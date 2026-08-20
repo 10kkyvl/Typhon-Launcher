@@ -95,6 +95,13 @@ export function speedBytes(bytesPerSec: number) {
   return `${Math.round(value / KB_BYTES)} КБ/с`;
 }
 
+export function truncateMiddle(text: string, max = 56) {
+  if (text.length <= max) return text;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`;
+}
+
 export function etaLabel(etaSeconds: number) {
   if (etaSeconds < 0) return '—';
   const min = Math.floor(etaSeconds / 60);

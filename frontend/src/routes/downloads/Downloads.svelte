@@ -23,10 +23,13 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import InstallModal from '../../lib/components/InstallModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { openFolder } from '../../lib/services/settings';
   import { active, completed, forceStart, moveDown, moveUp, queue, remove, stats } from '../../lib/stores/downloads';
+  import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
@@ -49,6 +52,8 @@
   let addOpen = $state(false);
   let detailsOpen = $state(false);
   let detailsId = $state<string | null>(null);
+  let installOpen = $state(false);
+  let installDownloadId = $state<string | null>(null);
 
   const statCards = $derived([
     { label: 'Скорость загрузки', value: speedBytes($stats.downSpeed), icon: ArrowDown, tint: 'accent' },
@@ -60,6 +65,11 @@
   function openDetails(id: string) {
     detailsId = id;
     detailsOpen = true;
+  }
+
+  function openInstall(id: string) {
+    installDownloadId = id;
+    installOpen = true;
   }
 
   function completedDate(iso: string | null) {
@@ -180,6 +190,7 @@
     <h2>Завершённые ({$completed.length})</h2>
     <div class="queue">
       {#each $completed as item (item.id)}
+        {@const install = $installationsByDownload.get(item.id)}
         <div class="queue-row">
           <div class="queue-thumb">
             <FileDown size="1.8rem" strokeWidth={1.7} />
@@ -190,6 +201,26 @@
           {#if item.seeding}
             <StatusBadge kind="success" label="Раздаётся" />
           {/if}
+          <div class="install-cell">
+            {#if !install}
+              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Установить</Button>
+            {:else if installActive(install.status)}
+              <div class="install-progress">
+                <span class="install-status">{installStatusLabels[install.status]}</span>
+                <ProgressBar value={install.progress * 100} height={4} />
+              </div>
+            {:else if install.status === 'waiting_for_user'}
+              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Продолжить установку</Button>
+            {:else if install.status === 'completed'}
+              <StatusBadge kind="success" label="Установлено" />
+            {:else if install.status === 'failed'}
+              <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>Установка: ошибка</Button>
+            {:else}
+              <Button size="sm" onclick={() => openInstall(item.id)}>
+                {install.status === 'cancelled' ? 'Отменено' : 'Прервано'}
+              </Button>
+            {/if}
+          </div>
           <div class="queue-actions">
             <IconButton label="Открыть папку" size="sm" onclick={() => openDestination(item.destination)}>
               <FolderOpen size="1.6rem" strokeWidth={1.8} />
@@ -206,6 +237,7 @@
 
 <AddDownloadModal bind:open={addOpen} />
 <DownloadDetailsModal bind:open={detailsOpen} id={detailsId} />
+<InstallModal bind:open={installOpen} downloadId={installDownloadId} />
 
 <style>
   .stats {
@@ -373,6 +405,27 @@
     display: flex;
     gap: 2px;
     margin-left: var(--space-3);
+  }
+
+  .install-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 17rem;
+    flex-shrink: 0;
+  }
+
+  .install-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .install-status {
+    font-size: 1.3rem;
+    color: var(--text-3);
+    text-align: right;
   }
 
   .dim {

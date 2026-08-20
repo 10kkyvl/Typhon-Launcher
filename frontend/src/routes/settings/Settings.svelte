@@ -122,6 +122,17 @@
     return maxActiveOptions.some((o) => o.id === id) ? id : '2';
   });
 
+  const cleanupPolicyOptions = [
+    { id: 'keep', label: 'Оставлять загруженные файлы' },
+    { id: 'ask', label: 'Спрашивать' },
+    { id: 'delete', label: 'Удалять после установки' },
+  ];
+
+  const cleanupPolicy = $derived.by(() => {
+    const id = current?.installCleanupPolicy ?? 'keep';
+    return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'keep';
+  });
+
   let scheduleEnabled = $state(false);
 
   let port = $state('42815');
@@ -393,6 +404,46 @@
             <span class="row-sub">Ограничивать загрузки в определённые часы</span>
           </div>
           <Toggle bind:checked={scheduleEnabled} label="Расписание" />
+        </div>
+      </div>
+    </section>
+
+    <section class="group">
+      <h3>Установка</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">После установки</span>
+            <span class="row-sub">Что делать с загруженными файлами</span>
+          </div>
+          <Select
+            value={cleanupPolicy}
+            width="26rem"
+            options={cleanupPolicyOptions}
+            onchange={(id) => set({ installCleanupPolicy: id })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Автоустановка portable/архивов</span>
+            <span class="row-sub">Устанавливать сразу после завершения загрузки</span>
+          </div>
+          <Toggle
+            checked={current?.autoInstall ?? false}
+            label="Автоустановка"
+            onchange={(v) => set({ autoInstall: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Проверять установку после завершения</span>
+            <span class="row-sub">Искать исполняемый файл и проверять содержимое папки</span>
+          </div>
+          <Toggle
+            checked={current?.verifyAfterInstall ?? true}
+            label="Проверка установки"
+            onchange={(v) => set({ verifyAfterInstall: v })}
+          />
         </div>
       </div>
     </section>
@@ -684,6 +735,9 @@
   }
 
   .single-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
     max-width: 72rem;
   }
 

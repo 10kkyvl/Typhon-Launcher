@@ -17,6 +17,9 @@ export interface Settings {
   downloadRateLimit: number;
   uploadRateLimit: number;
   seedAfterDownload: boolean;
+  installCleanupPolicy: string;
+  autoInstall: boolean;
+  verifyAfterInstall: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -36,6 +39,9 @@ const fallbackDefaults: Settings = {
   downloadRateLimit: 0,
   uploadRateLimit: 0,
   seedAfterDownload: false,
+  installCleanupPolicy: 'keep',
+  autoInstall: false,
+  verifyAfterInstall: true,
 };
 
 export async function getSettings(): Promise<Settings> {

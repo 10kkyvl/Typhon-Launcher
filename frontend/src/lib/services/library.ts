@@ -26,7 +26,7 @@ export async function getInstalledGames(): Promise<LibraryGame[]> {
 
 export async function getRunningGames(): Promise<string[]> {
   if (!inWails) return [];
-  return await LibraryService.GetRunningGames();
+  return (await LibraryService.GetRunningGames()) ?? [];
 }
 
 export async function addGame(executable: string, title: string): Promise<LibraryGame> {
