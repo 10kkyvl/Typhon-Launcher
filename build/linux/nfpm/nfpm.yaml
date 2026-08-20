@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "typhonlauncher-tmp.exe"
+name: "typhon"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A TyphonLauncher-tmp application"
-vendor: "My Company"
+description: "Typhon game launcher"
+vendor: "Typhon"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/typhonlauncher-tmp.exe"
-    dst: "/usr/local/bin/typhonlauncher-tmp.exe"
+  - src: "./bin/typhon"
+    dst: "/usr/local/bin/typhon"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/typhonlauncher-tmp.exe.png"
-  - src: "./build/linux/typhonlauncher-tmp.exe.desktop"
-    dst: "/usr/share/applications/typhonlauncher-tmp.exe.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/typhon.png"
+  - src: "./build/linux/typhon.desktop"
+    dst: "/usr/share/applications/typhon.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

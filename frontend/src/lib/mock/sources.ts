@@ -3,8 +3,8 @@ import type { Source } from './types';
 export const initialSources: Source[] = [
   {
     id: 'src-core',
-    name: 'Aurora Core Library',
-    path: 'D:\\Aurora\\Sources\\Core',
+    name: 'Typhon Core Library',
+    path: 'D:\\Typhon\\Sources\\Core',
     status: 'active',
     lastUpdate: 'Сегодня, 12:45',
     items: 18742,
@@ -14,7 +14,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-nexus',
     name: 'Nexus Mods',
-    path: 'D:\\Aurora\\Sources\\NexusMods',
+    path: 'D:\\Typhon\\Sources\\NexusMods',
     status: 'active',
     lastUpdate: 'Вчера, 22:18',
     items: 124556,
@@ -24,7 +24,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-gog',
     name: 'GOG Library',
-    path: 'D:\\Aurora\\Sources\\GOG',
+    path: 'D:\\Typhon\\Sources\\GOG',
     status: 'active',
     lastUpdate: 'Сегодня, 09:30',
     items: 6482,
@@ -34,7 +34,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-steam',
     name: 'Steam Library',
-    path: 'D:\\Aurora\\Sources\\Steam',
+    path: 'D:\\Typhon\\Sources\\Steam',
     status: 'active',
     lastUpdate: 'Сегодня, 11:02',
     items: 3215,
@@ -44,7 +44,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-epic',
     name: 'Epic Games Store',
-    path: 'D:\\Aurora\\Sources\\Epic',
+    path: 'D:\\Typhon\\Sources\\Epic',
     status: 'active',
     lastUpdate: 'Вчера, 18:47',
     items: 892,
@@ -54,7 +54,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-backup',
     name: 'Backup Archive',
-    path: 'D:\\Aurora\\Sources\\Backup',
+    path: 'D:\\Typhon\\Sources\\Backup',
     status: 'disabled',
     lastUpdate: '12.05.2025, 16:12',
     items: 1103,
@@ -64,7 +64,7 @@ export const initialSources: Source[] = [
   {
     id: 'src-patches',
     name: 'Community Patches',
-    path: 'D:\\Aurora\\Sources\\Patches',
+    path: 'D:\\Typhon\\Sources\\Patches',
     status: 'disabled',
     lastUpdate: '07.05.2025, 20:33',
     items: 245,

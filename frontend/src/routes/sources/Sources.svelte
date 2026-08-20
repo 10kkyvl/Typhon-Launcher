@@ -62,7 +62,7 @@
 
   function submitSource() {
     if (!newName.trim()) return;
-    addSource(newName.trim(), newPath.trim() || 'D:\\Aurora\\Sources\\Custom');
+    addSource(newName.trim(), newPath.trim() || 'D:\\Typhon\\Sources\\Custom');
     toast(`Источник «${newName.trim()}» добавлен`, 'success');
     modalOpen = false;
     newName = '';
@@ -72,7 +72,7 @@
 
 <PageHeader
   title="Источники"
-  subtitle="Источники — это каталоги с играми, дополнениями и файлами, которые Aurora использует для отображения, установки и обновления контента. Все источники хранятся локально на этом устройстве и обновляются клиентом."
+  subtitle="Источники — это каталоги с играми, дополнениями и файлами, которые Typhon использует для отображения, установки и обновления контента. Все источники хранятся локально на этом устройстве и обновляются клиентом."
 >
   {#snippet actions()}
     <Button variant="primary" onclick={() => (modalOpen = true)}>
@@ -98,7 +98,7 @@
 
 {#if $sources.length === 0}
   <div class="empty-wrap">
-    <EmptyState title="Источники ещё не добавлены" description="Добавьте первый источник, чтобы Aurora могла находить игры и обновления.">
+    <EmptyState title="Источники ещё не добавлены" description="Добавьте первый источник, чтобы Typhon мог находить игры и обновления.">
       {#snippet icon()}
         <Database size="2.2rem" strokeWidth={1.8} />
       {/snippet}
@@ -169,7 +169,7 @@
     </label>
     <label class="field">
       <span class="field-label">Путь или URL</span>
-      <input type="text" placeholder="D:\Aurora\Sources\Custom" bind:value={newPath} />
+      <input type="text" placeholder="D:\Typhon\Sources\Custom" bind:value={newPath} />
     </label>
     <p class="form-hint">Источник будет проверен и проиндексирован после добавления.</p>
   </div>

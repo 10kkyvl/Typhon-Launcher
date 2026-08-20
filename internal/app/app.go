@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"runtime"
 
-	"aurora/internal/platform"
-	"aurora/internal/settings"
+	"typhon/internal/platform"
+	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

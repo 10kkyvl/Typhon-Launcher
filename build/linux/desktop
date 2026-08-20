@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A TyphonLauncher-tmp application
+Name=Typhon
+Comment=Typhon game launcher
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/typhonlauncher-tmp.exe %u
+Exec=/usr/local/bin/typhon %u
 Terminal=false
 Type=Application
-Icon=typhonlauncher-tmp.exe
+Icon=typhon
 Categories=Utility;
-StartupWMClass=typhonlauncher-tmp.exe
+StartupWMClass=typhon
 
  

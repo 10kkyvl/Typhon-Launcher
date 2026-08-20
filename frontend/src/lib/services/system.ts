@@ -1,4 +1,4 @@
-import { Service as AppService } from '../../../bindings/aurora/internal/app';
+import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 
 export interface AppInfo {
@@ -27,7 +27,7 @@ export interface StorageInfo {
 const GB = 1024 ** 3;
 
 const fixtureStorage: StorageInfo = {
-  path: 'D:\\Aurora\\Games',
+  path: 'D:\\Typhon\\Games',
   volume: 'D:',
   filesystem: 'NTFS',
   totalBytes: 1024 * GB,

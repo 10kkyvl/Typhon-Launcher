@@ -1,5 +1,5 @@
-import { Service as LibraryService } from '../../../bindings/aurora/internal/library';
-import { Service as AppService } from '../../../bindings/aurora/internal/app';
+import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
+import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 
 export interface LibraryGame {

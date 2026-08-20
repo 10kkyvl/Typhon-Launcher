@@ -26,7 +26,7 @@
   const notifications = [
     { id: 1, title: 'Hogwarts Legacy', text: 'Обновление 1.0.3.0 загружается' },
     { id: 2, title: 'ELDEN RING', text: 'Доступно дополнение Shadow of the Erdtree' },
-    { id: 3, title: 'Источники', text: 'Aurora Core Library обновлена' },
+    { id: 3, title: 'Источники', text: 'Typhon Core Library обновлена' },
   ];
 
   function win(action: 'minimise' | 'maximise' | 'close') {

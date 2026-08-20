@@ -1,5 +1,5 @@
-import { Service as SettingsService } from '../../../bindings/aurora/internal/settings';
-import { Service as AppService } from '../../../bindings/aurora/internal/app';
+import { Service as SettingsService } from '../../../bindings/typhon/internal/settings';
+import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 
 export interface Settings {
@@ -15,15 +15,15 @@ export interface Settings {
   animationsEnabled: boolean;
 }
 
-const FALLBACK_KEY = 'aurora.settings';
+const FALLBACK_KEY = 'typhon.settings';
 
 const fallbackDefaults: Settings = {
   theme: 'dark',
   language: 'ru',
   uiScale: 1,
-  downloadsPath: 'D:\\Aurora\\Downloads',
-  gamesPath: 'D:\\Aurora\\Games',
-  screenshotsPath: 'D:\\Aurora\\Screenshots',
+  downloadsPath: 'D:\\Typhon\\Downloads',
+  gamesPath: 'D:\\Typhon\\Games',
+  screenshotsPath: 'D:\\Typhon\\Screenshots',
   launchOnStartup: false,
   minimizeToTray: true,
   hardwareAcceleration: true,

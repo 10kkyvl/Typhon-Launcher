@@ -130,7 +130,7 @@
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Запускать Aurora при старте системы</span>
+              <span class="row-label">Запускать Typhon при старте системы</span>
               <span class="row-sub">Приложение будет запускаться автоматически</span>
             </div>
             <Toggle
@@ -153,7 +153,7 @@
           <div class="row">
             <div class="row-text">
               <span class="row-label">Показывать оверлей в игре</span>
-              <span class="row-sub">Игровой оверлей для доступа к функциям Aurora</span>
+              <span class="row-sub">Игровой оверлей для доступа к функциям Typhon</span>
             </div>
             <Toggle bind:checked={overlay} label="Оверлей" />
           </div>
@@ -223,7 +223,7 @@
           <div class="row">
             <div class="row-text">
               <span class="row-label">Язык</span>
-              <span class="row-sub">Язык интерфейса Aurora</span>
+              <span class="row-sub">Язык интерфейса Typhon</span>
             </div>
             <Select
               value={current?.language ?? 'ru'}
@@ -294,7 +294,7 @@
         <div class="danger-zone">
           <div class="row-text">
             <span class="row-label">Все данные приложения</span>
-            <span class="row-sub">Сбросить настройки и удалить все данные Aurora</span>
+            <span class="row-sub">Сбросить настройки и удалить все данные Typhon</span>
           </div>
           <Button variant="danger" onclick={() => (resetOpen = true)}>
             <Trash2 size="1.5rem" strokeWidth={1.8} />
@@ -526,9 +526,9 @@
   <div class="single-column">
     <section class="group about">
       <div class="about-logo">
-        <img src="/aurora.svg" alt="" width="44" height="44" draggable="false" />
+        <img src="/typhon.svg" alt="" width="44" height="44" draggable="false" />
         <div>
-          <h3>Aurora Launcher</h3>
+          <h3>Typhon Launcher</h3>
           <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}</span>
         </div>
       </div>
@@ -574,7 +574,7 @@
 {/if}
 
 <footer class="footer">
-  <span>Aurora Launcher {appInfo?.version ?? ''}</span>
+  <span>Typhon Launcher {appInfo?.version ?? ''}</span>
   <div class="footer-links">
     <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
     <span class="about-sep">|</span>
@@ -584,7 +584,7 @@
 
 <Modal bind:open={resetOpen} title="Сбросить все данные?">
   <p class="modal-text">
-    Настройки, кэш и локальные данные Aurora будут удалены. Установленные игры останутся на диске. Это действие нельзя
+    Настройки, кэш и локальные данные Typhon будут удалены. Установленные игры останутся на диске. Это действие нельзя
     отменить.
   </p>
   {#snippet footer()}

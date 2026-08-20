@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"aurora/internal/settings"
+	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

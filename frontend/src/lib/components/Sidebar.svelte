@@ -32,8 +32,8 @@
 
 <aside class="sidebar">
   <div class="logo">
-    <img class="logo-mark" src="/aurora.svg" alt="" draggable="false" />
-    <span class="logo-text">Aurora</span>
+    <img class="logo-mark" src="/typhon.svg" alt="" draggable="false" />
+    <span class="logo-text">Typhon</span>
   </div>
 
   <nav>

@@ -5,11 +5,11 @@ version: '3'
 
 # This information is used to generate the build assets.
 info:
-  companyName: "Aurora"
-  productName: "Aurora"
-  productIdentifier: "app.aurora.launcher"
-  description: "Aurora game launcher"
-  copyright: "(c) 2026 Aurora"
+  companyName: "Typhon"
+  productName: "Typhon"
+  productIdentifier: "app.typhon.launcher"
+  description: "Typhon game launcher"
+  copyright: "(c) 2026 Typhon"
   comments: ""
   version: "0.1.0"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)

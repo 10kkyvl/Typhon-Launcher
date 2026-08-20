@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 
-	"aurora/internal/app"
-	"aurora/internal/library"
-	"aurora/internal/settings"
+	"typhon/internal/app"
+	"typhon/internal/library"
+	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -31,8 +31,8 @@ func main() {
 	libraryService := library.NewService()
 
 	wails := application.New(application.Options{
-		Name:        "Aurora",
-		Description: "Aurora game launcher",
+		Name:        "Typhon",
+		Description: "Typhon game launcher",
 		Services: []application.Service{
 			application.NewService(appService),
 			application.NewService(settingsService),
@@ -47,7 +47,7 @@ func main() {
 	})
 
 	wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Aurora",
+		Title:            "Typhon",
 		Width:            1440,
 		Height:           900,
 		MinWidth:         1000,
@@ -62,7 +62,7 @@ func main() {
 		URL: "/",
 	})
 
-	slog.Info("aurora starting", "version", app.Version)
+	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
 		log.Fatal(err)
 	}

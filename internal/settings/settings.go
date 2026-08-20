@@ -30,7 +30,7 @@ func Defaults() Settings {
 	if err != nil {
 		home = "."
 	}
-	base := filepath.Join(home, "Aurora")
+	base := filepath.Join(home, "Typhon")
 	return Settings{
 		Theme:                "dark",
 		Language:             "ru",
@@ -45,12 +45,27 @@ func Defaults() Settings {
 	}
 }
 
+var migrateConfigDirOnce sync.Once
+
 func ConfigDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "Aurora"), nil
+	newDir := filepath.Join(dir, "Typhon")
+	migrateConfigDirOnce.Do(func() {
+		oldDir := filepath.Join(dir, "Aurora")
+		if _, err := os.Stat(newDir); !errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if _, err := os.Stat(oldDir); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if err := os.Rename(oldDir, newDir); err != nil {
+			slog.Warn("migrate config dir", "from", oldDir, "to", newDir, "error", err)
+		}
+	})
+	return newDir, nil
 }
 
 type Service struct {

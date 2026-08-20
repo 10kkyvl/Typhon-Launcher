@@ -5,10 +5,10 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A TyphonLauncher-tmp application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
+			"CompanyName": "Typhon",
+			"FileDescription": "Typhon game launcher",
+			"LegalCopyright": "(c) 2026 Typhon",
+			"ProductName": "Typhon",
 			"Comments": "This is a comment"
 		}
 	}

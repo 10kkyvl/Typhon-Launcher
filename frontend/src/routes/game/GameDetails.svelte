@@ -198,7 +198,7 @@
     <div class="local-danger">
       <div>
         <h3 class="card-title">Удалить из библиотеки</h3>
-        <p class="muted">Файлы игры останутся на диске — удалится только запись в Aurora.</p>
+        <p class="muted">Файлы игры останутся на диске — удалится только запись в Typhon.</p>
       </div>
       <Button variant="danger" onclick={() => (removeOpen = true)}>
         <Trash2 size="1.5rem" strokeWidth={1.8} />
@@ -209,7 +209,7 @@
 
   <Modal bind:open={removeOpen} title="Удалить игру из библиотеки?">
     <p class="modal-text">
-      «{localGame.title}» будет убрана из библиотеки Aurora. Файлы в папке {localGame.installDir} останутся на месте.
+      «{localGame.title}» будет убрана из библиотеки Typhon. Файлы в папке {localGame.installDir} останутся на месте.
     </p>
     {#snippet footer()}
       <Button onclick={() => (removeOpen = false)}>Отмена</Button>
@@ -499,7 +499,7 @@
       </EmptyState>
     {/if}
   {:else if tab === 'screenshots'}
-    <EmptyState title="Скриншотов пока нет" description="Скриншоты, сделанные через оверлей Aurora, появятся здесь.">
+    <EmptyState title="Скриншотов пока нет" description="Скриншоты, сделанные через оверлей Typhon, появятся здесь.">
       {#snippet icon()}
         <Image size="2.2rem" strokeWidth={1.8} />
       {/snippet}
