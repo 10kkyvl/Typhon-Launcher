@@ -17,8 +17,10 @@
   import Modal from '../../lib/components/Modal.svelte';
   import Select from '../../lib/components/Select.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import { get } from 'svelte/store';
   import { user } from '../../lib/mock/user';
   import { toast } from '../../lib/stores/toasts';
+  import { uiScale } from '../../lib/stores/ui';
 
   let tab = $state('general');
 
@@ -40,7 +42,7 @@
 
   let theme = $state('dark');
   let language = $state('ru');
-  let scale = $state('100');
+  let scale = $state(String(Math.round(get(uiScale) * 100)));
   let animations = $state(true);
   let descriptions = $state(true);
 
@@ -66,6 +68,10 @@
 
   let resetOpen = $state(false);
 
+  $effect(() => {
+    uiScale.set(Number(scale) / 100);
+  });
+
   const cleanupItems = [
     { id: 'cache', label: 'Очистить кэш', sub: 'Временные файлы приложений и загрузок', size: '2,45 ГБ' },
     { id: 'shaders', label: 'Очистить кэш шейдеров', sub: 'Скомпилированные шейдеры для игр', size: '1,12 ГБ' },
@@ -89,7 +95,7 @@
 <div class="tabs">
   {#each tabs as t (t.id)}
     <button class="tab" class:selected={tab === t.id} onclick={() => (tab = t.id)}>
-      <t.icon size={17} strokeWidth={1.8} />
+      <t.icon size="1.7rem" strokeWidth={1.8} />
       {t.label}
     </button>
   {/each}
@@ -149,7 +155,7 @@
                 <input type="text" value={folder.value} oninput={(e) => folder.set(e.currentTarget.value)} />
                 <Button size="sm" onclick={() => toast('Выбор папки недоступен в demo')}>Обзор</Button>
                 <IconButton label="Открыть папку" size="sm" onclick={() => toast('Открытие папки недоступно в demo')}>
-                  <FolderOpen size={16} strokeWidth={1.8} />
+                  <FolderOpen size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               </div>
             </div>
@@ -172,7 +178,7 @@
             </div>
             <Select
               bind:value={theme}
-              width="180px"
+              width="18rem"
               options={[
                 { id: 'dark', label: 'Тёмная' },
                 { id: 'system', label: 'Как в системе' },
@@ -186,7 +192,7 @@
             </div>
             <Select
               bind:value={language}
-              width="180px"
+              width="18rem"
               options={[
                 { id: 'ru', label: 'Русский' },
                 { id: 'en', label: 'English' },
@@ -200,7 +206,7 @@
             </div>
             <Select
               bind:value={scale}
-              width="180px"
+              width="18rem"
               options={[
                 { id: '90', label: '90%' },
                 { id: '100', label: '100% (по умолчанию)' },
@@ -250,7 +256,7 @@
             <span class="row-sub">Сбросить настройки и удалить все данные Aurora</span>
           </div>
           <Button variant="danger" onclick={() => (resetOpen = true)}>
-            <Trash2 size={15} strokeWidth={1.8} />
+            <Trash2 size="1.5rem" strokeWidth={1.8} />
             Сбросить
           </Button>
         </div>
@@ -269,7 +275,7 @@
           </div>
           <Select
             bind:value={downloadLimit}
-            width="200px"
+            width="20rem"
             options={[
               { id: 'none', label: 'Без ограничений' },
               { id: '10', label: '10 МБ/с' },
@@ -285,7 +291,7 @@
           </div>
           <Select
             bind:value={uploadLimit}
-            width="200px"
+            width="20rem"
             options={[
               { id: 'none', label: 'Без ограничений' },
               { id: '1', label: '1 МБ/с' },
@@ -301,7 +307,7 @@
           </div>
           <Select
             bind:value={maxActive}
-            width="200px"
+            width="20rem"
             options={[
               { id: '1', label: '1' },
               { id: '2', label: '2' },
@@ -367,7 +373,7 @@
           </div>
           <Select
             bind:value={theme}
-            width="200px"
+            width="20rem"
             options={[
               { id: 'dark', label: 'Тёмная' },
               { id: 'system', label: 'Как в системе' },
@@ -380,7 +386,7 @@
           </div>
           <Select
             bind:value={scale}
-            width="200px"
+            width="20rem"
             options={[
               { id: '90', label: '90%' },
               { id: '100', label: '100% (по умолчанию)' },
@@ -463,7 +469,7 @@
       </div>
       <div class="group-foot">
         <Button variant="danger" onclick={() => toast('Выход недоступен в demo')}>
-          <LogOut size={15} strokeWidth={1.8} />
+          <LogOut size="1.5rem" strokeWidth={1.8} />
           Выйти из профиля
         </Button>
       </div>
@@ -486,7 +492,7 @@
             <span class="row-sub">Установлена последняя версия</span>
           </div>
           <Button size="sm" onclick={() => toast('У вас последняя версия', 'success')}>
-            <ListChecks size={15} strokeWidth={1.8} />
+            <ListChecks size="1.5rem" strokeWidth={1.8} />
             Проверить
           </Button>
         </div>
@@ -530,15 +536,15 @@
 
 <style>
   .page-title {
-    font-size: 32px;
+    font-size: var(--font-title);
     letter-spacing: -0.01em;
     margin: var(--space-4) 0 var(--space-5);
   }
 
   .tabs {
     display: flex;
-    gap: 4px;
-    padding: 4px;
+    gap: 0.4rem;
+    padding: 0.4rem;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -551,11 +557,11 @@
   .tab {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    height: 38px;
-    padding: 0 16px;
-    border-radius: 8px;
-    font-size: 14px;
+    gap: 0.8rem;
+    height: 4.4rem;
+    padding: 0 1.6rem;
+    border-radius: 0.8rem;
+    font-size: 1.5rem;
     font-weight: 500;
     color: var(--text-2);
     white-space: nowrap;
@@ -588,7 +594,7 @@
   }
 
   .single-column {
-    max-width: 720px;
+    max-width: 72rem;
   }
 
   .group {
@@ -599,7 +605,7 @@
   }
 
   .group h3 {
-    font-size: 16px;
+    font-size: 1.7rem;
     margin-bottom: var(--space-4);
   }
 
@@ -613,7 +619,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-5);
-    padding: 12px 0;
+    padding: 1.2rem 0;
   }
 
   .row + .row {
@@ -628,39 +634,39 @@
   }
 
   .row-label {
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 500;
   }
 
   .row-sub {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   .folder-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 0.8rem;
   }
 
   .folder-label {
-    font-size: 13.5px;
+    font-size: 1.4rem;
   }
 
   .folder-controls {
     display: flex;
-    gap: 8px;
+    gap: 0.8rem;
   }
 
   .folder-controls input {
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 11px;
+    height: 3.6rem;
+    padding: 0 1.1rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-2);
     outline: none;
     transition: border-color var(--dur) var(--ease);
@@ -687,7 +693,7 @@
   }
 
   .cleanup-size {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -705,13 +711,13 @@
   }
 
   .port-input {
-    width: 120px;
-    height: 36px;
-    padding: 0 12px;
+    width: 12rem;
+    height: 4rem;
+    padding: 0 1.2rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 1.5rem;
     color: var(--text);
     outline: none;
     text-align: right;
@@ -735,8 +741,8 @@
   }
 
   .account-avatar {
-    width: 52px;
-    height: 52px;
+    width: 5.2rem;
+    height: 5.2rem;
     border-radius: 50%;
     object-fit: cover;
   }
@@ -749,12 +755,12 @@
   }
 
   .account-name {
-    font-size: 15px;
+    font-size: 1.6rem;
     font-weight: 600;
   }
 
   .account-status {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 
@@ -774,9 +780,9 @@
   }
 
   .about-link {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
-    border-radius: 4px;
+    border-radius: 0.4rem;
     transition: color var(--dur) var(--ease);
   }
 
@@ -785,7 +791,7 @@
   }
 
   .about-sep {
-    margin: 0 8px;
+    margin: 0 0.8rem;
     color: var(--text-3);
   }
 
@@ -796,12 +802,12 @@
     margin-top: var(--space-8);
     padding-top: var(--space-4);
     border-top: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   .modal-text {
-    font-size: 14px;
+    font-size: 1.5rem;
     line-height: 1.55;
     color: var(--text-2);
   }
