@@ -3,6 +3,11 @@ package main
 import (
 	"embed"
 	"log"
+	"log/slog"
+	"os"
+
+	"aurora/internal/app"
+	"aurora/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -10,10 +15,23 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+func init() {
+	application.RegisterEvent[settings.Settings]("settings:updated")
+}
+
 func main() {
-	app := application.New(application.Options{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	settingsService := settings.NewService()
+	appService := app.NewService(settingsService)
+
+	wails := application.New(application.Options{
 		Name:        "Aurora",
 		Description: "Aurora game launcher",
+		Services: []application.Service{
+			application.NewService(appService),
+			application.NewService(settingsService),
+		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
@@ -22,7 +40,7 @@ func main() {
 		},
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Aurora",
 		Width:            1440,
 		Height:           900,
@@ -38,7 +56,8 @@ func main() {
 		URL: "/",
 	})
 
-	if err := app.Run(); err != nil {
+	slog.Info("aurora starting", "version", app.Version)
+	if err := wails.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
