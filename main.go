@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"typhon/internal/app"
+	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/settings"
 
@@ -21,6 +22,11 @@ func init() {
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
+	application.RegisterEvent[download.Download]("download:added")
+	application.RegisterEvent[download.Download]("download:updated")
+	application.RegisterEvent[download.Download]("download:completed")
+	application.RegisterEvent[download.Download]("download:failed")
+	application.RegisterEvent[download.RemovedEvent]("download:removed")
 }
 
 func main() {
@@ -29,6 +35,7 @@ func main() {
 	settingsService := settings.NewService()
 	appService := app.NewService(settingsService)
 	libraryService := library.NewService()
+	downloadManager := download.NewManager(settingsService)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -37,6 +44,7 @@ func main() {
 			application.NewService(appService),
 			application.NewService(settingsService),
 			application.NewService(libraryService),
+			application.NewService(downloadManager),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
