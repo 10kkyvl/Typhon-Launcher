@@ -1,0 +1,35 @@
+<script lang="ts">
+  import AppShell from './lib/components/AppShell.svelte';
+  import { startDownloadSim } from './lib/stores/downloads';
+  import { route } from './lib/stores/router';
+  import Achievements from './routes/achievements/Achievements.svelte';
+  import Collections from './routes/collections/Collections.svelte';
+  import Downloads from './routes/downloads/Downloads.svelte';
+  import GameDetails from './routes/game/GameDetails.svelte';
+  import Installed from './routes/installed/Installed.svelte';
+  import Library from './routes/library/Library.svelte';
+  import Settings from './routes/settings/Settings.svelte';
+  import Sources from './routes/sources/Sources.svelte';
+
+  startDownloadSim();
+</script>
+
+<AppShell>
+  {#if $route.name === 'library'}
+    <Library />
+  {:else if $route.name === 'game'}
+    <GameDetails id={$route.params.id} />
+  {:else if $route.name === 'downloads'}
+    <Downloads />
+  {:else if $route.name === 'sources'}
+    <Sources />
+  {:else if $route.name === 'installed'}
+    <Installed />
+  {:else if $route.name === 'collections'}
+    <Collections />
+  {:else if $route.name === 'achievements'}
+    <Achievements />
+  {:else if $route.name === 'settings'}
+    <Settings />
+  {/if}
+</AppShell>
