@@ -14,6 +14,10 @@ import (
 	"sync"
 	"time"
 
+	// classicio must be initialized before anacrolix storage reads
+	// TORRENT_STORAGE_DEFAULT_FILE_IO: mmap file IO never releases mappings,
+	// which keeps files locked on Windows.
+	_ "typhon/internal/download/classicio"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 
@@ -34,16 +38,24 @@ const (
 	persistInterval = 5 * time.Second
 )
 
+const restoreFailedMessage = "не удалось восстановить загрузку"
+
 var (
 	errNotFound    = errors.New("загрузка не найдена")
 	errUnavailable = errors.New("недоступно для этой загрузки")
 	errNoClient    = errors.New("торрент-клиент недоступен")
 	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
+	errNoRestore   = errors.New(restoreFailedMessage)
 )
 
 type pending struct {
 	torrent *liveTorrent
 	source  string
+}
+
+type jobState struct {
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 type Manager struct {
@@ -56,12 +68,14 @@ type Manager struct {
 	engines map[string]engineTorrent
 	rates   map[string]*rateState
 	pending map[string]*pending
+	jobs    map[string]*jobState
 
 	client *client
 	max    int
 
 	ctx         context.Context
 	cancel      context.CancelFunc
+	closing     bool
 	wg          sync.WaitGroup
 	unsubscribe func()
 	lastPersist time.Time
@@ -83,6 +97,7 @@ func newManagerAt(dir string, settingsService *settings.Service) *Manager {
 		engines:  map[string]engineTorrent{},
 		rates:    map[string]*rateState{},
 		pending:  map[string]*pending{},
+		jobs:     map[string]*jobState{},
 	}
 	if dir != "" {
 		m.metaDir = filepath.Join(dir, "meta")
@@ -120,6 +135,11 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		m.client = cl
 	}
 	m.loadLocked()
+	known := make(map[string]bool, len(m.items))
+	for _, d := range m.items {
+		known[strings.ToLower(d.InfoHash)] = true
+	}
+	m.store.sweepMetainfo(known)
 	m.mu.Unlock()
 
 	if m.settings != nil {
@@ -133,6 +153,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 func (m *Manager) ServiceShutdown() error {
 	m.mu.Lock()
+	m.closing = true
 	cancel := m.cancel
 	unsubscribe := m.unsubscribe
 	m.mu.Unlock()
@@ -406,22 +427,50 @@ func (m *Manager) DiscardMetadata(infoHash string) {
 	if p != nil {
 		p.torrent.drop()
 	}
+	m.discardMetainfo(infoHash)
+}
+
+func (m *Manager) discardMetainfo(infoHash string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.findByHashLocked(infoHash) != nil || m.pending[infoHash] != nil {
+		return
+	}
+	m.store.removeMetainfo(infoHash)
+}
+
+func (m *Manager) returnPending(infoHash string, p *pending) {
+	m.mu.Lock()
+	if _, taken := m.pending[infoHash]; !taken {
+		m.pending[infoHash] = p
+		m.mu.Unlock()
+		return
+	}
+	m.mu.Unlock()
+	p.torrent.drop()
 }
 
 func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []int) (Download, error) {
 	m.mu.Lock()
 	p := m.pending[infoHash]
+	delete(m.pending, infoHash)
 	cl := m.client
 	m.mu.Unlock()
-	if p == nil || cl == nil {
+	if p == nil {
 		return Download{}, errors.New("сначала получите метаданные торрента")
+	}
+	if cl == nil {
+		m.returnPending(infoHash, p)
+		return Download{}, errNoClient
 	}
 
 	destination = strings.TrimSpace(destination)
 	if destination == "" {
+		m.returnPending(infoHash, p)
 		return Download{}, errors.New("укажите папку назначения")
 	}
 	if err := os.MkdirAll(destination, 0o755); err != nil {
+		m.returnPending(infoHash, p)
 		slog.Error("create destination", "path", destination, "error", err)
 		if errors.Is(err, fs.ErrPermission) {
 			return Download{}, errors.New("нет доступа к папке назначения")
@@ -433,18 +482,17 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 	files := fileStates(info, selectedIndices)
 	needed := selectedTotal(files)
 	if needed == 0 {
+		m.returnPending(infoHash, p)
 		return Download{}, errors.New("не выбрано ни одного файла")
 	}
 	if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
+		m.returnPending(infoHash, p)
 		return Download{}, fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
 			humanSize(needed), humanSize(int64(st.FreeBytes)))
 	}
 
 	mi := p.torrent.t.Metainfo()
 	p.torrent.drop()
-	m.mu.Lock()
-	delete(m.pending, infoHash)
-	m.mu.Unlock()
 
 	lt, err := cl.addMetainfo(&mi, destination)
 	if err != nil {
@@ -472,6 +520,9 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 	defer m.mu.Unlock()
 	m.items = append(m.items, d)
 	m.engines[d.ID] = lt
+	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
+		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+	}
 	m.persistLocked()
 	slog.Info("download added", "id", d.ID, "name", d.Name, "infoHash", infoHash)
 	emit(eventAdded, snapshot(d))
@@ -517,6 +568,9 @@ func (m *Manager) Resume(id string) error {
 	if d.Status != StatusPaused && d.Status != StatusFailed {
 		return errUnavailable
 	}
+	if m.engines[id] == nil {
+		return m.reattachLocked(d, false)
+	}
 	d.Status = StatusQueued
 	d.Error = ""
 	m.persistLocked()
@@ -535,6 +589,9 @@ func (m *Manager) ForceStart(id string) error {
 	if d.Status != StatusQueued && d.Status != StatusPaused && d.Status != StatusFailed {
 		return errUnavailable
 	}
+	if m.engines[id] == nil {
+		return m.reattachLocked(d, true)
+	}
 	d.Status = StatusQueued
 	d.Error = ""
 	if !m.startLocked(d) {
@@ -544,45 +601,112 @@ func (m *Manager) ForceStart(id string) error {
 	return nil
 }
 
-func (m *Manager) Cancel(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	d := m.findLocked(id)
-	if d == nil {
-		return errNotFound
+func (m *Manager) reattachLocked(d *Download, force bool) error {
+	if m.jobs[d.ID] != nil {
+		return errUnavailable
 	}
-	if eng := m.engines[id]; eng != nil {
-		eng.drop()
-		delete(m.engines, id)
+	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
+		slog.Warn("cannot reattach download", "id", d.ID, "infoHash", d.InfoHash)
+		return errNoRestore
 	}
-	if d.Status != StatusCompleted {
-		removeContent(d)
+	if m.client == nil || m.ctx == nil || m.closing {
+		return errNoClient
 	}
-	m.store.removeMetainfo(d.InfoHash)
-	m.dropLocked(id)
-	slog.Info("download cancelled", "id", id, "name", d.Name)
-	emit(eventRemoved, RemovedEvent{ID: id})
-	m.schedule()
+
+	job := restoreJob{
+		id:       d.ID,
+		infoHash: d.InfoHash,
+		source:   d.Source,
+		dest:     d.Destination,
+		force:    force,
+	}
+	d.Status = StatusVerifying
+	d.Error = ""
+	m.persistLocked()
+	emit(eventUpdated, snapshot(d))
+
+	m.spawnRestoreLocked(job)
 	return nil
 }
 
-func (m *Manager) Remove(id string) error {
+func (m *Manager) spawnRestoreLocked(job restoreJob) {
+	cl, ctx := m.client, m.ctx
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.restoreOne(ctx, cl, job)
+	}()
+}
+
+func (m *Manager) Cancel(id string) error { return m.discard(id, true) }
+
+func (m *Manager) Remove(id string) error { return m.discard(id, false) }
+
+func (m *Manager) discard(id string, deleteData bool) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	d := m.findLocked(id)
 	if d == nil {
+		m.mu.Unlock()
 		return errNotFound
 	}
-	if eng := m.engines[id]; eng != nil {
-		eng.drop()
-		delete(m.engines, id)
+	eng := m.engines[id]
+	delete(m.engines, id)
+
+	job := m.jobs[id]
+	if job != nil {
+		job.cancel()
 	}
-	m.store.removeMetainfo(d.InfoHash)
+
+	infoHash := d.InfoHash
+	destination, name := d.Destination, d.Name
+	purge := deleteData && d.Status != StatusCompleted
+
 	m.dropLocked(id)
-	slog.Info("download removed", "id", id, "name", d.Name)
+	if deleteData {
+		slog.Info("download cancelled", "id", id, "name", name)
+	} else {
+		slog.Info("download removed", "id", id, "name", name)
+	}
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
+	m.mu.Unlock()
+
+	go func() {
+		if job != nil {
+			<-job.done
+		}
+		if eng != nil {
+			eng.drop()
+		}
+		m.discardMetainfo(infoHash)
+		if purge {
+			removeContent(destination, name)
+		}
+	}()
 	return nil
+}
+
+func (m *Manager) beginJob(ctx context.Context, id string) (context.Context, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.findLocked(id) == nil || m.jobs[id] != nil {
+		return nil, false
+	}
+	jobCtx, cancel := context.WithCancel(ctx)
+	m.jobs[id] = &jobState{cancel: cancel, done: make(chan struct{})}
+	return jobCtx, true
+}
+
+func (m *Manager) endJob(id string) {
+	m.mu.Lock()
+	job := m.jobs[id]
+	delete(m.jobs, id)
+	m.mu.Unlock()
+	if job == nil {
+		return
+	}
+	job.cancel()
+	close(job.done)
 }
 
 func (m *Manager) dropLocked(id string) {
@@ -780,6 +904,9 @@ func (m *Manager) completeLocked(d *Download) {
 			eng.allowUpload()
 		} else {
 			eng.disallowUpload()
+			delete(m.engines, d.ID)
+			delete(m.rates, d.ID)
+			go eng.drop()
 		}
 	}
 	m.persistLocked()
@@ -807,21 +934,52 @@ func (m *Manager) applySettings(next settings.Settings) {
 	}
 	m.max = maxActive(next)
 	for _, d := range m.items {
-		if d.Status != StatusCompleted || d.Seeding == next.SeedAfterDownload {
+		if d.Status != StatusCompleted {
 			continue
 		}
-		d.Seeding = next.SeedAfterDownload
-		if eng := m.engines[d.ID]; eng != nil {
-			if d.Seeding {
-				eng.allowUpload()
-			} else {
+		eng := m.engines[d.ID]
+		switch {
+		case !next.SeedAfterDownload:
+			if eng != nil {
 				eng.disallowUpload()
 			}
+			if d.Seeding {
+				d.Seeding = false
+				emit(eventUpdated, snapshot(d))
+			}
+		case eng != nil:
+			if !d.Seeding {
+				d.Seeding = true
+				eng.allowUpload()
+				emit(eventUpdated, snapshot(d))
+			}
+		default:
+			if d.Seeding {
+				d.Seeding = false
+				emit(eventUpdated, snapshot(d))
+			}
+			m.reseedLocked(d)
 		}
-		emit(eventUpdated, snapshot(d))
 	}
 	m.persistLocked()
 	m.schedule()
+}
+
+func (m *Manager) reseedLocked(d *Download) {
+	if m.client == nil || m.ctx == nil || m.closing || m.jobs[d.ID] != nil {
+		return
+	}
+	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
+		slog.Warn("cannot reseed download", "id", d.ID, "infoHash", d.InfoHash)
+		return
+	}
+	m.spawnRestoreLocked(restoreJob{
+		id:       d.ID,
+		infoHash: d.InfoHash,
+		source:   d.Source,
+		dest:     d.Destination,
+		complete: true,
+	})
 }
 
 type restoreJob struct {
@@ -832,6 +990,7 @@ type restoreJob struct {
 	paused   bool
 	complete bool
 	seeding  bool
+	force    bool
 }
 
 func (m *Manager) restore() {
@@ -855,6 +1014,7 @@ func (m *Manager) restore() {
 	}
 	m.mu.Unlock()
 	if cl == nil {
+		m.failWithoutClient()
 		return
 	}
 
@@ -875,36 +1035,71 @@ func (m *Manager) restore() {
 	m.mu.Unlock()
 }
 
+func (m *Manager) failWithoutClient() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, d := range m.items {
+		if d.Status == StatusCompleted {
+			if d.Seeding {
+				d.Seeding = false
+				emit(eventUpdated, snapshot(d))
+			}
+			continue
+		}
+		if d.Status == StatusFailed || d.Status == StatusPaused {
+			continue
+		}
+		m.idleLocked(d, StatusFailed)
+		d.Error = errNoClient.Error()
+		emit(eventFailed, snapshot(d))
+		emit(eventUpdated, snapshot(d))
+	}
+	m.persistLocked()
+}
+
 func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
-	lt, err := m.reattach(ctx, cl, j)
+	jobCtx, started := m.beginJob(ctx, j.id)
+	if !started {
+		return
+	}
+	defer m.endJob(j.id)
+
+	lt, err := m.reattach(jobCtx, cl, j)
 	if err != nil {
-		if ctx.Err() != nil {
+		if jobCtx.Err() != nil {
 			return
 		}
 		slog.Error("restore download", "id", j.id, "infoHash", j.infoHash, "error", err)
-		m.markFailed(j.id, "не удалось восстановить загрузку")
+		if j.complete {
+			m.setSeeding(j.id, false)
+			return
+		}
+		m.markFailed(j.id, restoreFailedMessage)
 		return
 	}
+	m.watchWriteErrors(j.id, lt)
+	m.settleRestored(jobCtx, j, lt, lt.t.Info())
+}
 
+func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTorrent, info *metainfo.Info) {
 	m.mu.Lock()
 	d := m.findLocked(j.id)
 	if d == nil {
 		m.mu.Unlock()
-		lt.drop()
+		eng.drop()
 		return
 	}
-	if len(d.Files) == 0 {
-		if info := lt.t.Info(); info != nil {
-			d.Files = fileStates(info, nil)
-			d.Total = selectedTotal(d.Files)
-		}
+	if len(d.Files) == 0 && info != nil {
+		d.Files = fileStates(info, nil)
+		d.Total = selectedTotal(d.Files)
 	}
-	m.engines[j.id] = lt
-	lt.setPriorities(selectionOf(d))
+	m.engines[j.id] = eng
+	eng.setPriorities(selectionOf(d))
 	if j.complete {
 		d.Seeding = true
-		lt.allowUpload()
+		eng.allowUpload()
 		emit(eventUpdated, snapshot(d))
+		m.persistLocked()
 		m.mu.Unlock()
 		return
 	}
@@ -912,8 +1107,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	emit(eventUpdated, snapshot(d))
 	m.mu.Unlock()
 
-	m.watchWriteErrors(j.id, lt)
-	if err := lt.verify(ctx); err != nil {
+	if err := eng.verify(ctx); err != nil {
 		if ctx.Err() != nil {
 			return
 		}
@@ -926,15 +1120,22 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	if d == nil {
 		return
 	}
-	m.updateLocked(d, lt, time.Now())
-	if j.paused {
-		lt.disallowDownload()
-		lt.disallowUpload()
+	m.updateLocked(d, eng, time.Now())
+	switch {
+	case j.paused:
+		eng.disallowDownload()
+		eng.disallowUpload()
 		m.idleLocked(d, StatusPaused)
-	} else {
+		emit(eventUpdated, snapshot(d))
+	case j.force:
 		d.Status = StatusQueued
+		if !m.startLocked(d) {
+			emit(eventUpdated, snapshot(d))
+		}
+	default:
+		d.Status = StatusQueued
+		emit(eventUpdated, snapshot(d))
 	}
-	emit(eventUpdated, snapshot(d))
 	m.persistLocked()
 	m.schedule()
 }
@@ -965,6 +1166,15 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 		lt.drop()
 		return nil, err
 	}
+
+	m.mu.Lock()
+	stillTracked := m.findLocked(j.id) != nil
+	m.mu.Unlock()
+	if !stillTracked {
+		lt.drop()
+		return nil, errNotFound
+	}
+
 	mi := lt.t.Metainfo()
 	if err := m.store.saveMetainfo(j.infoHash, &mi); err != nil {
 		slog.Warn("save metainfo", "infoHash", j.infoHash, "error", err)
@@ -994,11 +1204,11 @@ func (m *Manager) setSeeding(id string, seeding bool) {
 	emit(eventUpdated, snapshot(d))
 }
 
-func removeContent(d *Download) {
-	if d.Destination == "" || !isSafeTorrentPath(d.Name) {
+func removeContent(destination, name string) {
+	if destination == "" || !isSafeTorrentPath(name) {
 		return
 	}
-	root := filepath.Join(d.Destination, d.Name)
+	root := filepath.Join(destination, name)
 	for _, path := range []string{root, root + ".part"} {
 		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("remove download data", "path", path, "error", err)

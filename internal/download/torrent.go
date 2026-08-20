@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -51,20 +53,51 @@ type client struct {
 }
 
 func newClient(cfg settings.Settings, metaDir string) (*client, error) {
+	tc := clientConfig(cfg, listenPort)
+	cl, err := torrent.NewClient(tc)
+	if err != nil && isListenError(err) {
+		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
+		closeDefaultStorage(tc)
+		tc = clientConfig(cfg, 0)
+		cl, err = torrent.NewClient(tc)
+	}
+	if err != nil {
+		closeDefaultStorage(tc)
+		return nil, err
+	}
+	slog.Info("torrent client started", "port", cl.LocalPort())
+	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
+}
+
+func clientConfig(cfg settings.Settings, port int) *torrent.ClientConfig {
 	tc := torrent.NewDefaultClientConfig()
 	tc.DataDir = cfg.DownloadsPath
-	tc.ListenPort = listenPort
+	tc.ListenPort = port
 	tc.Seed = true
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)
 	tc.DefaultStorage = storage.NewFileWithCompletion(cfg.DownloadsPath, storage.NewMapPieceCompletion())
+	return tc
+}
 
-	cl, err := torrent.NewClient(tc)
-	if err != nil {
-		return nil, err
+func closeDefaultStorage(tc *torrent.ClientConfig) {
+	if closer, ok := tc.DefaultStorage.(io.Closer); ok {
+		if err := closer.Close(); err != nil {
+			slog.Warn("close default storage", "error", err)
+		}
 	}
-	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
+}
+
+func isListenError(err error) bool {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "bind") ||
+		strings.Contains(text, "listen") ||
+		strings.Contains(text, "address already in use")
 }
 
 func (c *client) applyLimits(down, up int64) {
@@ -95,6 +128,9 @@ func (c *client) addMagnet(uri, destination string) (*liveTorrent, error) {
 }
 
 func (c *client) add(spec *torrent.TorrentSpec, destination string) (*liveTorrent, error) {
+	if len(spec.PieceLayers) == 0 {
+		spec.PieceLayers = nil
+	}
 	st := storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
 	spec.Storage = st
 	spec.DisallowDataDownload = true
@@ -122,7 +158,7 @@ func magnetSpec(uri string) (*torrent.TorrentSpec, error) {
 
 func newLimiter(bytesPerSecond int64) *rate.Limiter {
 	if bytesPerSecond <= 0 {
-		return rate.NewLimiter(rate.Inf, 0)
+		return rate.NewLimiter(rate.Inf, math.MaxInt)
 	}
 	return rate.NewLimiter(rate.Limit(bytesPerSecond), limiterBurst(bytesPerSecond))
 }
@@ -140,7 +176,7 @@ func applyLimit(l *rate.Limiter, bytesPerSecond int64) {
 	}
 	if bytesPerSecond <= 0 {
 		l.SetLimit(rate.Inf)
-		l.SetBurst(0)
+		l.SetBurst(math.MaxInt)
 		return
 	}
 	l.SetLimit(rate.Limit(bytesPerSecond))

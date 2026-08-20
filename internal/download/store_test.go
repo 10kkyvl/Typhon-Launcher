@@ -81,3 +81,44 @@ func TestStoreMissingFileLoadsEmpty(t *testing.T) {
 		t.Fatalf("loaded %v, want nil", got)
 	}
 }
+
+func writeTestMetainfo(t *testing.T, s *store, infoHash string) {
+	t.Helper()
+	path := s.metainfoPath(infoHash)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("d4:infod4:name1:aee"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStoreHasMetainfo(t *testing.T) {
+	s := newStore(t.TempDir())
+	if s.hasMetainfo("aaaa") {
+		t.Fatal("reported metainfo that was never written")
+	}
+	writeTestMetainfo(t, s, "aaaa")
+	if !s.hasMetainfo("aaaa") {
+		t.Fatal("written metainfo not found")
+	}
+}
+
+func TestStoreSweepMetainfoRemovesOrphans(t *testing.T) {
+	s := newStore(t.TempDir())
+	writeTestMetainfo(t, s, "keep")
+	writeTestMetainfo(t, s, "orphan")
+
+	s.sweepMetainfo(map[string]bool{"keep": true})
+
+	if !s.hasMetainfo("keep") {
+		t.Fatal("known metainfo removed")
+	}
+	if s.hasMetainfo("orphan") {
+		t.Fatal("orphaned metainfo kept")
+	}
+}
+
+func TestStoreSweepMetainfoWithoutDirectory(t *testing.T) {
+	newStore(t.TempDir()).sweepMetainfo(nil)
+}

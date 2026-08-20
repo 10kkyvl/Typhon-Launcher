@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
@@ -99,6 +100,39 @@ func (s *store) loadMetainfo(infoHash string) (*metainfo.MetaInfo, error) {
 		return nil, errors.New("downloads path unavailable")
 	}
 	return metainfo.LoadFromFile(s.metainfoPath(infoHash))
+}
+
+func (s *store) hasMetainfo(infoHash string) bool {
+	if s.dir == "" {
+		return false
+	}
+	info, err := os.Stat(s.metainfoPath(infoHash))
+	return err == nil && !info.IsDir()
+}
+
+func (s *store) sweepMetainfo(known map[string]bool) {
+	if s.dir == "" {
+		return
+	}
+	dir := filepath.Join(s.dir, "torrents")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".torrent") {
+			continue
+		}
+		if known[strings.ToLower(strings.TrimSuffix(name, ".torrent"))] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			slog.Warn("remove orphaned torrent file", "name", name, "error", err)
+		} else {
+			slog.Info("removed orphaned torrent file", "name", name)
+		}
+	}
 }
 
 func (s *store) removeMetainfo(infoHash string) {

@@ -1,6 +1,9 @@
 package download
 
 import (
+	"errors"
+	"fmt"
+	"net"
 	"runtime"
 	"testing"
 
@@ -39,6 +42,26 @@ func TestLimiterBurst(t *testing.T) {
 	}
 	if got := limiterBurst(4 << 20); got != 4<<20 {
 		t.Fatalf("burst = %d, want %d", got, 4<<20)
+	}
+}
+
+func TestIsListenError(t *testing.T) {
+	bindErr := &net.OpError{
+		Op:  "listen",
+		Net: "udp4",
+		Err: errors.New("Only one usage of each socket address is normally permitted."),
+	}
+	if !isListenError(bindErr) {
+		t.Fatal("net.OpError not recognised as a listen failure")
+	}
+	if !isListenError(fmt.Errorf("wrapped: %w", bindErr)) {
+		t.Fatal("wrapped net.OpError not recognised")
+	}
+	if !isListenError(errors.New("listen udp4 :42815: bind: address already in use")) {
+		t.Fatal("plain bind error not recognised")
+	}
+	if isListenError(errors.New("не удалось прочитать torrent-файл")) {
+		t.Fatal("unrelated error treated as a listen failure")
 	}
 }
 
