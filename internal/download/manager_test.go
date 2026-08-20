@@ -734,3 +734,78 @@ func TestPersistedStateReloads(t *testing.T) {
 		t.Fatalf("statuses = %s %s, want queued", items[0].Status, items[1].Status)
 	}
 }
+
+func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
+	m := newTestManager(t, 2)
+	m.addTestItem("a", StatusCompleted)
+	m.mu.Lock()
+	m.findLocked("a").Seeding = true
+	m.mu.Unlock()
+
+	if err := m.DeleteData("a"); err != errSeeding {
+		t.Fatalf("error = %v, want %v", err, errSeeding)
+	}
+	if _, err := m.Get("a"); err != nil {
+		t.Fatalf("download dropped: %v", err)
+	}
+}
+
+func TestDeleteDataRefusesUnfinishedDownload(t *testing.T) {
+	m := newTestManager(t, 2)
+	m.addTestItem("a", StatusQueued)
+	if err := m.DeleteData("a"); err != errUnavailable {
+		t.Fatalf("error = %v, want %v", err, errUnavailable)
+	}
+	if err := m.DeleteData("missing"); err != errNotFound {
+		t.Fatalf("error = %v, want %v", err, errNotFound)
+	}
+}
+
+func TestDeleteDataRemovesRecordAndFiles(t *testing.T) {
+	dest := t.TempDir()
+	root := filepath.Join(dest, "a")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "game.bin"), []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newTestManager(t, 2)
+	m.addTestItem("a", StatusCompleted)
+	m.mu.Lock()
+	m.findLocked("a").Destination = dest
+	m.mu.Unlock()
+
+	if err := m.DeleteData("a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Get("a"); err == nil {
+		t.Fatal("record kept after delete")
+	}
+	waitUntil(t, "download data to be deleted", func() bool {
+		_, err := os.Stat(root)
+		return os.IsNotExist(err)
+	})
+}
+
+func TestCompletionNotifiesInstaller(t *testing.T) {
+	m := newTestManager(t, 2)
+	seen := make(chan Download, 1)
+	m.SetOnCompleted(func(d Download) { seen <- d })
+
+	eng := m.addTestDownload("a")
+	eng.mu.Lock()
+	eng.done = 100
+	eng.mu.Unlock()
+	m.sample(time.Now())
+
+	select {
+	case d := <-seen:
+		if d.ID != "a" || d.Status != StatusCompleted {
+			t.Fatalf("notified with %+v", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("completion callback not invoked")
+	}
+}

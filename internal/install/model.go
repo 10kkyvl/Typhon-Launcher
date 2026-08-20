@@ -1,5 +1,7 @@
 package install
 
+import "time"
+
 type Type string
 
 const (
@@ -51,4 +53,116 @@ type Progress struct {
 	BytesDone   int64
 	BytesTotal  int64
 	CurrentFile string
+}
+
+const (
+	ModeMove = "move"
+	ModeCopy = "copy"
+)
+
+type Installation struct {
+	ID              string      `json:"id"`
+	DownloadID      string      `json:"downloadId"`
+	GameID          string      `json:"gameId"`
+	Name            string      `json:"name"`
+	Type            Type        `json:"type"`
+	Status          Status      `json:"status"`
+	Mode            string      `json:"mode"`
+	SourcePath      string      `json:"sourcePath"`
+	ContentRoot     string      `json:"contentRoot"`
+	Destination     string      `json:"destination"`
+	InstallerPath   string      `json:"installerPath"`
+	WorkingDir      string      `json:"workingDir"`
+	ArchivePath     string      `json:"archivePath"`
+	Progress        float64     `json:"progress"`
+	CurrentFile     string      `json:"currentFile"`
+	BytesDone       int64       `json:"bytesDone"`
+	BytesTotal      int64       `json:"bytesTotal"`
+	Executable      string      `json:"executable"`
+	Candidates      []Candidate `json:"candidates"`
+	DetectedVersion string      `json:"detectedVersion"`
+	VersionSource   string      `json:"versionSource"`
+	StartedAt       time.Time   `json:"startedAt"`
+	CompletedAt     *time.Time  `json:"completedAt"`
+	Error           string      `json:"error"`
+}
+
+type PlanInfo struct {
+	Plan          Plan   `json:"plan"`
+	DownloadID    string `json:"downloadId"`
+	Name          string `json:"name"`
+	RequiredBytes int64  `json:"requiredBytes"`
+	FreeBytes     int64  `json:"freeBytes"`
+	Seeding       bool   `json:"seeding"`
+}
+
+type StartOptions struct {
+	Destination   string `json:"destination"`
+	Mode          string `json:"mode"`
+	Type          Type   `json:"type"`
+	InstallerPath string `json:"installerPath"`
+}
+
+type RemovedEvent struct {
+	ID string `json:"id"`
+}
+
+func snapshotOf(i *Installation) Installation {
+	out := *i
+	out.Candidates = append([]Candidate(nil), i.Candidates...)
+	if i.CompletedAt != nil {
+		at := *i.CompletedAt
+		out.CompletedAt = &at
+	}
+	return out
+}
+
+func controlled(t Type) bool {
+	switch t {
+	case TypePortable, TypeArchiveZip, TypeArchive7z, TypeArchiveRar:
+		return true
+	}
+	return false
+}
+
+func archived(t Type) bool {
+	switch t {
+	case TypeArchiveZip, TypeArchive7z, TypeArchiveRar:
+		return true
+	}
+	return false
+}
+
+func external(t Type) bool {
+	return t == TypeExeInstaller || t == TypeMsiInstaller
+}
+
+func transient(s Status) bool {
+	switch s {
+	case StatusPending, StatusPreparing, StatusInstalling, StatusExtracting, StatusVerifying:
+		return true
+	}
+	return false
+}
+
+func active(s Status) bool {
+	return transient(s) || s == StatusWaitingForUser
+}
+
+func retryable(s Status) bool {
+	switch s {
+	case StatusFailed, StatusCancelled, StatusInterrupted:
+		return true
+	}
+	return false
+}
+
+func ratio(done, total int64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	if done >= total {
+		return 1
+	}
+	return float64(done) / float64(total)
 }

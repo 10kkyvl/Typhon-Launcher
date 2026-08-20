@@ -20,18 +20,27 @@ import (
 )
 
 type Game struct {
-	ID              string     `json:"id"`
-	Title           string     `json:"title"`
-	Executable      string     `json:"executable"`
-	LaunchArgs      []string   `json:"launchArgs,omitempty"`
-	InstallDir      string     `json:"installDir"`
-	Cover           string     `json:"cover"`
-	Hero            string     `json:"hero"`
-	Version         string     `json:"version"`
-	SizeBytes       int64      `json:"sizeBytes"`
-	LastPlayed      *time.Time `json:"lastPlayed"`
-	PlaytimeSeconds int64      `json:"playtimeSeconds"`
-	InstalledAt     time.Time  `json:"installedAt"`
+	ID               string     `json:"id"`
+	Title            string     `json:"title"`
+	Executable       string     `json:"executable"`
+	LaunchArgs       []string   `json:"launchArgs,omitempty"`
+	InstallDir       string     `json:"installDir"`
+	Cover            string     `json:"cover"`
+	Hero             string     `json:"hero"`
+	Version          string     `json:"version"`
+	SizeBytes        int64      `json:"sizeBytes"`
+	LastPlayed       *time.Time `json:"lastPlayed"`
+	PlaytimeSeconds  int64      `json:"playtimeSeconds"`
+	InstalledAt      time.Time  `json:"installedAt"`
+	SourceDownloadID string     `json:"sourceDownloadId,omitempty"`
+}
+
+type InstalledGame struct {
+	Title            string `json:"title"`
+	Executable       string `json:"executable"`
+	InstallDir       string `json:"installDir"`
+	Version          string `json:"version"`
+	SourceDownloadID string `json:"sourceDownloadId"`
 }
 
 type Service struct {
@@ -155,6 +164,63 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 		return Game{}, fmt.Errorf("save library: %w", err)
 	}
 	slog.Info("game added", "id", game.ID, "title", game.Title)
+	s.emitUpdated()
+	return game, nil
+}
+
+func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
+	info, err := os.Stat(g.Executable)
+	if err != nil || info.IsDir() {
+		return Game{}, errors.New("исполняемый файл не найден")
+	}
+	installDir := strings.TrimSpace(g.InstallDir)
+	if installDir == "" {
+		installDir = filepath.Dir(g.Executable)
+	}
+	title := strings.TrimSpace(g.Title)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if !strings.EqualFold(s.games[i].Executable, g.Executable) {
+			continue
+		}
+		previous := s.games[i]
+		if title != "" {
+			s.games[i].Title = title
+		}
+		s.games[i].InstallDir = installDir
+		s.games[i].Version = g.Version
+		s.games[i].SizeBytes = dirSize(installDir)
+		s.games[i].SourceDownloadID = g.SourceDownloadID
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+		slog.Info("game updated", "id", s.games[i].ID, "title", s.games[i].Title)
+		s.emitUpdated()
+		return s.games[i], nil
+	}
+
+	if title == "" {
+		title = TitleFromExecutable(g.Executable)
+	}
+	game := Game{
+		ID:               newID(),
+		Title:            title,
+		Executable:       g.Executable,
+		InstallDir:       installDir,
+		Version:          g.Version,
+		SizeBytes:        dirSize(installDir),
+		InstalledAt:      time.Now(),
+		SourceDownloadID: g.SourceDownloadID,
+	}
+	s.games = append(s.games, game)
+	if err := s.persist(); err != nil {
+		s.games = s.games[:len(s.games)-1]
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	slog.Info("game installed", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
 }

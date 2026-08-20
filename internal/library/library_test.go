@@ -3,6 +3,7 @@ package library
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,6 +65,74 @@ func TestPlayMissingExecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("expected error for missing executable")
+	}
+}
+
+func TestRegisterInstalledAddsGame(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := newServiceAt(path)
+	exe := tempGameExe(t)
+
+	game, err := s.RegisterInstalled(InstalledGame{
+		Title:            "  Space Game  ",
+		Executable:       exe,
+		InstallDir:       filepath.Dir(exe),
+		Version:          "1.2.3",
+		SourceDownloadID: "d1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if game.Title != "Space Game" || game.Version != "1.2.3" || game.SourceDownloadID != "d1" {
+		t.Fatalf("game = %+v", game)
+	}
+	if game.SizeBytes == 0 || game.InstalledAt.IsZero() {
+		t.Fatalf("game = %+v", game)
+	}
+
+	reloaded := newServiceAt(path).GetInstalledGames()
+	if len(reloaded) != 1 || reloaded[0].SourceDownloadID != "d1" {
+		t.Fatalf("reloaded = %+v", reloaded)
+	}
+}
+
+func TestRegisterInstalledUpdatesExisting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := newServiceAt(path)
+	exe := tempGameExe(t)
+
+	first, err := s.AddGame(exe, "Original")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := s.RegisterInstalled(InstalledGame{
+		Executable:       strings.ToUpper(exe),
+		Version:          "2.0",
+		SourceDownloadID: "d2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != first.ID {
+		t.Fatalf("id = %q, want %q", updated.ID, first.ID)
+	}
+	if updated.Title != "Original" {
+		t.Fatalf("title = %q, want the original one", updated.Title)
+	}
+	if updated.Version != "2.0" || updated.SourceDownloadID != "d2" {
+		t.Fatalf("game = %+v", updated)
+	}
+	if games := s.GetInstalledGames(); len(games) != 1 {
+		t.Fatalf("games = %+v", games)
+	}
+}
+
+func TestRegisterInstalledRejectsMissingExecutable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := newServiceAt(path)
+	if _, err := s.RegisterInstalled(InstalledGame{Executable: filepath.Join(t.TempDir(), "nope.exe")}); err == nil {
 		t.Fatal("expected error for missing executable")
 	}
 }

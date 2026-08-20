@@ -46,6 +46,7 @@ var (
 	errNoClient    = errors.New("торрент-клиент недоступен")
 	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
 	errNoRestore   = errors.New(restoreFailedMessage)
+	errSeeding     = errors.New("файлы сейчас раздаются — сначала остановите раздачу")
 )
 
 type pending struct {
@@ -70,8 +71,9 @@ type Manager struct {
 	pending map[string]*pending
 	jobs    map[string]*jobState
 
-	client *client
-	max    int
+	client      *client
+	max         int
+	onCompleted func(Download)
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -638,9 +640,61 @@ func (m *Manager) spawnRestoreLocked(job restoreJob) {
 	}()
 }
 
+//wails:ignore
+func (m *Manager) SetOnCompleted(fn func(Download)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onCompleted = fn
+}
+
 func (m *Manager) Cancel(id string) error { return m.discard(id, true) }
 
 func (m *Manager) Remove(id string) error { return m.discard(id, false) }
+
+func (m *Manager) DeleteData(id string) error {
+	m.mu.Lock()
+	d := m.findLocked(id)
+	if d == nil {
+		m.mu.Unlock()
+		return errNotFound
+	}
+	if d.Status != StatusCompleted {
+		m.mu.Unlock()
+		return errUnavailable
+	}
+	if d.Seeding {
+		m.mu.Unlock()
+		return errSeeding
+	}
+	eng := m.engines[id]
+	delete(m.engines, id)
+
+	job := m.jobs[id]
+	if job != nil {
+		job.cancel()
+	}
+
+	infoHash := d.InfoHash
+	destination, name := d.Destination, d.Name
+
+	m.dropLocked(id)
+	slog.Info("download data deleted", "id", id, "name", name)
+	emit(eventRemoved, RemovedEvent{ID: id})
+	m.schedule()
+	m.mu.Unlock()
+
+	go func() {
+		if job != nil {
+			<-job.done
+		}
+		if eng != nil {
+			eng.drop()
+		}
+		m.discardMetainfo(infoHash)
+		removeContent(destination, name)
+	}()
+	return nil
+}
 
 func (m *Manager) discard(id string, deleteData bool) error {
 	m.mu.Lock()
@@ -913,6 +967,10 @@ func (m *Manager) completeLocked(d *Download) {
 	slog.Info("download completed", "id", d.ID, "name", d.Name)
 	emit(eventCompleted, snapshot(d))
 	emit(eventUpdated, snapshot(d))
+	if m.onCompleted != nil {
+		notify, done := m.onCompleted, snapshot(d)
+		go notify(done)
+	}
 	m.schedule()
 }
 

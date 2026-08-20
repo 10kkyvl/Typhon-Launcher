@@ -62,6 +62,39 @@ func TestDownloadLimitsAreSanitized(t *testing.T) {
 	}
 }
 
+func TestCleanupPolicyIsSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := newServiceAt(path)
+
+	next := s.GetSettings()
+	next.InstallCleanupPolicy = "wipe"
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().InstallCleanupPolicy; got != CleanupKeep {
+		t.Fatalf("policy = %q, want %q", got, CleanupKeep)
+	}
+
+	next.InstallCleanupPolicy = CleanupDelete
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().InstallCleanupPolicy; got != CleanupDelete {
+		t.Fatalf("policy = %q, want %q", got, CleanupDelete)
+	}
+}
+
+func TestInstallDefaultsSurviveOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"dark","gamesPath":"D:\\Games"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := newServiceAt(path).GetSettings()
+	if got.InstallCleanupPolicy != CleanupKeep || got.AutoInstall || !got.VerifyAfterInstall {
+		t.Fatalf("install defaults lost: %+v", got)
+	}
+}
+
 func TestSubscribersAreNotified(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	s := newServiceAt(path)

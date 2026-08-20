@@ -12,6 +12,12 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+const (
+	CleanupKeep   = "keep"
+	CleanupAsk    = "ask"
+	CleanupDelete = "delete"
+)
+
 type Settings struct {
 	Theme                string  `json:"theme"`
 	Language             string  `json:"language"`
@@ -27,6 +33,9 @@ type Settings struct {
 	DownloadRateLimit    int64   `json:"downloadRateLimit"`
 	UploadRateLimit      int64   `json:"uploadRateLimit"`
 	SeedAfterDownload    bool    `json:"seedAfterDownload"`
+	InstallCleanupPolicy string  `json:"installCleanupPolicy"`
+	AutoInstall          bool    `json:"autoInstall"`
+	VerifyAfterInstall   bool    `json:"verifyAfterInstall"`
 }
 
 func Defaults() Settings {
@@ -50,6 +59,9 @@ func Defaults() Settings {
 		DownloadRateLimit:    0,
 		UploadRateLimit:      0,
 		SeedAfterDownload:    false,
+		InstallCleanupPolicy: CleanupKeep,
+		AutoInstall:          false,
+		VerifyAfterInstall:   true,
 	}
 }
 
@@ -68,6 +80,11 @@ func sanitize(s Settings) Settings {
 	}
 	if s.UploadRateLimit < 0 {
 		s.UploadRateLimit = 0
+	}
+	switch s.InstallCleanupPolicy {
+	case CleanupKeep, CleanupAsk, CleanupDelete:
+	default:
+		s.InstallCleanupPolicy = CleanupKeep
 	}
 	return s
 }

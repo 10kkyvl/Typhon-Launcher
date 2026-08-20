@@ -8,6 +8,7 @@ import (
 
 	"typhon/internal/app"
 	"typhon/internal/download"
+	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/settings"
 
@@ -27,6 +28,12 @@ func init() {
 	application.RegisterEvent[download.Download]("download:completed")
 	application.RegisterEvent[download.Download]("download:failed")
 	application.RegisterEvent[download.RemovedEvent]("download:removed")
+	application.RegisterEvent[install.Installation]("install:started")
+	application.RegisterEvent[install.Installation]("install:updated")
+	application.RegisterEvent[install.Installation]("install:completed")
+	application.RegisterEvent[install.Installation]("install:failed")
+	application.RegisterEvent[install.Installation]("install:cancelled")
+	application.RegisterEvent[install.RemovedEvent]("install:removed")
 }
 
 func main() {
@@ -36,6 +43,8 @@ func main() {
 	appService := app.NewService(settingsService)
 	libraryService := library.NewService()
 	downloadManager := download.NewManager(settingsService)
+	installService := install.NewService(settingsService, downloadManager, libraryService)
+	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -45,6 +54,7 @@ func main() {
 			application.NewService(settingsService),
 			application.NewService(libraryService),
 			application.NewService(downloadManager),
+			application.NewService(installService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
