@@ -1,0 +1,814 @@
+<script lang="ts">
+  import {
+    Bell,
+    Download,
+    FolderOpen,
+    Info,
+    ListChecks,
+    LogOut,
+    Monitor,
+    Settings as SettingsIcon,
+    Trash2,
+    UserRound,
+    Wifi,
+  } from '@lucide/svelte';
+  import Button from '../../lib/components/Button.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
+  import Modal from '../../lib/components/Modal.svelte';
+  import Select from '../../lib/components/Select.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
+  import { user } from '../../lib/mock/user';
+  import { toast } from '../../lib/stores/toasts';
+
+  let tab = $state('general');
+
+  const tabs = [
+    { id: 'general', label: 'Общие', icon: SettingsIcon },
+    { id: 'downloads', label: 'Загрузки', icon: Download },
+    { id: 'connection', label: 'Соединение', icon: Wifi },
+    { id: 'interface', label: 'Интерфейс', icon: Monitor },
+    { id: 'notifications', label: 'Уведомления', icon: Bell },
+    { id: 'account', label: 'Аккаунт', icon: UserRound },
+    { id: 'about', label: 'О программе', icon: Info },
+  ];
+
+  let launchOnStartup = $state(false);
+  let minimizeToTray = $state(true);
+  let overlay = $state(true);
+  let hardwareAccel = $state(true);
+  let autoUpdate = $state(true);
+
+  let theme = $state('dark');
+  let language = $state('ru');
+  let scale = $state('100');
+  let animations = $state(true);
+  let descriptions = $state(true);
+
+  let gamesFolder = $state('D:\\Aurora\\Games');
+  let downloadsFolder = $state('D:\\Aurora\\Downloads');
+  let screenshotsFolder = $state('D:\\Aurora\\Screenshots');
+  let tempFolder = $state('D:\\Aurora\\Temp');
+
+  let downloadLimit = $state('none');
+  let uploadLimit = $state('5');
+  let maxActive = $state('2');
+  let seedAfter = $state(true);
+  let scheduleEnabled = $state(false);
+
+  let port = $state('42815');
+  let upnp = $state(true);
+  let proxy = $state(false);
+
+  let notifyDone = $state(true);
+  let notifyUpdates = $state(true);
+  let notifyAchievements = $state(true);
+  let notifySound = $state(false);
+
+  let resetOpen = $state(false);
+
+  const cleanupItems = [
+    { id: 'cache', label: 'Очистить кэш', sub: 'Временные файлы приложений и загрузок', size: '2,45 ГБ' },
+    { id: 'shaders', label: 'Очистить кэш шейдеров', sub: 'Скомпилированные шейдеры для игр', size: '1,12 ГБ' },
+    { id: 'logs', label: 'Очистить журналы', sub: 'Файлы логов и диагностические данные', size: '156 МБ' },
+  ];
+
+  function folderRow(label: string, value: string) {
+    return { label, value };
+  }
+
+  const folders = $derived([
+    { ...folderRow('Папка с играми', gamesFolder), set: (v: string) => (gamesFolder = v) },
+    { ...folderRow('Папка загрузок', downloadsFolder), set: (v: string) => (downloadsFolder = v) },
+    { ...folderRow('Папка скриншотов', screenshotsFolder), set: (v: string) => (screenshotsFolder = v) },
+    { ...folderRow('Временная папка', tempFolder), set: (v: string) => (tempFolder = v) },
+  ]);
+</script>
+
+<h1 class="page-title">Настройки</h1>
+
+<div class="tabs">
+  {#each tabs as t (t.id)}
+    <button class="tab" class:selected={tab === t.id} onclick={() => (tab = t.id)}>
+      <t.icon size={17} strokeWidth={1.8} />
+      {t.label}
+    </button>
+  {/each}
+</div>
+
+{#if tab === 'general'}
+  <div class="columns">
+    <div class="column">
+      <section class="group">
+        <h3>Запуск и поведение</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Запускать Aurora при старте системы</span>
+              <span class="row-sub">Приложение будет запускаться автоматически</span>
+            </div>
+            <Toggle bind:checked={launchOnStartup} label="Запускать при старте" />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Сворачивать в трей</span>
+              <span class="row-sub">При закрытии окна сворачивать в область уведомлений</span>
+            </div>
+            <Toggle bind:checked={minimizeToTray} label="Сворачивать в трей" />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Показывать оверлей в игре</span>
+              <span class="row-sub">Игровой оверлей для доступа к функциям Aurora</span>
+            </div>
+            <Toggle bind:checked={overlay} label="Оверлей" />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Аппаратное ускорение</span>
+              <span class="row-sub">Использовать GPU для улучшения производительности</span>
+            </div>
+            <Toggle bind:checked={hardwareAccel} label="Аппаратное ускорение" />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Автоматические обновления</span>
+              <span class="row-sub">Обновлять установленные игры в фоне</span>
+            </div>
+            <Toggle bind:checked={autoUpdate} label="Автообновления" />
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Папки</h3>
+        <div class="rows">
+          {#each folders as folder (folder.label)}
+            <div class="row folder-row">
+              <span class="row-label folder-label">{folder.label}</span>
+              <div class="folder-controls">
+                <input type="text" value={folder.value} oninput={(e) => folder.set(e.currentTarget.value)} />
+                <Button size="sm" onclick={() => toast('Выбор папки недоступен в demo')}>Обзор</Button>
+                <IconButton label="Открыть папку" size="sm" onclick={() => toast('Открытие папки недоступно в demo')}>
+                  <FolderOpen size={16} strokeWidth={1.8} />
+                </IconButton>
+              </div>
+            </div>
+          {/each}
+        </div>
+        <div class="group-foot">
+          <Button size="sm" onclick={() => toast('Папка данных недоступна в demo')}>Открыть папку данных</Button>
+        </div>
+      </section>
+    </div>
+
+    <div class="column">
+      <section class="group">
+        <h3>Интерфейс</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Тема</span>
+              <span class="row-sub">Выберите внешний вид приложения</span>
+            </div>
+            <Select
+              bind:value={theme}
+              width="180px"
+              options={[
+                { id: 'dark', label: 'Тёмная' },
+                { id: 'system', label: 'Как в системе' },
+              ]}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Язык</span>
+              <span class="row-sub">Язык интерфейса Aurora</span>
+            </div>
+            <Select
+              bind:value={language}
+              width="180px"
+              options={[
+                { id: 'ru', label: 'Русский' },
+                { id: 'en', label: 'English' },
+              ]}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Размер интерфейса</span>
+              <span class="row-sub">Масштаб элементов интерфейса</span>
+            </div>
+            <Select
+              bind:value={scale}
+              width="180px"
+              options={[
+                { id: '90', label: '90%' },
+                { id: '100', label: '100% (по умолчанию)' },
+                { id: '110', label: '110%' },
+                { id: '125', label: '125%' },
+              ]}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Анимации интерфейса</span>
+              <span class="row-sub">Включить плавные переходы и анимации</span>
+            </div>
+            <Toggle bind:checked={animations} label="Анимации" />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Показывать описания игр</span>
+              <span class="row-sub">Отображать описания на карточках игр в библиотеке</span>
+            </div>
+            <Toggle bind:checked={descriptions} label="Описания игр" />
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Очистка данных</h3>
+        <div class="rows">
+          {#each cleanupItems as item (item.id)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{item.label}</span>
+                <span class="row-sub">{item.sub}</span>
+              </div>
+              <div class="cleanup-controls">
+                <span class="cleanup-size">{item.size}</span>
+                <Button size="sm" onclick={() => toast(`${item.label.replace('Очистить ', '')}: очищено`, 'success')}>
+                  Очистить
+                </Button>
+              </div>
+            </div>
+          {/each}
+        </div>
+        <div class="danger-zone">
+          <div class="row-text">
+            <span class="row-label">Все данные приложения</span>
+            <span class="row-sub">Сбросить настройки и удалить все данные Aurora</span>
+          </div>
+          <Button variant="danger" onclick={() => (resetOpen = true)}>
+            <Trash2 size={15} strokeWidth={1.8} />
+            Сбросить
+          </Button>
+        </div>
+      </section>
+    </div>
+  </div>
+{:else if tab === 'downloads'}
+  <div class="single-column">
+    <section class="group">
+      <h3>Загрузки</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Ограничение скорости загрузки</span>
+            <span class="row-sub">Максимальная скорость входящего трафика</span>
+          </div>
+          <Select
+            bind:value={downloadLimit}
+            width="200px"
+            options={[
+              { id: 'none', label: 'Без ограничений' },
+              { id: '10', label: '10 МБ/с' },
+              { id: '25', label: '25 МБ/с' },
+              { id: '50', label: '50 МБ/с' },
+            ]}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Ограничение скорости отдачи</span>
+            <span class="row-sub">Максимальная скорость исходящего трафика</span>
+          </div>
+          <Select
+            bind:value={uploadLimit}
+            width="200px"
+            options={[
+              { id: 'none', label: 'Без ограничений' },
+              { id: '1', label: '1 МБ/с' },
+              { id: '5', label: '5 МБ/с' },
+              { id: '10', label: '10 МБ/с' },
+            ]}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Одновременные загрузки</span>
+            <span class="row-sub">Количество активных загрузок</span>
+          </div>
+          <Select
+            bind:value={maxActive}
+            width="200px"
+            options={[
+              { id: '1', label: '1' },
+              { id: '2', label: '2' },
+              { id: '3', label: '3' },
+              { id: '5', label: '5' },
+            ]}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Раздавать после загрузки</span>
+            <span class="row-sub">Продолжать отдачу завершённых загрузок</span>
+          </div>
+          <Toggle bind:checked={seedAfter} label="Раздача" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Загружать по расписанию</span>
+            <span class="row-sub">Ограничивать загрузки в определённые часы</span>
+          </div>
+          <Toggle bind:checked={scheduleEnabled} label="Расписание" />
+        </div>
+      </div>
+    </section>
+  </div>
+{:else if tab === 'connection'}
+  <div class="single-column">
+    <section class="group">
+      <h3>Соединение</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Порт для входящих соединений</span>
+            <span class="row-sub">Используется для обмена данными с пирами</span>
+          </div>
+          <input class="port-input" type="text" bind:value={port} />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">UPnP / NAT-PMP</span>
+            <span class="row-sub">Автоматически пробрасывать порт на маршрутизаторе</span>
+          </div>
+          <Toggle bind:checked={upnp} label="UPnP" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Прокси-сервер</span>
+            <span class="row-sub">Направлять трафик через прокси</span>
+          </div>
+          <Toggle bind:checked={proxy} label="Прокси" />
+        </div>
+      </div>
+    </section>
+  </div>
+{:else if tab === 'interface'}
+  <div class="single-column">
+    <section class="group">
+      <h3>Интерфейс</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Тема</span>
+          </div>
+          <Select
+            bind:value={theme}
+            width="200px"
+            options={[
+              { id: 'dark', label: 'Тёмная' },
+              { id: 'system', label: 'Как в системе' },
+            ]}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Размер интерфейса</span>
+          </div>
+          <Select
+            bind:value={scale}
+            width="200px"
+            options={[
+              { id: '90', label: '90%' },
+              { id: '100', label: '100% (по умолчанию)' },
+              { id: '110', label: '110%' },
+              { id: '125', label: '125%' },
+            ]}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Анимации интерфейса</span>
+          </div>
+          <Toggle bind:checked={animations} label="Анимации" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Показывать описания игр</span>
+          </div>
+          <Toggle bind:checked={descriptions} label="Описания" />
+        </div>
+      </div>
+    </section>
+  </div>
+{:else if tab === 'notifications'}
+  <div class="single-column">
+    <section class="group">
+      <h3>Уведомления</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Завершение загрузки</span>
+            <span class="row-sub">Уведомлять, когда игра установлена</span>
+          </div>
+          <Toggle bind:checked={notifyDone} label="Загрузки" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Обновления игр</span>
+            <span class="row-sub">Уведомлять о доступных обновлениях</span>
+          </div>
+          <Toggle bind:checked={notifyUpdates} label="Обновления" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Достижения</span>
+            <span class="row-sub">Показывать уведомления о полученных достижениях</span>
+          </div>
+          <Toggle bind:checked={notifyAchievements} label="Достижения" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Звук уведомлений</span>
+            <span class="row-sub">Воспроизводить звук при уведомлениях</span>
+          </div>
+          <Toggle bind:checked={notifySound} label="Звук" />
+        </div>
+      </div>
+    </section>
+  </div>
+{:else if tab === 'account'}
+  <div class="single-column">
+    <section class="group">
+      <h3>Аккаунт</h3>
+      <div class="account-card">
+        <img class="account-avatar" src={user.avatar} alt="" draggable="false" />
+        <div class="account-info">
+          <span class="account-name">{user.name}</span>
+          <span class="account-status">{user.status} · Локальный профиль</span>
+        </div>
+        <Button onclick={() => toast('Редактирование профиля недоступно в demo')}>Изменить профиль</Button>
+      </div>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Синхронизация сохранений</span>
+            <span class="row-sub">Резервное копирование сохранений между устройствами</span>
+          </div>
+          <Toggle checked={false} label="Синхронизация" onchange={() => toast('Синхронизация недоступна в demo')} />
+        </div>
+      </div>
+      <div class="group-foot">
+        <Button variant="danger" onclick={() => toast('Выход недоступен в demo')}>
+          <LogOut size={15} strokeWidth={1.8} />
+          Выйти из профиля
+        </Button>
+      </div>
+    </section>
+  </div>
+{:else if tab === 'about'}
+  <div class="single-column">
+    <section class="group about">
+      <div class="about-logo">
+        <img src="/aurora.svg" alt="" width="44" height="44" draggable="false" />
+        <div>
+          <h3>Aurora Launcher</h3>
+          <span class="row-sub">Версия 1.3.0</span>
+        </div>
+      </div>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Проверить обновления клиента</span>
+            <span class="row-sub">Установлена последняя версия</span>
+          </div>
+          <Button size="sm" onclick={() => toast('У вас последняя версия', 'success')}>
+            <ListChecks size={15} strokeWidth={1.8} />
+            Проверить
+          </Button>
+        </div>
+      </div>
+      <div class="about-links">
+        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
+        <span class="about-sep">·</span>
+        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
+      </div>
+    </section>
+  </div>
+{/if}
+
+<footer class="footer">
+  <span>Aurora Launcher 1.3.0</span>
+  <div class="footer-links">
+    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
+    <span class="about-sep">|</span>
+    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
+  </div>
+</footer>
+
+<Modal bind:open={resetOpen} title="Сбросить все данные?">
+  <p class="modal-text">
+    Настройки, кэш и локальные данные Aurora будут удалены. Установленные игры останутся на диске. Это действие нельзя
+    отменить.
+  </p>
+  {#snippet footer()}
+    <Button onclick={() => (resetOpen = false)}>Отмена</Button>
+    <Button
+      variant="danger"
+      onclick={() => {
+        resetOpen = false;
+        toast('Сброс недоступен в demo', 'danger');
+      }}
+    >
+      Сбросить все данные
+    </Button>
+  {/snippet}
+</Modal>
+
+<style>
+  .page-title {
+    font-size: 32px;
+    letter-spacing: -0.01em;
+    margin: var(--space-4) 0 var(--space-5);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    margin-bottom: var(--space-6);
+  }
+
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .tab:hover {
+    color: var(--text);
+  }
+
+  .tab.selected {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-width: 0;
+  }
+
+  .single-column {
+    max-width: 720px;
+  }
+
+  .group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .group h3 {
+    font-size: 16px;
+    margin-bottom: var(--space-4);
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    padding: 12px 0;
+  }
+
+  .row + .row {
+    border-top: 1px solid var(--border);
+  }
+
+  .row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .row-label {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .row-sub {
+    font-size: 12.5px;
+    color: var(--text-3);
+  }
+
+  .folder-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .folder-label {
+    font-size: 13.5px;
+  }
+
+  .folder-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .folder-controls input {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--text-2);
+    outline: none;
+    transition: border-color var(--dur) var(--ease);
+  }
+
+  .folder-controls input:hover {
+    border-color: var(--border-strong);
+  }
+
+  .folder-controls input:focus {
+    border-color: rgba(104, 117, 232, 0.55);
+    color: var(--text);
+  }
+
+  .group-foot {
+    margin-top: var(--space-4);
+  }
+
+  .cleanup-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-shrink: 0;
+  }
+
+  .cleanup-size {
+    font-size: 13px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .danger-zone {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    margin-top: var(--space-4);
+    padding: var(--space-4);
+    border: 1px solid rgba(217, 105, 105, 0.25);
+    border-radius: var(--radius-md);
+    background: rgba(217, 105, 105, 0.05);
+  }
+
+  .port-input {
+    width: 120px;
+    height: 36px;
+    padding: 0 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: border-color var(--dur) var(--ease);
+  }
+
+  .port-input:focus {
+    border-color: rgba(104, 117, 232, 0.55);
+  }
+
+  .account-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+  }
+
+  .account-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .account-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .account-name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .account-status {
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  .about-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .about-logo h3 {
+    margin-bottom: 2px;
+  }
+
+  .about-links {
+    margin-top: var(--space-4);
+  }
+
+  .about-link {
+    font-size: 12.5px;
+    color: var(--text-3);
+    border-radius: 4px;
+    transition: color var(--dur) var(--ease);
+  }
+
+  .about-link:hover {
+    color: var(--text-2);
+  }
+
+  .about-sep {
+    margin: 0 8px;
+    color: var(--text-3);
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-8);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-3);
+  }
+
+  .modal-text {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 1240px) {
+    .columns {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
