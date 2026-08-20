@@ -6,10 +6,12 @@
     options,
     value = $bindable(),
     width = '22rem',
+    onchange,
   }: {
     options: { id: string; label: string }[];
     value: string;
     width?: string;
+    onchange?: (id: string) => void;
   } = $props();
 
   let open = $state(false);
@@ -32,6 +34,7 @@
           onclick={() => {
             value = option.id;
             open = false;
+            onchange?.(option.id);
           }}
         >
           <span>{option.label}</span>

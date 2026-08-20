@@ -12,6 +12,7 @@
   } from '@lucide/svelte';
   import { Window } from '@wailsio/runtime';
   import { user } from '../mock/user';
+  import { inWails } from '../services/backend';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
   import { clickOutside } from '../utils/clickOutside';
@@ -27,8 +28,6 @@
     { id: 2, title: 'ELDEN RING', text: 'Доступно дополнение Shadow of the Erdtree' },
     { id: 3, title: 'Источники', text: 'Aurora Core Library обновлена' },
   ];
-
-  const inWails = typeof (window as unknown as { _wails?: unknown })._wails !== 'undefined';
 
   function win(action: 'minimise' | 'maximise' | 'close') {
     if (!inWails) {

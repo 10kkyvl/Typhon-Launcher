@@ -1,0 +1,36 @@
+import { get, writable } from 'svelte/store';
+import { Events } from '@wailsio/runtime';
+import { inWails } from '../services/backend';
+import { getSettings, saveSettings, type Settings } from '../services/settings';
+import { toast } from './toasts';
+
+export const settings = writable<Settings | null>(null);
+
+settings.subscribe((value) => {
+  if (!value) return;
+  document.documentElement.style.setProperty('--ui-scale', String(value.uiScale));
+  document.documentElement.classList.toggle('no-anim', !value.animationsEnabled);
+});
+
+export async function initSettings() {
+  settings.set(await getSettings());
+  if (inWails) {
+    Events.On('settings:updated', (event) => {
+      settings.set(event.data as Settings);
+    });
+  }
+}
+
+export async function updateSettings(patch: Partial<Settings>) {
+  const current = get(settings);
+  if (!current) return;
+  const next = { ...current, ...patch };
+  settings.set(next);
+  try {
+    await saveSettings(next);
+  } catch (err) {
+    console.error('save settings', err);
+    toast('Не удалось сохранить настройки', 'danger');
+    settings.set(current);
+  }
+}

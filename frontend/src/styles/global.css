@@ -96,6 +96,13 @@ h4 {
   background: rgba(104, 117, 232, 0.35);
 }
 
+.no-anim *,
+.no-anim *::before,
+.no-anim *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

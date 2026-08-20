@@ -2,6 +2,8 @@
   import AppShell from './lib/components/AppShell.svelte';
   import { startDownloadSim } from './lib/stores/downloads';
   import { route } from './lib/stores/router';
+  import { initSettings, settings } from './lib/stores/settings';
+  import { refreshStorage } from './lib/stores/storage';
   import Achievements from './routes/achievements/Achievements.svelte';
   import Collections from './routes/collections/Collections.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
@@ -12,6 +14,16 @@
   import Sources from './routes/sources/Sources.svelte';
 
   startDownloadSim();
+  initSettings().then(refreshStorage);
+
+  let lastGamesPath: string | undefined;
+  settings.subscribe((value) => {
+    if (!value) return;
+    if (lastGamesPath !== undefined && lastGamesPath !== value.gamesPath) {
+      refreshStorage();
+    }
+    lastGamesPath = value.gamesPath;
+  });
 </script>
 
 <AppShell>

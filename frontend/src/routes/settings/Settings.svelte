@@ -12,15 +12,19 @@
     UserRound,
     Wifi,
   } from '@lucide/svelte';
+  import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import Select from '../../lib/components/Select.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import { get } from 'svelte/store';
   import { user } from '../../lib/mock/user';
+  import { inWails } from '../../lib/services/backend';
+  import { openFolder, selectFolder, type Settings } from '../../lib/services/settings';
+  import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
+  import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { uiScale } from '../../lib/stores/ui';
+  import { bytesLabel } from '../../lib/utils/format';
 
   let tab = $state('general');
 
@@ -34,22 +38,54 @@
     { id: 'about', label: 'О программе', icon: Info },
   ];
 
-  let launchOnStartup = $state(false);
-  let minimizeToTray = $state(true);
   let overlay = $state(true);
-  let hardwareAccel = $state(true);
   let autoUpdate = $state(true);
-
-  let theme = $state('dark');
-  let language = $state('ru');
-  let scale = $state(String(Math.round(get(uiScale) * 100)));
-  let animations = $state(true);
   let descriptions = $state(true);
 
-  let gamesFolder = $state('D:\\Aurora\\Games');
-  let downloadsFolder = $state('D:\\Aurora\\Downloads');
-  let screenshotsFolder = $state('D:\\Aurora\\Screenshots');
-  let tempFolder = $state('D:\\Aurora\\Temp');
+  const current = $derived($settings);
+  const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
+
+  let appInfo = $state<AppInfo | null>(null);
+  let systemInfo = $state<SystemInfo | null>(null);
+
+  onMount(async () => {
+    appInfo = await getAppInfo();
+    systemInfo = await getSystemInfo();
+  });
+
+  type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
+
+  const folderRows: { key: PathKey; label: string; title: string }[] = [
+    { key: 'gamesPath', label: 'Папка с играми', title: 'Выберите папку с играми' },
+    { key: 'downloadsPath', label: 'Папка загрузок', title: 'Выберите папку загрузок' },
+    { key: 'screenshotsPath', label: 'Папка скриншотов', title: 'Выберите папку скриншотов' },
+  ];
+
+  function set(patch: Partial<Settings>) {
+    updateSettings(patch);
+  }
+
+  async function browseFolder(key: PathKey, title: string) {
+    if (!inWails) {
+      toast('Выбор папки доступен только в desktop-сборке');
+      return;
+    }
+    try {
+      const path = await selectFolder(title);
+      if (path) set({ [key]: path });
+    } catch {
+      toast('Не удалось открыть диалог выбора папки', 'danger');
+    }
+  }
+
+  async function openPath(path: string | undefined) {
+    if (!path) return;
+    try {
+      await openFolder(path);
+    } catch {
+      toast('Папка недоступна', 'danger');
+    }
+  }
 
   let downloadLimit = $state('none');
   let uploadLimit = $state('5');
@@ -68,26 +104,11 @@
 
   let resetOpen = $state(false);
 
-  $effect(() => {
-    uiScale.set(Number(scale) / 100);
-  });
-
   const cleanupItems = [
     { id: 'cache', label: 'Очистить кэш', sub: 'Временные файлы приложений и загрузок', size: '2,45 ГБ' },
     { id: 'shaders', label: 'Очистить кэш шейдеров', sub: 'Скомпилированные шейдеры для игр', size: '1,12 ГБ' },
     { id: 'logs', label: 'Очистить журналы', sub: 'Файлы логов и диагностические данные', size: '156 МБ' },
   ];
-
-  function folderRow(label: string, value: string) {
-    return { label, value };
-  }
-
-  const folders = $derived([
-    { ...folderRow('Папка с играми', gamesFolder), set: (v: string) => (gamesFolder = v) },
-    { ...folderRow('Папка загрузок', downloadsFolder), set: (v: string) => (downloadsFolder = v) },
-    { ...folderRow('Папка скриншотов', screenshotsFolder), set: (v: string) => (screenshotsFolder = v) },
-    { ...folderRow('Временная папка', tempFolder), set: (v: string) => (tempFolder = v) },
-  ]);
 </script>
 
 <h1 class="page-title">Настройки</h1>
@@ -112,14 +133,22 @@
               <span class="row-label">Запускать Aurora при старте системы</span>
               <span class="row-sub">Приложение будет запускаться автоматически</span>
             </div>
-            <Toggle bind:checked={launchOnStartup} label="Запускать при старте" />
+            <Toggle
+              checked={current?.launchOnStartup ?? false}
+              label="Запускать при старте"
+              onchange={(v) => set({ launchOnStartup: v })}
+            />
           </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">Сворачивать в трей</span>
               <span class="row-sub">При закрытии окна сворачивать в область уведомлений</span>
             </div>
-            <Toggle bind:checked={minimizeToTray} label="Сворачивать в трей" />
+            <Toggle
+              checked={current?.minimizeToTray ?? true}
+              label="Сворачивать в трей"
+              onchange={(v) => set({ minimizeToTray: v })}
+            />
           </div>
           <div class="row">
             <div class="row-text">
@@ -133,7 +162,11 @@
               <span class="row-label">Аппаратное ускорение</span>
               <span class="row-sub">Использовать GPU для улучшения производительности</span>
             </div>
-            <Toggle bind:checked={hardwareAccel} label="Аппаратное ускорение" />
+            <Toggle
+              checked={current?.hardwareAcceleration ?? true}
+              label="Аппаратное ускорение"
+              onchange={(v) => set({ hardwareAcceleration: v })}
+            />
           </div>
           <div class="row">
             <div class="row-text">
@@ -148,21 +181,22 @@
       <section class="group">
         <h3>Папки</h3>
         <div class="rows">
-          {#each folders as folder (folder.label)}
+          {#each folderRows as folder (folder.key)}
             <div class="row folder-row">
               <span class="row-label folder-label">{folder.label}</span>
               <div class="folder-controls">
-                <input type="text" value={folder.value} oninput={(e) => folder.set(e.currentTarget.value)} />
-                <Button size="sm" onclick={() => toast('Выбор папки недоступен в demo')}>Обзор</Button>
-                <IconButton label="Открыть папку" size="sm" onclick={() => toast('Открытие папки недоступно в demo')}>
+                <input
+                  type="text"
+                  value={current?.[folder.key] ?? ''}
+                  onchange={(e) => set({ [folder.key]: e.currentTarget.value })}
+                />
+                <Button size="sm" onclick={() => browseFolder(folder.key, folder.title)}>Обзор</Button>
+                <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
                   <FolderOpen size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               </div>
             </div>
           {/each}
-        </div>
-        <div class="group-foot">
-          <Button size="sm" onclick={() => toast('Папка данных недоступна в demo')}>Открыть папку данных</Button>
         </div>
       </section>
     </div>
@@ -177,12 +211,13 @@
               <span class="row-sub">Выберите внешний вид приложения</span>
             </div>
             <Select
-              bind:value={theme}
+              value={current?.theme ?? 'dark'}
               width="18rem"
               options={[
                 { id: 'dark', label: 'Тёмная' },
                 { id: 'system', label: 'Как в системе' },
               ]}
+              onchange={(id) => set({ theme: id })}
             />
           </div>
           <div class="row">
@@ -191,12 +226,13 @@
               <span class="row-sub">Язык интерфейса Aurora</span>
             </div>
             <Select
-              bind:value={language}
+              value={current?.language ?? 'ru'}
               width="18rem"
               options={[
                 { id: 'ru', label: 'Русский' },
                 { id: 'en', label: 'English' },
               ]}
+              onchange={(id) => set({ language: id })}
             />
           </div>
           <div class="row">
@@ -205,7 +241,7 @@
               <span class="row-sub">Масштаб элементов интерфейса</span>
             </div>
             <Select
-              bind:value={scale}
+              value={scaleValue}
               width="18rem"
               options={[
                 { id: '90', label: '90%' },
@@ -213,6 +249,7 @@
                 { id: '110', label: '110%' },
                 { id: '125', label: '125%' },
               ]}
+              onchange={(id) => set({ uiScale: Number(id) / 100 })}
             />
           </div>
           <div class="row">
@@ -220,7 +257,11 @@
               <span class="row-label">Анимации интерфейса</span>
               <span class="row-sub">Включить плавные переходы и анимации</span>
             </div>
-            <Toggle bind:checked={animations} label="Анимации" />
+            <Toggle
+              checked={current?.animationsEnabled ?? true}
+              label="Анимации"
+              onchange={(v) => set({ animationsEnabled: v })}
+            />
           </div>
           <div class="row">
             <div class="row-text">
@@ -372,12 +413,13 @@
             <span class="row-label">Тема</span>
           </div>
           <Select
-            bind:value={theme}
+            value={current?.theme ?? 'dark'}
             width="20rem"
             options={[
               { id: 'dark', label: 'Тёмная' },
               { id: 'system', label: 'Как в системе' },
             ]}
+            onchange={(id) => set({ theme: id })}
           />
         </div>
         <div class="row">
@@ -385,7 +427,7 @@
             <span class="row-label">Размер интерфейса</span>
           </div>
           <Select
-            bind:value={scale}
+            value={scaleValue}
             width="20rem"
             options={[
               { id: '90', label: '90%' },
@@ -393,13 +435,18 @@
               { id: '110', label: '110%' },
               { id: '125', label: '125%' },
             ]}
+            onchange={(id) => set({ uiScale: Number(id) / 100 })}
           />
         </div>
         <div class="row">
           <div class="row-text">
             <span class="row-label">Анимации интерфейса</span>
           </div>
-          <Toggle bind:checked={animations} label="Анимации" />
+          <Toggle
+            checked={current?.animationsEnabled ?? true}
+            label="Анимации"
+            onchange={(v) => set({ animationsEnabled: v })}
+          />
         </div>
         <div class="row">
           <div class="row-text">
@@ -482,10 +529,30 @@
         <img src="/aurora.svg" alt="" width="44" height="44" draggable="false" />
         <div>
           <h3>Aurora Launcher</h3>
-          <span class="row-sub">Версия 1.3.0</span>
+          <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}</span>
         </div>
       </div>
       <div class="rows">
+        {#if systemInfo}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Система</span>
+              <span class="row-sub">{systemInfo.os}</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Процессор</span>
+              <span class="row-sub">{systemInfo.cpu} · {systemInfo.cores} потоков</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Память</span>
+              <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+            </div>
+          </div>
+        {/if}
         <div class="row">
           <div class="row-text">
             <span class="row-label">Проверить обновления клиента</span>
@@ -507,7 +574,7 @@
 {/if}
 
 <footer class="footer">
-  <span>Aurora Launcher 1.3.0</span>
+  <span>Aurora Launcher {appInfo?.version ?? ''}</span>
   <div class="footer-links">
     <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
     <span class="about-sep">|</span>
