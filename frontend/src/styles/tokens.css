@@ -1,0 +1,54 @@
+:root {
+  --bg: #0b1016;
+  --bg-sidebar: #0a0e13;
+  --surface: #111821;
+  --surface-2: #151d27;
+  --surface-3: #19222d;
+  --border: rgba(255, 255, 255, 0.065);
+  --border-strong: rgba(255, 255, 255, 0.1);
+
+  --text: #f3f5f7;
+  --text-2: #9aa5b1;
+  --text-3: #66717e;
+
+  --accent: #6875e8;
+  --accent-hover: #7884f1;
+  --accent-subtle: rgba(104, 117, 232, 0.14);
+  --accent-text: #97a1f5;
+
+  --success: #65b883;
+  --success-subtle: rgba(101, 184, 131, 0.13);
+  --warning: #d8a45d;
+  --warning-subtle: rgba(216, 164, 93, 0.13);
+  --danger: #d96969;
+  --danger-subtle: rgba(217, 105, 105, 0.12);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 13px;
+  --radius-xl: 16px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --page-x: 32px;
+  --sidebar-w: 240px;
+  --topbar-h: 68px;
+
+  --font-sans: "Geist Variable", "Geist", "Inter", system-ui, -apple-system, sans-serif;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 180ms;
+  --dur-fast: 140ms;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
