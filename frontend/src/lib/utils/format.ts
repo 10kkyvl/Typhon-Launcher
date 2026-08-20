@@ -70,3 +70,38 @@ export function bytesLabel(bytes: number) {
   }
   return `${Math.round(gbValue)} ГБ`;
 }
+
+const KB_BYTES = 1024;
+const MB_BYTES = 1024 ** 2;
+const TB_BYTES = 1024 ** 4;
+
+function decimal(value: number, digits: number) {
+  return value.toFixed(digits).replace('.', ',');
+}
+
+export function bytesSize(bytes: number) {
+  const value = Math.max(0, bytes);
+  if (value >= TB_BYTES) return `${decimal(value / TB_BYTES, 1)} ТБ`;
+  if (value >= GB_BYTES) return `${decimal(value / GB_BYTES, 1)} ГБ`;
+  if (value >= MB_BYTES) return `${Math.round(value / MB_BYTES)} МБ`;
+  if (value >= KB_BYTES) return `${Math.round(value / KB_BYTES)} КБ`;
+  return `${Math.round(value)} Б`;
+}
+
+export function speedBytes(bytesPerSec: number) {
+  const value = Math.max(0, bytesPerSec);
+  if (value <= 0) return '0 КБ/с';
+  if (value >= MB_BYTES) return `${decimal(value / MB_BYTES, 1)} МБ/с`;
+  return `${Math.round(value / KB_BYTES)} КБ/с`;
+}
+
+export function etaLabel(etaSeconds: number) {
+  if (etaSeconds < 0) return '—';
+  const min = Math.floor(etaSeconds / 60);
+  const sec = Math.floor(etaSeconds % 60);
+  if (min >= 60) {
+    const h = Math.floor(min / 60);
+    return `${h} ч ${min % 60} мин`;
+  }
+  return `${min} мин ${sec} сек`;
+}

@@ -87,10 +87,41 @@
     }
   }
 
-  let downloadLimit = $state('none');
-  let uploadLimit = $state('5');
-  let maxActive = $state('2');
-  let seedAfter = $state(true);
+  const MB = 1024 * 1024;
+
+  const downloadLimitOptions = [
+    { id: 'none', label: 'Без ограничений' },
+    { id: '10', label: '10 МБ/с' },
+    { id: '25', label: '25 МБ/с' },
+    { id: '50', label: '50 МБ/с' },
+  ];
+
+  const uploadLimitOptions = [
+    { id: 'none', label: 'Без ограничений' },
+    { id: '1', label: '1 МБ/с' },
+    { id: '5', label: '5 МБ/с' },
+    { id: '10', label: '10 МБ/с' },
+  ];
+
+  const maxActiveOptions = [
+    { id: '1', label: '1' },
+    { id: '2', label: '2' },
+    { id: '3', label: '3' },
+    { id: '5', label: '5' },
+  ];
+
+  function rateId(bytes: number | undefined, options: { id: string }[]) {
+    const id = String((bytes ?? 0) / MB);
+    return options.some((o) => o.id === id) ? id : 'none';
+  }
+
+  const downloadLimit = $derived(rateId(current?.downloadRateLimit, downloadLimitOptions));
+  const uploadLimit = $derived(rateId(current?.uploadRateLimit, uploadLimitOptions));
+  const maxActiveValue = $derived.by(() => {
+    const id = String(current?.maxActiveDownloads ?? 2);
+    return maxActiveOptions.some((o) => o.id === id) ? id : '2';
+  });
+
   let scheduleEnabled = $state(false);
 
   let port = $state('42815');
@@ -315,14 +346,10 @@
             <span class="row-sub">Максимальная скорость входящего трафика</span>
           </div>
           <Select
-            bind:value={downloadLimit}
+            value={downloadLimit}
             width="20rem"
-            options={[
-              { id: 'none', label: 'Без ограничений' },
-              { id: '10', label: '10 МБ/с' },
-              { id: '25', label: '25 МБ/с' },
-              { id: '50', label: '50 МБ/с' },
-            ]}
+            options={downloadLimitOptions}
+            onchange={(id) => set({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
           />
         </div>
         <div class="row">
@@ -331,14 +358,10 @@
             <span class="row-sub">Максимальная скорость исходящего трафика</span>
           </div>
           <Select
-            bind:value={uploadLimit}
+            value={uploadLimit}
             width="20rem"
-            options={[
-              { id: 'none', label: 'Без ограничений' },
-              { id: '1', label: '1 МБ/с' },
-              { id: '5', label: '5 МБ/с' },
-              { id: '10', label: '10 МБ/с' },
-            ]}
+            options={uploadLimitOptions}
+            onchange={(id) => set({ uploadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
           />
         </div>
         <div class="row">
@@ -347,14 +370,10 @@
             <span class="row-sub">Количество активных загрузок</span>
           </div>
           <Select
-            bind:value={maxActive}
+            value={maxActiveValue}
             width="20rem"
-            options={[
-              { id: '1', label: '1' },
-              { id: '2', label: '2' },
-              { id: '3', label: '3' },
-              { id: '5', label: '5' },
-            ]}
+            options={maxActiveOptions}
+            onchange={(id) => set({ maxActiveDownloads: Number(id) })}
           />
         </div>
         <div class="row">
@@ -362,7 +381,11 @@
             <span class="row-label">Раздавать после загрузки</span>
             <span class="row-sub">Продолжать отдачу завершённых загрузок</span>
           </div>
-          <Toggle bind:checked={seedAfter} label="Раздача" />
+          <Toggle
+            checked={current?.seedAfterDownload ?? false}
+            label="Раздача"
+            onchange={(v) => set({ seedAfterDownload: v })}
+          />
         </div>
         <div class="row">
           <div class="row-text">

@@ -22,28 +22,6 @@ export interface Game {
   lastUpdate: string;
 }
 
-export type DownloadStage = 'downloading' | 'unpacking' | 'verifying' | 'installing' | 'complete';
-
-export interface ActiveDownload {
-  id: string;
-  gameId: string;
-  label: string;
-  doneGb: number;
-  totalGb: number;
-  speedMbs: number;
-  baseMbs: number;
-  peers: [number, number];
-  stage: DownloadStage;
-  stagePct: number;
-  paused: boolean;
-}
-
-export interface QueuedDownload {
-  id: string;
-  gameId: string;
-  sizeGb: number;
-}
-
 export type SourceStatus = 'active' | 'disabled' | 'error';
 
 export interface Source {

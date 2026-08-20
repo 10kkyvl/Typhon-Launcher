@@ -1,106 +1,166 @@
 <script lang="ts">
-  import { Pause, Play, X } from '@lucide/svelte';
-  import type { ActiveDownload, DownloadStage } from '../mock/types';
-  import { gameById } from '../mock/games';
-  import { cancelDownload, stageLabels, togglePause } from '../stores/downloads';
-  import { navigate } from '../stores/router';
-  import { eta, gb, speed } from '../utils/format';
-  import Artwork from './Artwork.svelte';
+  import { FileDown, Pause, Play, Trash2, X } from '@lucide/svelte';
+  import type { Download } from '../services/downloads';
+  import { cancel, pause, remove, resume, statusLabels } from '../stores/downloads';
+  import { bytesSize, etaLabel, speedBytes } from '../utils/format';
+  import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
+  import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
   let {
     download,
     compact = false,
+    onopen,
   }: {
-    download: ActiveDownload;
+    download: Download;
     compact?: boolean;
+    onopen?: (download: Download) => void;
   } = $props();
 
-  const game = $derived(gameById(download.gameId));
-  const downloading = $derived(download.stage === 'downloading');
-  const pct = $derived(
-    downloading ? (download.doneGb / download.totalGb) * 100 : download.stagePct * 100,
+  const downloading = $derived(download.status === 'downloading');
+  const finished = $derived(download.status === 'completed' || download.status === 'failed');
+  const pct = $derived(download.progress * 100);
+  const barColor = $derived(
+    download.status === 'failed'
+      ? 'var(--danger)'
+      : download.status === 'paused'
+        ? 'var(--text-3)'
+        : 'var(--accent)',
   );
-  const stages: DownloadStage[] = ['downloading', 'unpacking', 'verifying', 'installing'];
+
+  let confirmOpen = $state(false);
+
+  function stop(e: MouseEvent) {
+    e.stopPropagation();
+  }
 </script>
 
-<div class="item" class:compact>
-  <button class="thumb" onclick={() => game && navigate('game', { id: game.id })} aria-label={game?.title}>
-    <Artwork src={game?.hero ?? ''} alt={game?.title ?? ''} radius="var(--radius-sm)" />
-  </button>
+<div
+  class="item"
+  class:compact
+  class:clickable={!!onopen}
+  role="button"
+  tabindex="0"
+  onclick={() => onopen?.(download)}
+  onkeydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onopen?.(download);
+    }
+  }}
+>
+  <div class="thumb">
+    <FileDown size="2.6rem" strokeWidth={1.6} />
+  </div>
   <div class="main">
     <div class="head">
       <div class="titles">
-        <span class="title">{game?.title ?? download.label}</span>
-        <span class="sub">{download.label}</span>
+        <span class="title">{download.name}</span>
+        <span class="sub">{statusLabels[download.status]}</span>
       </div>
       {#if !compact}
         <div class="stats">
           {#if downloading}
             <div class="stat">
               <span class="stat-label">Осталось</span>
-              <span class="stat-value">
-                {download.paused ? 'Пауза' : eta(download.doneGb, download.totalGb, download.speedMbs)}
-              </span>
+              <span class="stat-value">{etaLabel(download.etaSeconds)}</span>
             </div>
             <div class="stat">
               <span class="stat-label">Скорость</span>
-              <span class="stat-value">{download.paused ? '—' : speed(download.speedMbs)}</span>
+              <span class="stat-value">{speedBytes(download.downloadSpeed)}</span>
             </div>
             <div class="stat">
-              <span class="stat-label">Пиров</span>
-              <span class="stat-value">{download.peers[0]} из {download.peers[1]}</span>
+              <span class="stat-label">Отдача</span>
+              <span class="stat-value">{speedBytes(download.uploadSpeed)}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Пиры</span>
+              <span class="stat-value">{download.seeders} сид / {download.peers} пир</span>
             </div>
           {:else}
             <div class="stat">
-              <span class="stat-label">Этап</span>
-              <span class="stat-value">{stageLabels[download.stage]}</span>
+              <span class="stat-label">Состояние</span>
+              <span class="stat-value">{statusLabels[download.status]}</span>
             </div>
           {/if}
         </div>
       {/if}
       <div class="controls">
         {#if downloading}
-          <IconButton label={download.paused ? 'Продолжить' : 'Пауза'} onclick={() => togglePause(download.id)}>
-            {#if download.paused}
-              <Play size="1.7rem" strokeWidth={1.8} />
-            {:else}
-              <Pause size="1.7rem" strokeWidth={1.8} />
-            {/if}
+          <IconButton
+            label="Пауза"
+            onclick={(e) => {
+              stop(e);
+              pause(download.id);
+            }}
+          >
+            <Pause size="1.7rem" strokeWidth={1.8} />
+          </IconButton>
+        {:else if download.status === 'paused' || download.status === 'queued'}
+          <IconButton
+            label="Продолжить"
+            onclick={(e) => {
+              stop(e);
+              resume(download.id);
+            }}
+          >
+            <Play size="1.7rem" strokeWidth={1.8} />
           </IconButton>
         {/if}
-        <IconButton label="Отменить" onclick={() => cancelDownload(download.id)}>
-          <X size="1.7rem" strokeWidth={1.8} />
-        </IconButton>
+        {#if finished}
+          <IconButton
+            label="Удалить из списка"
+            onclick={(e) => {
+              stop(e);
+              remove(download.id);
+            }}
+          >
+            <Trash2 size="1.7rem" strokeWidth={1.8} />
+          </IconButton>
+        {:else}
+          <IconButton
+            label="Отменить"
+            onclick={(e) => {
+              stop(e);
+              confirmOpen = true;
+            }}
+          >
+            <X size="1.7rem" strokeWidth={1.8} />
+          </IconButton>
+        {/if}
       </div>
     </div>
     <div class="progress-row">
-      <ProgressBar value={pct} color={download.paused ? 'var(--text-3)' : 'var(--accent)'} />
+      <ProgressBar value={pct} color={barColor} />
       <span class="pct">{Math.floor(pct)}%</span>
     </div>
     <div class="foot">
-      {#if downloading}
-        <span class="size">{gb(download.doneGb)} / {gb(download.totalGb)}</span>
-      {:else}
-        <span class="size">{stageLabels[download.stage]}…</span>
-      {/if}
-      {#if !compact}
-        <div class="steps">
-          {#each stages as s, i (s)}
-            {#if i > 0}<span class="step-line" class:done={stages.indexOf(download.stage) >= i}></span>{/if}
-            <span
-              class="step-dot"
-              class:done={stages.indexOf(download.stage) > i}
-              class:current={download.stage === s}
-              title={stageLabels[s]}
-            ></span>
-          {/each}
-        </div>
+      <span class="size">{bytesSize(download.downloaded)} / {bytesSize(download.total)}</span>
+      {#if download.status === 'failed' && download.error}
+        <span class="error">{download.error}</span>
       {/if}
     </div>
   </div>
 </div>
+
+<Modal bind:open={confirmOpen} title="Отменить загрузку?">
+  <p class="modal-text">
+    Загрузка «{download.name}» будет остановлена, а уже скачанные файлы удалены с диска. Это действие нельзя отменить.
+  </p>
+  {#snippet footer()}
+    <Button onclick={() => (confirmOpen = false)}>Не отменять</Button>
+    <Button
+      variant="danger"
+      onclick={() => {
+        confirmOpen = false;
+        cancel(download.id);
+      }}
+    >
+      Отменить загрузку
+    </Button>
+  {/snippet}
+</Modal>
 
 <style>
   .item {
@@ -110,7 +170,12 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    text-align: left;
     transition: border-color var(--dur) var(--ease);
+  }
+
+  .item.clickable {
+    cursor: pointer;
   }
 
   .item:hover {
@@ -124,11 +189,16 @@
   }
 
   .thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 17.8rem;
     aspect-ratio: 16 / 9;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
-    overflow: hidden;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-3);
     align-self: center;
   }
 
@@ -195,6 +265,7 @@
     font-size: 1.4rem;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .controls {
@@ -221,6 +292,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--space-4);
   }
 
   .size {
@@ -229,37 +301,18 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .steps {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .error {
+    font-size: 1.3rem;
+    color: var(--danger);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .step-dot {
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.12);
-    transition: background var(--dur) var(--ease);
-  }
-
-  .step-dot.done {
-    background: var(--accent);
-  }
-
-  .step-dot.current {
-    background: var(--accent);
-    box-shadow: 0 0 0 0.3rem var(--accent-subtle);
-  }
-
-  .step-line {
-    width: 1.4rem;
-    height: 1.5px;
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .step-line.done {
-    background: var(--accent);
+  .modal-text {
+    font-size: 1.5rem;
+    line-height: 1.55;
+    color: var(--text-2);
   }
 
   @media (max-width: 1240px) {

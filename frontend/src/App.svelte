@@ -1,6 +1,6 @@
 <script lang="ts">
   import AppShell from './lib/components/AppShell.svelte';
-  import { startDownloadSim } from './lib/stores/downloads';
+  import { initDownloads } from './lib/stores/downloads';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initSettings, settings } from './lib/stores/settings';
@@ -14,7 +14,7 @@
   import Settings from './routes/settings/Settings.svelte';
   import Sources from './routes/sources/Sources.svelte';
 
-  startDownloadSim();
+  initDownloads();
   initSettings().then(refreshStorage);
   initLibrary();
 

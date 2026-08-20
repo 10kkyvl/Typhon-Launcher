@@ -13,6 +13,10 @@ export interface Settings {
   minimizeToTray: boolean;
   hardwareAcceleration: boolean;
   animationsEnabled: boolean;
+  maxActiveDownloads: number;
+  downloadRateLimit: number;
+  uploadRateLimit: number;
+  seedAfterDownload: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -28,6 +32,10 @@ const fallbackDefaults: Settings = {
   minimizeToTray: true,
   hardwareAcceleration: true,
   animationsEnabled: true,
+  maxActiveDownloads: 2,
+  downloadRateLimit: 0,
+  uploadRateLimit: 0,
+  seedAfterDownload: false,
 };
 
 export async function getSettings(): Promise<Settings> {

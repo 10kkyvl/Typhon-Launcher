@@ -1,120 +1,145 @@
 import { derived, writable } from 'svelte/store';
-import { initialActive, initialQueue } from '../mock/downloads';
-import { gameById } from '../mock/games';
-import type { ActiveDownload, DownloadStage, QueuedDownload } from '../mock/types';
+import { Events } from '@wailsio/runtime';
+import { inWails } from '../services/backend';
+import {
+  cancelDownload as cancelRequest,
+  forceStartDownload,
+  listDownloads,
+  moveDownloadDown,
+  moveDownloadUp,
+  pauseDownload,
+  removeDownload,
+  resumeDownload,
+  type Download,
+  type DownloadStatus,
+} from '../services/downloads';
 import { toast } from './toasts';
 
-export const active = writable<ActiveDownload[]>(structuredClone(initialActive));
-export const queue = writable<QueuedDownload[]>(structuredClone(initialQueue));
+export const downloads = writable<Download[]>([]);
 
-export const stats = derived(active, ($active) => {
-  const running = $active.filter((d) => !d.paused && d.stage === 'downloading');
-  const down = running.reduce((sum, d) => sum + d.speedMbs, 0);
-  return {
-    downSpeed: down,
-    upSpeed: down > 0 ? Math.round(down * 0.11 * 10) / 10 : 0,
-    activeCount: $active.length,
-  };
+export const downloadsById = derived(downloads, ($downloads) => {
+  const map = new Map<string, Download>();
+  for (const d of $downloads) map.set(d.id, d);
+  return map;
 });
 
-const stageOrder: DownloadStage[] = ['downloading', 'unpacking', 'verifying', 'installing', 'complete'];
+const activeStatuses: DownloadStatus[] = ['downloading', 'metadata', 'verifying', 'paused'];
 
-export const stageLabels: Record<DownloadStage, string> = {
+export const active = derived(downloads, ($downloads) =>
+  $downloads.filter((d) => activeStatuses.includes(d.status)),
+);
+
+export const queue = derived(downloads, ($downloads) => $downloads.filter((d) => d.status === 'queued'));
+
+export const completed = derived(downloads, ($downloads) =>
+  $downloads
+    .filter((d) => d.status === 'completed')
+    .slice()
+    .sort((a, b) => Date.parse(b.completedAt ?? b.addedAt) - Date.parse(a.completedAt ?? a.addedAt)),
+);
+
+export const stats = derived(downloads, ($downloads) => ({
+  downSpeed: $downloads.reduce((sum, d) => sum + d.downloadSpeed, 0),
+  upSpeed: $downloads.reduce((sum, d) => sum + d.uploadSpeed, 0),
+  activeCount: $downloads.filter((d) => activeStatuses.includes(d.status)).length,
+  queuedCount: $downloads.filter((d) => d.status === 'queued').length,
+}));
+
+export const statusLabels: Record<DownloadStatus, string> = {
+  queued: 'В очереди',
+  metadata: 'Получение метаданных',
   downloading: 'Загрузка',
-  unpacking: 'Распаковка',
-  verifying: 'Проверка',
-  installing: 'Установка',
-  complete: 'Готово',
+  paused: 'Пауза',
+  verifying: 'Проверка файлов',
+  completed: 'Завершено',
+  failed: 'Ошибка',
 };
 
-function jitter(base: number) {
-  return Math.max(4, base * (0.85 + Math.random() * 0.3));
-}
-
-function promoteFromQueue() {
-  queue.update((q) => {
-    const [next, ...rest] = q;
-    if (next) {
-      const game = gameById(next.gameId);
-      active.update((a) => [
-        ...a,
-        {
-          id: `dl-${next.id}`,
-          gameId: next.gameId,
-          label: 'Базовая игра',
-          doneGb: 0,
-          totalGb: next.sizeGb,
-          speedMbs: 24,
-          baseMbs: 24,
-          peers: [Math.floor(12 + Math.random() * 40), Math.floor(60 + Math.random() * 40)],
-          stage: 'downloading',
-          stagePct: 0,
-          paused: false,
-        },
-      ]);
-      if (game) toast(`Загрузка «${game.title}» началась`);
-    }
-    return rest;
+function upsert(item: Download) {
+  downloads.update((list) => {
+    const index = list.findIndex((d) => d.id === item.id);
+    if (index < 0) return [...list, item];
+    const next = [...list];
+    next[index] = item;
+    return next;
   });
 }
 
-function tick() {
-  let completed: ActiveDownload[] = [];
-  active.update((list) => {
-    const next = list.map((d) => {
-      if (d.paused || d.stage === 'complete') return d;
-      if (d.stage === 'downloading') {
-        const speed = jitter(d.baseMbs);
-        const doneGb = Math.min(d.totalGb, d.doneGb + speed / 1024);
-        if (doneGb >= d.totalGb) {
-          return { ...d, doneGb: d.totalGb, speedMbs: 0, stage: 'unpacking' as DownloadStage, stagePct: 0 };
-        }
-        return { ...d, doneGb, speedMbs: Math.round(speed * 10) / 10 };
-      }
-      const stagePct = d.stagePct + 0.08 + Math.random() * 0.06;
-      if (stagePct >= 1) {
-        const idx = stageOrder.indexOf(d.stage);
-        const stage = stageOrder[idx + 1];
-        return { ...d, stage, stagePct: 0 };
-      }
-      return { ...d, stagePct };
-    });
-    completed = next.filter((d) => d.stage === 'complete');
-    return next.filter((d) => d.stage !== 'complete');
+async function refresh() {
+  downloads.set(await listDownloads());
+}
+
+export function errorMessage(err: unknown) {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+export async function initDownloads() {
+  await refresh();
+  if (!inWails) return;
+
+  Events.On('download:added', (event) => {
+    const item = event.data as Download;
+    upsert(item);
+    toast(`Загрузка «${item.name}» добавлена`);
   });
-  for (const d of completed) {
-    const game = gameById(d.gameId);
-    toast(`«${game?.title ?? d.label}» установлена`, 'success');
-    promoteFromQueue();
+  Events.On('download:updated', (event) => {
+    upsert(event.data as Download);
+  });
+  Events.On('download:completed', (event) => {
+    const item = event.data as Download;
+    upsert(item);
+    toast(`«${item.name}» загружена`, 'success');
+  });
+  Events.On('download:failed', (event) => {
+    const item = event.data as Download;
+    upsert(item);
+    toast(`Ошибка загрузки «${item.name}»: ${item.error}`, 'danger');
+  });
+  Events.On('download:removed', (event) => {
+    const { id } = event.data as { id: string };
+    downloads.update((list) => list.filter((d) => d.id !== id));
+  });
+}
+
+async function run(action: () => Promise<void>) {
+  try {
+    await action();
+  } catch (err) {
+    toast(errorMessage(err), 'danger');
   }
 }
 
-let timer: ReturnType<typeof setInterval> | undefined;
-
-export function startDownloadSim() {
-  if (timer) return;
-  timer = setInterval(tick, 1000);
+export function pause(id: string) {
+  return run(() => pauseDownload(id));
 }
 
-export function togglePause(id: string) {
-  active.update((list) => list.map((d) => (d.id === id ? { ...d, paused: !d.paused } : d)));
+export function resume(id: string) {
+  return run(() => resumeDownload(id));
 }
 
-export function cancelDownload(id: string) {
-  active.update((list) => list.filter((d) => d.id !== id));
+export function cancel(id: string) {
+  return run(() => cancelRequest(id));
 }
 
-export function removeFromQueue(id: string) {
-  queue.update((q) => q.filter((d) => d.id !== id));
+export function remove(id: string) {
+  return run(() => removeDownload(id));
 }
 
-export function moveInQueue(id: string, dir: -1 | 1) {
-  queue.update((q) => {
-    const idx = q.findIndex((d) => d.id === id);
-    const target = idx + dir;
-    if (idx < 0 || target < 0 || target >= q.length) return q;
-    const next = [...q];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    return next;
+export function forceStart(id: string) {
+  return run(() => forceStartDownload(id));
+}
+
+export function moveUp(id: string) {
+  return run(async () => {
+    await moveDownloadUp(id);
+    await refresh();
+  });
+}
+
+export function moveDown(id: string) {
+  return run(async () => {
+    await moveDownloadDown(id);
+    await refresh();
   });
 }

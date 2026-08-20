@@ -7,6 +7,7 @@
     ChevronRight,
     CircleCheck,
     Clock,
+    FileDown,
     LayoutGrid,
     List,
     Play,
@@ -23,12 +24,12 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import { games, gameById } from '../../lib/mock/games';
-  import { active, moveInQueue, queue, removeFromQueue } from '../../lib/stores/downloads';
+  import { games } from '../../lib/mock/games';
+  import { active, moveUp, queue, remove } from '../../lib/stores/downloads';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
-  import { gb, plural } from '../../lib/utils/format';
+  import { bytesSize, gb, plural } from '../../lib/utils/format';
 
   type Filter = 'all' | 'favorites' | 'recent' | 'completed';
 
@@ -248,19 +249,18 @@
     {:else}
       <div class="queue">
         {#each $queue.slice(0, 3) as q (q.id)}
-          {@const game = gameById(q.gameId)}
           <div class="queue-row">
             <div class="queue-thumb">
-              <Artwork src={game?.hero ?? ''} alt={game?.title ?? ''} radius="0.6rem" />
+              <FileDown size="1.7rem" strokeWidth={1.7} />
             </div>
-            <span class="queue-title">{game?.title}</span>
-            <span class="queue-size">{gb(q.sizeGb)}</span>
+            <span class="queue-title">{q.name}</span>
+            <span class="queue-size">{bytesSize(q.total)}</span>
             <span class="queue-state">В очереди</span>
             <div class="queue-actions">
-              <IconButton label="Выше" size="sm" onclick={() => moveInQueue(q.id, -1)}>
+              <IconButton label="Выше" size="sm" onclick={() => moveUp(q.id)}>
                 <ArrowUp size="1.5rem" strokeWidth={1.8} />
               </IconButton>
-              <IconButton label="Убрать" size="sm" onclick={() => removeFromQueue(q.id)}>
+              <IconButton label="Убрать" size="sm" onclick={() => remove(q.id)}>
                 <X size="1.5rem" strokeWidth={1.8} />
               </IconButton>
             </div>
@@ -270,7 +270,7 @@
       <div class="panel-foot">
         <span class="panel-note">
           {$queue.length}
-          {plural($queue.length, 'игра', 'игры', 'игр')} в очереди
+          {plural($queue.length, 'загрузка', 'загрузки', 'загрузок')} в очереди
         </span>
         <Button size="sm" onclick={() => navigate('downloads')}>Управление</Button>
       </div>
@@ -554,11 +554,16 @@
   }
 
   .queue-thumb {
-    width: 5.6rem;
-    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.6rem;
+    height: 3.6rem;
     flex-shrink: 0;
     border-radius: 0.6rem;
-    overflow: hidden;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-3);
   }
 
   .queue-title {
