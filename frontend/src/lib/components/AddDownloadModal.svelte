@@ -26,6 +26,7 @@
   let selected = $state<boolean[]>([]);
   let starting = $state(false);
   let pendingHash = '';
+  let token = 0;
 
   const canContinue = $derived(source.trim().startsWith('magnet:'));
   const selectedCount = $derived(selected.filter(Boolean).length);
@@ -34,6 +35,7 @@
   );
 
   function reset() {
+    token++;
     if (pendingHash) {
       discardMetadata(pendingHash);
       pendingHash = '';
@@ -48,20 +50,26 @@
   $effect(() => {
     const isOpen = open;
     untrack(() => {
+      reset();
       if (isOpen) destination = get(settings)?.downloadsPath ?? '';
-      else reset();
     });
   });
 
   async function proceed(value: string) {
+    const current = ++token;
     step = 'loading';
     try {
       const result = await fetchMetadata(value);
+      if (!open || current !== token) {
+        discardMetadata(result.infoHash);
+        return;
+      }
       pendingHash = result.infoHash;
       info = result;
       selected = result.files.map(() => true);
       step = 'files';
     } catch (err) {
+      if (!open || current !== token) return;
       toast(errorMessage(err), 'danger');
       step = 'source';
     }
