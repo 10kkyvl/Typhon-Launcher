@@ -7,11 +7,11 @@
   {#each $toasts as t (t.id)}
     <div class="toast {t.kind}">
       {#if t.kind === 'success'}
-        <CircleCheck size={17} strokeWidth={1.8} />
+        <CircleCheck size="1.7rem" strokeWidth={1.8} />
       {:else if t.kind === 'danger'}
-        <CircleAlert size={17} strokeWidth={1.8} />
+        <CircleAlert size="1.7rem" strokeWidth={1.8} />
       {:else}
-        <Info size={17} strokeWidth={1.8} />
+        <Info size="1.7rem" strokeWidth={1.8} />
       {/if}
       <span>{t.message}</span>
     </div>
@@ -22,24 +22,24 @@
   .toasts {
     position: fixed;
     z-index: 120;
-    right: 24px;
-    bottom: 24px;
+    right: 2.4rem;
+    bottom: 2.4rem;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 1rem;
   }
 
   .toast {
     display: flex;
     align-items: center;
-    gap: 10px;
-    max-width: 380px;
-    padding: 12px 16px;
+    gap: 1rem;
+    max-width: 38rem;
+    padding: 1.2rem 1.6rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text);
     animation: slide var(--dur) var(--ease);
   }
@@ -59,7 +59,7 @@
   @keyframes slide {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(0.6rem);
     }
     to {
       opacity: 1;

@@ -6,7 +6,7 @@
   let {
     open = $bindable(false),
     title,
-    width = '460px',
+    width = '46rem',
     children,
     footer,
   }: {
@@ -30,7 +30,7 @@
       <div class="head">
         <h3>{title}</h3>
         <IconButton label="Закрыть" size="sm" onclick={() => (open = false)}>
-          <X size={17} strokeWidth={1.8} />
+          <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>
       <div class="body">
@@ -54,13 +54,13 @@
     align-items: center;
     justify-content: center;
     background: rgba(4, 6, 10, 0.6);
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(0.3rem);
     animation: fade var(--dur) var(--ease);
   }
 
   .modal {
-    max-width: calc(100vw - 48px);
-    max-height: calc(100vh - 80px);
+    max-width: calc(100vw - 4.8rem);
+    max-height: calc(100vh - 8rem);
     display: flex;
     flex-direction: column;
     background: var(--surface-2);
@@ -74,24 +74,24 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 20px 0 24px;
+    padding: 1.8rem 2rem 0 2.4rem;
   }
 
   h3 {
-    font-size: 17px;
+    font-size: 1.8rem;
     font-weight: 600;
   }
 
   .body {
-    padding: 16px 24px 24px;
+    padding: 1.6rem 2.4rem 2.4rem;
     overflow-y: auto;
   }
 
   .foot {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    padding: 16px 24px;
+    gap: 1rem;
+    padding: 1.6rem 2.4rem;
     border-top: 1px solid var(--border);
   }
 

@@ -23,7 +23,7 @@
 >
   {#snippet actions()}
     <Button onclick={() => toast('Все игры обновлены', 'success')}>
-      <RefreshCw size={16} strokeWidth={1.8} />
+      <RefreshCw size="1.6rem" strokeWidth={1.8} />
       Проверить обновления
     </Button>
     <SegmentedControl
@@ -35,9 +35,9 @@
     >
       {#snippet item(option)}
         {#if option.id === 'list'}
-          <List size={16} strokeWidth={1.8} />
+          <List size="1.6rem" strokeWidth={1.8} />
         {:else}
-          <LayoutGrid size={16} strokeWidth={1.8} />
+          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
         {/if}
       {/snippet}
     </SegmentedControl>
@@ -71,8 +71,8 @@
   <div class="storage-row">
     <div class="disk">
       <div class="disk-icon">
-        <HardDrive size={20} strokeWidth={1.8} />
-        <CircleCheck size={14} strokeWidth={2} class="disk-ok" />
+        <HardDrive size="2rem" strokeWidth={1.8} />
+        <CircleCheck size="1.4rem" strokeWidth={2} class="disk-ok" />
       </div>
       <div class="disk-text">
         <span class="disk-name">{storage.disk}</span>
@@ -104,15 +104,15 @@
 
   .thead {
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) 120px 90px 130px 140px auto;
+    grid-template-columns: minmax(24rem, 1fr) 12rem 9rem 13rem 14rem auto;
     gap: var(--space-4);
-    padding: 10px var(--space-4) 12px;
+    padding: 1rem var(--space-4) 1.2rem;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 4px;
+    margin-bottom: 0.4rem;
   }
 
   .thead span {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     font-weight: 500;
     color: var(--text-3);
   }
@@ -123,7 +123,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(18.5rem, 1fr));
     gap: var(--space-5);
   }
 
@@ -136,7 +136,7 @@
   }
 
   .storage-card h3 {
-    font-size: 15px;
+    font-size: 1.6rem;
     margin-bottom: var(--space-4);
   }
 
@@ -158,8 +158,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 4.4rem;
+    height: 4.4rem;
     border-radius: var(--radius-md);
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-2);
@@ -167,8 +167,8 @@
 
   .disk-icon :global(.disk-ok) {
     position: absolute;
-    right: -4px;
-    top: -4px;
+    right: -0.4rem;
+    top: -0.4rem;
     color: var(--success);
     background: var(--surface);
     border-radius: 50%;
@@ -180,12 +180,12 @@
   }
 
   .disk-name {
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 550;
   }
 
   .disk-meta {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
@@ -194,19 +194,19 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: 0.9rem;
   }
 
   .capacity-bar {
-    height: 8px;
-    border-radius: 99px;
+    height: 0.8rem;
+    border-radius: 9.9rem;
     background: rgba(255, 255, 255, 0.07);
     overflow: hidden;
   }
 
   .capacity-fill {
     height: 100%;
-    border-radius: 99px;
+    border-radius: 9.9rem;
     background: var(--accent);
   }
 
@@ -218,15 +218,15 @@
   .legend-item {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: 12.5px;
+    gap: 0.7rem;
+    font-size: 1.3rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .legend-dot {
-    width: 8px;
-    height: 8px;
+    width: 0.8rem;
+    height: 0.8rem;
     border-radius: 50%;
   }
 
@@ -240,7 +240,7 @@
 
   @media (max-width: 1240px) {
     .thead {
-      grid-template-columns: minmax(200px, 1fr) 100px 80px 140px auto;
+      grid-template-columns: minmax(20rem, 1fr) 10rem 8rem 14rem auto;
     }
 
     .thead .last {

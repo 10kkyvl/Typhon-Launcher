@@ -14,7 +14,9 @@
     <Topbar />
     {#key $route}
       <main class="content">
-        {@render children?.()}
+        <div class="page">
+          {@render children?.()}
+        </div>
       </main>
     {/key}
   </div>
@@ -26,7 +28,7 @@
   .shell {
     display: flex;
     height: 100vh;
-    min-width: 1000px;
+    min-width: 100rem;
     overflow: hidden;
   }
 
@@ -42,13 +44,25 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--space-2) var(--page-x) var(--space-10);
+  }
+
+  .page {
+    max-width: 164rem;
+    margin: 0 auto;
     animation: page-in var(--dur) var(--ease);
+  }
+
+  @media (min-width: 2200px) {
+    .content {
+      padding-left: var(--space-12);
+      padding-right: var(--space-12);
+    }
   }
 
   @keyframes page-in {
     from {
       opacity: 0;
-      transform: translateY(4px);
+      transform: translateY(0.4rem);
     }
     to {
       opacity: 1;

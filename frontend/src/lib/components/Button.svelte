@@ -25,8 +25,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: 0.8rem;
+    font-size: var(--font-md);
     font-weight: 500;
     border-radius: var(--radius-md);
     border: 1px solid transparent;
@@ -48,19 +48,20 @@
   }
 
   .md {
-    height: 38px;
-    padding: 0 16px;
+    height: var(--control-md);
+    padding: 0 1.8rem;
   }
 
   .sm {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 13px;
+    height: var(--control-sm);
+    padding: 0 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .lg {
-    height: 42px;
-    padding: 0 20px;
+    height: var(--control-lg);
+    padding: 0 2.2rem;
+    font-size: 1.6rem;
     font-weight: 600;
   }
 

@@ -76,7 +76,7 @@
 >
   {#snippet actions()}
     <Button variant="primary" onclick={() => (modalOpen = true)}>
-      <Plus size={16} strokeWidth={2} />
+      <Plus size="1.6rem" strokeWidth={2} />
       Добавить источник
     </Button>
     <DropdownMenu
@@ -89,7 +89,7 @@
     >
       {#snippet trigger({ toggle })}
         <IconButton label="Ещё" onclick={toggle}>
-          <Ellipsis size={18} strokeWidth={1.8} />
+          <Ellipsis size="1.8rem" strokeWidth={1.8} />
         </IconButton>
       {/snippet}
     </DropdownMenu>
@@ -100,11 +100,11 @@
   <div class="empty-wrap">
     <EmptyState title="Источники ещё не добавлены" description="Добавьте первый источник, чтобы Aurora могла находить игры и обновления.">
       {#snippet icon()}
-        <Database size={22} strokeWidth={1.8} />
+        <Database size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={() => (modalOpen = true)}>
-          <Plus size={16} strokeWidth={2} />
+          <Plus size="1.6rem" strokeWidth={2} />
           Добавить источник
         </Button>
       {/snippet}
@@ -114,10 +114,10 @@
   <div class="table">
     <div class="thead">
       <span class="th">Источник</span>
-      <span class="th sortable">Статус <ChevronsUpDown size={13} strokeWidth={1.8} /></span>
-      <span class="th sortable">Последнее обновление <ChevronsUpDown size={13} strokeWidth={1.8} /></span>
-      <span class="th sortable">Предметов <ChevronsUpDown size={13} strokeWidth={1.8} /></span>
-      <span class="th sortable">Версия <ChevronsUpDown size={13} strokeWidth={1.8} /></span>
+      <span class="th sortable">Статус <ChevronsUpDown size="1.3rem" strokeWidth={1.8} /></span>
+      <span class="th sortable">Последнее обновление <ChevronsUpDown size="1.3rem" strokeWidth={1.8} /></span>
+      <span class="th sortable">Предметов <ChevronsUpDown size="1.3rem" strokeWidth={1.8} /></span>
+      <span class="th sortable">Версия <ChevronsUpDown size="1.3rem" strokeWidth={1.8} /></span>
       <span class="th"></span>
     </div>
     {#each $sources as source (source.id)}
@@ -126,7 +126,7 @@
       <div class="row" class:disabled={source.status === 'disabled'}>
         <div class="source">
           <div class="source-icon {source.kind}">
-            <KindIcon size={19} strokeWidth={1.8} />
+            <KindIcon size="1.9rem" strokeWidth={1.8} />
           </div>
           <div class="source-text">
             <span class="source-name">{source.name}</span>
@@ -141,7 +141,7 @@
           <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label="Меню источника" size="sm" onclick={toggle}>
-                <EllipsisVertical size={16} strokeWidth={1.8} />
+                <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
               </IconButton>
             {/snippet}
           </DropdownMenu>
@@ -150,11 +150,11 @@
     {/each}
     <div class="tfoot">
       <span class="note">
-        <Info size={15} strokeWidth={1.8} />
+        <Info size="1.5rem" strokeWidth={1.8} />
         Источники обновляются клиентом автоматически по расписанию.
       </span>
       <button class="check" onclick={() => toast('Проверка обновлений источников...')}>
-        <RefreshCw size={15} strokeWidth={1.8} />
+        <RefreshCw size="1.5rem" strokeWidth={1.8} />
         Проверить обновления
       </button>
     </div>
@@ -196,22 +196,22 @@
   .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(260px, 1.6fr) 130px 1fr 110px 90px 52px;
+    grid-template-columns: minmax(26rem, 1.6fr) 13rem 1fr 11rem 9rem 5.2rem;
     align-items: center;
     gap: var(--space-4);
     padding: 0 var(--space-5);
   }
 
   .thead {
-    height: 46px;
+    height: 4.6rem;
     border-bottom: 1px solid var(--border);
   }
 
   .th {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 12.5px;
+    gap: 0.5rem;
+    font-size: 1.3rem;
     font-weight: 500;
     color: var(--text-3);
   }
@@ -225,8 +225,8 @@
   }
 
   .row {
-    padding-top: 13px;
-    padding-bottom: 13px;
+    padding-top: 1.3rem;
+    padding-bottom: 1.3rem;
     transition: background var(--dur) var(--ease);
   }
 
@@ -254,8 +254,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 4rem;
+    height: 4rem;
     border-radius: var(--radius-md);
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.05);
@@ -285,7 +285,7 @@
   }
 
   .source-name {
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -293,7 +293,7 @@
   }
 
   .source-path {
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -301,7 +301,7 @@
   }
 
   .cell {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-2);
     white-space: nowrap;
     overflow: hidden;
@@ -322,26 +322,26 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 12px var(--space-5);
+    padding: 1.2rem var(--space-5);
     border-top: 1px solid var(--border);
   }
 
   .note {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
+    gap: 0.8rem;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   .check {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: 0.8rem;
+    font-size: 1.4rem;
     font-weight: 500;
     color: var(--text-2);
-    padding: 6px 10px;
+    padding: 0.6rem 1rem;
     border-radius: var(--radius-sm);
     transition:
       background var(--dur) var(--ease),
@@ -362,22 +362,22 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 0.7rem;
   }
 
   .field-label {
-    font-size: 13px;
+    font-size: 1.4rem;
     font-weight: 500;
     color: var(--text-2);
   }
 
   .field input {
-    height: 38px;
-    padding: 0 12px;
+    height: var(--control-md);
+    padding: 0 1.2rem;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 1.5rem;
     color: var(--text);
     outline: none;
     transition:
@@ -399,14 +399,14 @@
   }
 
   .form-hint {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   @media (max-width: 1300px) {
     .thead,
     .row {
-      grid-template-columns: minmax(220px, 1.6fr) 120px 1fr 90px 52px;
+      grid-template-columns: minmax(22rem, 1.6fr) 12rem 1fr 9rem 5.2rem;
     }
 
     .th:nth-child(5),

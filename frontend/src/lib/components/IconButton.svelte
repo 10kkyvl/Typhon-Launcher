@@ -34,13 +34,13 @@
   }
 
   .md {
-    width: 36px;
-    height: 36px;
+    width: 4rem;
+    height: 4rem;
   }
 
   .sm {
-    width: 30px;
-    height: 30px;
+    width: 3.4rem;
+    height: 3.4rem;
   }
 
   .icon-btn:hover {

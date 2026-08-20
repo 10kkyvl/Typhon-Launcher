@@ -31,14 +31,14 @@
 
 <aside class="sidebar">
   <div class="logo">
-    <img src="/aurora.svg" alt="" width="30" height="30" draggable="false" />
+    <img class="logo-mark" src="/aurora.svg" alt="" draggable="false" />
     <span class="logo-text">Aurora</span>
   </div>
 
   <nav>
     {#each nav as item (item.name)}
       <button class="nav-item" class:active={isActive(item.name)} onclick={() => navigate(item.name)}>
-        <item.icon size={20} strokeWidth={1.8} />
+        <item.icon size="2.2rem" strokeWidth={1.8} />
         <span class="nav-label">{item.label}</span>
       </button>
     {/each}
@@ -58,7 +58,7 @@
         <span class="profile-name">{user.name}</span>
         <span class="profile-status">{user.status}</span>
       </span>
-      <ChevronsUpDown size={15} strokeWidth={1.8} />
+      <ChevronsUpDown size="1.5rem" strokeWidth={1.8} />
     </button>
 
     <div class="storage">
@@ -89,13 +89,18 @@
   .logo {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 4px 12px 0;
+    gap: 1.1rem;
+    padding: 0.4rem 1.2rem 0;
     margin-bottom: var(--space-8);
   }
 
+  .logo-mark {
+    width: 3.2rem;
+    height: 3.2rem;
+  }
+
   .logo-text {
-    font-size: 19px;
+    font-size: 2.1rem;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
@@ -109,11 +114,11 @@
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    height: 40px;
-    padding: 0 12px;
+    gap: 1.3rem;
+    height: 4.8rem;
+    padding: 0 1.3rem;
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 1.6rem;
     font-weight: 500;
     color: var(--text-2);
     transition:
@@ -145,8 +150,8 @@
   .profile {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
     border-radius: var(--radius-md);
     text-align: left;
     color: var(--text-3);
@@ -159,8 +164,8 @@
 
   .avatar {
     position: relative;
-    width: 34px;
-    height: 34px;
+    width: 3.8rem;
+    height: 3.8rem;
     flex-shrink: 0;
   }
 
@@ -180,7 +185,7 @@
     border-radius: 50%;
     background: var(--accent-subtle);
     color: var(--accent-text);
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 600;
   }
 
@@ -188,8 +193,8 @@
     position: absolute;
     right: -1px;
     bottom: -1px;
-    width: 10px;
-    height: 10px;
+    width: 1rem;
+    height: 1rem;
     border-radius: 50%;
     background: var(--success);
     border: 2px solid var(--bg-sidebar);
@@ -203,7 +208,7 @@
   }
 
   .profile-name {
-    font-size: 13.5px;
+    font-size: 1.5rem;
     font-weight: 550;
     color: var(--text);
     white-space: nowrap;
@@ -212,62 +217,62 @@
   }
 
   .profile-status {
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--success);
   }
 
   .storage {
-    padding: 12px;
+    padding: 1.2rem;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0.8rem;
   }
 
   .storage-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    font-size: 12.5px;
+    font-size: 1.4rem;
     font-weight: 550;
   }
 
   .storage-nums {
-    font-size: 11.5px;
+    font-size: 1.3rem;
     font-weight: 400;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .storage-bar {
-    height: 5px;
-    border-radius: 99px;
+    height: 0.5rem;
+    border-radius: 9.9rem;
     background: rgba(255, 255, 255, 0.07);
     overflow: hidden;
   }
 
   .storage-fill {
     height: 100%;
-    border-radius: 99px;
+    border-radius: 9.9rem;
     background: var(--accent);
   }
 
   .storage-free {
-    font-size: 11.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   @media (max-width: 1140px) {
     .sidebar {
-      width: 68px;
-      padding: var(--space-5) 10px var(--space-4);
+      width: 7.2rem;
+      padding: var(--space-5) 1rem var(--space-4);
       align-items: center;
     }
 
     .logo {
-      padding: 4px 0 0;
+      padding: 0.4rem 0 0;
       margin-bottom: var(--space-6);
     }
 
@@ -290,7 +295,7 @@
     }
 
     .profile {
-      padding: 6px;
+      padding: 0.6rem;
     }
   }
 </style>

@@ -19,18 +19,18 @@
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    height: 26px;
-    padding: 0 11px;
-    border-radius: 7px;
-    font-size: 12.5px;
+    gap: 0.7rem;
+    height: 2.6rem;
+    padding: 0 1.1rem;
+    border-radius: 0.7rem;
+    font-size: 1.3rem;
     font-weight: 500;
     white-space: nowrap;
   }
 
   .dot {
-    width: 6px;
-    height: 6px;
+    width: 0.6rem;
+    height: 0.6rem;
     border-radius: 50%;
     background: currentColor;
   }

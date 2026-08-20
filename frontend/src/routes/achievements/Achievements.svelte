@@ -34,7 +34,7 @@
           </div>
           {#if row.data.recent[0]}
             <span class="recent">
-              <Trophy size={13} strokeWidth={1.8} />
+              <Trophy size="1.3rem" strokeWidth={1.8} />
               {row.data.recent[0].name} · {row.data.recent[0].date}
             </span>
           {/if}
@@ -52,7 +52,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    max-width: 860px;
+    max-width: 86rem;
   }
 
   .row {
@@ -75,8 +75,8 @@
   }
 
   .thumb {
-    width: 56px;
-    height: 74px;
+    width: 5.6rem;
+    height: 7.4rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -87,11 +87,11 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 0.7rem;
   }
 
   .title {
-    font-size: 15px;
+    font-size: 1.6rem;
     font-weight: 600;
   }
 
@@ -99,11 +99,11 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    max-width: 420px;
+    max-width: 42rem;
   }
 
   .nums {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -112,8 +112,8 @@
   .recent {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
+    gap: 0.6rem;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -126,7 +126,7 @@
   }
 
   .pct {
-    font-size: 17px;
+    font-size: 1.8rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-2);

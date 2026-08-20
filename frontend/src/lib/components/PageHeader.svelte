@@ -36,15 +36,15 @@
   }
 
   h1 {
-    font-size: 32px;
+    font-size: var(--font-title);
     font-weight: 600;
     line-height: 1.15;
     letter-spacing: -0.01em;
   }
 
   p {
-    margin-top: 6px;
-    font-size: 13px;
+    margin-top: 0.6rem;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 

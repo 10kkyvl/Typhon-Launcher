@@ -1,4 +1,6 @@
 :root {
+  --ui-scale: 1;
+
   --bg: #0b1016;
   --bg-sidebar: #0a0e13;
   --surface: #111821;
@@ -23,32 +25,43 @@
   --danger: #d96969;
   --danger-subtle: rgba(217, 105, 105, 0.12);
 
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 13px;
-  --radius-xl: 16px;
+  --radius-sm: 0.8rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.3rem;
+  --radius-xl: 1.6rem;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
+  --space-1: 0.4rem;
+  --space-2: 0.8rem;
+  --space-3: 1.2rem;
+  --space-4: 1.6rem;
+  --space-5: 2rem;
+  --space-6: 2.4rem;
+  --space-8: 3.2rem;
+  --space-10: 4rem;
+  --space-12: 4.8rem;
 
-  --page-x: 32px;
-  --sidebar-w: 240px;
-  --topbar-h: 68px;
+  --page-x: 3.6rem;
+  --sidebar-w: 25.6rem;
+  --topbar-h: 7rem;
 
-  --font-sans: "Geist Variable", "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --font-xs: 1.3rem;
+  --font-sm: 1.4rem;
+  --font-md: 1.5rem;
+  --font-lg: 1.7rem;
+  --font-xl: 2rem;
+  --font-title: 3.5rem;
+
+  --control-sm: 3.6rem;
+  --control-md: 4.2rem;
+  --control-lg: 4.6rem;
+
+  --font-sans: "Geist Variable", "Geist", "Inter", "Segoe UI", system-ui, sans-serif;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 180ms;
   --dur-fast: 140ms;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 0.8rem 2.8rem rgba(0, 0, 0, 0.45), 0 2px 0.8rem rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 2rem 6rem rgba(0, 0, 0, 0.55);
 }

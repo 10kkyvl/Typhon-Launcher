@@ -44,10 +44,10 @@
 <header class="topbar" style="--wails-draggable: drag">
   <div class="no-drag nav-buttons">
     <IconButton label="Назад" onclick={goBack}>
-      <span class="arrow" class:dim={!$canGoBack}><ChevronLeft size={19} strokeWidth={1.8} /></span>
+      <span class="arrow" class:dim={!$canGoBack}><ChevronLeft size="1.9rem" strokeWidth={1.8} /></span>
     </IconButton>
     <IconButton label="Вперёд" onclick={goForward}>
-      <span class="arrow" class:dim={!$canGoForward}><ChevronRight size={19} strokeWidth={1.8} /></span>
+      <span class="arrow" class:dim={!$canGoForward}><ChevronRight size="1.9rem" strokeWidth={1.8} /></span>
     </IconButton>
   </div>
 
@@ -58,7 +58,7 @@
   <div class="no-drag right">
     <div class="bell" use:clickOutside={() => (notificationsOpen = false)}>
       <IconButton label="Уведомления" active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
-        <Bell size={19} strokeWidth={1.8} />
+        <Bell size="1.9rem" strokeWidth={1.8} />
       </IconButton>
       {#if notificationsOpen}
         <div class="notifications">
@@ -73,10 +73,10 @@
       {/if}
     </div>
     <IconButton label="Справка" onclick={() => toast('Справка недоступна в demo')}>
-      <CircleHelp size={19} strokeWidth={1.8} />
+      <CircleHelp size="1.9rem" strokeWidth={1.8} />
     </IconButton>
     <IconButton label="Настройки" onclick={() => navigate('settings')}>
-      <Settings size={19} strokeWidth={1.8} />
+      <Settings size="1.9rem" strokeWidth={1.8} />
     </IconButton>
 
     <button class="account" onclick={() => navigate('settings')}>
@@ -91,18 +91,18 @@
         <span class="account-name">{user.name}</span>
         <span class="account-status"><span class="dot"></span>{user.status}</span>
       </span>
-      <ChevronDown size={14} strokeWidth={1.8} />
+      <ChevronDown size="1.4rem" strokeWidth={1.8} />
     </button>
 
     <div class="window-controls">
       <button class="wc" aria-label="Свернуть" onclick={() => win('minimise')}>
-        <Minus size={16} strokeWidth={1.6} />
+        <Minus size="1.6rem" strokeWidth={1.6} />
       </button>
       <button class="wc" aria-label="Развернуть" onclick={() => win('maximise')}>
-        <Square size={13} strokeWidth={1.6} />
+        <Square size="1.3rem" strokeWidth={1.6} />
       </button>
       <button class="wc close" aria-label="Закрыть" onclick={() => win('close')}>
-        <X size={16} strokeWidth={1.6} />
+        <X size="1.6rem" strokeWidth={1.6} />
       </button>
     </div>
   </div>
@@ -137,13 +137,13 @@
 
   .search-wrap {
     flex: 1;
-    max-width: 560px;
+    max-width: 58rem;
   }
 
   .right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
     margin-left: auto;
   }
 
@@ -154,10 +154,10 @@
   .notifications {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 8px);
+    top: calc(100% + 0.8rem);
     right: 0;
-    width: 320px;
-    padding: 6px;
+    width: 32rem;
+    padding: 0.6rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
@@ -166,8 +166,8 @@
   }
 
   .notifications-head {
-    padding: 8px 11px 6px;
-    font-size: 12px;
+    padding: 0.8rem 1.1rem 0.6rem;
+    font-size: 1.3rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -179,7 +179,7 @@
     flex-direction: column;
     gap: 2px;
     width: 100%;
-    padding: 9px 11px;
+    padding: 0.9rem 1.1rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -190,22 +190,22 @@
   }
 
   .notification-title {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 550;
   }
 
   .notification-text {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   .account {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 44px;
-    margin-left: 6px;
-    padding: 0 10px;
+    gap: 1rem;
+    height: 4.4rem;
+    margin-left: 0.6rem;
+    padding: 0 1rem;
     border-radius: var(--radius-md);
     color: var(--text-3);
     transition: background var(--dur) var(--ease);
@@ -216,8 +216,8 @@
   }
 
   .avatar {
-    width: 32px;
-    height: 32px;
+    width: 3.6rem;
+    height: 3.6rem;
     flex-shrink: 0;
   }
 
@@ -237,7 +237,7 @@
     border-radius: 50%;
     background: var(--accent-subtle);
     color: var(--accent-text);
-    font-size: 13px;
+    font-size: 1.4rem;
     font-weight: 600;
   }
 
@@ -248,7 +248,7 @@
   }
 
   .account-name {
-    font-size: 13.5px;
+    font-size: 1.5rem;
     font-weight: 550;
     color: var(--text);
     line-height: 1.25;
@@ -257,30 +257,30 @@
   .account-status {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
+    gap: 0.5rem;
+    font-size: 1.2rem;
     color: var(--text-3);
     line-height: 1.25;
   }
 
   .dot {
-    width: 6px;
-    height: 6px;
+    width: 0.6rem;
+    height: 0.6rem;
     border-radius: 50%;
     background: var(--success);
   }
 
   .window-controls {
     display: flex;
-    margin-left: 10px;
+    margin-left: 1rem;
   }
 
   .wc {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 34px;
+    width: 4.4rem;
+    height: 3.6rem;
     border-radius: var(--radius-sm);
     color: var(--text-3);
     transition:
@@ -301,7 +301,7 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-3px);
+      transform: translateY(-0.3rem);
     }
     to {
       opacity: 1;

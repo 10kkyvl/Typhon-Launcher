@@ -25,14 +25,14 @@
 <style>
   .tabs {
     display: flex;
-    gap: 4px;
+    gap: 0.4rem;
     border-bottom: 1px solid var(--border);
   }
 
   .tab {
     position: relative;
-    padding: 10px 14px 12px;
-    font-size: 14px;
+    padding: 1rem 1.4rem 1.2rem;
+    font-size: 1.5rem;
     font-weight: 500;
     color: var(--text-2);
     transition: color var(--dur) var(--ease);
@@ -49,8 +49,8 @@
   .tab.selected::after {
     content: '';
     position: absolute;
-    left: 10px;
-    right: 10px;
+    left: 1rem;
+    right: 1rem;
     bottom: -1px;
     height: 2px;
     border-radius: 2px;

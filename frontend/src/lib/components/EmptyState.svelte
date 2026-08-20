@@ -37,35 +37,35 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    padding: 64px 32px;
+    padding: 6.4rem 3.2rem;
   }
 
   .icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    height: 52px;
-    margin-bottom: 18px;
-    border-radius: 14px;
+    width: 5.2rem;
+    height: 5.2rem;
+    margin-bottom: 1.8rem;
+    border-radius: 1.4rem;
     background: var(--surface-3);
     border: 1px solid var(--border);
     color: var(--text-3);
   }
 
   h3 {
-    font-size: 16px;
+    font-size: 1.7rem;
     font-weight: 600;
   }
 
   p {
-    margin-top: 8px;
-    max-width: 360px;
-    font-size: 13.5px;
+    margin-top: 0.8rem;
+    max-width: 36rem;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 
   .actions {
-    margin-top: 20px;
+    margin-top: 2rem;
   }
 </style>

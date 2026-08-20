@@ -5,7 +5,7 @@
   let {
     options,
     value = $bindable(),
-    width = '220px',
+    width = '22rem',
   }: {
     options: { id: string; label: string }[];
     value: string;
@@ -20,7 +20,7 @@
 <div class="select" style:width use:clickOutside={() => (open = false)}>
   <button class="trigger" class:open aria-haspopup="listbox" aria-expanded={open} onclick={() => (open = !open)}>
     <span>{selected?.label ?? ''}</span>
-    <ChevronDown size={16} strokeWidth={1.8} />
+    <ChevronDown size="1.6rem" strokeWidth={1.8} />
   </button>
   {#if open}
     <div class="menu" role="listbox">
@@ -35,7 +35,7 @@
           }}
         >
           <span>{option.label}</span>
-          {#if value === option.id}<Check size={15} strokeWidth={2} />{/if}
+          {#if value === option.id}<Check size="1.5rem" strokeWidth={2} />{/if}
         </button>
       {/each}
     </div>
@@ -51,14 +51,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 0.8rem;
     width: 100%;
-    height: 38px;
-    padding: 0 12px 0 14px;
+    height: var(--control-md);
+    padding: 0 1.2rem 0 1.4rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 1.5rem;
     color: var(--text);
     transition:
       background var(--dur) var(--ease),
@@ -83,10 +83,10 @@
   .menu {
     position: absolute;
     z-index: 40;
-    top: calc(100% + 6px);
+    top: calc(100% + 0.6rem);
     left: 0;
     right: 0;
-    padding: 5px;
+    padding: 0.5rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -98,11 +98,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 0.8rem;
     width: 100%;
-    padding: 8px 10px;
-    border-radius: 7px;
-    font-size: 13.5px;
+    padding: 0.8rem 1rem;
+    border-radius: 0.7rem;
+    font-size: 1.4rem;
     color: var(--text-2);
     text-align: left;
     transition:
@@ -126,7 +126,7 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-3px);
+      transform: translateY(-0.3rem);
     }
     to {
       opacity: 1;

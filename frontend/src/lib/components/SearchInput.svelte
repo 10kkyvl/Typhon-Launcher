@@ -13,7 +13,7 @@
 </script>
 
 <div class="search">
-  <Search size={17} strokeWidth={1.8} />
+  <Search size="1.7rem" strokeWidth={1.8} />
   <input type="text" {placeholder} bind:value />
   {#if shortcut}
     <kbd>{shortcut}</kbd>
@@ -24,9 +24,9 @@
   .search {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 40px;
-    padding: 0 12px 0 14px;
+    gap: 1rem;
+    height: 4.4rem;
+    padding: 0 1.2rem 0 1.5rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -51,7 +51,7 @@
     background: none;
     border: none;
     outline: none;
-    font-size: 14px;
+    font-size: var(--font-md);
     color: var(--text);
   }
 
@@ -60,12 +60,12 @@
   }
 
   kbd {
-    padding: 2px 7px;
-    border-radius: 6px;
+    padding: 2px 0.7rem;
+    border-radius: 0.6rem;
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.04);
     font-family: inherit;
-    font-size: 11.5px;
+    font-size: 1.2rem;
     color: var(--text-3);
   }
 </style>

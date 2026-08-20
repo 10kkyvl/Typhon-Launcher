@@ -54,9 +54,9 @@
   .menu {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 6px);
-    min-width: 190px;
-    padding: 5px;
+    top: calc(100% + 0.6rem);
+    min-width: 19rem;
+    padding: 0.5rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -67,9 +67,9 @@
   .item {
     display: block;
     width: 100%;
-    padding: 8px 11px;
-    border-radius: 7px;
-    font-size: 13.5px;
+    padding: 0.8rem 1.1rem;
+    border-radius: 0.7rem;
+    font-size: 1.4rem;
     color: var(--text-2);
     text-align: left;
     white-space: nowrap;
@@ -93,14 +93,14 @@
 
   .separator {
     height: 1px;
-    margin: 5px 4px;
+    margin: 0.5rem 0.4rem;
     background: var(--border);
   }
 
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-3px);
+      transform: translateY(-0.3rem);
     }
     to {
       opacity: 1;

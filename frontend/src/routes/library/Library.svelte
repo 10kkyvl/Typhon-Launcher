@@ -95,14 +95,14 @@
       {#snippet trigger({ open, toggle })}
         <button class="pill primary-pill" class:open onclick={toggle}>
           Все игры
-          <ChevronDown size={15} strokeWidth={1.8} />
+          <ChevronDown size="1.5rem" strokeWidth={1.8} />
         </button>
       {/snippet}
     </DropdownMenu>
     {#each filters.slice(1) as f (f.id)}
       <button class="pill" class:selected={filter === f.id} onclick={() => (filter = filter === f.id ? 'all' : f.id)}>
         {#if f.icon}
-          <f.icon size={15} strokeWidth={1.8} />
+          <f.icon size="1.5rem" strokeWidth={1.8} />
         {/if}
         {f.label}
       </button>
@@ -119,9 +119,9 @@
     >
       {#snippet trigger({ open, toggle })}
         <button class="pill" class:open onclick={toggle}>
-          <SlidersHorizontal size={15} strokeWidth={1.8} />
+          <SlidersHorizontal size="1.5rem" strokeWidth={1.8} />
           Фильтры
-          <ChevronDown size={15} strokeWidth={1.8} />
+          <ChevronDown size="1.5rem" strokeWidth={1.8} />
         </button>
       {/snippet}
     </DropdownMenu>
@@ -136,9 +136,9 @@
     >
       {#snippet trigger({ open, toggle })}
         <button class="pill" class:open onclick={toggle}>
-          <ArrowDownUp size={15} strokeWidth={1.8} />
+          <ArrowDownUp size="1.5rem" strokeWidth={1.8} />
           Сортировка: По алфавиту
-          <ChevronDown size={15} strokeWidth={1.8} />
+          <ChevronDown size="1.5rem" strokeWidth={1.8} />
         </button>
       {/snippet}
     </DropdownMenu>
@@ -151,9 +151,9 @@
     >
       {#snippet item(option)}
         {#if option.id === 'grid'}
-          <LayoutGrid size={16} strokeWidth={1.8} />
+          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
         {:else}
-          <List size={16} strokeWidth={1.8} />
+          <List size="1.6rem" strokeWidth={1.8} />
         {/if}
       {/snippet}
     </SegmentedControl>
@@ -162,7 +162,7 @@
 
 {#if hero}
   <div class="hero-block">
-    <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="240px">
+    <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem">
       <h2 class="hero-title">{hero.title}</h2>
       <div class="hero-genres">
         {#each hero.genres.slice(0, 4) as genre (genre)}
@@ -172,12 +172,12 @@
       <p class="hero-tagline">{hero.tagline}</p>
       <div class="hero-actions">
         <Button variant="primary" size="lg" onclick={() => toast(`Запуск «${hero.title}»...`)}>
-          <Play size={16} strokeWidth={2} fill="currentColor" />
+          <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
           Играть
         </Button>
         <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>Подробнее</Button>
         <IconButton label="В коллекцию" onclick={() => toast('Добавлено в коллекцию')}>
-          <Bookmark size={18} strokeWidth={1.8} />
+          <Bookmark size="1.8rem" strokeWidth={1.8} />
         </IconButton>
       </div>
     </GameHero>
@@ -199,7 +199,7 @@
     <h2>{sectionTitles[filter]}</h2>
     <button class="link" onclick={() => navigate('installed')}>
       Показать все
-      <ChevronRight size={15} strokeWidth={1.8} />
+      <ChevronRight size="1.5rem" strokeWidth={1.8} />
     </button>
   </div>
 
@@ -214,7 +214,7 @@
       {#each visibleGames as game (game.id)}
         <button class="list-row" onclick={() => navigate('game', { id: game.id })}>
           <div class="list-thumb">
-            <Artwork src={game.cover} alt={game.title} radius="6px" />
+            <Artwork src={game.cover} alt={game.title} radius="0.6rem" />
           </div>
           <span class="list-title">{game.title}</span>
           <span class="list-meta">{game.genres.slice(0, 2).join(' · ')}</span>
@@ -251,17 +251,17 @@
           {@const game = gameById(q.gameId)}
           <div class="queue-row">
             <div class="queue-thumb">
-              <Artwork src={game?.hero ?? ''} alt={game?.title ?? ''} radius="6px" />
+              <Artwork src={game?.hero ?? ''} alt={game?.title ?? ''} radius="0.6rem" />
             </div>
             <span class="queue-title">{game?.title}</span>
             <span class="queue-size">{gb(q.sizeGb)}</span>
             <span class="queue-state">В очереди</span>
             <div class="queue-actions">
               <IconButton label="Выше" size="sm" onclick={() => moveInQueue(q.id, -1)}>
-                <ArrowUp size={15} strokeWidth={1.8} />
+                <ArrowUp size="1.5rem" strokeWidth={1.8} />
               </IconButton>
               <IconButton label="Убрать" size="sm" onclick={() => removeFromQueue(q.id)}>
-                <X size={15} strokeWidth={1.8} />
+                <X size="1.5rem" strokeWidth={1.8} />
               </IconButton>
             </div>
           </div>
@@ -280,7 +280,7 @@
 
 <style>
   .page-title {
-    font-size: 32px;
+    font-size: var(--font-title);
     letter-spacing: -0.01em;
     margin: var(--space-4) 0 var(--space-5);
   }
@@ -304,13 +304,13 @@
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    height: 36px;
-    padding: 0 14px;
+    gap: 0.8rem;
+    height: 4rem;
+    padding: 0 1.4rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--surface);
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 500;
     color: var(--text-2);
     white-space: nowrap;
@@ -349,35 +349,35 @@
   }
 
   .hero-title {
-    font-size: clamp(30px, 3vw, 42px);
+    font-size: clamp(3.2rem, 3vw, 4.4rem);
     font-weight: 600;
     letter-spacing: -0.01em;
-    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 2px 1.8rem rgba(0, 0, 0, 0.5);
   }
 
   .hero-genres {
     display: flex;
-    gap: 8px;
-    margin-top: 14px;
+    gap: 0.8rem;
+    margin-top: 1.4rem;
     flex-wrap: wrap;
   }
 
   .genre {
-    padding: 4px 12px;
-    border-radius: 8px;
+    padding: 0.4rem 1.2rem;
+    border-radius: 0.8rem;
     background: rgba(10, 14, 19, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-2);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(0.4rem);
   }
 
   .hero-tagline {
-    margin-top: 14px;
-    max-width: 420px;
-    font-size: 14.5px;
+    margin-top: 1.4rem;
+    max-width: 42rem;
+    font-size: 1.5rem;
     color: rgba(243, 245, 247, 0.85);
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -394,15 +394,15 @@
 
   .hero-dots {
     position: absolute;
-    right: 20px;
-    bottom: 16px;
+    right: 2rem;
+    bottom: 1.6rem;
     display: flex;
-    gap: 7px;
+    gap: 0.7rem;
   }
 
   .dot {
-    width: 7px;
-    height: 7px;
+    width: 0.7rem;
+    height: 0.7rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.28);
     transition:
@@ -431,17 +431,17 @@
   }
 
   .section-head h2 {
-    font-size: 19px;
+    font-size: 2rem;
   }
 
   .link {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    font-size: 13.5px;
+    gap: 0.3rem;
+    font-size: 1.4rem;
     color: var(--text-3);
-    border-radius: 7px;
-    padding: 4px 8px;
+    border-radius: 0.7rem;
+    padding: 0.4rem 0.8rem;
     transition: color var(--dur) var(--ease);
   }
 
@@ -451,7 +451,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(18.5rem, 1fr));
     gap: var(--space-5);
   }
 
@@ -465,7 +465,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 8px 12px;
+    padding: 0.8rem 1.2rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -476,17 +476,17 @@
   }
 
   .list-thumb {
-    width: 34px;
-    height: 46px;
+    width: 3.4rem;
+    height: 4.6rem;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: 0.6rem;
     overflow: hidden;
   }
 
   .list-title {
     flex: 1;
     min-width: 0;
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -494,13 +494,13 @@
   }
 
   .list-meta {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
     white-space: nowrap;
   }
 
   .list-meta.right {
-    min-width: 60px;
+    min-width: 6rem;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
@@ -527,12 +527,12 @@
   }
 
   .panel-head h3 {
-    font-size: 15px;
+    font-size: 1.6rem;
     font-weight: 600;
   }
 
   .panel-empty {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-3);
     padding: var(--space-2) 0 var(--space-1);
   }
@@ -546,7 +546,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 7px 0;
+    padding: 0.7rem 0;
   }
 
   .queue-row + .queue-row {
@@ -554,17 +554,17 @@
   }
 
   .queue-thumb {
-    width: 56px;
+    width: 5.6rem;
     aspect-ratio: 16 / 9;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: 0.6rem;
     overflow: hidden;
   }
 
   .queue-title {
     flex: 1;
     min-width: 0;
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -572,14 +572,14 @@
   }
 
   .queue-size {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
   .queue-state {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -599,7 +599,7 @@
   }
 
   .panel-note {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 

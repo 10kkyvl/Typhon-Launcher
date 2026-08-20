@@ -24,15 +24,15 @@
   .tip {
     position: absolute;
     z-index: 60;
-    bottom: calc(100% + 7px);
+    bottom: calc(100% + 0.7rem);
     left: 50%;
     transform: translateX(-50%) translateY(2px);
-    padding: 5px 9px;
+    padding: 0.5rem 0.9rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
-    border-radius: 7px;
+    border-radius: 0.7rem;
     box-shadow: var(--shadow-pop);
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--text-2);
     white-space: nowrap;
     opacity: 0;

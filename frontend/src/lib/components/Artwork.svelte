@@ -47,7 +47,7 @@
     height: 100%;
     background: linear-gradient(135deg, #1a2330, #12181f);
     color: var(--text-3);
-    font-size: 28px;
+    font-size: 2.8rem;
     font-weight: 600;
   }
 </style>

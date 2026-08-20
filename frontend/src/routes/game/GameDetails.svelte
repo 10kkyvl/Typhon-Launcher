@@ -81,11 +81,11 @@
 {:else}
   <nav class="breadcrumb">
     <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
-    <ChevronRight size={14} strokeWidth={1.8} />
+    <ChevronRight size="1.4rem" strokeWidth={1.8} />
     <span class="crumb current">{game.title}</span>
   </nav>
 
-  <GameHero src={game.hero} alt={game.title} ratio="2.9 / 1" minHeight="300px">
+  <GameHero src={game.hero} alt={game.title} ratio="2.9 / 1" minHeight="30rem">
     <h1 class="title">{game.title}</h1>
     <div class="genres">
       {#each game.genres as genre (genre)}
@@ -94,17 +94,17 @@
     </div>
     <div class="meta">
       <span class="meta-item">
-        <Calendar size={15} strokeWidth={1.8} />
+        <Calendar size="1.5rem" strokeWidth={1.8} />
         <span class="meta-label">Выпуск</span>
         {game.releaseDate}
       </span>
       <span class="meta-item">
-        <UserRound size={15} strokeWidth={1.8} />
+        <UserRound size="1.5rem" strokeWidth={1.8} />
         <span class="meta-label">Разработчик</span>
         {game.developer}
       </span>
       <span class="meta-item">
-        <Globe size={15} strokeWidth={1.8} />
+        <Globe size="1.5rem" strokeWidth={1.8} />
         <span class="meta-label">Язык</span>
         {game.language}
       </span>
@@ -113,7 +113,7 @@
     <div class="actions">
       {#if game.installed}
         <Button variant="primary" size="lg" onclick={() => toast(`Запуск «${game.title}»...`)}>
-          <Play size={16} strokeWidth={2} fill="currentColor" />
+          <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
           Играть
         </Button>
         <DropdownMenu
@@ -128,24 +128,24 @@
           {#snippet trigger({ toggle })}
             <span class="installed-group">
               <Button size="lg">
-                <Check size={16} strokeWidth={2} />
+                <Check size="1.6rem" strokeWidth={2} />
                 Установлено
               </Button>
               <Button size="lg" onclick={toggle}>
-                <ChevronDown size={16} strokeWidth={1.8} />
+                <ChevronDown size="1.6rem" strokeWidth={1.8} />
               </Button>
             </span>
           {/snippet}
         </DropdownMenu>
       {:else}
         <Button variant="primary" size="lg" onclick={() => toast(`«${game.title}» добавлена в очередь загрузки`)}>
-          <Download size={16} strokeWidth={2} />
+          <Download size="1.6rem" strokeWidth={2} />
           Установить
         </Button>
         <span class="size-hint">{gb(game.sizeGb)}</span>
       {/if}
       <IconButton label="В коллекцию" active={bookmarked} onclick={() => (bookmarked = !bookmarked)}>
-        <Bookmark size={18} strokeWidth={1.8} fill={bookmarked ? 'currentColor' : 'none'} />
+        <Bookmark size="1.8rem" strokeWidth={1.8} fill={bookmarked ? 'currentColor' : 'none'} />
       </IconButton>
     </div>
   </GameHero>
@@ -196,7 +196,7 @@
         </dl>
         <button class="expand" onclick={() => (expanded = !expanded)}>
           {expanded ? 'Показать меньше' : 'Показать больше'}
-          <ChevronDown size={15} strokeWidth={1.8} style={expanded ? 'transform: rotate(180deg)' : ''} />
+          <ChevronDown size="1.5rem" strokeWidth={1.8} style={expanded ? 'transform: rotate(180deg)' : ''} />
         </button>
       </Card>
 
@@ -210,7 +210,7 @@
         {#if gameAchievements}
           <div class="ach-summary">
             <div class="ach-badge">
-              <Trophy size={22} strokeWidth={1.8} />
+              <Trophy size="2.2rem" strokeWidth={1.8} />
             </div>
             <div class="ach-count">
               <span class="ach-nums"><strong>{gameAchievements.earned}</strong> / {gameAchievements.total}</span>
@@ -223,7 +223,7 @@
             {#each gameAchievements.recent.slice(0, 1) as a (a.name)}
               <div class="ach-item">
                 <div class="ach-icon">
-                  <Trophy size={16} strokeWidth={1.8} />
+                  <Trophy size="1.6rem" strokeWidth={1.8} />
                 </div>
                 <div class="ach-text">
                   <span class="ach-name">{a.name}</span>
@@ -260,7 +260,7 @@
                 {#if dlc.installed}
                   <span class="dlc-state installed">
                     Установлено
-                    <CircleCheck size={15} strokeWidth={1.8} />
+                    <CircleCheck size="1.5rem" strokeWidth={1.8} />
                   </span>
                 {:else}
                   <span class="dlc-state">Не установлено</span>
@@ -270,7 +270,7 @@
           </div>
           <button class="link with-icon" onclick={() => (tab = 'addons')}>
             Управление дополнениями
-            <ExternalLink size={14} strokeWidth={1.8} />
+            <ExternalLink size="1.4rem" strokeWidth={1.8} />
           </button>
         {/if}
       </Card>
@@ -281,7 +281,7 @@
       <div class="quick-actions">
         {#each quickActions as action (action.id)}
           <button class="qa" class:danger={action.danger} onclick={() => quickAction(action.id)}>
-            <action.icon size={19} strokeWidth={1.8} />
+            <action.icon size="1.9rem" strokeWidth={1.8} />
             <span class="qa-text">
               <span class="qa-label">{action.label}</span>
               <span class="qa-sub">{action.sub}</span>
@@ -294,7 +294,7 @@
     {#if gameDlcs.length === 0}
       <EmptyState title="Дополнений нет" description="У этой игры пока нет доступных дополнений.">
         {#snippet icon()}
-          <Gamepad2 size={22} strokeWidth={1.8} />
+          <Gamepad2 size="2.2rem" strokeWidth={1.8} />
         {/snippet}
       </EmptyState>
     {:else}
@@ -310,7 +310,7 @@
                 <StatusBadge kind="success" label="Установлено" dot={false} />
               {:else}
                 <Button size="sm" onclick={() => toast(`«${dlc.name}» добавлено в очередь`)}>
-                  <Download size={14} strokeWidth={1.8} />
+                  <Download size="1.4rem" strokeWidth={1.8} />
                   Установить
                 </Button>
               {/if}
@@ -324,7 +324,7 @@
       <Card>
         <div class="ach-summary">
           <div class="ach-badge">
-            <Trophy size={22} strokeWidth={1.8} />
+            <Trophy size="2.2rem" strokeWidth={1.8} />
           </div>
           <div class="ach-count">
             <span class="ach-nums"><strong>{gameAchievements.earned}</strong> / {gameAchievements.total}</span>
@@ -336,7 +336,7 @@
           {#each gameAchievements.recent as a (a.name)}
             <div class="ach-item">
               <div class="ach-icon">
-                <Trophy size={16} strokeWidth={1.8} />
+                <Trophy size="1.6rem" strokeWidth={1.8} />
               </div>
               <div class="ach-text">
                 <span class="ach-name">{a.name}</span>
@@ -350,14 +350,14 @@
     {:else}
       <EmptyState title="Достижений пока нет" description="Запустите игру, чтобы начать получать достижения.">
         {#snippet icon()}
-          <Trophy size={22} strokeWidth={1.8} />
+          <Trophy size="2.2rem" strokeWidth={1.8} />
         {/snippet}
       </EmptyState>
     {/if}
   {:else if tab === 'screenshots'}
     <EmptyState title="Скриншотов пока нет" description="Скриншоты, сделанные через оверлей Aurora, появятся здесь.">
       {#snippet icon()}
-        <Image size={22} strokeWidth={1.8} />
+        <Image size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button onclick={() => toast('Папка скриншотов недоступна в demo')}>Открыть папку скриншотов</Button>
@@ -366,11 +366,11 @@
   {:else if tab === 'notes'}
     <EmptyState title="Заметок пока нет" description="Храните здесь пароли от сейфов, билды и прочие игровые записи.">
       {#snippet icon()}
-        <NotebookPen size={22} strokeWidth={1.8} />
+        <NotebookPen size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button onclick={() => toast('Заметки недоступны в demo')}>
-          <SquarePen size={15} strokeWidth={1.8} />
+          <SquarePen size="1.5rem" strokeWidth={1.8} />
           Добавить заметку
         </Button>
       {/snippet}
@@ -382,15 +382,15 @@
   .breadcrumb {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.8rem;
     margin: var(--space-3) 0 var(--space-4);
     color: var(--text-3);
   }
 
   .crumb {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-3);
-    border-radius: 6px;
+    border-radius: 0.6rem;
     transition: color var(--dur) var(--ease);
   }
 
@@ -404,26 +404,26 @@
   }
 
   .title {
-    font-size: clamp(32px, 3.4vw, 44px);
+    font-size: clamp(3.2rem, 3.4vw, 4.4rem);
     letter-spacing: -0.015em;
-    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 2px 1.8rem rgba(0, 0, 0, 0.5);
   }
 
   .genres {
     display: flex;
-    gap: 8px;
-    margin-top: 14px;
+    gap: 0.8rem;
+    margin-top: 1.4rem;
     flex-wrap: wrap;
   }
 
   .genre {
-    padding: 4px 12px;
-    border-radius: 8px;
+    padding: 0.4rem 1.2rem;
+    border-radius: 0.8rem;
     background: rgba(10, 14, 19, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-2);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(0.4rem);
   }
 
   .meta {
@@ -436,10 +436,10 @@
   .meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: 13px;
+    gap: 0.7rem;
+    font-size: 1.4rem;
     color: rgba(243, 245, 247, 0.9);
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .meta-item :global(svg) {
@@ -452,10 +452,10 @@
 
   .tagline {
     margin-top: var(--space-4);
-    max-width: 460px;
-    font-size: 14px;
+    max-width: 46rem;
+    font-size: 1.5rem;
     color: rgba(243, 245, 247, 0.85);
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -483,13 +483,13 @@
   .installed-group :global(button:last-child) {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    padding: 0 10px;
+    padding: 0 1rem;
   }
 
   .size-hint {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: rgba(243, 245, 247, 0.75);
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .tabs-row {
@@ -505,7 +505,7 @@
   }
 
   .card-title {
-    font-size: 15px;
+    font-size: 1.6rem;
     font-weight: 600;
   }
 
@@ -518,7 +518,7 @@
 
   .description {
     margin-top: var(--space-3);
-    font-size: 13.5px;
+    font-size: 1.4rem;
     line-height: 1.6;
     color: var(--text-2);
   }
@@ -532,7 +532,7 @@
   .props {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 1rem;
   }
 
   .prop {
@@ -542,12 +542,12 @@
   }
 
   dt {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 
   dd {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-2);
     text-align: right;
   }
@@ -555,12 +555,12 @@
   .expand {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 0.5rem;
     margin-top: var(--space-4);
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 500;
     color: var(--accent-text);
-    border-radius: 6px;
+    border-radius: 0.6rem;
     transition: color var(--dur) var(--ease);
   }
 
@@ -573,9 +573,9 @@
   }
 
   .link {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--accent-text);
-    border-radius: 6px;
+    border-radius: 0.6rem;
     transition: color var(--dur) var(--ease);
   }
 
@@ -586,7 +586,7 @@
   .link.with-icon {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
     margin-top: var(--space-4);
   }
 
@@ -601,8 +601,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    height: 52px;
+    width: 5.2rem;
+    height: 5.2rem;
     border-radius: 50%;
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -615,18 +615,18 @@
   }
 
   .ach-nums {
-    font-size: 15px;
+    font-size: 1.6rem;
     color: var(--text-3);
   }
 
   .ach-nums strong {
-    font-size: 26px;
+    font-size: 2.6rem;
     font-weight: 600;
     color: var(--text);
   }
 
   .ach-label {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 
@@ -636,9 +636,9 @@
 
   .ach-recent-label {
     display: block;
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--text-3);
-    margin-bottom: 10px;
+    margin-bottom: 1rem;
   }
 
   .ach-list {
@@ -655,15 +655,15 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 9px 0;
+    padding: 0.9rem 0;
   }
 
   .ach-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 3.6rem;
+    height: 3.6rem;
     border-radius: var(--radius-sm);
     background: rgba(232, 195, 90, 0.12);
     color: #e8c35a;
@@ -678,12 +678,12 @@
   }
 
   .ach-name {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 550;
   }
 
   .ach-desc {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -691,19 +691,19 @@
   }
 
   .ach-date {
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
   }
 
   .muted {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-3);
     margin-top: var(--space-3);
   }
 
   .muted.small {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     margin: 0;
   }
 
@@ -718,7 +718,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: 10px 0;
+    padding: 1rem 0;
   }
 
   .dlc + .dlc {
@@ -732,7 +732,7 @@
   }
 
   .dlc-name {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -740,15 +740,15 @@
   }
 
   .dlc-kind {
-    font-size: 12px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
   .dlc-state {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
+    gap: 0.6rem;
+    font-size: 1.3rem;
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -761,7 +761,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    max-width: 720px;
+    max-width: 72rem;
   }
 
   .addon {
@@ -784,8 +784,8 @@
   .qa {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 1.2rem;
+    padding: 1.2rem 1.4rem;
     border-radius: var(--radius-md);
     text-align: left;
     color: var(--text-2);
@@ -825,7 +825,7 @@
   }
 
   .qa-label {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -833,7 +833,7 @@
   }
 
   .qa-sub {
-    font-size: 11.5px;
+    font-size: 1.2rem;
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;

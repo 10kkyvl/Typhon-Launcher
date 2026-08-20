@@ -64,14 +64,14 @@
         {#if downloading}
           <IconButton label={download.paused ? 'Продолжить' : 'Пауза'} onclick={() => togglePause(download.id)}>
             {#if download.paused}
-              <Play size={17} strokeWidth={1.8} />
+              <Play size="1.7rem" strokeWidth={1.8} />
             {:else}
-              <Pause size={17} strokeWidth={1.8} />
+              <Pause size="1.7rem" strokeWidth={1.8} />
             {/if}
           </IconButton>
         {/if}
         <IconButton label="Отменить" onclick={() => cancelDownload(download.id)}>
-          <X size={17} strokeWidth={1.8} />
+          <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>
     </div>
@@ -124,7 +124,7 @@
   }
 
   .thumb {
-    width: 178px;
+    width: 17.8rem;
     aspect-ratio: 16 / 9;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
@@ -133,7 +133,7 @@
   }
 
   .compact .thumb {
-    width: 120px;
+    width: 12rem;
   }
 
   .main {
@@ -142,7 +142,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 9px;
+    gap: 0.9rem;
   }
 
   .head {
@@ -160,7 +160,7 @@
   }
 
   .title {
-    font-size: 15px;
+    font-size: 1.6rem;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -168,7 +168,7 @@
   }
 
   .sub {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 
@@ -181,25 +181,25 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    min-width: 76px;
+    min-width: 7.6rem;
   }
 
   .stat-label {
-    font-size: 11px;
+    font-size: 1.2rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-3);
   }
 
   .stat-value {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
 
   .controls {
     display: flex;
-    gap: 4px;
+    gap: 0.4rem;
   }
 
   .progress-row {
@@ -209,11 +209,11 @@
   }
 
   .pct {
-    font-size: 13px;
+    font-size: 1.4rem;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     color: var(--text-2);
-    min-width: 38px;
+    min-width: 3.8rem;
     text-align: right;
   }
 
@@ -224,7 +224,7 @@
   }
 
   .size {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -232,12 +232,12 @@
   .steps {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 0.5rem;
   }
 
   .step-dot {
-    width: 7px;
-    height: 7px;
+    width: 0.7rem;
+    height: 0.7rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.12);
     transition: background var(--dur) var(--ease);
@@ -249,11 +249,11 @@
 
   .step-dot.current {
     background: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
+    box-shadow: 0 0 0 0.3rem var(--accent-subtle);
   }
 
   .step-line {
-    width: 14px;
+    width: 1.4rem;
     height: 1.5px;
     background: rgba(255, 255, 255, 0.1);
   }
@@ -268,7 +268,7 @@
     }
 
     .thumb {
-      width: 140px;
+      width: 14rem;
     }
   }
 </style>

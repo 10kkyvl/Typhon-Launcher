@@ -42,18 +42,18 @@
   <span class="cell size">{gb(game.sizeGb)}</span>
   <span class="cell last">{game.lastPlayed ?? '—'}</span>
   <span class="cell state">
-    <CircleCheck size={16} strokeWidth={1.8} />
+    <CircleCheck size="1.6rem" strokeWidth={1.8} />
     Установлено
   </span>
   <div class="actions">
     <Button variant="primary" size="sm" onclick={() => toast(`Запуск «${game.title}»...`)}>
-      <Play size={14} strokeWidth={2} fill="currentColor" />
+      <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
       Играть
     </Button>
     <DropdownMenu items={menuItems} onselect={onMenu}>
       {#snippet trigger({ toggle })}
         <IconButton label="Меню" size="sm" onclick={toggle}>
-          <EllipsisVertical size={16} strokeWidth={1.8} />
+          <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
         </IconButton>
       {/snippet}
     </DropdownMenu>
@@ -63,10 +63,10 @@
 <style>
   .row {
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) 120px 90px 130px 140px auto;
+    grid-template-columns: minmax(24rem, 1fr) 12rem 9rem 13rem 14rem auto;
     align-items: center;
     gap: var(--space-4);
-    padding: 10px var(--space-4);
+    padding: 1rem var(--space-4);
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
@@ -84,8 +84,8 @@
   }
 
   .thumb {
-    width: 44px;
-    height: 58px;
+    width: 4.4rem;
+    height: 5.8rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -94,12 +94,12 @@
   .titles {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 0.5rem;
     min-width: 0;
   }
 
   .title {
-    font-size: 14.5px;
+    font-size: 1.5rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -108,21 +108,21 @@
 
   .tags {
     display: flex;
-    gap: 5px;
+    gap: 0.5rem;
   }
 
   .tag {
-    padding: 2px 8px;
-    border-radius: 6px;
+    padding: 2px 0.8rem;
+    border-radius: 0.6rem;
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.03);
-    font-size: 11.5px;
+    font-size: 1.2rem;
     color: var(--text-3);
     white-space: nowrap;
   }
 
   .cell {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -133,7 +133,7 @@
   .state {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 0.7rem;
     color: var(--text-2);
   }
 
@@ -145,13 +145,13 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
     justify-self: end;
   }
 
   @media (max-width: 1240px) {
     .row {
-      grid-template-columns: minmax(200px, 1fr) 100px 80px 140px auto;
+      grid-template-columns: minmax(20rem, 1fr) 10rem 8rem 14rem auto;
     }
 
     .last {

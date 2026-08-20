@@ -25,11 +25,11 @@
     </button>
     {#if game.installed}
       <button class="play" aria-label="Играть" onclick={() => toast(`Запуск «${game.title}»...`)}>
-        <Play size={15} strokeWidth={2} fill="currentColor" />
+        <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
       </button>
     {/if}
     <button class="fav" class:on={favorite} aria-label="В избранное" onclick={() => (favorite = !favorite)}>
-      <Star size={14} strokeWidth={2} fill={favorite ? 'currentColor' : 'none'} />
+      <Star size="1.4rem" strokeWidth={2} fill={favorite ? 'currentColor' : 'none'} />
     </button>
   </div>
   <button class="info" onclick={() => navigate('game', { id: game.id })}>
@@ -44,7 +44,7 @@
   .card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 1rem;
     min-width: 0;
   }
 
@@ -94,18 +94,18 @@
 
   .play {
     position: absolute;
-    left: 10px;
-    bottom: 10px;
+    left: 1rem;
+    bottom: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 3.4rem;
+    height: 3.4rem;
     border-radius: 50%;
     background: var(--accent);
     color: #fff;
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(0.4rem);
     transition:
       opacity var(--dur) var(--ease),
       transform var(--dur) var(--ease),
@@ -124,14 +124,14 @@
 
   .fav {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 0.8rem;
+    right: 0.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 0.8rem;
     background: rgba(6, 9, 13, 0.65);
     color: var(--text-2);
     opacity: 0;
@@ -161,7 +161,7 @@
 
   .title {
     width: 100%;
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 550;
     color: var(--text);
     white-space: nowrap;
@@ -170,7 +170,7 @@
   }
 
   .meta {
-    font-size: 12.5px;
+    font-size: 1.3rem;
     color: var(--text-3);
   }
 </style>

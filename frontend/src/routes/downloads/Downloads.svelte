@@ -51,14 +51,14 @@
     >
       {#snippet trigger({ open, toggle })}
         <Button onclick={toggle}>
-          <Clock size={16} strokeWidth={1.8} />
+          <Clock size="1.6rem" strokeWidth={1.8} />
           Ограничение скорости
-          <ChevronDown size={15} strokeWidth={1.8} />
+          <ChevronDown size="1.5rem" strokeWidth={1.8} />
         </Button>
       {/snippet}
     </DropdownMenu>
     <Button onclick={() => navigate('settings')}>
-      <Settings size={16} strokeWidth={1.8} />
+      <Settings size="1.6rem" strokeWidth={1.8} />
       Настройки загрузок
     </Button>
   {/snippet}
@@ -68,7 +68,7 @@
   {#each statCards as stat (stat.label)}
     <div class="stat-card">
       <div class="stat-icon {stat.tint}">
-        <stat.icon size={20} strokeWidth={1.8} />
+        <stat.icon size="2rem" strokeWidth={1.8} />
       </div>
       <div class="stat-text">
         <span class="stat-label">{stat.label}</span>
@@ -83,7 +83,7 @@
   {#if $active.length === 0}
     <EmptyState title="Нет активных загрузок" description="Добавьте игру из библиотеки, чтобы начать загрузку.">
       {#snippet icon()}
-        <Download size={22} strokeWidth={1.8} />
+        <Download size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button onclick={() => navigate('library')}>В библиотеку</Button>
@@ -108,11 +108,11 @@
         {@const game = gameById(q.gameId)}
         <div class="queue-row">
           <span class="grip" title="Перетащите для изменения порядка">
-            <GripVertical size={17} strokeWidth={1.8} />
+            <GripVertical size="1.7rem" strokeWidth={1.8} />
           </span>
           <button class="queue-game" onclick={() => game && navigate('game', { id: game.id })}>
             <div class="queue-thumb">
-              <Artwork src={game?.cover ?? ''} alt={game?.title ?? ''} radius="6px" />
+              <Artwork src={game?.cover ?? ''} alt={game?.title ?? ''} radius="0.6rem" />
             </div>
             <span class="queue-title">{game?.title}</span>
           </button>
@@ -120,15 +120,15 @@
           <span class="queue-state">В очереди</span>
           <div class="queue-actions">
             <IconButton label="Выше" size="sm" onclick={() => moveInQueue(q.id, -1)}>
-              <span class="dim" class:disabled={i === 0}><ArrowUp size={16} strokeWidth={1.8} /></span>
+              <span class="dim" class:disabled={i === 0}><ArrowUp size="1.6rem" strokeWidth={1.8} /></span>
             </IconButton>
             <IconButton label="Ниже" size="sm" onclick={() => moveInQueue(q.id, 1)}>
               <span class="dim" class:disabled={i === $queue.length - 1}>
-                <ArrowDown size={16} strokeWidth={1.8} />
+                <ArrowDown size="1.6rem" strokeWidth={1.8} />
               </span>
             </IconButton>
             <IconButton label="Убрать из очереди" size="sm" onclick={() => removeFromQueue(q.id)}>
-              <X size={16} strokeWidth={1.8} />
+              <X size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -159,8 +159,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 46px;
-    height: 46px;
+    width: 4.6rem;
+    height: 4.6rem;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -183,7 +183,7 @@
   }
 
   .stat-label {
-    font-size: 11px;
+    font-size: 1.2rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-3);
@@ -191,7 +191,7 @@
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: 2.2rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
@@ -202,7 +202,7 @@
   }
 
   .section h2 {
-    font-size: 17px;
+    font-size: 1.8rem;
     margin-bottom: var(--space-4);
   }
 
@@ -213,7 +213,7 @@
   }
 
   .muted {
-    font-size: 13.5px;
+    font-size: 1.4rem;
     color: var(--text-3);
   }
 
@@ -228,7 +228,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 8px 10px;
+    padding: 0.8rem 1rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
@@ -262,15 +262,15 @@
   }
 
   .queue-thumb {
-    width: 40px;
-    height: 52px;
+    width: 4rem;
+    height: 5.2rem;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: 0.6rem;
     overflow: hidden;
   }
 
   .queue-title {
-    font-size: 14px;
+    font-size: 1.5rem;
     font-weight: 550;
     white-space: nowrap;
     overflow: hidden;
@@ -278,17 +278,17 @@
   }
 
   .queue-size {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
-    min-width: 70px;
+    min-width: 7rem;
     text-align: right;
   }
 
   .queue-state {
-    font-size: 13px;
+    font-size: 1.4rem;
     color: var(--text-3);
-    min-width: 90px;
+    min-width: 9rem;
     text-align: right;
   }
 

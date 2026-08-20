@@ -22,9 +22,9 @@
 <style>
   .toggle {
     position: relative;
-    width: 42px;
-    height: 24px;
-    border-radius: 99px;
+    width: 4.6rem;
+    height: 2.6rem;
+    border-radius: 9.9rem;
     background: rgba(255, 255, 255, 0.12);
     flex-shrink: 0;
     transition: background var(--dur) var(--ease);
@@ -44,16 +44,16 @@
 
   .knob {
     position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 18px;
-    height: 18px;
+    top: 0.3rem;
+    left: 0.3rem;
+    width: 2rem;
+    height: 2rem;
     border-radius: 50%;
     background: #fff;
     transition: transform var(--dur) var(--ease);
   }
 
   .on .knob {
-    transform: translateX(18px);
+    transform: translateX(2rem);
   }
 </style>

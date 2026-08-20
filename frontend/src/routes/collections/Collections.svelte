@@ -9,7 +9,7 @@
 <PageHeader title="Коллекции" subtitle="Группируйте игры по собственным подборкам">
   {#snippet actions()}
     <Button variant="primary" onclick={() => toast('Создание коллекций недоступно в demo')}>
-      <Plus size={16} strokeWidth={2} />
+      <Plus size="1.6rem" strokeWidth={2} />
       Создать коллекцию
     </Button>
   {/snippet}
@@ -21,11 +21,11 @@
     description="Создайте первую коллекцию, чтобы объединить игры по жанру, настроению или прохождению."
   >
     {#snippet icon()}
-      <Bookmark size={22} strokeWidth={1.8} />
+      <Bookmark size="2.2rem" strokeWidth={1.8} />
     {/snippet}
     {#snippet actions()}
       <Button onclick={() => toast('Создание коллекций недоступно в demo')}>
-        <Plus size={16} strokeWidth={2} />
+        <Plus size="1.6rem" strokeWidth={2} />
         Создать коллекцию
       </Button>
     {/snippet}

@@ -14,7 +14,7 @@
   const pct = $derived(Math.min(100, Math.max(0, (value / max) * 100)));
 </script>
 
-<div class="track" style:height="{height}px">
+<div class="track" style:height="{height / 10}rem">
   <div class="fill" style:width="{pct}%" style:background={color}></div>
 </div>
 
@@ -22,13 +22,13 @@
   .track {
     width: 100%;
     background: rgba(255, 255, 255, 0.07);
-    border-radius: 99px;
+    border-radius: 9.9rem;
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    border-radius: 99px;
+    border-radius: 9.9rem;
     transition: width 600ms linear;
   }
 </style>
