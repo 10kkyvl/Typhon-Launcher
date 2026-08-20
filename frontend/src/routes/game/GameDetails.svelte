@@ -16,6 +16,7 @@
     NotebookPen,
     Play,
     Settings,
+    Square,
     SquarePen,
     Terminal,
     Trash2,
@@ -29,18 +30,66 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameHero from '../../lib/components/GameHero.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Modal from '../../lib/components/Modal.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import { achievements, dlcs } from '../../lib/mock/achievements';
   import { gameById } from '../../lib/mock/games';
+  import { playGame, removeGame, stopGame } from '../../lib/services/library';
+  import { openFolder } from '../../lib/services/settings';
+  import { libraryGames, runningGames } from '../../lib/stores/library';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
-  import { gb } from '../../lib/utils/format';
+  import { bytesLabel, gb, playtime, relativeDate } from '../../lib/utils/format';
 
   let { id }: { id: string } = $props();
 
   const game = $derived(gameById(id));
+  const localGame = $derived($libraryGames.find((g) => g.id === id));
+  const localRunning = $derived(localGame ? $runningGames.has(localGame.id) : false);
+
+  let removeOpen = $state(false);
+
+  async function localPlay() {
+    if (!localGame) return;
+    try {
+      await playGame(localGame.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+    }
+  }
+
+  async function localStop() {
+    if (!localGame) return;
+    try {
+      await stopGame(localGame.id);
+    } catch {
+      toast('Не удалось остановить игру', 'danger');
+    }
+  }
+
+  async function localOpenFolder() {
+    if (!localGame) return;
+    try {
+      await openFolder(localGame.installDir);
+    } catch {
+      toast('Папка недоступна', 'danger');
+    }
+  }
+
+  async function localRemove() {
+    if (!localGame) return;
+    const title = localGame.title;
+    try {
+      await removeGame(localGame.id);
+      removeOpen = false;
+      toast(`«${title}» удалена из библиотеки`);
+      navigate('installed');
+    } catch {
+      toast('Не удалось удалить игру', 'danger');
+    }
+  }
   const gameAchievements = $derived(achievements[id]);
   const gameDlcs = $derived(dlcs.filter((d) => d.gameId === id));
 
@@ -72,7 +121,102 @@
   }
 </script>
 
-{#if !game}
+{#if localGame}
+  <nav class="breadcrumb">
+    <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
+    <ChevronRight size="1.4rem" strokeWidth={1.8} />
+    <span class="crumb current">{localGame.title}</span>
+  </nav>
+
+  <section class="local-hero">
+    <div class="local-head">
+      <h1 class="local-title">{localGame.title}</h1>
+      {#if localRunning}
+        <StatusBadge kind="accent" label="Запущена" />
+      {:else}
+        <StatusBadge kind="success" label="Установлено" dot={false} />
+      {/if}
+    </div>
+    <p class="local-path">{localGame.installDir}</p>
+    <div class="actions">
+      {#if localRunning}
+        <Button size="lg" onclick={localStop}>
+          <Square size="1.5rem" strokeWidth={2} fill="currentColor" />
+          Остановить
+        </Button>
+      {:else}
+        <Button variant="primary" size="lg" onclick={localPlay}>
+          <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
+          Играть
+        </Button>
+      {/if}
+      <Button size="lg" onclick={localOpenFolder}>
+        <FolderOpen size="1.6rem" strokeWidth={1.8} />
+        Открыть папку
+      </Button>
+    </div>
+  </section>
+
+  <div class="local-grid">
+    <Card>
+      <h3 class="card-title">Сведения</h3>
+      <dl class="props local-props">
+        <div class="prop">
+          <dt>Исполняемый файл</dt>
+          <dd class="mono">{localGame.executable}</dd>
+        </div>
+        <div class="prop">
+          <dt>Размер</dt>
+          <dd>{bytesLabel(localGame.sizeBytes)}</dd>
+        </div>
+        <div class="prop">
+          <dt>Добавлена</dt>
+          <dd>{relativeDate(localGame.installedAt)}</dd>
+        </div>
+      </dl>
+    </Card>
+    <Card>
+      <h3 class="card-title">Активность</h3>
+      <dl class="props local-props">
+        <div class="prop">
+          <dt>Наиграно</dt>
+          <dd>{playtime(localGame.playtimeSeconds)}</dd>
+        </div>
+        <div class="prop">
+          <dt>Последний запуск</dt>
+          <dd>{relativeDate(localGame.lastPlayed)}</dd>
+        </div>
+        <div class="prop">
+          <dt>Состояние</dt>
+          <dd>{localRunning ? 'Запущена' : 'Не запущена'}</dd>
+        </div>
+      </dl>
+    </Card>
+  </div>
+
+  <Card padding="var(--space-5) var(--space-6)">
+    <div class="local-danger">
+      <div>
+        <h3 class="card-title">Удалить из библиотеки</h3>
+        <p class="muted">Файлы игры останутся на диске — удалится только запись в Aurora.</p>
+      </div>
+      <Button variant="danger" onclick={() => (removeOpen = true)}>
+        <Trash2 size="1.5rem" strokeWidth={1.8} />
+        Удалить
+      </Button>
+    </div>
+  </Card>
+
+  <Modal bind:open={removeOpen} title="Удалить игру из библиотеки?">
+    <p class="modal-text">
+      «{localGame.title}» будет убрана из библиотеки Aurora. Файлы в папке {localGame.installDir} останутся на месте.
+    </p>
+    {#snippet footer()}
+      <Button onclick={() => (removeOpen = false)}>Отмена</Button>
+      <Button variant="danger" onclick={localRemove}>Удалить</Button>
+    {/snippet}
+  </Modal>
+{:else if !game}
   <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
     {#snippet actions()}
       <Button onclick={() => navigate('library')}>В библиотеку</Button>
@@ -852,6 +996,71 @@
 
   @media (max-width: 1100px) {
     .overview {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .local-hero {
+    padding: var(--space-6) var(--space-8);
+    background: linear-gradient(135deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-5);
+  }
+
+  .local-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .local-title {
+    font-size: clamp(3rem, 3vw, 4rem);
+    letter-spacing: -0.015em;
+  }
+
+  .local-path {
+    margin-top: 0.8rem;
+    font-size: 1.4rem;
+    color: var(--text-3);
+  }
+
+  .local-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: var(--space-5);
+    align-items: start;
+    margin-bottom: var(--space-5);
+  }
+
+  .local-props {
+    margin-top: var(--space-4);
+  }
+
+  .mono {
+    word-break: break-all;
+  }
+
+  .local-danger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+  }
+
+  .local-danger .muted {
+    margin-top: 0.4rem;
+  }
+
+  .modal-text {
+    font-size: var(--font-md);
+    line-height: 1.55;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 1100px) {
+    .local-grid {
       grid-template-columns: 1fr;
     }
   }
