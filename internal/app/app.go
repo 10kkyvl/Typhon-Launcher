@@ -50,6 +50,20 @@ func (s *Service) GetStorageInfo() (platform.StorageInfo, error) {
 	return info, err
 }
 
+func (s *Service) SelectExecutable(title string) (string, error) {
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle(title).
+		CanChooseFiles(true).
+		AddFilter("Исполняемые файлы (*.exe)", "*.exe").
+		AddFilter("Все файлы", "*.*")
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		slog.Warn("select executable", "error", err)
+		return "", err
+	}
+	return path, nil
+}
+
 func (s *Service) SelectFolder(title string) (string, error) {
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle(title).

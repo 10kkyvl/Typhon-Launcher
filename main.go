@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"aurora/internal/app"
+	"aurora/internal/library"
 	"aurora/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -17,6 +18,9 @@ var assets embed.FS
 
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
+	application.RegisterEvent[[]library.Game]("library:updated")
+	application.RegisterEvent[library.SessionEvent]("game:started")
+	application.RegisterEvent[library.SessionEvent]("game:stopped")
 }
 
 func main() {
@@ -24,6 +28,7 @@ func main() {
 
 	settingsService := settings.NewService()
 	appService := app.NewService(settingsService)
+	libraryService := library.NewService()
 
 	wails := application.New(application.Options{
 		Name:        "Aurora",
@@ -31,6 +36,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(appService),
 			application.NewService(settingsService),
+			application.NewService(libraryService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

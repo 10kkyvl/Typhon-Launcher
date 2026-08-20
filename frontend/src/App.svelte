@@ -2,6 +2,7 @@
   import AppShell from './lib/components/AppShell.svelte';
   import { startDownloadSim } from './lib/stores/downloads';
   import { route } from './lib/stores/router';
+  import { initLibrary } from './lib/stores/library';
   import { initSettings, settings } from './lib/stores/settings';
   import { refreshStorage } from './lib/stores/storage';
   import Achievements from './routes/achievements/Achievements.svelte';
@@ -15,6 +16,7 @@
 
   startDownloadSim();
   initSettings().then(refreshStorage);
+  initLibrary();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
