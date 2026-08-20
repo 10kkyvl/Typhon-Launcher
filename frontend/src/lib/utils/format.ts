@@ -29,3 +29,19 @@ export function plural(n: number, one: string, few: string, many: string) {
 export function formatCount(n: number) {
   return n.toLocaleString('ru-RU');
 }
+
+const GB_BYTES = 1024 ** 3;
+
+export function bytesToGb(bytes: number) {
+  return bytes / GB_BYTES;
+}
+
+export function bytesLabel(bytes: number) {
+  const gbValue = bytes / GB_BYTES;
+  if (gbValue >= 1000) {
+    const tb = gbValue / 1024;
+    const text = (Math.round(tb * 10) / 10).toString().replace('.', ',');
+    return `${text} ТБ`;
+  }
+  return `${Math.round(gbValue)} ГБ`;
+}

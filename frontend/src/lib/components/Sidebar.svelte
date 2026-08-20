@@ -9,9 +9,10 @@
     Settings,
     Trophy,
   } from '@lucide/svelte';
-  import { storage, user } from '../mock/user';
+  import { user } from '../mock/user';
   import { navigate, route, type RouteName } from '../stores/router';
-  import { gb } from '../utils/format';
+  import { storageInfo } from '../stores/storage';
+  import { bytesLabel } from '../utils/format';
 
   const nav: { name: RouteName; label: string; icon: typeof LayoutGrid }[] = [
     { name: 'library', label: 'Библиотека', icon: LayoutGrid },
@@ -61,16 +62,18 @@
       <ChevronsUpDown size="1.5rem" strokeWidth={1.8} />
     </button>
 
-    <div class="storage">
-      <div class="storage-head">
-        <span>Хранилище</span>
-        <span class="storage-nums">{storage.usedGb} ГБ / {gb(storage.totalGb / 1024, 0).replace(' ГБ', ' ТБ')}</span>
+    {#if $storageInfo}
+      <div class="storage">
+        <div class="storage-head">
+          <span>Хранилище</span>
+          <span class="storage-nums">{bytesLabel($storageInfo.usedBytes)} / {bytesLabel($storageInfo.totalBytes)}</span>
+        </div>
+        <div class="storage-bar">
+          <div class="storage-fill" style:width="{($storageInfo.usedBytes / $storageInfo.totalBytes) * 100}%"></div>
+        </div>
+        <span class="storage-free">Свободно {bytesLabel($storageInfo.freeBytes)}</span>
       </div>
-      <div class="storage-bar">
-        <div class="storage-fill" style:width="{(storage.usedGb / storage.totalGb) * 100}%"></div>
-      </div>
-      <span class="storage-free">Свободно {storage.totalGb - storage.usedGb} ГБ</span>
-    </div>
+    {/if}
   </div>
 </aside>
 

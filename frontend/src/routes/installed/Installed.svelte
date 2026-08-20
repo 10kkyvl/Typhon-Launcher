@@ -6,13 +6,23 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { games } from '../../lib/mock/games';
-  import { storage } from '../../lib/mock/user';
+  import { openFolder } from '../../lib/services/settings';
+  import { settings } from '../../lib/stores/settings';
+  import { storageInfo } from '../../lib/stores/storage';
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
-  import { gb, plural } from '../../lib/utils/format';
+  import { bytesLabel, gb, plural } from '../../lib/utils/format';
 
   const installed = games.filter((g) => g.installed);
-  const usedPct = (storage.usedGb / storage.totalGb) * 100;
+  const usedPct = $derived($storageInfo ? ($storageInfo.usedBytes / $storageInfo.totalBytes) * 100 : 0);
+
+  async function openGamesFolder() {
+    try {
+      await openFolder($settings?.gamesPath ?? '');
+    } catch {
+      toast('Папка с играми недоступна', 'danger');
+    }
+  }
 </script>
 
 <PageHeader
@@ -66,33 +76,39 @@
   </div>
 {/if}
 
-<section class="storage-card">
-  <h3>Хранилище игр</h3>
-  <div class="storage-row">
-    <div class="disk">
-      <div class="disk-icon">
-        <HardDrive size="2rem" strokeWidth={1.8} />
-        <CircleCheck size="1.4rem" strokeWidth={2} class="disk-ok" />
+{#if $storageInfo}
+  <section class="storage-card">
+    <h3>Хранилище игр</h3>
+    <div class="storage-row">
+      <div class="disk">
+        <div class="disk-icon">
+          <HardDrive size="2rem" strokeWidth={1.8} />
+          <CircleCheck size="1.4rem" strokeWidth={2} class="disk-ok" />
+        </div>
+        <div class="disk-text">
+          <span class="disk-name">Диск ({$storageInfo.volume || '—'})</span>
+          <span class="disk-meta">
+            {bytesLabel($storageInfo.totalBytes)}{$storageInfo.filesystem ? ` · ${$storageInfo.filesystem}` : ''}
+          </span>
+        </div>
       </div>
-      <div class="disk-text">
-        <span class="disk-name">{storage.disk}</span>
-        <span class="disk-meta">1 ТБ · {storage.fs}</span>
+      <div class="capacity">
+        <div class="capacity-bar">
+          <div class="capacity-fill" style:width="{usedPct}%"></div>
+        </div>
+        <div class="capacity-legend">
+          <span class="legend-item">
+            <span class="legend-dot used"></span>Занято {bytesLabel($storageInfo.usedBytes)} ({Math.round(usedPct)}%)
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot free"></span>Свободно {bytesLabel($storageInfo.freeBytes)} ({Math.round(100 - usedPct)}%)
+          </span>
+        </div>
       </div>
+      <Button onclick={openGamesFolder}>Открыть папку игр</Button>
     </div>
-    <div class="capacity">
-      <div class="capacity-bar">
-        <div class="capacity-fill" style:width="{usedPct}%"></div>
-      </div>
-      <div class="capacity-legend">
-        <span class="legend-item"><span class="legend-dot used"></span>Занято {storage.usedGb} ГБ ({Math.round(usedPct)}%)</span>
-        <span class="legend-item">
-          <span class="legend-dot free"></span>Свободно {storage.totalGb - storage.usedGb} ГБ ({Math.round(100 - usedPct)}%)
-        </span>
-      </div>
-    </div>
-    <Button onclick={() => toast('Управление хранилищем недоступно в demo')}>Управление хранилищем</Button>
-  </div>
-</section>
+  </section>
+{/if}
 
 <style>
   .table {
