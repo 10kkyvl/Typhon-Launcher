@@ -23,6 +23,10 @@ type Settings struct {
 	MinimizeToTray       bool    `json:"minimizeToTray"`
 	HardwareAcceleration bool    `json:"hardwareAcceleration"`
 	AnimationsEnabled    bool    `json:"animationsEnabled"`
+	MaxActiveDownloads   int     `json:"maxActiveDownloads"`
+	DownloadRateLimit    int64   `json:"downloadRateLimit"`
+	UploadRateLimit      int64   `json:"uploadRateLimit"`
+	SeedAfterDownload    bool    `json:"seedAfterDownload"`
 }
 
 func Defaults() Settings {
@@ -42,7 +46,30 @@ func Defaults() Settings {
 		MinimizeToTray:       true,
 		HardwareAcceleration: true,
 		AnimationsEnabled:    true,
+		MaxActiveDownloads:   2,
+		DownloadRateLimit:    0,
+		UploadRateLimit:      0,
+		SeedAfterDownload:    false,
 	}
+}
+
+func sanitize(s Settings) Settings {
+	if s.UIScale < 0.9 || s.UIScale > 1.25 {
+		s.UIScale = 1
+	}
+	if s.MaxActiveDownloads < 1 {
+		s.MaxActiveDownloads = 1
+	}
+	if s.MaxActiveDownloads > 10 {
+		s.MaxActiveDownloads = 10
+	}
+	if s.DownloadRateLimit < 0 {
+		s.DownloadRateLimit = 0
+	}
+	if s.UploadRateLimit < 0 {
+		s.UploadRateLimit = 0
+	}
+	return s
 }
 
 var migrateConfigDirOnce sync.Once
@@ -72,6 +99,8 @@ type Service struct {
 	mu      sync.Mutex
 	path    string
 	current Settings
+	subs    map[int]func(Settings)
+	nextSub int
 }
 
 func NewService() *Service {
@@ -103,10 +132,24 @@ func (s *Service) load() {
 		slog.Error("parse settings", "path", s.path, "error", err)
 		return
 	}
-	if loaded.UIScale < 0.9 || loaded.UIScale > 1.25 {
-		loaded.UIScale = 1
+	s.current = sanitize(loaded)
+}
+
+//wails:ignore
+func (s *Service) Subscribe(fn func(Settings)) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.subs == nil {
+		s.subs = map[int]func(Settings){}
 	}
-	s.current = loaded
+	id := s.nextSub
+	s.nextSub++
+	s.subs[id] = fn
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.subs, id)
+	}
 }
 
 func (s *Service) GetSettings() Settings {
@@ -116,29 +159,44 @@ func (s *Service) GetSettings() Settings {
 }
 
 func (s *Service) SaveSettings(next Settings) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if next.UIScale < 0.9 || next.UIScale > 1.25 {
-		next.UIScale = 1
-	}
-	if s.path == "" {
-		return errors.New("settings path unavailable")
-	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		slog.Error("create config dir", "error", err)
-		return fmt.Errorf("create config dir: %w", err)
-	}
-	data, err := json.MarshalIndent(next, "", "  ")
+	next, subs, err := s.persist(next)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		slog.Error("write settings", "path", s.path, "error", err)
-		return fmt.Errorf("write settings: %w", err)
-	}
-	s.current = next
 	if app := application.Get(); app != nil {
 		app.Event.Emit("settings:updated", next)
 	}
+	for _, notify := range subs {
+		notify(next)
+	}
 	return nil
+}
+
+func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	next = sanitize(next)
+	if s.path == "" {
+		return next, nil, errors.New("settings path unavailable")
+	}
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+		slog.Error("create config dir", "error", err)
+		return next, nil, fmt.Errorf("create config dir: %w", err)
+	}
+	data, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return next, nil, err
+	}
+	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+		slog.Error("write settings", "path", s.path, "error", err)
+		return next, nil, fmt.Errorf("write settings: %w", err)
+	}
+	s.current = next
+
+	subs := make([]func(Settings), 0, len(s.subs))
+	for _, fn := range s.subs {
+		subs = append(subs, fn)
+	}
+	return next, subs, nil
 }

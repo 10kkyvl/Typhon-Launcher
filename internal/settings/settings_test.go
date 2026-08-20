@@ -38,6 +38,59 @@ func TestInvalidScaleFallsBack(t *testing.T) {
 	}
 }
 
+func TestDownloadLimitsAreSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := newServiceAt(path)
+	next := s.GetSettings()
+	next.MaxActiveDownloads = 42
+	next.DownloadRateLimit = -1
+	next.UploadRateLimit = -5
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	got := s.GetSettings()
+	if got.MaxActiveDownloads != 10 || got.DownloadRateLimit != 0 || got.UploadRateLimit != 0 {
+		t.Fatalf("got %+v", got)
+	}
+
+	next.MaxActiveDownloads = 0
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().MaxActiveDownloads; got != 1 {
+		t.Fatalf("max active = %d, want 1", got)
+	}
+}
+
+func TestSubscribersAreNotified(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := newServiceAt(path)
+
+	var seen Settings
+	calls := 0
+	unsubscribe := s.Subscribe(func(next Settings) {
+		seen = next
+		calls++
+	})
+
+	next := s.GetSettings()
+	next.SeedAfterDownload = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || !seen.SeedAfterDownload {
+		t.Fatalf("calls = %d, seen = %+v", calls, seen)
+	}
+
+	unsubscribe()
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls after unsubscribe = %d, want 1", calls)
+	}
+}
+
 func TestCorruptFileFallsBackToDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte("{broken"), 0o644); err != nil {
