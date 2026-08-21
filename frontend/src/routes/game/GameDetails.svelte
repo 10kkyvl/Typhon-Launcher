@@ -24,6 +24,8 @@
     UploadCloud,
     UserRound,
   } from '@lucide/svelte';
+  import { untrack } from 'svelte';
+  import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -32,12 +34,20 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
+  import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import { achievements, dlcs } from '../../lib/mock/achievements';
   import { gameById } from '../../lib/mock/games';
+  import type { DownloadOrigin } from '../../lib/services/downloads';
   import { playGame, removeGame, stopGame } from '../../lib/services/library';
   import { openFolder } from '../../lib/services/settings';
+  import {
+    getReleasesForGame,
+    getReleasesForTitle,
+    prepareReleaseDownload,
+    type ReleaseGroup,
+  } from '../../lib/services/sources';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
@@ -50,6 +60,56 @@
   const localRunning = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
+
+  let releaseGroups = $state<ReleaseGroup[]>([]);
+  let releasesLoading = $state(false);
+  let releaseToken = 0;
+
+  const releaseTitle = $derived(localGame?.title ?? game?.title);
+  const releaseKey = $derived(`${id}|${localGame?.canonicalGameId ?? ''}|${releaseTitle ?? ''}`);
+
+  async function loadReleases(canonicalGameId: string | undefined, title: string | undefined) {
+    const current = ++releaseToken;
+    releasesLoading = true;
+    try {
+      const groups = canonicalGameId
+        ? await getReleasesForGame(canonicalGameId)
+        : title
+          ? await getReleasesForTitle(title)
+          : [];
+      if (current !== releaseToken) return;
+      releaseGroups = groups;
+    } catch {
+      if (current !== releaseToken) return;
+      releaseGroups = [];
+    } finally {
+      if (current === releaseToken) releasesLoading = false;
+    }
+  }
+
+  $effect(() => {
+    releaseKey;
+    const canonicalGameId = localGame?.canonicalGameId;
+    const title = releaseTitle;
+    untrack(() => {
+      loadReleases(canonicalGameId, title);
+    });
+  });
+
+  let downloadModalOpen = $state(false);
+  let downloadSource = $state('');
+  let downloadOrigin = $state<DownloadOrigin | undefined>(undefined);
+
+  async function downloadRelease(group: ReleaseGroup) {
+    try {
+      const request = await prepareReleaseDownload(group.release.id);
+      downloadSource = request.uri;
+      downloadOrigin = { releaseId: request.releaseId, sourceId: request.sourceId, gameId: request.gameId };
+      downloadModalOpen = true;
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось подготовить загрузку', 'danger');
+    }
+  }
 
   async function localPlay() {
     if (!localGame) return;
@@ -194,6 +254,13 @@
     </Card>
   </div>
 
+  {#if releasesLoading || releaseGroups.length > 0}
+    <Card padding="var(--space-5) var(--space-6)">
+      <h3 class="card-title qa-title">Доступные загрузки</h3>
+      <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
+    </Card>
+  {/if}
+
   <Card padding="var(--space-5) var(--space-6)">
     <div class="local-danger">
       <div>
@@ -216,6 +283,8 @@
       <Button variant="danger" onclick={localRemove}>Удалить</Button>
     {/snippet}
   </Modal>
+
+  <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
 {:else if !game}
   <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
     {#snippet actions()}
@@ -343,6 +412,15 @@
           <ChevronDown size="1.5rem" strokeWidth={1.8} style={expanded ? 'transform: rotate(180deg)' : ''} />
         </button>
       </Card>
+
+      {#if releasesLoading || releaseGroups.length > 0}
+        <Card>
+          <div class="card-head">
+            <h3 class="card-title">Доступные загрузки</h3>
+          </div>
+          <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
+        </Card>
+      {/if}
 
       <Card>
         <div class="card-head">
@@ -520,6 +598,8 @@
       {/snippet}
     </EmptyState>
   {/if}
+
+  <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
 {/if}
 
 <style>

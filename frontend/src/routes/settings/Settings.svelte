@@ -133,6 +133,19 @@
     return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'keep';
   });
 
+  const sourceRefreshOptions = [
+    { id: 'manual', label: 'Вручную' },
+    { id: '1h', label: 'Каждый час' },
+    { id: '6h', label: 'Каждые 6 часов' },
+    { id: '12h', label: 'Каждые 12 часов' },
+    { id: '24h', label: 'Раз в сутки' },
+  ];
+
+  const sourceRefreshInterval = $derived.by(() => {
+    const id = current?.sourceRefreshInterval ?? '6h';
+    return sourceRefreshOptions.some((o) => o.id === id) ? id : '6h';
+  });
+
   let scheduleEnabled = $state(false);
 
   let port = $state('42815');
@@ -404,6 +417,18 @@
             <span class="row-sub">Ограничивать загрузки в определённые часы</span>
           </div>
           <Toggle bind:checked={scheduleEnabled} label="Расписание" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Обновление источников</span>
+            <span class="row-sub">Как часто проверять источники на новые релизы</span>
+          </div>
+          <Select
+            value={sourceRefreshInterval}
+            width="20rem"
+            options={sourceRefreshOptions}
+            onchange={(id) => set({ sourceRefreshInterval: id })}
+          />
         </div>
       </div>
     </section>

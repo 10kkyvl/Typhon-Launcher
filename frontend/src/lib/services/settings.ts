@@ -19,6 +19,7 @@ export interface Settings {
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
   autoInstall: boolean;
+  sourceRefreshInterval: string;
   verifyAfterInstall: boolean;
 }
 
@@ -41,6 +42,7 @@ const fallbackDefaults: Settings = {
   seedAfterDownload: false,
   installCleanupPolicy: 'keep',
   autoInstall: false,
+  sourceRefreshInterval: '6h',
   verifyAfterInstall: true,
 };
 

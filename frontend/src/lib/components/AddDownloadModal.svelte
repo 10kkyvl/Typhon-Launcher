@@ -6,7 +6,8 @@
     discardMetadata,
     fetchMetadata,
     selectTorrentFile,
-    startDownload,
+    startDownloadFrom,
+    type DownloadOrigin,
     type TorrentInfo,
   } from '../services/downloads';
   import { selectFolder } from '../services/settings';
@@ -17,7 +18,11 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
 
-  let { open = $bindable(false) }: { open?: boolean } = $props();
+  let {
+    open = $bindable(false),
+    initialSource = '',
+    origin = undefined,
+  }: { open?: boolean; initialSource?: string; origin?: DownloadOrigin } = $props();
 
   let step = $state<'source' | 'loading' | 'files'>('source');
   let source = $state('');
@@ -49,9 +54,16 @@
 
   $effect(() => {
     const isOpen = open;
+    const preset = initialSource;
     untrack(() => {
       reset();
-      if (isOpen) destination = get(settings)?.downloadsPath ?? '';
+      if (isOpen) {
+        destination = get(settings)?.downloadsPath ?? '';
+        if (preset) {
+          source = preset;
+          proceed(preset);
+        }
+      }
     });
   });
 
@@ -100,7 +112,7 @@
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
     starting = true;
     try {
-      await startDownload(info.infoHash, destination, indices);
+      await startDownloadFrom(info.infoHash, destination, indices, origin ?? {});
       pendingHash = '';
       open = false;
     } catch (err) {

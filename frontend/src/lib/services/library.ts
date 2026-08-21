@@ -15,6 +15,9 @@ export interface LibraryGame {
   lastPlayed: string | null;
   playtimeSeconds: number;
   installedAt: string;
+  releaseId?: string;
+  sourceId?: string;
+  canonicalGameId?: string;
 }
 
 const unavailable = () => new Error('unavailable in browser');
