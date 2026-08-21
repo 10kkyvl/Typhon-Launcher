@@ -7,10 +7,12 @@ import (
 	"os"
 
 	"typhon/internal/app"
+	"typhon/internal/catalog"
 	"typhon/internal/download"
 	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/settings"
+	"typhon/internal/sources"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -34,6 +36,12 @@ func init() {
 	application.RegisterEvent[install.Installation]("install:failed")
 	application.RegisterEvent[install.Installation]("install:cancelled")
 	application.RegisterEvent[install.RemovedEvent]("install:removed")
+	application.RegisterEvent[sources.Source]("source:updated")
+	application.RegisterEvent[sources.SourceError]("source:error")
+	application.RegisterEvent[sources.ReleaseBatch]("release:added")
+	application.RegisterEvent[sources.ReleaseBatch]("release:removed")
+	application.RegisterEvent[sources.ReleaseBatch]("release:matched")
+	application.RegisterEvent[sources.ReleaseBatch]("release:needs-review")
 }
 
 func main() {
@@ -44,6 +52,8 @@ func main() {
 	libraryService := library.NewService()
 	downloadManager := download.NewManager(settingsService)
 	installService := install.NewService(settingsService, downloadManager, libraryService)
+	catalogService := catalog.NewService()
+	sourcesService := sources.NewService(settingsService, catalogService)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 
 	wails := application.New(application.Options{
@@ -55,6 +65,8 @@ func main() {
 			application.NewService(libraryService),
 			application.NewService(downloadManager),
 			application.NewService(installService),
+			application.NewService(catalogService),
+			application.NewService(sourcesService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
