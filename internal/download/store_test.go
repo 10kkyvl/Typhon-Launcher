@@ -122,3 +122,15 @@ func TestStoreSweepMetainfoRemovesOrphans(t *testing.T) {
 func TestStoreSweepMetainfoWithoutDirectory(t *testing.T) {
 	newStore(t.TempDir()).sweepMetainfo(nil)
 }
+
+func TestStoreKeepsOrigin(t *testing.T) {
+	s := newStore(t.TempDir())
+	origin := Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "game-1"}
+	if err := s.save([]record{{ID: "a", InfoHash: "aaaa", Origin: origin}}); err != nil {
+		t.Fatal(err)
+	}
+	loaded := s.load()
+	if len(loaded) != 1 || loaded[0].Origin != origin {
+		t.Fatalf("origin = %+v, want %+v", loaded[0].Origin, origin)
+	}
+}

@@ -309,6 +309,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		WorkingDir:    plan.WorkingDir,
 		ArchivePath:   plan.ArchivePath,
 		BytesTotal:    plan.EstimatedSize,
+		Origin:        d.Origin,
 		StartedAt:     time.Now(),
 	}
 

@@ -18,6 +18,12 @@ type Type string
 
 const TypeTorrent Type = "torrent"
 
+type Origin struct {
+	ReleaseID string `json:"releaseId,omitempty"`
+	SourceID  string `json:"sourceId,omitempty"`
+	GameID    string `json:"gameId,omitempty"`
+}
+
 type FileState struct {
 	Path      string `json:"path"`
 	Size      int64  `json:"size"`
@@ -43,6 +49,7 @@ type Download struct {
 	Peers         int         `json:"peers"`
 	Files         []FileState `json:"files"`
 	Seeding       bool        `json:"seeding"`
+	Origin        Origin      `json:"origin"`
 	AddedAt       time.Time   `json:"addedAt"`
 	CompletedAt   *time.Time  `json:"completedAt"`
 	Error         string      `json:"error"`

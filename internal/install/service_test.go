@@ -234,6 +234,36 @@ func TestPortableInstallCompletes(t *testing.T) {
 	}
 }
 
+func TestInstallKeepsDownloadProvenance(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "Game")
+	downloads.add("d1", "Game", root)
+	downloads.mu.Lock()
+	d := downloads.items["d1"]
+	d.Origin = download.Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "canon-1"}
+	downloads.items["d1"] = d
+	downloads.mu.Unlock()
+
+	dest := filepath.Join(t.TempDir(), "Games", "Game")
+	item, err := s.Start("d1", StartOptions{Destination: dest, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if item.Origin.ReleaseID != "rel-1" {
+		t.Fatalf("installation origin = %+v", item.Origin)
+	}
+
+	s.waitStatus(t, item.ID, StatusCompleted)
+	games := registrar.registered()
+	if len(games) != 1 {
+		t.Fatalf("registered = %+v", games)
+	}
+	if games[0].ReleaseID != "rel-1" || games[0].SourceID != "src-1" || games[0].CanonicalGameID != "canon-1" {
+		t.Fatalf("registered game = %+v, want provenance from the download", games[0])
+	}
+}
+
 func TestPortableMoveIsForcedToCopyWhileSeeding(t *testing.T) {
 	s, downloads, _ := newTestService(t)
 	root := t.TempDir()

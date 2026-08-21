@@ -1,6 +1,10 @@
 package install
 
-import "time"
+import (
+	"time"
+
+	"typhon/internal/download"
+)
 
 type Type string
 
@@ -61,30 +65,31 @@ const (
 )
 
 type Installation struct {
-	ID              string      `json:"id"`
-	DownloadID      string      `json:"downloadId"`
-	GameID          string      `json:"gameId"`
-	Name            string      `json:"name"`
-	Type            Type        `json:"type"`
-	Status          Status      `json:"status"`
-	Mode            string      `json:"mode"`
-	SourcePath      string      `json:"sourcePath"`
-	ContentRoot     string      `json:"contentRoot"`
-	Destination     string      `json:"destination"`
-	InstallerPath   string      `json:"installerPath"`
-	WorkingDir      string      `json:"workingDir"`
-	ArchivePath     string      `json:"archivePath"`
-	Progress        float64     `json:"progress"`
-	CurrentFile     string      `json:"currentFile"`
-	BytesDone       int64       `json:"bytesDone"`
-	BytesTotal      int64       `json:"bytesTotal"`
-	Executable      string      `json:"executable"`
-	Candidates      []Candidate `json:"candidates"`
-	DetectedVersion string      `json:"detectedVersion"`
-	VersionSource   string      `json:"versionSource"`
-	StartedAt       time.Time   `json:"startedAt"`
-	CompletedAt     *time.Time  `json:"completedAt"`
-	Error           string      `json:"error"`
+	ID              string          `json:"id"`
+	DownloadID      string          `json:"downloadId"`
+	GameID          string          `json:"gameId"`
+	Name            string          `json:"name"`
+	Type            Type            `json:"type"`
+	Status          Status          `json:"status"`
+	Mode            string          `json:"mode"`
+	SourcePath      string          `json:"sourcePath"`
+	ContentRoot     string          `json:"contentRoot"`
+	Destination     string          `json:"destination"`
+	InstallerPath   string          `json:"installerPath"`
+	WorkingDir      string          `json:"workingDir"`
+	ArchivePath     string          `json:"archivePath"`
+	Progress        float64         `json:"progress"`
+	CurrentFile     string          `json:"currentFile"`
+	BytesDone       int64           `json:"bytesDone"`
+	BytesTotal      int64           `json:"bytesTotal"`
+	Executable      string          `json:"executable"`
+	Candidates      []Candidate     `json:"candidates"`
+	Origin          download.Origin `json:"origin"`
+	DetectedVersion string          `json:"detectedVersion"`
+	VersionSource   string          `json:"versionSource"`
+	StartedAt       time.Time       `json:"startedAt"`
+	CompletedAt     *time.Time      `json:"completedAt"`
+	Error           string          `json:"error"`
 }
 
 type PlanInfo struct {

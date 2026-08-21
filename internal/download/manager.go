@@ -194,6 +194,7 @@ func (m *Manager) loadLocked() {
 			Total:       r.Total,
 			ETASeconds:  -1,
 			Seeding:     r.Seeding,
+			Origin:      r.Origin,
 			AddedAt:     r.AddedAt,
 			CompletedAt: r.CompletedAt,
 			Error:       r.Error,
@@ -230,6 +231,7 @@ func (m *Manager) persistLocked() {
 			Downloaded:  d.Downloaded,
 			Total:       d.Total,
 			Seeding:     d.Seeding,
+			Origin:      d.Origin,
 			AddedAt:     d.AddedAt,
 			CompletedAt: d.CompletedAt,
 			Error:       d.Error,
@@ -453,6 +455,10 @@ func (m *Manager) returnPending(infoHash string, p *pending) {
 }
 
 func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []int) (Download, error) {
+	return m.StartDownloadFrom(infoHash, destination, selectedIndices, Origin{})
+}
+
+func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
 	m.mu.Lock()
 	p := m.pending[infoHash]
 	delete(m.pending, infoHash)
@@ -513,6 +519,7 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 		Total:       needed,
 		ETASeconds:  -1,
 		Files:       files,
+		Origin:      origin,
 		AddedAt:     time.Now(),
 	}
 	lt.setPriorities(selectionOf(d))

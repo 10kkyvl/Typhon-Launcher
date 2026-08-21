@@ -25,6 +25,7 @@ type record struct {
 	Downloaded  int64      `json:"downloaded"`
 	Total       int64      `json:"total"`
 	Seeding     bool       `json:"seeding"`
+	Origin      Origin     `json:"origin,omitempty"`
 	AddedAt     time.Time  `json:"addedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 	Error       string     `json:"error"`

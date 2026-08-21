@@ -208,6 +208,9 @@ func (s *Service) register(item Installation, version string) (library.Game, err
 		InstallDir:       item.Destination,
 		Version:          version,
 		SourceDownloadID: item.DownloadID,
+		ReleaseID:        item.Origin.ReleaseID,
+		SourceID:         item.Origin.SourceID,
+		CanonicalGameID:  item.Origin.GameID,
 	})
 }
 

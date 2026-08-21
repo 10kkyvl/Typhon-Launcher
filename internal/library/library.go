@@ -33,6 +33,9 @@ type Game struct {
 	PlaytimeSeconds  int64      `json:"playtimeSeconds"`
 	InstalledAt      time.Time  `json:"installedAt"`
 	SourceDownloadID string     `json:"sourceDownloadId,omitempty"`
+	ReleaseID        string     `json:"releaseId,omitempty"`
+	SourceID         string     `json:"sourceId,omitempty"`
+	CanonicalGameID  string     `json:"canonicalGameId,omitempty"`
 }
 
 type InstalledGame struct {
@@ -41,6 +44,9 @@ type InstalledGame struct {
 	InstallDir       string `json:"installDir"`
 	Version          string `json:"version"`
 	SourceDownloadID string `json:"sourceDownloadId"`
+	ReleaseID        string `json:"releaseId"`
+	SourceID         string `json:"sourceId"`
+	CanonicalGameID  string `json:"canonicalGameId"`
 }
 
 type Service struct {
@@ -193,6 +199,15 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		s.games[i].Version = g.Version
 		s.games[i].SizeBytes = dirSize(installDir)
 		s.games[i].SourceDownloadID = g.SourceDownloadID
+		if g.ReleaseID != "" {
+			s.games[i].ReleaseID = g.ReleaseID
+		}
+		if g.SourceID != "" {
+			s.games[i].SourceID = g.SourceID
+		}
+		if g.CanonicalGameID != "" {
+			s.games[i].CanonicalGameID = g.CanonicalGameID
+		}
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return Game{}, fmt.Errorf("save library: %w", err)
@@ -214,6 +229,9 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		SizeBytes:        dirSize(installDir),
 		InstalledAt:      time.Now(),
 		SourceDownloadID: g.SourceDownloadID,
+		ReleaseID:        g.ReleaseID,
+		SourceID:         g.SourceID,
+		CanonicalGameID:  g.CanonicalGameID,
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
