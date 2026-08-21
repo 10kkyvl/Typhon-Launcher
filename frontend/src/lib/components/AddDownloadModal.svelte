@@ -127,7 +127,7 @@
     <div class="source">
       <label class="field">
         <span class="field-label">Magnet-ссылка</span>
-        <input type="text" placeholder="magnet:?xt=urn:btih:…" bind:value={source} />
+        <input class="input" type="text" placeholder="magnet:?xt=urn:btih:…" bind:value={source} />
       </label>
       <div class="or">
         <span class="line"></span>
@@ -154,7 +154,7 @@
       <div class="dest">
         <span class="field-label">Папка назначения</span>
         <div class="dest-controls">
-          <input type="text" readonly value={destination} />
+          <input class="input sm" type="text" readonly value={destination} />
           <Button size="sm" onclick={browseDestination}>Обзор</Button>
         </div>
       </div>
@@ -206,29 +206,8 @@
   }
 
   .field-label {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  input {
-    width: 100%;
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-  }
-
-  input[readonly] {
-    color: var(--text-2);
   }
 
   .or {
@@ -244,7 +223,7 @@
   }
 
   .or-text {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
@@ -266,12 +245,12 @@
   }
 
   .loading-text {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
   .loading-note {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
@@ -289,7 +268,7 @@
   }
 
   .torrent-name {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     font-weight: 600;
     min-width: 0;
     overflow: hidden;
@@ -298,7 +277,7 @@
   }
 
   .torrent-size {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
@@ -312,7 +291,12 @@
 
   .dest-controls {
     display: flex;
+    align-items: center;
     gap: 0.8rem;
+  }
+
+  .dest-controls .input {
+    flex: 1;
   }
 
   .file-list {
@@ -320,9 +304,8 @@
     flex-direction: column;
     max-height: 28rem;
     overflow-y: auto;
-    padding: 0.4rem;
+    padding: var(--space-1);
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
 
@@ -332,13 +315,13 @@
     gap: var(--space-3);
     width: 100%;
     padding: 0.7rem 0.8rem;
-    border-radius: 0.7rem;
+    border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }
 
   .file-row:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--hover);
   }
 
   .box {
@@ -348,7 +331,7 @@
     width: 1.8rem;
     height: 1.8rem;
     flex-shrink: 0;
-    border-radius: 0.5rem;
+    border-radius: var(--radius-xs);
     border: 1px solid var(--border-strong);
     background: var(--surface-2);
     color: #fff;
@@ -365,7 +348,7 @@
   .file-path {
     flex: 1;
     min-width: 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -373,7 +356,7 @@
   }
 
   .file-size {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
@@ -382,7 +365,7 @@
   .summary {
     margin-right: auto;
     align-self: center;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }

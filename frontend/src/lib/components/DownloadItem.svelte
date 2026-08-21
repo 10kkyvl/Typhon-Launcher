@@ -20,9 +20,9 @@
 
   const purposeLabel = $derived(
     download.origin.purpose === 'update'
-      ? 'ОБНОВЛЕНИЕ'
+      ? 'Обновление'
       : download.origin.purpose === 'repair'
-        ? 'ВОССТАНОВЛЕНИЕ'
+        ? 'Восстановление'
         : '',
   );
   const downloading = $derived(download.status === 'downloading');
@@ -58,97 +58,91 @@
   }}
 >
   <div class="thumb">
-    <FileDown size="2.6rem" strokeWidth={1.6} />
+    <FileDown size="1.8rem" strokeWidth={1.8} />
   </div>
   <div class="main">
     <div class="head">
       <div class="titles">
-        <span class="title">
-          {download.name}
-          {#if purposeLabel}<span class="purpose">{purposeLabel}</span>{/if}
+        <span class="title">{download.name}</span>
+        <span class="sub">
+          {statusLabels[download.status]}
+          {#if purposeLabel}<span class="sep">·</span>{purposeLabel}{/if}
         </span>
-        <span class="sub">{statusLabels[download.status]}</span>
       </div>
-      {#if !compact}
-        <div class="stats">
-          {#if downloading}
-            <div class="stat">
-              <span class="stat-label">Осталось</span>
-              <span class="stat-value">{etaLabel(download.etaSeconds)}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Скорость</span>
-              <span class="stat-value">{speedBytes(download.downloadSpeed)}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Отдача</span>
-              <span class="stat-value">{speedBytes(download.uploadSpeed)}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Пиры</span>
-              <span class="stat-value">{download.seeders} сид / {download.peers} пир</span>
-            </div>
-          {:else}
-            <div class="stat">
-              <span class="stat-label">Состояние</span>
-              <span class="stat-value">{statusLabels[download.status]}</span>
-            </div>
-          {/if}
-        </div>
-      {/if}
       <div class="controls">
         {#if downloading}
           <IconButton
             label="Пауза"
+            size="sm"
             onclick={(e) => {
               stop(e);
               pause(download.id);
             }}
           >
-            <Pause size="1.7rem" strokeWidth={1.8} />
+            <Pause size="1.6rem" strokeWidth={1.8} />
           </IconButton>
         {:else if download.status === 'paused' || download.status === 'queued'}
           <IconButton
             label="Продолжить"
+            size="sm"
             onclick={(e) => {
               stop(e);
               resume(download.id);
             }}
           >
-            <Play size="1.7rem" strokeWidth={1.8} />
+            <Play size="1.6rem" strokeWidth={1.8} />
           </IconButton>
         {/if}
         {#if finished}
           <IconButton
             label="Удалить из списка"
+            size="sm"
             onclick={(e) => {
               stop(e);
               remove(download.id);
             }}
           >
-            <Trash2 size="1.7rem" strokeWidth={1.8} />
+            <Trash2 size="1.6rem" strokeWidth={1.8} />
           </IconButton>
         {:else}
           <IconButton
             label="Отменить"
+            size="sm"
             onclick={(e) => {
               stop(e);
               confirmOpen = true;
             }}
           >
-            <X size="1.7rem" strokeWidth={1.8} />
+            <X size="1.6rem" strokeWidth={1.8} />
           </IconButton>
         {/if}
       </div>
     </div>
-    <div class="progress-row">
-      <ProgressBar value={pct} color={barColor} />
-      <span class="pct">{Math.floor(pct)}%</span>
-    </div>
+    <ProgressBar value={pct} color={barColor} height={compact ? 4 : 5} />
     <div class="foot">
-      <span class="size">{bytesSize(download.downloaded)} / {bytesSize(download.total)}</span>
+      <span class="size">
+        <span class="pct">{Math.floor(pct)}%</span>
+        <span class="sep">·</span>
+        {bytesSize(download.downloaded)} / {bytesSize(download.total)}
+      </span>
       {#if download.status === 'failed' && download.error}
         <span class="error">{download.error}</span>
+      {:else if downloading && !compact}
+        <span class="stats">
+          <span>{speedBytes(download.downloadSpeed)}</span>
+          <span class="sep">·</span>
+          <span>осталось {etaLabel(download.etaSeconds)}</span>
+          <span class="sep">·</span>
+          <span class="dim">↑ {speedBytes(download.uploadSpeed)}</span>
+          <span class="sep">·</span>
+          <span class="dim">{download.seeders} сид / {download.peers} пир</span>
+        </span>
+      {:else if downloading}
+        <span class="stats">
+          <span>{speedBytes(download.downloadSpeed)}</span>
+          <span class="sep">·</span>
+          <span>{etaLabel(download.etaSeconds)}</span>
+        </span>
       {/if}
     </div>
   </div>
@@ -173,41 +167,26 @@
 </Modal>
 
 <style>
-  .purpose {
-    display: inline-block;
-    margin-left: 0.8rem;
-    padding: 0.1rem 0.6rem;
-    border-radius: 0.5rem;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    color: var(--accent);
-    font-size: 1.1rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    vertical-align: middle;
-  }
-
   .item {
     display: flex;
     gap: var(--space-4);
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-5);
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     text-align: left;
-    transition: border-color var(--dur) var(--ease);
+    transition: background var(--dur) var(--ease);
   }
 
   .item.clickable {
     cursor: pointer;
   }
 
-  .item:hover {
-    border-color: var(--border-strong);
+  .item.clickable:hover {
+    background: var(--surface-2);
   }
 
   .item.compact {
     background: transparent;
-    border: none;
     padding: 0;
   }
 
@@ -215,18 +194,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 17.8rem;
-    aspect-ratio: 16 / 9;
+    width: 4rem;
+    height: 4rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
-    border: 1px solid var(--border);
     color: var(--text-3);
-    align-self: center;
-  }
-
-  .compact .thumb {
-    width: 12rem;
   }
 
   .main {
@@ -234,14 +207,13 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 0.9rem;
+    gap: 0.8rem;
   }
 
   .head {
     display: flex;
-    align-items: center;
-    gap: var(--space-5);
+    align-items: flex-start;
+    gap: var(--space-4);
   }
 
   .titles {
@@ -249,66 +221,33 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.1rem;
   }
 
   .title {
-    font-size: 1.6rem;
+    font-size: var(--font-md);
     font-weight: 600;
+    letter-spacing: var(--tracking-heading);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .sub {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
-  .stats {
-    display: flex;
-    gap: var(--space-8);
-  }
-
-  .stat {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 7.6rem;
-  }
-
-  .stat-label {
-    font-size: 1.2rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-3);
-  }
-
-  .stat-value {
-    font-size: 1.4rem;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+  .sep {
+    margin: 0 0.5rem;
+    opacity: 0.6;
   }
 
   .controls {
     display: flex;
-    gap: 0.4rem;
-  }
-
-  .progress-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .pct {
-    font-size: 1.4rem;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-2);
-    min-width: 3.8rem;
-    text-align: right;
+    gap: 0.2rem;
+    margin-top: -0.4rem;
+    margin-right: -0.6rem;
   }
 
   .foot {
@@ -316,16 +255,35 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-  }
-
-  .size {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
+  .size {
+    white-space: nowrap;
+  }
+
+  .pct {
+    color: var(--text-2);
+    font-weight: 500;
+  }
+
+  .stats {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    color: var(--text-2);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dim {
+    color: var(--text-3);
+  }
+
   .error {
-    font-size: 1.3rem;
     color: var(--danger);
     white-space: nowrap;
     overflow: hidden;
@@ -333,18 +291,8 @@
   }
 
   .modal-text {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     line-height: 1.55;
     color: var(--text-2);
-  }
-
-  @media (max-width: 1240px) {
-    .stats {
-      gap: var(--space-5);
-    }
-
-    .thumb {
-      width: 14rem;
-    }
   }
 </style>

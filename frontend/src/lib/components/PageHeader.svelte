@@ -32,26 +32,33 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: var(--space-6);
+    padding-top: var(--space-3);
     margin-bottom: var(--space-6);
+  }
+
+  .text {
+    min-width: 0;
   }
 
   h1 {
     font-size: var(--font-title);
     font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
+    line-height: 1.1;
+    letter-spacing: var(--tracking-title);
   }
 
   p {
     margin-top: 0.6rem;
-    font-size: 1.4rem;
+    max-width: var(--prose-max);
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     flex-shrink: 0;
+    padding-bottom: 0.3rem;
   }
 </style>

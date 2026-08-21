@@ -46,10 +46,10 @@
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>
         <div class="release-badges">
           {#if release.new}
-            <StatusBadge kind="accent" label="Новое" dot={false} />
+            <StatusBadge kind="accent" label="Новое" plain />
           {/if}
           {#if removed}
-            <StatusBadge kind="danger" label="Недоступно" dot={false} />
+            <StatusBadge kind="danger" label="Недоступно" plain />
           {/if}
         </div>
         <Button size="sm" disabled={removed} onclick={() => ondownload(group)}>
@@ -68,7 +68,7 @@
   }
 
   .hint {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     padding: 0.8rem 0;
   }
@@ -93,15 +93,16 @@
   }
 
   .release-version {
-    font-size: 1.4rem;
-    font-weight: 550;
+    font-size: var(--font-sm);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .release-edition {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -110,15 +111,15 @@
 
   .release-size {
     flex: 0 0 7rem;
-    font-size: 1.3rem;
-    color: var(--text-2);
+    font-size: var(--font-xs);
+    color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .release-source {
     flex: 1;
     min-width: 0;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -132,7 +133,7 @@
 
   .release-date {
     flex: 0 0 8.5rem;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
   }

@@ -18,6 +18,7 @@
       class="segment"
       class:selected={value === option.id}
       aria-label={option.label}
+      aria-pressed={value === option.id}
       title={option.label}
       onclick={() => (value = option.id)}
     >
@@ -36,7 +37,6 @@
     padding: 0.3rem;
     gap: 2px;
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
 
@@ -45,10 +45,10 @@
     align-items: center;
     justify-content: center;
     height: 3rem;
-    min-width: 3.4rem;
+    min-width: 3.2rem;
     padding: 0 0.8rem;
-    border-radius: 0.7rem;
-    font-size: 1.4rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-xs);
     color: var(--text-3);
     transition:
       background var(--dur) var(--ease),
@@ -60,7 +60,7 @@
   }
 
   .segment.selected {
-    background: var(--surface-3);
+    background: var(--surface-4);
     color: var(--text);
   }
 </style>

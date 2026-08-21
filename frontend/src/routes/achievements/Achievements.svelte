@@ -22,14 +22,15 @@
   {#each rows as row (row.game?.id)}
     {@const game = row.game}
     {#if game}
-      <button class="row" onclick={() => navigate('game', { id: game.id })}>
+      {@const done = row.data.earned === row.data.total}
+      <button class="row" class:done onclick={() => navigate('game', { id: game.id })}>
         <div class="thumb">
           <Artwork src={game.cover} alt={game.title} radius="var(--radius-sm)" />
         </div>
         <div class="text">
           <span class="title">{game.title}</span>
           <div class="progress">
-            <ProgressBar value={row.data.earned} max={row.data.total} height={5} />
+            <ProgressBar value={row.data.earned} max={row.data.total} height={4} color={done ? 'var(--success)' : 'var(--accent)'} />
             <span class="nums">{row.data.earned} / {row.data.total}</span>
           </div>
           {#if row.data.recent[0]}
@@ -39,7 +40,7 @@
             </span>
           {/if}
         </div>
-        <span class="pct" class:done={row.data.earned === row.data.total}>
+        <span class="pct">
           {Math.round((row.data.earned / row.data.total) * 100)}%
         </span>
       </button>
@@ -49,34 +50,33 @@
 
 <style>
   .list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    max-width: 86rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    max-width: 110rem;
   }
 
   .row {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-4);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    gap: var(--space-5);
+    padding: 1.4rem 1.2rem;
+    margin: 0 -1.2rem;
+    border-radius: var(--radius-md);
     text-align: left;
-    transition:
-      border-color var(--dur) var(--ease),
-      transform var(--dur) var(--ease);
+    transition: background var(--dur) var(--ease);
+  }
+
+  .row + .row {
+    border-top: 1px solid var(--border);
   }
 
   .row:hover {
-    border-color: var(--border-strong);
-    transform: translateY(-1px);
+    background: var(--hover);
   }
 
   .thumb {
-    width: 5.6rem;
-    height: 7.4rem;
+    width: 5.2rem;
+    height: 6.9rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -91,19 +91,23 @@
   }
 
   .title {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .progress {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    max-width: 42rem;
+    max-width: 44rem;
   }
 
   .nums {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -113,7 +117,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -121,18 +125,44 @@
   }
 
   .recent :global(svg) {
-    color: #e8c35a;
+    color: #e3c26b;
     flex-shrink: 0;
   }
 
   .pct {
-    font-size: 1.8rem;
+    font-size: var(--font-xl);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-2);
+    min-width: 6rem;
+    text-align: right;
   }
 
-  .pct.done {
+  .done .pct {
     color: var(--success);
+  }
+
+  .done .title {
+    color: var(--text-2);
+  }
+
+  @media (min-width: 1800px) {
+    .list {
+      grid-template-columns: 1fr 1fr;
+      column-gap: var(--space-12);
+      max-width: none;
+    }
+
+    .row + .row {
+      border-top: none;
+    }
+
+    .row {
+      border-top: 1px solid var(--border);
+    }
+
+    .row:nth-child(-n + 2) {
+      border-top: none;
+    }
   }
 </style>

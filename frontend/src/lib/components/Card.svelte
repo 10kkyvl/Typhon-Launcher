@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
 
   let {
-    padding = 'var(--space-6)',
+    padding = 'var(--space-5) var(--space-6)',
     children,
   }: {
     padding?: string;
@@ -17,8 +17,6 @@
 <style>
   .card {
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
   }
 </style>

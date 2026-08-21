@@ -7,6 +7,7 @@
     ChevronRight,
     CircleCheck,
     Download,
+    EllipsisVertical,
     ExternalLink,
     FileCheck,
     FolderOpen,
@@ -26,6 +27,7 @@
   } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -45,9 +47,11 @@
   import { playGame, removeGame, stopGame } from '../../lib/services/library';
   import { openFolder } from '../../lib/services/settings';
   import {
+    getCatalogGame,
     getReleasesForGame,
     getReleasesForTitle,
     prepareReleaseDownload,
+    type CatalogGame,
     type ReleaseGroup,
   } from '../../lib/services/sources';
   import { getVerifyState } from '../../lib/services/updates';
@@ -96,8 +100,35 @@
   let releasesLoading = $state(false);
   let releaseToken = 0;
 
-  const releaseTitle = $derived(localGame?.title ?? game?.title);
-  const releaseKey = $derived(`${id}|${localGame?.canonicalGameId ?? ''}|${releaseTitle ?? ''}`);
+  let catalogGame = $state<CatalogGame | null>(null);
+  let catalogToken = 0;
+
+  async function loadCatalogGame(gameId: string) {
+    const current = ++catalogToken;
+    const found = await getCatalogGame(gameId);
+    if (current !== catalogToken) return;
+    catalogGame = found;
+  }
+
+  $effect(() => {
+    const gameId = id;
+    const known = Boolean(localGame || game);
+    untrack(() => {
+      if (known) {
+        catalogToken++;
+        catalogGame = null;
+        return;
+      }
+      loadCatalogGame(gameId);
+    });
+  });
+
+  const canonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id);
+  const catalogMeta = $derived(
+    [catalogGame?.releaseYear, catalogGame?.developer, catalogGame?.publisher].filter(Boolean).join(' · '),
+  );
+  const releaseTitle = $derived(localGame?.title ?? catalogGame?.title ?? game?.title);
+  const releaseKey = $derived(`${id}|${canonicalId ?? ''}|${releaseTitle ?? ''}`);
 
   async function loadReleases(canonicalGameId: string | undefined, title: string | undefined) {
     const current = ++releaseToken;
@@ -120,7 +151,7 @@
 
   $effect(() => {
     releaseKey;
-    const canonicalGameId = localGame?.canonicalGameId;
+    const canonicalGameId = canonicalId;
     const title = releaseTitle;
     untrack(() => {
       loadReleases(canonicalGameId, title);
@@ -211,7 +242,6 @@
     else toast('Действие недоступно в demo');
   }
 </script>
-
 {#if localGame}
   <nav class="breadcrumb">
     <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
@@ -220,38 +250,57 @@
   </nav>
 
   <section class="local-hero">
-    <div class="local-head">
-      <h1 class="local-title">{localGame.title}</h1>
-      {#if localRunning}
-        <StatusBadge kind="accent" label="Запущена" />
-      {:else}
-        <StatusBadge kind="success" label="Установлено" dot={false} />
-      {/if}
-    </div>
-    <p class="local-path">{localGame.installDir}</p>
-    <div class="actions">
-      {#if localRunning}
-        <Button size="lg" onclick={localStop}>
-          <Square size="1.5rem" strokeWidth={2} fill="currentColor" />
-          Остановить
+    {#if localGame.hero}
+      <div class="local-art">
+        <Artwork src={localGame.hero} alt="" />
+      </div>
+    {/if}
+    <div class="local-content">
+      <div class="local-head">
+        <h1 class="local-title">{localGame.title}</h1>
+        {#if localRunning}
+          <StatusBadge kind="accent" label="Запущена" />
+        {:else}
+          <StatusBadge kind="success" label="Установлено" dot={false} />
+        {/if}
+      </div>
+      <p class="local-path">{localGame.installDir}</p>
+      <div class="actions">
+        {#if localRunning}
+          <Button size="lg" onclick={localStop}>
+            <Square size="1.5rem" strokeWidth={2} fill="currentColor" />
+            Остановить
+          </Button>
+        {:else}
+          <Button variant="primary" size="lg" onclick={localPlay}>
+            <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
+            Играть
+          </Button>
+        {/if}
+        <Button size="lg" onclick={localOpenFolder}>
+          <FolderOpen size="1.6rem" strokeWidth={1.8} />
+          Открыть папку
         </Button>
-      {:else}
-        <Button variant="primary" size="lg" onclick={localPlay}>
-          <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
-          Играть
-        </Button>
-      {/if}
-      <Button size="lg" onclick={localOpenFolder}>
-        <FolderOpen size="1.6rem" strokeWidth={1.8} />
-        Открыть папку
-      </Button>
+        <DropdownMenu
+          items={[{ id: 'remove', label: 'Удалить из библиотеки', danger: true }]}
+          onselect={(actionId) => {
+            if (actionId === 'remove') removeOpen = true;
+          }}
+        >
+          {#snippet trigger({ toggle })}
+            <IconButton label="Ещё" onclick={toggle}>
+              <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+            </IconButton>
+          {/snippet}
+        </DropdownMenu>
+      </div>
     </div>
   </section>
 
   <div class="local-grid">
-    <Card>
-      <h3 class="card-title">Сведения</h3>
-      <dl class="props local-props">
+    <div class="local-col">
+      <h3 class="group-title">Сведения</h3>
+      <dl class="local-props">
         <div class="prop">
           <dt>Исполняемый файл</dt>
           <dd class="mono">{localGame.executable}</dd>
@@ -269,10 +318,10 @@
           <dd>{relativeDate(localGame.installedAt)}</dd>
         </div>
       </dl>
-    </Card>
-    <Card>
-      <h3 class="card-title">Активность</h3>
-      <dl class="props local-props">
+    </div>
+    <div class="local-col">
+      <h3 class="group-title">Активность</h3>
+      <dl class="local-props">
         <div class="prop">
           <dt>Наиграно</dt>
           <dd>{playtime(localGame.playtimeSeconds)}</dd>
@@ -286,7 +335,7 @@
           <dd>{localRunning ? 'Запущена' : 'Не запущена'}</dd>
         </div>
       </dl>
-    </Card>
+    </div>
   </div>
 
   {#if showUpdateCard && localUpdate}
@@ -296,24 +345,11 @@
   <VerifyCard gameId={localGame.id} state={localVerify} running={localRunning} />
 
   {#if releasesLoading || releaseGroups.length > 0}
-    <Card padding="var(--space-5) var(--space-6)">
-      <h3 class="card-title qa-title">Доступные загрузки</h3>
+    <section class="block">
+      <h2 class="section-title">Доступные загрузки</h2>
       <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
-    </Card>
+    </section>
   {/if}
-
-  <Card padding="var(--space-5) var(--space-6)">
-    <div class="local-danger">
-      <div>
-        <h3 class="card-title">Удалить из библиотеки</h3>
-        <p class="muted">Файлы игры останутся на диске — удалится только запись в Typhon.</p>
-      </div>
-      <Button variant="danger" onclick={() => (removeOpen = true)}>
-        <Trash2 size="1.5rem" strokeWidth={1.8} />
-        Удалить
-      </Button>
-    </div>
-  </Card>
 
   <Modal bind:open={removeOpen} title="Удалить игру из библиотеки?">
     <p class="modal-text">
@@ -324,6 +360,35 @@
       <Button variant="danger" onclick={localRemove}>Удалить</Button>
     {/snippet}
   </Modal>
+
+  <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
+{:else if catalogGame}
+  <nav class="breadcrumb">
+    <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
+    <ChevronRight size="1.4rem" strokeWidth={1.8} />
+    <span class="crumb current">{catalogGame.title}</span>
+  </nav>
+
+  <section class="local-hero">
+    <div class="local-content">
+      <div class="local-head">
+        <h1 class="local-title">{catalogGame.title}</h1>
+        <StatusBadge kind="neutral" label="Не установлено" dot={false} />
+      </div>
+      {#if catalogMeta}
+        <p class="local-path">{catalogMeta}</p>
+      {/if}
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="section-title">Доступные загрузки</h2>
+    {#if releasesLoading || releaseGroups.length > 0}
+      <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
+    {:else}
+      <p class="muted">Ни один источник не предлагает релизы для этой игры.</p>
+    {/if}
+  </section>
 
   <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
 {:else if !game}
@@ -339,13 +404,9 @@
     <span class="crumb current">{game.title}</span>
   </nav>
 
-  <GameHero src={game.hero} alt={game.title} ratio="2.9 / 1" minHeight="30rem">
+  <GameHero src={game.hero} alt={game.title} ratio="2.6 / 1" minHeight="30rem" maxHeight="44rem">
     <h1 class="title">{game.title}</h1>
-    <div class="genres">
-      {#each game.genres as genre (genre)}
-        <span class="genre">{genre}</span>
-      {/each}
-    </div>
+    <span class="genres">{game.genres.join(' · ')}</span>
     <div class="meta">
       <span class="meta-item">
         <Calendar size="1.5rem" strokeWidth={1.8} />
@@ -410,149 +471,152 @@
 
   {#if tab === 'overview'}
     <div class="overview">
-      <Card>
-        <h3 class="card-title">О игре</h3>
-        <p class="description">{game.description}</p>
-        <div class="divider"></div>
-        <dl class="props">
-          <div class="prop">
-            <dt>Режимы игры</dt>
-            <dd>{game.modes.join(', ')}</dd>
-          </div>
-          <div class="prop">
-            <dt>Поддержка контроллера</dt>
-            <dd>{game.controllerSupport}</dd>
-          </div>
-          <div class="prop">
-            <dt>Последнее обновление</dt>
-            <dd>{game.lastUpdate}</dd>
-          </div>
-          {#if expanded}
+      <div class="overview-main">
+        <section class="block">
+          <h2 class="section-title">О игре</h2>
+          <p class="description">{game.description}</p>
+          <dl class="props">
             <div class="prop">
-              <dt>Издатель</dt>
-              <dd>{game.publisher}</dd>
+              <dt>Режимы игры</dt>
+              <dd>{game.modes.join(', ')}</dd>
             </div>
             <div class="prop">
-              <dt>Версия</dt>
-              <dd>{game.version}</dd>
+              <dt>Поддержка контроллера</dt>
+              <dd>{game.controllerSupport}</dd>
             </div>
             <div class="prop">
-              <dt>Размер</dt>
-              <dd>{gb(game.sizeGb)}</dd>
+              <dt>Последнее обновление</dt>
+              <dd>{game.lastUpdate}</dd>
             </div>
-            {#if game.playtimeHours > 0}
+            {#if expanded}
               <div class="prop">
-                <dt>Наиграно</dt>
-                <dd>{game.playtimeHours} ч</dd>
+                <dt>Издатель</dt>
+                <dd>{game.publisher}</dd>
               </div>
+              <div class="prop">
+                <dt>Версия</dt>
+                <dd>{game.version}</dd>
+              </div>
+              <div class="prop">
+                <dt>Размер</dt>
+                <dd>{gb(game.sizeGb)}</dd>
+              </div>
+              {#if game.playtimeHours > 0}
+                <div class="prop">
+                  <dt>Наиграно</dt>
+                  <dd>{game.playtimeHours} ч</dd>
+                </div>
+              {/if}
             {/if}
-          {/if}
-        </dl>
-        <button class="expand" onclick={() => (expanded = !expanded)}>
-          {expanded ? 'Показать меньше' : 'Показать больше'}
-          <ChevronDown size="1.5rem" strokeWidth={1.8} style={expanded ? 'transform: rotate(180deg)' : ''} />
-        </button>
-      </Card>
+          </dl>
+          <button class="expand" onclick={() => (expanded = !expanded)}>
+            {expanded ? 'Показать меньше' : 'Показать больше'}
+            <ChevronDown size="1.5rem" strokeWidth={1.8} style={expanded ? 'transform: rotate(180deg)' : ''} />
+          </button>
+        </section>
 
-      {#if releasesLoading || releaseGroups.length > 0}
+        {#if releasesLoading || releaseGroups.length > 0}
+          <section class="block">
+            <h2 class="section-title">Доступные загрузки</h2>
+            <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
+          </section>
+        {/if}
+      </div>
+
+      <div class="overview-side">
         <Card>
           <div class="card-head">
-            <h3 class="card-title">Доступные загрузки</h3>
+            <h3 class="card-title">Достижения</h3>
+            {#if gameAchievements}
+              <button class="link" onclick={() => (tab = 'achievements')}>Показать все</button>
+            {/if}
           </div>
-          <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
-        </Card>
-      {/if}
-
-      <Card>
-        <div class="card-head">
-          <h3 class="card-title">Достижения</h3>
           {#if gameAchievements}
-            <button class="link" onclick={() => (tab = 'achievements')}>Показать все</button>
-          {/if}
-        </div>
-        {#if gameAchievements}
-          <div class="ach-summary">
-            <div class="ach-badge">
-              <Trophy size="2.2rem" strokeWidth={1.8} />
-            </div>
-            <div class="ach-count">
-              <span class="ach-nums"><strong>{gameAchievements.earned}</strong> / {gameAchievements.total}</span>
-              <span class="ach-label">Достижений получено</span>
-            </div>
-          </div>
-          <ProgressBar value={gameAchievements.earned} max={gameAchievements.total} />
-          <div class="ach-recent">
-            <span class="ach-recent-label">Последнее достижение</span>
-            {#each gameAchievements.recent.slice(0, 1) as a (a.name)}
-              <div class="ach-item">
-                <div class="ach-icon">
-                  <Trophy size="1.6rem" strokeWidth={1.8} />
-                </div>
-                <div class="ach-text">
-                  <span class="ach-name">{a.name}</span>
-                  <span class="ach-desc">{a.description}</span>
-                </div>
-                <span class="ach-date">{a.date}</span>
+            <div class="ach-summary">
+              <div class="ach-badge">
+                <Trophy size="2rem" strokeWidth={1.8} />
               </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="muted">Пока нет полученных достижений.</p>
-        {/if}
-      </Card>
+              <div class="ach-count">
+                <span class="ach-nums"><strong>{gameAchievements.earned}</strong> / {gameAchievements.total}</span>
+                <span class="ach-label">Достижений получено</span>
+              </div>
+            </div>
+            <ProgressBar value={gameAchievements.earned} max={gameAchievements.total} />
+            <div class="ach-recent">
+              <span class="ach-recent-label">Последнее достижение</span>
+              {#each gameAchievements.recent.slice(0, 1) as a (a.name)}
+                <div class="ach-item">
+                  <div class="ach-icon">
+                    <Trophy size="1.6rem" strokeWidth={1.8} />
+                  </div>
+                  <div class="ach-text">
+                    <span class="ach-name">{a.name}</span>
+                    <span class="ach-desc">{a.description}</span>
+                  </div>
+                  <span class="ach-date">{a.date}</span>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="muted">Пока нет полученных достижений.</p>
+          {/if}
+        </Card>
 
-      <Card>
-        <div class="card-head">
-          <h3 class="card-title">Установленные дополнения</h3>
-          {#if gameDlcs.length > 0}
-            <span class="muted small">
-              {gameDlcs.filter((d) => d.installed).length} / {gameDlcs.length}
-            </span>
-          {/if}
-        </div>
-        {#if gameDlcs.length === 0}
-          <p class="muted">У этой игры нет дополнений.</p>
-        {:else}
-          <div class="dlc-list">
-            {#each gameDlcs as dlc (dlc.id)}
-              <div class="dlc">
-                <div class="dlc-text">
-                  <span class="dlc-name">{dlc.name}</span>
-                  <span class="dlc-kind">{dlc.kind}</span>
-                </div>
-                {#if dlc.installed}
-                  <span class="dlc-state installed">
-                    Установлено
-                    <CircleCheck size="1.5rem" strokeWidth={1.8} />
-                  </span>
-                {:else}
-                  <span class="dlc-state">Не установлено</span>
-                {/if}
-              </div>
-            {/each}
+        <Card>
+          <div class="card-head">
+            <h3 class="card-title">Установленные дополнения</h3>
+            {#if gameDlcs.length > 0}
+              <span class="muted small">
+                {gameDlcs.filter((d) => d.installed).length} / {gameDlcs.length}
+              </span>
+            {/if}
           </div>
-          <button class="link with-icon" onclick={() => (tab = 'addons')}>
-            Управление дополнениями
-            <ExternalLink size="1.4rem" strokeWidth={1.8} />
-          </button>
-        {/if}
-      </Card>
+          {#if gameDlcs.length === 0}
+            <p class="muted">У этой игры нет дополнений.</p>
+          {:else}
+            <div class="dlc-list">
+              {#each gameDlcs as dlc (dlc.id)}
+                <div class="dlc">
+                  <div class="dlc-text">
+                    <span class="dlc-name">{dlc.name}</span>
+                    <span class="dlc-kind">{dlc.kind}</span>
+                  </div>
+                  {#if dlc.installed}
+                    <span class="dlc-state installed">
+                      Установлено
+                      <CircleCheck size="1.5rem" strokeWidth={1.8} />
+                    </span>
+                  {:else}
+                    <span class="dlc-state">Не установлено</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+            <button class="link with-icon" onclick={() => (tab = 'addons')}>
+              Управление дополнениями
+              <ExternalLink size="1.4rem" strokeWidth={1.8} />
+            </button>
+          {/if}
+        </Card>
+      </div>
     </div>
 
-    <Card padding="var(--space-5) var(--space-6)">
-      <h3 class="card-title qa-title">Быстрые действия</h3>
+    <section class="block">
+      <h2 class="section-title">Быстрые действия</h2>
       <div class="quick-actions">
         {#each quickActions as action (action.id)}
-          <button class="qa" class:danger={action.danger} onclick={() => quickAction(action.id)}>
-            <action.icon size="1.9rem" strokeWidth={1.8} />
-            <span class="qa-text">
-              <span class="qa-label">{action.label}</span>
-              <span class="qa-sub">{action.sub}</span>
-            </span>
+          <button
+            class="qa"
+            class:danger={action.danger}
+            title={action.sub}
+            onclick={() => quickAction(action.id)}
+          >
+            <action.icon size="1.6rem" strokeWidth={1.8} />
+            <span class="qa-label">{action.label}</span>
           </button>
         {/each}
       </div>
-    </Card>
+    </section>
   {:else if tab === 'addons'}
     {#if gameDlcs.length === 0}
       <EmptyState title="Дополнений нет" description="У этой игры пока нет доступных дополнений.">
@@ -563,31 +627,29 @@
     {:else}
       <div class="addons">
         {#each gameDlcs as dlc (dlc.id)}
-          <Card padding="var(--space-4) var(--space-5)">
-            <div class="addon">
-              <div class="dlc-text">
-                <span class="dlc-name">{dlc.name}</span>
-                <span class="dlc-kind">{dlc.kind}</span>
-              </div>
-              {#if dlc.installed}
-                <StatusBadge kind="success" label="Установлено" dot={false} />
-              {:else}
-                <Button size="sm" onclick={() => toast(`«${dlc.name}» добавлено в очередь`)}>
-                  <Download size="1.4rem" strokeWidth={1.8} />
-                  Установить
-                </Button>
-              {/if}
+          <div class="addon">
+            <div class="dlc-text">
+              <span class="dlc-name">{dlc.name}</span>
+              <span class="dlc-kind">{dlc.kind}</span>
             </div>
-          </Card>
+            {#if dlc.installed}
+              <StatusBadge kind="success" label="Установлено" dot={false} />
+            {:else}
+              <Button size="sm" onclick={() => toast(`«${dlc.name}» добавлено в очередь`)}>
+                <Download size="1.4rem" strokeWidth={1.8} />
+                Установить
+              </Button>
+            {/if}
+          </div>
         {/each}
       </div>
     {/if}
   {:else if tab === 'achievements'}
     {#if gameAchievements}
-      <Card>
+      <section class="block">
         <div class="ach-summary">
           <div class="ach-badge">
-            <Trophy size="2.2rem" strokeWidth={1.8} />
+            <Trophy size="2rem" strokeWidth={1.8} />
           </div>
           <div class="ach-count">
             <span class="ach-nums"><strong>{gameAchievements.earned}</strong> / {gameAchievements.total}</span>
@@ -609,7 +671,7 @@
             </div>
           {/each}
         </div>
-      </Card>
+      </section>
     {:else}
       <EmptyState title="Достижений пока нет" description="Запустите игру, чтобы начать получать достижения.">
         {#snippet icon()}
@@ -653,9 +715,9 @@
   }
 
   .crumb {
-    font-size: 1.4rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
-    border-radius: 0.6rem;
+    border-radius: var(--radius-sm);
     transition: color var(--dur) var(--ease);
   }
 
@@ -669,26 +731,19 @@
   }
 
   .title {
-    font-size: clamp(3.2rem, 3.4vw, 4.4rem);
-    letter-spacing: -0.015em;
-    text-shadow: 0 2px 1.8rem rgba(0, 0, 0, 0.5);
+    font-size: var(--font-hero);
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+    line-height: 1.05;
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .genres {
-    display: flex;
-    gap: 0.8rem;
-    margin-top: 1.4rem;
-    flex-wrap: wrap;
-  }
-
-  .genre {
-    padding: 0.4rem 1.2rem;
-    border-radius: 0.8rem;
-    background: rgba(10, 14, 19, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 1.3rem;
-    color: var(--text-2);
-    backdrop-filter: blur(0.4rem);
+    display: block;
+    margin-top: var(--space-3);
+    font-size: var(--font-sm);
+    color: rgba(255, 255, 255, 0.75);
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .meta {
@@ -702,12 +757,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.7rem;
-    font-size: 1.4rem;
-    color: rgba(243, 245, 247, 0.9);
+    font-size: var(--font-sm);
+    color: rgba(255, 255, 255, 0.85);
     text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .meta-item :global(svg) {
+    width: 1.5rem;
+    height: 1.5rem;
     color: var(--text-2);
   }
 
@@ -717,10 +774,10 @@
 
   .tagline {
     margin-top: var(--space-4);
-    max-width: 46rem;
-    font-size: 1.5rem;
-    color: rgba(243, 245, 247, 0.85);
-    text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
+    max-width: 52rem;
+    font-size: var(--font-md);
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -733,6 +790,7 @@
     align-items: center;
     gap: var(--space-3);
     margin-top: var(--space-5);
+    flex-wrap: wrap;
   }
 
   .installed-group {
@@ -752,25 +810,54 @@
   }
 
   .size-hint {
-    font-size: 1.4rem;
-    color: rgba(243, 245, 247, 0.75);
+    font-size: var(--font-sm);
+    color: rgba(255, 255, 255, 0.75);
     text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .tabs-row {
-    margin: var(--space-6) 0;
+    margin: var(--space-6) 0 var(--space-8);
   }
 
   .overview {
     display: grid;
-    grid-template-columns: 1.15fr 1.2fr 1fr;
-    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr) 38rem;
+    gap: var(--space-12);
     align-items: start;
-    margin-bottom: var(--space-5);
+    margin-bottom: var(--space-10);
+  }
+
+  .overview-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .overview-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
+  .block {
+    margin-bottom: var(--space-8);
+  }
+
+  .overview-main .block {
+    margin-bottom: 0;
+  }
+
+  .section-title {
+    font-size: var(--font-xl);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    margin-bottom: var(--space-4);
   }
 
   .card-title {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     font-weight: 600;
   }
 
@@ -778,43 +865,43 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 2px;
+    gap: var(--space-3);
   }
 
   .description {
-    margin-top: var(--space-3);
-    font-size: 1.4rem;
-    line-height: 1.6;
+    font-size: var(--font-md);
+    line-height: 1.65;
     color: var(--text-2);
-  }
-
-  .divider {
-    height: 1px;
-    background: var(--border);
-    margin: var(--space-4) 0;
+    max-width: var(--prose-max);
   }
 
   .props {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    margin-top: var(--space-6);
+    max-width: var(--prose-max);
   }
 
-  .prop {
-    display: flex;
-    justify-content: space-between;
+  .props .prop {
+    display: grid;
+    grid-template-columns: 18rem 1fr;
     gap: var(--space-4);
+    padding: 1.1rem 0;
+  }
+
+  .props .prop + .prop {
+    border-top: 1px solid var(--border);
   }
 
   dt {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
   dd {
-    font-size: 1.4rem;
-    color: var(--text-2);
-    text-align: right;
+    font-size: var(--font-sm);
+    color: var(--text);
+    min-width: 0;
   }
 
   .expand {
@@ -822,10 +909,10 @@
     align-items: center;
     gap: 0.5rem;
     margin-top: var(--space-4);
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     font-weight: 500;
     color: var(--accent-text);
-    border-radius: 0.6rem;
+    border-radius: var(--radius-sm);
     transition: color var(--dur) var(--ease);
   }
 
@@ -838,9 +925,9 @@
   }
 
   .link {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--accent-text);
-    border-radius: 0.6rem;
+    border-radius: var(--radius-sm);
     transition: color var(--dur) var(--ease);
   }
 
@@ -866,32 +953,34 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 5.2rem;
-    height: 5.2rem;
+    width: 4rem;
+    height: 4rem;
     border-radius: 50%;
-    background: var(--accent-subtle);
-    color: var(--accent-text);
+    background: var(--surface-3);
+    color: var(--text-2);
     flex-shrink: 0;
   }
 
   .ach-count {
     display: flex;
     flex-direction: column;
+    min-width: 0;
   }
 
   .ach-nums {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 
   .ach-nums strong {
-    font-size: 2.6rem;
+    font-size: 2.2rem;
     font-weight: 600;
     color: var(--text);
   }
 
   .ach-label {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
@@ -901,7 +990,7 @@
 
   .ach-recent-label {
     display: block;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     margin-bottom: 1rem;
   }
@@ -930,8 +1019,8 @@
     width: 3.6rem;
     height: 3.6rem;
     border-radius: var(--radius-sm);
-    background: rgba(232, 195, 90, 0.12);
-    color: #e8c35a;
+    background: var(--surface-3);
+    color: var(--text-2);
     flex-shrink: 0;
   }
 
@@ -943,12 +1032,15 @@
   }
 
   .ach-name {
-    font-size: 1.4rem;
-    font-weight: 550;
+    font-size: var(--font-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .ach-desc {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -956,19 +1048,19 @@
   }
 
   .ach-date {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
   }
 
   .muted {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     margin-top: var(--space-3);
   }
 
   .muted.small {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     margin: 0;
   }
 
@@ -997,15 +1089,15 @@
   }
 
   .dlc-name {
-    font-size: 1.4rem;
-    font-weight: 550;
+    font-size: var(--font-sm);
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .dlc-kind {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
@@ -1013,7 +1105,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -1025,8 +1117,7 @@
   .addons {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    max-width: 72rem;
+    max-width: 86rem;
   }
 
   .addon {
@@ -1034,25 +1125,26 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
+    padding: 1.2rem 0;
   }
 
-  .qa-title {
-    margin-bottom: var(--space-4);
+  .addon + .addon {
+    border-top: 1px solid var(--border);
   }
 
   .quick-actions {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
   .qa {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 1.2rem;
-    padding: 1.2rem 1.4rem;
+    gap: 0.8rem;
+    height: var(--control-md);
+    padding: 0 1.2rem;
     border-radius: var(--radius-md);
-    text-align: left;
     color: var(--text-2);
     transition:
       background var(--dur) var(--ease),
@@ -1060,7 +1152,7 @@
   }
 
   .qa:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--hover-strong);
     color: var(--text);
   }
 
@@ -1083,50 +1175,38 @@
     color: var(--danger);
   }
 
-  .qa-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
   .qa-label {
-    font-size: 1.4rem;
-    font-weight: 550;
+    font-size: var(--font-sm);
+    font-weight: 500;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .qa-sub {
-    font-size: 1.2rem;
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   @media (max-width: 1400px) {
     .overview {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .quick-actions {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
-  @media (max-width: 1100px) {
-    .overview {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-8);
     }
   }
 
   .local-hero {
-    padding: var(--space-6) var(--space-8);
-    background: linear-gradient(135deg, var(--surface-2), var(--surface));
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    margin-bottom: var(--space-5);
+    position: relative;
+    padding: var(--space-4) 0 var(--space-6);
+  }
+
+  .local-art {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 36rem;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent);
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent);
+  }
+
+  .local-content {
+    position: relative;
+    z-index: 1;
   }
 
   .local-head {
@@ -1137,41 +1217,52 @@
   }
 
   .local-title {
-    font-size: clamp(3rem, 3vw, 4rem);
-    letter-spacing: -0.015em;
+    font-size: var(--font-hero);
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+    line-height: 1.05;
+    min-width: 0;
   }
 
   .local-path {
     margin-top: 0.8rem;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
+    word-break: break-all;
   }
 
   .local-grid {
     display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: var(--space-5);
-    align-items: start;
-    margin-bottom: var(--space-5);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 var(--space-12);
+    max-width: 120rem;
+    margin-bottom: var(--space-8);
   }
 
-  .local-props {
-    margin-top: var(--space-4);
+  .local-col {
+    min-width: 0;
+  }
+
+  .group-title {
+    font-size: var(--font-lg);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+
+  .local-props .prop {
+    display: grid;
+    grid-template-columns: 16rem 1fr;
+    gap: var(--space-3);
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .local-props dd {
+    font-variant-numeric: tabular-nums;
   }
 
   .mono {
     word-break: break-all;
-  }
-
-  .local-danger {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-5);
-  }
-
-  .local-danger .muted {
-    margin-top: 0.4rem;
   }
 
   .modal-text {
@@ -1182,7 +1273,7 @@
 
   @media (max-width: 1100px) {
     .local-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

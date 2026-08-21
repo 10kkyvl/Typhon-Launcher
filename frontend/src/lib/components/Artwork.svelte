@@ -12,12 +12,26 @@
   } = $props();
 
   let failed = $state(false);
+
+  $effect(() => {
+    src;
+    failed = false;
+  });
+
+  const initials = $derived(
+    alt
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join(''),
+  );
 </script>
 
 <div class="artwork" style:aspect-ratio={ratio} style:border-radius={radius}>
-  {#if failed}
-    <div class="fallback">
-      <span>{alt.slice(0, 1) || '?'}</span>
+  {#if failed || !src}
+    <div class="fallback" aria-label={alt}>
+      <span>{initials || '?'}</span>
     </div>
   {:else}
     <img {src} {alt} loading="lazy" draggable="false" onerror={() => (failed = true)} />
@@ -45,9 +59,17 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1a2330, #12181f);
+    background:
+      linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 55%),
+      var(--surface-3);
     color: var(--text-3);
-    font-size: 2.8rem;
+    font-size: 2rem;
     font-weight: 600;
+    letter-spacing: 0.02em;
+    container-type: inline-size;
+  }
+
+  .fallback span {
+    font-size: clamp(1.2rem, 22cqw, 3.2rem);
   }
 </style>

@@ -7,6 +7,7 @@
   import { initSettings, settings } from './lib/stores/settings';
   import { initSources } from './lib/stores/sources';
   import { initUpdates } from './lib/stores/updates';
+  import { initCurrentUser } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
   import Achievements from './routes/achievements/Achievements.svelte';
   import Collections from './routes/collections/Collections.svelte';
@@ -23,6 +24,7 @@
   initLibrary();
   initSources();
   initUpdates();
+  initCurrentUser().catch((err) => console.error('init current user', err));
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {

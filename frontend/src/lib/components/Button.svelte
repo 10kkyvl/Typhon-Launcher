@@ -25,8 +25,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.8rem;
-    font-size: var(--font-md);
+    gap: 0.7rem;
+    font-size: var(--font-sm);
     font-weight: 500;
     border-radius: var(--radius-md);
     border: 1px solid transparent;
@@ -49,25 +49,26 @@
 
   .md {
     height: var(--control-md);
-    padding: 0 1.8rem;
+    padding: 0 1.5rem;
   }
 
   .sm {
     height: var(--control-sm);
-    padding: 0 1.4rem;
-    font-size: var(--font-sm);
+    padding: 0 1.2rem;
+    font-size: var(--font-xs);
   }
 
   .lg {
     height: var(--control-lg);
-    padding: 0 2.2rem;
-    font-size: 1.6rem;
+    padding: 0 2rem;
+    font-size: var(--font-md);
     font-weight: 600;
   }
 
   .primary {
     background: var(--accent);
     color: #fff;
+    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
   }
 
   .primary:hover:not(:disabled) {
@@ -76,13 +77,11 @@
 
   .secondary {
     background: var(--surface-3);
-    border-color: var(--border);
     color: var(--text);
   }
 
   .secondary:hover:not(:disabled) {
-    background: #1e2835;
-    border-color: var(--border-strong);
+    background: var(--surface-4);
   }
 
   .ghost {
@@ -91,18 +90,18 @@
   }
 
   .ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-strong);
     color: var(--text);
   }
 
   .danger {
     background: transparent;
-    border-color: rgba(217, 105, 105, 0.35);
+    border-color: rgba(217, 105, 105, 0.3);
     color: var(--danger);
   }
 
   .danger:hover:not(:disabled) {
     background: var(--danger-subtle);
-    border-color: rgba(217, 105, 105, 0.55);
+    border-color: rgba(217, 105, 105, 0.5);
   }
 </style>

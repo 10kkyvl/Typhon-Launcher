@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import {
+    getRelease,
     getSourceDetails,
     queryReleases,
     type ReleaseView,
@@ -16,7 +17,11 @@
   import Select from './Select.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
-  let { open = $bindable(false), sourceId }: { open?: boolean; sourceId: string | null } = $props();
+  let {
+    open = $bindable(false),
+    sourceId,
+    focusReleaseId = null,
+  }: { open?: boolean; sourceId: string | null; focusReleaseId?: string | null } = $props();
 
   const source = $derived(sourceId ? $sources.find((s) => s.id === sourceId) : undefined);
 
@@ -53,16 +58,24 @@
   $effect(() => {
     const id = sourceId;
     const isOpen = open;
+    const releaseId = focusReleaseId;
     untrack(() => {
       if (isOpen && id) {
         filterStatus = 'all';
         search = '';
         page = 1;
         loadDetails(id);
-        loadReleases(id);
+        if (releaseId) focusRelease(id, releaseId);
+        else loadReleases(id);
       }
     });
   });
+
+  async function focusRelease(id: string, releaseId: string) {
+    const view = await getRelease(releaseId);
+    if (view) search = view.release.rawTitle;
+    loadReleases(id);
+  }
 
   async function loadDetails(id: string) {
     try {
@@ -180,11 +193,11 @@
 
       {#if details}
         <section class="counters">
-          <div class="counter"><span class="counter-value">{details.total}</span><span class="counter-label">Всего</span></div>
-          <div class="counter"><span class="counter-value">{details.available}</span><span class="counter-label">Доступно</span></div>
-          <div class="counter"><span class="counter-value">{details.removed}</span><span class="counter-label">Удалено</span></div>
-          <div class="counter"><span class="counter-value">{details.new}</span><span class="counter-label">Новых</span></div>
-          <div class="counter"><span class="counter-value">{details.ignored}</span><span class="counter-label">Игнор</span></div>
+          <div class="counter"><span class="counter-label">Всего</span><span class="counter-value">{details.total}</span></div>
+          <div class="counter"><span class="counter-label">Доступно</span><span class="counter-value">{details.available}</span></div>
+          <div class="counter"><span class="counter-label">Удалено</span><span class="counter-value">{details.removed}</span></div>
+          <div class="counter"><span class="counter-label">Новых</span><span class="counter-value">{details.new}</span></div>
+          <div class="counter"><span class="counter-label">Игнор</span><span class="counter-value">{details.ignored}</span></div>
         </section>
       {/if}
 
@@ -272,7 +285,7 @@
   }
 
   .url {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -286,12 +299,12 @@
   }
 
   .updated {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
   .error {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--danger);
   }
 
@@ -302,23 +315,19 @@
   }
 
   .counters {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: var(--space-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-8);
   }
 
   .counter {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
-    padding: var(--space-3) var(--space-4);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    gap: 0.2rem;
   }
 
   .counter-value {
-    font-size: 1.9rem;
+    font-size: var(--font-lg);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
@@ -326,6 +335,8 @@
   .counter-label {
     font-size: 1.2rem;
     color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   .filters {
@@ -340,8 +351,7 @@
 
   .table {
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     overflow: hidden;
   }
 
@@ -381,7 +391,7 @@
   }
 
   .row.clickable:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--hover);
   }
 
   .row:disabled {
@@ -389,7 +399,7 @@
   }
 
   .cell {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -412,7 +422,7 @@
   }
 
   .pct {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -420,7 +430,7 @@
   .empty {
     padding: var(--space-6);
     text-align: center;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
@@ -434,7 +444,7 @@
   }
 
   .range {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }

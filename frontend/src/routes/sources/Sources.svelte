@@ -1,10 +1,10 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     CircleAlert,
     CircleCheck,
     Database,
     EllipsisVertical,
-    Globe,
     Plus,
     RefreshCw,
     TriangleAlert,
@@ -18,6 +18,7 @@
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
+  import { route } from '../../lib/stores/router';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
   import type { Source, SourceHealth, SourceStatus } from '../../lib/services/sources';
   import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
@@ -25,6 +26,17 @@
   let addOpen = $state(false);
   let detailsOpen = $state(false);
   let detailsId = $state<string | null>(null);
+  let detailsReleaseId = $state<string | null>(null);
+
+  $effect(() => {
+    const params = $route.params;
+    untrack(() => {
+      if (!params.sourceId) return;
+      detailsId = params.sourceId;
+      detailsReleaseId = params.releaseId ?? null;
+      detailsOpen = true;
+    });
+  });
 
   const statusBadge: Record<SourceStatus, { kind: 'success' | 'neutral' | 'danger'; label: string }> = {
     active: { kind: 'success', label: 'Активен' },
@@ -41,6 +53,7 @@
 
   function openDetails(id: string) {
     detailsId = id;
+    detailsReleaseId = null;
     detailsOpen = true;
   }
 
@@ -68,50 +81,44 @@
   }
 </script>
 
-<PageHeader
-  title="Источники"
-  subtitle="Источники — это фиды с релизами игр, которые Typhon использует для поиска и сопоставления загрузок. Источники обновляются автоматически и вручную."
->
+<PageHeader title="Источники" subtitle="Фиды с релизами игр для поиска и сопоставления загрузок">
   {#snippet actions()}
-    <Button disabled={$refreshingAll} onclick={refreshAll}>
+    <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
       <span class="spin" class:on={$refreshingAll}>
-        <RefreshCw size="1.6rem" strokeWidth={1.8} />
+        <RefreshCw size="1.5rem" strokeWidth={1.8} />
       </span>
       {$refreshingAll ? 'Обновление…' : 'Обновить все'}
     </Button>
     <Button variant="primary" onclick={() => (addOpen = true)}>
-      <Plus size="1.6rem" strokeWidth={2} />
+      <Plus size="1.5rem" strokeWidth={2} />
       Добавить источник
     </Button>
   {/snippet}
 </PageHeader>
 
 {#if $sources.length === 0}
-  <div class="empty-wrap">
-    <EmptyState
-      title="Источники ещё не добавлены"
-      description="Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления."
-    >
-      {#snippet icon()}
-        <Database size="2.2rem" strokeWidth={1.8} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={() => (addOpen = true)}>
-          <Plus size="1.6rem" strokeWidth={2} />
-          Добавить источник
-        </Button>
-      {/snippet}
-    </EmptyState>
-  </div>
+  <EmptyState
+    title="Источники ещё не добавлены"
+    description="Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления."
+  >
+    {#snippet icon()}
+      <Database size="2rem" strokeWidth={1.8} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={() => (addOpen = true)}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        Добавить источник
+      </Button>
+    {/snippet}
+  </EmptyState>
 {:else}
   <div class="table">
     <div class="thead">
       <span class="th">Источник</span>
       <span class="th">Статус</span>
-      <span class="th center">Здоровье</span>
       <span class="th">Обновлён</span>
       <span class="th nums">Записей</span>
-      <span class="th">Сопоставление</span>
+      <span class="th nums">Сопоставлено</span>
       <span class="th"></span>
     </div>
     {#each $sources as source (source.id)}
@@ -119,35 +126,34 @@
       {@const health = healthMeta[source.health]}
       <div class="row" class:disabled={!source.enabled}>
         <button class="source" onclick={() => openDetails(source.id)}>
-          <div class="source-icon">
-            <Globe size="1.8rem" strokeWidth={1.8} />
-          </div>
-          <div class="source-text">
-            <span class="source-name">{source.name}</span>
-            <span class="source-url">{source.url}</span>
-          </div>
+          <span class="source-name">{source.name}</span>
+          <span class="source-url">{source.url}</span>
         </button>
-        <span class="cell">
-          <StatusBadge kind={badge.kind} label={badge.label} />
+        <span class="cell status">
+          <StatusBadge kind={badge.kind} label={badge.label} plain />
           {#if source.lastError}
             <Tooltip text={truncateMiddle(source.lastError, 90)}>
               <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
             </Tooltip>
+          {:else if source.health !== 'healthy'}
+            <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.join('; ')}` : health.label}>
+              <span class="health" style:color={health.color}>
+                <health.icon size="1.5rem" strokeWidth={1.8} />
+              </span>
+            </Tooltip>
           {/if}
-        </span>
-        <span class="cell center">
-          <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.join('; ')}` : health.label}>
-            <span class="health" style:color={health.color}>
-              <health.icon size="1.8rem" strokeWidth={1.8} />
-            </span>
-          </Tooltip>
         </span>
         <span class="cell">{relativeDate(source.lastUpdatedAt)}</span>
         <span class="cell nums">{formatCount(source.entries)}</span>
-        <span class="cell counts">
-          <span class="count success" title="Сопоставлено">{formatCount(source.matched)}</span>
-          <span class="count warning" title="На проверку">{formatCount(source.review)}</span>
-          <span class="count neutral" title="Без совпадения">{formatCount(source.unmatched)}</span>
+        <span class="cell nums counts">
+          <Tooltip text={`Сопоставлено ${formatCount(source.matched)} · на проверку ${formatCount(source.review)} · без совпадения ${formatCount(source.unmatched)}`}>
+            <span class="count-wrap">
+              <span class="count">{formatCount(source.matched)}</span>
+              {#if source.review > 0}
+                <span class="count review">+{formatCount(source.review)}</span>
+              {/if}
+            </span>
+          </Tooltip>
         </span>
         <span class="cell menu-cell">
           <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
@@ -164,44 +170,33 @@
 {/if}
 
 <AddSourceModal bind:open={addOpen} />
-<SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} />
+<SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
 
 <style>
-  .empty-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
   .table {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-width: 140rem;
   }
 
   .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(24rem, 1.6fr) 12rem 6.4rem 11rem 8rem 15rem 5.2rem;
+    grid-template-columns: minmax(24rem, 1.6fr) 16rem 11rem 9rem 11rem 4rem;
     align-items: center;
-    gap: var(--space-4);
-    padding: 0 var(--space-5);
+    gap: var(--space-5);
   }
 
   .thead {
-    height: 4.6rem;
+    padding: 0 1.2rem 0.8rem;
     border-bottom: 1px solid var(--border);
   }
 
   .th {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 500;
     color: var(--text-3);
-  }
-
-  .th.center {
-    text-align: center;
+    white-space: nowrap;
   }
 
   .th.nums {
@@ -209,17 +204,16 @@
   }
 
   .row {
-    padding-top: 1.3rem;
-    padding-bottom: 1.3rem;
+    padding: 1.2rem 1.2rem;
     transition: background var(--dur) var(--ease);
-  }
-
-  .row:hover {
-    background: rgba(255, 255, 255, 0.02);
   }
 
   .row + .row {
     border-top: 1px solid var(--border);
+  }
+
+  .row:hover {
+    background: var(--hover);
   }
 
   .row.disabled .source-name,
@@ -229,34 +223,15 @@
 
   .source {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
+    flex-direction: column;
+    gap: 0.2rem;
     min-width: 0;
     text-align: left;
   }
 
-  .source-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4rem;
-    height: 4rem;
-    border-radius: var(--radius-md);
-    flex-shrink: 0;
-    background: var(--accent-subtle);
-    color: var(--accent-text);
-  }
-
-  .source-text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
-
   .source-name {
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-md);
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -268,7 +243,7 @@
   }
 
   .source-url {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -279,21 +254,23 @@
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
-    font-size: 1.4rem;
+    min-width: 0;
+    font-size: var(--font-sm);
     color: var(--text-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  .cell.status,
+  .cell.counts,
+  .cell.menu-cell {
+    overflow: visible;
+  }
+
   .cell.nums {
     justify-content: flex-end;
     font-variant-numeric: tabular-nums;
-  }
-
-  .cell.center {
-    justify-content: center;
-    overflow: visible;
   }
 
   .warn-icon {
@@ -305,36 +282,22 @@
     display: inline-flex;
   }
 
-  .counts {
-    overflow: visible;
+  .count-wrap {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
   }
 
   .count {
-    font-size: 1.4rem;
     font-variant-numeric: tabular-nums;
   }
 
-  .count.success {
-    color: var(--success);
-  }
-
-  .count.warning {
+  .count.review {
+    font-size: var(--font-xs);
     color: var(--warning);
   }
 
-  .count.neutral {
-    color: var(--text-3);
-  }
-
-  .count + .count::before {
-    content: '/';
-    margin-right: 0.6rem;
-    color: var(--text-3);
-    opacity: 0.5;
-  }
-
   .menu-cell {
-    overflow: visible;
     justify-self: end;
   }
 
@@ -355,11 +318,11 @@
   @media (max-width: 1300px) {
     .thead,
     .row {
-      grid-template-columns: minmax(20rem, 1.6fr) 11rem 6.4rem 9rem 15rem 5.2rem;
+      grid-template-columns: minmax(20rem, 1.6fr) 15rem 10rem 11rem 4rem;
     }
 
-    .th:nth-child(5),
-    .cell.nums {
+    .th:nth-child(4),
+    .cell.nums:not(.counts) {
       display: none;
     }
   }

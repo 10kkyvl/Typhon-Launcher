@@ -5,18 +5,20 @@
     label,
     size = 'md',
     active = false,
+    disabled = false,
     onclick,
     children,
   }: {
     label: string;
     size?: 'md' | 'sm';
     active?: boolean;
+    disabled?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button class="icon-btn {size}" class:active aria-label={label} title={label} {onclick}>
+<button class="icon-btn {size}" class:active aria-label={label} title={label} {disabled} {onclick}>
   {@render children?.()}
 </button>
 
@@ -34,22 +36,26 @@
   }
 
   .md {
-    width: 4rem;
-    height: 4rem;
+    width: 3.6rem;
+    height: 3.6rem;
   }
 
   .sm {
-    width: 3.4rem;
-    height: 3.4rem;
+    width: 3.2rem;
+    height: 3.2rem;
   }
 
-  .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
+  .icon-btn:hover:not(:disabled) {
+    background: var(--hover-strong);
     color: var(--text);
   }
 
   .icon-btn.active {
-    background: var(--accent-subtle);
     color: var(--accent-text);
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 </style>

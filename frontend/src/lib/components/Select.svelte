@@ -21,8 +21,8 @@
 
 <div class="select" style:width use:clickOutside={() => (open = false)}>
   <button class="trigger" class:open aria-haspopup="listbox" aria-expanded={open} onclick={() => (open = !open)}>
-    <span>{selected?.label ?? ''}</span>
-    <ChevronDown size="1.6rem" strokeWidth={1.8} />
+    <span class="value">{selected?.label ?? ''}</span>
+    <ChevronDown size="1.5rem" strokeWidth={1.8} />
   </button>
   {#if open}
     <div class="menu" role="listbox">
@@ -38,7 +38,7 @@
           }}
         >
           <span>{option.label}</span>
-          {#if value === option.id}<Check size="1.5rem" strokeWidth={2} />{/if}
+          {#if value === option.id}<Check size="1.4rem" strokeWidth={2} />{/if}
         </button>
       {/each}
     </div>
@@ -57,23 +57,31 @@
     gap: 0.8rem;
     width: 100%;
     height: var(--control-md);
-    padding: 0 1.2rem 0 1.4rem;
+    padding: 0 1rem 0 1.2rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-size: 1.5rem;
+    font-size: var(--font-sm);
     color: var(--text);
     transition:
       background var(--dur) var(--ease),
       border-color var(--dur) var(--ease);
   }
 
+  .value {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .trigger :global(svg) {
     color: var(--text-3);
+    flex-shrink: 0;
     transition: transform var(--dur) var(--ease);
   }
 
-  .trigger.open :global(svg),
+  .trigger.open,
   .trigger:hover {
     border-color: var(--border-strong);
     background: var(--surface-3);
@@ -86,10 +94,10 @@
   .menu {
     position: absolute;
     z-index: 40;
-    top: calc(100% + 0.6rem);
+    top: calc(100% + 0.4rem);
     left: 0;
     right: 0;
-    padding: 0.5rem;
+    padding: 0.4rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -103,9 +111,9 @@
     justify-content: space-between;
     gap: 0.8rem;
     width: 100%;
-    padding: 0.8rem 1rem;
-    border-radius: 0.7rem;
-    font-size: 1.4rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-sm);
     color: var(--text-2);
     text-align: left;
     transition:
@@ -114,7 +122,7 @@
   }
 
   .option:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--hover-strong);
     color: var(--text);
   }
 

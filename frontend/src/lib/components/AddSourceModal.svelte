@@ -66,7 +66,7 @@
     <div class="form">
       <label class="field">
         <span class="field-label">URL источника</span>
-        <input type="text" placeholder="https://example.com/feed.json" bind:value={url} />
+        <input class="input" type="text" placeholder="https://example.com/feed.json" bind:value={url} />
       </label>
       {#if error}
         <p class="error">
@@ -143,43 +143,16 @@
   }
 
   .field-label {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text-2);
-  }
-
-  .field input {
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
-    transition:
-      border-color var(--dur) var(--ease),
-      background var(--dur) var(--ease);
-  }
-
-  .field input:hover {
-    border-color: var(--border-strong);
-  }
-
-  .field input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-    background: var(--surface-3);
-  }
-
-  .field input::placeholder {
-    color: var(--text-3);
   }
 
   .error {
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--danger);
   }
 
@@ -201,12 +174,12 @@
   }
 
   .loading-text {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
   .loading-note {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
@@ -214,6 +187,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    padding: 0.4rem var(--space-4);
+    background: var(--surface);
+    border-radius: var(--radius-md);
   }
 
   .preview-row {
@@ -222,7 +198,7 @@
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.9rem 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .preview-row + .preview-row {
@@ -249,10 +225,10 @@
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--warning);
     background: var(--warning-subtle);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     padding: 0.8rem 1rem;
   }
 

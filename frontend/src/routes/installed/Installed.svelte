@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    CircleCheck,
     EllipsisVertical,
     FolderOpen,
     Gamepad2,
@@ -18,6 +17,7 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { inWails } from '../../lib/services/backend';
@@ -142,10 +142,6 @@
     : 'Локальная библиотека пуста'}
 >
   {#snippet actions()}
-    <Button variant="primary" onclick={openAddDialog}>
-      <Plus size="1.6rem" strokeWidth={2} />
-      Добавить игру
-    </Button>
     <SegmentedControl
       bind:value={$installedView}
       options={[
@@ -161,72 +157,74 @@
         {/if}
       {/snippet}
     </SegmentedControl>
+    <Button variant="primary" onclick={openAddDialog}>
+      <Plus size="1.5rem" strokeWidth={2} />
+      Добавить игру
+    </Button>
   {/snippet}
 </PageHeader>
 
 {#if $libraryGames.length === 0}
-  <div class="empty-wrap">
-    <EmptyState
-      title="Игры ещё не добавлены"
-      description="Добавьте установленную игру, указав её исполняемый файл — Typhon будет отслеживать запуски и время в игре."
-    >
-      {#snippet icon()}
-        <Gamepad2 size="2.2rem" strokeWidth={1.8} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={openAddDialog}>
-          <Plus size="1.6rem" strokeWidth={2} />
-          Добавить игру
-        </Button>
-      {/snippet}
-    </EmptyState>
-  </div>
+  <EmptyState
+    title="Игры ещё не добавлены"
+    description="Добавьте установленную игру, указав её исполняемый файл — Typhon будет отслеживать запуски и время в игре."
+  >
+    {#snippet icon()}
+      <Gamepad2 size="2rem" strokeWidth={1.8} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={openAddDialog}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        Добавить игру
+      </Button>
+    {/snippet}
+  </EmptyState>
 {:else if $installedView === 'list'}
-  <div class="table">
-    <div class="thead">
-      <span>Игра</span>
-      <span>Размер</span>
-      <span class="last">Последний запуск</span>
-      <span>Наиграно</span>
-      <span>Состояние</span>
-      <span></span>
-    </div>
+  <div class="list">
     {#each $libraryGames as game (game.id)}
       {@const running = $runningGames.has(game.id)}
-      <div class="row">
+      {@const update = $updatesByGame.get(game.id)?.availability}
+      <div class="row" class:running>
         <button class="game" onclick={() => navigate('game', { id: game.id })}>
           <div class="thumb">
-            <Artwork src={game.cover} alt={game.title} radius="var(--radius-sm)" />
+            <Artwork src={game.hero || game.cover} alt={game.title} radius="var(--radius-sm)" />
           </div>
           <div class="titles">
             <span class="title">{game.title}</span>
-            <span class="path">{game.installDir}</span>
+            <span class="meta">
+              {#if game.version}<span class="version">{game.version}</span><span class="sep">·</span>{/if}
+              <span>{bytesLabel(game.sizeBytes)}</span>
+            </span>
           </div>
         </button>
-        <span class="cell">{bytesLabel(game.sizeBytes)}</span>
-        <span class="cell last">{relativeDate(game.lastPlayed)}</span>
-        <span class="cell">{playtime(game.playtimeSeconds)}</span>
-        <span class="cell state">
+        <div class="cell last">
+          <span class="cell-value">{relativeDate(game.lastPlayed)}</span>
+          <span class="cell-label">Последний запуск</span>
+        </div>
+        <div class="cell time">
+          <span class="cell-value">{game.playtimeSeconds > 0 ? playtime(game.playtimeSeconds) : '—'}</span>
+          <span class="cell-label">Наиграно</span>
+        </div>
+        <div class="cell state">
           {#if running}
-            <StatusBadge kind="accent" label="Запущена" />
-          {:else if $updatesByGame.get(game.id)?.availability.kind === 'update'}
-            <StatusBadge kind="warning" label="Обновление" />
-          {:else if $updatesByGame.get(game.id)?.availability.kind === 'new_release'}
-            <StatusBadge kind="neutral" label="Новый релиз" />
+            <StatusBadge kind="accent" label="Запущена" plain />
+          {:else if update?.kind === 'update'}
+            <StatusBadge kind="warning" label="Обновление" plain />
+          {:else if update?.kind === 'new_release'}
+            <StatusBadge kind="neutral" label="Новый релиз" plain />
           {:else}
-            <CircleCheck size="1.6rem" strokeWidth={1.8} />
-            Установлено
+            <StatusBadge kind="success" label="Установлено" plain />
           {/if}
-        </span>
+        </div>
         <div class="actions">
           {#if running}
             <Button size="sm" onclick={() => stop(game)}>
-              <Square size="1.3rem" strokeWidth={2} fill="currentColor" />
+              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
               Стоп
             </Button>
           {:else}
             <Button variant="primary" size="sm" onclick={() => play(game)}>
-              <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+              <Play size="1.3rem" strokeWidth={2} fill="currentColor" />
               Играть
             </Button>
           {/if}
@@ -244,18 +242,17 @@
 {:else}
   <div class="grid">
     {#each $libraryGames as game (game.id)}
+      {@const update = $updatesByGame.get(game.id)?.availability}
       <div class="card">
         <button class="card-cover" onclick={() => navigate('game', { id: game.id })} aria-label={game.title}>
-          <Artwork src={game.cover} alt={game.title} ratio="3 / 4" radius="var(--radius-lg)" />
+          <Artwork src={game.cover} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
         </button>
         <div class="card-info">
           <span class="card-title">{game.title}</span>
           <span class="card-meta">
             {bytesLabel(game.sizeBytes)}
-            {#if $updatesByGame.get(game.id)?.availability.available}
-              <span class="card-update">
-                {$updatesByGame.get(game.id)?.availability.kind === 'update' ? 'Обновление' : 'Новый релиз'}
-              </span>
+            {#if update?.available}
+              <span class="card-update">{update.kind === 'update' ? 'Обновление' : 'Новый релиз'}</span>
             {/if}
           </span>
         </div>
@@ -265,39 +262,27 @@
 {/if}
 
 {#if $storageInfo}
-  <section class="storage-card">
-    <h3>Хранилище игр</h3>
-    <div class="storage-row">
+  <section class="storage">
+    <div class="storage-head">
       <div class="disk">
-        <div class="disk-icon">
-          <HardDrive size="2rem" strokeWidth={1.8} />
-          <CircleCheck size="1.4rem" strokeWidth={2} class="disk-ok" />
-        </div>
+        <HardDrive size="1.8rem" strokeWidth={1.8} />
         <div class="disk-text">
-          <span class="disk-name">Диск ({$storageInfo.volume || '—'})</span>
+          <span class="disk-name">Хранилище · Диск {$storageInfo.volume || '—'}</span>
           <span class="disk-meta">
             {bytesLabel($storageInfo.totalBytes)}{$storageInfo.filesystem ? ` · ${$storageInfo.filesystem}` : ''}
           </span>
         </div>
       </div>
-      <div class="capacity">
-        <div class="capacity-bar">
-          <div class="capacity-fill" style:width="{usedPct}%"></div>
-        </div>
-        <div class="capacity-legend">
-          <span class="legend-item">
-            <span class="legend-dot used"></span>Занято {bytesLabel($storageInfo.usedBytes)} ({Math.round(usedPct)}%)
-          </span>
-          <span class="legend-item">
-            <span class="legend-dot free"></span>Свободно {bytesLabel($storageInfo.freeBytes)} ({Math.round(100 - usedPct)}%)
-          </span>
-        </div>
-      </div>
-      <div class="storage-actions">
-        <Button onclick={openGamesFolder}>
-          <FolderOpen size="1.6rem" strokeWidth={1.8} />
-          Открыть папку игр
-        </Button>
+      <Button size="sm" variant="ghost" onclick={openGamesFolder}>
+        <FolderOpen size="1.5rem" strokeWidth={1.8} />
+        Открыть папку игр
+      </Button>
+    </div>
+    <div class="capacity">
+      <ProgressBar value={usedPct} height={5} />
+      <div class="capacity-legend">
+        <span>Занято {bytesLabel($storageInfo.usedBytes)} ({Math.round(usedPct)}%)</span>
+        <span>Свободно {bytesLabel($storageInfo.freeBytes)}</span>
       </div>
     </div>
   </section>
@@ -308,13 +293,13 @@
     <label class="field">
       <span class="field-label">Исполняемый файл</span>
       <div class="field-row">
-        <input type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
-        <Button size="sm" onclick={browseExecutable}>Обзор</Button>
+        <input class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
+        <Button onclick={browseExecutable}>Обзор</Button>
       </div>
     </label>
     <label class="field">
       <span class="field-label">Название</span>
-      <input type="text" placeholder="Название игры" bind:value={newTitle} />
+      <input class="input" type="text" placeholder="Название игры" bind:value={newTitle} />
     </label>
     <p class="form-hint">Папка установки будет определена автоматически по расположению файла.</p>
   </div>
@@ -327,56 +312,29 @@
 </Modal>
 
 <style>
-  .card-update {
-    margin-left: 0.8rem;
-    color: var(--accent);
+  .list {
+    display: flex;
+    flex-direction: column;
   }
 
-  .empty-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
-  .table {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-2);
-  }
-
-  .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(26rem, 1fr) 10rem 14rem 10rem 15rem auto;
+    grid-template-columns: minmax(28rem, 1fr) 15rem 11rem 13rem auto;
     align-items: center;
-    gap: var(--space-4);
-  }
-
-  .thead {
-    padding: 1rem var(--space-4) 1.2rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 0.4rem;
-  }
-
-  .thead span {
-    font-size: 1.3rem;
-    font-weight: 500;
-    color: var(--text-3);
-  }
-
-  .thead span:last-child {
-    justify-self: end;
-  }
-
-  .row {
-    padding: 1rem var(--space-4);
+    gap: var(--space-5);
+    min-height: 8rem;
+    padding: 1rem 1.2rem;
+    margin: 0 -1.2rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
 
+  .row + .row {
+    border-top: 1px solid var(--border);
+  }
+
   .row:hover {
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--hover);
   }
 
   .game {
@@ -388,7 +346,7 @@
   }
 
   .thumb {
-    width: 4.4rem;
+    width: 10.4rem;
     height: 5.8rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
@@ -403,23 +361,44 @@
   }
 
   .title {
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-lg);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .path {
-    font-size: 1.3rem;
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    font-size: var(--font-xs);
     color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .version {
+    max-width: 18rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .sep {
+    opacity: 0.6;
   }
 
   .cell {
-    font-size: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .cell-value {
+    font-size: var(--font-sm);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -427,52 +406,42 @@
     text-overflow: ellipsis;
   }
 
-  .state {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.7rem;
-    overflow: visible;
-  }
-
-  .state :global(svg) {
-    color: var(--success);
-    flex-shrink: 0;
+  .cell-label {
+    font-size: 1.2rem;
+    color: var(--text-3);
+    white-space: nowrap;
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.4rem;
     justify-self: end;
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18.5rem, 1fr));
-    gap: var(--space-5);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-6) var(--space-5);
   }
 
   .card {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.9rem;
     min-width: 0;
   }
 
   .card-cover {
     display: block;
     width: 100%;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    border: 1px solid var(--border);
-    transition:
-      transform var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
+    transition: transform var(--dur) var(--ease);
   }
 
   .card-cover:hover {
-    transform: translateY(-1px);
-    border-color: var(--border-strong);
+    transform: scale(1.01);
   }
 
   .card-info {
@@ -483,63 +452,48 @@
   }
 
   .card-title {
-    font-size: 1.5rem;
-    font-weight: 550;
-    white-space: nowrap;
+    font-size: var(--font-md);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .card-meta {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 
-  .storage-card {
-    margin-top: var(--space-6);
-    padding: var(--space-5) var(--space-6);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+  .card-update {
+    margin-left: 0.8rem;
+    color: var(--warning);
   }
 
-  .storage-card h3 {
-    font-size: 1.6rem;
-    margin-bottom: var(--space-4);
+  .storage {
+    margin-top: var(--space-10);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border);
+    max-width: 96rem;
   }
 
-  .storage-row {
+  .storage-head {
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
   }
 
   .disk {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    flex-shrink: 0;
-  }
-
-  .disk-icon {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4.4rem;
-    height: 4.4rem;
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.05);
     color: var(--text-2);
-  }
-
-  .disk-icon :global(.disk-ok) {
-    position: absolute;
-    right: -0.4rem;
-    top: -0.4rem;
-    color: var(--success);
-    background: var(--surface);
-    border-radius: 50%;
   }
 
   .disk-text {
@@ -548,66 +502,28 @@
   }
 
   .disk-name {
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-md);
+    font-weight: 500;
+    color: var(--text);
   }
 
   .disk-meta {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
   .capacity {
-    flex: 1;
-    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
-  }
-
-  .capacity-bar {
-    height: 0.8rem;
-    border-radius: 9.9rem;
-    background: rgba(255, 255, 255, 0.07);
-    overflow: hidden;
-  }
-
-  .capacity-fill {
-    height: 100%;
-    border-radius: 9.9rem;
-    background: var(--accent);
+    gap: 0.8rem;
   }
 
   .capacity-legend {
     display: flex;
-    gap: var(--space-5);
-  }
-
-  .legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.7rem;
-    font-size: 1.3rem;
+    justify-content: space-between;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  .legend-dot {
-    width: 0.8rem;
-    height: 0.8rem;
-    border-radius: 50%;
-  }
-
-  .legend-dot.used {
-    background: var(--accent);
-  }
-
-  .legend-dot.free {
-    background: rgba(255, 255, 255, 0.18);
-  }
-
-  .storage-actions {
-    flex-shrink: 0;
   }
 
   .form {
@@ -619,11 +535,11 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.6rem;
   }
 
   .field-label {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text-2);
   }
@@ -633,52 +549,28 @@
     gap: 0.8rem;
   }
 
-  .field input {
-    flex: 1;
-    min-width: 0;
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: var(--font-md);
-    color: var(--text);
-    outline: none;
-    transition:
-      border-color var(--dur) var(--ease),
-      background var(--dur) var(--ease);
-  }
-
-  .field input:hover {
-    border-color: var(--border-strong);
-  }
-
-  .field input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-    background: var(--surface-3);
-  }
-
-  .field input::placeholder {
-    color: var(--text-3);
-  }
-
   .form-hint {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
-  @media (max-width: 1240px) {
-    .thead,
+  @media (min-width: 2200px) {
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    }
+  }
+
+  @media (max-width: 1400px) {
     .row {
-      grid-template-columns: minmax(20rem, 1fr) 9rem 10rem 15rem auto;
+      grid-template-columns: minmax(22rem, 1fr) 12rem 13rem auto;
     }
 
     .last {
       display: none;
     }
 
-    .storage-row {
-      flex-wrap: wrap;
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
     }
   }
 </style>

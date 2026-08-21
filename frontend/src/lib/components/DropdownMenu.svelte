@@ -54,9 +54,9 @@
   .menu {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 0.6rem);
+    top: calc(100% + 0.4rem);
     min-width: 19rem;
-    padding: 0.5rem;
+    padding: 0.4rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -67,9 +67,9 @@
   .item {
     display: block;
     width: 100%;
-    padding: 0.8rem 1.1rem;
-    border-radius: 0.7rem;
-    font-size: 1.4rem;
+    padding: 0.7rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-sm);
     color: var(--text-2);
     text-align: left;
     white-space: nowrap;
@@ -79,7 +79,7 @@
   }
 
   .item:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--hover-strong);
     color: var(--text);
   }
 
@@ -93,7 +93,7 @@
 
   .separator {
     height: 1px;
-    margin: 0.5rem 0.4rem;
+    margin: 0.4rem 0.4rem;
     background: var(--border);
   }
 

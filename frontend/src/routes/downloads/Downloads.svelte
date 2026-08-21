@@ -1,19 +1,15 @@
 <script lang="ts">
   import {
-    Activity,
     ArrowDown,
     ArrowUp,
     ChevronDown,
     Clock,
     Download,
-    FileDown,
     FolderOpen,
     GripVertical,
-    Layers,
     Play,
     Plus,
     Settings,
-    Upload,
     X,
   } from '@lucide/svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -33,7 +29,7 @@
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { bytesSize, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, plural, speedBytes } from '../../lib/utils/format';
 
   const MB = 1024 * 1024;
 
@@ -55,12 +51,14 @@
   let installOpen = $state(false);
   let installDownloadId = $state<string | null>(null);
 
-  const statCards = $derived([
-    { label: 'Скорость загрузки', value: speedBytes($stats.downSpeed), icon: ArrowDown, tint: 'accent' },
-    { label: 'Скорость отдачи', value: speedBytes($stats.upSpeed), icon: Upload, tint: 'success' },
-    { label: 'Активные загрузки', value: String($stats.activeCount), icon: Activity, tint: 'success' },
-    { label: 'В очереди', value: String($queue.length), icon: Layers, tint: 'accent' },
-  ]);
+  const summary = $derived(
+    [
+      `↓ ${speedBytes($stats.downSpeed)}`,
+      `↑ ${speedBytes($stats.upSpeed)}`,
+      `${$stats.activeCount} ${plural($stats.activeCount, 'активная', 'активные', 'активных')}`,
+      `${$queue.length} в очереди`,
+    ].join(' · '),
+  );
 
   function openDetails(id: string) {
     detailsId = id;
@@ -87,51 +85,36 @@
   }
 </script>
 
-<PageHeader title="Загрузки">
+<PageHeader title="Загрузки" subtitle={summary}>
   {#snippet actions()}
     <DropdownMenu
       items={limitItems}
       onselect={(id) => updateSettings({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
     >
       {#snippet trigger({ toggle })}
-        <Button onclick={toggle}>
-          <Clock size="1.6rem" strokeWidth={1.8} />
+        <Button variant="ghost" onclick={toggle}>
+          <Clock size="1.5rem" strokeWidth={1.8} />
           {limitLabel}
-          <ChevronDown size="1.5rem" strokeWidth={1.8} />
+          <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </Button>
       {/snippet}
     </DropdownMenu>
-    <Button onclick={() => navigate('settings')}>
-      <Settings size="1.6rem" strokeWidth={1.8} />
-      Настройки загрузок
-    </Button>
+    <IconButton label="Настройки загрузок" onclick={() => navigate('settings')}>
+      <Settings size="1.7rem" strokeWidth={1.8} />
+    </IconButton>
     <Button variant="primary" onclick={() => (addOpen = true)}>
-      <Plus size="1.6rem" strokeWidth={1.8} />
+      <Plus size="1.5rem" strokeWidth={2} />
       Добавить загрузку
     </Button>
   {/snippet}
 </PageHeader>
 
-<div class="stats">
-  {#each statCards as stat (stat.label)}
-    <div class="stat-card">
-      <div class="stat-icon {stat.tint}">
-        <stat.icon size="2rem" strokeWidth={1.8} />
-      </div>
-      <div class="stat-text">
-        <span class="stat-label">{stat.label}</span>
-        <span class="stat-value">{stat.value}</span>
-      </div>
-    </div>
-  {/each}
-</div>
-
 <section class="section">
-  <h2>Активные загрузки ({$active.length})</h2>
+  <h2>Активные <span class="count">{$active.length}</span></h2>
   {#if $active.length === 0}
-    <EmptyState title="Нет активных загрузок" description="Добавьте торрент, чтобы начать загрузку.">
+    <EmptyState title="Нет активных загрузок" description="Добавьте торрент или выберите релиз на странице игры.">
       {#snippet icon()}
-        <Download size="2.2rem" strokeWidth={1.8} />
+        <Download size="2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={() => (addOpen = true)}>Добавить загрузку</Button>
@@ -147,36 +130,30 @@
 </section>
 
 <section class="section">
-  <h2>В очереди ({$queue.length})</h2>
+  <h2>В очереди <span class="count">{$queue.length}</span></h2>
   {#if $queue.length === 0}
-    <p class="muted">Очередь загрузки пуста.</p>
+    <p class="muted">Очередь пуста.</p>
   {:else}
-    <div class="queue">
+    <div class="rows">
       {#each $queue as q, i (q.id)}
-        <div class="queue-row">
+        <div class="row">
           <span class="grip">
-            <GripVertical size="1.7rem" strokeWidth={1.8} />
+            <GripVertical size="1.6rem" strokeWidth={1.8} />
           </span>
-          <div class="queue-thumb">
-            <FileDown size="1.8rem" strokeWidth={1.7} />
-          </div>
-          <span class="queue-title">{q.name}</span>
-          <span class="queue-size">{bytesSize(q.total)}</span>
-          <span class="queue-state">В очереди</span>
-          <div class="queue-actions">
-            <IconButton label="Выше" size="sm" onclick={() => moveUp(q.id)}>
-              <span class="dim" class:disabled={i === 0}><ArrowUp size="1.6rem" strokeWidth={1.8} /></span>
+          <span class="row-title">{q.name}</span>
+          <span class="row-size">{bytesSize(q.total)}</span>
+          <div class="row-actions">
+            <IconButton label="Выше" size="sm" disabled={i === 0} onclick={() => moveUp(q.id)}>
+              <ArrowUp size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton label="Ниже" size="sm" onclick={() => moveDown(q.id)}>
-              <span class="dim" class:disabled={i === $queue.length - 1}>
-                <ArrowDown size="1.6rem" strokeWidth={1.8} />
-              </span>
+            <IconButton label="Ниже" size="sm" disabled={i === $queue.length - 1} onclick={() => moveDown(q.id)}>
+              <ArrowDown size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton label="Начать сейчас" size="sm" onclick={() => forceStart(q.id)}>
-              <Play size="1.6rem" strokeWidth={1.8} />
+              <Play size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton label="Убрать из очереди" size="sm" onclick={() => remove(q.id)}>
-              <X size="1.6rem" strokeWidth={1.8} />
+              <X size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -187,20 +164,19 @@
 
 {#if $completed.length > 0}
   <section class="section">
-    <h2>Завершённые ({$completed.length})</h2>
-    <div class="queue">
+    <h2>Завершённые <span class="count">{$completed.length}</span></h2>
+    <div class="rows">
       {#each $completed as item (item.id)}
         {@const install = $installationsByDownload.get(item.id)}
-        <div class="queue-row">
-          <div class="queue-thumb">
-            <FileDown size="1.8rem" strokeWidth={1.7} />
-          </div>
-          <button class="queue-title link" onclick={() => openDetails(item.id)}>{item.name}</button>
-          <span class="queue-size">{bytesSize(item.total)}</span>
-          <span class="queue-state">{completedDate(item.completedAt)}</span>
-          {#if item.seeding}
-            <StatusBadge kind="success" label="Раздаётся" />
-          {/if}
+        <div class="row">
+          <button class="row-title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+          <span class="row-size">{bytesSize(item.total)}</span>
+          <span class="row-date">{completedDate(item.completedAt)}</span>
+          <span class="row-state">
+            {#if item.seeding}
+              <StatusBadge kind="success" label="Раздаётся" plain />
+            {/if}
+          </span>
           <div class="install-cell">
             {#if !install}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Установить</Button>
@@ -212,7 +188,7 @@
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Продолжить установку</Button>
             {:else if install.status === 'completed'}
-              <StatusBadge kind="success" label="Установлено" />
+              <StatusBadge kind="success" label="Установлено" plain />
             {:else if install.status === 'failed'}
               <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>Установка: ошибка</Button>
             {:else}
@@ -221,12 +197,12 @@
               </Button>
             {/if}
           </div>
-          <div class="queue-actions">
+          <div class="row-actions">
             <IconButton label="Открыть папку" size="sm" onclick={() => openDestination(item.destination)}>
-              <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              <FolderOpen size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton label="Удалить из списка" size="sm" onclick={() => remove(item.id)}>
-              <X size="1.6rem" strokeWidth={1.8} />
+              <X size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -240,171 +216,119 @@
 <InstallModal bind:open={installOpen} downloadId={installDownloadId} />
 
 <style>
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-4);
-    margin-bottom: var(--space-8);
-  }
-
-  .stat-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-5);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
-  .stat-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4.6rem;
-    height: 4.6rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .stat-icon.accent {
-    background: var(--accent-subtle);
-    color: var(--accent-text);
-  }
-
-  .stat-icon.success {
-    background: var(--success-subtle);
-    color: var(--success);
-  }
-
-  .stat-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .stat-label {
-    font-size: 1.2rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .stat-value {
-    font-size: 2.2rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-  }
-
   .section {
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
+    max-width: 140rem;
   }
 
   .section h2 {
-    font-size: 1.8rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    font-size: var(--font-xl);
     margin-bottom: var(--space-4);
+  }
+
+  .count {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 
   .downloads {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0.8rem;
   }
 
   .muted {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
-  .queue {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-2);
+  .rows {
+    display: flex;
+    flex-direction: column;
   }
 
-  .queue-row {
+  .row {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: 0.8rem 1rem;
+    gap: var(--space-4);
+    min-height: 5.2rem;
+    padding: 0.6rem 1.2rem;
+    margin: 0 -1.2rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
 
-  .queue-row:hover {
-    background: rgba(255, 255, 255, 0.025);
+  .row:hover {
+    background: var(--hover);
   }
 
-  .queue-row + .queue-row {
+  .row + .row {
     border-top: 1px solid var(--border);
   }
 
   .grip {
+    display: inline-flex;
     color: var(--text-3);
     cursor: grab;
     flex-shrink: 0;
-    opacity: 0.6;
+    opacity: 0.5;
   }
 
-  .queue-row:hover .grip {
+  .row:hover .grip {
     opacity: 1;
   }
 
-  .queue-thumb {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4rem;
-    height: 4rem;
-    flex-shrink: 0;
-    border-radius: 0.6rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    color: var(--text-3);
-  }
-
-  .queue-title {
+  .row-title {
     flex: 1;
     min-width: 0;
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-md);
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .queue-title.link {
+  .row-title.link {
     text-align: left;
     transition: color var(--dur) var(--ease);
   }
 
-  .queue-title.link:hover {
+  .row-title.link:hover {
     color: var(--accent-text);
   }
 
-  .queue-size {
-    font-size: 1.4rem;
-    color: var(--text-2);
-    font-variant-numeric: tabular-nums;
-    min-width: 7rem;
-    text-align: right;
-  }
-
-  .queue-state {
-    font-size: 1.4rem;
+  .row-size,
+  .row-date {
+    font-size: var(--font-sm);
     color: var(--text-3);
-    min-width: 9rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
     text-align: right;
   }
 
-  .queue-actions {
+  .row-size {
+    min-width: 7rem;
+  }
+
+  .row-date {
+    min-width: 9rem;
+  }
+
+  .row-state {
+    min-width: 9rem;
+    display: inline-flex;
+    justify-content: flex-end;
+  }
+
+  .row-actions {
     display: flex;
     gap: 2px;
-    margin-left: var(--space-3);
+    margin-left: var(--space-2);
   }
 
   .install-cell {
@@ -423,22 +347,15 @@
   }
 
   .install-status {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     text-align: right;
   }
 
-  .dim {
-    display: inline-flex;
-  }
-
-  .dim.disabled {
-    opacity: 0.3;
-  }
-
-  @media (max-width: 1240px) {
-    .stats {
-      grid-template-columns: repeat(2, 1fr);
+  @media (max-width: 1300px) {
+    .row-date,
+    .row-state {
+      display: none;
     }
   }
 </style>

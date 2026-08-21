@@ -1,34 +1,54 @@
 <script lang="ts">
-  import {
-    Bookmark,
-    ChevronsUpDown,
-    Database,
-    Download,
-    LayoutGrid,
-    MonitorDown,
-    Settings,
-    Trophy,
-  } from '@lucide/svelte';
-  import { user } from '../mock/user';
+  import { Bookmark, Database, Download, LayoutGrid, MonitorDown, Settings, Trophy } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
-  import { storageInfo } from '../stores/storage';
-  import { bytesLabel } from '../utils/format';
+  import { currentUser } from '../stores/user';
 
-  const nav: { name: RouteName; label: string; icon: typeof LayoutGrid }[] = [
-    { name: 'library', label: 'Библиотека', icon: LayoutGrid },
-    { name: 'installed', label: 'Установлено', icon: MonitorDown },
-    { name: 'downloads', label: 'Загрузки', icon: Download },
-    { name: 'sources', label: 'Источники', icon: Database },
-    { name: 'collections', label: 'Коллекции', icon: Bookmark },
-    { name: 'achievements', label: 'Достижения', icon: Trophy },
-    { name: 'settings', label: 'Настройки', icon: Settings },
+  type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
+
+  const groups: NavItem[][] = [
+    [
+      { name: 'library', label: 'Библиотека', icon: LayoutGrid },
+      { name: 'installed', label: 'Установлено', icon: MonitorDown },
+    ],
+    [
+      { name: 'downloads', label: 'Загрузки', icon: Download },
+      { name: 'sources', label: 'Источники', icon: Database },
+    ],
+    [
+      { name: 'collections', label: 'Коллекции', icon: Bookmark },
+      { name: 'achievements', label: 'Достижения', icon: Trophy },
+    ],
   ];
+
+  const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
 
   let avatarFailed = $state(false);
 
   const isActive = (name: RouteName) =>
     $route.name === name || (name === 'library' && $route.name === 'game');
+
+  const avatarInitial = $derived(
+    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : '?',
+  );
+
+  $effect(() => {
+    $currentUser?.avatarUrl;
+    avatarFailed = false;
+  });
 </script>
+
+{#snippet navButton(item: NavItem)}
+  <button
+    class="nav-item"
+    class:active={isActive(item.name)}
+    aria-current={isActive(item.name) ? 'page' : undefined}
+    onclick={() => navigate(item.name)}
+  >
+    <span class="indicator"></span>
+    <item.icon size="2rem" strokeWidth={1.8} />
+    <span class="nav-label">{item.label}</span>
+  </button>
+{/snippet}
 
 <aside class="sidebar">
   <div class="logo">
@@ -37,43 +57,37 @@
   </div>
 
   <nav>
-    {#each nav as item (item.name)}
-      <button class="nav-item" class:active={isActive(item.name)} onclick={() => navigate(item.name)}>
-        <item.icon size="2.2rem" strokeWidth={1.8} />
-        <span class="nav-label">{item.label}</span>
-      </button>
+    {#each groups as group, i (i)}
+      <div class="group">
+        {#each group as item (item.name)}
+          {@render navButton(item)}
+        {/each}
+      </div>
     {/each}
   </nav>
 
   <div class="bottom">
-    <button class="profile">
+    {@render navButton(settingsItem)}
+    <button class="profile" onclick={() => navigate('settings')}>
       <span class="avatar">
-        {#if avatarFailed}
-          <span class="avatar-fallback">{user.name.slice(0, 1)}</span>
+        {#if avatarFailed || !$currentUser?.avatarUrl}
+          <span class="avatar-fallback">{avatarInitial}</span>
         {:else}
-          <img src={user.avatar} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
+          <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
         {/if}
-        <span class="status-dot"></span>
+        {#if $currentUser}
+          <span class="status-dot"></span>
+        {/if}
       </span>
       <span class="profile-text">
-        <span class="profile-name">{user.name}</span>
-        <span class="profile-status">{user.status}</span>
+        {#if $currentUser}
+          <span class="profile-name">{$currentUser.displayName}</span>
+          <span class="profile-status">@{$currentUser.username}</span>
+        {:else}
+          <span class="profile-name">Не авторизован</span>
+        {/if}
       </span>
-      <ChevronsUpDown size="1.5rem" strokeWidth={1.8} />
     </button>
-
-    {#if $storageInfo}
-      <div class="storage">
-        <div class="storage-head">
-          <span>Хранилище</span>
-          <span class="storage-nums">{bytesLabel($storageInfo.usedBytes)} / {bytesLabel($storageInfo.totalBytes)}</span>
-        </div>
-        <div class="storage-bar">
-          <div class="storage-fill" style:width="{($storageInfo.usedBytes / $storageInfo.totalBytes) * 100}%"></div>
-        </div>
-        <span class="storage-free">Свободно {bytesLabel($storageInfo.freeBytes)}</span>
-      </div>
-    {/if}
   </div>
 </aside>
 
@@ -85,43 +99,49 @@
     flex-shrink: 0;
     height: 100%;
     background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
-    padding: var(--space-5) var(--space-3) var(--space-4);
+    padding: 1.8rem 1.2rem 1.4rem;
   }
 
   .logo {
     display: flex;
     align-items: center;
-    gap: 1.1rem;
-    padding: 0.4rem 1.2rem 0;
+    gap: 1rem;
+    padding: 0.2rem 1rem 0;
     margin-bottom: var(--space-8);
   }
 
   .logo-mark {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 2.8rem;
+    height: 2.8rem;
   }
 
   .logo-text {
-    font-size: 2.1rem;
+    font-size: 1.9rem;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: var(--tracking-title);
   }
 
   nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .group {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 
   .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 1.3rem;
-    height: 4.8rem;
-    padding: 0 1.3rem;
+    gap: 1.2rem;
+    height: 4rem;
+    padding: 0 1rem;
     border-radius: var(--radius-md);
-    font-size: 1.6rem;
+    font-size: var(--font-md);
     font-weight: 500;
     color: var(--text-2);
     transition:
@@ -129,14 +149,48 @@
       color var(--dur) var(--ease);
   }
 
+  .nav-item :global(svg) {
+    flex-shrink: 0;
+    color: var(--text-3);
+    transition: color var(--dur) var(--ease);
+  }
+
   .nav-item:hover {
-    background: rgba(255, 255, 255, 0.045);
+    background: var(--hover);
     color: var(--text);
   }
 
+  .nav-item:hover :global(svg) {
+    color: var(--text-2);
+  }
+
   .nav-item.active {
+    background: var(--hover-strong);
+    color: var(--text);
+  }
+
+  .nav-item.active :global(svg) {
+    color: var(--text);
+  }
+
+  .indicator {
+    position: absolute;
+    left: 0;
+    top: 1.1rem;
+    bottom: 1.1rem;
+    width: 0.3rem;
+    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
     background: var(--accent);
-    color: #fff;
+    opacity: 0;
+    transform: scaleY(0.5);
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+  }
+
+  .nav-item.active .indicator {
+    opacity: 1;
+    transform: scaleY(1);
   }
 
   .nav-label {
@@ -154,7 +208,7 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.8rem 1rem;
+    padding: 0.6rem 0.8rem;
     border-radius: var(--radius-md);
     text-align: left;
     color: var(--text-3);
@@ -162,13 +216,13 @@
   }
 
   .profile:hover {
-    background: rgba(255, 255, 255, 0.045);
+    background: var(--hover);
   }
 
   .avatar {
     position: relative;
-    width: 3.8rem;
-    height: 3.8rem;
+    width: 3.2rem;
+    height: 3.2rem;
     flex-shrink: 0;
   }
 
@@ -186,9 +240,9 @@
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: var(--accent-subtle);
-    color: var(--accent-text);
-    font-size: 1.5rem;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: var(--font-sm);
     font-weight: 600;
   }
 
@@ -196,8 +250,8 @@
     position: absolute;
     right: -1px;
     bottom: -1px;
-    width: 1rem;
-    height: 1rem;
+    width: 0.9rem;
+    height: 0.9rem;
     border-radius: 50%;
     background: var(--success);
     border: 2px solid var(--bg-sidebar);
@@ -211,83 +265,41 @@
   }
 
   .profile-name {
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-sm);
+    font-weight: 500;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.3;
   }
 
   .profile-status {
-    font-size: 1.3rem;
-    color: var(--success);
-  }
-
-  .storage {
-    padding: 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .storage-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: 1.4rem;
-    font-weight: 550;
-  }
-
-  .storage-nums {
-    font-size: 1.3rem;
-    font-weight: 400;
+    font-size: 1.2rem;
     color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .storage-bar {
-    height: 0.5rem;
-    border-radius: 9.9rem;
-    background: rgba(255, 255, 255, 0.07);
-    overflow: hidden;
-  }
-
-  .storage-fill {
-    height: 100%;
-    border-radius: 9.9rem;
-    background: var(--accent);
-  }
-
-  .storage-free {
-    font-size: 1.3rem;
-    color: var(--text-3);
+    line-height: 1.3;
   }
 
   @media (max-width: 1140px) {
     .sidebar {
-      width: 7.2rem;
-      padding: var(--space-5) 1rem var(--space-4);
+      width: 6.4rem;
+      padding: 1.8rem 1rem 1.4rem;
       align-items: center;
     }
 
     .logo {
-      padding: 0.4rem 0 0;
+      padding: 0.2rem 0 0;
       margin-bottom: var(--space-6);
     }
 
     .logo-text,
     .nav-label,
-    .profile-text,
-    .profile :global(svg),
-    .storage {
+    .profile-text {
       display: none;
     }
 
-    nav {
+    nav,
+    .bottom {
       width: 100%;
     }
 
@@ -298,6 +310,7 @@
     }
 
     .profile {
+      justify-content: center;
       padding: 0.6rem;
     }
   }

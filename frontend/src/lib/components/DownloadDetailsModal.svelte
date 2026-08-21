@@ -122,7 +122,7 @@
   }
 
   .block h4 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -141,7 +141,7 @@
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.8rem 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .row + .row {
@@ -179,9 +179,8 @@
     gap: 1rem;
     max-height: 26rem;
     overflow-y: auto;
-    padding: 1rem;
+    padding: var(--space-3) var(--space-4);
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
 
@@ -204,7 +203,7 @@
 
   .file-path {
     min-width: 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -212,7 +211,7 @@
   }
 
   .file-size {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;

@@ -251,9 +251,27 @@ export async function prepareReleaseDownload(releaseId: string): Promise<Release
   return (await SourcesService.PrepareDownload(releaseId)) as unknown as ReleaseDownloadRequest;
 }
 
+export async function getRelease(releaseId: string): Promise<ReleaseView | null> {
+  if (!inWails) return null;
+  try {
+    return (await SourcesService.GetRelease(releaseId)) as unknown as ReleaseView;
+  } catch {
+    return null;
+  }
+}
+
 export async function searchGames(query: string, limit = 20): Promise<CatalogGame[]> {
   if (!inWails) return [];
   return ((await CatalogService.SearchGames(query, limit)) ?? []) as unknown as CatalogGame[];
+}
+
+export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
+  if (!inWails) return null;
+  try {
+    return (await CatalogService.GetGame(id)) as unknown as CatalogGame;
+  } catch {
+    return null;
+  }
 }
 
 export async function listCatalogGames(): Promise<CatalogGame[]> {

@@ -9,33 +9,23 @@
 <PageHeader title="Коллекции" subtitle="Группируйте игры по собственным подборкам">
   {#snippet actions()}
     <Button variant="primary" onclick={() => toast('Создание коллекций недоступно в demo')}>
-      <Plus size="1.6rem" strokeWidth={2} />
+      <Plus size="1.5rem" strokeWidth={2} />
       Создать коллекцию
     </Button>
   {/snippet}
 </PageHeader>
 
-<div class="empty-wrap">
-  <EmptyState
-    title="Коллекций пока нет"
-    description="Создайте первую коллекцию, чтобы объединить игры по жанру, настроению или прохождению."
-  >
-    {#snippet icon()}
-      <Bookmark size="2.2rem" strokeWidth={1.8} />
-    {/snippet}
-    {#snippet actions()}
-      <Button onclick={() => toast('Создание коллекций недоступно в demo')}>
-        <Plus size="1.6rem" strokeWidth={2} />
-        Создать коллекцию
-      </Button>
-    {/snippet}
-  </EmptyState>
-</div>
-
-<style>
-  .empty-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-</style>
+<EmptyState
+  title="Коллекций пока нет"
+  description="Создайте первую коллекцию, чтобы объединить игры по жанру, настроению или прохождению."
+>
+  {#snippet icon()}
+    <Bookmark size="2rem" strokeWidth={1.8} />
+  {/snippet}
+  {#snippet actions()}
+    <Button onclick={() => toast('Создание коллекций недоступно в demo')}>
+      <Plus size="1.5rem" strokeWidth={2} />
+      Создать коллекцию
+    </Button>
+  {/snippet}
+</EmptyState>

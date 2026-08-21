@@ -20,12 +20,12 @@
 <div class="card">
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id: game.id })} aria-label={game.title}>
-      <Artwork src={game.cover} alt={game.title} ratio="3 / 4" radius="var(--radius-lg)" />
+      <Artwork src={game.cover} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
     {#if game.installed}
       <button class="play" aria-label="Играть" onclick={() => toast(`Запуск «${game.title}»...`)}>
-        <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+        <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
       </button>
     {/if}
     <button class="fav" class:on={favorite} aria-label="В избранное" onclick={() => (favorite = !favorite)}>
@@ -44,45 +44,32 @@
   .card {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.9rem;
     min-width: 0;
   }
 
   .cover-wrap {
     position: relative;
-    border-radius: var(--radius-lg);
-    transition: transform var(--dur) var(--ease);
-  }
-
-  .cover-wrap:hover {
-    transform: translateY(-1px);
+    border-radius: var(--radius-md);
   }
 
   .cover {
     display: block;
     width: 100%;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    border: 1px solid var(--border);
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  .cover :global(img) {
-    transition: transform 300ms var(--ease);
+    background: var(--surface-3);
+    transition: transform var(--dur) var(--ease);
   }
 
   .cover-wrap:hover .cover {
-    border-color: var(--border-strong);
-  }
-
-  .cover-wrap:hover .cover :global(img) {
-    transform: scale(1.015);
+    transform: scale(1.01);
   }
 
   .fade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 55%, rgba(5, 8, 12, 0.55));
+    background: linear-gradient(180deg, transparent 55%, rgba(5, 8, 12, 0.6));
     opacity: 0;
     transition: opacity var(--dur) var(--ease);
     pointer-events: none;
@@ -99,13 +86,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.4rem;
-    height: 3.4rem;
-    border-radius: 50%;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
     background: var(--accent);
     color: #fff;
     opacity: 0;
-    transform: translateY(0.4rem);
+    transform: translateY(0.3rem);
     transition:
       opacity var(--dur) var(--ease),
       transform var(--dur) var(--ease),
@@ -131,8 +118,8 @@
     justify-content: center;
     width: 2.8rem;
     height: 2.8rem;
-    border-radius: 0.8rem;
-    background: rgba(6, 9, 13, 0.65);
+    border-radius: var(--radius-sm);
+    background: rgba(6, 9, 13, 0.6);
     color: var(--text-2);
     opacity: 0;
     transition:
@@ -147,30 +134,35 @@
   }
 
   .fav.on {
-    color: #e8c35a;
+    color: #e3c26b;
   }
 
   .info {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: 0.2rem;
     min-width: 0;
     text-align: left;
   }
 
   .title {
     width: 100%;
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-md);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: var(--tracking-heading);
     color: var(--text);
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .meta {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 </style>

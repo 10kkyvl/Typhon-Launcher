@@ -35,37 +35,37 @@
   .empty {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 6.4rem 3.2rem;
+    align-items: flex-start;
+    text-align: left;
+    padding: var(--space-10) 0;
+    max-width: 44rem;
   }
 
   .icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 5.2rem;
-    height: 5.2rem;
-    margin-bottom: 1.8rem;
-    border-radius: 1.4rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border);
+    width: 4.4rem;
+    height: 4.4rem;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
     color: var(--text-3);
   }
 
   h3 {
-    font-size: 1.7rem;
+    font-size: var(--font-lg);
     font-weight: 600;
   }
 
   p {
-    margin-top: 0.8rem;
-    max-width: 36rem;
-    font-size: 1.4rem;
+    margin-top: 0.6rem;
+    font-size: var(--font-sm);
+    line-height: 1.55;
     color: var(--text-3);
   }
 
   .actions {
-    margin-top: 2rem;
+    margin-top: var(--space-5);
   }
 </style>

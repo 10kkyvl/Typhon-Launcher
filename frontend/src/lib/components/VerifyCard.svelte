@@ -18,6 +18,7 @@
   const percent = $derived(Math.round((state?.ratio ?? 0) * 1000) / 10);
 </script>
 
+<div class="section">
 <Card padding="var(--space-5) var(--space-6)">
   <div class="head">
     <h3 class="card-title">Целостность файлов</h3>
@@ -98,8 +99,14 @@
     {/if}
   {/if}
 </Card>
+</div>
 
 <style>
+  .section {
+    max-width: 120rem;
+    margin-bottom: var(--space-6);
+  }
+
   .head {
     display: flex;
     align-items: center;
@@ -122,8 +129,8 @@
   }
 
   .summary dt {
-    font-size: 1.3rem;
-    color: var(--text-dim);
+    font-size: var(--font-xs);
+    color: var(--text-3);
     margin-bottom: 0.4rem;
   }
 
@@ -131,6 +138,7 @@
     margin: 0;
     font-size: var(--font-md);
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   .progress {
@@ -151,18 +159,18 @@
   }
 
   .muted {
-    color: var(--text-dim);
-    font-size: 1.3rem;
+    color: var(--text-3);
+    font-size: var(--font-xs);
     margin: 0 0 var(--space-4);
   }
 
   .mono {
-    font-family: var(--font-mono);
+    word-break: break-all;
   }
 
   .error {
     color: var(--danger);
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     margin: 0 0 var(--space-4);
   }
 </style>

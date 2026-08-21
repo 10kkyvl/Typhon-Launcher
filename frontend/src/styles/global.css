@@ -25,6 +25,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "cv05", "ss01";
   overflow: hidden;
   user-select: none;
 }
@@ -63,6 +64,49 @@ h3,
 h4 {
   font-weight: 600;
   line-height: 1.2;
+  letter-spacing: var(--tracking-heading);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0 1.2rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
+  color: var(--text);
+  outline: none;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.input:hover {
+  border-color: var(--border-strong);
+}
+
+.input:focus {
+  border-color: var(--accent-ring);
+  background: var(--surface-3);
+}
+
+.input::placeholder {
+  color: var(--text-3);
+}
+
+.input[readonly] {
+  color: var(--text-2);
+}
+
+.input.sm {
+  height: var(--control-sm);
+  font-size: var(--font-sm);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 ::-webkit-scrollbar {

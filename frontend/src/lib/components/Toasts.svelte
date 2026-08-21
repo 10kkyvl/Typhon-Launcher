@@ -7,11 +7,11 @@
   {#each $toasts as t (t.id)}
     <div class="toast {t.kind}">
       {#if t.kind === 'success'}
-        <CircleCheck size="1.7rem" strokeWidth={1.8} />
+        <CircleCheck size="1.6rem" strokeWidth={1.8} />
       {:else if t.kind === 'danger'}
-        <CircleAlert size="1.7rem" strokeWidth={1.8} />
+        <CircleAlert size="1.6rem" strokeWidth={1.8} />
       {:else}
-        <Info size="1.7rem" strokeWidth={1.8} />
+        <Info size="1.6rem" strokeWidth={1.8} />
       {/if}
       <span>{t.message}</span>
     </div>
@@ -26,7 +26,7 @@
     bottom: 2.4rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.8rem;
   }
 
   .toast {
@@ -34,14 +34,18 @@
     align-items: center;
     gap: 1rem;
     max-width: 38rem;
-    padding: 1.2rem 1.6rem;
-    background: var(--surface-3);
+    padding: 1.1rem 1.4rem;
+    background: var(--surface-4);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text);
-    animation: slide var(--dur) var(--ease);
+    animation: slide var(--dur-panel) var(--ease);
+  }
+
+  .toast :global(svg) {
+    flex-shrink: 0;
   }
 
   .toast.success :global(svg) {

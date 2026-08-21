@@ -170,12 +170,7 @@
 
       <section class="block">
         <h4>Поиск вручную</h4>
-        <input
-          type="text"
-          placeholder="Название игры"
-          bind:value={query}
-          oninput={onQueryInput}
-        />
+        <input class="input" type="text" placeholder="Название игры" bind:value={query} oninput={onQueryInput} />
         {#if searching}
           <p class="muted">Поиск…</p>
         {:else if searchResults.length > 0}
@@ -216,7 +211,7 @@
   }
 
   .block h4 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -235,7 +230,7 @@
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.8rem 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .row + .row {
@@ -257,16 +252,18 @@
   }
 
   .muted {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 
   .candidates {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
     max-height: 18rem;
     overflow-y: auto;
+    padding: var(--space-1);
+    background: var(--surface);
+    border-radius: var(--radius-md);
   }
 
   .candidate {
@@ -274,22 +271,17 @@
     align-items: center;
     gap: var(--space-3);
     padding: 0.9rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    background: var(--surface);
+    border-radius: var(--radius-sm);
     text-align: left;
-    transition:
-      background var(--dur-fast) var(--ease),
-      border-color var(--dur-fast) var(--ease);
+    transition: background var(--dur-fast) var(--ease);
   }
 
   .candidate:hover {
-    border-color: var(--border-strong);
+    background: var(--hover);
   }
 
   .candidate.selected {
-    border-color: rgba(104, 117, 232, 0.55);
-    background: var(--accent-subtle);
+    background: var(--hover-strong);
   }
 
   .radio {
@@ -313,7 +305,7 @@
   .candidate-title {
     flex: 1;
     min-width: 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -332,7 +324,7 @@
   }
 
   .candidate-score {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     font-weight: 600;
     color: var(--accent-text);
     font-variant-numeric: tabular-nums;
@@ -341,21 +333,7 @@
     text-align: right;
   }
 
-  input {
-    width: 100%;
-    height: var(--control-md);
-    padding: 0 1.2rem;
+  .block .input {
     margin-bottom: 0.8rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
   }
 </style>

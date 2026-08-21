@@ -1,41 +1,40 @@
 <script lang="ts">
-  import {
-    Bell,
-    Download,
-    FolderOpen,
-    Info,
-    ListChecks,
-    LogOut,
-    Monitor,
-    Settings as SettingsIcon,
-    Trash2,
-    UserRound,
-    Wifi,
-  } from '@lucide/svelte';
+  import { FolderOpen, ListChecks, Trash2 } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import PageHeader from '../../lib/components/PageHeader.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import { user } from '../../lib/mock/user';
+  import { AccountError } from '../../lib/services/account';
   import { inWails } from '../../lib/services/backend';
   import { openFolder, selectFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
+  import {
+    changeAvatar,
+    currentUser,
+    deleteAvatar,
+    removingAvatar,
+    saveProfile,
+    savingProfile,
+    uploadingAvatar,
+  } from '../../lib/stores/user';
   import { bytesLabel } from '../../lib/utils/format';
 
   let tab = $state('general');
 
   const tabs = [
-    { id: 'general', label: 'Общие', icon: SettingsIcon },
-    { id: 'downloads', label: 'Загрузки', icon: Download },
-    { id: 'connection', label: 'Соединение', icon: Wifi },
-    { id: 'interface', label: 'Интерфейс', icon: Monitor },
-    { id: 'notifications', label: 'Уведомления', icon: Bell },
-    { id: 'account', label: 'Аккаунт', icon: UserRound },
-    { id: 'about', label: 'О программе', icon: Info },
+    { id: 'general', label: 'Общие' },
+    { id: 'downloads', label: 'Загрузки' },
+    { id: 'connection', label: 'Соединение' },
+    { id: 'interface', label: 'Интерфейс' },
+    { id: 'notifications', label: 'Уведомления' },
+    { id: 'account', label: 'Аккаунт' },
+    { id: 'about', label: 'О программе' },
   ];
 
   let overlay = $state(true);
@@ -63,6 +62,111 @@
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
+  }
+
+  let profileDraft = $state({ displayName: '', username: '' });
+  let profileDraftFor = $state<string | null>(null);
+  let profileFieldErrors = $state<{ displayName?: string; username?: string; general?: string }>({});
+  let avatarError = $state('');
+  let avatarFailed = $state(false);
+
+  $effect(() => {
+    const u = $currentUser;
+    if (u && profileDraftFor !== u.id) {
+      profileDraft = { displayName: u.displayName, username: u.username };
+      profileDraftFor = u.id;
+    } else if (!u) {
+      profileDraftFor = null;
+    }
+  });
+
+  $effect(() => {
+    $currentUser?.avatarUrl;
+    avatarFailed = false;
+  });
+
+  const avatarInitial = $derived(
+    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : '?',
+  );
+
+  const memberSince = $derived(
+    $currentUser
+      ? new Date($currentUser.createdAt).toLocaleDateString('ru-RU', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : '',
+  );
+
+  const profileDirty = $derived(
+    !!$currentUser &&
+      (profileDraft.displayName !== $currentUser.displayName || profileDraft.username !== $currentUser.username),
+  );
+
+  function accountErrorMessage(code: string): string {
+    switch (code) {
+      case 'username_taken':
+        return 'Это имя пользователя уже занято';
+      case 'invalid_username':
+        return '3–24 символа: латиница, цифры, _ и точка (не в начале и не в конце)';
+      case 'invalid_display_name':
+        return 'От 1 до 32 символов';
+      case 'avatar_too_large':
+        return 'Файл больше 10 МБ';
+      case 'unsupported_avatar':
+        return 'Поддерживаются PNG, JPEG и WebP';
+      case 'invalid_avatar':
+        return 'Не удалось прочитать изображение';
+      case 'network_error':
+        return 'Нет связи с сервером';
+      default:
+        return 'Не удалось сохранить';
+    }
+  }
+
+  function resetProfileDraft() {
+    if (!$currentUser) return;
+    profileDraft = { displayName: $currentUser.displayName, username: $currentUser.username };
+    profileFieldErrors = {};
+  }
+
+  async function saveProfileDraft() {
+    if (!$currentUser || !profileDirty || $savingProfile) return;
+    profileFieldErrors = {};
+    const patch: { displayName?: string; username?: string } = {};
+    if (profileDraft.displayName !== $currentUser.displayName) patch.displayName = profileDraft.displayName;
+    if (profileDraft.username !== $currentUser.username) patch.username = profileDraft.username;
+    try {
+      await saveProfile(patch);
+      resetProfileDraft();
+      toast('Профиль обновлён', 'success');
+    } catch (err) {
+      const code = err instanceof AccountError ? err.code : '';
+      const field = err instanceof AccountError ? err.field : '';
+      const message = accountErrorMessage(code);
+      if (field === 'username') profileFieldErrors = { ...profileFieldErrors, username: message };
+      else if (field === 'displayName') profileFieldErrors = { ...profileFieldErrors, displayName: message };
+      else profileFieldErrors = { ...profileFieldErrors, general: message };
+    }
+  }
+
+  async function onChangeAvatar() {
+    avatarError = '';
+    try {
+      await changeAvatar();
+    } catch (err) {
+      avatarError = accountErrorMessage(err instanceof AccountError ? err.code : '');
+    }
+  }
+
+  async function onDeleteAvatar() {
+    avatarError = '';
+    try {
+      await deleteAvatar();
+    } catch (err) {
+      avatarError = accountErrorMessage(err instanceof AccountError ? err.code : '');
+    }
   }
 
   async function browseFolder(key: PathKey, title: string) {
@@ -177,15 +281,10 @@
   ];
 </script>
 
-<h1 class="page-title">Настройки</h1>
+<PageHeader title="Настройки" />
 
-<div class="tabs">
-  {#each tabs as t (t.id)}
-    <button class="tab" class:selected={tab === t.id} onclick={() => (tab = t.id)}>
-      <t.icon size="1.7rem" strokeWidth={1.8} />
-      {t.label}
-    </button>
-  {/each}
+<div class="tabs-wrap">
+  <Tabs {tabs} bind:value={tab} />
 </div>
 
 {#if tab === 'general'}
@@ -252,6 +351,7 @@
               <span class="row-label folder-label">{folder.label}</span>
               <div class="folder-controls">
                 <input
+                  class="input sm"
                   type="text"
                   value={current?.[folder.key] ?? ''}
                   onchange={(e) => set({ [folder.key]: e.currentTarget.value })}
@@ -278,7 +378,7 @@
             </div>
             <Select
               value={current?.theme ?? 'dark'}
-              width="18rem"
+              width="22rem"
               options={[
                 { id: 'dark', label: 'Тёмная' },
                 { id: 'system', label: 'Как в системе' },
@@ -293,7 +393,7 @@
             </div>
             <Select
               value={current?.language ?? 'ru'}
-              width="18rem"
+              width="22rem"
               options={[
                 { id: 'ru', label: 'Русский' },
                 { id: 'en', label: 'English' },
@@ -308,7 +408,7 @@
             </div>
             <Select
               value={scaleValue}
-              width="18rem"
+              width="22rem"
               options={[
                 { id: '90', label: '90%' },
                 { id: '100', label: '100% (по умолчанию)' },
@@ -563,7 +663,7 @@
             <span class="row-label">Порт для входящих соединений</span>
             <span class="row-sub">Используется для обмена данными с пирами</span>
           </div>
-          <input class="port-input" type="text" bind:value={port} />
+          <input class="input sm port-input" type="text" bind:value={port} />
         </div>
         <div class="row">
           <div class="row-text">
@@ -676,29 +776,95 @@
   <div class="single-column">
     <section class="group">
       <h3>Аккаунт</h3>
-      <div class="account-card">
-        <img class="account-avatar" src={user.avatar} alt="" draggable="false" />
-        <div class="account-info">
-          <span class="account-name">{user.name}</span>
-          <span class="account-status">{user.status} · Локальный профиль</span>
-        </div>
-        <Button onclick={() => toast('Редактирование профиля недоступно в demo')}>Изменить профиль</Button>
-      </div>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Синхронизация сохранений</span>
-            <span class="row-sub">Резервное копирование сохранений между устройствами</span>
+      {#if !$currentUser}
+        <p class="row-sub">Вы не авторизованы.</p>
+      {:else}
+        <div class="account-card">
+          <div class="account-avatar-block">
+            {#if avatarFailed || !$currentUser.avatarUrl}
+              <span class="account-avatar-fallback">{avatarInitial}</span>
+            {:else}
+              <img
+                class="account-avatar"
+                src={$currentUser.avatarUrl}
+                alt=""
+                draggable="false"
+                onerror={() => (avatarFailed = true)}
+              />
+            {/if}
           </div>
-          <Toggle checked={false} label="Синхронизация" onchange={() => toast('Синхронизация недоступна в demo')} />
+          <div class="account-info">
+            <span class="account-name">{$currentUser.displayName}</span>
+            <span class="account-status">@{$currentUser.username}</span>
+            {#if avatarError}<span class="field-error">{avatarError}</span>{/if}
+          </div>
+          <div class="account-avatar-actions">
+            <Button size="sm" disabled={$uploadingAvatar || $removingAvatar} onclick={onChangeAvatar}>
+              {$uploadingAvatar ? 'Загрузка…' : 'Изменить'}
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={$uploadingAvatar || $removingAvatar || !$currentUser.avatarUrl}
+              onclick={onDeleteAvatar}
+            >
+              {$removingAvatar ? 'Удаление…' : 'Удалить'}
+            </Button>
+          </div>
         </div>
-      </div>
-      <div class="group-foot">
-        <Button variant="danger" onclick={() => toast('Выход недоступен в demo')}>
-          <LogOut size="1.5rem" strokeWidth={1.8} />
-          Выйти из профиля
-        </Button>
-      </div>
+
+        <div class="rows profile-form">
+          <div class="row field-row">
+            <label class="field-label" for="profile-display-name">Отображаемое имя</label>
+            <input
+              id="profile-display-name"
+              class="input"
+              type="text"
+              maxlength="32"
+              bind:value={profileDraft.displayName}
+            />
+            {#if profileFieldErrors.displayName}
+              <span class="field-error">{profileFieldErrors.displayName}</span>
+            {/if}
+          </div>
+          <div class="row field-row">
+            <label class="field-label" for="profile-username">Имя пользователя</label>
+            <div class="username-field">
+              <span class="username-prefix">@</span>
+              <input
+                id="profile-username"
+                class="input"
+                type="text"
+                maxlength="24"
+                bind:value={profileDraft.username}
+              />
+            </div>
+            {#if profileFieldErrors.username}
+              <span class="field-error">{profileFieldErrors.username}</span>
+            {/if}
+          </div>
+          <div class="row field-row">
+            <span class="field-label">Email</span>
+            <input class="input" type="text" value={$currentUser.email} readonly />
+          </div>
+          <div class="row field-row">
+            <span class="field-label">Участник с</span>
+            <input class="input" type="text" value={memberSince} readonly />
+          </div>
+        </div>
+
+        <div class="group-foot profile-actions">
+          {#if profileFieldErrors.general}
+            <span class="field-error">{profileFieldErrors.general}</span>
+          {/if}
+          <Button variant="ghost" disabled={!profileDirty || $savingProfile} onclick={resetProfileDraft}>
+            Отмена
+          </Button>
+          <Button variant="primary" disabled={!profileDirty || $savingProfile} onclick={saveProfileDraft}>
+            {$savingProfile ? 'Сохранение…' : 'Сохранить'}
+          </Button>
+        </div>
+      {/if}
     </section>
   </div>
 {:else if tab === 'about'}
@@ -752,15 +918,6 @@
   </div>
 {/if}
 
-<footer class="footer">
-  <span>Typhon Launcher {appInfo?.version ?? ''}</span>
-  <div class="footer-links">
-    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
-    <span class="about-sep">|</span>
-    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
-  </div>
-</footer>
-
 <Modal bind:open={resetOpen} title="Сбросить все данные?">
   <p class="modal-text">
     Настройки, кэш и локальные данные Typhon будут удалены. Установленные игры останутся на диске. Это действие нельзя
@@ -781,81 +938,35 @@
 </Modal>
 
 <style>
-  .page-title {
-    font-size: var(--font-title);
-    letter-spacing: -0.01em;
-    margin: var(--space-4) 0 var(--space-5);
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0.4rem;
-    padding: 0.4rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    width: fit-content;
-    max-width: 100%;
-    overflow-x: auto;
-    margin-bottom: var(--space-6);
-  }
-
-  .tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.8rem;
-    height: 4.4rem;
-    padding: 0 1.6rem;
-    border-radius: 0.8rem;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text-2);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .tab:hover {
-    color: var(--text);
-  }
-
-  .tab.selected {
-    background: var(--accent);
-    color: #fff;
+  .tabs-wrap {
+    margin-bottom: var(--space-8);
   }
 
   .columns {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-5);
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
     align-items: start;
+    max-width: 96rem;
   }
 
   .column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
     min-width: 0;
   }
 
   .single-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-    max-width: 72rem;
+    max-width: 96rem;
   }
 
   .group {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-5) var(--space-6);
+    margin-bottom: var(--space-10);
   }
 
   .group h3 {
-    font-size: 1.7rem;
-    margin-bottom: var(--space-4);
+    font-size: var(--font-xl);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    margin-bottom: var(--space-3);
   }
 
   .rows {
@@ -867,8 +978,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-5);
-    padding: 1.2rem 0;
+    gap: var(--space-6);
+    padding: 1.3rem 0;
   }
 
   .row + .row {
@@ -883,51 +994,29 @@
   }
 
   .row-label {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
   .row-sub {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
   .folder-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.8rem;
+    gap: var(--space-2);
   }
 
   .folder-label {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .folder-controls {
     display: flex;
-    gap: 0.8rem;
-  }
-
-  .folder-controls input {
-    flex: 1;
-    min-width: 0;
-    height: 3.6rem;
-    padding: 0 1.1rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 1.4rem;
-    color: var(--text-2);
-    outline: none;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  .folder-controls input:hover {
-    border-color: var(--border-strong);
-  }
-
-  .folder-controls input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-    color: var(--text);
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .group-foot {
@@ -942,7 +1031,7 @@
   }
 
   .cleanup-size {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -953,29 +1042,15 @@
     justify-content: space-between;
     gap: var(--space-5);
     margin-top: var(--space-4);
-    padding: var(--space-4);
-    border: 1px solid rgba(217, 105, 105, 0.25);
+    padding: var(--space-4) var(--space-5);
     border-radius: var(--radius-md);
-    background: rgba(217, 105, 105, 0.05);
+    background: var(--danger-subtle);
   }
 
   .port-input {
     width: 12rem;
-    height: 4rem;
-    padding: 0 1.2rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
     text-align: right;
     font-variant-numeric: tabular-nums;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  .port-input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
   }
 
   .account-card {
@@ -983,17 +1058,35 @@
     align-items: center;
     gap: var(--space-4);
     padding: var(--space-4);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
     margin-bottom: var(--space-4);
   }
 
+  .account-avatar-block {
+    flex-shrink: 0;
+    width: 6.4rem;
+    height: 6.4rem;
+  }
+
   .account-avatar {
-    width: 5.2rem;
-    height: 5.2rem;
+    width: 6.4rem;
+    height: 6.4rem;
     border-radius: 50%;
     object-fit: cover;
+  }
+
+  .account-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 6.4rem;
+    height: 6.4rem;
+    border-radius: 50%;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: var(--font-lg);
+    font-weight: 600;
   }
 
   .account-info {
@@ -1001,16 +1094,81 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    gap: 2px;
   }
 
   .account-name {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     font-weight: 600;
   }
 
   .account-status {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
+  }
+
+  .account-avatar-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  .profile-form {
+    margin-top: var(--space-2);
+  }
+
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .field-label {
+    font-size: var(--font-sm);
+    font-weight: 500;
+  }
+
+  .field-error {
+    font-size: var(--font-xs);
+    color: var(--danger);
+  }
+
+  .username-field {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: var(--control-md);
+    padding: 0 1.2rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    transition:
+      border-color var(--dur) var(--ease),
+      background var(--dur) var(--ease);
+  }
+
+  .username-field:focus-within {
+    border-color: var(--accent-ring);
+    background: var(--surface-3);
+  }
+
+  .username-prefix {
+    color: var(--text-3);
+    flex-shrink: 0;
+  }
+
+  .username-field .input {
+    height: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .profile-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-3);
   }
 
   .about-logo {
@@ -1029,9 +1187,9 @@
   }
 
   .about-link {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-xs);
     transition: color var(--dur) var(--ease);
   }
 
@@ -1044,26 +1202,17 @@
     color: var(--text-3);
   }
 
-  .footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: var(--space-8);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--border);
-    font-size: 1.3rem;
-    color: var(--text-3);
-  }
-
   .modal-text {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     line-height: 1.55;
     color: var(--text-2);
+    max-width: var(--prose-max);
   }
 
-  @media (max-width: 1240px) {
+  @media (min-width: 1600px) {
     .columns {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-12);
     }
   }
 </style>

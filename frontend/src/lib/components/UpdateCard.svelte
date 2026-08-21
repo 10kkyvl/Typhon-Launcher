@@ -49,6 +49,7 @@
   }
 </script>
 
+<div class="section">
 <Card padding="var(--space-5) var(--space-6)">
   <div class="head">
     <div class="titles">
@@ -176,6 +177,7 @@
     </div>
   {/if}
 </Card>
+</div>
 
 <Modal bind:open={confirmOpen} title="Обновить игру?">
   <dl class="summary modal-summary">
@@ -231,6 +233,11 @@
 </Modal>
 
 <style>
+  .section {
+    max-width: 120rem;
+    margin-bottom: var(--space-6);
+  }
+
   .head {
     display: flex;
     align-items: flex-start;
@@ -251,18 +258,27 @@
     gap: 0.8rem;
     margin: 0.6rem 0 0;
     font-size: var(--font-md);
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+  }
+
+  .versions span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .from {
-    color: var(--text-dim);
+    color: var(--text-3);
   }
 
   .arrow {
-    color: var(--text-dim);
+    color: var(--text-3);
   }
 
   .to {
-    font-weight: 600;
+    font-weight: 500;
   }
 
   .badges {
@@ -278,8 +294,8 @@
   }
 
   .summary dt {
-    font-size: 1.3rem;
-    color: var(--text-dim);
+    font-size: var(--font-xs);
+    color: var(--text-3);
     margin-bottom: 0.4rem;
   }
 
@@ -287,6 +303,7 @@
     margin: 0;
     font-size: var(--font-md);
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   .modal-summary {
@@ -345,8 +362,8 @@
   }
 
   .muted {
-    color: var(--text-dim);
-    font-size: 1.3rem;
+    color: var(--text-3);
+    font-size: var(--font-xs);
     margin: 0;
   }
 
@@ -356,7 +373,7 @@
 
   .error {
     color: var(--danger);
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     margin: 0 0 var(--space-4);
   }
 </style>

@@ -7,17 +7,19 @@
     alt = '',
     ratio = '3.8 / 1',
     minHeight,
+    maxHeight,
     children,
   }: {
     src: string;
     alt?: string;
     ratio?: string;
     minHeight?: string;
+    maxHeight?: string;
     children?: Snippet;
   } = $props();
 </script>
 
-<section class="hero" style:aspect-ratio={ratio} style:min-height={minHeight}>
+<section class="hero" style:aspect-ratio={ratio} style:min-height={minHeight} style:max-height={maxHeight}>
   <div class="art">
     <Artwork {src} {alt} />
   </div>
@@ -30,9 +32,10 @@
 <style>
   .hero {
     position: relative;
-    border-radius: var(--radius-xl);
+    width: 100%;
+    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
     overflow: hidden;
-    border: 1px solid var(--border);
+    background: var(--surface);
   }
 
   .art {
@@ -43,7 +46,9 @@
   .overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, rgba(5, 8, 12, 0.9), rgba(5, 8, 12, 0.45) 45%, rgba(5, 8, 12, 0.05));
+    background:
+      linear-gradient(180deg, rgba(11, 15, 20, 0) 55%, rgba(11, 15, 20, 0.92) 100%),
+      linear-gradient(90deg, rgba(11, 15, 20, 0.88) 0%, rgba(11, 15, 20, 0.5) 38%, rgba(11, 15, 20, 0) 70%);
   }
 
   .content {
@@ -52,15 +57,15 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: var(--space-8) var(--space-10);
-    max-width: 60%;
+    justify-content: flex-end;
+    padding: var(--space-8) var(--space-8) var(--space-8);
+    max-width: 62%;
   }
 
   @media (max-width: 1280px) {
     .content {
-      max-width: 75%;
-      padding: var(--space-6) var(--space-8);
+      max-width: 78%;
+      padding: var(--space-6);
     }
   }
 </style>
