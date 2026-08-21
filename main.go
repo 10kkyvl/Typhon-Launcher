@@ -66,7 +66,10 @@ func main() {
 		fatal("start settings service", err)
 	}
 	appService := app.NewService(settingsService)
-	accountService := account.NewService()
+	accountService, err := account.NewService()
+	if err != nil {
+		fatal("start account service", err)
+	}
 	libraryService, err := library.NewService()
 	if err != nil {
 		fatal("start library service", err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -37,7 +38,11 @@ func Token() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open auth file %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Debug("close auth file", "error", err)
+		}
+	}()
 
 	data, err := io.ReadAll(io.LimitReader(f, maxAuthFileSize))
 	if err != nil {

@@ -10,13 +10,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 )
 
 const (
 	maxResponseBodySize = 1 << 20
 	maxAvatarSize       = 10 << 20
+	maxRedirects        = 5
 )
 
 type CurrentUser struct {
@@ -59,19 +59,39 @@ func newTransport() *http.Transport {
 	}
 }
 
-func NewClient(baseURL string, token func() (string, error)) *Client {
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	if err := checkURLScheme(req.URL); err != nil {
+		return err
+	}
+	prev := via[len(via)-1].URL
+	if req.URL.Scheme != prev.Scheme || req.URL.Host != prev.Host {
+		req.Header.Del("Authorization")
+	}
+	return nil
+}
+
+func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
+	base, err := validateBaseURL(baseURL)
+	if err != nil {
+		return nil, err
+	}
 	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
+		baseURL: base,
 		token:   token,
 		httpClient: &http.Client{
-			Timeout:   30 * time.Second,
-			Transport: newTransport(),
+			Timeout:       30 * time.Second,
+			Transport:     newTransport(),
+			CheckRedirect: checkRedirect,
 		},
 		uploadHTTP: &http.Client{
-			Timeout:   120 * time.Second,
-			Transport: newTransport(),
+			Timeout:       120 * time.Second,
+			Transport:     newTransport(),
+			CheckRedirect: checkRedirect,
 		},
-	}
+	}, nil
 }
 
 func (c *Client) Me(ctx context.Context) (CurrentUser, error) {
@@ -111,7 +131,11 @@ func (c *Client) doUser(
 	if err != nil {
 		return CurrentUser{}, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			slog.Debug("close response body", "error", err)
+		}
+	}()
 
 	limited := io.LimitReader(resp.Body, maxResponseBodySize)
 

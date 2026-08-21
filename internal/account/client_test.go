@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+func newTestClient(t *testing.T, baseURL string, token func() (string, error)) *Client {
+	t.Helper()
+	c, err := NewClient(baseURL, token)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	return c
+}
+
 func tokenOK(tok string) func() (string, error) {
 	return func() (string, error) { return tok, nil }
 }
@@ -43,7 +52,7 @@ func TestClientMe(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("test-token"))
+	c := newTestClient(t, srv.URL, tokenOK("test-token"))
 	user, err := c.Me(context.Background())
 	if err != nil {
 		t.Fatalf("Me() error = %v", err)
@@ -61,7 +70,7 @@ func TestClientMeUnauthenticated(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("bad-token"))
+	c := newTestClient(t, srv.URL, tokenOK("bad-token"))
 	_, err := c.Me(context.Background())
 	var accErr *Error
 	if !errors.As(err, &accErr) {
@@ -83,7 +92,7 @@ func TestClientUpdateProfileUsernameTaken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	username := "egor"
 	_, err := c.UpdateProfile(context.Background(), Patch{Username: &username})
 	var accErr *Error
@@ -106,7 +115,7 @@ func TestClientUpdateProfileInvalidUsername(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	username := "!"
 	_, err := c.UpdateProfile(context.Background(), Patch{Username: &username})
 	var accErr *Error
@@ -121,11 +130,13 @@ func TestClientUpdateProfileInvalidUsername(t *testing.T) {
 func TestClientMalformedErrorEnvelope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("not json"))
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	_, err := c.Me(context.Background())
 	var accErr *Error
 	if !errors.As(err, &accErr) {
@@ -139,11 +150,13 @@ func TestClientMalformedErrorEnvelope(t *testing.T) {
 func TestClientUndecodableSuccessBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("not json"))
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	user, err := c.Me(context.Background())
 	if err == nil {
 		t.Fatalf("expected error for undecodable body, got user %+v", user)
@@ -161,7 +174,7 @@ func TestClientMissingToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, func() (string, error) { return "", ErrNoToken })
+	c := newTestClient(t, srv.URL, func() (string, error) { return "", ErrNoToken })
 	_, err := c.Me(context.Background())
 	var accErr *Error
 	if !errors.As(err, &accErr) {
@@ -189,7 +202,7 @@ func TestClientUpdateProfileSendsOnlyNonNilFields(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	displayName := "New Name"
 	_, err := c.UpdateProfile(context.Background(), Patch{DisplayName: &displayName})
 	if err != nil {
@@ -221,7 +234,7 @@ func TestClientUploadAvatarSendsRawBytes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("upload-token"))
+	c := newTestClient(t, srv.URL, tokenOK("upload-token"))
 	user, err := c.UploadAvatar(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("UploadAvatar() error = %v", err)
@@ -245,7 +258,7 @@ func TestClientUploadAvatarOversizedRejectedLocally(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	oversized := make([]byte, maxAvatarSize+1)
 	_, err := c.UploadAvatar(context.Background(), oversized)
 	var accErr *Error
@@ -268,7 +281,7 @@ func TestClientUploadAvatarEmptyRejectedLocally(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	_, err := c.UploadAvatar(context.Background(), nil)
 	var accErr *Error
 	if !errors.As(err, &accErr) {
@@ -291,7 +304,7 @@ func TestClientRemoveAvatarIssuesDelete(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, tokenOK("t"))
+	c := newTestClient(t, srv.URL, tokenOK("t"))
 	user, err := c.RemoveAvatar(context.Background())
 	if err != nil {
 		t.Fatalf("RemoveAvatar() error = %v", err)
