@@ -52,15 +52,26 @@ type Source struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
+type Kind string
+
+const (
+	KindRelease Kind = "release"
+	KindPatch   Kind = "patch"
+)
+
 type Release struct {
 	ID              string         `json:"id"`
 	SourceID        string         `json:"sourceId"`
+	Kind            Kind           `json:"kind,omitempty"`
 	RawTitle        string         `json:"rawTitle"`
 	Title           string         `json:"title"`
 	NormalizedTitle string         `json:"normalizedTitle"`
 	CanonicalGameID *string        `json:"canonicalGameId"`
 	Version         string         `json:"version"`
 	RawVersion      string         `json:"rawVersion,omitempty"`
+	FromVersion     string         `json:"fromVersion,omitempty"`
+	ToVersion       string         `json:"toVersion,omitempty"`
+	Sequence        int            `json:"sequence,omitempty"`
 	Edition         string         `json:"edition,omitempty"`
 	Languages       []string       `json:"languages,omitempty"`
 	Year            int            `json:"year,omitempty"`
@@ -84,7 +95,17 @@ func (r *Release) identity() string {
 	if r.InfoHash != "" {
 		return "hash:" + r.InfoHash
 	}
+	if r.Kind == KindPatch {
+		return "patch:" + r.NormalizedTitle + "|" + r.FromVersion + "|" + r.ToVersion
+	}
 	return "title:" + r.NormalizedTitle + "|" + r.RawTitle
+}
+
+func (r *Release) kind() Kind {
+	if r.Kind == KindPatch {
+		return KindPatch
+	}
+	return KindRelease
 }
 
 type SourceRef struct {

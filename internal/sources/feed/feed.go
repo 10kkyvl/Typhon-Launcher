@@ -23,10 +23,15 @@ var (
 )
 
 type Entry struct {
-	Title      string
-	URIs       []string
-	UploadedAt *time.Time
-	Size       int64
+	Title       string
+	Game        string
+	Type        string
+	FromVersion string
+	ToVersion   string
+	Sequence    int
+	URIs        []string
+	UploadedAt  *time.Time
+	Size        int64
 }
 
 type Feed struct {
@@ -47,7 +52,14 @@ type rawFeed struct {
 }
 
 type rawEntry struct {
-	Title      string          `json:"title"`
+	Title       string `json:"title"`
+	Game        string `json:"game"`
+	Type        string `json:"type"`
+	FromVersion string `json:"fromVersion"`
+	ToVersion   string `json:"toVersion"`
+	Sequence    *int   `json:"sequence"`
+	Order       *int   `json:"order"`
+
 	URIs       []string        `json:"uris"`
 	URI        string          `json:"uri"`
 	Magnet     string          `json:"magnet"`
@@ -68,6 +80,8 @@ type warningCounter struct {
 	badSize          int
 	badDate          int
 	duplicates       int
+	badPatch         int
+	unknownType      int
 }
 
 func (w warningCounter) build() []string {
@@ -101,6 +115,12 @@ func (w warningCounter) build() []string {
 	}
 	if w.duplicates > 0 {
 		out = append(out, fmt.Sprintf("%d дублирующихся записей объединено", w.duplicates))
+	}
+	if w.badPatch > 0 {
+		out = append(out, fmt.Sprintf("%d патчей пропущено: не указаны fromVersion/toVersion", w.badPatch))
+	}
+	if w.unknownType > 0 {
+		out = append(out, fmt.Sprintf("%d записей с неизвестным типом обработано как обычный релиз", w.unknownType))
 	}
 	if len(out) > MaxWarnings {
 		out = out[:MaxWarnings]

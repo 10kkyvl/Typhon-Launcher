@@ -20,13 +20,30 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		parsed := titles.Parse(e.Title)
+		kind := KindRelease
+		if e.Type == feed.TypePatch {
+			kind = KindPatch
+		}
+		base, normalized := parsed.Base, parsed.Normalized
+		if e.Game != "" {
+			hint := titles.Parse(e.Game)
+			base, normalized = hint.Base, hint.Normalized
+		}
+		version := parsed.Version
+		if e.ToVersion != "" {
+			version = e.ToVersion
+		}
 		r := &Release{
 			SourceID:        sourceID,
+			Kind:            kind,
 			RawTitle:        e.Title,
-			Title:           parsed.Base,
-			NormalizedTitle: parsed.Normalized,
-			Version:         parsed.Version,
+			Title:           base,
+			NormalizedTitle: normalized,
+			Version:         version,
 			RawVersion:      parsed.RawVersion,
+			FromVersion:     e.FromVersion,
+			ToVersion:       e.ToVersion,
+			Sequence:        e.Sequence,
 			Edition:         parsed.Edition,
 			Languages:       parsed.Languages,
 			Year:            parsed.Year,
@@ -86,10 +103,14 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 			summary.Updated++
 		}
 		current.RawTitle = next.RawTitle
+		current.Kind = next.Kind
 		current.Title = next.Title
 		current.NormalizedTitle = next.NormalizedTitle
 		current.Version = next.Version
 		current.RawVersion = next.RawVersion
+		current.FromVersion = next.FromVersion
+		current.ToVersion = next.ToVersion
+		current.Sequence = next.Sequence
 		current.Edition = next.Edition
 		current.Languages = next.Languages
 		current.Year = next.Year
@@ -113,6 +134,11 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 
 func changed(current, next *Release) bool {
 	return current.RawTitle != next.RawTitle ||
+		current.Kind != next.Kind ||
+		current.Version != next.Version ||
+		current.FromVersion != next.FromVersion ||
+		current.ToVersion != next.ToVersion ||
+		current.Sequence != next.Sequence ||
 		current.Size != next.Size ||
 		strings.Join(current.URIs, "|") != strings.Join(next.URIs, "|") ||
 		!sameTime(current.UploadedAt, next.UploadedAt)
