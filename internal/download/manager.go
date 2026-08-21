@@ -194,6 +194,8 @@ func (m *Manager) loadLocked() {
 			Total:       r.Total,
 			ETASeconds:  -1,
 			Seeding:     r.Seeding,
+			Flat:        r.Flat,
+			InPlace:     r.InPlace,
 			Origin:      r.Origin,
 			AddedAt:     r.AddedAt,
 			CompletedAt: r.CompletedAt,
@@ -231,6 +233,8 @@ func (m *Manager) persistLocked() {
 			Downloaded:  d.Downloaded,
 			Total:       d.Total,
 			Seeding:     d.Seeding,
+			Flat:        d.Flat,
+			InPlace:     d.InPlace,
 			Origin:      d.Origin,
 			AddedAt:     d.AddedAt,
 			CompletedAt: d.CompletedAt,
@@ -339,7 +343,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	}
 	m.mu.Unlock()
 
-	lt, err := cl.add(spec, cl.metaDir)
+	lt, err := cl.add(spec, cl.metaDir, storageOpts{})
 	if err != nil {
 		slog.Error("add torrent for metadata", "source", source, "error", err)
 		return TorrentInfo{}, errors.New("не удалось добавить торрент")
@@ -502,7 +506,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	mi := p.torrent.t.Metainfo()
 	p.torrent.drop()
 
-	lt, err := cl.addMetainfo(&mi, destination)
+	lt, err := cl.addMetainfo(&mi, destination, storageOpts{})
 	if err != nil {
 		slog.Error("add torrent", "infoHash", infoHash, "error", err)
 		return Download{}, errors.New("не удалось добавить торрент")
@@ -627,6 +631,8 @@ func (m *Manager) reattachLocked(d *Download, force bool) error {
 		infoHash: d.InfoHash,
 		source:   d.Source,
 		dest:     d.Destination,
+		flat:     d.Flat,
+		inPlace:  d.InPlace,
 		force:    force,
 	}
 	d.Status = StatusVerifying
@@ -1043,6 +1049,8 @@ func (m *Manager) reseedLocked(d *Download) {
 		infoHash: d.InfoHash,
 		source:   d.Source,
 		dest:     d.Destination,
+		flat:     d.Flat,
+		inPlace:  d.InPlace,
 		complete: true,
 	})
 }
@@ -1052,6 +1060,8 @@ type restoreJob struct {
 	infoHash string
 	source   string
 	dest     string
+	flat     bool
+	inPlace  bool
 	paused   bool
 	complete bool
 	seeding  bool
@@ -1072,6 +1082,8 @@ func (m *Manager) restore() {
 			infoHash: d.InfoHash,
 			source:   d.Source,
 			dest:     d.Destination,
+			flat:     d.Flat,
+			inPlace:  d.InPlace,
 			paused:   d.Status == StatusPaused,
 			complete: d.Status == StatusCompleted,
 			seeding:  d.Seeding,
@@ -1206,15 +1218,16 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 }
 
 func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*liveTorrent, error) {
+	opts := storageOpts{flat: j.flat, inPlace: j.inPlace}
 	if mi, err := m.store.loadMetainfo(j.infoHash); err == nil {
-		return cl.addMetainfo(mi, j.dest)
+		return cl.addMetainfo(mi, j.dest, opts)
 	}
 	if !strings.HasPrefix(j.source, "magnet:") {
 		return nil, errors.New("metainfo unavailable")
 	}
 
 	m.setStatus(j.id, StatusMetadata)
-	lt, err := cl.addMagnet(j.source, j.dest)
+	lt, err := cl.addMagnet(j.source, j.dest, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/settings"
 
+	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -31,6 +32,14 @@ type engineStats struct {
 	uploaded   int64
 	seeders    int
 	peers      int
+}
+
+// storageOpts maps torrent files onto an existing directory. flat drops the
+// torrent name folder, inPlace disables .part files so that already installed
+// files are read and repaired where they are.
+type storageOpts struct {
+	flat    bool
+	inPlace bool
 }
 
 type engineTorrent interface {
@@ -111,27 +120,46 @@ func (c *client) close() {
 	}
 }
 
-func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string) (*liveTorrent, error) {
+func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string, opts storageOpts) (*liveTorrent, error) {
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
 	if err != nil {
 		return nil, err
 	}
-	return c.add(spec, destination)
+	return c.add(spec, destination, opts)
 }
 
-func (c *client) addMagnet(uri, destination string) (*liveTorrent, error) {
+func (c *client) addMagnet(uri, destination string, opts storageOpts) (*liveTorrent, error) {
 	spec, err := magnetSpec(uri)
 	if err != nil {
 		return nil, err
 	}
-	return c.add(spec, destination)
+	return c.add(spec, destination, opts)
 }
 
-func (c *client) add(spec *torrent.TorrentSpec, destination string) (*liveTorrent, error) {
+func newStorage(destination string, opts storageOpts) storage.ClientImplCloser {
+	if !opts.flat && !opts.inPlace {
+		return storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+	}
+	clientOpts := storage.NewFileClientOpts{
+		ClientBaseDir:   destination,
+		PieceCompletion: storage.NewMapPieceCompletion(),
+	}
+	if opts.flat {
+		clientOpts.FilePathMaker = func(o storage.FilePathMakerOpts) string {
+			return filepath.Join(o.File.BestPath()...)
+		}
+	}
+	if opts.inPlace {
+		clientOpts.UsePartFiles = g.Some(false)
+	}
+	return storage.NewFileOpts(clientOpts)
+}
+
+func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storageOpts) (*liveTorrent, error) {
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
-	st := storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+	st := newStorage(destination, opts)
 	spec.Storage = st
 	spec.DisallowDataDownload = true
 	spec.DisallowDataUpload = true
@@ -224,6 +252,30 @@ func (l *liveTorrent) stats() engineStats {
 
 func (l *liveTorrent) verify(ctx context.Context) error {
 	return l.t.VerifyDataContext(ctx)
+}
+
+func (l *liveTorrent) verifyEach(ctx context.Context, done func(index int, length int64)) error {
+	for i := 0; i < l.t.NumPieces(); i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		piece := l.t.Piece(i)
+		if err := piece.VerifyDataContext(ctx); err != nil {
+			return err
+		}
+		done(i, piece.Info().Length())
+	}
+	return nil
+}
+
+func (l *liveTorrent) completePieces() (complete, total int) {
+	total = l.t.NumPieces()
+	for i := 0; i < total; i++ {
+		if l.t.Piece(i).State().Complete {
+			complete++
+		}
+	}
+	return complete, total
 }
 
 func (l *liveTorrent) drop() {
