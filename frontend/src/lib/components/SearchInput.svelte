@@ -5,16 +5,18 @@
     value = $bindable(''),
     placeholder = 'Поиск',
     shortcut,
+    oninput,
   }: {
     value?: string;
     placeholder?: string;
     shortcut?: string;
+    oninput?: (value: string) => void;
   } = $props();
 </script>
 
 <div class="search">
   <Search size="1.7rem" strokeWidth={1.8} />
-  <input type="text" {placeholder} bind:value />
+  <input type="text" {placeholder} bind:value oninput={() => oninput?.(value)} />
   {#if shortcut}
     <kbd>{shortcut}</kbd>
   {/if}

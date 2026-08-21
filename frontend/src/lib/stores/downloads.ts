@@ -13,7 +13,10 @@ import {
   type Download,
   type DownloadStatus,
 } from '../services/downloads';
+import { errorMessage } from '../utils/errors';
 import { toast } from './toasts';
+
+export { errorMessage };
 
 export const downloads = writable<Download[]>([]);
 
@@ -67,11 +70,6 @@ function upsert(item: Download) {
 
 async function refresh() {
   downloads.set(await listDownloads());
-}
-
-export function errorMessage(err: unknown) {
-  if (err instanceof Error) return err.message;
-  return String(err);
 }
 
 export async function initDownloads() {

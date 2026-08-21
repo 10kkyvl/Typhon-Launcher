@@ -22,19 +22,6 @@ export interface Game {
   lastUpdate: string;
 }
 
-export type SourceStatus = 'active' | 'disabled' | 'error';
-
-export interface Source {
-  id: string;
-  name: string;
-  path: string;
-  status: SourceStatus;
-  lastUpdate: string;
-  items: number;
-  version: string;
-  kind: 'core' | 'store' | 'mods' | 'archive' | 'web';
-}
-
 export interface Achievement {
   name: string;
   description: string;

@@ -5,6 +5,7 @@
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initSettings, settings } from './lib/stores/settings';
+  import { initSources } from './lib/stores/sources';
   import { refreshStorage } from './lib/stores/storage';
   import Achievements from './routes/achievements/Achievements.svelte';
   import Collections from './routes/collections/Collections.svelte';
@@ -19,6 +20,7 @@
   initInstalls();
   initSettings().then(refreshStorage);
   initLibrary();
+  initSources();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
