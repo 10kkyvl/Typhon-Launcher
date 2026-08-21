@@ -1,17 +1,8 @@
-# Правила работы с этим репозиторием
-
-Файл коммитится вместе с `.golangci.yml` и `.claude/settings.json` (решение владельца от 2026-08-21: линтер и правила должны существовать в чистом клоне). Остальные AI/tooling файлы (`.claude/*` кроме settings.json, `.codex/`, `.cursor/`, `.aider*`, `.ai/`, `AGENTS.md`, `*.local.md`) — в .gitignore.
-
 Правила ниже выведены из аудита `typhon-go-audit` (216 находок, 25 КРИТ / 117 ВАЖНО) и из проверки того, как его «чинили»: на момент проверки 0 из 142 КРИТ/ВАЖНО было закрыто, при этом работа была заявлена как сделанная. Каждое правило — проверяемый инвариант, за которым стоит конкретный класс багов. Если правило кажется лишним — это значит, что его нарушение пока не проявилось у пользователя.
 
 ## Git
 
-- Никаких следов ИИ в репозитории и истории.
-- Коммиты только от настроенной identity владельца (Egor <189146166+10kkyvl@users.noreply.github.com>). Никогда не менять git user.name / user.email.
-- Запрещены трейлеры и упоминания: `Co-Authored-By: Claude`, `Co-Authored-By: Anthropic`, `Generated-by`, `AI-assisted` и любые аналоги — ни в commit message, ни в PR, ни в тегах.
-- Commit messages короткие, обычные: `feat: ...`, `fix: ...`, `style: ...`.
-- Не коммитить и не пушить: `.claude/*` (кроме `settings.json`), `.codex/`, `.cursor/`, `.aider*`, `.ai/`, `AGENTS.md`, `*.local.md`.
-- Базис линтера: `docs/lint-baseline-706f9eb.txt` — 239 находок на 706f9eb; число в `golangci-lint run ./...` может только уменьшаться.
+- Базис линтера: `docs/lint-baseline-5b22e81.txt` — **122 находки** в чистом клоне на коммите 5b22e81 (конфиг с отключёнными G301/G306/G304). Сравнивать только с прогоном в чистом клоне (`git clone` в /tmp, `golangci-lint run ./...`): локальное дерево с untracked-файлами даёт другую цифру. Число может только уменьшаться.
 - Ветки: `main` (стабильная), `dev` (рабочая). Фичи — в dev, в main через merge.
 
 ## Код
@@ -135,7 +126,7 @@ golangci-lint run ./...                             # весь модуль: ч�
 - Линтеры: `errcheck` (check-blank, check-type-assertions), `govet`, `staticcheck`, `ineffassign`, `unused`, `nilerr`, `errorlint`, `contextcheck`, `bodyclose`, `gosec`, `forbidigo`, `sloglint`, форматтер `gofmt`. `nilerr` и `errcheck` — ключевые: они ловят «залогировал и вернул nil», из которого выросла треть отчёта.
 - `forbidigo` делает физически невозможным: `os.WriteFile` вне `internal/storage` (инвариант 1), `context.Background/TODO` вне `main` и тестов (20), `http.Get/DefaultClient` (29), `filepath.Walk` (21), `time.Sleep` (тесты), `log.*`/`fmt.Print*` вместо slog, `os.Exit` вне main, `panic` в коде.
 - `issues.max-same-issues: 0`, `max-issues-per-linter: 0` — дефолтные лимиты (3 и 50) скрывали больше половины находок. Не возвращать.
-- Базис на 706f9eb: **239 находок** (96 в тестах), поэтому режим работы — `--new-from-rev`: новый и изменённый код чистый, легаси разбирается отдельными задачами по списку худших файлов (manager_test.go 27, updates/apply.go 12, install/fsops.go 12, …). Общее число при любой задаче может только уменьшаться.
+- Базис: **122 находки** в чистом клоне на 5b22e81 (`docs/lint-baseline-5b22e81.txt`; первый замер на 706f9eb давал 239 до отключения G301/G306/G304). Режим работы — `--new-from-rev`: новый и изменённый код чистый, легаси разбирается отдельными задачами. Общее число при любой задаче может только уменьшаться, и меряется оно в чистом клоне.
 - PostToolUse-хук в `.claude/settings.json` гоняет `golangci-lint run --fast-only ./...` после каждого Edit/Write (в v2 флаг `--fast-only`, `--fast` нет); он показывает только быстрые линтеры — это не замена полного прогона из чеклиста.
 
 Запрещено:
@@ -146,4 +137,4 @@ golangci-lint run ./...                             # весь модуль: ч�
 
 Frontend (`frontend/`): `npm run check` и `npm run build`.
 
-Перед commit/push: `git status` не тянет бинарники, `bindings/`, `dist/`, `CLAUDE.md`, `.golangci.yml`, `.claude/`.
+Перед commit/push: `git status` не тянет бинарники, `bindings/`, `dist/`
