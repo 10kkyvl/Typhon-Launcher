@@ -22,10 +22,6 @@ Thumbs.db
 
 .claude/*
 !.claude/settings.json
-.codex/
-.cursor/
-.aider*
-.ai/
 AGENTS.md
 AGENTS.local.md
 *.local.md
