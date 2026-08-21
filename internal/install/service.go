@@ -258,7 +258,7 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
-	plan, err := Inspect(sourceDir(d))
+	plan, err := Inspect(s.baseContext(), sourceDir(d))
 	if err != nil {
 		return PlanInfo{}, err
 	}
@@ -266,12 +266,16 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if controlled(plan.Type) || plan.Type == TypeUnknown {
 		plan.Destination = s.proposeDestination(cfg.GamesPath, d.Name)
 	}
+	free, err := s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath))
+	if err != nil {
+		return PlanInfo{}, err
+	}
 	return PlanInfo{
 		Plan:          plan,
 		DownloadID:    d.ID,
 		Name:          d.Name,
 		RequiredBytes: requiredBytes(plan),
-		FreeBytes:     s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath)),
+		FreeBytes:     free,
 		Seeding:       d.Seeding,
 	}, nil
 }
@@ -291,7 +295,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 	s.mu.Unlock()
 
-	plan, err := Inspect(sourceDir(d))
+	plan, err := Inspect(s.baseContext(), sourceDir(d))
 	if err != nil {
 		return Installation{}, err
 	}
@@ -455,7 +459,7 @@ func (s *Service) Retry(id string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(sourceDir(d))
+	plan, err := Inspect(s.baseContext(), sourceDir(d))
 	if err != nil {
 		return err
 	}
@@ -591,12 +595,23 @@ func (s *Service) completedDownload(id string) (download.Download, error) {
 	return d, nil
 }
 
-func (s *Service) spawnLocked(id string) {
-	base := s.ctx
-	if base == nil {
-		base = context.Background()
+// baseLocked отдаёт контекст жизни сервиса; до ServiceStartup (и в тестах,
+// которые его не вызывают) сервис живёт столько же, сколько процесс.
+func (s *Service) baseLocked() context.Context {
+	if s.ctx == nil {
+		return context.Background()
 	}
-	ctx, cancel := context.WithCancel(base)
+	return s.ctx
+}
+
+func (s *Service) baseContext() context.Context {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.baseLocked()
+}
+
+func (s *Service) spawnLocked(id string) {
+	ctx, cancel := context.WithCancel(s.baseLocked())
 	s.jobs[id] = &job{cancel: cancel}
 	s.wg.Add(1)
 	go func() {
@@ -742,27 +757,29 @@ func (s *Service) proposeDestination(gamesPath, name string) string {
 	return base
 }
 
-func (s *Service) freeBytes(path string) int64 {
+func (s *Service) freeBytes(path string) (int64, error) {
 	if path == "" {
-		return 0
+		return 0, errEmptyDestination
 	}
 	info, err := s.freeSpace(path)
 	if err != nil {
-		slog.Warn("check free space", "path", path, "error", err)
-		return 0
+		return 0, fmt.Errorf("свободное место %s: %w", path, err)
 	}
 	if info.FreeBytes > math.MaxInt64 {
-		return math.MaxInt64
+		return math.MaxInt64, nil
 	}
-	return int64(info.FreeBytes)
+	return int64(info.FreeBytes), nil
 }
 
 func (s *Service) checkSpace(destination string, need int64) error {
-	if need <= 0 || destination == "" {
+	if need <= 0 {
 		return nil
 	}
-	free := s.freeBytes(destination)
-	if free <= 0 || free >= need {
+	free, err := s.freeBytes(destination)
+	if err != nil {
+		return err
+	}
+	if free >= need {
 		return nil
 	}
 	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s", humanSize(need), humanSize(free))

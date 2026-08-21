@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ func TestInspectPortableDir(t *testing.T) {
 	mkFile(t, filepath.Join(root, "Game.exe"), 2<<20)
 	mkFile(t, filepath.Join(root, "Data", "assets.pak"), 4096)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -38,7 +39,7 @@ func TestInspectExeInstaller(t *testing.T) {
 	mkFile(t, filepath.Join(root, "data1.bin"), 8192)
 	mkFile(t, filepath.Join(root, "data2.bin"), 8192)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestInspectSingleExeWithData(t *testing.T) {
 	mkFile(t, filepath.Join(root, "Game_Release.exe"), 1024)
 	mkFile(t, filepath.Join(root, "data1.cab"), 8192)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestInspectMsiInstaller(t *testing.T) {
 	root := t.TempDir()
 	mkFile(t, filepath.Join(root, "installer.msi"), 4096)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -100,7 +101,7 @@ func TestInspectMsiWinsOverSetupExe(t *testing.T) {
 	mkFile(t, filepath.Join(root, "setup.exe"), 1024)
 	mkFile(t, filepath.Join(root, "payload.msi"), 4096)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestInspectSingleArchive(t *testing.T) {
 		{name: "game/readme.txt", data: []byte("hello")},
 	})
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -140,18 +141,44 @@ func TestInspectSingleArchive(t *testing.T) {
 
 func TestInspectArchiveFileDirectly(t *testing.T) {
 	dir := t.TempDir()
-	archive := filepath.Join(dir, "game.7z")
-	mkFile(t, archive, 64)
+	archive := filepath.Join(dir, "game.zip")
+	writeZip(t, archive, []zipEntry{{name: "game.exe", data: make([]byte, 64)}})
 
-	plan, err := Inspect(archive)
+	plan, err := Inspect(context.Background(), archive)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
-	if plan.Type != TypeArchive7z {
-		t.Fatalf("type = %s, want %s", plan.Type, TypeArchive7z)
+	if plan.Type != TypeArchiveZip {
+		t.Fatalf("type = %s, want %s", plan.Type, TypeArchiveZip)
 	}
 	if plan.ArchivePath != archive || plan.ContentRoot != dir {
 		t.Fatalf("plan = %+v", plan)
+	}
+	if !plan.CanAutoInstall {
+		t.Fatal("readable archive must be auto installable")
+	}
+}
+
+func TestInspectUnreadableArchiveIsNotAutoInstallable(t *testing.T) {
+	cases := []struct{ name, file string }{
+		{name: "broken 7z", file: "game.7z"},
+		{name: "broken zip", file: "game.zip"},
+		{name: "broken rar", file: "game.rar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive := filepath.Join(dir, tc.file)
+			mkFile(t, archive, 64)
+
+			plan, err := Inspect(context.Background(), archive)
+			if err == nil {
+				t.Fatalf("Inspect = %+v, want error", plan)
+			}
+			if plan.CanAutoInstall {
+				t.Fatal("unreadable archive must never be marked auto installable")
+			}
+		})
 	}
 }
 
@@ -160,7 +187,7 @@ func TestInspectJunkOnly(t *testing.T) {
 	mkText(t, filepath.Join(root, "readme.txt"), "nothing here")
 	mkText(t, filepath.Join(root, "release.nfo"), "scene info")
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -179,7 +206,7 @@ func TestInspectDescendsSingleSubdir(t *testing.T) {
 	mkFile(t, filepath.Join(inner, "Game.exe"), 2<<20)
 	mkFile(t, filepath.Join(inner, "Data", "main.pak"), 2048)
 
-	plan, err := Inspect(outer)
+	plan, err := Inspect(context.Background(), outer)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -199,7 +226,7 @@ func TestInspectIgnoresUninstallerAsGame(t *testing.T) {
 	mkFile(t, filepath.Join(root, "unins000.exe"), 1<<20)
 	mkFile(t, filepath.Join(root, "Data", "blob.dat"), 1024)
 
-	plan, err := Inspect(root)
+	plan, err := Inspect(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -214,7 +241,7 @@ func TestInspectIgnoresUninstallerAsGame(t *testing.T) {
 }
 
 func TestInspectMissingDir(t *testing.T) {
-	if _, err := Inspect(filepath.Join(t.TempDir(), "nope")); err == nil {
+	if _, err := Inspect(context.Background(), filepath.Join(t.TempDir(), "nope")); err == nil {
 		t.Fatal("expected error for missing dir")
 	}
 }

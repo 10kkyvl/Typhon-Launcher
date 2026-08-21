@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -32,7 +33,11 @@ func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 		return err
 	}
 
-	rep := newReporter(onProgress, DirSize(src))
+	total, err := DirSize(ctx, src)
+	if err != nil {
+		return err
+	}
+	rep := newReporter(onProgress, total)
 	buf := make([]byte, copyBufferSize)
 	walkErr := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -81,7 +86,11 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 		return err
 	}
 
-	rep := newReporter(onProgress, DirSize(src))
+	total, err := DirSize(ctx, src)
+	if err != nil {
+		return err
+	}
+	rep := newReporter(onProgress, total)
 	buf := make([]byte, copyBufferSize)
 	walkErr := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -137,7 +146,10 @@ func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	}
 	renameErr := os.Rename(src, dst)
 	if renameErr == nil {
-		total := DirSize(dst)
+		total, err := DirSize(ctx, dst)
+		if err != nil {
+			return err
+		}
 		rep := newReporter(onProgress, total)
 		rep.done = total
 		rep.flush()
@@ -202,20 +214,29 @@ func verifyCopy(src, dst string) error {
 	})
 }
 
-func DirSize(dir string) int64 {
+func DirSize(ctx context.Context, dir string) (int64, error) {
 	var total int64
-	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
-		if !d.IsDir() {
-			if info, err := d.Info(); err == nil {
-				total += info.Size()
-			}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
 		}
+		total += info.Size()
 		return nil
 	})
-	return total
+	if err != nil {
+		return 0, fmt.Errorf("measure %s: %w", dir, err)
+	}
+	return total, nil
 }
 
 func SameVolume(a, b string) bool {

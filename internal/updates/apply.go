@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -28,6 +29,7 @@ var (
 	errStagingEmpty   = errors.New("временная установка пуста")
 	errNoLaunchTarget = errors.New("исполняемый файл не найден после обновления")
 	errSwapFailed     = errors.New("не удалось заменить установленную версию")
+	errCarryOver      = errors.New("не удалось перенести пользовательские файлы из предыдущей версии")
 
 	errUnavailablePrefetch = errors.New("предварительная загрузка недоступна для этой стратегии")
 )
@@ -378,7 +380,13 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 		return errSwapFailed
 	}
 
-	executable := resolveExecutable(game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), item.Executable, staging)
+	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), item.Executable, staging)
+	if err != nil {
+		if restoreErr := restoreDirectories(game.InstallDir, previous); restoreErr != nil {
+			slog.Error("restore previous version", "game", plan.GameID, "error", restoreErr)
+		}
+		return err
+	}
 	if executable == "" {
 		slog.Error("no launch target after update", "game", plan.GameID)
 		if err := restoreDirectories(game.InstallDir, previous); err != nil {
@@ -387,7 +395,15 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 		return errNoLaunchTarget
 	}
 
-	carryOverExtras(previous, game.InstallDir)
+	carried, err := carryOverExtras(ctx, previous, game.InstallDir)
+	if err != nil {
+		slog.Error("carry over user files", "game", plan.GameID, "path", previous, "error", err)
+		return fmt.Errorf("%w: предыдущая версия сохранена в %s: %w", errCarryOver, previous, err)
+	}
+	if carried.skipped > 0 {
+		slog.Warn("user files not carried over", "game", plan.GameID, "bytes", carried.skipped, "limit", int64(carryOverLimit))
+		s.setStep(plan.GameID, StepCleanup, fmt.Sprintf("Не перенесено %d Б пользовательских файлов: превышен лимит", carried.skipped))
+	}
 	s.rememberPrevious(game, previous)
 
 	s.setStep(plan.GameID, StepCleanup, "")
@@ -410,7 +426,10 @@ func (s *Service) applyTorrentReuse(ctx context.Context, plan UpdatePlan) error 
 	}
 
 	s.setStep(plan.GameID, StepVerify, "Проверка установки")
-	executable := resolveExecutable(game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
+	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
+	if err != nil {
+		return err
+	}
 	if executable == "" {
 		return errNoLaunchTarget
 	}
@@ -460,7 +479,10 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	}
 
 	s.setStep(plan.GameID, StepVerify, "Проверка установки")
-	executable := resolveExecutable(game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
+	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
+	if err != nil {
+		return err
+	}
 	if executable == "" {
 		return errNoLaunchTarget
 	}
@@ -635,26 +657,42 @@ func restoreDirectories(current, previous string) error {
 	return nil
 }
 
-func resolveExecutable(installDir, relative, installed, staging string) string {
+func resolveExecutable(ctx context.Context, installDir, relative, installed, staging string) (string, error) {
+	if installDir == "" {
+		return "", errEmptyInstallDir
+	}
 	if relative != "" {
 		candidate := filepath.Join(installDir, relative)
-		if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
-			return candidate
+		stat, err := os.Stat(candidate)
+		switch {
+		case err == nil && !stat.IsDir():
+			return candidate, nil
+		case err != nil && !errors.Is(err, fs.ErrNotExist):
+			return "", fmt.Errorf("stat %s: %w", candidate, err)
 		}
 	}
 	if installed != "" && staging != "" {
-		if rel, err := filepath.Rel(staging, installed); err == nil {
-			candidate := filepath.Join(installDir, rel)
-			if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
-				return candidate
-			}
+		rel, err := filepath.Rel(staging, installed)
+		if err != nil {
+			return "", fmt.Errorf("relative path %s: %w", installed, err)
+		}
+		candidate := filepath.Join(installDir, rel)
+		stat, err := os.Stat(candidate)
+		switch {
+		case err == nil && !stat.IsDir():
+			return candidate, nil
+		case err != nil && !errors.Is(err, fs.ErrNotExist):
+			return "", fmt.Errorf("stat %s: %w", candidate, err)
 		}
 	}
-	candidates := install.FindExecutables(installDir, filepath.Base(installDir))
-	if len(candidates) == 0 {
-		return ""
+	candidates, err := install.FindExecutables(ctx, installDir, filepath.Base(installDir))
+	if err != nil {
+		return "", err
 	}
-	return candidates[0].Path
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	return candidates[0].Path, nil
 }
 
 // Game binaries and packed data are never carried over: a file the new release
@@ -666,66 +704,124 @@ var engineExtensions = map[string]bool{
 	".bin": true, ".dat": true, ".wad": true, ".sga": true, ".big": true, ".unity3d": true,
 }
 
+type carryReport struct {
+	carried int64
+	skipped int64
+}
+
 // carryOverExtras keeps user files that the new installation does not provide,
-// so configs, saves and mods survive a full replacement.
-func carryOverExtras(previous, current string) {
+// so configs, saves and mods survive a full replacement. Прервавшийся перенос —
+// ошибка: после неё вызывающий обязан оставить .previous нетронутым.
+func carryOverExtras(ctx context.Context, previous, current string) (carryReport, error) {
+	return carryOverLimited(ctx, previous, current, carryOverLimit)
+}
+
+func carryOverLimited(ctx context.Context, previous, current string, limit int64) (carryReport, error) {
 	if previous == "" || current == "" {
-		return
+		return carryReport{}, errEmptyInstallDir
 	}
-	var carried int64
+	var report carryReport
+	buf := make([]byte, copyBufferSize)
 	err := filepath.WalkDir(previous, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !d.Type().IsRegular() {
-			return nil
+		if err != nil {
+			return err
 		}
-		if engineExtensions[strings.ToLower(filepath.Ext(path))] {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
 		rel, err := filepath.Rel(previous, path)
 		if err != nil {
-			return nil
+			return fmt.Errorf("relative path %s: %w", path, err)
 		}
 		target := filepath.Join(current, rel)
-		if _, err := os.Stat(target); err == nil {
+		if _, err := os.Lstat(target); err == nil {
+			return nil
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("stat %s: %w", target, err)
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return carrySymlink(path, target)
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s: нерегулярный файл (%s)", rel, d.Type())
+		}
+		if engineExtensions[strings.ToLower(filepath.Ext(path))] {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil || carried+info.Size() > carryOverLimit {
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
+		}
+		if report.carried+info.Size() > limit {
+			report.skipped += info.Size()
+			slog.Warn("carry over limit reached", "file", rel, "bytes", info.Size(), "limit", limit)
 			return nil
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return nil
+			return err
 		}
-		if err := copyFile(path, target); err != nil {
-			slog.Warn("carry over user file", "path", rel, "error", err)
-			return nil
+		if err := copyFile(path, target, buf); err != nil {
+			return fmt.Errorf("copy %s: %w", rel, err)
 		}
-		carried += info.Size()
+		report.carried += info.Size()
 		return nil
 	})
 	if err != nil {
-		slog.Warn("scan previous install", "path", previous, "error", err)
+		return report, fmt.Errorf("scan previous install %s: %w", previous, err)
 	}
-	if carried > 0 {
-		slog.Info("user files carried over", "bytes", carried, "path", current)
+	if report.carried > 0 {
+		slog.Info("user files carried over", "bytes", report.carried, "path", current)
 	}
+	return report, nil
 }
 
-func copyFile(src, dst string) error {
+func carrySymlink(path, target string) error {
+	dest, err := os.Readlink(path)
+	if err != nil {
+		return fmt.Errorf("readlink %s: %w", path, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	if err := os.Symlink(dest, target); err != nil {
+		return fmt.Errorf("symlink %s: %w", target, err)
+	}
+	return nil
+}
+
+func copyFile(src, dst string, buf []byte) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		if err := in.Close(); err != nil {
+			slog.Warn("close source file", "path", src, "error", err)
+		}
+	}()
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	if _, err := io.CopyBuffer(out, in, make([]byte, copyBufferSize)); err != nil {
-		out.Close()
-		os.Remove(dst)
-		return err
+	if _, err := io.CopyBuffer(out, in, buf); err != nil {
+		return errors.Join(err, out.Close(), removeFailedCopy(dst))
+	}
+	// .previous удаляется сразу после переноса, поэтому данные должны лежать
+	// на диске, а не в кеше записи.
+	if err := out.Sync(); err != nil {
+		return errors.Join(err, out.Close(), removeFailedCopy(dst))
 	}
 	return out.Close()
+}
+
+func removeFailedCopy(dst string) error {
+	if err := os.Remove(dst); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove partial copy %s: %w", dst, err)
+	}
+	return nil
 }
 
 func isEmptyDir(path string) (bool, error) {

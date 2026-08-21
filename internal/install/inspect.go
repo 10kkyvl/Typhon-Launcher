@@ -1,7 +1,9 @@
 package install
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,42 +38,75 @@ var installerDataExts = map[string]bool{
 	".gid": true,
 }
 
-func Inspect(dir string) (Plan, error) {
+type sizedEntry struct {
+	name  string
+	size  int64
+	isDir bool
+}
+
+func sizedEntries(dir string) ([]sizedEntry, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	out := make([]sizedEntry, 0, len(entries))
+	for _, e := range entries {
+		item := sizedEntry{name: e.Name(), isDir: e.IsDir()}
+		if !item.isDir {
+			info, err := e.Info()
+			if err != nil {
+				return nil, fmt.Errorf("stat %s: %w", filepath.Join(dir, e.Name()), err)
+			}
+			item.size = info.Size()
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func Inspect(ctx context.Context, dir string) (Plan, error) {
 	info, err := os.Stat(dir)
 	if err != nil {
-		return Plan{}, errNoSource
+		return Plan{}, fmt.Errorf("%w: %w", errNoSource, err)
 	}
 	if !info.IsDir() {
-		return inspectFile(dir, info.Size()), nil
+		return inspectFile(dir, info.Size())
 	}
 
-	root := normalizeRoot(dir)
+	root, err := normalizeRoot(dir)
+	if err != nil {
+		return Plan{}, err
+	}
 	plan := Plan{
 		Type:        TypeUnknown,
 		SourcePath:  dir,
 		ContentRoot: root,
 	}
 
-	entries, err := os.ReadDir(root)
+	entries, err := sizedEntries(root)
 	if err != nil {
-		return Plan{}, errNoSource
+		return Plan{}, err
 	}
-
-	var files []os.DirEntry
-	var dirs []os.DirEntry
+	var files []sizedEntry
+	dirCount := 0
 	for _, e := range entries {
-		if e.IsDir() {
-			dirs = append(dirs, e)
+		if e.isDir {
+			dirCount++
 			continue
 		}
 		files = append(files, e)
 	}
 
+	total, err := DirSize(ctx, root)
+	if err != nil {
+		return Plan{}, err
+	}
+	plan.EstimatedSize = total
+
 	if msi := pickByExt(root, files, ".msi"); msi != "" {
 		plan.Type = TypeMsiInstaller
 		plan.InstallerPath = msi
 		plan.WorkingDir = filepath.Dir(msi)
-		plan.EstimatedSize = DirSize(root)
 		plan.RequiresUserInteraction = true
 		return plan, nil
 	}
@@ -80,33 +115,38 @@ func Inspect(dir string) (Plan, error) {
 		plan.Type = TypeExeInstaller
 		plan.InstallerPath = exe
 		plan.WorkingDir = filepath.Dir(exe)
-		plan.EstimatedSize = DirSize(root)
 		plan.RequiresUserInteraction = true
 		return plan, nil
 	}
 
-	if archive := pickDominantArchive(root, files); archive != "" {
-		fillArchivePlan(&plan, archive)
+	if archive := pickDominantArchive(root, files, total); archive != "" {
+		if err := fillArchivePlan(&plan, archive); err != nil {
+			return Plan{}, err
+		}
 		return plan, nil
 	}
 
 	title := filepath.Base(dir)
-	candidates := FindExecutables(root, title)
-	if len(candidates) > 0 && (len(dirs) > 0 || hasAssets(root)) {
+	candidates, err := FindExecutables(ctx, root, title)
+	if err != nil {
+		return Plan{}, err
+	}
+	assets, err := hasAssets(root)
+	if err != nil {
+		return Plan{}, err
+	}
+	plan.Candidates = candidates
+	if len(candidates) > 0 && (dirCount > 0 || assets) {
 		plan.Type = TypePortable
-		plan.EstimatedSize = DirSize(root)
-		plan.Candidates = candidates
 		plan.CanAutoInstall = true
 		return plan, nil
 	}
 
-	plan.EstimatedSize = DirSize(root)
-	plan.Candidates = candidates
 	plan.RequiresUserInteraction = true
 	return plan, nil
 }
 
-func inspectFile(path string, size int64) Plan {
+func inspectFile(path string, size int64) (Plan, error) {
 	plan := Plan{
 		Type:        TypeUnknown,
 		SourcePath:  path,
@@ -114,7 +154,9 @@ func inspectFile(path string, size int64) Plan {
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".zip", ".7z", ".rar":
-		fillArchivePlan(&plan, path)
+		if err := fillArchivePlan(&plan, path); err != nil {
+			return Plan{}, err
+		}
 	case ".msi":
 		plan.Type = TypeMsiInstaller
 		plan.InstallerPath = path
@@ -131,35 +173,40 @@ func inspectFile(path string, size int64) Plan {
 		plan.EstimatedSize = size
 		plan.RequiresUserInteraction = true
 	}
-	return plan
+	return plan, nil
 }
 
-func fillArchivePlan(plan *Plan, archive string) {
+func fillArchivePlan(plan *Plan, archive string) error {
+	info, err := os.Stat(archive)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", archive, err)
+	}
+	size, err := EstimateExtracted(archive)
+	if err != nil {
+		return fmt.Errorf("estimate %s: %w", archive, err)
+	}
 	plan.Type = archiveType(archive)
 	plan.ArchivePath = archive
+	plan.CompressedSize = info.Size()
+	plan.EstimatedSize = size
 	plan.CanAutoInstall = true
-	if info, err := os.Stat(archive); err == nil {
-		plan.CompressedSize = info.Size()
-	}
-	if size, err := EstimateExtracted(archive); err == nil {
-		plan.EstimatedSize = size
-	}
+	return nil
 }
 
-func normalizeRoot(dir string) string {
+func normalizeRoot(dir string) (string, error) {
 	current := dir
 	for i := 0; i < maxDescendDepth; i++ {
-		entries, err := os.ReadDir(current)
+		entries, err := sizedEntries(current)
 		if err != nil {
-			return current
+			return "", err
 		}
 		var sub string
 		subCount := 0
 		meaningful := 0
 		for _, e := range entries {
-			if e.IsDir() {
+			if e.isDir {
 				subCount++
-				sub = e.Name()
+				sub = e.name
 				continue
 			}
 			if !isJunk(e) {
@@ -167,45 +214,42 @@ func normalizeRoot(dir string) string {
 			}
 		}
 		if subCount != 1 || meaningful != 0 {
-			return current
+			return current, nil
 		}
 		current = filepath.Join(current, sub)
 	}
-	return current
+	return current, nil
 }
 
-func isJunk(e os.DirEntry) bool {
-	name := e.Name()
-	if strings.HasPrefix(name, ".") {
+func isJunk(e sizedEntry) bool {
+	if strings.HasPrefix(e.name, ".") {
 		return true
 	}
-	if !junkExts[strings.ToLower(filepath.Ext(name))] {
+	if !junkExts[strings.ToLower(filepath.Ext(e.name))] {
 		return false
 	}
-	info, err := e.Info()
-	return err == nil && info.Size() <= junkFileLimit
+	return e.size <= junkFileLimit
 }
 
-func pickByExt(root string, files []os.DirEntry, ext string) string {
+func pickByExt(root string, files []sizedEntry, ext string) string {
 	var best string
 	var bestSize int64 = -1
 	for _, f := range files {
-		if !strings.EqualFold(filepath.Ext(f.Name()), ext) {
+		if !strings.EqualFold(filepath.Ext(f.name), ext) {
 			continue
 		}
-		size := entrySize(f)
-		if size > bestSize {
-			best, bestSize = filepath.Join(root, f.Name()), size
+		if f.size > bestSize {
+			best, bestSize = filepath.Join(root, f.name), f.size
 		}
 	}
 	return best
 }
 
-func pickInstallerExe(root string, files []os.DirEntry) string {
-	var exes []os.DirEntry
+func pickInstallerExe(root string, files []sizedEntry) string {
+	var exes []sizedEntry
 	hasData := false
 	for _, f := range files {
-		lower := strings.ToLower(f.Name())
+		lower := strings.ToLower(f.name)
 		if strings.HasSuffix(lower, ".exe") {
 			exes = append(exes, f)
 			continue
@@ -215,22 +259,22 @@ func pickInstallerExe(root string, files []os.DirEntry) string {
 		}
 	}
 	for _, f := range exes {
-		lower := strings.ToLower(f.Name())
+		lower := strings.ToLower(f.name)
 		if strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install") {
-			return filepath.Join(root, f.Name())
+			return filepath.Join(root, f.name)
 		}
 	}
 	if len(exes) == 1 && hasData {
-		return filepath.Join(root, exes[0].Name())
+		return filepath.Join(root, exes[0].name)
 	}
 	return ""
 }
 
-func pickDominantArchive(root string, files []os.DirEntry) string {
-	var archives []os.DirEntry
+func pickDominantArchive(root string, files []sizedEntry, total int64) string {
+	var archives []sizedEntry
 	meaningful := 0
 	for _, f := range files {
-		if IsArchive(f.Name()) {
+		if IsArchive(f.name) {
 			archives = append(archives, f)
 		}
 		if !isJunk(f) {
@@ -240,24 +284,15 @@ func pickDominantArchive(root string, files []os.DirEntry) string {
 	if len(archives) == 0 {
 		return ""
 	}
-	sort.Slice(archives, func(i, j int) bool { return entrySize(archives[i]) > entrySize(archives[j]) })
+	sort.Slice(archives, func(i, j int) bool { return archives[i].size > archives[j].size })
 	largest := archives[0]
-	path := filepath.Join(root, largest.Name())
+	path := filepath.Join(root, largest.name)
 
 	if meaningful == 1 && len(archives) == 1 {
 		return path
 	}
-	total := DirSize(root)
-	if total > 0 && float64(entrySize(largest)) >= float64(total)*dominantFraction {
+	if total > 0 && float64(largest.size) >= float64(total)*dominantFraction {
 		return path
 	}
 	return ""
-}
-
-func entrySize(e os.DirEntry) int64 {
-	info, err := e.Info()
-	if err != nil {
-		return 0
-	}
-	return info.Size()
 }

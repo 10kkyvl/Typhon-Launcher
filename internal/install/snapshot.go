@@ -1,6 +1,9 @@
 package install
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,8 +14,9 @@ import (
 const snapshotDepth = 2
 
 type dirState struct {
-	modTime  time.Time
-	children string
+	modTime    time.Time
+	children   string
+	unreadable bool
 }
 
 type fsSnapshot struct {
@@ -20,24 +24,38 @@ type fsSnapshot struct {
 	dirs  map[string]dirState
 }
 
-func takeSnapshot(roots []string) fsSnapshot {
+func takeSnapshot(roots []string) (fsSnapshot, error) {
 	snap := fsSnapshot{dirs: map[string]dirState{}}
 	for _, root := range roots {
 		root = filepath.Clean(root)
 		info, err := os.Stat(root)
-		if err != nil || !info.IsDir() {
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fsSnapshot{}, fmt.Errorf("stat %s: %w", root, err)
+		}
+		if !info.IsDir() {
 			continue
 		}
 		snap.roots = append(snap.roots, root)
-		scanDir(snap.dirs, root, snapshotDepth)
+		if err := scanDir(snap.dirs, root, snapshotDepth); err != nil {
+			return fsSnapshot{}, err
+		}
 	}
-	return snap
+	return snap, nil
 }
 
-func scanDir(out map[string]dirState, dir string, depth int) {
+func scanDir(out map[string]dirState, dir string, depth int) error {
 	entries, err := os.ReadDir(dir)
+	// Каталоги вида C:\Program Files\WindowsApps закрыты ACL и читаться не будут
+	// никогда; отмечаем их как непрочитанные, чтобы отличать от «каталог пуст».
+	if errors.Is(err, fs.ErrPermission) {
+		out[dir] = dirState{unreadable: true}
+		return nil
+	}
 	if err != nil {
-		return
+		return fmt.Errorf("read dir %s: %w", dir, err)
 	}
 	names := make([]string, 0, len(entries))
 	subdirs := make([]string, 0, len(entries))
@@ -49,18 +67,21 @@ func scanDir(out map[string]dirState, dir string, depth int) {
 	}
 	sort.Strings(names)
 
-	state := dirState{children: strings.Join(names, "\n")}
-	if info, err := os.Stat(dir); err == nil {
-		state.modTime = info.ModTime()
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", dir, err)
 	}
-	out[dir] = state
+	out[dir] = dirState{children: strings.Join(names, "\n"), modTime: info.ModTime()}
 
 	if depth <= 0 {
-		return
+		return nil
 	}
 	for _, name := range subdirs {
-		scanDir(out, filepath.Join(dir, name), depth-1)
+		if err := scanDir(out, filepath.Join(dir, name), depth-1); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func diffSnapshot(before, after fsSnapshot) []string {
@@ -75,7 +96,7 @@ func diffSnapshot(before, after fsSnapshot) []string {
 			continue
 		}
 		old, known := before.dirs[path]
-		if known && old.modTime.Equal(state.modTime) && old.children == state.children {
+		if known && old.unreadable == state.unreadable && old.modTime.Equal(state.modTime) && old.children == state.children {
 			continue
 		}
 		changed = append(changed, path)

@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestFindExecutablesPrefersGame(t *testing.T) {
 	mkFile(t, filepath.Join(root, "_CommonRedist", "DXSETUP.exe"), 6<<20)
 	mkFile(t, filepath.Join(root, "UE4PrereqSetup_x64.exe"), 5<<20)
 
-	got := FindExecutables(root, "Game")
+	got := mustFind(t, root, "Game")
 	if len(got) != 1 {
 		t.Fatalf("candidates = %+v, want only Game.exe", got)
 	}
@@ -37,7 +38,7 @@ func TestFindExecutablesTitleBoost(t *testing.T) {
 	mkFile(t, filepath.Join(root, "Witcher3.exe"), 1<<20)
 	mkFile(t, filepath.Join(root, "tool.exe"), 1<<20)
 
-	got := FindExecutables(root, "The Witcher 3: Wild Hunt")
+	got := mustFind(t, root, "The Witcher 3: Wild Hunt")
 	if len(got) != 2 {
 		t.Fatalf("candidates = %+v", got)
 	}
@@ -54,7 +55,7 @@ func TestFindExecutablesPrefersShallowAndBinDirs(t *testing.T) {
 	mkFile(t, filepath.Join(root, "Binaries", "Win64", "Shooter.exe"), 1<<20)
 	mkFile(t, filepath.Join(root, "third_party", "tools", "misc", "thing.exe"), 1<<20)
 
-	got := FindExecutables(root, "Shooter")
+	got := mustFind(t, root, "Shooter")
 	if len(got) != 2 || filepath.Base(got[0].Path) != "Shooter.exe" {
 		t.Fatalf("candidates = %+v", got)
 	}
@@ -81,15 +82,15 @@ func TestHighConfidence(t *testing.T) {
 func TestHighConfidenceOnScanResults(t *testing.T) {
 	strong := t.TempDir()
 	mkFile(t, filepath.Join(strong, "Game.exe"), 2<<20)
-	if !HighConfidence(FindExecutables(strong, "Game")) {
-		t.Fatalf("expected high confidence, got %+v", FindExecutables(strong, "Game"))
+	if !HighConfidence(mustFind(t, strong, "Game")) {
+		t.Fatalf("expected high confidence, got %+v", mustFind(t, strong, "Game"))
 	}
 
 	weak := t.TempDir()
 	mkFile(t, filepath.Join(weak, "alpha.exe"), 2<<20)
 	mkFile(t, filepath.Join(weak, "beta.exe"), 2<<20)
-	if HighConfidence(FindExecutables(weak, "Something Else")) {
-		t.Fatalf("expected low confidence, got %+v", FindExecutables(weak, "Something Else"))
+	if HighConfidence(mustFind(t, weak, "Something Else")) {
+		t.Fatalf("expected low confidence, got %+v", mustFind(t, weak, "Something Else"))
 	}
 }
 
@@ -111,4 +112,13 @@ func TestExcludedExe(t *testing.T) {
 			t.Fatalf("%s should not be excluded", name)
 		}
 	}
+}
+
+func mustFind(t *testing.T, root, title string) []Candidate {
+	t.Helper()
+	got, err := FindExecutables(context.Background(), root, title)
+	if err != nil {
+		t.Fatalf("FindExecutables(%s): %v", root, err)
+	}
+	return got
 }

@@ -32,6 +32,7 @@ type Game struct {
 	VersionSource     string     `json:"versionSource,omitempty"`
 	VersionConfidence float64    `json:"versionConfidence,omitempty"`
 	SizeBytes         int64      `json:"sizeBytes"`
+	SizeUnknown       bool       `json:"sizeUnknown,omitempty"`
 	LastPlayed        *time.Time `json:"lastPlayed"`
 	PlaytimeSeconds   int64      `json:"playtimeSeconds"`
 	InstalledAt       time.Time  `json:"installedAt"`
@@ -176,12 +177,14 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	if installDir == "" {
 		return Game{}, errEmptyInstallDir
 	}
+	size, unknown := measureInstall("", installDir)
 	game := Game{
 		ID:          newID(),
 		Title:       title,
 		Executable:  executable,
 		InstallDir:  installDir,
-		SizeBytes:   dirSize(installDir),
+		SizeBytes:   size,
+		SizeUnknown: unknown,
 		InstalledAt: time.Now(),
 	}
 
@@ -226,7 +229,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		s.games[i].InstallDir = installDir
 		s.games[i].Version = g.Version
 		s.games[i].VersionSource = g.VersionSource
-		s.games[i].SizeBytes = dirSize(installDir)
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, installDir)
 		s.games[i].SourceDownloadID = g.SourceDownloadID
 		if g.ReleaseID != "" {
 			s.games[i].ReleaseID = g.ReleaseID
@@ -249,6 +252,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	if title == "" {
 		title = TitleFromExecutable(g.Executable)
 	}
+	size, unknown := measureInstall("", installDir)
 	game := Game{
 		ID:               newID(),
 		Title:            title,
@@ -256,7 +260,8 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		InstallDir:       installDir,
 		Version:          g.Version,
 		VersionSource:    g.VersionSource,
-		SizeBytes:        dirSize(installDir),
+		SizeBytes:        size,
+		SizeUnknown:      unknown,
 		InstalledAt:      time.Now(),
 		SourceDownloadID: g.SourceDownloadID,
 		ReleaseID:        g.ReleaseID,
@@ -300,7 +305,7 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 		}
 		s.games[i].Version = u.Version
 		s.games[i].VersionSource = u.VersionSource
-		s.games[i].SizeBytes = dirSize(s.games[i].InstallDir)
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, s.games[i].InstallDir)
 		if u.ReleaseID != "" {
 			s.games[i].ReleaseID = u.ReleaseID
 		}
@@ -349,18 +354,38 @@ func newID() string {
 	return hex.EncodeToString(buf)
 }
 
-func dirSize(dir string) int64 {
+func dirSize(dir string) (int64, error) {
+	if dir == "" {
+		return 0, errEmptyInstallDir
+	}
 	var total int64
-	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
-		if !d.IsDir() {
-			if info, err := d.Info(); err == nil {
-				total += info.Size()
-			}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
 		}
+		total += info.Size()
 		return nil
 	})
-	return total
+	if err != nil {
+		return 0, fmt.Errorf("measure %s: %w", dir, err)
+	}
+	return total, nil
+}
+
+// measureInstall не роняет регистрацию игры: недоступный подкаталог не повод
+// потерять запись, но и нулевой размер выдавать за настоящий нельзя.
+func measureInstall(id, dir string) (int64, bool) {
+	size, err := dirSize(dir)
+	if err != nil {
+		slog.Warn("measure install dir", "id", id, "error", err)
+		return 0, true
+	}
+	return size, false
 }

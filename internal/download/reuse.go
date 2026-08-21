@@ -3,6 +3,8 @@ package download
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -206,8 +208,12 @@ func (m *Manager) engine() (*client, context.Context, error) {
 
 func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash string) (*metainfo.MetaInfo, error) {
 	if infoHash != "" {
-		if mi, err := m.store.loadMetainfo(infoHash); err == nil {
+		mi, err := m.store.loadMetainfo(infoHash)
+		switch {
+		case err == nil:
 			return mi, nil
+		case !errors.Is(err, fs.ErrNotExist):
+			return nil, fmt.Errorf("кеш torrent-файла %s: %w", infoHash, err)
 		}
 	}
 	source = strings.TrimSpace(source)

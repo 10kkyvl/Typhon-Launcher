@@ -85,7 +85,10 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
 	s.setStatus(id, StatusPreparing)
 	roots := s.installRoots()
-	before := takeSnapshot(roots)
+	before, err := takeSnapshot(roots)
+	if err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -110,8 +113,15 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		return errInstallerFail
 	}
 
-	dirs := diffSnapshot(before, takeSnapshot(roots))
-	candidates := gather(dirs, item.Name)
+	after, err := takeSnapshot(roots)
+	if err != nil {
+		return err
+	}
+	dirs := diffSnapshot(before, after)
+	candidates, err := gather(ctx, dirs, item.Name)
+	if err != nil {
+		return err
+	}
 	if dest := pickInstallDir(dirs, candidates); dest != "" {
 		s.setDestination(id, dest)
 	}
@@ -148,7 +158,10 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 		return err
 	}
 	if item.Executable == "" {
-		candidates := FindExecutables(item.Destination, item.Name)
+		candidates, err := FindExecutables(ctx, item.Destination, item.Name)
+		if err != nil {
+			return err
+		}
 		switch {
 		case HighConfidence(candidates):
 			s.setExecutable(id, candidates[0].Path, candidates)
@@ -317,10 +330,14 @@ func detectVersion(item Installation) (string, string) {
 	return "", ""
 }
 
-func gather(dirs []string, title string) []Candidate {
+func gather(ctx context.Context, dirs []string, title string) ([]Candidate, error) {
 	var out []Candidate
 	for _, dir := range dirs {
-		out = append(out, FindExecutables(dir, title)...)
+		found, err := FindExecutables(ctx, dir, title)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, found...)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Score == out[j].Score {
@@ -331,7 +348,7 @@ func gather(dirs []string, title string) []Candidate {
 	if len(out) > maxCandidates {
 		out = out[:maxCandidates]
 	}
-	return out
+	return out, nil
 }
 
 func pickInstallDir(dirs []string, candidates []Candidate) string {
