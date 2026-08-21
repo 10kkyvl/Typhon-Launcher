@@ -1,0 +1,728 @@
+internal\download\reuse.go:292:32: Non-inherited new context, use function like `context.WithXXX` instead (contextcheck)
+func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress func(VerifyProgress)) (ReuseReport, error) {
+                               ^
+internal\download\tasks.go:32:27: Non-inherited new context, use function like `context.WithXXX` instead (contextcheck)
+func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error) {
+                          ^
+internal\sources\service.go:115:2: Function `schedule->refreshDue` should pass the context parameter (contextcheck)
+	go s.schedule()
+	^
+internal\updates\plan.go:94:30: Function `PrefetchUpdate` should pass the context parameter (contextcheck)
+			if err := s.PrefetchUpdate(gameID); err != nil {
+			                          ^
+internal\updates\service.go:214:6: Function `ServiceStartup$1` should pass the context parameter (contextcheck)
+		go func() {
+		   ^
+internal\account\client.go:114:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal\account\client_test.go:124:6: Error return value of `w.Write` is not checked (errcheck)
+		_, _ = w.Write([]byte("not json"))
+		   ^
+internal\account\client_test.go:142:6: Error return value of `w.Write` is not checked (errcheck)
+		_, _ = w.Write([]byte("not json"))
+		   ^
+internal\account\token.go:40:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal\app\logging.go:21:11: Error return value of `q.w.Write` is not checked (errcheck)
+	q.w.Write(p)
+	         ^
+internal\app\logging.go:44:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(path + ".old")
+		         ^
+internal\app\logging.go:45:12: Error return value of `os.Rename` is not checked (errcheck)
+		os.Rename(path, path+".old")
+		         ^
+internal\download\classicio\classicio.go:7:12: Error return value of `os.Setenv` is not checked (errcheck)
+		os.Setenv("TORRENT_STORAGE_DEFAULT_FILE_IO", "classic")
+		         ^
+internal\download\manager_test.go:244:8: Error return value of `m.Get` is not checked (errcheck)
+	done, _ := m.Get("a")
+	      ^
+internal\download\manager_test.go:558:10: Error return value of `m.Get` is not checked (errcheck)
+	if got, _ := m.Get("a"); got.Seeding {
+	        ^
+internal\download\manager_test.go:582:10: Error return value of `m.Get` is not checked (errcheck)
+	if got, _ := m.Get("a"); got.Seeding {
+	        ^
+internal\download\manager_test.go:591:10: Error return value of `m.Get` is not checked (errcheck)
+	if got, _ := m.Get("a"); !got.Seeding {
+	        ^
+internal\download\manager_test.go:611:10: Error return value of `m.Get` is not checked (errcheck)
+	if got, _ := m.Get("a"); got.Seeding {
+	        ^
+internal\download\manager_test.go:634:13: Error return value of `m.Get` is not checked (errcheck)
+	if paused, _ := m.Get("b"); paused.Status != StatusPaused {
+	           ^
+internal\download\manager_test.go:637:7: Error return value of `m.Get` is not checked (errcheck)
+	got, _ := m.Get("c")
+	     ^
+internal\download\store.go:157:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(tmp)
+		         ^
+internal\download\torrent.go:169:11: Error return value of `st.Close` is not checked (errcheck)
+		st.Close()
+		        ^
+internal\install\archive.go:100:10: Error return value of `f.Close` is not checked (errcheck)
+		f.Close()
+		       ^
+internal\install\executable.go:91:2: Error return value of `filepath.WalkDir` is not checked (errcheck)
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	^
+internal\install\flow.go:124:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(destination)
+		         ^
+internal\install\fsops.go:162:16: Error return value of `in.Close` is not checked (errcheck)
+	defer in.Close()
+	              ^
+internal\install\fsops.go:171:12: Error return value of `out.Close` is not checked (errcheck)
+		out.Close()
+		         ^
+internal\install\fsops.go:207:2: Error return value of `filepath.WalkDir` is not checked (errcheck)
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+	^
+internal\install\helpers_test.go:22:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal\install\rar.go:17:16: Error return value of `rc.Close` is not checked (errcheck)
+	defer rc.Close()
+	              ^
+internal\install\service_test.go:426:25: Error return value of `s.ServiceShutdown` is not checked (errcheck)
+	defer s.ServiceShutdown()
+	                       ^
+internal\install\service_test.go:480:12: Error return value is not checked (errcheck)
+	calls := (s.runner.(*fakeRunner)).calls()
+	          ^
+internal\install\sevenzip.go:15:16: Error return value of `rc.Close` is not checked (errcheck)
+	defer rc.Close()
+	              ^
+internal\install\sevenzip.go:43:12: Error return value of `src.Close` is not checked (errcheck)
+		src.Close()
+		         ^
+internal\install\sevenzip.go:56:16: Error return value of `rc.Close` is not checked (errcheck)
+	defer rc.Close()
+	              ^
+internal\install\store.go:64:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(tmp)
+		         ^
+internal\install\zip.go:14:16: Error return value of `rc.Close` is not checked (errcheck)
+	defer rc.Close()
+	              ^
+internal\install\zip.go:42:12: Error return value of `src.Close` is not checked (errcheck)
+		src.Close()
+		         ^
+internal\install\zip.go:55:16: Error return value of `rc.Close` is not checked (errcheck)
+	defer rc.Close()
+	              ^
+internal\library\library.go:339:2: Error return value of `filepath.WalkDir` is not checked (errcheck)
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+	^
+internal\library\sessions.go:52:3: Error return value of `cmd.Wait` is not checked (errcheck)
+		_ = cmd.Wait()
+		^
+internal\platform\platform_test.go:26:8: Error return value of `os.UserHomeDir` is not checked (errcheck)
+	home, _ := os.UserHomeDir()
+	      ^
+internal\platform\storage_windows.go:84:17: Error return value of `key.Close` is not checked (errcheck)
+	defer key.Close()
+	               ^
+internal\platform\storage_windows.go:94:17: Error return value of `key.Close` is not checked (errcheck)
+	defer key.Close()
+	               ^
+internal\sources\feed\feed_test.go:168:8: Error return value of `json.Marshal` is not checked (errcheck)
+	data, _ := json.Marshal(raw)
+	      ^
+internal\sources\feed\feed_test.go:237:8: Error return value of `json.Marshal` is not checked (errcheck)
+	data, _ := json.Marshal(raw)
+	      ^
+internal\sources\feed\fetch.go:113:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal\sources\feed\fetch_test.go:20:10: Error return value of `w.Write` is not checked (errcheck)
+		w.Write([]byte(validFeedJSON))
+		       ^
+internal\sources\feed\fetch_test.go:91:10: Error return value of `w.Write` is not checked (errcheck)
+		w.Write([]byte(validFeedJSON))
+		       ^
+internal\sources\feed\fetch_test.go:119:12: Error return value is not checked (errcheck)
+		flusher, _ := w.(http.Flusher)
+		         ^
+internal\sources\service_test.go:77:13: Error return value of `fmt.Fprint` is not checked (errcheck)
+		fmt.Fprint(w, body)
+		          ^
+internal\storage\doc.go:97:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(tmp)
+		         ^
+internal\updates\apply.go:99:18: Error return value of `s.CheckGame` is not checked (errcheck)
+			go s.CheckGame(gameID)
+			              ^
+internal\updates\apply.go:577:16: Error return value of `s.CheckGame` is not checked (errcheck)
+	go s.CheckGame(gameID)
+	              ^
+internal\updates\apply.go:706:16: Error return value of `in.Close` is not checked (errcheck)
+	defer in.Close()
+	              ^
+internal\updates\apply.go:712:12: Error return value of `out.Close` is not checked (errcheck)
+		out.Close()
+		         ^
+internal\updates\apply.go:713:12: Error return value of `os.Remove` is not checked (errcheck)
+		os.Remove(dst)
+		         ^
+internal\updates\graph.go:80:7: Error return value is not checked (errcheck)
+	n := x.(*node)
+	     ^
+internal\updates\graph.go:122:14: Error return value is not checked (errcheck)
+		current := heap.Pop(pending).(*node)
+		           ^
+internal\updates\manifest.go:82:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal\updates\service_test.go:375:9: Error return value of `h.service.GetVerifyState` is not checked (errcheck)
+	state, _ := h.service.GetVerifyState("local-1")
+	       ^
+internal\updates\service_test.go:395:11: Error return value of `os.ReadFile` is not checked (errcheck)
+	if data, _ := os.ReadFile(filepath.Join(current, "marker")); string(data) != "new" {
+	         ^
+internal\updates\service_test.go:401:11: Error return value of `os.ReadFile` is not checked (errcheck)
+	if data, _ := os.ReadFile(filepath.Join(current, "marker")); string(data) != "old" {
+	         ^
+internal\updates\verify.go:222:9: Error return value of `s.GetVerifyState` is not checked (errcheck)
+	state, _ := s.GetVerifyState(gameID)
+	       ^
+internal\download\manager_test.go:311:26: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.Pause("a"); err != errUnavailable {
+	                        ^
+internal\download\manager_test.go:314:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.Resume("a"); err != errUnavailable {
+	                         ^
+internal\download\manager_test.go:321:29: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.Pause("nope"); err != errNotFound {
+	                           ^
+internal\download\manager_test.go:324:30: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if _, err := m.Get("nope"); err != errNotFound {
+	                            ^
+internal\download\manager_test.go:367:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.MoveUp("a"); err != errUnavailable {
+	                         ^
+internal\download\manager_test.go:382:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if _, err := m.Get("a"); err != errNotFound {
+	                         ^
+internal\download\manager_test.go:459:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if _, err := m.Get("a"); err != errNotFound {
+	                         ^
+internal\download\manager_test.go:520:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.Resume("a"); err != errNoRestore {
+	                         ^
+internal\download\manager_test.go:526:31: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.ForceStart("a"); err != errNoRestore {
+	                             ^
+internal\download\manager_test.go:541:27: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.Resume("a"); err != errNoClient {
+	                         ^
+internal\download\manager_test.go:745:31: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.DeleteData("a"); err != errSeeding {
+	                             ^
+internal\download\manager_test.go:756:31: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.DeleteData("a"); err != errUnavailable {
+	                             ^
+internal\download\manager_test.go:759:37: comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error (errorlint)
+	if err := m.DeleteData("missing"); err != errNotFound {
+	                                   ^
+internal\account\service.go:24:29: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+	return context.WithTimeout(context.Background(), requestTimeout)
+	                           ^
+internal\download\manager.go:321:9: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		ctx = context.Background()
+		      ^
+internal\download\manager_test.go:182:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(5 * time.Millisecond)
+		^
+internal\download\reuse.go:202:9: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		ctx = context.Background()
+		      ^
+internal\download\tasks.go:135:9: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		ctx = context.Background()
+		      ^
+internal\install\service.go:583:10: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		base = context.Background()
+		       ^
+internal\install\service_test.go:128:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(2 * time.Millisecond)
+		^
+internal\library\sessions_test.go:31:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(50 * time.Millisecond)
+		^
+internal\library\sessions_test.go:76:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(50 * time.Millisecond)
+		^
+internal\sources\service.go:362:9: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+	return context.Background()
+	       ^
+internal\updates\service.go:246:10: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		return context.Background()
+		       ^
+internal\updates\service.go:602:10: use of `context.Background` forbidden because "ctx пробрасывается параметром; Background только в main и тестах" (forbidigo)
+		base = context.Background()
+		       ^
+internal\updates\service_test.go:240:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(5 * time.Millisecond)
+		^
+internal\updates\service_test.go:364:3: use of `time.Sleep` forbidden because "в тестах синхронизация каналами; в коде таймер с ctx" (forbidigo)
+		time.Sleep(5 * time.Millisecond)
+		^
+main.go:120:3: use of `log.Fatal` forbidden because "логирование только через slog" (forbidigo)
+		log.Fatal(err)
+		^
+internal\app\app.go:1:1: File is not properly formatted (gofmt)
+package app
+^
+internal\download\classicio\classicio.go:1:1: File is not properly formatted (gofmt)
+package classicio
+^
+internal\download\manager_test.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\download\speed.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\download\speed_test.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\download\store.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\download\store_test.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\download\torrent_test.go:1:1: File is not properly formatted (gofmt)
+package download
+^
+internal\install\archive.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\archive_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\executable.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\executable_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\fsops_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\helpers_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\inspect.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\inspect_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\progress.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\rar.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\runner.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\runner_windows.go:1:1: File is not properly formatted (gofmt)
+//go:build windows
+^
+internal\install\safety.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\safety_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\sevenzip.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\snapshot.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\snapshot_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\store.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\version.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\version_test.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\version_windows.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\install\zip.go:1:1: File is not properly formatted (gofmt)
+package install
+^
+internal\library\library_test.go:1:1: File is not properly formatted (gofmt)
+package library
+^
+internal\platform\platform_test.go:1:1: File is not properly formatted (gofmt)
+package platform
+^
+internal\settings\settings.go:1:1: File is not properly formatted (gofmt)
+package settings
+^
+internal\sources\store.go:1:1: File is not properly formatted (gofmt)
+package sources
+^
+internal\storage\doc.go:1:1: File is not properly formatted (gofmt)
+package storage
+^
+internal\storage\doc_test.go:1:1: File is not properly formatted (gofmt)
+package storage
+^
+internal\updates\store.go:1:1: File is not properly formatted (gofmt)
+package updates
+^
+internal\account\service.go:66:15: G304: Potential file inclusion via variable (gosec)
+	data, err := os.ReadFile(path)
+	             ^
+internal\account\token.go:33:12: G304: Potential file inclusion via variable (gosec)
+	f, err := os.Open(path)
+	          ^
+internal\app\logging.go:39:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+	          ^
+internal\app\logging.go:47:9: G302: Expect file permissions to be 0600 or less (gosec)
+	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	       ^
+internal\catalog\catalog_test.go:239:15: G304: Potential file inclusion via variable (gosec)
+	data, err := os.ReadFile(filepath.Join(dir, "catalog.json"))
+	             ^
+internal\download\manager.go:484:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+	          ^
+internal\download\manager.go:500:89: G115: integer overflow conversion int64 -> uint64 (gosec)
+	if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
+	                                                                                       ^
+internal\download\manager.go:503:38: G115: integer overflow conversion uint64 -> int64 (gosec)
+			humanSize(needed), humanSize(int64(st.FreeBytes)))
+			                                  ^
+internal\download\manager_test.go:646:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+	          ^
+internal\download\manager_test.go:649:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(filepath.Join(root, "chunk.bin"), []byte("data"), 0o644); err != nil {
+	          ^
+internal\download\manager_test.go:672:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+	          ^
+internal\download\manager_test.go:767:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+	          ^
+internal\download\manager_test.go:770:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(filepath.Join(root, "game.bin"), []byte("data"), 0o644); err != nil {
+	          ^
+internal\download\reuse_test.go:111:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\download\reuse_test.go:114:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, make([]byte, size), 0o644); err != nil {
+	          ^
+internal\download\store.go:76:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+	          ^
+internal\download\store.go:91:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\download\store.go:152:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	          ^
+internal\download\store_test.go:71:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(filepath.Join(dir, "downloads.json"), []byte("{not json"), 0o644); err != nil {
+	          ^
+internal\download\store_test.go:88:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\download\store_test.go:91:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, []byte("d4:infod4:name1:aee"), 0o644); err != nil {
+	          ^
+internal\download\tasks.go:44:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+	          ^
+internal\download\tasks.go:68:90: G115: integer overflow conversion int64 -> uint64 (gosec)
+		if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
+		                                                                                       ^
+internal\download\tasks.go:70:39: G115: integer overflow conversion uint64 -> int64 (gosec)
+				humanSize(needed), humanSize(int64(st.FreeBytes)))
+				                                  ^
+internal\install\archive.go:49:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+	          ^
+internal\install\archive.go:92:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	          ^
+internal\install\archive.go:95:12: G304: Potential file inclusion via variable (gosec)
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, entryMode(mode))
+	          ^
+internal\install\archive_test.go:35:16: G304: Potential file inclusion via variable (gosec)
+		data, err := os.ReadFile(filepath.Join(dest, filepath.FromSlash(name)))
+		             ^
+internal\install\fsops.go:31:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+	          ^
+internal\install\fsops.go:53:11: G301: Expect directory permissions to be 0750 or less (gosec)
+			return os.MkdirAll(target, 0o755)
+			       ^
+internal\install\fsops.go:80:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+	          ^
+internal\install\fsops.go:102:11: G301: Expect directory permissions to be 0750 or less (gosec)
+			return os.MkdirAll(target, 0o755)
+			       ^
+internal\install\fsops.go:135:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	          ^
+internal\install\fsops.go:158:13: G304: Potential file inclusion via variable (gosec)
+	in, err := os.Open(src)
+	           ^
+internal\install\fsops.go:163:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	          ^
+internal\install\fsops.go:166:14: G304: Potential file inclusion via variable (gosec)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, entryMode(mode))
+	            ^
+internal\install\fsops_test.go:19:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Join(src, "empty"), 0o755); err != nil {
+	          ^
+internal\install\fsops_test.go:29:18: G304: Potential file inclusion via variable (gosec)
+	if data, err := os.ReadFile(filepath.Join(dst, "a.txt")); err != nil || string(data) != "alpha" {
+	                ^
+internal\install\fsops_test.go:32:18: G304: Potential file inclusion via variable (gosec)
+	if data, err := os.ReadFile(filepath.Join(dst, "sub", "b.txt")); err != nil || string(data) != "beta" {
+	                ^
+internal\install\fsops_test.go:62:18: G304: Potential file inclusion via variable (gosec)
+	if data, err := os.ReadFile(filepath.Join(dst, "keep.txt")); err != nil || string(data) != "keep" {
+	                ^
+internal\install\fsops_test.go:125:18: G304: Potential file inclusion via variable (gosec)
+	if data, err := os.ReadFile(filepath.Join(dst, "a.txt")); err != nil || string(data) != "alpha" {
+	                ^
+internal\install\fsops_test.go:183:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(missing, 0o755); err != nil {
+	          ^
+internal\install\helpers_test.go:18:12: G304: Potential file inclusion via variable (gosec)
+	f, err := os.Create(path)
+	          ^
+internal\install\helpers_test.go:40:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\install\helpers_test.go:43:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, bytes.Repeat([]byte{'x'}, size), 0o644); err != nil {
+	          ^
+internal\install\helpers_test.go:50:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\install\helpers_test.go:53:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	          ^
+internal\install\helpers_test.go:59:19: G703: Path traversal via taint analysis (gosec)
+	_, err := os.Stat(path)
+	                 ^
+internal\install\rar.go:40:14: G301: Expect directory permissions to be 0750 or less (gosec)
+			if err := os.MkdirAll(target, 0o755); err != nil {
+			          ^
+internal\install\runner_windows.go:16:9: G204: Subprocess launched with a potential tainted input or cmd arguments (gosec)
+	cmd := exec.Command(spec.Path, spec.Args...)
+	       ^
+internal\install\safety_test.go:71:15: G304: Potential file inclusion via variable (gosec)
+	data, err := os.ReadFile(filepath.Join(dest, "good", "ok.txt"))
+	             ^
+internal\install\service_test.go:296:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+	          ^
+internal\install\service_test.go:335:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+	          ^
+internal\install\service_test.go:347:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+	          ^
+internal\install\sevenzip.go:32:14: G301: Expect directory permissions to be 0750 or less (gosec)
+			if err := os.MkdirAll(target, 0o755); err != nil {
+			          ^
+internal\install\sevenzip.go:64:17: G115: integer overflow conversion uint64 -> int64 (gosec)
+		total += int64(entry.UncompressedSize)
+		              ^
+internal\install\snapshot_test.go:67:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+	          ^
+internal\install\store.go:47:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+	          ^
+internal\install\store.go:59:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	          ^
+internal\install\version.go:45:16: G304: Potential file inclusion via variable (gosec)
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		             ^
+internal\install\version_windows.go:17:54: G103: Use of unsafe calls should be audited (gosec)
+	if err := windows.GetFileVersionInfo(path, 0, size, unsafe.Pointer(&block[0])); err != nil {
+	                                                    ^
+internal\install\version_windows.go:43:34: G103: Use of unsafe calls should be audited (gosec)
+	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\VarFileInfo\Translation`, unsafe.Pointer(&ptr), &size); err != nil || size < 4 {
+	                                ^
+internal\install\version_windows.go:54:34: G103: Use of unsafe calls should be audited (gosec)
+	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), sub, unsafe.Pointer(&ptr), &size); err != nil || size == 0 {
+	                                ^
+internal\install\version_windows.go:63:34: G103: Use of unsafe calls should be audited (gosec)
+	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\`, unsafe.Pointer(&ptr), &size); err != nil || size == 0 {
+	                                ^
+internal\install\zip.go:31:14: G301: Expect directory permissions to be 0750 or less (gosec)
+			if err := os.MkdirAll(target, 0o755); err != nil {
+			          ^
+internal\install\zip.go:63:17: G115: integer overflow conversion uint64 -> int64 (gosec)
+		total += int64(entry.UncompressedSize64)
+		              ^
+internal\library\library.go:114:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	          ^
+internal\library\library.go:121:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+	          ^
+internal\library\library_test.go:14:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(exe, []byte("stub"), 0o755); err != nil {
+	          ^
+internal\library\sessions.go:39:9: G204: Subprocess launched with a potential tainted input or cmd arguments (gosec)
+	cmd := exec.Command(game.Executable, game.LaunchArgs...)
+	       ^
+internal\library\sessions_test.go:45:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(gameDir, 0o755); err != nil {
+	          ^
+internal\library\sessions_test.go:53:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(exe, data, 0o755); err != nil {
+	          ^
+internal\platform\open.go:20:10: G204: Subprocess launched with variable (gosec)
+		return exec.Command("explorer.exe", path).Start()
+		       ^
+internal\platform\open.go:22:10: G204: Subprocess launched with variable (gosec)
+		return exec.Command("open", path).Start()
+		       ^
+internal\platform\open.go:24:10: G204: Subprocess launched with variable (gosec)
+		return exec.Command("xdg-open", path).Start()
+		       ^
+internal\platform\storage_windows.go:34:88: G115: integer overflow conversion int -> uint32 (gosec)
+		err = windows.GetVolumeInformation(rootPtr, nil, 0, nil, nil, nil, &fsName[0], uint32(len(fsName)))
+		                                                                                     ^
+internal\platform\storage_windows.go:47:58: G103: Use of unsafe calls should be audited (gosec)
+	r1, _, callErr := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&mem)))
+	                                                        ^
+internal\settings\settings.go:236:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	          ^
+internal\settings\settings.go:244:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+	          ^
+internal\settings\settings_test.go:115:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, []byte(`{"theme":"dark","gamesPath":"D:\\Games"}`), 0o644); err != nil {
+	          ^
+internal\settings\settings_test.go:155:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, []byte("{broken"), 0o644); err != nil {
+	          ^
+internal\storage\doc.go:23:14: G304: Potential file inclusion via variable (gosec)
+	raw, err := os.ReadFile(path)
+	            ^
+internal\storage\doc.go:84:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\storage\doc.go:92:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	          ^
+internal\storage\doc_test.go:48:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+	          ^
+internal\updates\apply.go:683:13: G301: Expect directory permissions to be 0750 or less (gosec)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		          ^
+internal\updates\apply.go:702:13: G304: Potential file inclusion via variable (gosec)
+	in, err := os.Open(src)
+	           ^
+internal\updates\apply.go:707:14: G304: Potential file inclusion via variable (gosec)
+	out, err := os.Create(dst)
+	            ^
+internal\updates\manifest.go:78:12: G304: Potential file inclusion via variable (gosec)
+	f, err := os.Open(path)
+	          ^
+internal\updates\manifest_test.go:13:12: G301: Expect directory permissions to be 0750 or less (gosec)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	          ^
+internal\updates\manifest_test.go:16:12: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	          ^
+internal\updates\service_test.go:153:14: G301: Expect directory permissions to be 0750 or less (gosec)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			          ^
+internal\updates\service_test.go:156:14: G306: Expect WriteFile permissions to be 0600 or less (gosec)
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			          ^
+internal\install\executable.go:93:4: error is not nil (line 91) but it returns nil (nilerr)
+			return nil
+			^
+internal\install\executable.go:104:4: error is not nil (line 102) but it returns nil (nilerr)
+			return nil
+			^
+internal\install\executable.go:108:4: error is not nil (line 106) but it returns nil (nilerr)
+			return nil
+			^
+internal\install\fsops.go:209:4: error is not nil (line 207) but it returns nil (nilerr)
+			return nil
+			^
+internal\library\library.go:341:4: error is not nil (line 339) but it returns nil (nilerr)
+			return nil
+			^
+internal\updates\apply.go:666:4: error is not nil (line 664) but it returns nil (nilerr)
+			return nil
+			^
+internal\updates\apply.go:673:4: error is not nil (line 671) but it returns nil (nilerr)
+			return nil
+			^
+internal\updates\apply.go:681:4: error is not nil (line 679) but it returns nil (nilerr)
+			return nil
+			^
+internal\updates\apply.go:684:4: error is not nil (line 683) but it returns nil (nilerr)
+			return nil
+			^
+internal\updates\manifest.go:265:4: error is not nil (line 261) but it returns nil (nilerr)
+			return nil
+			^
+internal\sources\service_test.go:20:27: use slog.DiscardHandler instead (sloglint)
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	                         ^
+internal\updates\store.go:50:14: message should be a string literal or a constant (sloglint)
+		slog.Error("load "+label, "error", err)
+		           ^
+internal\download\manager.go:909:39: QF1001: could apply De Morgan's law (staticcheck)
+		if d.Status != StatusDownloading && !(d.Status == StatusCompleted && d.Seeding) {
+		                                    ^
+internal\download\manager.go:1102:20: QF1001: could apply De Morgan's law (staticcheck)
+		if j.complete && !(j.seeding && seed) {
+		                 ^
+internal\sources\feed\magnet.go:58:6: QF1001: could apply De Morgan's law (staticcheck)
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		   ^
+internal\install\runner.go:8:5: var errWindowsOnly is unused (unused)
+var errWindowsOnly = errors.New("установка доступна только в Windows")
+    ^
+internal\updates\service.go:674:6: func humanSize is unused (unused)
+func humanSize(bytes int64) string {
+     ^
+239 issues:
+* contextcheck: 5
+* errcheck: 59
+* errorlint: 13
+* forbidigo: 15
+* gofmt: 37
+* gosec: 93
+* nilerr: 10
+* sloglint: 2
+* staticcheck: 3
+* unused: 2

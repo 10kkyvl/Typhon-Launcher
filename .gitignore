@@ -19,8 +19,8 @@ frontend/bindings/
 Thumbs.db
 *.log
 
-CLAUDE.md
-.claude/
+.claude/*
+!.claude/settings.json
 .codex/
 .cursor/
 .aider*

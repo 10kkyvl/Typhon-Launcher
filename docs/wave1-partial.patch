@@ -1,0 +1,679 @@
+diff --git a/internal/download/store.go b/internal/download/store.go
+index 660a425..9233cb8 100644
+--- a/internal/download/store.go
++++ b/internal/download/store.go
+@@ -4,12 +4,16 @@ import (
+ 	"bytes"
+ 	"encoding/json"
+ 	"errors"
++	"fmt"
++	"io/fs"
+ 	"log/slog"
+ 	"os"
+ 	"path/filepath"
+ 	"strings"
+ 	"time"
+ 
++	"typhon/internal/storage"
++
+ 	"github.com/anacrolix/torrent/metainfo"
+ )
+ 
+@@ -49,24 +53,22 @@ func (s *store) metainfoPath(infoHash string) string {
+ 	return filepath.Join(s.dir, "torrents", infoHash+".torrent")
+ }
+ 
+-func (s *store) load() []record {
++func (s *store) load() ([]record, error) {
+ 	if s.dir == "" {
+-		return nil
++		return nil, errors.New("downloads path unavailable")
+ 	}
+ 	data, err := os.ReadFile(s.listPath())
+-	if errors.Is(err, os.ErrNotExist) {
+-		return nil
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil, nil
+ 	}
+ 	if err != nil {
+-		slog.Error("read downloads", "path", s.listPath(), "error", err)
+-		return nil
++		return nil, fmt.Errorf("read downloads %s: %w", s.listPath(), err)
+ 	}
+ 	var records []record
+ 	if err := json.Unmarshal(data, &records); err != nil {
+-		slog.Error("parse downloads", "path", s.listPath(), "error", err)
+-		return nil
++		return nil, fmt.Errorf("parse downloads %s: %w", s.listPath(), err)
+ 	}
+-	return records
++	return records, nil
+ }
+ 
+ func (s *store) save(records []record) error {
+@@ -80,7 +82,7 @@ func (s *store) save(records []record) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	return writeAtomic(s.listPath(), data)
++	return storage.WriteAtomic(s.listPath(), data)
+ }
+ 
+ func (s *store) saveMetainfo(infoHash string, mi *metainfo.MetaInfo) error {
+@@ -95,7 +97,7 @@ func (s *store) saveMetainfo(infoHash string, mi *metainfo.MetaInfo) error {
+ 	if err := mi.Write(&buf); err != nil {
+ 		return err
+ 	}
+-	return writeAtomic(path, buf.Bytes())
++	return storage.WriteAtomic(path, buf.Bytes())
+ }
+ 
+ func (s *store) loadMetainfo(infoHash string) (*metainfo.MetaInfo, error) {
+@@ -146,17 +148,3 @@ func (s *store) removeMetainfo(infoHash string) {
+ 		slog.Warn("remove torrent file", "infoHash", infoHash, "error", err)
+ 	}
+ }
+-
+-func writeAtomic(path string, data []byte) error {
+-	tmp := path + ".tmp"
+-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+-		slog.Error("write file", "path", tmp, "error", err)
+-		return err
+-	}
+-	if err := os.Rename(tmp, path); err != nil {
+-		os.Remove(tmp)
+-		slog.Error("replace file", "path", path, "error", err)
+-		return err
+-	}
+-	return nil
+-}
+diff --git a/internal/install/store.go b/internal/install/store.go
+index d7d42ca..f3f36c9 100644
+--- a/internal/install/store.go
++++ b/internal/install/store.go
+@@ -3,9 +3,12 @@ package install
+ import (
+ 	"encoding/json"
+ 	"errors"
+-	"log/slog"
++	"fmt"
++	"io/fs"
+ 	"os"
+ 	"path/filepath"
++
++	"typhon/internal/storage"
+ )
+ 
+ type store struct {
+@@ -20,24 +23,22 @@ func (s *store) listPath() string {
+ 	return filepath.Join(s.dir, "installations.json")
+ }
+ 
+-func (s *store) load() []Installation {
++func (s *store) load() ([]Installation, error) {
+ 	if s.dir == "" {
+-		return nil
++		return nil, errors.New("installations path unavailable")
+ 	}
+ 	data, err := os.ReadFile(s.listPath())
+-	if errors.Is(err, os.ErrNotExist) {
+-		return nil
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil, nil
+ 	}
+ 	if err != nil {
+-		slog.Error("read installations", "path", s.listPath(), "error", err)
+-		return nil
++		return nil, fmt.Errorf("read installations %s: %w", s.listPath(), err)
+ 	}
+ 	var items []Installation
+ 	if err := json.Unmarshal(data, &items); err != nil {
+-		slog.Error("parse installations", "path", s.listPath(), "error", err)
+-		return nil
++		return nil, fmt.Errorf("parse installations %s: %w", s.listPath(), err)
+ 	}
+-	return items
++	return items, nil
+ }
+ 
+ func (s *store) save(items []Installation) error {
+@@ -51,19 +52,5 @@ func (s *store) save(items []Installation) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	return writeAtomic(s.listPath(), data)
+-}
+-
+-func writeAtomic(path string, data []byte) error {
+-	tmp := path + ".tmp"
+-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+-		slog.Error("write file", "path", tmp, "error", err)
+-		return err
+-	}
+-	if err := os.Rename(tmp, path); err != nil {
+-		os.Remove(tmp)
+-		slog.Error("replace file", "path", path, "error", err)
+-		return err
+-	}
+-	return nil
++	return storage.WriteAtomic(s.listPath(), data)
+ }
+diff --git a/internal/settings/settings.go b/internal/settings/settings.go
+index 4a54e17..6f4f5fd 100644
+--- a/internal/settings/settings.go
++++ b/internal/settings/settings.go
+@@ -4,11 +4,14 @@ import (
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"io/fs"
+ 	"log/slog"
+ 	"os"
+ 	"path/filepath"
+ 	"sync"
+ 
++	"typhon/internal/storage"
++
+ 	"github.com/wailsapp/wails/v3/pkg/application"
+ )
+ 
+@@ -156,36 +159,40 @@ type Service struct {
+ 	nextSub int
+ }
+ 
+-func NewService() *Service {
++func NewService() (*Service, error) {
+ 	dir, err := ConfigDir()
+ 	if err != nil {
+-		slog.Error("resolve config dir", "error", err)
+-		return &Service{current: Defaults()}
++		return nil, fmt.Errorf("resolve config dir: %w", err)
+ 	}
+ 	return newServiceAt(filepath.Join(dir, "settings.json"))
+ }
+ 
+-func newServiceAt(path string) *Service {
++func newServiceAt(path string) (*Service, error) {
++	if path == "" {
++		return nil, errors.New("settings path unavailable")
++	}
+ 	s := &Service{current: Defaults(), path: path}
+-	s.load()
+-	return s
++	current, err := s.load()
++	if err != nil {
++		return nil, err
++	}
++	s.current = current
++	return s, nil
+ }
+ 
+-func (s *Service) load() {
++func (s *Service) load() (Settings, error) {
+ 	data, err := os.ReadFile(s.path)
+-	if errors.Is(err, os.ErrNotExist) {
+-		return
++	if errors.Is(err, fs.ErrNotExist) {
++		return Defaults(), nil
+ 	}
+ 	if err != nil {
+-		slog.Error("read settings", "path", s.path, "error", err)
+-		return
++		return Settings{}, fmt.Errorf("read settings %s: %w", s.path, err)
+ 	}
+ 	loaded := Defaults()
+ 	if err := json.Unmarshal(data, &loaded); err != nil {
+-		slog.Error("parse settings", "path", s.path, "error", err)
+-		return
++		return Settings{}, fmt.Errorf("parse settings %s: %w", s.path, err)
+ 	}
+-	s.current = sanitize(loaded)
++	return sanitize(loaded), nil
+ }
+ 
+ //wails:ignore
+@@ -234,15 +241,13 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
+ 		return next, nil, errors.New("settings path unavailable")
+ 	}
+ 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+-		slog.Error("create config dir", "error", err)
+ 		return next, nil, fmt.Errorf("create config dir: %w", err)
+ 	}
+ 	data, err := json.MarshalIndent(next, "", "  ")
+ 	if err != nil {
+ 		return next, nil, err
+ 	}
+-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+-		slog.Error("write settings", "path", s.path, "error", err)
++	if err := storage.WriteAtomic(s.path, data); err != nil {
+ 		return next, nil, fmt.Errorf("write settings: %w", err)
+ 	}
+ 	s.current = next
+diff --git a/internal/sources/store.go b/internal/sources/store.go
+index e4dd8ad..ab79bf3 100644
+--- a/internal/sources/store.go
++++ b/internal/sources/store.go
+@@ -2,6 +2,8 @@ package sources
+ 
+ import (
+ 	"errors"
++	"fmt"
++	"io/fs"
+ 	"log/slog"
+ 	"os"
+ 	"path/filepath"
+@@ -36,17 +38,20 @@ func (s *store) releasesPath(sourceID string) string {
+ 	return filepath.Join(s.dir, "releases", sourceID+".json")
+ }
+ 
+-func (s *store) loadSources() []Source {
++func (s *store) loadSources() ([]Source, error) {
+ 	path := s.sourcesPath()
+ 	if path == "" {
+-		return nil
++		return nil, errors.New("sources path unavailable")
+ 	}
+ 	var list []Source
+-	if err := storage.Load(path, sourcesVersion, nil, &list); err != nil {
+-		slog.Error("load sources", "error", err)
+-		return nil
++	err := storage.Load(path, sourcesVersion, nil, &list)
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil, nil
+ 	}
+-	return list
++	if err != nil {
++		return nil, fmt.Errorf("load sources: %w", err)
++	}
++	return list, nil
+ }
+ 
+ func (s *store) saveSources(list []Source) error {
+@@ -57,17 +62,20 @@ func (s *store) saveSources(list []Source) error {
+ 	return storage.Save(path, sourcesVersion, list)
+ }
+ 
+-func (s *store) loadReleases(sourceID string) []Release {
++func (s *store) loadReleases(sourceID string) ([]Release, error) {
+ 	path := s.releasesPath(sourceID)
+ 	if path == "" {
+-		return nil
++		return nil, errors.New("releases path unavailable")
+ 	}
+ 	var list []Release
+-	if err := storage.Load(path, releasesVersion, nil, &list); err != nil {
+-		slog.Error("load releases", "source", sourceID, "error", err)
+-		return nil
++	err := storage.Load(path, releasesVersion, nil, &list)
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, fmt.Errorf("load releases %s: %w", sourceID, err)
+ 	}
+-	return list
++	return list, nil
+ }
+ 
+ func (s *store) saveReleases(sourceID string, list []*Release) error {
+diff --git a/internal/storage/doc.go b/internal/storage/doc.go
+index a6cc61e..58d7f7d 100644
+--- a/internal/storage/doc.go
++++ b/internal/storage/doc.go
+@@ -1,9 +1,11 @@
+ package storage
+ 
+ import (
++	"bytes"
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"io/fs"
+ 	"log/slog"
+ 	"os"
+ 	"path/filepath"
+@@ -21,15 +23,12 @@ func Load(path string, version int, migrations map[int]Migration, out any) error
+ 		return errors.New("storage path unavailable")
+ 	}
+ 	raw, err := os.ReadFile(path)
+-	if errors.Is(err, os.ErrNotExist) {
+-		return nil
+-	}
+ 	if err != nil {
+ 		return fmt.Errorf("read %s: %w", filepath.Base(path), err)
+ 	}
+ 	payload, from, err := split(raw)
+ 	if err != nil {
+-		return err
++		return fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+ 	}
+ 	if from > version {
+ 		return fmt.Errorf("%s: unsupported version %d", filepath.Base(path), from)
+@@ -55,16 +54,22 @@ func Load(path string, version int, migrations map[int]Migration, out any) error
+ }
+ 
+ func split(raw []byte) (json.RawMessage, int, error) {
++	trimmed := bytes.TrimSpace(raw)
++	if len(trimmed) == 0 {
++		return nil, 0, errors.New("empty document")
++	}
+ 	var envelope doc
+-	if err := json.Unmarshal(raw, &envelope); err != nil {
+-		var legacy json.RawMessage
+-		if json.Unmarshal(raw, &legacy) != nil {
+-			return nil, 0, errors.New("invalid json")
++	if err := json.Unmarshal(trimmed, &envelope); err != nil {
++		if trimmed[0] != '[' && trimmed[0] != '{' {
++			return nil, 0, fmt.Errorf("unexpected document root: %w", err)
++		}
++		if !json.Valid(trimmed) {
++			return nil, 0, fmt.Errorf("malformed document: %w", err)
+ 		}
+-		return legacy, 0, nil
++		return json.RawMessage(trimmed), 0, nil
+ 	}
+ 	if envelope.Version == 0 || envelope.Data == nil {
+-		return json.RawMessage(raw), 0, nil
++		return json.RawMessage(trimmed), 0, nil
+ 	}
+ 	return envelope.Data, envelope.Version, nil
+ }
+@@ -88,15 +93,66 @@ func Save(path string, version int, data any) error {
+ }
+ 
+ func WriteAtomic(path string, data []byte) error {
+-	tmp := path + ".tmp"
+-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+-		slog.Error("write file", "path", tmp, "error", err)
+-		return err
++	dir := filepath.Dir(path)
++	mode := fs.FileMode(0o600)
++	if info, err := os.Stat(path); err == nil {
++		mode = info.Mode().Perm()
++	} else if !errors.Is(err, fs.ErrNotExist) {
++		return fmt.Errorf("stat %s: %w", path, err)
++	}
++
++	f, err := os.CreateTemp(dir, ".tmp-*")
++	if err != nil {
++		return fmt.Errorf("create temp file in %s: %w", dir, err)
++	}
++	tmp := f.Name()
++	if err := writeAndSync(f, data, mode); err != nil {
++		discardTemp(f)
++		return fmt.Errorf("write %s: %w", tmp, err)
++	}
++	if err := f.Close(); err != nil {
++		discardTemp(f)
++		return fmt.Errorf("close %s: %w", tmp, err)
+ 	}
+ 	if err := os.Rename(tmp, path); err != nil {
+-		os.Remove(tmp)
+-		slog.Error("replace file", "path", path, "error", err)
+-		return err
++		discardTemp(f)
++		return fmt.Errorf("replace %s: %w", path, err)
+ 	}
++	syncDir(dir)
+ 	return nil
+ }
++
++func writeAndSync(f *os.File, data []byte, mode fs.FileMode) error {
++	if _, err := f.Write(data); err != nil {
++		return err
++	}
++	if err := f.Chmod(mode); err != nil {
++		return err
++	}
++	return f.Sync()
++}
++
++func discardTemp(f *os.File) {
++	if err := f.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
++		slog.Warn("close temp file", "path", f.Name(), "err", err)
++	}
++	if err := os.Remove(f.Name()); err != nil && !errors.Is(err, fs.ErrNotExist) {
++		slog.Warn("remove temp file", "path", f.Name(), "err", err)
++	}
++}
++
++// Windows не даёт открыть каталог как файл и не поддерживает его fsync, поэтому
++// долговечность самой записи каталога здесь best-effort.
++func syncDir(dir string) {
++	d, err := os.Open(dir)
++	if err != nil {
++		slog.Debug("open dir for sync", "dir", dir, "err", err)
++		return
++	}
++	if err := d.Sync(); err != nil {
++		slog.Debug("sync dir", "dir", dir, "err", err)
++	}
++	if err := d.Close(); err != nil {
++		slog.Debug("close dir", "dir", dir, "err", err)
++	}
++}
+diff --git a/internal/storage/doc_test.go b/internal/storage/doc_test.go
+index d8cc227..4553cae 100644
+--- a/internal/storage/doc_test.go
++++ b/internal/storage/doc_test.go
+@@ -2,6 +2,8 @@ package storage
+ 
+ import (
+ 	"encoding/json"
++	"errors"
++	"io/fs"
+ 	"os"
+ 	"path/filepath"
+ 	"testing"
+@@ -28,16 +30,107 @@ func TestSaveLoadRoundTrip(t *testing.T) {
+ 	}
+ }
+ 
+-func TestLoadMissingFileIsNoop(t *testing.T) {
++func TestLoadMissingFileReportsNotExist(t *testing.T) {
+ 	var got []item
+-	if err := Load(filepath.Join(t.TempDir(), "absent.json"), 1, nil, &got); err != nil {
+-		t.Fatalf("load: %v", err)
++	err := Load(filepath.Join(t.TempDir(), "absent.json"), 1, nil, &got)
++	if !errors.Is(err, fs.ErrNotExist) {
++		t.Fatalf("load: %v, want fs.ErrNotExist", err)
+ 	}
+ 	if got != nil {
+ 		t.Fatalf("got %+v, want nil", got)
+ 	}
+ }
+ 
++func TestLoadRejectsCorruptFile(t *testing.T) {
++	cases := []struct {
++		name string
++		raw  string
++	}{
++		{"truncated envelope", `{"version":1,"data":[`},
++		{"truncated array", `[{"id":"1"`},
++		{"scalar root", `42`},
++		{"garbage", `not json at all`},
++		{"empty", ``},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			path := filepath.Join(t.TempDir(), "items.json")
++			if err := os.WriteFile(path, []byte(tc.raw), 0o644); err != nil {
++				t.Fatal(err)
++			}
++			var got []item
++			err := Load(path, 1, nil, &got)
++			if err == nil {
++				t.Fatal("expected error")
++			}
++			if errors.Is(err, fs.ErrNotExist) {
++				t.Fatalf("corrupt file reported as missing: %v", err)
++			}
++		})
++	}
++}
++
++func TestWriteAtomicLeavesNoTempOnFailure(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "sub", "items.json")
++	if err := WriteAtomic(path, []byte("payload")); err == nil {
++		t.Fatal("expected error writing into missing directory")
++	}
++	entries, err := os.ReadDir(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(entries) != 0 {
++		t.Fatalf("leftovers: %v", entries)
++	}
++}
++
++func TestWriteAtomicDoesNotUseSuffixTemp(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "items.json")
++	if err := os.WriteFile(path+".tmp", []byte("sentinel"), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	if err := WriteAtomic(path, []byte("payload")); err != nil {
++		t.Fatalf("write: %v", err)
++	}
++	sentinel, err := os.ReadFile(path + ".tmp")
++	if err != nil {
++		t.Fatalf("read sentinel: %v", err)
++	}
++	if string(sentinel) != "sentinel" {
++		t.Fatalf("path+\".tmp\" was reused as scratch file")
++	}
++	entries, err := os.ReadDir(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(entries) != 2 {
++		t.Fatalf("unexpected leftovers: %v", entries)
++	}
++}
++
++func TestWriteAtomicKeepsExistingMode(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "items.json")
++	if err := os.WriteFile(path, []byte("a"), 0o640); err != nil {
++		t.Fatal(err)
++	}
++	before, err := os.Stat(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := WriteAtomic(path, []byte("b")); err != nil {
++		t.Fatalf("write: %v", err)
++	}
++	after, err := os.Stat(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if before.Mode().Perm() != after.Mode().Perm() {
++		t.Fatalf("mode changed: %v -> %v", before.Mode().Perm(), after.Mode().Perm())
++	}
++}
++
+ func TestLoadLegacyFileRunsMigrations(t *testing.T) {
+ 	path := filepath.Join(t.TempDir(), "items.json")
+ 	legacy := []map[string]string{{"id": "1", "name": "Старый формат"}}
+diff --git a/internal/updates/store.go b/internal/updates/store.go
+index f158c0c..e77e159 100644
+--- a/internal/updates/store.go
++++ b/internal/updates/store.go
+@@ -2,6 +2,8 @@ package updates
+ 
+ import (
+ 	"errors"
++	"fmt"
++	"io/fs"
+ 	"log/slog"
+ 	"os"
+ 	"path/filepath"
+@@ -41,19 +43,22 @@ func (s *store) manifestPath(gameID string) string {
+ 	return filepath.Join(s.dir, "manifests", gameID+".json")
+ }
+ 
+-func load[T any](path string, version int, label string) []T {
++func load[T any](path string, version int, label string) ([]T, error) {
+ 	if path == "" {
+-		return nil
++		return nil, fmt.Errorf("%s path unavailable", label)
+ 	}
+ 	var list []T
+-	if err := storage.Load(path, version, nil, &list); err != nil {
+-		slog.Error("load "+label, "error", err)
+-		return nil
++	err := storage.Load(path, version, nil, &list)
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil, nil
+ 	}
+-	return list
++	if err != nil {
++		return nil, fmt.Errorf("load %s: %w", label, err)
++	}
++	return list, nil
+ }
+ 
+-func (s *store) loadUpdates() []Update {
++func (s *store) loadUpdates() ([]Update, error) {
+ 	return load[Update](s.path("updates.json"), updatesVersion, "updates")
+ }
+ 
+@@ -61,7 +66,7 @@ func (s *store) saveUpdates(list []Update) error {
+ 	return storage.Save(s.path("updates.json"), updatesVersion, list)
+ }
+ 
+-func (s *store) loadHistory() []UpdateHistory {
++func (s *store) loadHistory() ([]UpdateHistory, error) {
+ 	return load[UpdateHistory](s.path("update_history.json"), historyVersion, "update history")
+ }
+ 
+@@ -72,7 +77,7 @@ func (s *store) saveHistory(list []UpdateHistory) error {
+ 	return storage.Save(s.path("update_history.json"), historyVersion, list)
+ }
+ 
+-func (s *store) loadRollbacks() []Rollback {
++func (s *store) loadRollbacks() ([]Rollback, error) {
+ 	return load[Rollback](s.path("rollbacks.json"), rollbackVersion, "rollbacks")
+ }
+ 
+@@ -80,7 +85,7 @@ func (s *store) saveRollbacks(list []Rollback) error {
+ 	return storage.Save(s.path("rollbacks.json"), rollbackVersion, list)
+ }
+ 
+-func (s *store) loadVerifications() []VerifyState {
++func (s *store) loadVerifications() ([]VerifyState, error) {
+ 	return load[VerifyState](s.path("verify.json"), verifyVersion, "verifications")
+ }
+ 
+@@ -88,20 +93,23 @@ func (s *store) saveVerifications(list []VerifyState) error {
+ 	return storage.Save(s.path("verify.json"), verifyVersion, list)
+ }
+ 
+-func (s *store) loadManifest(gameID string) (FileManifest, bool) {
++func (s *store) loadManifest(gameID string) (FileManifest, bool, error) {
+ 	path := s.manifestPath(gameID)
+ 	if path == "" {
+-		return FileManifest{}, false
++		return FileManifest{}, false, errors.New("manifest path unavailable")
+ 	}
+ 	var manifest FileManifest
+-	if err := storage.Load(path, manifestsVersion, nil, &manifest); err != nil {
+-		slog.Error("load manifest", "game", gameID, "error", err)
+-		return FileManifest{}, false
++	err := storage.Load(path, manifestsVersion, nil, &manifest)
++	if errors.Is(err, fs.ErrNotExist) {
++		return FileManifest{}, false, nil
++	}
++	if err != nil {
++		return FileManifest{}, false, fmt.Errorf("load manifest %s: %w", gameID, err)
+ 	}
+ 	if len(manifest.Entries) == 0 {
+-		return FileManifest{}, false
++		return FileManifest{}, false, nil
+ 	}
+-	return manifest, true
++	return manifest, true, nil
+ }
+ 
+ func (s *store) saveManifest(manifest FileManifest) error {

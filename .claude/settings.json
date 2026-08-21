@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "golangci-lint run --fast-only ./... 2>&1 | head -50"
+          }
+        ]
+      }
+    ]
+  }
+}
