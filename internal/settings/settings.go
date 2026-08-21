@@ -16,26 +16,33 @@ const (
 	CleanupKeep   = "keep"
 	CleanupAsk    = "ask"
 	CleanupDelete = "delete"
+
+	RefreshManual   = "manual"
+	RefreshHourly   = "1h"
+	RefreshSixHours = "6h"
+	RefreshHalfDay  = "12h"
+	RefreshDaily    = "24h"
 )
 
 type Settings struct {
-	Theme                string  `json:"theme"`
-	Language             string  `json:"language"`
-	UIScale              float64 `json:"uiScale"`
-	DownloadsPath        string  `json:"downloadsPath"`
-	GamesPath            string  `json:"gamesPath"`
-	ScreenshotsPath      string  `json:"screenshotsPath"`
-	LaunchOnStartup      bool    `json:"launchOnStartup"`
-	MinimizeToTray       bool    `json:"minimizeToTray"`
-	HardwareAcceleration bool    `json:"hardwareAcceleration"`
-	AnimationsEnabled    bool    `json:"animationsEnabled"`
-	MaxActiveDownloads   int     `json:"maxActiveDownloads"`
-	DownloadRateLimit    int64   `json:"downloadRateLimit"`
-	UploadRateLimit      int64   `json:"uploadRateLimit"`
-	SeedAfterDownload    bool    `json:"seedAfterDownload"`
-	InstallCleanupPolicy string  `json:"installCleanupPolicy"`
-	AutoInstall          bool    `json:"autoInstall"`
-	VerifyAfterInstall   bool    `json:"verifyAfterInstall"`
+	Theme                 string  `json:"theme"`
+	Language              string  `json:"language"`
+	UIScale               float64 `json:"uiScale"`
+	DownloadsPath         string  `json:"downloadsPath"`
+	GamesPath             string  `json:"gamesPath"`
+	ScreenshotsPath       string  `json:"screenshotsPath"`
+	LaunchOnStartup       bool    `json:"launchOnStartup"`
+	MinimizeToTray        bool    `json:"minimizeToTray"`
+	HardwareAcceleration  bool    `json:"hardwareAcceleration"`
+	AnimationsEnabled     bool    `json:"animationsEnabled"`
+	MaxActiveDownloads    int     `json:"maxActiveDownloads"`
+	DownloadRateLimit     int64   `json:"downloadRateLimit"`
+	UploadRateLimit       int64   `json:"uploadRateLimit"`
+	SeedAfterDownload     bool    `json:"seedAfterDownload"`
+	InstallCleanupPolicy  string  `json:"installCleanupPolicy"`
+	AutoInstall           bool    `json:"autoInstall"`
+	SourceRefreshInterval string  `json:"sourceRefreshInterval"`
+	VerifyAfterInstall    bool    `json:"verifyAfterInstall"`
 }
 
 func Defaults() Settings {
@@ -45,23 +52,24 @@ func Defaults() Settings {
 	}
 	base := filepath.Join(home, "Typhon")
 	return Settings{
-		Theme:                "dark",
-		Language:             "ru",
-		UIScale:              1,
-		DownloadsPath:        filepath.Join(base, "Downloads"),
-		GamesPath:            filepath.Join(base, "Games"),
-		ScreenshotsPath:      filepath.Join(base, "Screenshots"),
-		LaunchOnStartup:      false,
-		MinimizeToTray:       true,
-		HardwareAcceleration: true,
-		AnimationsEnabled:    true,
-		MaxActiveDownloads:   2,
-		DownloadRateLimit:    0,
-		UploadRateLimit:      0,
-		SeedAfterDownload:    false,
-		InstallCleanupPolicy: CleanupKeep,
-		AutoInstall:          false,
-		VerifyAfterInstall:   true,
+		Theme:                 "dark",
+		Language:              "ru",
+		UIScale:               1,
+		DownloadsPath:         filepath.Join(base, "Downloads"),
+		GamesPath:             filepath.Join(base, "Games"),
+		ScreenshotsPath:       filepath.Join(base, "Screenshots"),
+		LaunchOnStartup:       false,
+		MinimizeToTray:        true,
+		HardwareAcceleration:  true,
+		AnimationsEnabled:     true,
+		MaxActiveDownloads:    2,
+		DownloadRateLimit:     0,
+		UploadRateLimit:       0,
+		SeedAfterDownload:     false,
+		InstallCleanupPolicy:  CleanupKeep,
+		AutoInstall:           false,
+		SourceRefreshInterval: RefreshSixHours,
+		VerifyAfterInstall:    true,
 	}
 }
 
@@ -85,6 +93,11 @@ func sanitize(s Settings) Settings {
 	case CleanupKeep, CleanupAsk, CleanupDelete:
 	default:
 		s.InstallCleanupPolicy = CleanupKeep
+	}
+	switch s.SourceRefreshInterval {
+	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
+	default:
+		s.SourceRefreshInterval = RefreshSixHours
 	}
 	return s
 }

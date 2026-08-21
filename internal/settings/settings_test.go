@@ -84,6 +84,32 @@ func TestCleanupPolicyIsSanitized(t *testing.T) {
 	}
 }
 
+func TestSourceRefreshIntervalIsSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := newServiceAt(path)
+
+	if got := s.GetSettings().SourceRefreshInterval; got != RefreshSixHours {
+		t.Fatalf("default interval = %q, want %q", got, RefreshSixHours)
+	}
+
+	next := s.GetSettings()
+	next.SourceRefreshInterval = "every minute"
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().SourceRefreshInterval; got != RefreshSixHours {
+		t.Fatalf("interval = %q, want %q", got, RefreshSixHours)
+	}
+
+	next.SourceRefreshInterval = RefreshManual
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().SourceRefreshInterval; got != RefreshManual {
+		t.Fatalf("interval = %q, want %q", got, RefreshManual)
+	}
+}
+
 func TestInstallDefaultsSurviveOldConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(`{"theme":"dark","gamesPath":"D:\\Games"}`), 0o644); err != nil {
