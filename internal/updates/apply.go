@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"typhon/internal/download"
@@ -644,6 +645,15 @@ func resolveExecutable(installDir, relative, installed, staging string) string {
 	return candidates[0].Path
 }
 
+// Game binaries and packed data are never carried over: a file the new release
+// dropped must stay dropped, otherwise the installation ends up mixing builds.
+var engineExtensions = map[string]bool{
+	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".sys": true, ".drv": true,
+	".pdb": true, ".pak": true, ".pck": true, ".assets": true, ".bundle": true,
+	".bank": true, ".arc": true, ".vpk": true, ".rpf": true, ".cab": true, ".msi": true,
+	".bin": true, ".dat": true, ".wad": true, ".sga": true, ".big": true, ".unity3d": true,
+}
+
 // carryOverExtras keeps user files that the new installation does not provide,
 // so configs, saves and mods survive a full replacement.
 func carryOverExtras(previous, current string) {
@@ -653,6 +663,9 @@ func carryOverExtras(previous, current string) {
 	var carried int64
 	err := filepath.WalkDir(previous, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !d.Type().IsRegular() {
+			return nil
+		}
+		if engineExtensions[strings.ToLower(filepath.Ext(path))] {
 			return nil
 		}
 		rel, err := filepath.Rel(previous, path)

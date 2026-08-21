@@ -248,14 +248,41 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 	return &mi, nil
 }
 
+// hashBusy reports whether the torrent is already live in the client. A
+// completed download that no longer seeds holds no engine, so its files can be
+// rechecked against another directory.
 func (m *Manager) hashBusy(infoHash string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.findByHashLocked(infoHash) != nil {
+	if _, waiting := m.pending[infoHash]; waiting {
 		return true
 	}
-	_, waiting := m.pending[infoHash]
-	return waiting
+	for _, d := range m.items {
+		if !strings.EqualFold(d.InfoHash, infoHash) {
+			continue
+		}
+		if m.engines[d.ID] != nil || m.jobs[d.ID] != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// hashInUse reports whether another download already holds a live torrent with
+// the same infohash. Two of them would share one engine and write to the wrong
+// directory.
+func (m *Manager) hashInUse(infoHash, excludeID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, d := range m.items {
+		if d.ID == excludeID || !strings.EqualFold(d.InfoHash, infoHash) {
+			continue
+		}
+		if m.engines[d.ID] != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // InspectReuse hashes the files already present at a path against a torrent and

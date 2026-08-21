@@ -1141,6 +1141,16 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	}
 	defer m.endJob(j.id)
 
+	if m.hashInUse(j.infoHash, j.id) {
+		slog.Warn("torrent already attached elsewhere", "id", j.id, "infoHash", j.infoHash)
+		if j.complete {
+			m.setSeeding(j.id, false)
+			return
+		}
+		m.markFailed(j.id, errHashBusy.Error())
+		return
+	}
+
 	lt, err := m.reattach(jobCtx, cl, j)
 	if err != nil {
 		if jobCtx.Err() != nil {

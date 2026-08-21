@@ -178,6 +178,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 			item.Progress = 0
 		}
 		item.Planning = false
+		item.Plan = nil
 		s.updates[item.GameID] = &item
 	}
 	for _, v := range s.store.loadVerifications() {
@@ -193,7 +194,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.history = s.store.loadHistory()
 	interrupted := make([]string, 0, len(s.updates))
 	for _, u := range s.updates {
-		if u.State == StateFailed && u.Plan != nil {
+		if u.State == StateFailed {
 			interrupted = append(interrupted, u.GameID)
 		}
 	}
@@ -419,11 +420,33 @@ func (s *Service) checkAll(ctx context.Context) {
 	if s.library == nil {
 		return
 	}
-	for _, game := range s.library.GetInstalledGames() {
+	games := s.library.GetInstalledGames()
+	known := make(map[string]bool, len(games))
+	for _, game := range games {
 		if ctx.Err() != nil {
 			return
 		}
+		known[game.ID] = true
 		s.check(game)
+	}
+	s.prune(known)
+}
+
+func (s *Service) prune(known map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	removed := false
+	for id := range s.updates {
+		if known[id] {
+			continue
+		}
+		delete(s.updates, id)
+		delete(s.verifications, id)
+		removed = true
+	}
+	if removed {
+		s.persistLocked()
+		s.persistVerifyLocked()
 	}
 }
 

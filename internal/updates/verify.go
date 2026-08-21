@@ -22,7 +22,9 @@ func (s *Service) emitVerify(gameID, event string, apply func(*VerifyState)) Ver
 		s.verifications[gameID] = state
 	}
 	apply(state)
-	s.persistVerifyLocked()
+	if event != eventVerifyUpdated && event != eventRepairUpdated {
+		s.persistVerifyLocked()
+	}
 	snap := *state
 	s.mu.Unlock()
 	emit(event, snap)

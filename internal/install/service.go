@@ -53,6 +53,7 @@ var (
 	errOutsideInstall = errors.New("файл находится вне папки установки")
 	errEmptyInstall   = errors.New("папка установки пуста")
 	errNoLibrary      = errors.New("библиотека недоступна")
+	errNeedsUser      = errors.New("этот пакет требует участия пользователя")
 )
 
 type downloadSource interface {

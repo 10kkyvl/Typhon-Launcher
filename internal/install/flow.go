@@ -89,6 +89,9 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if item.Unattended {
+		return errNeedsUser
+	}
 	s.setStatus(id, StatusInstalling)
 
 	spec := runSpec{Path: item.InstallerPath, Dir: item.WorkingDir}
