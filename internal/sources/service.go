@@ -51,6 +51,7 @@ type Service struct {
 
 	refreshing map[string]bool
 	sem        chan struct{}
+	onChanged  func()
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -517,7 +518,26 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	if summary.Review > 0 {
 		emit(eventReleaseReview, ReleaseBatch{SourceID: id, Count: summary.Review})
 	}
+	if summary.Added > 0 || summary.Updated > 0 || summary.Restored > 0 {
+		s.notifyChanged()
+	}
 	return summary
+}
+
+//wails:ignore
+func (s *Service) SetOnChanged(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onChanged = fn
+}
+
+func (s *Service) notifyChanged() {
+	s.mu.Lock()
+	notify := s.onChanged
+	s.mu.Unlock()
+	if notify != nil {
+		go notify()
+	}
 }
 
 func (s *Service) schedule() {

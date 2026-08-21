@@ -144,6 +144,10 @@ type UpdatePlan struct {
 	BackupAvailable   bool `json:"backupAvailable"`
 	BackupCreated     bool `json:"backupCreated"`
 	RequiresRestart   bool `json:"requiresRestart"`
+	RollbackAvailable bool `json:"rollbackAvailable"`
+	ReuseFlat         bool `json:"reuseFlat,omitempty"`
+
+	Patches []Patch `json:"patches,omitempty"`
 
 	Confidence float64   `json:"confidence"`
 	CreatedAt  time.Time `json:"createdAt"`

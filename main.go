@@ -13,6 +13,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/updates"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -42,6 +43,18 @@ func init() {
 	application.RegisterEvent[sources.ReleaseBatch]("release:removed")
 	application.RegisterEvent[sources.ReleaseBatch]("release:matched")
 	application.RegisterEvent[sources.ReleaseBatch]("release:needs-review")
+	application.RegisterEvent[updates.Update]("update:available")
+	application.RegisterEvent[updates.Update]("update:started")
+	application.RegisterEvent[updates.Update]("update:updated")
+	application.RegisterEvent[updates.Update]("update:completed")
+	application.RegisterEvent[updates.Update]("update:failed")
+	application.RegisterEvent[updates.Update]("update:rollback")
+	application.RegisterEvent[updates.VerifyState]("verify:started")
+	application.RegisterEvent[updates.VerifyState]("verify:updated")
+	application.RegisterEvent[updates.VerifyState]("verify:completed")
+	application.RegisterEvent[updates.VerifyState]("repair:started")
+	application.RegisterEvent[updates.VerifyState]("repair:updated")
+	application.RegisterEvent[updates.VerifyState]("repair:completed")
 }
 
 func main() {
@@ -54,7 +67,11 @@ func main() {
 	installService := install.NewService(settingsService, downloadManager, libraryService)
 	catalogService := catalog.NewService()
 	sourcesService := sources.NewService(settingsService, catalogService)
+	updateService := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
+	installService.SetOnFinished(updateService.HandleInstallFinished)
+	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
+	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -67,6 +84,7 @@ func main() {
 			application.NewService(installService),
 			application.NewService(catalogService),
 			application.NewService(sourcesService),
+			application.NewService(updateService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

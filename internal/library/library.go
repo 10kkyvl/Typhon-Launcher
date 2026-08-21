@@ -20,22 +20,24 @@ import (
 )
 
 type Game struct {
-	ID               string     `json:"id"`
-	Title            string     `json:"title"`
-	Executable       string     `json:"executable"`
-	LaunchArgs       []string   `json:"launchArgs,omitempty"`
-	InstallDir       string     `json:"installDir"`
-	Cover            string     `json:"cover"`
-	Hero             string     `json:"hero"`
-	Version          string     `json:"version"`
-	SizeBytes        int64      `json:"sizeBytes"`
-	LastPlayed       *time.Time `json:"lastPlayed"`
-	PlaytimeSeconds  int64      `json:"playtimeSeconds"`
-	InstalledAt      time.Time  `json:"installedAt"`
-	SourceDownloadID string     `json:"sourceDownloadId,omitempty"`
-	ReleaseID        string     `json:"releaseId,omitempty"`
-	SourceID         string     `json:"sourceId,omitempty"`
-	CanonicalGameID  string     `json:"canonicalGameId,omitempty"`
+	ID                string     `json:"id"`
+	Title             string     `json:"title"`
+	Executable        string     `json:"executable"`
+	LaunchArgs        []string   `json:"launchArgs,omitempty"`
+	InstallDir        string     `json:"installDir"`
+	Cover             string     `json:"cover"`
+	Hero              string     `json:"hero"`
+	Version           string     `json:"version"`
+	VersionSource     string     `json:"versionSource,omitempty"`
+	VersionConfidence float64    `json:"versionConfidence,omitempty"`
+	SizeBytes         int64      `json:"sizeBytes"`
+	LastPlayed        *time.Time `json:"lastPlayed"`
+	PlaytimeSeconds   int64      `json:"playtimeSeconds"`
+	InstalledAt       time.Time  `json:"installedAt"`
+	SourceDownloadID  string     `json:"sourceDownloadId,omitempty"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
 }
 
 type InstalledGame struct {
@@ -43,17 +45,29 @@ type InstalledGame struct {
 	Executable       string `json:"executable"`
 	InstallDir       string `json:"installDir"`
 	Version          string `json:"version"`
+	VersionSource    string `json:"versionSource"`
 	SourceDownloadID string `json:"sourceDownloadId"`
 	ReleaseID        string `json:"releaseId"`
 	SourceID         string `json:"sourceId"`
 	CanonicalGameID  string `json:"canonicalGameId"`
 }
 
+type InstalledUpdate struct {
+	ID            string `json:"id"`
+	Executable    string `json:"executable"`
+	InstallDir    string `json:"installDir"`
+	Version       string `json:"version"`
+	VersionSource string `json:"versionSource"`
+	ReleaseID     string `json:"releaseId"`
+	SourceID      string `json:"sourceId"`
+}
+
 type Service struct {
-	mu      sync.Mutex
-	path    string
-	games   []Game
-	running map[string]*session
+	mu        sync.Mutex
+	path      string
+	games     []Game
+	running   map[string]*session
+	onSession func(gameID string, seconds int64)
 }
 
 type session struct {
@@ -124,7 +138,9 @@ func (s *Service) emitUpdated() {
 func (s *Service) GetInstalledGames() []Game {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]Game(nil), s.games...)
+	games := make([]Game, len(s.games))
+	copy(games, s.games)
+	return games
 }
 
 func (s *Service) GetRunningGames() []string {
@@ -197,6 +213,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		}
 		s.games[i].InstallDir = installDir
 		s.games[i].Version = g.Version
+		s.games[i].VersionSource = g.VersionSource
 		s.games[i].SizeBytes = dirSize(installDir)
 		s.games[i].SourceDownloadID = g.SourceDownloadID
 		if g.ReleaseID != "" {
@@ -226,6 +243,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		Executable:       g.Executable,
 		InstallDir:       installDir,
 		Version:          g.Version,
+		VersionSource:    g.VersionSource,
 		SizeBytes:        dirSize(installDir),
 		InstalledAt:      time.Now(),
 		SourceDownloadID: g.SourceDownloadID,
@@ -241,6 +259,48 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	slog.Info("game installed", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
+}
+
+//wails:ignore
+func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID != u.ID {
+			continue
+		}
+		previous := s.games[i]
+		if u.Executable != "" {
+			s.games[i].Executable = u.Executable
+		}
+		if u.InstallDir != "" {
+			s.games[i].InstallDir = u.InstallDir
+		}
+		s.games[i].Version = u.Version
+		s.games[i].VersionSource = u.VersionSource
+		s.games[i].SizeBytes = dirSize(s.games[i].InstallDir)
+		if u.ReleaseID != "" {
+			s.games[i].ReleaseID = u.ReleaseID
+		}
+		if u.SourceID != "" {
+			s.games[i].SourceID = u.SourceID
+		}
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+		slog.Info("game version updated", "id", u.ID, "version", u.Version)
+		s.emitUpdated()
+		return s.games[i], nil
+	}
+	return Game{}, errors.New("игра не найдена")
 }
 
 func (s *Service) RemoveGame(id string) error {

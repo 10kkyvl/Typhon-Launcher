@@ -69,6 +69,58 @@ func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	return nil
 }
 
+func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errNotDir
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+
+	rep := newReporter(onProgress, DirSize(src))
+	buf := make([]byte, copyBufferSize)
+	walkErr := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		entry, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		rep.setFile(rel)
+		return copyFile(ctx, path, target, entry.Mode(), rep, buf)
+	})
+	if walkErr != nil {
+		return walkErr
+	}
+	rep.flush()
+	return nil
+}
+
 func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
 	info, err := os.Stat(src)
 	if err != nil {

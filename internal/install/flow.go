@@ -146,11 +146,19 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 	}
 	if item.Executable == "" {
 		candidates := FindExecutables(item.Destination, item.Name)
-		if !HighConfidence(candidates) {
+		switch {
+		case HighConfidence(candidates):
+			s.setExecutable(id, candidates[0].Path, candidates)
+		case item.Unattended:
+			executable := ""
+			if len(candidates) > 0 {
+				executable = candidates[0].Path
+			}
+			s.setExecutable(id, executable, candidates)
+		default:
 			s.waitForUser(id, candidates)
 			return nil
 		}
-		s.setExecutable(id, candidates[0].Path, candidates)
 	}
 	return s.complete(id)
 }
@@ -167,9 +175,13 @@ func (s *Service) complete(id string) error {
 		}
 	}
 	version, source := detectVersion(item)
-	game, err := s.register(item, version)
-	if err != nil {
-		return err
+	var game library.Game
+	if !item.SkipRegister {
+		registered, err := s.register(item, version, source)
+		if err != nil {
+			return err
+		}
+		game = registered
 	}
 
 	s.mu.Lock()
@@ -194,11 +206,14 @@ func (s *Service) complete(id string) error {
 	slog.Info("install completed", "id", id, "name", snap.Name, "game", game.ID, "version", version)
 	emit(eventCompleted, snap)
 	emit(eventUpdated, snap)
-	s.applyCleanup(cfg, snap.DownloadID)
+	if !item.SkipRegister {
+		s.applyCleanup(cfg, snap.DownloadID)
+	}
+	s.notifyFinished(snap)
 	return nil
 }
 
-func (s *Service) register(item Installation, version string) (library.Game, error) {
+func (s *Service) register(item Installation, version, source string) (library.Game, error) {
 	if s.library == nil {
 		return library.Game{}, errNoLibrary
 	}
@@ -207,6 +222,7 @@ func (s *Service) register(item Installation, version string) (library.Game, err
 		Executable:       item.Executable,
 		InstallDir:       item.Destination,
 		Version:          version,
+		VersionSource:    source,
 		SourceDownloadID: item.DownloadID,
 		ReleaseID:        item.Origin.ReleaseID,
 		SourceID:         item.Origin.SourceID,
@@ -256,6 +272,11 @@ func (s *Service) setDestination(id, destination string) {
 	s.persistLocked()
 }
 
+const (
+	VersionSourceRelease    = "release_metadata"
+	VersionSourceExecutable = "executable_metadata"
+)
+
 func verifyInstall(item Installation) error {
 	if item.Destination != "" {
 		entries, err := os.ReadDir(item.Destination)
@@ -274,6 +295,9 @@ func verifyInstall(item Installation) error {
 }
 
 func detectVersion(item Installation) (string, string) {
+	if item.Origin.Version != "" {
+		return item.Origin.Version, VersionSourceRelease
+	}
 	if item.Executable != "" {
 		if info, ok := ExeVersion(item.Executable); ok && info.Version != "" {
 			return info.Version, info.Source

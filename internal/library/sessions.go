@@ -65,6 +65,10 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 
 	delete(s.running, id)
 	seconds := int64(time.Since(startedAt).Seconds())
+	if s.onSession != nil {
+		notify := s.onSession
+		go notify(id, seconds)
+	}
 	game := s.findLocked(id)
 	if game == nil {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})

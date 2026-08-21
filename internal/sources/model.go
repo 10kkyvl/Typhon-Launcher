@@ -101,13 +101,6 @@ func (r *Release) identity() string {
 	return "title:" + r.NormalizedTitle + "|" + r.RawTitle
 }
 
-func (r *Release) kind() Kind {
-	if r.Kind == KindPatch {
-		return KindPatch
-	}
-	return KindRelease
-}
-
 type SourceRef struct {
 	ReleaseID  string `json:"releaseId"`
 	SourceID   string `json:"sourceId"`
@@ -196,4 +189,5 @@ type DownloadRequest struct {
 	ReleaseID string `json:"releaseId"`
 	SourceID  string `json:"sourceId"`
 	GameID    string `json:"gameId"`
+	Version   string `json:"version"`
 }

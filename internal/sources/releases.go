@@ -365,11 +365,55 @@ func (s *Service) PrepareDownload(releaseID string) (DownloadRequest, error) {
 		Name:      r.RawTitle,
 		ReleaseID: r.ID,
 		SourceID:  r.SourceID,
+		Version:   releaseVersion(r),
 	}
 	if r.CanonicalGameID != nil {
 		request.GameID = *r.CanonicalGameID
 	}
 	return request, nil
+}
+
+func releaseVersion(r *Release) string {
+	if r.ToVersion != "" {
+		return r.ToVersion
+	}
+	return r.Version
+}
+
+//wails:ignore
+func (s *Service) ReleasesFor(canonicalGameID, title string) []Release {
+	if canonicalGameID == "" && title != "" && s.catalog != nil {
+		if game, ok := s.catalog.LookupByTitle(title); ok {
+			canonicalGameID = game.ID
+		}
+	}
+	if canonicalGameID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Release
+	for _, list := range s.releases {
+		for _, r := range list {
+			if r.Ignored || r.CanonicalGameID == nil || *r.CanonicalGameID != canonicalGameID {
+				continue
+			}
+			out = append(out, *r)
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].ID < out[b].ID })
+	return out
+}
+
+//wails:ignore
+func (s *Service) FindRelease(id string) (Release, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.findReleaseLocked(id)
+	if r == nil {
+		return Release{}, false
+	}
+	return *r, true
 }
 
 func (s *Service) persistTouchedLocked(touched map[string]bool) {

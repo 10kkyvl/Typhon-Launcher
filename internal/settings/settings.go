@@ -22,6 +22,10 @@ const (
 	RefreshSixHours = "6h"
 	RefreshHalfDay  = "12h"
 	RefreshDaily    = "24h"
+
+	KeepPreviousOff         = "off"
+	KeepPreviousFirstLaunch = "first_launch"
+	KeepPreviousDay         = "24h"
 )
 
 type Settings struct {
@@ -43,6 +47,13 @@ type Settings struct {
 	AutoInstall           bool    `json:"autoInstall"`
 	SourceRefreshInterval string  `json:"sourceRefreshInterval"`
 	VerifyAfterInstall    bool    `json:"verifyAfterInstall"`
+
+	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
+	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
+	UpdateAutoInstall        bool   `json:"updateAutoInstall"`
+	UpdateSaveBackup         bool   `json:"updateSaveBackup"`
+	KeepPreviousVersion      string `json:"keepPreviousVersion"`
+	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 }
 
 func Defaults() Settings {
@@ -70,6 +81,13 @@ func Defaults() Settings {
 		AutoInstall:           false,
 		SourceRefreshInterval: RefreshSixHours,
 		VerifyAfterInstall:    true,
+
+		UpdateCheckAutomatically: true,
+		UpdateAutoDownload:       false,
+		UpdateAutoInstall:        false,
+		UpdateSaveBackup:         true,
+		KeepPreviousVersion:      KeepPreviousFirstLaunch,
+		AllowTorrentReuse:        true,
 	}
 }
 
@@ -98,6 +116,11 @@ func sanitize(s Settings) Settings {
 	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
 	default:
 		s.SourceRefreshInterval = RefreshSixHours
+	}
+	switch s.KeepPreviousVersion {
+	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
+	default:
+		s.KeepPreviousVersion = KeepPreviousFirstLaunch
 	}
 	return s
 }

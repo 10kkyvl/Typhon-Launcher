@@ -85,6 +85,8 @@ type Installation struct {
 	Executable      string          `json:"executable"`
 	Candidates      []Candidate     `json:"candidates"`
 	Origin          download.Origin `json:"origin"`
+	Unattended      bool            `json:"unattended,omitempty"`
+	SkipRegister    bool            `json:"skipRegister,omitempty"`
 	DetectedVersion string          `json:"detectedVersion"`
 	VersionSource   string          `json:"versionSource"`
 	StartedAt       time.Time       `json:"startedAt"`
@@ -106,6 +108,8 @@ type StartOptions struct {
 	Mode          string `json:"mode"`
 	Type          Type   `json:"type"`
 	InstallerPath string `json:"installerPath"`
+	Unattended    bool   `json:"unattended,omitempty"`
+	SkipRegister  bool   `json:"skipRegister,omitempty"`
 }
 
 type RemovedEvent struct {

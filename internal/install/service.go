@@ -78,8 +78,9 @@ type Service struct {
 	store     *store
 	runner    runner
 
-	items []*Installation
-	jobs  map[string]*job
+	items      []*Installation
+	jobs       map[string]*job
+	onFinished func(Installation)
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
@@ -310,6 +311,8 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		ArchivePath:   plan.ArchivePath,
 		BytesTotal:    plan.EstimatedSize,
 		Origin:        d.Origin,
+		Unattended:    opts.Unattended,
+		SkipRegister:  opts.SkipRegister,
 		StartedAt:     time.Now(),
 	}
 
@@ -372,8 +375,10 @@ func (s *Service) Cancel(id string) error {
 
 	partial := partialPath(item)
 	s.markCancelledLocked(item)
+	snap := snapshotOf(item)
 	s.mu.Unlock()
 	go sweepPartial([]string{partial})
+	s.notifyFinished(snap)
 	return nil
 }
 
@@ -512,7 +517,26 @@ func (s *Service) DeleteDownloadData(downloadID string) error {
 }
 
 //wails:ignore
+func (s *Service) SetOnFinished(fn func(Installation)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onFinished = fn
+}
+
+func (s *Service) notifyFinished(item Installation) {
+	s.mu.Lock()
+	notify := s.onFinished
+	s.mu.Unlock()
+	if notify != nil {
+		go notify(item)
+	}
+}
+
+//wails:ignore
 func (s *Service) HandleDownloadCompleted(d download.Download) {
+	if d.Origin.Purpose != download.PurposeRelease {
+		return
+	}
 	if !s.config().AutoInstall {
 		return
 	}
@@ -647,7 +671,9 @@ func (s *Service) fail(id string, cause error) {
 	switch {
 	case j != nil && j.cancelled:
 		s.markCancelledLocked(item)
+		snap := snapshotOf(item)
 		s.mu.Unlock()
+		s.notifyFinished(snap)
 	case s.closing || errors.Is(cause, context.Canceled):
 		s.persistLocked()
 		s.mu.Unlock()
@@ -661,6 +687,7 @@ func (s *Service) fail(id string, cause error) {
 		slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
 		emit(eventFailed, snap)
 		emit(eventUpdated, snap)
+		s.notifyFinished(snap)
 	}
 }
 

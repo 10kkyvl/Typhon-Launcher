@@ -30,6 +30,7 @@ type Origin struct {
 	ReleaseID    string  `json:"releaseId,omitempty"`
 	SourceID     string  `json:"sourceId,omitempty"`
 	GameID       string  `json:"gameId,omitempty"`
+	Version      string  `json:"version,omitempty"`
 	Purpose      Purpose `json:"purpose,omitempty"`
 	UpdatePlanID string  `json:"updatePlanId,omitempty"`
 	LibraryID    string  `json:"libraryId,omitempty"`
