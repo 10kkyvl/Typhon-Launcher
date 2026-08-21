@@ -3,13 +3,10 @@ package download
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
-
-	"typhon/internal/platform"
 )
 
 var errDuplicateTask = errors.New("такая загрузка уже добавлена")
@@ -63,11 +60,13 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	}
 
 	files := fileStates(&info, nil)
-	needed := selectedTotal(files)
+	needed, err := requiredBytes(files)
+	if err != nil {
+		return Download{}, err
+	}
 	if !req.InPlace {
-		if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
-			return Download{}, fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
-				humanSize(needed), humanSize(int64(st.FreeBytes)))
+		if err := checkFreeSpace(destination, needed); err != nil {
+			return Download{}, err
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,6 +48,8 @@ var (
 	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
 	errNoRestore   = errors.New(restoreFailedMessage)
 	errSeeding     = errors.New("файлы сейчас раздаются — сначала остановите раздачу")
+	errBadSizes    = errors.New("недопустимые размеры файлов в торренте")
+	errNoFreeSpace = errors.New("не удалось определить свободное место на диске")
 )
 
 type pending struct {
@@ -503,15 +506,18 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 	info := p.torrent.t.Info()
 	files := fileStates(info, selectedIndices)
-	needed := selectedTotal(files)
+	needed, err := requiredBytes(files)
+	if err != nil {
+		m.returnPending(infoHash, p)
+		return Download{}, err
+	}
 	if needed == 0 {
 		m.returnPending(infoHash, p)
 		return Download{}, errors.New("не выбрано ни одного файла")
 	}
-	if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
+	if err := checkFreeSpace(destination, needed); err != nil {
 		m.returnPending(infoHash, p)
-		return Download{}, fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
-			humanSize(needed), humanSize(int64(st.FreeBytes)))
+		return Download{}, err
 	}
 
 	mi := p.torrent.t.Metainfo()
@@ -1313,6 +1319,38 @@ func removeContent(destination, name string) {
 			slog.Warn("remove download data", "path", path, "error", err)
 		}
 	}
+}
+
+func requiredBytes(files []FileState) (int64, error) {
+	var total int64
+	for _, f := range files {
+		if !f.Selected {
+			continue
+		}
+		if f.Size < 0 || total > math.MaxInt64-f.Size {
+			return 0, errBadSizes
+		}
+		total += f.Size
+	}
+	return total, nil
+}
+
+func checkFreeSpace(destination string, needed int64) error {
+	if needed < 0 {
+		return errBadSizes
+	}
+	st, err := platform.GetStorageInfo(destination)
+	if err != nil {
+		slog.Error("storage info", "path", destination, "error", err)
+		return fmt.Errorf("%w: %w", errNoFreeSpace, err)
+	}
+	//nolint:gosec // G115: needed >= 0 проверено выше, конверсия int64 -> uint64 точная
+	if st.FreeBytes >= uint64(needed) {
+		return nil
+	}
+	//nolint:gosec // G115: в этой ветке FreeBytes < needed <= MaxInt64
+	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
+		humanSize(needed), humanSize(int64(st.FreeBytes)))
 }
 
 func humanSize(bytes int64) string {
