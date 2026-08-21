@@ -21,6 +21,12 @@ export interface Settings {
   autoInstall: boolean;
   sourceRefreshInterval: string;
   verifyAfterInstall: boolean;
+  updateCheckAutomatically: boolean;
+  updateAutoDownload: boolean;
+  updateAutoInstall: boolean;
+  updateSaveBackup: boolean;
+  keepPreviousVersion: string;
+  allowTorrentReuse: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -44,6 +50,12 @@ const fallbackDefaults: Settings = {
   autoInstall: false,
   sourceRefreshInterval: '6h',
   verifyAfterInstall: true,
+  updateCheckAutomatically: true,
+  updateAutoDownload: false,
+  updateAutoInstall: false,
+  updateSaveBackup: true,
+  keepPreviousVersion: 'first_launch',
+  allowTorrentReuse: true,
 };
 
 export async function getSettings(): Promise<Settings> {

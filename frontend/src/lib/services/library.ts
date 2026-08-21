@@ -24,7 +24,7 @@ const unavailable = () => new Error('unavailable in browser');
 
 export async function getInstalledGames(): Promise<LibraryGame[]> {
   if (!inWails) return [];
-  return (await LibraryService.GetInstalledGames()) as unknown as LibraryGame[];
+  return ((await LibraryService.GetInstalledGames()) ?? []) as unknown as LibraryGame[];
 }
 
 export async function getRunningGames(): Promise<string[]> {

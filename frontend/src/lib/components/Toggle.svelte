@@ -2,20 +2,31 @@
   let {
     checked = $bindable(false),
     label,
+    disabled = false,
     onchange,
   }: {
     checked?: boolean;
     label?: string;
+    disabled?: boolean;
     onchange?: (checked: boolean) => void;
   } = $props();
 
   function toggle() {
+    if (disabled) return;
     checked = !checked;
     onchange?.(checked);
   }
 </script>
 
-<button class="toggle" class:on={checked} role="switch" aria-checked={checked} aria-label={label} onclick={toggle}>
+<button
+  class="toggle"
+  class:on={checked}
+  {disabled}
+  role="switch"
+  aria-checked={checked}
+  aria-label={label}
+  onclick={toggle}
+>
   <span class="knob"></span>
 </button>
 
@@ -28,6 +39,11 @@
     background: rgba(255, 255, 255, 0.12);
     flex-shrink: 0;
     transition: background var(--dur) var(--ease);
+  }
+
+  .toggle:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   .toggle:hover {

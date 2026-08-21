@@ -37,6 +37,8 @@
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import UpdateCard from '../../lib/components/UpdateCard.svelte';
+  import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import { achievements, dlcs } from '../../lib/mock/achievements';
   import { gameById } from '../../lib/mock/games';
   import type { DownloadOrigin } from '../../lib/services/downloads';
@@ -48,7 +50,9 @@
     prepareReleaseDownload,
     type ReleaseGroup,
   } from '../../lib/services/sources';
+  import { getVerifyState } from '../../lib/services/updates';
   import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { updatesByGame, verifications } from '../../lib/stores/updates';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { bytesLabel, gb, playtime, relativeDate } from '../../lib/utils/format';
@@ -60,6 +64,33 @@
   const localRunning = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
+
+  const localUpdate = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
+  const localVerify = $derived(localGame ? $verifications[localGame.id] : undefined);
+  const showUpdateCard = $derived(
+    Boolean(
+      localUpdate &&
+        (localUpdate.availability.available ||
+          localUpdate.canRollback ||
+          localUpdate.state === 'updating' ||
+          localUpdate.state === 'update_downloading' ||
+          localUpdate.state === 'update_failed'),
+    ),
+  );
+
+  async function loadVerifyState(gameId: string) {
+    const state = await getVerifyState(gameId);
+    if (!state) return;
+    verifications.update((map) => (map[gameId] ? map : { ...map, [gameId]: state }));
+  }
+
+  $effect(() => {
+    const gameId = localGame?.id;
+    if (!gameId) return;
+    untrack(() => {
+      loadVerifyState(gameId);
+    });
+  });
 
   let releaseGroups = $state<ReleaseGroup[]>([]);
   let releasesLoading = $state(false);
@@ -226,6 +257,10 @@
           <dd class="mono">{localGame.executable}</dd>
         </div>
         <div class="prop">
+          <dt>Версия</dt>
+          <dd>{localGame.version || 'Неизвестна'}</dd>
+        </div>
+        <div class="prop">
           <dt>Размер</dt>
           <dd>{bytesLabel(localGame.sizeBytes)}</dd>
         </div>
@@ -253,6 +288,12 @@
       </dl>
     </Card>
   </div>
+
+  {#if showUpdateCard && localUpdate}
+    <UpdateCard update={localUpdate} running={localRunning} />
+  {/if}
+
+  <VerifyCard gameId={localGame.id} state={localVerify} running={localRunning} />
 
   {#if releasesLoading || releaseGroups.length > 0}
     <Card padding="var(--space-5) var(--space-6)">

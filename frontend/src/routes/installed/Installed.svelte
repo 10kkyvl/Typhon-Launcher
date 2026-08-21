@@ -36,6 +36,7 @@
   import { storageInfo } from '../../lib/stores/storage';
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
+  import { updatesByGame } from '../../lib/stores/updates';
   import { bytesLabel, playtime, plural, relativeDate } from '../../lib/utils/format';
 
   const totalBytes = $derived($libraryGames.reduce((sum, g) => sum + g.sizeBytes, 0));
@@ -208,6 +209,10 @@
         <span class="cell state">
           {#if running}
             <StatusBadge kind="accent" label="Запущена" />
+          {:else if $updatesByGame.get(game.id)?.availability.kind === 'update'}
+            <StatusBadge kind="warning" label="Обновление" />
+          {:else if $updatesByGame.get(game.id)?.availability.kind === 'new_release'}
+            <StatusBadge kind="neutral" label="Новый релиз" />
           {:else}
             <CircleCheck size="1.6rem" strokeWidth={1.8} />
             Установлено
@@ -245,7 +250,14 @@
         </button>
         <div class="card-info">
           <span class="card-title">{game.title}</span>
-          <span class="card-meta">{bytesLabel(game.sizeBytes)}</span>
+          <span class="card-meta">
+            {bytesLabel(game.sizeBytes)}
+            {#if $updatesByGame.get(game.id)?.availability.available}
+              <span class="card-update">
+                {$updatesByGame.get(game.id)?.availability.kind === 'update' ? 'Обновление' : 'Новый релиз'}
+              </span>
+            {/if}
+          </span>
         </div>
       </div>
     {/each}
@@ -315,6 +327,11 @@
 </Modal>
 
 <style>
+  .card-update {
+    margin-left: 0.8rem;
+    color: var(--accent);
+  }
+
   .empty-wrap {
     background: var(--surface);
     border: 1px solid var(--border);

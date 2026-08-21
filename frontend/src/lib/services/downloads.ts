@@ -17,10 +17,16 @@ export interface FileState {
   bytesDone: number;
 }
 
+export type DownloadPurpose = 'update' | 'repair';
+
 export interface DownloadOrigin {
   releaseId?: string;
   sourceId?: string;
   gameId?: string;
+  version?: string;
+  purpose?: DownloadPurpose;
+  updatePlanId?: string;
+  libraryId?: string;
 }
 
 export interface Download {

@@ -146,6 +146,17 @@
     return sourceRefreshOptions.some((o) => o.id === id) ? id : '6h';
   });
 
+  const keepPreviousOptions = [
+    { id: 'off', label: 'Не сохранять' },
+    { id: 'first_launch', label: 'До первого успешного запуска' },
+    { id: '24h', label: '24 часа' },
+  ];
+
+  const keepPreviousVersion = $derived.by(() => {
+    const id = current?.keepPreviousVersion ?? 'first_launch';
+    return keepPreviousOptions.some((o) => o.id === id) ? id : 'first_launch';
+  });
+
   let scheduleEnabled = $state(false);
 
   let port = $state('42815');
@@ -468,6 +479,75 @@
             checked={current?.verifyAfterInstall ?? true}
             label="Проверка установки"
             onchange={(v) => set({ verifyAfterInstall: v })}
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="group">
+      <h3>Обновления</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Проверять автоматически</span>
+            <span class="row-sub">Искать новые релизы после обновления источников</span>
+          </div>
+          <Toggle
+            checked={current?.updateCheckAutomatically ?? true}
+            label="Проверка обновлений"
+            onchange={(v) => set({ updateCheckAutomatically: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Скачивать обновления автоматически</span>
+            <span class="row-sub">Данные загружаются заранее, установка остаётся ручной</span>
+          </div>
+          <Toggle
+            checked={current?.updateAutoDownload ?? false}
+            label="Автозагрузка обновлений"
+            onchange={(v) => set({ updateAutoDownload: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Устанавливать автоматически</span>
+            <span class="row-sub">Пока недоступно: установка всегда подтверждается вручную</span>
+          </div>
+          <Toggle checked={false} disabled label="Автоустановка обновлений" />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Резервная копия сохранений</span>
+            <span class="row-sub">Создавать снимок сохранений, когда их расположение известно</span>
+          </div>
+          <Toggle
+            checked={current?.updateSaveBackup ?? true}
+            label="Резервная копия"
+            onchange={(v) => set({ updateSaveBackup: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Хранить предыдущую версию</span>
+            <span class="row-sub">Позволяет откатиться, если обновление оказалось неудачным</span>
+          </div>
+          <Select
+            value={keepPreviousVersion}
+            width="28rem"
+            options={keepPreviousOptions}
+            onchange={(id) => set({ keepPreviousVersion: id })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Переиспользовать файлы торрента</span>
+            <span class="row-sub">Скачивать только изменившиеся блоки, когда раскладка совпадает</span>
+          </div>
+          <Toggle
+            checked={current?.allowTorrentReuse ?? true}
+            label="Повторное использование файлов"
+            onchange={(v) => set({ allowTorrentReuse: v })}
           />
         </div>
       </div>

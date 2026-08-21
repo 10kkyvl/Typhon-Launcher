@@ -18,6 +18,13 @@
     onopen?: (download: Download) => void;
   } = $props();
 
+  const purposeLabel = $derived(
+    download.origin.purpose === 'update'
+      ? 'ОБНОВЛЕНИЕ'
+      : download.origin.purpose === 'repair'
+        ? 'ВОССТАНОВЛЕНИЕ'
+        : '',
+  );
   const downloading = $derived(download.status === 'downloading');
   const finished = $derived(download.status === 'completed' || download.status === 'failed');
   const pct = $derived(download.progress * 100);
@@ -56,7 +63,10 @@
   <div class="main">
     <div class="head">
       <div class="titles">
-        <span class="title">{download.name}</span>
+        <span class="title">
+          {download.name}
+          {#if purposeLabel}<span class="purpose">{purposeLabel}</span>{/if}
+        </span>
         <span class="sub">{statusLabels[download.status]}</span>
       </div>
       {#if !compact}
@@ -163,6 +173,19 @@
 </Modal>
 
 <style>
+  .purpose {
+    display: inline-block;
+    margin-left: 0.8rem;
+    padding: 0.1rem 0.6rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+  }
+
   .item {
     display: flex;
     gap: var(--space-4);
