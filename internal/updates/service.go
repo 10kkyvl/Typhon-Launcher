@@ -191,7 +191,19 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		s.rollbacks[entry.GameID] = &entry
 	}
 	s.history = s.store.loadHistory()
+	interrupted := make([]string, 0, len(s.updates))
+	for _, u := range s.updates {
+		if u.State == StateFailed && u.Plan != nil {
+			interrupted = append(interrupted, u.GameID)
+		}
+	}
 	s.mu.Unlock()
+
+	for _, gameID := range interrupted {
+		if game, ok := s.installedGame(gameID); ok {
+			removeTree(stagingDir(game.InstallDir, gameID))
+		}
+	}
 
 	s.wg.Add(1)
 	go s.housekeeping()

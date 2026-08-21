@@ -205,3 +205,36 @@ func TestRefreshIntervalMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestParseEntriesMapsPatchMetadata(t *testing.T) {
+	now := time.Now()
+	list := parseEntries("src", []feed.Entry{
+		{
+			Title:       "Cyberpunk 2077 Update 2.21 to 2.31",
+			Game:        "Cyberpunk 2077",
+			Type:        feed.TypePatch,
+			FromVersion: "2.21",
+			ToVersion:   "2.31",
+			Sequence:    4,
+			URIs:        []string{magnetOf("b1")},
+			Size:        6 << 30,
+		},
+	}, now)
+
+	if len(list) != 1 {
+		t.Fatalf("releases = %d, want 1", len(list))
+	}
+	r := list[0]
+	if r.Kind != KindPatch {
+		t.Fatalf("kind = %q, want %q", r.Kind, KindPatch)
+	}
+	if r.Title != "Cyberpunk 2077" || r.NormalizedTitle != "cyberpunk 2077" {
+		t.Fatalf("title = %q normalized = %q", r.Title, r.NormalizedTitle)
+	}
+	if r.FromVersion != "2.21" || r.ToVersion != "2.31" || r.Version != "2.31" {
+		t.Fatalf("versions = %q -> %q (%q)", r.FromVersion, r.ToVersion, r.Version)
+	}
+	if r.Sequence != 4 {
+		t.Fatalf("sequence = %d, want 4", r.Sequence)
+	}
+}

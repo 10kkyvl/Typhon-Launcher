@@ -183,6 +183,7 @@ func (s *Service) inspectReuse(ctx context.Context, in planInput) *download.Reus
 		last = now
 		s.emitVerify(gameID, eventVerifyUpdated, func(v *VerifyState) {
 			v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
+			v.ProcessedBytes = p.ProcessedBytes
 			v.CurrentFile = p.CurrentFile
 			v.TotalBytes = p.TotalBytes
 		})
@@ -209,6 +210,7 @@ func (s *Service) applyReuseReport(gameID string, report download.ReuseReport) {
 		v.Progress = 1
 		v.CurrentFile = ""
 		v.TotalBytes = report.TotalBytes
+		v.ProcessedBytes = report.TotalBytes
 		v.OkBytes = report.MatchedBytes
 		v.Ratio = ratio(report.MatchedBytes, report.TotalBytes)
 		v.MissingFiles = report.MissingFiles

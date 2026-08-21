@@ -33,6 +33,7 @@ type VerifyState struct {
 	Running         bool            `json:"running"`
 	Repairing       bool            `json:"repairing"`
 	Progress        float64         `json:"progress"`
+	ProcessedBytes  int64           `json:"processedBytes"`
 	CurrentFile     string          `json:"currentFile,omitempty"`
 	Ratio           float64         `json:"ratio"`
 	TotalBytes      int64           `json:"totalBytes"`

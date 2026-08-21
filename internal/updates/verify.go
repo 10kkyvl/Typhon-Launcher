@@ -119,6 +119,7 @@ func (s *Service) verifyByTorrent(ctx context.Context, game library.Game, releas
 		last = now
 		s.emitVerify(game.ID, eventVerifyUpdated, func(v *VerifyState) {
 			v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
+			v.ProcessedBytes = p.ProcessedBytes
 			v.CurrentFile = p.CurrentFile
 			v.TotalBytes = p.TotalBytes
 		})
@@ -158,6 +159,7 @@ func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manif
 		last = now
 		s.emitVerify(game.ID, eventVerifyUpdated, func(v *VerifyState) {
 			v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
+			v.ProcessedBytes = p.ProcessedBytes
 			v.CurrentFile = p.CurrentFile
 			v.TotalBytes = p.TotalBytes
 		})

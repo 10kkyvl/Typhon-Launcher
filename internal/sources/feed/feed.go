@@ -128,6 +128,44 @@ func (w warningCounter) build() []string {
 	return out
 }
 
+func normalizeType(raw string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", TypeRelease:
+		return TypeRelease, true
+	case TypePatch, "update":
+		return TypePatch, true
+	default:
+		return TypeRelease, false
+	}
+}
+
+func trimVersion(raw string) string {
+	v := strings.Join(strings.Fields(raw), " ")
+	if utf8.RuneCountInString(v) > MaxVersionLen {
+		return ""
+	}
+	return v
+}
+
+func trimGame(raw string) string {
+	name := strings.Join(strings.Fields(raw), " ")
+	if utf8.RuneCountInString(name) > MaxTitleLen {
+		return ""
+	}
+	return name
+}
+
+func sequenceOf(re rawEntry) int {
+	switch {
+	case re.Sequence != nil:
+		return *re.Sequence
+	case re.Order != nil:
+		return *re.Order
+	default:
+		return 0
+	}
+}
+
 func rawURIs(re rawEntry) []string {
 	if len(re.URIs) > 0 {
 		return re.URIs
@@ -255,9 +293,20 @@ func Parse(data []byte) (Feed, error) {
 			wc.badDate++
 		}
 
+		entryType, known := normalizeType(re.Type)
+		if !known {
+			wc.unknownType++
+		}
+		from, to := trimVersion(re.FromVersion), trimVersion(re.ToVersion)
+		if entryType == TypePatch && (from == "" || to == "") {
+			invalid++
+			wc.badPatch++
+			continue
+		}
+
 		sortedURIs := append([]string(nil), uris...)
 		sort.Strings(sortedURIs)
-		key := title + "\x1f" + strings.Join(sortedURIs, "\x1f")
+		key := entryType + "\x1f" + title + "\x1f" + strings.Join(sortedURIs, "\x1f")
 		if seen[key] {
 			wc.duplicates++
 			continue
@@ -265,10 +314,15 @@ func Parse(data []byte) (Feed, error) {
 		seen[key] = true
 
 		entries = append(entries, Entry{
-			Title:      title,
-			URIs:       uris,
-			UploadedAt: uploadedAt,
-			Size:       size,
+			Title:       title,
+			Game:        trimGame(re.Game),
+			Type:        entryType,
+			FromVersion: from,
+			ToVersion:   to,
+			Sequence:    sequenceOf(re),
+			URIs:        uris,
+			UploadedAt:  uploadedAt,
+			Size:        size,
 		})
 	}
 	if len(entries) == 0 {
@@ -300,7 +354,16 @@ func Fingerprint(f Feed) string {
 	for _, e := range f.Entries {
 		uris := append([]string(nil), e.URIs...)
 		sort.Strings(uris)
-		parts = append(parts, e.Title+"\x1f"+strings.Join(uris, "\x1f")+"\x1f"+strconv.FormatInt(e.Size, 10))
+		parts = append(parts, strings.Join([]string{
+			e.Title,
+			e.Game,
+			e.Type,
+			e.FromVersion,
+			e.ToVersion,
+			strconv.Itoa(e.Sequence),
+			strings.Join(uris, "\x1e"),
+			strconv.FormatInt(e.Size, 10),
+		}, "\x1f"))
 	}
 	sort.Strings(parts)
 
