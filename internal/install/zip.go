@@ -3,6 +3,7 @@ package install
 import (
 	"archive/zip"
 	"context"
+	"fmt"
 	"os"
 )
 
@@ -60,7 +61,11 @@ func estimateZip(archivePath string) (int64, error) {
 		if info.IsDir() || !info.Mode().IsRegular() {
 			continue
 		}
-		total += int64(entry.UncompressedSize64)
+		next, err := addEntrySize(total, entry.UncompressedSize64)
+		if err != nil {
+			return 0, fmt.Errorf("%s: %w", entry.Name, err)
+		}
+		total = next
 	}
 	return total, nil
 }
