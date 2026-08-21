@@ -119,6 +119,19 @@ type ReleaseGroup struct {
 	Duplicates []SourceRef `json:"duplicates,omitempty"`
 }
 
+type GameReleaseInfo struct {
+	Title         string
+	Releases      int
+	Sources       int
+	LatestVersion string
+}
+
+type ReleaseMatches struct {
+	Games         map[string]GameReleaseInfo
+	Unmatched     []ReleaseView
+	MoreUnmatched int
+}
+
 type ReleaseQuery struct {
 	SourceID string `json:"sourceId"`
 	Search   string `json:"search"`

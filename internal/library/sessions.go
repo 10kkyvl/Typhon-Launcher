@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -30,8 +31,13 @@ func (s *Service) PlayGame(id string) error {
 		return errors.New("исполняемый файл больше не существует")
 	}
 
+	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
+	if err != nil {
+		return fmt.Errorf("рабочая папка игры: %w", err)
+	}
+
 	cmd := exec.Command(game.Executable, game.LaunchArgs...)
-	cmd.Dir = game.InstallDir
+	cmd.Dir = workDir
 	if err := cmd.Start(); err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		return fmt.Errorf("не удалось запустить игру: %w", err)

@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"typhon/internal/catalog"
 	"typhon/internal/titles"
+	"typhon/internal/version"
 )
 
 const (
@@ -103,10 +105,7 @@ func matchesStatus(r *Release, status string) bool {
 }
 
 func (s *Service) matchesSearch(r *Release, search, normalizedSearch string) bool {
-	if strings.Contains(strings.ToLower(r.RawTitle), search) {
-		return true
-	}
-	if normalizedSearch != "" && strings.Contains(r.NormalizedTitle, normalizedSearch) {
+	if releaseMatchesQuery(r, search, normalizedSearch) {
 		return true
 	}
 	if r.CanonicalGameID != nil && s.catalog != nil {
@@ -452,4 +451,133 @@ func (s *Service) snapshotsLocked(touched map[string]bool) []Source {
 		}
 	}
 	return out
+}
+
+type versionRef struct {
+	raw string
+	at  *time.Time
+	id  string
+}
+
+type releaseAgg struct {
+	count    int
+	sources  map[string]bool
+	title    string
+	titleID  string
+	versions []versionRef
+}
+
+//wails:ignore
+func (s *Service) SearchReleaseMatches(query string, gameIDs []string, unmatchedLimit int) ReleaseMatches {
+	search := strings.ToLower(strings.TrimSpace(query))
+	matches := ReleaseMatches{Games: map[string]GameReleaseInfo{}, Unmatched: []ReleaseView{}}
+	if search == "" {
+		return matches
+	}
+	if unmatchedLimit < 0 {
+		unmatchedLimit = 0
+	}
+	normalized := titles.Normalize(search)
+	wanted := make(map[string]bool, len(gameIDs))
+	for _, id := range gameIDs {
+		if id != "" {
+			wanted[id] = true
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	agg := map[string]*releaseAgg{}
+	var unmatched []*Release
+	for sourceID, list := range s.releases {
+		src := s.findLocked(sourceID)
+		if src == nil || !src.Enabled {
+			continue
+		}
+		for _, r := range list {
+			if r.Ignored || r.Availability != AvailabilityAvailable {
+				continue
+			}
+			hit := releaseMatchesQuery(r, search, normalized)
+			if r.CanonicalGameID == nil || *r.CanonicalGameID == "" {
+				if hit {
+					unmatched = append(unmatched, r)
+				}
+				continue
+			}
+			gameID := *r.CanonicalGameID
+			if !hit && !wanted[gameID] {
+				continue
+			}
+			a := agg[gameID]
+			if a == nil {
+				a = &releaseAgg{sources: map[string]bool{}}
+				agg[gameID] = a
+			}
+			a.count++
+			a.sources[r.SourceID] = true
+			if a.titleID == "" || r.ID < a.titleID {
+				a.title, a.titleID = r.Title, r.ID
+			}
+			a.versions = append(a.versions, versionRef{raw: releaseVersion(r), at: r.UploadedAt, id: r.ID})
+		}
+	}
+	for gameID, a := range agg {
+		matches.Games[gameID] = GameReleaseInfo{
+			Title:         a.title,
+			Releases:      a.count,
+			Sources:       len(a.sources),
+			LatestVersion: latestVersion(a.versions),
+		}
+	}
+
+	sortReleases(unmatched, "")
+	if len(unmatched) > unmatchedLimit {
+		matches.MoreUnmatched = len(unmatched) - unmatchedLimit
+		unmatched = unmatched[:unmatchedLimit]
+	}
+	for _, r := range unmatched {
+		matches.Unmatched = append(matches.Unmatched, s.viewLocked(r))
+	}
+	return matches
+}
+
+func releaseMatchesQuery(r *Release, search, normalized string) bool {
+	if strings.Contains(strings.ToLower(r.RawTitle), search) {
+		return true
+	}
+	return normalized != "" && strings.Contains(r.NormalizedTitle, normalized)
+}
+
+func latestVersion(refs []versionRef) string {
+	sort.Slice(refs, func(a, b int) bool {
+		left, right := refs[a], refs[b]
+		switch {
+		case left.at == nil && right.at == nil:
+		case left.at == nil:
+			return false
+		case right.at == nil:
+			return true
+		case !left.at.Equal(*right.at):
+			return left.at.After(*right.at)
+		}
+		return left.id < right.id
+	})
+	var best version.Version
+	raw := ""
+	for _, ref := range refs {
+		if ref.raw == "" {
+			continue
+		}
+		parsed := version.Parse(ref.raw)
+		if raw == "" {
+			best, raw = parsed, ref.raw
+			continue
+		}
+		if cmp, ok := version.Compare(parsed, best); ok && cmp > 0 {
+			best, raw = parsed, ref.raw
+		}
+	}
+	return raw
 }

@@ -4,13 +4,14 @@ import (
 	"embed"
 	"log"
 	"log/slog"
-	"os"
 
+	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/catalog"
 	"typhon/internal/download"
 	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/search"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
 	"typhon/internal/updates"
@@ -58,15 +59,17 @@ func init() {
 }
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	app.InitLogging()
 
 	settingsService := settings.NewService()
 	appService := app.NewService(settingsService)
+	accountService := account.NewService()
 	libraryService := library.NewService()
 	downloadManager := download.NewManager(settingsService)
 	installService := install.NewService(settingsService, downloadManager, libraryService)
 	catalogService := catalog.NewService()
 	sourcesService := sources.NewService(settingsService, catalogService)
+	searchService := search.NewService(libraryService, catalogService, sourcesService)
 	updateService := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
@@ -78,12 +81,14 @@ func main() {
 		Description: "Typhon game launcher",
 		Services: []application.Service{
 			application.NewService(appService),
+			application.NewService(accountService),
 			application.NewService(settingsService),
 			application.NewService(libraryService),
 			application.NewService(downloadManager),
 			application.NewService(installService),
 			application.NewService(catalogService),
 			application.NewService(sourcesService),
+			application.NewService(searchService),
 			application.NewService(updateService),
 		},
 		Assets: application.AssetOptions{
