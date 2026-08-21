@@ -2,6 +2,8 @@ package sources
 
 import (
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -36,17 +38,20 @@ func (s *store) releasesPath(sourceID string) string {
 	return filepath.Join(s.dir, "releases", sourceID+".json")
 }
 
-func (s *store) loadSources() []Source {
+func (s *store) loadSources() ([]Source, error) {
 	path := s.sourcesPath()
 	if path == "" {
-		return nil
+		return nil, errors.New("sources path unavailable")
 	}
 	var list []Source
-	if err := storage.Load(path, sourcesVersion, nil, &list); err != nil {
-		slog.Error("load sources", "error", err)
-		return nil
+	err := storage.Load(path, sourcesVersion, nil, &list)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
-	return list
+	if err != nil {
+		return nil, fmt.Errorf("load sources: %w", err)
+	}
+	return list, nil
 }
 
 func (s *store) saveSources(list []Source) error {
@@ -57,17 +62,20 @@ func (s *store) saveSources(list []Source) error {
 	return storage.Save(path, sourcesVersion, list)
 }
 
-func (s *store) loadReleases(sourceID string) []Release {
+func (s *store) loadReleases(sourceID string) ([]Release, error) {
 	path := s.releasesPath(sourceID)
 	if path == "" {
-		return nil
+		return nil, errors.New("releases path unavailable")
 	}
 	var list []Release
-	if err := storage.Load(path, releasesVersion, nil, &list); err != nil {
-		slog.Error("load releases", "source", sourceID, "error", err)
-		return nil
+	err := storage.Load(path, releasesVersion, nil, &list)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
-	return list
+	if err != nil {
+		return nil, fmt.Errorf("load releases %s: %w", sourceID, err)
+	}
+	return list, nil
 }
 
 func (s *store) saveReleases(sourceID string, list []*Release) error {

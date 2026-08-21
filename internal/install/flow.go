@@ -220,6 +220,9 @@ func (s *Service) register(item Installation, version, source string) (library.G
 	if s.library == nil {
 		return library.Game{}, errNoLibrary
 	}
+	if item.Destination == "" {
+		return library.Game{}, errEmptyDestination
+	}
 	return s.library.RegisterInstalled(library.InstalledGame{
 		Title:            item.Name,
 		Executable:       item.Executable,

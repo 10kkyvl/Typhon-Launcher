@@ -50,16 +50,18 @@ const (
 var pollInterval = time.Second
 
 var (
-	errNotTracked   = errors.New("для этой игры нет данных об обновлении")
-	errNoPlan       = errors.New("сначала подготовьте план обновления")
-	errGameRunning  = errors.New("игра запущена — закройте её перед обновлением")
-	errBusy         = errors.New("операция уже выполняется")
-	errNoRollback   = errors.New("предыдущая версия недоступна")
-	errNoIdentity   = errors.New("проверка недоступна для этой установки")
-	errNoDownloads  = errors.New("менеджер загрузок недоступен")
-	errNoInstaller  = errors.New("установщик недоступен")
-	errNoLibrary    = errors.New("библиотека недоступна")
-	errUpdateFailed = errors.New("не удалось применить обновление")
+	errNotTracked = errors.New("для этой игры нет данных об обновлении")
+
+	errEmptyInstallDir = errors.New("каталог установки не задан")
+	errNoPlan          = errors.New("сначала подготовьте план обновления")
+	errGameRunning     = errors.New("игра запущена — закройте её перед обновлением")
+	errBusy            = errors.New("операция уже выполняется")
+	errNoRollback      = errors.New("предыдущая версия недоступна")
+	errNoIdentity      = errors.New("проверка недоступна для этой установки")
+	errNoDownloads     = errors.New("менеджер загрузок недоступен")
+	errNoInstaller     = errors.New("установщик недоступен")
+	errNoLibrary       = errors.New("библиотека недоступна")
+	errUpdateFailed    = errors.New("не удалось применить обновление")
 )
 
 type librarySource interface {
@@ -119,13 +121,15 @@ func NewService(
 	releases *sources.Service,
 	downloads *download.Manager,
 	installs *install.Service,
-) *Service {
+) (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	s := newServiceAt(dir, settingsService)
+	s, err := newServiceAt(dir, settingsService)
+	if err != nil {
+		return nil, err
+	}
 	if lib != nil {
 		s.library = lib
 	}
@@ -138,10 +142,13 @@ func NewService(
 	if installs != nil {
 		s.installs = installs
 	}
-	return s
+	return s, nil
 }
 
-func newServiceAt(dir string, settingsService *settings.Service) *Service {
+func newServiceAt(dir string, settingsService *settings.Service) (*Service, error) {
+	if dir == "" {
+		return nil, errors.New("updates path unavailable")
+	}
 	return &Service{
 		settings:      settingsService,
 		store:         newStore(dir),
@@ -150,7 +157,7 @@ func newServiceAt(dir string, settingsService *settings.Service) *Service {
 		rollbacks:     map[string]*Rollback{},
 		jobs:          map[string]*job{},
 		waiters:       map[string]chan install.Installation{},
-	}
+	}, nil
 }
 
 func (s *Service) config() settings.Settings {
@@ -169,7 +176,39 @@ func emit(name string, data any) {
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	for _, u := range s.store.loadUpdates() {
+	storedUpdates, err := s.store.loadUpdates()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	storedVerifications, err := s.store.loadVerifications()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	storedRollbacks, err := s.store.loadRollbacks()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	storedHistory, err := s.store.loadHistory()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	for _, u := range storedUpdates {
 		item := u
 		if item.State == StateUpdating || item.State == StateDownloading {
 			item.State = StateFailed
@@ -181,17 +220,17 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		item.Plan = nil
 		s.updates[item.GameID] = &item
 	}
-	for _, v := range s.store.loadVerifications() {
+	for _, v := range storedVerifications {
 		state := v
 		state.Running = false
 		state.Repairing = false
 		s.verifications[state.GameID] = &state
 	}
-	for _, r := range s.store.loadRollbacks() {
+	for _, r := range storedRollbacks {
 		entry := r
 		s.rollbacks[entry.GameID] = &entry
 	}
-	s.history = s.store.loadHistory()
+	s.history = storedHistory
 	interrupted := make([]string, 0, len(s.updates))
 	for _, u := range s.updates {
 		if u.State == StateFailed {
@@ -202,7 +241,12 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 	for _, gameID := range interrupted {
 		if game, ok := s.installedGame(gameID); ok {
-			removeTree(stagingDir(game.InstallDir, gameID))
+			staging, err := stagingDir(game.InstallDir, gameID)
+			if err != nil {
+				slog.Error("resolve staging dir", "game", gameID, "err", err)
+				continue
+			}
+			removeTree(staging)
 		}
 	}
 
@@ -659,8 +703,31 @@ func (s *Service) finishHistory(id, status, message string) {
 	}
 }
 
-func stagingDir(installDir, gameID string) string {
-	return filepath.Join(filepath.Dir(installDir), stagingDirName, gameID)
+func (s *Service) recheck(gameID string) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if _, err := s.CheckGame(gameID); err != nil {
+			slog.Warn("recheck update", "game", gameID, "err", err)
+		}
+	}()
+}
+
+func stagingDir(installDir, gameID string) (string, error) {
+	if installDir == "" {
+		return "", errEmptyInstallDir
+	}
+	if gameID == "" {
+		return "", errors.New("идентификатор игры не задан")
+	}
+	return filepath.Join(filepath.Dir(installDir), stagingDirName, gameID), nil
+}
+
+func previousDir(installDir string) (string, error) {
+	if installDir == "" {
+		return "", errEmptyInstallDir
+	}
+	return installDir + previousSuffix, nil
 }
 
 func newID() string {

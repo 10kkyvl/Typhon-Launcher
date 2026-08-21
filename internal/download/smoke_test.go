@@ -38,7 +38,7 @@ func fetchTorrentFile(t *testing.T, url, dest string) string {
 }
 
 func startManager(t *testing.T, cfgDir string) *Manager {
-	m := newManagerAt(cfgDir, nil)
+	m := mustManagerAt(t, cfgDir)
 	if err := m.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("startup: %v", err)
 	}

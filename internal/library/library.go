@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"typhon/internal/settings"
+	"typhon/internal/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -62,6 +63,8 @@ type InstalledUpdate struct {
 	SourceID      string `json:"sourceId"`
 }
 
+var errEmptyInstallDir = errors.New("каталог установки не задан")
+
 type Service struct {
 	mu        sync.Mutex
 	path      string
@@ -75,36 +78,43 @@ type session struct {
 	startedAt time.Time
 }
 
-func NewService() *Service {
+func NewService() (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		return newServiceAt("")
+		return nil, fmt.Errorf("resolve config dir: %w", err)
+	}
+	if dir == "" {
+		return nil, errors.New("config dir unavailable")
 	}
 	return newServiceAt(filepath.Join(dir, "library.json"))
 }
 
-func newServiceAt(path string) *Service {
+func newServiceAt(path string) (*Service, error) {
+	if path == "" {
+		return nil, errors.New("library path unavailable")
+	}
 	s := &Service{path: path, running: map[string]*session{}}
-	s.load()
-	return s
+	games, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	s.games = games
+	return s, nil
 }
 
-func (s *Service) load() {
-	if s.path == "" {
-		return
-	}
+func (s *Service) load() ([]Game, error) {
 	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
 	if err != nil {
-		slog.Error("read library", "path", s.path, "error", err)
-		return
+		return nil, fmt.Errorf("read library %s: %w", s.path, err)
 	}
-	if err := json.Unmarshal(data, &s.games); err != nil {
-		slog.Error("parse library", "path", s.path, "error", err)
+	var games []Game
+	if err := json.Unmarshal(data, &games); err != nil {
+		return nil, fmt.Errorf("parse library %s: %w", s.path, err)
 	}
+	return games, nil
 }
 
 func (s *Service) persist() error {
@@ -118,9 +128,8 @@ func (s *Service) persist() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		slog.Error("write library", "path", s.path, "error", err)
-		return err
+	if err := storage.WriteAtomic(s.path, data); err != nil {
+		return fmt.Errorf("write library %s: %w", s.path, err)
 	}
 	return nil
 }
@@ -163,7 +172,10 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 		title = TitleFromExecutable(executable)
 	}
 
-	installDir := filepath.Dir(executable)
+	installDir := strings.TrimSpace(filepath.Dir(executable))
+	if installDir == "" {
+		return Game{}, errEmptyInstallDir
+	}
 	game := Game{
 		ID:          newID(),
 		Title:       title,
@@ -197,7 +209,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	}
 	installDir := strings.TrimSpace(g.InstallDir)
 	if installDir == "" {
-		installDir = filepath.Dir(g.Executable)
+		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
 
@@ -282,6 +294,9 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 		}
 		if u.InstallDir != "" {
 			s.games[i].InstallDir = u.InstallDir
+		}
+		if s.games[i].InstallDir == "" {
+			return Game{}, errEmptyInstallDir
 		}
 		s.games[i].Version = u.Version
 		s.games[i].VersionSource = u.VersionSource

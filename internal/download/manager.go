@@ -83,16 +83,18 @@ type Manager struct {
 	lastPersist time.Time
 }
 
-func NewManager(settingsService *settings.Service) *Manager {
+func NewManager(settingsService *settings.Service) (*Manager, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newManagerAt(dir, settingsService)
 }
 
-func newManagerAt(dir string, settingsService *settings.Service) *Manager {
+func newManagerAt(dir string, settingsService *settings.Service) (*Manager, error) {
+	if dir == "" {
+		return nil, errors.New("downloads path unavailable")
+	}
 	m := &Manager{
 		settings: settingsService,
 		store:    newStore(dir),
@@ -101,11 +103,9 @@ func newManagerAt(dir string, settingsService *settings.Service) *Manager {
 		pending:  map[string]*pending{},
 		jobs:     map[string]*jobState{},
 	}
-	if dir != "" {
-		m.metaDir = filepath.Join(dir, "meta")
-	}
+	m.metaDir = filepath.Join(dir, "meta")
 	m.max = maxActive(m.config())
-	return m
+	return m, nil
 }
 
 func (m *Manager) config() settings.Settings {
@@ -130,13 +130,19 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	cfg := m.config()
 	m.max = maxActive(cfg)
+	if err := m.loadLocked(); err != nil {
+		cancel := m.cancel
+		m.cancel = nil
+		m.mu.Unlock()
+		cancel()
+		return err
+	}
 	cl, err := newClient(cfg, m.metaDir)
 	if err != nil {
 		slog.Error("start torrent client", "error", err)
 	} else {
 		m.client = cl
 	}
-	m.loadLocked()
 	known := make(map[string]bool, len(m.items))
 	for _, d := range m.items {
 		known[strings.ToLower(d.InfoHash)] = true
@@ -180,8 +186,12 @@ func (m *Manager) ServiceShutdown() error {
 	return nil
 }
 
-func (m *Manager) loadLocked() {
-	for _, r := range m.store.load() {
+func (m *Manager) loadLocked() error {
+	records, err := m.store.load()
+	if err != nil {
+		return err
+	}
+	for _, r := range records {
 		d := &Download{
 			ID:          r.ID,
 			Name:        r.Name,
@@ -216,6 +226,7 @@ func (m *Manager) loadLocked() {
 		d.Progress = ratio(d.Downloaded, d.Total)
 		m.items = append(m.items, d)
 	}
+	return nil
 }
 
 func (m *Manager) persistLocked() {

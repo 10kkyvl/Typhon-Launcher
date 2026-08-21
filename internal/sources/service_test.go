@@ -95,11 +95,29 @@ func (fs *feedServer) fail(status int) {
 
 func (fs *feedServer) url() string { return fs.server.URL + "/feed.json" }
 
+func mustCatalog(t testing.TB, dir string) *catalog.Service {
+	t.Helper()
+	cat, err := catalog.NewServiceAt(dir)
+	if err != nil {
+		t.Fatalf("new catalog service at %s: %v", dir, err)
+	}
+	return cat
+}
+
+func mustServiceAt(t testing.TB, dir string, cat *catalog.Service) *Service {
+	t.Helper()
+	s, err := newServiceAt(dir, nil, cat)
+	if err != nil {
+		t.Fatalf("new sources service at %s: %v", dir, err)
+	}
+	return s
+}
+
 func testService(t *testing.T) (*Service, *catalog.Service, string) {
 	t.Helper()
 	dir := t.TempDir()
-	cat := catalog.NewServiceAt(dir)
-	return newServiceAt(dir, nil, cat), cat, dir
+	cat := mustCatalog(t, dir)
+	return mustServiceAt(t, dir, cat), cat, dir
 }
 
 func addSource(t *testing.T, s *Service, url string) Source {
@@ -459,14 +477,14 @@ func TestInvalidEntriesAreSkipped(t *testing.T) {
 
 func TestReleasesSurviveRestart(t *testing.T) {
 	dir := t.TempDir()
-	cat := catalog.NewServiceAt(dir)
-	s := newServiceAt(dir, nil, cat)
+	cat := mustCatalog(t, dir)
+	s := mustServiceAt(t, dir, cat)
 	server := newFeedServer(t, feedBody(t, "Example",
 		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
 	))
 	src := addSource(t, s, server.url())
 
-	restarted := newServiceAt(dir, nil, catalog.NewServiceAt(dir))
+	restarted := mustServiceAt(t, dir, mustCatalog(t, dir))
 	sources := restarted.ListSources()
 	if len(sources) != 1 || sources[0].ID != src.ID {
 		t.Fatalf("sources after restart = %+v", sources)

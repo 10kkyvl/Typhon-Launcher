@@ -59,16 +59,18 @@ type Service struct {
 	wg      sync.WaitGroup
 }
 
-func NewService(settingsService *settings.Service, cat *catalog.Service) *Service {
+func NewService(settingsService *settings.Service, cat *catalog.Service) (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newServiceAt(dir, settingsService, cat)
 }
 
-func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Service) *Service {
+func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Service) (*Service, error) {
+	if dir == "" {
+		return nil, errors.New("sources path unavailable")
+	}
 	s := &Service{
 		store:      newStore(dir),
 		catalog:    cat,
@@ -78,15 +80,24 @@ func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Se
 		sem:        make(chan struct{}, refreshConcurrency),
 		client:     &http.Client{Timeout: feed.FetchTimeout},
 	}
-	s.load()
-	return s
+	if err := s.load(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (s *Service) load() {
-	for _, src := range s.store.loadSources() {
+func (s *Service) load() error {
+	srcs, err := s.store.loadSources()
+	if err != nil {
+		return err
+	}
+	for _, src := range srcs {
 		item := src
 		s.sources = append(s.sources, &item)
-		stored := s.store.loadReleases(item.ID)
+		stored, err := s.store.loadReleases(item.ID)
+		if err != nil {
+			return err
+		}
 		list := make([]*Release, 0, len(stored))
 		for i := range stored {
 			r := stored[i]
@@ -97,6 +108,7 @@ func (s *Service) load() {
 	if len(s.sources) > 0 {
 		slog.Info("sources loaded", "sources", len(s.sources), "releases", s.totalReleases())
 	}
+	return nil
 }
 
 func (s *Service) totalReleases() int {

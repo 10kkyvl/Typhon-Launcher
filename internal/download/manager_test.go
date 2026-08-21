@@ -138,7 +138,7 @@ func (f *fakeTorrent) isUploading() bool {
 
 func newTestManager(t *testing.T, max int) *Manager {
 	t.Helper()
-	m := newManagerAt(t.TempDir(), nil)
+	m := mustManagerAt(t, t.TempDir())
 	m.max = max
 	return m
 }
@@ -210,6 +210,15 @@ func assertStatuses(t *testing.T, m *Manager, want map[string]Status) {
 			t.Fatalf("%s status = %s, want %s", id, got, status)
 		}
 	}
+}
+
+func mustManagerAt(t testing.TB, dir string) *Manager {
+	t.Helper()
+	m, err := newManagerAt(dir, nil)
+	if err != nil {
+		t.Fatalf("new download manager at %s: %v", dir, err)
+	}
+	return m
 }
 
 func TestQueueRespectsMaxActive(t *testing.T) {
@@ -721,9 +730,11 @@ func TestPersistedStateReloads(t *testing.T) {
 	m.addTestDownload("a")
 	m.addTestDownload("b")
 
-	reloaded := newManagerAt(m.store.dir, nil)
+	reloaded := mustManagerAt(t, m.store.dir)
 	reloaded.mu.Lock()
-	reloaded.loadLocked()
+	if err := reloaded.loadLocked(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
 	reloaded.mu.Unlock()
 
 	items := reloaded.List()

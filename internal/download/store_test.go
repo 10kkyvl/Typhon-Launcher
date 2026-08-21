@@ -41,7 +41,10 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatalf("downloads.json missing: %v", err)
 	}
 
-	loaded := newStore(s.dir).load()
+	loaded, err := newStore(s.dir).load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
 	if len(loaded) != 2 {
 		t.Fatalf("loaded %d records, want 2", len(loaded))
 	}
@@ -66,18 +69,23 @@ func TestStoreSaveLeavesNoTempFile(t *testing.T) {
 	}
 }
 
-func TestStoreCorruptFileLoadsEmpty(t *testing.T) {
+func TestStoreCorruptFileFailsLoad(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "downloads.json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := newStore(dir).load(); len(got) != 0 {
-		t.Fatalf("loaded %d records, want 0", len(got))
+	got, err := newStore(dir).load()
+	if err == nil {
+		t.Fatalf("load = %v, want error", got)
 	}
 }
 
 func TestStoreMissingFileLoadsEmpty(t *testing.T) {
-	if got := newStore(t.TempDir()).load(); got != nil {
+	got, err := newStore(t.TempDir()).load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got != nil {
 		t.Fatalf("loaded %v, want nil", got)
 	}
 }
@@ -129,7 +137,10 @@ func TestStoreKeepsOrigin(t *testing.T) {
 	if err := s.save([]record{{ID: "a", InfoHash: "aaaa", Origin: origin}}); err != nil {
 		t.Fatal(err)
 	}
-	loaded := s.load()
+	loaded, err := s.load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
 	if len(loaded) != 1 || loaded[0].Origin != origin {
 		t.Fatalf("origin = %+v, want %+v", loaded[0].Origin, origin)
 	}

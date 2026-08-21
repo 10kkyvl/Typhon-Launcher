@@ -119,7 +119,7 @@ func TestMergeRestoresRemovedRelease(t *testing.T) {
 }
 
 func TestApplyMatchesProvisionsUnmatched(t *testing.T) {
-	cat := catalog.NewServiceAt(t.TempDir())
+	cat := mustCatalog(t, t.TempDir())
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{
 		entry("Hades.II.v0.9", magnetOf("11"), 10),
@@ -144,7 +144,7 @@ func TestApplyMatchesProvisionsUnmatched(t *testing.T) {
 }
 
 func TestApplyMatchesKeepsAmbiguousForReview(t *testing.T) {
-	cat := catalog.NewServiceAt(t.TempDir())
+	cat := mustCatalog(t, t.TempDir())
 	prey2006 := 2006
 	prey2017 := 2017
 	if _, err := cat.AddGame(catalog.Game{Title: "Prey", ReleaseYear: &prey2006}); err != nil {
@@ -171,7 +171,7 @@ func TestApplyMatchesKeepsAmbiguousForReview(t *testing.T) {
 }
 
 func TestApplyMatchesSkipsLocked(t *testing.T) {
-	cat := catalog.NewServiceAt(t.TempDir())
+	cat := mustCatalog(t, t.TempDir())
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{entry("Some Game v1.0", magnetOf("11"), 10)}, now)
 	list, _ = merge(nil, list, now, true)

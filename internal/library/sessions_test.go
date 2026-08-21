@@ -9,7 +9,7 @@ import (
 
 func TestPlayGameTracksSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Session Test")
 	if err != nil {
@@ -34,7 +34,7 @@ func TestPlayGameTracksSession(t *testing.T) {
 	if s.GetInstalledGames()[0].LastPlayed == nil {
 		t.Fatal("last played not set")
 	}
-	if newServiceAt(path).GetInstalledGames()[0].LastPlayed == nil {
+	if mustServiceAt(t, path).GetInstalledGames()[0].LastPlayed == nil {
 		t.Fatal("last played not persisted")
 	}
 }
@@ -54,7 +54,7 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := newServiceAt(filepath.Join(root, "library.json"))
+	s := mustServiceAt(t, filepath.Join(root, "library.json"))
 	game, err := s.AddGame(exe, "Nested Game")
 	if err != nil {
 		t.Fatal(err)

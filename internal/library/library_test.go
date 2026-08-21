@@ -17,9 +17,18 @@ func tempGameExe(t *testing.T) string {
 	return exe
 }
 
+func mustServiceAt(t testing.TB, path string) *Service {
+	t.Helper()
+	s, err := newServiceAt(path)
+	if err != nil {
+		t.Fatalf("new library service at %s: %v", path, err)
+	}
+	return s
+}
+
 func TestAddAndReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	exe := tempGameExe(t)
 	game, err := s.AddGame(exe, "  ")
@@ -40,7 +49,7 @@ func TestAddAndReload(t *testing.T) {
 		t.Fatal("expected duplicate error")
 	}
 
-	reloaded := newServiceAt(path).GetInstalledGames()
+	reloaded := mustServiceAt(t, path).GetInstalledGames()
 	if len(reloaded) != 1 || reloaded[0].ID != game.ID {
 		t.Fatalf("reloaded = %+v", reloaded)
 	}
@@ -48,14 +57,14 @@ func TestAddAndReload(t *testing.T) {
 	if err := s.RemoveGame(game.ID); err != nil {
 		t.Fatal(err)
 	}
-	if len(newServiceAt(path).GetInstalledGames()) != 0 {
+	if len(mustServiceAt(t, path).GetInstalledGames()) != 0 {
 		t.Fatal("remove not persisted")
 	}
 }
 
 func TestPlayMissingExecutable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
 	game, err := s.AddGame(exe, "Ghost")
 	if err != nil {
@@ -71,7 +80,7 @@ func TestPlayMissingExecutable(t *testing.T) {
 
 func TestRegisterInstalledAddsGame(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
 
 	game, err := s.RegisterInstalled(InstalledGame{
@@ -91,7 +100,7 @@ func TestRegisterInstalledAddsGame(t *testing.T) {
 		t.Fatalf("game = %+v", game)
 	}
 
-	reloaded := newServiceAt(path).GetInstalledGames()
+	reloaded := mustServiceAt(t, path).GetInstalledGames()
 	if len(reloaded) != 1 || reloaded[0].SourceDownloadID != "d1" {
 		t.Fatalf("reloaded = %+v", reloaded)
 	}
@@ -99,7 +108,7 @@ func TestRegisterInstalledAddsGame(t *testing.T) {
 
 func TestRegisterInstalledUpdatesExisting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
 
 	first, err := s.AddGame(exe, "Original")
@@ -109,6 +118,7 @@ func TestRegisterInstalledUpdatesExisting(t *testing.T) {
 
 	updated, err := s.RegisterInstalled(InstalledGame{
 		Executable:       strings.ToUpper(exe),
+		InstallDir:       filepath.Dir(exe),
 		Version:          "2.0",
 		SourceDownloadID: "d2",
 	})
@@ -131,7 +141,7 @@ func TestRegisterInstalledUpdatesExisting(t *testing.T) {
 
 func TestRegisterInstalledRejectsMissingExecutable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	if _, err := s.RegisterInstalled(InstalledGame{Executable: filepath.Join(t.TempDir(), "nope.exe")}); err == nil {
 		t.Fatal("expected error for missing executable")
 	}

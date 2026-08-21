@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -35,38 +36,45 @@ type Service struct {
 	idx           *index
 }
 
-func NewService() *Service {
+func NewService() (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return NewServiceAt(dir)
 }
 
 //wails:ignore
-func NewServiceAt(dir string) *Service {
-	s := &Service{overrideMap: map[string]string{}}
-	if dir != "" {
-		s.gamesPath = filepath.Join(dir, "catalog.json")
-		s.overridesPath = filepath.Join(dir, "match_overrides.json")
+func NewServiceAt(dir string) (*Service, error) {
+	if dir == "" {
+		return nil, errors.New("catalog dir unavailable")
 	}
-	s.load()
-	return s
+	s := &Service{overrideMap: map[string]string{}}
+	s.gamesPath = filepath.Join(dir, "catalog.json")
+	s.overridesPath = filepath.Join(dir, "match_overrides.json")
+	if err := s.load(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (s *Service) load() {
-	if s.gamesPath != "" {
-		if err := storage.Load(s.gamesPath, gamesVersion, nil, &s.games); err != nil {
-			slog.Error("load catalog", "error", err)
-		}
+func (s *Service) load() error {
+	if err := loadList(s.gamesPath, gamesVersion, &s.games); err != nil {
+		return fmt.Errorf("load catalog: %w", err)
 	}
-	if s.overridesPath != "" {
-		if err := storage.Load(s.overridesPath, overridesVersion, nil, &s.overrides); err != nil {
-			slog.Error("load match overrides", "error", err)
-		}
+	if err := loadList(s.overridesPath, overridesVersion, &s.overrides); err != nil {
+		return fmt.Errorf("load match overrides: %w", err)
 	}
 	s.rebuildLocked()
+	return nil
+}
+
+func loadList(path string, version int, out any) error {
+	err := storage.Load(path, version, nil, out)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) rebuildLocked() {
@@ -82,14 +90,14 @@ func (s *Service) rebuildLocked() {
 
 func (s *Service) persistGamesLocked() error {
 	if s.gamesPath == "" {
-		return nil
+		return errors.New("catalog path unavailable")
 	}
 	return storage.Save(s.gamesPath, gamesVersion, s.games)
 }
 
 func (s *Service) persistOverridesLocked() error {
 	if s.overridesPath == "" {
-		return nil
+		return errors.New("match overrides path unavailable")
 	}
 	return storage.Save(s.overridesPath, overridesVersion, s.overrides)
 }

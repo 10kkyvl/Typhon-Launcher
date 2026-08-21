@@ -13,7 +13,7 @@ func gameRef(id string) *string {
 
 func searchService(t *testing.T, srcs []*Source, releases map[string][]*Release) *Service {
 	t.Helper()
-	s := newServiceAt(t.TempDir(), nil, nil)
+	s := mustServiceAt(t, t.TempDir(), nil)
 	s.sources = srcs
 	s.releases = releases
 	return s
@@ -261,7 +261,7 @@ func BenchmarkSearchReleaseMatches(b *testing.B) {
 		}
 		list = append(list, availableRelease("r"+string(rune(i)), "src-1", "Some Game Build 1234", "some game build 1234", gameID, "1.0"))
 	}
-	s := newServiceAt(b.TempDir(), nil, nil)
+	s := mustServiceAt(b, b.TempDir(), nil)
 	s.sources = []*Source{{ID: "src-1", Name: "Feed A", Enabled: true}}
 	s.releases = map[string][]*Release{"src-1": list}
 

@@ -11,7 +11,16 @@ import (
 
 func newTestService(t *testing.T) *Service {
 	t.Helper()
-	return NewServiceAt(t.TempDir())
+	return mustServiceAt(t, t.TempDir())
+}
+
+func mustServiceAt(t *testing.T, dir string) *Service {
+	t.Helper()
+	s, err := NewServiceAt(dir)
+	if err != nil {
+		t.Fatalf("new catalog service at %s: %v", dir, err)
+	}
+	return s
 }
 
 func year(v int) *int { return &v }
@@ -153,14 +162,14 @@ func TestLearnMatchAppliesToNextResolve(t *testing.T) {
 
 func TestLearnMatchSurvivesRestart(t *testing.T) {
 	dir := t.TempDir()
-	s := NewServiceAt(dir)
+	s := mustServiceAt(t, dir)
 	games := seed(t, s, Game{Title: "Cyberpunk 2077"})
 	normalized := titles.Parse("CP2077 Ultimate v2.31").Normalized
 	if err := s.LearnMatch(normalized, games[0].ID); err != nil {
 		t.Fatalf("learn match: %v", err)
 	}
 
-	restarted := NewServiceAt(dir)
+	restarted := mustServiceAt(t, dir)
 	match := restarted.Resolve(query("CP2077 Ultimate v2.31"))
 	if match.Status != StatusMatched || match.GameID != games[0].ID {
 		t.Fatalf("match after restart = %+v, want matched to %s", match, games[0].ID)
@@ -233,7 +242,7 @@ func TestSearchGames(t *testing.T) {
 
 func TestPersistedCatalogFileIsVersioned(t *testing.T) {
 	dir := t.TempDir()
-	s := NewServiceAt(dir)
+	s := mustServiceAt(t, dir)
 	seed(t, s, Game{Title: "Cyberpunk 2077"})
 
 	data, err := os.ReadFile(filepath.Join(dir, "catalog.json"))

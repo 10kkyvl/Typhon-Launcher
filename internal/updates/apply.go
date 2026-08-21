@@ -96,7 +96,7 @@ func (s *Service) StartUpdate(gameID string) error {
 			})
 			emit(eventCompleted, done)
 			slog.Info("update completed", "game", gameID, "version", plan.TargetVersion)
-			go s.CheckGame(gameID)
+			s.recheck(gameID)
 		case ctx.Err() != nil:
 			s.finishHistory(entry.ID, HistoryFailed, interruptedUpdateText)
 			s.mutate(gameID, func(u *Update) {
@@ -337,7 +337,10 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 	if !ok {
 		return errNotTracked
 	}
-	staging := stagingDir(game.InstallDir, plan.GameID)
+	staging, err := stagingDir(game.InstallDir, plan.GameID)
+	if err != nil {
+		return err
+	}
 	removeTree(staging)
 	defer removeTree(staging)
 
@@ -366,7 +369,10 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 	}
 
 	s.setStep(plan.GameID, StepSwap, "Замена текущей версии")
-	previous := game.InstallDir + previousSuffix
+	previous, err := previousDir(game.InstallDir)
+	if err != nil {
+		return err
+	}
 	if err := swapDirectories(game.InstallDir, staging, previous); err != nil {
 		slog.Error("swap install directory", "game", plan.GameID, "error", err)
 		return errSwapFailed
@@ -416,7 +422,10 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	if !ok {
 		return errNotTracked
 	}
-	staging := stagingDir(game.InstallDir, plan.GameID)
+	staging, err := stagingDir(game.InstallDir, plan.GameID)
+	if err != nil {
+		return err
+	}
 	defer removeTree(staging)
 
 	for _, patch := range plan.Patches {
@@ -531,6 +540,9 @@ func (s *Service) Rollback(gameID string) error {
 		return errNoRollback
 	}
 
+	if entry.InstallDir == "" {
+		return errEmptyInstallDir
+	}
 	replaced := entry.InstallDir + replacedSuffix
 	removeTree(replaced)
 	if _, err := os.Stat(entry.InstallDir); err == nil {
@@ -574,7 +586,7 @@ func (s *Service) Rollback(gameID string) error {
 	})
 	slog.Info("update rolled back", "game", gameID, "version", entry.Version)
 	emit(eventRollback, snap)
-	go s.CheckGame(gameID)
+	s.recheck(gameID)
 	return nil
 }
 

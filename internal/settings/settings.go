@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"typhon/internal/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -156,36 +159,40 @@ type Service struct {
 	nextSub int
 }
 
-func NewService() *Service {
+func NewService() (*Service, error) {
 	dir, err := ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		return &Service{current: Defaults()}
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newServiceAt(filepath.Join(dir, "settings.json"))
 }
 
-func newServiceAt(path string) *Service {
+func newServiceAt(path string) (*Service, error) {
+	if path == "" {
+		return nil, errors.New("settings path unavailable")
+	}
 	s := &Service{current: Defaults(), path: path}
-	s.load()
-	return s
+	current, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	s.current = current
+	return s, nil
 }
 
-func (s *Service) load() {
+func (s *Service) load() (Settings, error) {
 	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return
+	if errors.Is(err, fs.ErrNotExist) {
+		return Defaults(), nil
 	}
 	if err != nil {
-		slog.Error("read settings", "path", s.path, "error", err)
-		return
+		return Settings{}, fmt.Errorf("read settings %s: %w", s.path, err)
 	}
 	loaded := Defaults()
 	if err := json.Unmarshal(data, &loaded); err != nil {
-		slog.Error("parse settings", "path", s.path, "error", err)
-		return
+		return Settings{}, fmt.Errorf("parse settings %s: %w", s.path, err)
 	}
-	s.current = sanitize(loaded)
+	return sanitize(loaded), nil
 }
 
 //wails:ignore
@@ -234,15 +241,13 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 		return next, nil, errors.New("settings path unavailable")
 	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		slog.Error("create config dir", "error", err)
 		return next, nil, fmt.Errorf("create config dir: %w", err)
 	}
 	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return next, nil, err
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		slog.Error("write settings", "path", s.path, "error", err)
+	if err := storage.WriteAtomic(s.path, data); err != nil {
 		return next, nil, fmt.Errorf("write settings: %w", err)
 	}
 	s.current = next

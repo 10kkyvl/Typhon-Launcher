@@ -102,7 +102,7 @@ func (f *fakeRunner) calls() []runSpec {
 
 func newTestService(t *testing.T) (*Service, *fakeDownloads, *fakeRegistrar) {
 	t.Helper()
-	s := newServiceAt(t.TempDir(), nil)
+	s := mustServiceAt(t, t.TempDir())
 	downloads := newFakeDownloads()
 	registrar := &fakeRegistrar{}
 	s.downloads = downloads
@@ -152,6 +152,15 @@ func portableSource(t *testing.T, root, name string) string {
 	return dir
 }
 
+func mustServiceAt(t testing.TB, dir string) *Service {
+	t.Helper()
+	s, err := newServiceAt(dir, nil)
+	if err != nil {
+		t.Fatalf("new install service at %s: %v", dir, err)
+	}
+	return s
+}
+
 func TestStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	completed := time.Now().Truncate(time.Second)
@@ -173,7 +182,10 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := st.save(items); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	loaded := st.load()
+	loaded, err := st.load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
 	if len(loaded) != 1 {
 		t.Fatalf("loaded %d items", len(loaded))
 	}
@@ -419,7 +431,7 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := newServiceAt(dir, nil)
+	s := mustServiceAt(t, dir)
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("startup: %v", err)
 	}
@@ -620,7 +632,7 @@ func TestSanitizeName(t *testing.T) {
 }
 
 func TestProposeDestinationAvoidsCollision(t *testing.T) {
-	s := newServiceAt(t.TempDir(), nil)
+	s := mustServiceAt(t, t.TempDir())
 	games := t.TempDir()
 	mkFile(t, filepath.Join(games, "Game", "taken.txt"), 4)
 

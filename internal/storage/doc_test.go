@@ -2,6 +2,8 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,13 +30,104 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLoadMissingFileIsNoop(t *testing.T) {
+func TestLoadMissingFileReportsNotExist(t *testing.T) {
 	var got []item
-	if err := Load(filepath.Join(t.TempDir(), "absent.json"), 1, nil, &got); err != nil {
-		t.Fatalf("load: %v", err)
+	err := Load(filepath.Join(t.TempDir(), "absent.json"), 1, nil, &got)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("load: %v, want fs.ErrNotExist", err)
 	}
 	if got != nil {
 		t.Fatalf("got %+v, want nil", got)
+	}
+}
+
+func TestLoadRejectsCorruptFile(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"truncated envelope", `{"version":1,"data":[`},
+		{"truncated array", `[{"id":"1"`},
+		{"scalar root", `42`},
+		{"garbage", `not json at all`},
+		{"empty", ``},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "items.json")
+			if err := os.WriteFile(path, []byte(tc.raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var got []item
+			err := Load(path, 1, nil, &got)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("corrupt file reported as missing: %v", err)
+			}
+		})
+	}
+}
+
+func TestWriteAtomicLeavesNoTempOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sub", "items.json")
+	if err := WriteAtomic(path, []byte("payload")); err == nil {
+		t.Fatal("expected error writing into missing directory")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+}
+
+func TestWriteAtomicDoesNotUseSuffixTemp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "items.json")
+	if err := os.WriteFile(path+".tmp", []byte("sentinel"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomic(path, []byte("payload")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	sentinel, err := os.ReadFile(filepath.Clean(path + ".tmp"))
+	if err != nil {
+		t.Fatalf("read sentinel: %v", err)
+	}
+	if string(sentinel) != "sentinel" {
+		t.Fatalf("path+\".tmp\" was reused as scratch file")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("unexpected leftovers: %v", entries)
+	}
+}
+
+func TestWriteAtomicKeepsExistingMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "items.json")
+	if err := os.WriteFile(path, []byte("a"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomic(path, []byte("b")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Mode().Perm() != after.Mode().Perm() {
+		t.Fatalf("mode changed: %v -> %v", before.Mode().Perm(), after.Mode().Perm())
 	}
 }
 
@@ -45,7 +138,7 @@ func TestLoadLegacyFileRunsMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

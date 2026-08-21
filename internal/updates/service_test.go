@@ -201,7 +201,11 @@ func newHarness(t *testing.T) *harness {
 		downloads:  newFakeDownloads(),
 		installDir: installDir,
 	}
-	h.service = newServiceAt(filepath.Join(root, "config"), nil)
+	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
+	if err != nil {
+		t.Fatalf("new updates service: %v", err)
+	}
+	h.service = svc
 	h.service.library = h.library
 	h.service.releases = h.releases
 	h.service.downloads = h.downloads

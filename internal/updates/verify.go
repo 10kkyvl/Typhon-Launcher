@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -59,11 +60,17 @@ func (s *Service) VerifyGame(gameID string) error {
 	if !ok {
 		return errNotTracked
 	}
+	if game.InstallDir == "" {
+		return errEmptyInstallDir
+	}
 	if stat, err := os.Stat(game.InstallDir); err != nil || !stat.IsDir() {
 		return errNoIdentity
 	}
 	release, hasTorrent := s.torrentIdentity(game)
-	manifest, hasManifest := s.store.loadManifest(gameID)
+	manifest, hasManifest, err := s.store.loadManifest(gameID)
+	if err != nil {
+		return fmt.Errorf("load manifest %s: %w", gameID, err)
+	}
 	if !hasTorrent && !hasManifest {
 		s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
 			v.Method = MethodUnavailable

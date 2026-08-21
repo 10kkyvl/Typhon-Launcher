@@ -6,9 +6,18 @@ import (
 	"testing"
 )
 
+func mustServiceAt(t testing.TB, path string) *Service {
+	t.Helper()
+	s, err := newServiceAt(path)
+	if err != nil {
+		t.Fatalf("new settings service at %s: %v", path, err)
+	}
+	return s
+}
+
 func TestSaveAndReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	next := s.GetSettings()
 	next.Theme = "dark"
@@ -19,7 +28,7 @@ func TestSaveAndReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reloaded := newServiceAt(path).GetSettings()
+	reloaded := mustServiceAt(t, path).GetSettings()
 	if reloaded != next {
 		t.Fatalf("got %+v, want %+v", reloaded, next)
 	}
@@ -27,7 +36,7 @@ func TestSaveAndReload(t *testing.T) {
 
 func TestInvalidScaleFallsBack(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	next := s.GetSettings()
 	next.UIScale = 3
 	if err := s.SaveSettings(next); err != nil {
@@ -40,7 +49,7 @@ func TestInvalidScaleFallsBack(t *testing.T) {
 
 func TestDownloadLimitsAreSanitized(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 	next := s.GetSettings()
 	next.MaxActiveDownloads = 42
 	next.DownloadRateLimit = -1
@@ -64,7 +73,7 @@ func TestDownloadLimitsAreSanitized(t *testing.T) {
 
 func TestCleanupPolicyIsSanitized(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	next := s.GetSettings()
 	next.InstallCleanupPolicy = "wipe"
@@ -86,7 +95,7 @@ func TestCleanupPolicyIsSanitized(t *testing.T) {
 
 func TestSourceRefreshIntervalIsSanitized(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	if got := s.GetSettings().SourceRefreshInterval; got != RefreshSixHours {
 		t.Fatalf("default interval = %q, want %q", got, RefreshSixHours)
@@ -115,7 +124,7 @@ func TestInstallDefaultsSurviveOldConfig(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"theme":"dark","gamesPath":"D:\\Games"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := newServiceAt(path).GetSettings()
+	got := mustServiceAt(t, path).GetSettings()
 	if got.InstallCleanupPolicy != CleanupKeep || got.AutoInstall || !got.VerifyAfterInstall {
 		t.Fatalf("install defaults lost: %+v", got)
 	}
@@ -123,7 +132,7 @@ func TestInstallDefaultsSurviveOldConfig(t *testing.T) {
 
 func TestSubscribersAreNotified(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	s := newServiceAt(path)
+	s := mustServiceAt(t, path)
 
 	var seen Settings
 	calls := 0
@@ -150,13 +159,19 @@ func TestSubscribersAreNotified(t *testing.T) {
 	}
 }
 
-func TestCorruptFileFallsBackToDefaults(t *testing.T) {
+func TestCorruptFileFailsConstruction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := newServiceAt(path).GetSettings()
-	if got != Defaults() {
-		t.Fatalf("got %+v, want defaults", got)
+	if _, err := newServiceAt(path); err == nil {
+		t.Fatal("corrupt settings must not start the service")
+	}
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "{broken" {
+		t.Fatalf("settings file rewritten: %q", data)
 	}
 }

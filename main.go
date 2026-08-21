@@ -2,8 +2,8 @@ package main
 
 import (
 	"embed"
-	"log"
 	"log/slog"
+	"os"
 
 	"typhon/internal/account"
 	"typhon/internal/app"
@@ -61,16 +61,37 @@ func init() {
 func main() {
 	app.InitLogging()
 
-	settingsService := settings.NewService()
+	settingsService, err := settings.NewService()
+	if err != nil {
+		fatal("start settings service", err)
+	}
 	appService := app.NewService(settingsService)
 	accountService := account.NewService()
-	libraryService := library.NewService()
-	downloadManager := download.NewManager(settingsService)
-	installService := install.NewService(settingsService, downloadManager, libraryService)
-	catalogService := catalog.NewService()
-	sourcesService := sources.NewService(settingsService, catalogService)
+	libraryService, err := library.NewService()
+	if err != nil {
+		fatal("start library service", err)
+	}
+	downloadManager, err := download.NewManager(settingsService)
+	if err != nil {
+		fatal("start download manager", err)
+	}
+	installService, err := install.NewService(settingsService, downloadManager, libraryService)
+	if err != nil {
+		fatal("start install service", err)
+	}
+	catalogService, err := catalog.NewService()
+	if err != nil {
+		fatal("start catalog service", err)
+	}
+	sourcesService, err := sources.NewService(settingsService, catalogService)
+	if err != nil {
+		fatal("start sources service", err)
+	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
-	updateService := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
+	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
+	if err != nil {
+		fatal("start updates service", err)
+	}
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
@@ -117,6 +138,11 @@ func main() {
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
-		log.Fatal(err)
+		fatal("run application", err)
 	}
+}
+
+func fatal(stage string, err error) {
+	slog.Error("startup failed", "stage", stage, "err", err)
+	os.Exit(1)
 }

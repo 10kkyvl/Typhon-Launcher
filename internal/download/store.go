@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"typhon/internal/storage"
 
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -49,24 +53,22 @@ func (s *store) metainfoPath(infoHash string) string {
 	return filepath.Join(s.dir, "torrents", infoHash+".torrent")
 }
 
-func (s *store) load() []record {
+func (s *store) load() ([]record, error) {
 	if s.dir == "" {
-		return nil
+		return nil, errors.New("downloads path unavailable")
 	}
 	data, err := os.ReadFile(s.listPath())
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
 	if err != nil {
-		slog.Error("read downloads", "path", s.listPath(), "error", err)
-		return nil
+		return nil, fmt.Errorf("read downloads %s: %w", s.listPath(), err)
 	}
 	var records []record
 	if err := json.Unmarshal(data, &records); err != nil {
-		slog.Error("parse downloads", "path", s.listPath(), "error", err)
-		return nil
+		return nil, fmt.Errorf("parse downloads %s: %w", s.listPath(), err)
 	}
-	return records
+	return records, nil
 }
 
 func (s *store) save(records []record) error {
@@ -80,7 +82,7 @@ func (s *store) save(records []record) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(s.listPath(), data)
+	return storage.WriteAtomic(s.listPath(), data)
 }
 
 func (s *store) saveMetainfo(infoHash string, mi *metainfo.MetaInfo) error {
@@ -95,7 +97,7 @@ func (s *store) saveMetainfo(infoHash string, mi *metainfo.MetaInfo) error {
 	if err := mi.Write(&buf); err != nil {
 		return err
 	}
-	return writeAtomic(path, buf.Bytes())
+	return storage.WriteAtomic(path, buf.Bytes())
 }
 
 func (s *store) loadMetainfo(infoHash string) (*metainfo.MetaInfo, error) {
@@ -145,18 +147,4 @@ func (s *store) removeMetainfo(infoHash string) {
 	if err := os.Remove(s.metainfoPath(infoHash)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		slog.Warn("remove torrent file", "infoHash", infoHash, "error", err)
 	}
-}
-
-func writeAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		slog.Error("write file", "path", tmp, "error", err)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		slog.Error("replace file", "path", path, "error", err)
-		return err
-	}
-	return nil
 }

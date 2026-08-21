@@ -39,21 +39,22 @@ const (
 const interruptedMessage = "установка была прервана"
 
 var (
-	errNotFound       = errors.New("установка не найдена")
-	errNoDownloads    = errors.New("менеджер загрузок недоступен")
-	errNotCompleted   = errors.New("загрузка ещё не завершена")
-	errBusy           = errors.New("установка этой загрузки уже выполняется")
-	errNoDestination  = errors.New("укажите папку установки")
-	errDestNotEmpty   = errors.New("папка установки уже существует и не пуста")
-	errUnknownType    = errors.New("тип пакета не распознан")
-	errUnavailable    = errors.New("недоступно для этой установки")
-	errExternalRuns   = errors.New("установщик запущен отдельно, дождитесь его завершения")
-	errInstallerFail  = errors.New("установщик завершился с ошибкой")
-	errNoExecutable   = errors.New("исполняемый файл не найден")
-	errOutsideInstall = errors.New("файл находится вне папки установки")
-	errEmptyInstall   = errors.New("папка установки пуста")
-	errNoLibrary      = errors.New("библиотека недоступна")
-	errNeedsUser      = errors.New("этот пакет требует участия пользователя")
+	errNotFound         = errors.New("установка не найдена")
+	errNoDownloads      = errors.New("менеджер загрузок недоступен")
+	errNotCompleted     = errors.New("загрузка ещё не завершена")
+	errBusy             = errors.New("установка этой загрузки уже выполняется")
+	errNoDestination    = errors.New("укажите папку установки")
+	errDestNotEmpty     = errors.New("папка установки уже существует и не пуста")
+	errUnknownType      = errors.New("тип пакета не распознан")
+	errUnavailable      = errors.New("недоступно для этой установки")
+	errExternalRuns     = errors.New("установщик запущен отдельно, дождитесь его завершения")
+	errInstallerFail    = errors.New("установщик завершился с ошибкой")
+	errNoExecutable     = errors.New("исполняемый файл не найден")
+	errOutsideInstall   = errors.New("файл находится вне папки установки")
+	errEmptyInstall     = errors.New("папка установки пуста")
+	errNoLibrary        = errors.New("библиотека недоступна")
+	errEmptyDestination = errors.New("каталог установки не задан")
+	errNeedsUser        = errors.New("этот пакет требует участия пользователя")
 )
 
 type downloadSource interface {
@@ -92,30 +93,35 @@ type Service struct {
 	wg      sync.WaitGroup
 }
 
-func NewService(settingsService *settings.Service, downloads *download.Manager, lib *library.Service) *Service {
+func NewService(settingsService *settings.Service, downloads *download.Manager, lib *library.Service) (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	s := newServiceAt(dir, settingsService)
+	s, err := newServiceAt(dir, settingsService)
+	if err != nil {
+		return nil, err
+	}
 	if downloads != nil {
 		s.downloads = downloads
 	}
 	if lib != nil {
 		s.library = lib
 	}
-	return s
+	return s, nil
 }
 
-func newServiceAt(dir string, settingsService *settings.Service) *Service {
+func newServiceAt(dir string, settingsService *settings.Service) (*Service, error) {
+	if dir == "" {
+		return nil, errors.New("installations path unavailable")
+	}
 	return &Service{
 		settings:  settingsService,
 		store:     newStore(dir),
 		runner:    newRunner(),
 		jobs:      map[string]*job{},
 		freeSpace: platform.GetStorageInfo,
-	}
+	}, nil
 }
 
 func (s *Service) config() settings.Settings {
@@ -135,7 +141,15 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	stale := make([]string, 0, 4)
-	for _, rec := range s.store.load() {
+	stored, err := s.store.load()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	for _, rec := range stored {
 		item := rec
 		if transient(item.Status) {
 			item.Status = StatusInterrupted
