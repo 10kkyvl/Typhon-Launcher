@@ -3,6 +3,7 @@ import { resetHistory } from './router';
 import {
   AccountError,
   bootstrapSession,
+  continueAsGuest,
   login,
   logout,
   register,
@@ -16,7 +17,7 @@ import {
   type RegisterInput,
 } from '../services/account';
 
-export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable';
+export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest';
 export type AuthView = 'login' | 'register';
 
 export const currentUser = writable<CurrentUser | null>(null);
@@ -54,11 +55,35 @@ async function runBootstrap(): Promise<void> {
     }
     currentUser.set(null);
     authReason.set(state.reason);
-    authState.set(state.status === 'unavailable' ? 'unavailable' : 'unauthenticated');
+    if (state.status === 'unavailable' || state.status === 'guest') {
+      authState.set(state.status);
+      return;
+    }
+    authState.set('unauthenticated');
   } catch (err) {
     currentUser.set(null);
     authReason.set(err instanceof AccountError ? err.code : 'server_error');
     authState.set('unavailable');
+  }
+}
+
+export async function enterAsGuest(): Promise<void> {
+  await continueAsGuest();
+  currentUser.set(null);
+  authReason.set('');
+  resetHistory();
+  authState.set('guest');
+}
+
+export async function leaveGuest(view: AuthView = 'login'): Promise<void> {
+  try {
+    await logout();
+  } finally {
+    currentUser.set(null);
+    authReason.set('');
+    authView.set(view);
+    resetHistory();
+    authState.set('unauthenticated');
   }
 }
 

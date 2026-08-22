@@ -15,6 +15,7 @@ vi.mock('../services/account', () => {
   return {
     AccountError,
     bootstrapSession: vi.fn(),
+    continueAsGuest: vi.fn(),
     register: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
@@ -147,6 +148,61 @@ describe('initAuth', () => {
 
     expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(2);
     expect(get(userStore.authState)).toBe('authenticated');
+  });
+});
+
+describe('guest mode', () => {
+  it('enters the app as a guest without touching the profile', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.continueAsGuest).mockResolvedValue(undefined);
+
+    await userStore.enterAsGuest();
+
+    expect(get(userStore.authState)).toBe('guest');
+    expect(get(userStore.currentUser)).toBeNull();
+    expect(accountMock.fetchCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it('restores guest mode on the next bootstrap', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'guest',
+      user: emptyUser(),
+      reason: '',
+    } as never);
+
+    await userStore.initAuth();
+
+    expect(get(userStore.authState)).toBe('guest');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+
+  it('leaving guest mode clears it through the backend and opens the chosen view', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.continueAsGuest).mockResolvedValue(undefined);
+    await userStore.enterAsGuest();
+
+    vi.mocked(accountMock.logout).mockResolvedValue(undefined);
+    await userStore.leaveGuest('register');
+
+    expect(accountMock.logout).toHaveBeenCalledTimes(1);
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.authView)).toBe('register');
+  });
+
+  it('keeps guest mode when the marker cannot be written', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'unauthenticated',
+      user: emptyUser(),
+      reason: '',
+    } as never);
+    await userStore.initAuth();
+
+    vi.mocked(accountMock.continueAsGuest).mockRejectedValue(new accountMock.AccountError('server_error'));
+
+    await expect(userStore.enterAsGuest()).rejects.toMatchObject({ code: 'server_error' });
+    expect(get(userStore.authState)).toBe('unauthenticated');
   });
 });
 

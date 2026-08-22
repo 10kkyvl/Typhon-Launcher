@@ -42,7 +42,7 @@
   <div class="boot">
     <img class="boot-mark" src="/typhon.svg" alt="" draggable="false" />
   </div>
-{:else if $authState === 'authenticated'}
+{:else if $authState === 'authenticated' || $authState === 'guest'}
   <AppShell>
     {#if $route.name === 'library'}
       <Library />

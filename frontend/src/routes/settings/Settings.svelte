@@ -15,7 +15,7 @@
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { currentUser, signOut } from '../../lib/stores/user';
+  import { authState, currentUser, leaveGuest, signOut } from '../../lib/stores/user';
   import { bytesLabel } from '../../lib/utils/format';
 
   let tab = $state('general');
@@ -59,6 +59,7 @@
 
   let avatarFailed = $state(false);
   let signingOut = $state(false);
+  const isGuest = $derived($authState === 'guest');
 
   $effect(() => {
     $currentUser?.avatarUrl;
@@ -83,7 +84,8 @@
     if (signingOut) return;
     signingOut = true;
     try {
-      await signOut();
+      if (isGuest) await leaveGuest();
+      else await signOut();
     } catch (err) {
       toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
     } finally {
@@ -698,7 +700,26 @@
   <div class="single-column">
     <section class="group">
       <h3>Аккаунт</h3>
-      {#if !$currentUser}
+      {#if isGuest}
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Гостевой режим</span>
+              <span class="row-sub">Аккаунта нет. Библиотека, загрузки и источники работают локально.</span>
+            </div>
+            <Button size="sm" variant="primary" disabled={signingOut} onclick={onSignOut}>
+              {signingOut ? 'Открываю…' : 'Войти в аккаунт'}
+            </Button>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Профиль</span>
+              <span class="row-sub">Имя, аватар и email доступны только с аккаунтом.</span>
+            </div>
+            <Button size="sm" onclick={() => navigate('profile')}>Открыть профиль</Button>
+          </div>
+        </div>
+      {:else if !$currentUser}
         <p class="row-sub">Вы не авторизованы.</p>
       {:else}
         <div class="account-card">

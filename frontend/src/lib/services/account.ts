@@ -27,7 +27,7 @@ export interface LoginInput {
   password: string;
 }
 
-export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unavailable';
+export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest';
 
 export interface BootstrapState {
   status: AuthStatus;
@@ -104,6 +104,15 @@ export async function bootstrapSession(): Promise<BootstrapState> {
 
 function emptyUser(): CurrentUser {
   return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+}
+
+export async function continueAsGuest(): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.ContinueAsGuest();
+  } catch (err) {
+    throw toAccountError(err);
+  }
 }
 
 export async function register(input: RegisterInput): Promise<CurrentUser> {

@@ -18,6 +18,7 @@ const (
 	StatusAuthenticated   = "authenticated"
 	StatusUnauthenticated = "unauthenticated"
 	StatusUnavailable     = "unavailable"
+	StatusGuest           = "guest"
 )
 
 var errNotStarted = errors.New("account service is not started")
@@ -29,10 +30,12 @@ type State struct {
 }
 
 type Service struct {
-	client *Client
-	store  CredentialStore
+	client    *Client
+	store     CredentialStore
+	statePath string
 
 	mu     sync.Mutex
+	guest  bool
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -42,11 +45,23 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newService(store, BaseURL())
+	path, err := statePath()
+	if err != nil {
+		return nil, err
+	}
+	return newService(store, BaseURL(), path)
 }
 
-func newService(store CredentialStore, baseURL string) (*Service, error) {
-	s := &Service{store: store}
+func newService(store CredentialStore, baseURL, path string) (*Service, error) {
+	if path == "" {
+		return nil, errors.New("account state path is empty")
+	}
+	loaded, err := loadState(path)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &Service{store: store, statePath: path, guest: loaded.Guest}
 	client, err := NewClient(baseURL, s.token)
 	if err != nil {
 		return nil, err
@@ -95,13 +110,13 @@ func (s *Service) requestContext() (context.Context, context.CancelFunc, error) 
 func (s *Service) Bootstrap() (State, error) {
 	cred, err := s.store.Load()
 	if errors.Is(err, ErrNoCredential) {
-		return State{Status: StatusUnauthenticated}, nil
+		return s.signedOutState(), nil
 	}
 	if err != nil {
 		return State{}, fmt.Errorf("load stored credential: %w", err)
 	}
 	if cred.Token == "" {
-		return State{Status: StatusUnauthenticated}, nil
+		return s.signedOutState(), nil
 	}
 
 	ctx, cancel, err := s.requestContext()
@@ -124,13 +139,24 @@ func (s *Service) Bootstrap() (State, error) {
 		if delErr := s.store.Delete(); delErr != nil {
 			return State{}, fmt.Errorf("discard rejected credential: %w", delErr)
 		}
-		return State{Status: StatusUnauthenticated}, nil
+		return s.signedOutState(), nil
 	}
 
 	return State{Status: StatusUnavailable, Reason: apiErr.Code}, nil
 }
 
+func (s *Service) signedOutState() State {
+	if s.isGuest() {
+		return State{Status: StatusGuest}
+	}
+	return State{Status: StatusUnauthenticated}
+}
+
 func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
+	if err := s.setGuest(false); err != nil {
+		return CurrentUser{}, err
+	}
+
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -145,6 +171,10 @@ func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 }
 
 func (s *Service) Login(input LoginInput) (CurrentUser, error) {
+	if err := s.setGuest(false); err != nil {
+		return CurrentUser{}, err
+	}
+
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -181,6 +211,10 @@ func (s *Service) revoke(token string) error {
 }
 
 func (s *Service) Logout() error {
+	if err := s.setGuest(false); err != nil {
+		return err
+	}
+
 	cred, err := s.store.Load()
 	if err != nil && !errors.Is(err, ErrNoCredential) {
 		return fmt.Errorf("load stored credential: %w", err)
