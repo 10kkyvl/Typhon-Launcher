@@ -2,20 +2,19 @@
   import {
     ArrowDownUp,
     ArrowUp,
-    Bookmark,
     ChevronDown,
     ChevronRight,
-    CircleCheck,
     Clock,
     FileDown,
     LayoutGrid,
     List,
+    MonitorDown,
     Play,
-    SlidersHorizontal,
-    Star,
+    Square,
     X,
   } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -25,60 +24,170 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
-  import { games } from '../../lib/mock/games';
+  import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
+  import { listCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import { active, moveUp, queue, remove } from '../../lib/stores/downloads';
+  import { libraryGames, runningGames } from '../../lib/stores/library';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
-  import { bytesSize, gb, plural } from '../../lib/utils/format';
+  import { bytesSize, playtime, plural, relativeDate } from '../../lib/utils/format';
 
-  type Filter = 'all' | 'favorites' | 'recent' | 'completed';
+  type Filter = 'all' | 'installed' | 'recent';
+  type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
+
+  interface Entry {
+    id: string;
+    title: string;
+    cover: string;
+    hero: string;
+    installed: boolean;
+    playtimeSeconds: number;
+    sizeBytes: number;
+    lastPlayed: string | null;
+    subtitle: string;
+  }
 
   let filter = $state<Filter>('all');
+  let sort = $state<Sort>('alpha');
   let heroIndex = $state(0);
+  let catalog = $state<CatalogGame[]>([]);
 
-  const featured = games.filter((g) => g.installed && g.favorite).slice(0, 5);
-
-  const filters: { id: Filter; label: string; icon?: typeof Star }[] = [
-    { id: 'all', label: 'Все игры' },
-    { id: 'favorites', label: 'Избранное', icon: Star },
-    { id: 'recent', label: 'Недавние', icon: Clock },
-    { id: 'completed', label: 'Пройденные', icon: CircleCheck },
-  ];
-
-  const sectionTitles: Record<Filter, string> = {
-    all: 'Недавние игры',
-    favorites: 'Избранное',
-    recent: 'Недавние игры',
-    completed: 'Пройденные',
-  };
-
-  const visibleGames = $derived.by(() => {
-    switch (filter) {
-      case 'favorites':
-        return games.filter((g) => g.favorite);
-      case 'recent':
-        return games.filter((g) => g.lastPlayed !== null);
-      case 'completed':
-        return games.filter((g) => g.completed);
-      default:
-        return games;
+  onMount(async () => {
+    try {
+      catalog = await listCatalogGames();
+    } catch {
+      catalog = [];
     }
   });
 
-  const hero = $derived(featured[heroIndex]);
+  const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
+    { id: 'all', label: 'Все игры' },
+    { id: 'installed', label: 'Установленные', icon: MonitorDown },
+    { id: 'recent', label: 'Недавние', icon: Clock },
+  ];
+
+  const sortLabels: Record<Sort, string> = {
+    alpha: 'По алфавиту',
+    recent: 'По последнему запуску',
+    playtime: 'По наигранному времени',
+    size: 'По размеру',
+  };
+
+  const sectionTitles: Record<Filter, string> = {
+    all: 'Все игры',
+    installed: 'Установленные',
+    recent: 'Недавние',
+  };
+
+  function installedEntry(game: LibraryGame): Entry {
+    const bits: string[] = [];
+    if (game.version) bits.push(game.version);
+    if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
+    return {
+      id: game.id,
+      title: game.title,
+      cover: game.cover,
+      hero: game.hero,
+      installed: true,
+      playtimeSeconds: game.playtimeSeconds,
+      sizeBytes: game.sizeBytes,
+      lastPlayed: game.lastPlayed,
+      subtitle: bits.join(' · '),
+    };
+  }
+
+  function catalogEntry(game: CatalogGame): Entry {
+    const bits: string[] = [];
+    if (game.releaseYear) bits.push(String(game.releaseYear));
+    if (game.developer) bits.push(game.developer);
+    return {
+      id: game.id,
+      title: game.title,
+      cover: '',
+      hero: '',
+      installed: false,
+      playtimeSeconds: 0,
+      sizeBytes: 0,
+      lastPlayed: null,
+      subtitle: bits.join(' · '),
+    };
+  }
+
+  const entries = $derived.by(() => {
+    const installed = $libraryGames.map(installedEntry);
+    const claimed = new Set<string>();
+    for (const game of $libraryGames) {
+      claimed.add(game.id);
+      if (game.canonicalGameId) claimed.add(game.canonicalGameId);
+    }
+    const rest = catalog.filter((game) => !claimed.has(game.id)).map(catalogEntry);
+    return [...installed, ...rest];
+  });
+
+  const visibleGames = $derived.by(() => {
+    const filtered = entries.filter((entry) => {
+      switch (filter) {
+        case 'installed':
+          return entry.installed;
+        case 'recent':
+          return entry.lastPlayed !== null;
+        default:
+          return true;
+      }
+    });
+
+    return filtered.toSorted((a, b) => {
+      switch (sort) {
+        case 'recent':
+          return time(b.lastPlayed) - time(a.lastPlayed) || a.title.localeCompare(b.title, 'ru');
+        case 'playtime':
+          return b.playtimeSeconds - a.playtimeSeconds || a.title.localeCompare(b.title, 'ru');
+        case 'size':
+          return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title, 'ru');
+        default:
+          return a.title.localeCompare(b.title, 'ru');
+      }
+    });
+  });
+
+  function time(value: string | null) {
+    if (!value) return 0;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  const featured = $derived(
+    $libraryGames
+      .map(installedEntry)
+      .toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed))
+      .slice(0, 5),
+  );
+
+  const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
   const activeDownload = $derived($active[0]);
 
   onMount(() => {
     const timer = setInterval(() => {
+      if (featured.length === 0) return;
       heroIndex = (heroIndex + 1) % featured.length;
     }, 8000);
     return () => clearInterval(timer);
   });
 
-  function playtime(hours: number) {
-    return `${hours} ч`;
+  function entryMeta(entry: Entry) {
+    if (entry.playtimeSeconds > 0) return playtime(entry.playtimeSeconds);
+    if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
+    return entry.installed ? 'Не запускалась' : 'Не установлена';
+  }
+
+  async function toggleRun(id: string) {
+    try {
+      if ($runningGames.has(id)) await stopGame(id);
+      else await playGame(id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+    }
   }
 </script>
 
@@ -106,52 +215,45 @@
   <div class="hero-block">
     <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem" maxHeight="34rem">
       <h2 class="hero-title">{hero.title}</h2>
-      <p class="hero-genres">{hero.genres.slice(0, 4).join(' · ')}</p>
-      <p class="hero-tagline">{hero.tagline}</p>
+      {#if hero.subtitle}
+        <p class="hero-genres">{hero.subtitle}</p>
+      {/if}
+      <p class="hero-tagline">
+        {hero.lastPlayed ? `Последний запуск: ${relativeDate(hero.lastPlayed)}` : 'Ещё не запускалась'}
+        {hero.playtimeSeconds > 0 ? ` · ${playtime(hero.playtimeSeconds)}` : ''}
+      </p>
       <div class="hero-actions">
-        <Button variant="primary" size="lg" onclick={() => toast(`Запуск «${hero.title}»...`)}>
-          <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-          Играть
+        <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
+          {#if $runningGames.has(hero.id)}
+            <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+            Остановить
+          {:else}
+            <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+            Играть
+          {/if}
         </Button>
         <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>Подробнее</Button>
-        <IconButton label="В коллекцию" onclick={() => toast('Добавлено в коллекцию')}>
-          <Bookmark size="1.8rem" strokeWidth={1.8} />
-        </IconButton>
       </div>
     </GameHero>
-    <div class="hero-dots">
-      {#each featured as g, i (g.id)}
-        <button
-          class="dot"
-          class:on={i === heroIndex}
-          aria-label={g.title}
-          onclick={() => (heroIndex = i)}
-        ></button>
-      {/each}
-    </div>
+    {#if featured.length > 1}
+      <div class="hero-dots">
+        {#each featured as g, i (g.id)}
+          <button
+            class="dot"
+            class:on={i === heroIndex}
+            aria-label={g.title}
+            onclick={() => (heroIndex = i)}
+          ></button>
+        {/each}
+      </div>
+    {/if}
   </div>
 {/if}
 
 <div class="toolbar">
   <div class="filters">
-    <DropdownMenu
-      align="left"
-      items={[
-        { id: 'all', label: 'Все игры' },
-        { id: 'installed', label: 'Установленные' },
-        { id: 'not-installed', label: 'Не установленные' },
-      ]}
-      onselect={() => (filter = 'all')}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="chip" class:selected={filter === 'all'} class:open onclick={toggle}>
-          Все игры
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
-    {#each filters.slice(1) as f (f.id)}
-      <button class="chip" class:selected={filter === f.id} onclick={() => (filter = filter === f.id ? 'all' : f.id)}>
+    {#each filters as f (f.id)}
+      <button class="chip" class:selected={filter === f.id} onclick={() => (filter = f.id)}>
         {#if f.icon}
           <f.icon size="1.4rem" strokeWidth={1.8} />
         {/if}
@@ -162,32 +264,17 @@
   <div class="toolbar-right">
     <DropdownMenu
       items={[
-        { id: 'genre', label: 'По жанру' },
-        { id: 'installed', label: 'Установленные' },
-        { id: 'size', label: 'По размеру' },
+        { id: 'alpha', label: sortLabels.alpha },
+        { id: 'recent', label: sortLabels.recent },
+        { id: 'playtime', label: sortLabels.playtime },
+        { id: 'size', label: sortLabels.size },
       ]}
-      onselect={() => toast('Фильтры недоступны в demo')}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="chip quiet" class:open onclick={toggle}>
-          <SlidersHorizontal size="1.4rem" strokeWidth={1.8} />
-          Фильтры
-        </button>
-      {/snippet}
-    </DropdownMenu>
-    <DropdownMenu
-      items={[
-        { id: 'alpha', label: 'По алфавиту' },
-        { id: 'recent', label: 'По последнему запуску' },
-        { id: 'playtime', label: 'По наигранному времени' },
-        { id: 'size', label: 'По размеру' },
-      ]}
-      onselect={() => toast('Сортировка применена')}
+      onselect={(id) => (sort = id as Sort)}
     >
       {#snippet trigger({ open, toggle })}
         <button class="chip quiet" class:open onclick={toggle}>
           <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-          По алфавиту
+          {sortLabels[sort]}
           <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </button>
       {/snippet}
@@ -199,31 +286,40 @@
   <div class="section-head">
     <h2>{sectionTitles[filter]}</h2>
     <button class="link" onclick={() => navigate('installed')}>
-      Показать все
+      Установленные
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
     </button>
   </div>
 
   {#if visibleGames.length === 0}
-    <EmptyState title="Здесь пока пусто" description="Игры, подходящие под этот фильтр, появятся здесь." />
+    <EmptyState
+      title="Здесь пока пусто"
+      description="Добавьте источник и установите игру — она появится в библиотеке."
+    />
   {:else if $libraryView === 'grid'}
     <div class="grid">
-      {#each visibleGames as game (game.id)}
-        <GameCard {game} meta={game.playtimeHours > 0 ? playtime(game.playtimeHours) : gb(game.sizeGb)} />
+      {#each visibleGames as entry (entry.id)}
+        <GameCard
+          id={entry.id}
+          title={entry.title}
+          cover={entry.cover}
+          installed={entry.installed}
+          running={$runningGames.has(entry.id)}
+          meta={entryMeta(entry)}
+          onplay={() => toggleRun(entry.id)}
+        />
       {/each}
     </div>
   {:else}
     <div class="list">
-      {#each visibleGames as game (game.id)}
-        <button class="list-row" onclick={() => navigate('game', { id: game.id })}>
+      {#each visibleGames as entry (entry.id)}
+        <button class="list-row" onclick={() => navigate('game', { id: entry.id })}>
           <div class="list-thumb">
-            <Artwork src={game.cover} alt={game.title} radius="var(--radius-xs)" />
+            <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
           </div>
-          <span class="list-title">{game.title}</span>
-          <span class="list-meta">{game.genres.slice(0, 2).join(' · ')}</span>
-          <span class="list-meta right">
-            {game.playtimeHours > 0 ? playtime(game.playtimeHours) : gb(game.sizeGb)}
-          </span>
+          <span class="list-title">{entry.title}</span>
+          <span class="list-meta">{entry.subtitle}</span>
+          <span class="list-meta right">{entryMeta(entry)}</span>
         </button>
       {/each}
     </div>
@@ -307,11 +403,6 @@
     line-height: 1.5;
     color: rgba(238, 242, 246, 0.85);
     text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .hero-actions {
