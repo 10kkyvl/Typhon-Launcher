@@ -1,39 +1,45 @@
 <script lang="ts">
-  import { Play, Star } from '@lucide/svelte';
-  import type { Game } from '../mock/types';
+  import { Play, Square } from '@lucide/svelte';
   import { navigate } from '../stores/router';
-  import { toast } from '../stores/toasts';
   import Artwork from './Artwork.svelte';
 
   let {
-    game,
+    id,
+    title,
+    cover = '',
+    installed = false,
+    running = false,
     meta,
+    onplay,
   }: {
-    game: Game;
+    id: string;
+    title: string;
+    cover?: string;
+    installed?: boolean;
+    running?: boolean;
     meta?: string;
+    onplay?: () => void;
   } = $props();
-
-  // svelte-ignore state_referenced_locally
-  let favorite = $state(game.favorite);
 </script>
 
 <div class="card">
   <div class="cover-wrap">
-    <button class="cover" onclick={() => navigate('game', { id: game.id })} aria-label={game.title}>
-      <Artwork src={game.cover} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+    <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
+      <Artwork src={cover} alt={title} ratio="3 / 4" radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
-    {#if game.installed}
-      <button class="play" aria-label="Играть" onclick={() => toast(`Запуск «${game.title}»...`)}>
-        <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+    {#if installed && onplay}
+      <button class="play" class:running aria-label={running ? 'Остановить' : 'Играть'} onclick={onplay}>
+        {#if running}
+          <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+        {:else}
+          <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+        {/if}
       </button>
     {/if}
-    <button class="fav" class:on={favorite} aria-label="В избранное" onclick={() => (favorite = !favorite)}>
-      <Star size="1.4rem" strokeWidth={2} fill={favorite ? 'currentColor' : 'none'} />
-    </button>
   </div>
-  <button class="info" onclick={() => navigate('game', { id: game.id })}>
-    <span class="title">{game.title}</span>
+  <button class="info" onclick={() => navigate('game', { id })}>
+    <span class="title">{title}</span>
     {#if meta}
       <span class="meta">{meta}</span>
     {/if}
@@ -104,37 +110,10 @@
   }
 
   .cover-wrap:hover .play,
-  .play:focus-visible {
+  .play:focus-visible,
+  .play.running {
     opacity: 1;
     transform: translateY(0);
-  }
-
-  .fav {
-    position: absolute;
-    top: 0.8rem;
-    right: 0.8rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.8rem;
-    height: 2.8rem;
-    border-radius: var(--radius-sm);
-    background: rgba(6, 9, 13, 0.6);
-    color: var(--text-2);
-    opacity: 0;
-    transition:
-      opacity var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .cover-wrap:hover .fav,
-  .fav:focus-visible,
-  .fav.on {
-    opacity: 1;
-  }
-
-  .fav.on {
-    color: #e3c26b;
   }
 
   .info {
