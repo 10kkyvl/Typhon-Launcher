@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync"
@@ -13,10 +14,23 @@ import (
 
 const requestTimeout = 30 * time.Second
 
+const (
+	StatusAuthenticated   = "authenticated"
+	StatusUnauthenticated = "unauthenticated"
+	StatusUnavailable     = "unavailable"
+)
+
 var errNotStarted = errors.New("account service is not started")
+
+type State struct {
+	Status string      `json:"status"`
+	User   CurrentUser `json:"user"`
+	Reason string      `json:"reason"`
+}
 
 type Service struct {
 	client *Client
+	store  CredentialStore
 
 	mu     sync.Mutex
 	ctx    context.Context
@@ -24,11 +38,29 @@ type Service struct {
 }
 
 func NewService() (*Service, error) {
-	client, err := NewClient(BaseURL(), Token)
+	store, err := NewCredentialStore()
 	if err != nil {
 		return nil, err
 	}
-	return &Service{client: client}, nil
+	return newService(store, BaseURL())
+}
+
+func newService(store CredentialStore, baseURL string) (*Service, error) {
+	s := &Service{store: store}
+	client, err := NewClient(baseURL, s.token)
+	if err != nil {
+		return nil, err
+	}
+	s.client = client
+	return s, nil
+}
+
+func (s *Service) token() (string, error) {
+	cred, err := s.store.Load()
+	if err != nil {
+		return "", err
+	}
+	return cred.Token, nil
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -58,6 +90,119 @@ func (s *Service) requestContext() (context.Context, context.CancelFunc, error) 
 	}
 	ctx, cancel := context.WithTimeout(base, requestTimeout)
 	return ctx, cancel, nil
+}
+
+func (s *Service) Bootstrap() (State, error) {
+	cred, err := s.store.Load()
+	if errors.Is(err, ErrNoCredential) {
+		return State{Status: StatusUnauthenticated}, nil
+	}
+	if err != nil {
+		return State{}, fmt.Errorf("load stored credential: %w", err)
+	}
+	if cred.Token == "" {
+		return State{Status: StatusUnauthenticated}, nil
+	}
+
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return State{}, err
+	}
+	defer cancel()
+
+	user, err := s.client.Me(ctx)
+	if err == nil {
+		return State{Status: StatusAuthenticated, User: user}, nil
+	}
+
+	var apiErr *Error
+	if !errors.As(err, &apiErr) {
+		return State{}, err
+	}
+
+	if apiErr.Code == CodeUnauthenticated {
+		if delErr := s.store.Delete(); delErr != nil {
+			return State{}, fmt.Errorf("discard rejected credential: %w", delErr)
+		}
+		return State{Status: StatusUnauthenticated}, nil
+	}
+
+	return State{Status: StatusUnavailable, Reason: apiErr.Code}, nil
+}
+
+func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	defer cancel()
+
+	session, err := s.client.Register(ctx, input)
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	return s.adopt(session)
+}
+
+func (s *Service) Login(input LoginInput) (CurrentUser, error) {
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	defer cancel()
+
+	session, err := s.client.Login(ctx, input)
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	return s.adopt(session)
+}
+
+func (s *Service) adopt(session Session) (CurrentUser, error) {
+	saveErr := s.store.Save(Credential{Token: session.Token, Username: session.User.Username})
+	if saveErr == nil {
+		return session.User, nil
+	}
+
+	slog.Error("store session credential", "error", saveErr)
+	if err := s.revoke(session.Token); err != nil {
+		slog.Error("revoke session after failed credential write", "error", err)
+	}
+	return CurrentUser{}, fmt.Errorf("store session credential: %w", saveErr)
+}
+
+func (s *Service) revoke(token string) error {
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	return s.client.Logout(ctx, token)
+}
+
+func (s *Service) Logout() error {
+	cred, err := s.store.Load()
+	if err != nil && !errors.Is(err, ErrNoCredential) {
+		return fmt.Errorf("load stored credential: %w", err)
+	}
+
+	var revokeErr error
+	if cred.Token != "" {
+		revokeErr = s.revoke(cred.Token)
+	}
+
+	if err := s.store.Delete(); err != nil {
+		return fmt.Errorf("delete stored credential: %w", err)
+	}
+
+	if revokeErr != nil {
+		var apiErr *Error
+		if errors.As(revokeErr, &apiErr) && apiErr.Code == CodeUnauthenticated {
+			return nil
+		}
+		return revokeErr
+	}
+	return nil
 }
 
 func (s *Service) GetCurrentUser() (CurrentUser, error) {
@@ -126,9 +271,4 @@ func (s *Service) RemoveAvatar() (CurrentUser, error) {
 	}
 	defer cancel()
 	return s.client.RemoveAvatar(ctx)
-}
-
-func (s *Service) IsSignedIn() bool {
-	_, err := Token()
-	return err == nil
 }

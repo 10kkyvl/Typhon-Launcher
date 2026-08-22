@@ -14,6 +14,10 @@ vi.mock('../services/account', () => {
   }
   return {
     AccountError,
+    bootstrapSession: vi.fn(),
+    register: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
     fetchCurrentUser: vi.fn(),
     updateProfile: vi.fn(),
     selectAvatarFile: vi.fn(),
@@ -34,37 +38,199 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function emptyUser() {
+  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+}
+
 async function loadModules() {
   vi.resetModules();
   const accountMock = await import('../services/account');
   const userStore = await import('./user');
-  return { accountMock, userStore };
+  const router = await import('./router');
+  return { accountMock, userStore, router };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('initCurrentUser', () => {
-  it('calls fetchCurrentUser exactly once even when invoked twice', async () => {
+describe('initAuth', () => {
+  it('starts in the bootstrapping state so no auth screen flashes', async () => {
+    const { accountMock, userStore } = await loadModules();
+    let resolve!: (value: unknown) => void;
+    vi.mocked(accountMock.bootstrapSession).mockReturnValue(
+      new Promise((r) => {
+        resolve = r as (value: unknown) => void;
+      }) as never,
+    );
+
+    expect(get(userStore.authState)).toBe('bootstrapping');
+
+    const pending = userStore.initAuth();
+    expect(get(userStore.authState)).toBe('bootstrapping');
+
+    resolve({ status: 'unauthenticated', user: emptyUser(), reason: '' });
+    await pending;
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+  });
+
+  it('authenticates from a restored session', async () => {
     const { accountMock, userStore } = await loadModules();
     const user = makeUser();
-    vi.mocked(accountMock.fetchCurrentUser).mockResolvedValue(user);
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'authenticated',
+      user,
+      reason: '',
+    } as never);
 
-    await Promise.all([userStore.initCurrentUser(), userStore.initCurrentUser()]);
+    await userStore.initAuth();
 
-    expect(accountMock.fetchCurrentUser).toHaveBeenCalledTimes(1);
+    expect(get(userStore.authState)).toBe('authenticated');
     expect(get(userStore.currentUser)).toEqual(user);
   });
 
-  it('clears currentUser on an unauthenticated response', async () => {
+  it('bootstraps only once when called twice', async () => {
     const { accountMock, userStore } = await loadModules();
-    const err = new accountMock.AccountError('unauthenticated');
-    vi.mocked(accountMock.fetchCurrentUser).mockRejectedValue(err);
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'unauthenticated',
+      user: emptyUser(),
+      reason: '',
+    } as never);
 
-    userStore.currentUser.set(makeUser());
-    await userStore.initCurrentUser();
+    await Promise.all([userStore.initAuth(), userStore.initAuth()]);
 
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the user out of the app but does not authenticate when the backend is unreachable', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'unavailable',
+      user: emptyUser(),
+      reason: 'network_error',
+    } as never);
+
+    await userStore.initAuth();
+
+    expect(get(userStore.authState)).toBe('unavailable');
+    expect(get(userStore.authReason)).toBe('network_error');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+
+  it('treats a thrown error as unavailable rather than as a logout', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockRejectedValue(new accountMock.AccountError('network_error'));
+
+    await userStore.initAuth();
+
+    expect(get(userStore.authState)).toBe('unavailable');
+    expect(get(userStore.authReason)).toBe('network_error');
+  });
+
+  it('retryBootstrap runs another bootstrap after a failure', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValueOnce({
+      status: 'unavailable',
+      user: emptyUser(),
+      reason: 'network_error',
+    } as never);
+    await userStore.initAuth();
+
+    const user = makeUser();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValueOnce({
+      status: 'authenticated',
+      user,
+      reason: '',
+    } as never);
+    await userStore.retryBootstrap();
+
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(2);
+    expect(get(userStore.authState)).toBe('authenticated');
+  });
+});
+
+describe('signUp and signIn', () => {
+  it('enters the app right after registration without a second login', async () => {
+    const { accountMock, userStore } = await loadModules();
+    const user = makeUser();
+    vi.mocked(accountMock.register).mockResolvedValue(user);
+
+    await userStore.signUp({
+      email: 'egor@example.com',
+      username: 'egor',
+      displayName: 'Egor',
+      password: 'password',
+    });
+
+    expect(accountMock.login).not.toHaveBeenCalled();
+    expect(get(userStore.authState)).toBe('authenticated');
+    expect(get(userStore.currentUser)).toEqual(user);
+  });
+
+  it('enters the app after login and lands on the library route', async () => {
+    const { accountMock, userStore, router } = await loadModules();
+    router.navigate('settings');
+    vi.mocked(accountMock.login).mockResolvedValue(makeUser());
+
+    await userStore.signIn({ emailOrUsername: 'egor', password: 'password' });
+
+    expect(get(userStore.authState)).toBe('authenticated');
+    expect(get(router.route).name).toBe('library');
+  });
+
+  it('leaves the state unauthenticated and rethrows when credentials are wrong', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue({
+      status: 'unauthenticated',
+      user: emptyUser(),
+      reason: '',
+    } as never);
+    await userStore.initAuth();
+
+    vi.mocked(accountMock.login).mockRejectedValue(new accountMock.AccountError('invalid_credentials'));
+
+    await expect(userStore.signIn({ emailOrUsername: 'egor', password: 'nope' })).rejects.toMatchObject({
+      code: 'invalid_credentials',
+    });
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+});
+
+describe('signOut', () => {
+  it('clears the user and returns to the login view', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.register).mockResolvedValue(makeUser());
+    await userStore.signUp({
+      email: 'egor@example.com',
+      username: 'egor',
+      displayName: 'Egor',
+      password: 'password',
+    });
+
+    vi.mocked(accountMock.logout).mockResolvedValue(undefined);
+    await userStore.signOut();
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+    expect(get(userStore.authView)).toBe('login');
+  });
+
+  it('still signs the user out locally when the revoke call fails', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.register).mockResolvedValue(makeUser());
+    await userStore.signUp({
+      email: 'egor@example.com',
+      username: 'egor',
+      displayName: 'Egor',
+      password: 'password',
+    });
+
+    vi.mocked(accountMock.logout).mockRejectedValue(new accountMock.AccountError('network_error'));
+    await expect(userStore.signOut()).rejects.toMatchObject({ code: 'network_error' });
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
     expect(get(userStore.currentUser)).toBeNull();
   });
 });
@@ -94,6 +260,20 @@ describe('saveProfile', () => {
     expect(get(userStore.currentUser)).toEqual(original);
   });
 
+  it('signs out when the session was rejected mid-session', async () => {
+    const { accountMock, userStore } = await loadModules();
+    userStore.currentUser.set(makeUser());
+    userStore.authState.set('authenticated');
+    vi.mocked(accountMock.updateProfile).mockRejectedValue(new accountMock.AccountError('unauthenticated'));
+
+    await expect(userStore.saveProfile({ displayName: 'X' })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    });
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+
   it('issues no second request while one is already in flight', async () => {
     const { accountMock, userStore } = await loadModules();
     let resolveFirst!: (value: ReturnType<typeof makeUser>) => void;
@@ -121,6 +301,18 @@ describe('changeAvatar', () => {
     await userStore.changeAvatar();
 
     expect(get(userStore.currentUser)?.avatarUrl).toBe('https://cdn/avatar.png');
+  });
+
+  it('keeps the current user when the file dialog is cancelled', async () => {
+    const { accountMock, userStore } = await loadModules();
+    const original = makeUser({ avatarUrl: 'https://cdn/old.png' });
+    userStore.currentUser.set(original);
+    vi.mocked(accountMock.selectAvatarFile).mockResolvedValue('');
+
+    await userStore.changeAvatar();
+
+    expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
+    expect(get(userStore.currentUser)).toEqual(original);
   });
 });
 

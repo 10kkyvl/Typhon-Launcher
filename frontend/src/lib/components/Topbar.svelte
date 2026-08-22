@@ -14,11 +14,14 @@
   import { inWails } from '../services/backend';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
+  import { notifications, type Notification } from '../stores/notifications';
   import { toast } from '../stores/toasts';
-  import { currentUser } from '../stores/user';
+  import { currentUser, signOut } from '../stores/user';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
+  import { accountErrorText } from '../services/accountMessages';
   import Artwork from './Artwork.svelte';
+  import DropdownMenu from './DropdownMenu.svelte';
   import IconButton from './IconButton.svelte';
   import SearchInput from './SearchInput.svelte';
 
@@ -115,11 +118,32 @@
     return parts.join(' · ');
   }
 
-  const notifications = [
-    { id: 1, title: 'Hogwarts Legacy', text: 'Обновление 1.0.3.0 загружается' },
-    { id: 2, title: 'ELDEN RING', text: 'Доступно дополнение Shadow of the Erdtree' },
-    { id: 3, title: 'Источники', text: 'Typhon Core Library обновлена' },
+  function openNotification(item: Notification) {
+    notificationsOpen = false;
+    navigate(item.route);
+  }
+
+  const accountMenu = [
+    { id: 'profile', label: 'Профиль' },
+    { id: 'settings', label: 'Настройки' },
+    { id: 'logout', label: 'Выйти', danger: true, separator: true },
   ];
+
+  async function onAccountSelect(id: string) {
+    if (id === 'profile') {
+      navigate('profile');
+      return;
+    }
+    if (id === 'settings') {
+      navigate('settings');
+      return;
+    }
+    try {
+      await signOut();
+    } catch (err) {
+      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
+    }
+  }
 
   function win(action: 'minimise' | 'maximise' | 'close') {
     if (!inWails) {
@@ -217,34 +241,46 @@
       <IconButton label="Уведомления" active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
         <Bell size="1.8rem" strokeWidth={1.8} />
       </IconButton>
+      {#if $notifications.length > 0}
+        <span class="badge">{$notifications.length}</span>
+      {/if}
       {#if notificationsOpen}
         <div class="notifications">
           <div class="notifications-head">Уведомления</div>
-          {#each notifications as n (n.id)}
-            <button class="notification" onclick={() => (notificationsOpen = false)}>
-              <span class="notification-title">{n.title}</span>
-              <span class="notification-text">{n.text}</span>
-            </button>
-          {/each}
+          {#if $notifications.length === 0}
+            <div class="notifications-empty">Пока ничего нового</div>
+          {:else}
+            {#each $notifications as n (n.id)}
+              <button class="notification" onclick={() => openNotification(n)}>
+                <span class="notification-title">{n.title}</span>
+                <span class="notification-text">{n.text}</span>
+              </button>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
 
-    <button
-      class="account"
-      onclick={() => navigate('settings')}
-      title={$currentUser ? $currentUser.displayName : 'Не авторизован'}
-    >
-      <span class="avatar">
-        {#if avatarFailed || !$currentUser?.avatarUrl}
-          <span class="avatar-fallback">{avatarInitial}</span>
-        {:else}
-          <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-        {/if}
-      </span>
-      <span class="account-name">{$currentUser ? $currentUser.displayName : 'Не авторизован'}</span>
-      <ChevronDown size="1.4rem" strokeWidth={1.8} />
-    </button>
+    <DropdownMenu items={accountMenu} onselect={onAccountSelect}>
+      {#snippet trigger({ open, toggle })}
+        <button
+          class="account"
+          class:open
+          onclick={toggle}
+          title={$currentUser ? $currentUser.displayName : 'Не авторизован'}
+        >
+          <span class="avatar">
+            {#if avatarFailed || !$currentUser?.avatarUrl}
+              <span class="avatar-fallback">{avatarInitial}</span>
+            {:else}
+              <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
+            {/if}
+          </span>
+          <span class="account-name">{$currentUser ? $currentUser.displayName : 'Не авторизован'}</span>
+          <ChevronDown size="1.4rem" strokeWidth={1.8} />
+        </button>
+      {/snippet}
+    </DropdownMenu>
 
     <div class="window-controls">
       <button class="wc" aria-label="Свернуть" onclick={() => win('minimise')}>
@@ -384,6 +420,29 @@
     color: var(--text-3);
   }
 
+  .notifications-empty {
+    padding: 0.8rem 1rem 1.2rem;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    pointer-events: none;
+    min-width: 1.6rem;
+    height: 1.6rem;
+    padding: 0 0.4rem;
+    border-radius: 0.8rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.6rem;
+    text-align: center;
+  }
+
   .results-more,
   .results-empty,
   .results-error {
@@ -433,7 +492,8 @@
     transition: background var(--dur) var(--ease);
   }
 
-  .account:hover {
+  .account:hover,
+  .account.open {
     background: var(--hover);
   }
 

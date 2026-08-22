@@ -127,7 +127,12 @@ func (c *Client) doUser(
 	contentType string,
 	hc *http.Client,
 ) (CurrentUser, error) {
-	resp, err := c.do(ctx, method, path, body, contentType, hc)
+	tok, err := c.resolveToken()
+	if err != nil {
+		return CurrentUser{}, err
+	}
+
+	resp, err := c.do(ctx, method, path, body, contentType, hc, tok)
 	if err != nil {
 		return CurrentUser{}, err
 	}
@@ -150,27 +155,33 @@ func (c *Client) doUser(
 	return user, nil
 }
 
+func (c *Client) resolveToken() (string, error) {
+	tok, err := c.token()
+	if err != nil {
+		if errors.Is(err, ErrNoCredential) {
+			return "", &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized}
+		}
+		slog.Error("resolve api token", "error", err)
+		return "", &Error{Code: CodeServer, cause: err}
+	}
+	return tok, nil
+}
+
 func (c *Client) do(
 	ctx context.Context,
 	method, path string,
 	body io.Reader,
 	contentType string,
 	hc *http.Client,
+	token string,
 ) (*http.Response, error) {
-	tok, err := c.token()
-	if err != nil {
-		if errors.Is(err, ErrNoToken) {
-			return nil, &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized}
-		}
-		slog.Error("resolve api token", "error", err)
-		return nil, &Error{Code: CodeServer, cause: err}
-	}
-
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return nil, fmt.Errorf("build request %s %s: %w", method, path, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -200,7 +211,7 @@ func decodeError(status int, body io.Reader) error {
 		message = env.Error.Message
 	}
 
-	if status == http.StatusUnauthorized {
+	if code == CodeServer && status == http.StatusUnauthorized {
 		code = CodeUnauthenticated
 	}
 

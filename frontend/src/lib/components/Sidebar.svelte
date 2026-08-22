@@ -68,7 +68,7 @@
 
   <div class="bottom">
     {@render navButton(settingsItem)}
-    <button class="profile" onclick={() => navigate('settings')}>
+    <button class="profile" class:active={$route.name === 'profile'} onclick={() => navigate('profile')}>
       <span class="avatar">
         {#if avatarFailed || !$currentUser?.avatarUrl}
           <span class="avatar-fallback">{avatarInitial}</span>
@@ -215,7 +215,8 @@
     transition: background var(--dur) var(--ease);
   }
 
-  .profile:hover {
+  .profile:hover,
+  .profile.active {
     background: var(--hover);
   }
 

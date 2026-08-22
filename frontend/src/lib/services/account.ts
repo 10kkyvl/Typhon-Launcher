@@ -15,9 +15,33 @@ export interface ProfilePatch {
   displayName?: string;
 }
 
+export interface RegisterInput {
+  email: string;
+  username: string;
+  displayName: string;
+  password: string;
+}
+
+export interface LoginInput {
+  emailOrUsername: string;
+  password: string;
+}
+
+export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unavailable';
+
+export interface BootstrapState {
+  status: AuthStatus;
+  user: CurrentUser;
+  reason: string;
+}
+
 const KNOWN_CODES = new Set([
   'unauthenticated',
+  'invalid_credentials',
   'username_taken',
+  'email_taken',
+  'invalid_email',
+  'invalid_password',
   'invalid_username',
   'invalid_display_name',
   'email_immutable',
@@ -35,7 +59,10 @@ const CODE_FIELDS: Record<string, string> = {
   username_taken: 'username',
   invalid_username: 'username',
   invalid_display_name: 'displayName',
+  email_taken: 'email',
+  invalid_email: 'email',
   email_immutable: 'email',
+  invalid_password: 'password',
   avatar_too_large: 'avatar',
   unsupported_avatar: 'avatar',
   invalid_avatar: 'avatar',
@@ -61,6 +88,50 @@ function toAccountError(err: unknown): AccountError {
 }
 
 const unauthenticated = () => new AccountError('unauthenticated');
+
+export async function bootstrapSession(): Promise<BootstrapState> {
+  if (!inWails) {
+    return { status: 'unauthenticated', user: emptyUser(), reason: '' };
+  }
+  try {
+    const state = (await AccountService.Bootstrap()) as unknown as BootstrapState | null;
+    if (!state) throw new AccountError('server_error');
+    return { status: state.status, user: state.user ?? emptyUser(), reason: state.reason ?? '' };
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+function emptyUser(): CurrentUser {
+  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+}
+
+export async function register(input: RegisterInput): Promise<CurrentUser> {
+  if (!inWails) throw unauthenticated();
+  try {
+    return (await AccountService.Register(input)) as unknown as CurrentUser;
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function login(input: LoginInput): Promise<CurrentUser> {
+  if (!inWails) throw unauthenticated();
+  try {
+    return (await AccountService.Login(input)) as unknown as CurrentUser;
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function logout(): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.Logout();
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();

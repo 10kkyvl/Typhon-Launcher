@@ -8,21 +8,14 @@
   import Select from '../../lib/components/Select.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import { AccountError } from '../../lib/services/account';
+  import { accountErrorText } from '../../lib/services/accountMessages';
   import { inWails } from '../../lib/services/backend';
   import { openFolder, selectFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
+  import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import {
-    changeAvatar,
-    currentUser,
-    deleteAvatar,
-    removingAvatar,
-    saveProfile,
-    savingProfile,
-    uploadingAvatar,
-  } from '../../lib/stores/user';
+  import { currentUser, signOut } from '../../lib/stores/user';
   import { bytesLabel } from '../../lib/utils/format';
 
   let tab = $state('general');
@@ -64,21 +57,8 @@
     updateSettings(patch);
   }
 
-  let profileDraft = $state({ displayName: '', username: '' });
-  let profileDraftFor = $state<string | null>(null);
-  let profileFieldErrors = $state<{ displayName?: string; username?: string; general?: string }>({});
-  let avatarError = $state('');
   let avatarFailed = $state(false);
-
-  $effect(() => {
-    const u = $currentUser;
-    if (u && profileDraftFor !== u.id) {
-      profileDraft = { displayName: u.displayName, username: u.username };
-      profileDraftFor = u.id;
-    } else if (!u) {
-      profileDraftFor = null;
-    }
-  });
+  let signingOut = $state(false);
 
   $effect(() => {
     $currentUser?.avatarUrl;
@@ -99,73 +79,15 @@
       : '',
   );
 
-  const profileDirty = $derived(
-    !!$currentUser &&
-      (profileDraft.displayName !== $currentUser.displayName || profileDraft.username !== $currentUser.username),
-  );
-
-  function accountErrorMessage(code: string): string {
-    switch (code) {
-      case 'username_taken':
-        return 'Это имя пользователя уже занято';
-      case 'invalid_username':
-        return '3–24 символа: латиница, цифры, _ и точка (не в начале и не в конце)';
-      case 'invalid_display_name':
-        return 'От 1 до 32 символов';
-      case 'avatar_too_large':
-        return 'Файл больше 10 МБ';
-      case 'unsupported_avatar':
-        return 'Поддерживаются PNG, JPEG и WebP';
-      case 'invalid_avatar':
-        return 'Не удалось прочитать изображение';
-      case 'network_error':
-        return 'Нет связи с сервером';
-      default:
-        return 'Не удалось сохранить';
-    }
-  }
-
-  function resetProfileDraft() {
-    if (!$currentUser) return;
-    profileDraft = { displayName: $currentUser.displayName, username: $currentUser.username };
-    profileFieldErrors = {};
-  }
-
-  async function saveProfileDraft() {
-    if (!$currentUser || !profileDirty || $savingProfile) return;
-    profileFieldErrors = {};
-    const patch: { displayName?: string; username?: string } = {};
-    if (profileDraft.displayName !== $currentUser.displayName) patch.displayName = profileDraft.displayName;
-    if (profileDraft.username !== $currentUser.username) patch.username = profileDraft.username;
+  async function onSignOut() {
+    if (signingOut) return;
+    signingOut = true;
     try {
-      await saveProfile(patch);
-      resetProfileDraft();
-      toast('Профиль обновлён', 'success');
+      await signOut();
     } catch (err) {
-      const code = err instanceof AccountError ? err.code : '';
-      const field = err instanceof AccountError ? err.field : '';
-      const message = accountErrorMessage(code);
-      if (field === 'username') profileFieldErrors = { ...profileFieldErrors, username: message };
-      else if (field === 'displayName') profileFieldErrors = { ...profileFieldErrors, displayName: message };
-      else profileFieldErrors = { ...profileFieldErrors, general: message };
-    }
-  }
-
-  async function onChangeAvatar() {
-    avatarError = '';
-    try {
-      await changeAvatar();
-    } catch (err) {
-      avatarError = accountErrorMessage(err instanceof AccountError ? err.code : '');
-    }
-  }
-
-  async function onDeleteAvatar() {
-    avatarError = '';
-    try {
-      await deleteAvatar();
-    } catch (err) {
-      avatarError = accountErrorMessage(err instanceof AccountError ? err.code : '');
+      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
+    } finally {
+      signingOut = false;
     }
   }
 
@@ -796,73 +718,34 @@
           <div class="account-info">
             <span class="account-name">{$currentUser.displayName}</span>
             <span class="account-status">@{$currentUser.username}</span>
-            {#if avatarError}<span class="field-error">{avatarError}</span>{/if}
           </div>
           <div class="account-avatar-actions">
-            <Button size="sm" disabled={$uploadingAvatar || $removingAvatar} onclick={onChangeAvatar}>
-              {$uploadingAvatar ? 'Загрузка…' : 'Изменить'}
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={$uploadingAvatar || $removingAvatar || !$currentUser.avatarUrl}
-              onclick={onDeleteAvatar}
-            >
-              {$removingAvatar ? 'Удаление…' : 'Удалить'}
-            </Button>
+            <Button size="sm" onclick={() => navigate('profile')}>Открыть профиль</Button>
           </div>
         </div>
 
-        <div class="rows profile-form">
-          <div class="row field-row">
-            <label class="field-label" for="profile-display-name">Отображаемое имя</label>
-            <input
-              id="profile-display-name"
-              class="input"
-              type="text"
-              maxlength="32"
-              bind:value={profileDraft.displayName}
-            />
-            {#if profileFieldErrors.displayName}
-              <span class="field-error">{profileFieldErrors.displayName}</span>
-            {/if}
-          </div>
-          <div class="row field-row">
-            <label class="field-label" for="profile-username">Имя пользователя</label>
-            <div class="username-field">
-              <span class="username-prefix">@</span>
-              <input
-                id="profile-username"
-                class="input"
-                type="text"
-                maxlength="24"
-                bind:value={profileDraft.username}
-              />
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Email</span>
+              <span class="row-sub">{$currentUser.email}</span>
             </div>
-            {#if profileFieldErrors.username}
-              <span class="field-error">{profileFieldErrors.username}</span>
-            {/if}
           </div>
-          <div class="row field-row">
-            <span class="field-label">Email</span>
-            <input class="input" type="text" value={$currentUser.email} readonly />
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Участник с</span>
+              <span class="row-sub">{memberSince}</span>
+            </div>
           </div>
-          <div class="row field-row">
-            <span class="field-label">Участник с</span>
-            <input class="input" type="text" value={memberSince} readonly />
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Сессия</span>
+              <span class="row-sub">Хранится в диспетчере учётных данных Windows</span>
+            </div>
+            <Button size="sm" variant="danger" disabled={signingOut} onclick={onSignOut}>
+              {signingOut ? 'Выход…' : 'Выйти'}
+            </Button>
           </div>
-        </div>
-
-        <div class="group-foot profile-actions">
-          {#if profileFieldErrors.general}
-            <span class="field-error">{profileFieldErrors.general}</span>
-          {/if}
-          <Button variant="ghost" disabled={!profileDirty || $savingProfile} onclick={resetProfileDraft}>
-            Отмена
-          </Button>
-          <Button variant="primary" disabled={!profileDirty || $savingProfile} onclick={saveProfileDraft}>
-            {$savingProfile ? 'Сохранение…' : 'Сохранить'}
-          </Button>
         </div>
       {/if}
     </section>
@@ -1019,10 +902,6 @@
     gap: var(--space-2);
   }
 
-  .group-foot {
-    margin-top: var(--space-4);
-  }
-
   .cleanup-controls {
     display: flex;
     align-items: center;
@@ -1111,64 +990,6 @@
     display: flex;
     gap: var(--space-3);
     flex-shrink: 0;
-  }
-
-  .profile-form {
-    margin-top: var(--space-2);
-  }
-
-  .field-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
-  }
-
-  .field-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-  }
-
-  .field-error {
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
-  .username-field {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    transition:
-      border-color var(--dur) var(--ease),
-      background var(--dur) var(--ease);
-  }
-
-  .username-field:focus-within {
-    border-color: var(--accent-ring);
-    background: var(--surface-3);
-  }
-
-  .username-prefix {
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .username-field .input {
-    height: auto;
-    padding: 0;
-    border: none;
-    background: transparent;
-  }
-
-  .profile-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-3);
   }
 
   .about-logo {

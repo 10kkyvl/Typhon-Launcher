@@ -2,7 +2,11 @@ package account
 
 const (
 	CodeUnauthenticated   = "unauthenticated"
+	CodeInvalidLogin      = "invalid_credentials"
 	CodeUsernameTaken     = "username_taken"
+	CodeEmailTaken        = "email_taken"
+	CodeInvalidEmail      = "invalid_email"
+	CodeInvalidPassword   = "invalid_password"
 	CodeInvalidUsername   = "invalid_username"
 	CodeInvalidDisplay    = "invalid_display_name"
 	CodeEmailImmutable    = "email_immutable"

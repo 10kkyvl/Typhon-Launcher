@@ -174,7 +174,7 @@ func TestClientMissingToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := newTestClient(t, srv.URL, func() (string, error) { return "", ErrNoToken })
+	c := newTestClient(t, srv.URL, func() (string, error) { return "", ErrNoCredential })
 	_, err := c.Me(context.Background())
 	var accErr *Error
 	if !errors.As(err, &accErr) {
@@ -328,27 +328,4 @@ func TestBaseURL(t *testing.T) {
 	if got := BaseURL(); got != "https://override.example/api" {
 		t.Fatalf("expected env override, got %q", got)
 	}
-}
-
-func TestToken(t *testing.T) {
-	t.Run("env override", func(t *testing.T) {
-		t.Setenv("TYPHON_API_TOKEN", "env-token")
-		tok, err := Token()
-		if err != nil {
-			t.Fatalf("Token() error = %v", err)
-		}
-		if tok != "env-token" {
-			t.Fatalf("expected env-token, got %q", tok)
-		}
-	})
-
-	t.Run("missing file", func(t *testing.T) {
-		t.Setenv("TYPHON_API_TOKEN", "")
-		dir := t.TempDir()
-		t.Setenv("APPDATA", dir)
-		_, err := Token()
-		if !errors.Is(err, ErrNoToken) {
-			t.Fatalf("expected ErrNoToken, got %v", err)
-		}
-	})
 }

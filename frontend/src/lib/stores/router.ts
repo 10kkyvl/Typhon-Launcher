@@ -8,6 +8,7 @@ export type RouteName =
   | 'installed'
   | 'collections'
   | 'achievements'
+  | 'profile'
   | 'settings';
 
 export interface Route {
@@ -39,4 +40,8 @@ export function goBack() {
 
 export function goForward() {
   history.update((h) => (h.index < h.stack.length - 1 ? { ...h, index: h.index + 1 } : h));
+}
+
+export function resetHistory() {
+  history.set({ stack: [{ name: 'library', params: {} }], index: 0 });
 }
