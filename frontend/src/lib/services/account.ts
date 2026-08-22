@@ -154,7 +154,10 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
 export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UpdateProfile(patch)) as CurrentUser;
+    return (await AccountService.UpdateProfile({
+      username: patch.username,
+      displayName: patch.displayName,
+    })) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }
