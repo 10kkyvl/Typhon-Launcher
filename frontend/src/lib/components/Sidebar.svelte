@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Bookmark, Database, Download, LayoutGrid, MonitorDown, Settings, Trophy } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
-  import { currentUser } from '../stores/user';
+  import { authState, currentUser } from '../stores/user';
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -27,8 +27,10 @@
   const isActive = (name: RouteName) =>
     $route.name === name || (name === 'library' && $route.name === 'game');
 
+  const isGuest = $derived($authState === 'guest');
+
   const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : '?',
+    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : isGuest ? 'Г' : '?',
   );
 
   $effect(() => {
@@ -83,6 +85,9 @@
         {#if $currentUser}
           <span class="profile-name">{$currentUser.displayName}</span>
           <span class="profile-status">@{$currentUser.username}</span>
+        {:else if isGuest}
+          <span class="profile-name">Гость</span>
+          <span class="profile-status">Без аккаунта</span>
         {:else}
           <span class="profile-name">Не авторизован</span>
         {/if}

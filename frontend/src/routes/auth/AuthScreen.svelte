@@ -4,7 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { inWails } from '../../lib/services/backend';
-  import { authReason, authState, authView, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
+  import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
 
   type FieldErrors = Partial<Record<'email' | 'username' | 'displayName' | 'password' | 'general', string>>;
@@ -62,6 +62,19 @@
       await signIn({ emailOrUsername: identifier, password });
     } catch (err) {
       applyError(err);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function onGuest() {
+    if (busy) return;
+    errors = {};
+    busy = true;
+    try {
+      await enterAsGuest();
+    } catch (err) {
+      errors = { general: accountErrorText(err, 'Не удалось продолжить без аккаунта') };
     } finally {
       busy = false;
     }
@@ -195,6 +208,12 @@
           {/if}
         </button>
       </form>
+
+      <div class="guest">
+        <span class="guest-divider"><span>или</span></span>
+        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>Войти как гость</button>
+        <p class="guest-hint">Библиотека, загрузки и источники работают локально. Профиль и аватар — только с аккаунтом.</p>
+      </div>
 
       <p class="switch">
         {#if isRegister}
@@ -381,6 +400,55 @@
   .submit:disabled {
     opacity: 0.55;
     cursor: default;
+  }
+
+  .guest {
+    margin-top: var(--space-5);
+  }
+
+  .guest-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .guest-divider::before,
+  .guest-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-strong);
+  }
+
+  .guest-btn {
+    width: 100%;
+    height: var(--control-md);
+    margin-top: var(--space-3);
+    background: var(--surface-3);
+    color: var(--text);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: background var(--dur) var(--ease);
+  }
+
+  .guest-btn:hover:not(:disabled) {
+    background: var(--surface-4);
+  }
+
+  .guest-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .guest-hint {
+    margin-top: 0.8rem;
+    font-size: var(--font-xs);
+    line-height: 1.45;
+    color: var(--text-3);
+    text-align: center;
   }
 
   .switch {

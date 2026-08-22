@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { LogOut, Pencil } from '@lucide/svelte';
+  import { LogIn, LogOut, Pencil, UserRound } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import {
+    authState,
     changeAvatar,
     currentUser,
+    leaveGuest,
     deleteAvatar,
     removingAvatar,
     savingProfile,
@@ -23,6 +25,7 @@
   let avatarError = $state('');
   let avatarFailed = $state(false);
   let signingOut = $state(false);
+  const isGuest = $derived($authState === 'guest');
 
   $effect(() => {
     $currentUser?.avatarUrl;
@@ -110,11 +113,39 @@
       signingOut = false;
     }
   }
+
+  async function toAuth(view: 'login' | 'register') {
+    if (signingOut) return;
+    signingOut = true;
+    try {
+      await leaveGuest(view);
+    } catch (err) {
+      toast(accountErrorText(err, 'Не удалось открыть вход'), 'danger');
+    } finally {
+      signingOut = false;
+    }
+  }
 </script>
 
 <PageHeader title="Профиль" />
 
-{#if !$currentUser}
+{#if isGuest}
+  <EmptyState
+    title="Вы вошли как гость"
+    description="Библиотека, загрузки и источники работают без аккаунта. Профиль, аватар и синхронизация появятся после входа."
+  >
+    {#snippet icon()}
+      <UserRound size="2rem" strokeWidth={1.8} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" disabled={signingOut} onclick={() => toAuth('login')}>
+        <LogIn size="1.5rem" strokeWidth={1.8} />
+        Войти
+      </Button>
+      <Button disabled={signingOut} onclick={() => toAuth('register')}>Создать аккаунт</Button>
+    {/snippet}
+  </EmptyState>
+{:else if !$currentUser}
   <EmptyState title="Нет данных профиля" description="Войдите в аккаунт, чтобы увидеть профиль." />
 {:else}
   <div class="profile">

@@ -16,7 +16,7 @@
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
   import { notifications, type Notification } from '../stores/notifications';
   import { toast } from '../stores/toasts';
-  import { currentUser, signOut } from '../stores/user';
+  import { authState, currentUser, leaveGuest, signOut } from '../stores/user';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
   import { accountErrorText } from '../services/accountMessages';
@@ -32,8 +32,11 @@
   let notificationsOpen = $state(false);
   let avatarFailed = $state(false);
 
+  const isGuest = $derived($authState === 'guest');
+  const accountLabel = $derived($currentUser ? $currentUser.displayName : isGuest ? 'Гость' : 'Не авторизован');
+
   const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : '?',
+    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : isGuest ? 'Г' : '?',
   );
 
   $effect(() => {
@@ -123,11 +126,19 @@
     navigate(item.route);
   }
 
-  const accountMenu = [
-    { id: 'profile', label: 'Профиль' },
-    { id: 'settings', label: 'Настройки' },
-    { id: 'logout', label: 'Выйти', danger: true, separator: true },
-  ];
+  const accountMenu = $derived(
+    isGuest
+      ? [
+          { id: 'profile', label: 'Профиль' },
+          { id: 'settings', label: 'Настройки' },
+          { id: 'login', label: 'Войти в аккаунт', separator: true },
+        ]
+      : [
+          { id: 'profile', label: 'Профиль' },
+          { id: 'settings', label: 'Настройки' },
+          { id: 'logout', label: 'Выйти', danger: true, separator: true },
+        ],
+  );
 
   async function onAccountSelect(id: string) {
     if (id === 'profile') {
@@ -139,7 +150,8 @@
       return;
     }
     try {
-      await signOut();
+      if (id === 'login') await leaveGuest();
+      else await signOut();
     } catch (err) {
       toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
     }
@@ -267,7 +279,7 @@
           class="account"
           class:open
           onclick={toggle}
-          title={$currentUser ? $currentUser.displayName : 'Не авторизован'}
+          title={accountLabel}
         >
           <span class="avatar">
             {#if avatarFailed || !$currentUser?.avatarUrl}
@@ -276,7 +288,7 @@
               <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
             {/if}
           </span>
-          <span class="account-name">{$currentUser ? $currentUser.displayName : 'Не авторизован'}</span>
+          <span class="account-name">{accountLabel}</span>
           <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </button>
       {/snippet}

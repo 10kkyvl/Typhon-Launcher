@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -67,9 +68,14 @@ func (f *fakeStore) snapshot() (Credential, bool) {
 	return f.cred, f.present
 }
 
+func statePathFor(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "account.json")
+}
+
 func startedService(t *testing.T, store CredentialStore, baseURL string) *Service {
 	t.Helper()
-	s, err := newService(store, baseURL)
+	s, err := newService(store, baseURL, statePathFor(t))
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -380,7 +386,7 @@ func TestLogout(t *testing.T) {
 }
 
 func TestServiceRejectsCallsBeforeStartup(t *testing.T) {
-	s, err := newService(&fakeStore{}, "http://127.0.0.1:1")
+	s, err := newService(&fakeStore{}, "http://127.0.0.1:1", statePathFor(t))
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -402,7 +408,7 @@ func TestBootstrapAbortsOnCancelledContext(t *testing.T) {
 	defer close(blocked)
 
 	store := &fakeStore{cred: Credential{Token: "token"}, present: true}
-	s, err := newService(store, srv.URL)
+	s, err := newService(store, srv.URL, statePathFor(t))
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
