@@ -3,14 +3,17 @@
   import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { inWails } from '../../lib/services/backend';
+  import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { openFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
   import { navigate } from '../../lib/stores/router';
@@ -41,10 +44,28 @@
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
 
+  let legalDocs = $state<LegalMeta[]>([]);
+  let legalError = $state('');
+  let legalOpen = $state(false);
+  let legalActiveId = $state<string | null>(null);
+  let legalActiveTitle = $state('');
+  let sourcesNoticeReviewOpen = $state(false);
+
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
+    try {
+      legalDocs = await listLegalDocuments();
+    } catch {
+      legalError = inWails ? 'Не удалось загрузить список документов.' : 'Правовые документы недоступны вне приложения.';
+    }
   });
+
+  function openLegalDoc(meta: LegalMeta) {
+    legalActiveId = meta.id;
+    legalActiveTitle = meta.title;
+    legalOpen = true;
+  }
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
 
@@ -470,7 +491,9 @@
         <div class="row">
           <div class="row-text">
             <span class="row-label">Отдавать во время загрузки</span>
-            <span class="row-sub">Разрешить отдачу другим пирам, пока загрузка идёт</span>
+            <span class="row-sub"
+              >Разрешает передавать другим участникам уже загруженные части во время активной BitTorrent-загрузки.</span
+            >
           </div>
           <Toggle
             checked={current?.uploadWhileDownloading ?? false}
@@ -481,7 +504,7 @@
         <div class="row">
           <div class="row-text">
             <span class="row-label">Раздавать после загрузки</span>
-            <span class="row-sub">Продолжать отдачу завершённых загрузок</span>
+            <span class="row-sub">Продолжать отдавать завершённую загрузку другим участникам.</span>
           </div>
           <Toggle
             checked={current?.seedAfterDownload ?? false}
@@ -884,11 +907,31 @@
           </Button>
         </div>
       </div>
-      <div class="about-links">
-        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
-        <span class="about-sep">·</span>
-        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
-      </div>
+    </section>
+
+    <section class="group">
+      <h3>Правовая информация</h3>
+      {#if legalError}
+        <p class="row-sub">{legalError}</p>
+      {:else}
+        <div class="rows">
+          {#each legalDocs as meta (meta.id)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{meta.title}</span>
+              </div>
+              <Button size="sm" onclick={() => openLegalDoc(meta)}>Открыть</Button>
+            </div>
+          {/each}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Уведомление об источниках</span>
+              <span class="row-sub">Правила добавления сторонних источников релизов</span>
+            </div>
+            <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>Открыть</Button>
+          </div>
+        </div>
+      {/if}
     </section>
   </div>
 {/if}
@@ -919,6 +962,9 @@
     </Button>
   {/snippet}
 </Modal>
+
+<LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
+<SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 
 <style>
   .tabs-wrap {
@@ -1101,26 +1147,6 @@
 
   .about-logo h3 {
     margin-bottom: 2px;
-  }
-
-  .about-links {
-    margin-top: var(--space-4);
-  }
-
-  .about-link {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    border-radius: var(--radius-xs);
-    transition: color var(--dur) var(--ease);
-  }
-
-  .about-link:hover {
-    color: var(--text-2);
-  }
-
-  .about-sep {
-    margin: 0 0.8rem;
-    color: var(--text-3);
   }
 
   .modal-text {

@@ -23,7 +23,10 @@ export async function initSettings() {
 
 export async function updateSettings(patch: Partial<Settings>) {
   const current = get(settings);
-  if (!current) return;
+  if (!current) {
+    toast('Настройки ещё не загружены', 'danger');
+    return;
+  }
   const next = { ...current, ...patch };
   settings.set(next);
   try {

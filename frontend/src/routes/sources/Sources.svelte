@@ -16,17 +16,28 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
+  import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
+  import { settings } from '../../lib/stores/settings';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
   let addOpen = $state(false);
+  let noticeOpen = $state(false);
   let detailsOpen = $state(false);
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
+
+  function startAddSource() {
+    if ($settings?.sourcesNoticeAccepted) {
+      addOpen = true;
+    } else {
+      noticeOpen = true;
+    }
+  }
 
   $effect(() => {
     const params = $route.params;
@@ -81,7 +92,7 @@
   }
 </script>
 
-<PageHeader title="Источники" subtitle="Фиды с релизами игр для поиска и сопоставления загрузок">
+<PageHeader title="Источники" subtitle="Пользовательские источники релизов">
   {#snippet actions()}
     <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
       <span class="spin" class:on={$refreshingAll}>
@@ -89,12 +100,14 @@
       </span>
       {$refreshingAll ? 'Обновление…' : 'Обновить все'}
     </Button>
-    <Button variant="primary" onclick={() => (addOpen = true)}>
+    <Button variant="primary" onclick={startAddSource}>
       <Plus size="1.5rem" strokeWidth={2} />
       Добавить источник
     </Button>
   {/snippet}
 </PageHeader>
+
+<p class="device-hint">Добавленные источники обрабатываются на вашем устройстве.</p>
 
 {#if $sources.length === 0}
   <EmptyState
@@ -105,7 +118,7 @@
       <Database size="2rem" strokeWidth={1.8} />
     {/snippet}
     {#snippet actions()}
-      <Button variant="primary" onclick={() => (addOpen = true)}>
+      <Button variant="primary" onclick={startAddSource}>
         <Plus size="1.5rem" strokeWidth={2} />
         Добавить источник
       </Button>
@@ -170,9 +183,16 @@
 {/if}
 
 <AddSourceModal bind:open={addOpen} />
+<SourcesNoticeModal bind:open={noticeOpen} onaccepted={() => (addOpen = true)} />
 <SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
 
 <style>
+  .device-hint {
+    margin: calc(var(--space-6) * -1) 0 var(--space-6);
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
   .table {
     display: flex;
     flex-direction: column;

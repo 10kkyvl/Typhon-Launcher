@@ -76,6 +76,8 @@ type Settings struct {
 	UpdateSaveBackup         bool   `json:"updateSaveBackup"`
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
+
+	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 }
 
 func Defaults() Settings {
@@ -106,6 +108,8 @@ func Defaults() Settings {
 		UpdateSaveBackup:         true,
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
+
+		SourcesNoticeAccepted: false,
 	}
 }
 
