@@ -769,19 +769,6 @@ func newID() string {
 	return hex.EncodeToString(buf)
 }
 
-func humanSize(bytes int64) string {
-	switch {
-	case bytes >= 1<<30:
-		return fmt.Sprintf("%.1f ГБ", float64(bytes)/(1<<30))
-	case bytes >= 1<<20:
-		return fmt.Sprintf("%.1f МБ", float64(bytes)/(1<<20))
-	case bytes >= 1<<10:
-		return fmt.Sprintf("%.1f КБ", float64(bytes)/(1<<10))
-	default:
-		return fmt.Sprintf("%d Б", bytes)
-	}
-}
-
 func relativeExecutable(installDir, executable string) string {
 	if installDir == "" || executable == "" {
 		return ""
