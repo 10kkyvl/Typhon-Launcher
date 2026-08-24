@@ -64,6 +64,11 @@ var (
 	errNeedsUser        = errors.New("этот пакет требует участия пользователя")
 
 	errInstallerNoOutput = errors.New("установщик не создал файлов в папке установки")
+
+	// errInstallerNotConfirmedStopped значит, что процесс всё ещё может писать
+	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
+	errInstallerNotConfirmedStopped = errors.New("установщик не подтвердил остановку")
+	errInstallerStillRunning        = errors.New("установка ещё идёт в фоне: установщик с правами администратора не завершился")
 )
 
 type downloadSource interface {
@@ -197,12 +202,18 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return err
 	}
+	resume := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
 		if transient(item.Status) {
-			item.Status = StatusInterrupted
-			item.Error = interruptedMessage
-			slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
+			if s.transientWorkerAlive(item.ID) {
+				resume = append(resume, item.ID)
+				slog.Info("installation worker still running, resuming", "id", item.ID, "name", item.Name)
+			} else {
+				item.Status = StatusInterrupted
+				item.Error = interruptedMessage
+				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
+			}
 		}
 		if item.Destination != "" {
 			stale = append(stale, item.Destination+partialSuffix)
@@ -218,7 +229,165 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		sweepPartial(stale)
 		s.sweepRemovals()
 	}()
+
+	for _, id := range resume {
+		//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(), тот же приём, что spawnLocked уже использует для job-контекстов; contextcheck не видит связь через поле структуры
+		s.spawnResumeWatcher(s.baseContext(), id)
+	}
 	return nil
+}
+
+// transientWorkerAlive решает судьбу записи, пережившей перезапуск
+// лаунчера: os.FindProcess на Windows всегда "успешен" вне зависимости от
+// того, жив ли процесс, поэтому единственный источник правды — файл
+// состояния воркера (тот же, что пишет и читает runElevated) и
+// workerProcessAlive по записанному в нём PID. Ошибка чтения или проверки
+// не превращается в "жив" по умолчанию — только подтверждённая жизнь
+// оставляет запись в рабочем статусе.
+func (s *Service) transientWorkerAlive(id string) bool {
+	statePath := s.workerStatePath(id)
+	state, found, err := readWorkerState(statePath)
+	if err != nil {
+		slog.Error("read worker state on startup", "id", id, "error", err)
+		return false
+	}
+	if !found || state.Done {
+		return false
+	}
+	alive, err := workerProcessAlive(state.PID)
+	if err != nil {
+		slog.Error("check worker process on startup", "id", id, "pid", state.PID, "error", err)
+		return false
+	}
+	return alive
+}
+
+// var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
+var resumeWatchPollInterval = 2 * time.Second
+
+// spawnResumeWatcher принимает ctx от жизни сервиса: s.cancel() при
+// ServiceShutdown останавливает и наблюдателя, без чего s.wg.Wait() ждал бы
+// его вечно (инвариант 19).
+func (s *Service) spawnResumeWatcher(ctx context.Context, id string) {
+	statePath := s.workerStatePath(id)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.watchResumedInstall(ctx, id, statePath)
+	}()
+}
+
+// watchResumedInstall доводит до конца установку, чей воркер пережил
+// перезапуск лаунчера: снимков before/beforeEntries/shell, взятых до старта
+// установщика, восстановить неоткуда, поэтому этот путь не пытается их
+// подделать — только ждёт Done и передаёт результат в finishResumed.
+func (s *Service) watchResumedInstall(ctx context.Context, id, statePath string) {
+	ticker := time.NewTicker(resumeWatchPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			state, found, err := readWorkerState(statePath)
+			if err != nil {
+				slog.Error("read worker state while resuming install", "id", id, "error", err)
+				s.interruptResumed(id)
+				return
+			}
+			if found && state.Done {
+				s.finishResumed(ctx, id, state)
+				return
+			}
+			if !found {
+				s.interruptResumed(id)
+				return
+			}
+			alive, err := workerProcessAlive(state.PID)
+			if err != nil {
+				slog.Error("check worker process while resuming install", "id", id, "pid", state.PID, "error", err)
+				s.interruptResumed(id)
+				return
+			}
+			if !alive {
+				s.interruptResumed(id)
+				return
+			}
+		}
+	}
+}
+
+func (s *Service) interruptResumed(id string) {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil || !active(item.Status) {
+		s.mu.Unlock()
+		return
+	}
+	item.Status = StatusInterrupted
+	item.Error = interruptedMessage
+	s.persistLocked()
+	snap := snapshotOf(item)
+	s.mu.Unlock()
+	slog.Info("resumed installation interrupted", "id", id, "name", snap.Name)
+	emit(eventUpdated, snap)
+}
+
+// finishResumed завершает установку по итогу воркера, обнаруженного живым на
+// старте: происхождение каталога и запись деинсталлятора мы честно не
+// знаем (их выясняет setRemoval по снимку до установки, а снимка нет),
+// поэтому Owned=false и UninstallUnknown=true — явный неизвестный статус, а
+// не унаследованный от нулевого значения. Уборка ярлыков здесь не
+// выполняется: baseline ярлыков снимался до старта установщика и тоже не
+// восстановим.
+func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
+	dropInstallerLog(s.installerLogPath(id))
+	if state.Cancelled {
+		// Cancel записал маркер и оставил статус рабочим именно ради этого
+		// момента: воркер подтвердил отмену через Cancelled, а не через
+		// текст ошибки, и запись должна дойти до "отменено", а не до "провал".
+		s.cancelResumed(id)
+		return
+	}
+	if state.Error != "" {
+		slog.Warn("resumed installer worker failed", "id", id, "error", state.Error)
+		s.fail(id, errors.New(state.Error))
+		return
+	}
+	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
+	s.markResumedOwnership(id)
+	if err := s.finalize(ctx, id); err != nil {
+		s.fail(id, err)
+	}
+}
+
+func (s *Service) cancelResumed(id string) {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil {
+		s.mu.Unlock()
+		return
+	}
+	partial := partialPath(item)
+	s.markCancelledLocked(item)
+	snap := snapshotOf(item)
+	s.mu.Unlock()
+	go sweepPartial([]string{partial})
+	s.notifyFinished(snap)
+}
+
+func (s *Service) markResumedOwnership(id string) {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil {
+		s.mu.Unlock()
+		return
+	}
+	item.Owned = false
+	item.UninstallUnknown = true
+	item.Uninstall = library.Uninstall{}
+	s.persistLocked()
+	s.mu.Unlock()
 }
 
 func (s *Service) ServiceShutdown() error {
@@ -356,6 +525,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if opts.Type != "" {
 		plan.Type = opts.Type
 	}
+	manual := false
 	if installer := strings.TrimSpace(opts.InstallerPath); installer != "" && !samePath(installer, plan.InstallerPath) {
 		info, err := os.Stat(installer)
 		if err != nil || info.IsDir() {
@@ -368,6 +538,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		if err := fillInstallerPlan(&plan, kind, installer); err != nil {
 			return Installation{}, err
 		}
+		manual = true
 	}
 	if plan.Type == TypeUnknown {
 		return Installation{}, errUnknownType
@@ -377,23 +548,25 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	item := &Installation{
-		ID:            newID(),
-		DownloadID:    d.ID,
-		Name:          s.nameFor(d),
-		Type:          plan.Type,
-		Status:        StatusPending,
-		SourcePath:    plan.SourcePath,
-		ContentRoot:   plan.ContentRoot,
-		InstallerPath: plan.InstallerPath,
-		WorkingDir:    plan.WorkingDir,
-		Engine:        plan.Engine,
-		Silent:        plan.Silent,
-		ArchivePath:   plan.ArchivePath,
-		BytesTotal:    plan.EstimatedSize,
-		Origin:        d.Origin,
-		Unattended:    opts.Unattended,
-		SkipRegister:  opts.SkipRegister,
-		StartedAt:     time.Now(),
+		ID:              newID(),
+		DownloadID:      d.ID,
+		Name:            s.nameFor(d),
+		Type:            plan.Type,
+		Status:          StatusPending,
+		SourcePath:      plan.SourcePath,
+		ContentRoot:     plan.ContentRoot,
+		InstallerPath:   plan.InstallerPath,
+		ExtraInstallers: plan.ExtraInstallers,
+		ManualInstaller: manual,
+		WorkingDir:      plan.WorkingDir,
+		Engine:          plan.Engine,
+		Silent:          plan.Silent,
+		ArchivePath:     plan.ArchivePath,
+		BytesTotal:      plan.EstimatedSize,
+		Origin:          d.Origin,
+		Unattended:      opts.Unattended,
+		SkipRegister:    opts.SkipRegister,
+		StartedAt:       time.Now(),
 	}
 
 	if ownDestination(plan.Type, plan.Silent) {
@@ -456,6 +629,15 @@ func (s *Service) Cancel(id string) error {
 		s.mu.Unlock()
 		return nil
 	}
+	// Нет job — либо запись подхвачена после перезапуска (воркер жив, но
+	// s.jobs для неё никогда не заводился), либо воркер уже мёртв. Проверка и
+	// решение — под тем же захватом, что статус (инвариант 17): без этого UI
+	// сказал бы "отменено" над установщиком, который продолжает писать.
+	if s.transientWorkerAlive(id) {
+		err := writeWorkerCancel(s.workerCancelPath(id))
+		s.mu.Unlock()
+		return err
+	}
 
 	partial := partialPath(item)
 	s.markCancelledLocked(item)
@@ -517,9 +699,19 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	// Проверка и решение — под одним и тем же захватом (инвариант 17): статус
+	// мог стать retryable по устаревшему прочтению (воркер, о котором
+	// ServiceStartup не успел узнать, ещё пишет по тем же детерминированным
+	// путям state/spec/cancel), и вызвать retry поверх него — поднять второго
+	// воркера на то же место.
+	if s.transientWorkerAlive(id) {
+		s.mu.Unlock()
+		return errInstallerStillRunning
+	}
 	downloadID := item.DownloadID
 	kind := item.Type
 	installer := item.InstallerPath
+	manual := item.ManualInstaller
 	destination := item.Destination
 	title := item.Name
 	s.mu.Unlock()
@@ -533,14 +725,22 @@ func (s *Service) Retry(id string) error {
 		return err
 	}
 
-	// Запись могла быть создана прошлой версией лаунчера или установщиком,
-	// выбранным вручную: движок определяем заново по её собственному файлу.
+	// Установщик, выбранный пользователем вручную, переживает повтор вместе со
+	// своим движком; автоматический выбор берётся из свежего плана, иначе запись
+	// прошлой версии лаунчера навсегда останется с неверным файлом.
 	engine := plan.Engine
-	if external(kind) && installer != "" && !samePath(installer, plan.InstallerPath) {
+	extras := plan.ExtraInstallers
+	if external(kind) && manual && installer != "" && !samePath(installer, plan.InstallerPath) {
 		engine, err = DetectEngine(installer)
 		if err != nil {
 			return err
 		}
+		extras = nil
+	} else if external(kind) {
+		installer = plan.InstallerPath
+	}
+	if external(kind) && installer == "" {
+		return errNoExecutable
 	}
 	if external(kind) && supportsSilent(engine) && destination == "" {
 		destination = s.proposeDestination(s.config().GamesPath, title)
@@ -572,6 +772,9 @@ func (s *Service) Retry(id string) error {
 		item.Mode = installMode(item.Mode, d.Seeding)
 	}
 	if external(item.Type) {
+		item.InstallerPath = installer
+		item.ExtraInstallers = extras
+		item.WorkingDir = filepath.Dir(installer)
 		item.Engine = engine
 		item.Silent = supportsSilent(engine)
 		item.BytesTotal = plan.EstimatedSize
@@ -791,7 +994,22 @@ func (s *Service) fail(id string, cause error) {
 		return
 	}
 	j := s.jobs[id]
+	// errInstallerNotConfirmedStopped переживает и j.cancelled, и s.closing:
+	// установщик мог не остановиться именно потому, что пользователь отменил
+	// или лаунчер закрывается, и в обоих случаях запись обязана остаться в
+	// состоянии "каталог занят", а не превратиться в чистое "отменено, ничего
+	// нет" — это и есть тот дефолт, который прячет живой процесс от UI.
 	switch {
+	case errors.Is(cause, errInstallerNotConfirmedStopped):
+		item.Status = StatusFailed
+		item.Error = cause.Error()
+		s.persistLocked()
+		snap := snapshotOf(item)
+		s.mu.Unlock()
+		slog.Error("install failed, installer still running", "id", id, "name", snap.Name, "error", cause)
+		emit(eventFailed, snap)
+		emit(eventUpdated, snap)
+		s.notifyFinished(snap)
 	case j != nil && j.cancelled:
 		s.markCancelledLocked(item)
 		snap := snapshotOf(item)

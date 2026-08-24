@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -474,6 +475,110 @@ func TestSilentArgsDeclinesExtras(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDiscoverPlan(t *testing.T) {
+	dir := t.TempDir()
+	installerPath := filepath.Join(dir, "setup.exe")
+	dest := filepath.Join(dir, "Game")
+	infPath := filepath.Join(dir, "probe.inf")
+
+	t.Run("inno builds saveinf plan", func(t *testing.T) {
+		plan, ok, err := discoverPlan(EngineInno, installerPath, dest, infPath)
+		if err != nil {
+			t.Fatalf("discoverPlan error = %v", err)
+		}
+		if !ok {
+			t.Fatalf("discoverPlan ok = false, want true")
+		}
+		joined := strings.Join(plan.Args, " ")
+		for _, want := range []string{"/SP-", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=" + dest, "/SAVEINF=" + infPath} {
+			if !strings.Contains(joined, want) {
+				t.Fatalf("args %v missing %q", plan.Args, want)
+			}
+		}
+	})
+
+	t.Run("nsis has no discovery plan", func(t *testing.T) {
+		plan, ok, err := discoverPlan(EngineNsis, installerPath, dest, infPath)
+		if err != nil {
+			t.Fatalf("discoverPlan error = %v, want nil", err)
+		}
+		if ok {
+			t.Fatalf("discoverPlan ok = true, want false")
+		}
+		if len(plan.Args) != 0 || plan.CmdLine != "" {
+			t.Fatalf("discoverPlan plan = %+v, want zero value", plan)
+		}
+	})
+
+	t.Run("msi has no discovery plan", func(t *testing.T) {
+		_, ok, err := discoverPlan(EngineMsi, installerPath, dest, infPath)
+		if err != nil {
+			t.Fatalf("discoverPlan error = %v, want nil", err)
+		}
+		if ok {
+			t.Fatalf("discoverPlan ok = true, want false")
+		}
+	})
+
+	t.Run("empty installer path", func(t *testing.T) {
+		_, ok, err := discoverPlan(EngineInno, "", dest, infPath)
+		if !errors.Is(err, errEmptyInstallerPath) {
+			t.Fatalf("discoverPlan error = %v, want errEmptyInstallerPath", err)
+		}
+		if ok {
+			t.Fatalf("discoverPlan ok = true on error, want false")
+		}
+	})
+
+	t.Run("empty destination", func(t *testing.T) {
+		_, _, err := discoverPlan(EngineInno, installerPath, "", infPath)
+		if !errors.Is(err, errEmptyDestination) {
+			t.Fatalf("discoverPlan error = %v, want errEmptyDestination", err)
+		}
+	})
+
+	t.Run("relative destination", func(t *testing.T) {
+		_, _, err := discoverPlan(EngineInno, installerPath, "relative/dest", infPath)
+		if !errors.Is(err, errRelativeDestination) {
+			t.Fatalf("discoverPlan error = %v, want errRelativeDestination", err)
+		}
+	})
+
+	t.Run("empty inf path", func(t *testing.T) {
+		_, _, err := discoverPlan(EngineInno, installerPath, dest, "")
+		if !errors.Is(err, errEmptyInfPath) {
+			t.Fatalf("discoverPlan error = %v, want errEmptyInfPath", err)
+		}
+	})
+}
+
+func TestPlanWithComponents(t *testing.T) {
+	base := silentPlan{Args: []string{"/SP-", "/VERYSILENT"}}
+
+	t.Run("empty component list leaves args untouched", func(t *testing.T) {
+		got := planWithComponents(base, nil)
+		if !reflect.DeepEqual(got.Args, base.Args) {
+			t.Fatalf("planWithComponents Args = %v, want %v", got.Args, base.Args)
+		}
+	})
+
+	t.Run("non empty list appends exactly one components arg", func(t *testing.T) {
+		got := planWithComponents(base, []string{"a", "b", "c"})
+		if len(got.Args) != len(base.Args)+1 {
+			t.Fatalf("planWithComponents Args = %v, want %d entries", got.Args, len(base.Args)+1)
+		}
+		last := got.Args[len(got.Args)-1]
+		if last != "/COMPONENTS=a,b,c" {
+			t.Fatalf("planWithComponents last arg = %q, want /COMPONENTS=a,b,c", last)
+		}
+		for i, a := range base.Args {
+			if got.Args[i] != a {
+				t.Fatalf("planWithComponents Args[%d] = %q, want %q", i, got.Args[i], a)
+			}
+		}
+	})
 }
 
 func TestSilentArgsNsisIgnoresOptions(t *testing.T) {

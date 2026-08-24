@@ -22,6 +22,7 @@ var errNoSource = errors.New("папка загрузки недоступна")
 var errEmptySource = errors.New("папка загрузки пуста — файлы не были загружены")
 var errIncompleteSource = errors.New("загрузка не завершена — на диске остались только незавершённые файлы")
 var errUnrecognizedSource = errors.New("формат файла не распознан")
+var errMixedInstallers = errors.New("установщики набора разного типа")
 
 var junkExts = map[string]bool{
 	".nfo": true,
@@ -121,8 +122,11 @@ func Inspect(ctx context.Context, dir string) (Plan, error) {
 		return plan, nil
 	}
 
-	if exe := pickInstallerExe(root, files); exe != "" {
-		if err := fillInstallerPlan(&plan, TypeExeInstaller, exe); err != nil {
+	if exes := pickInstallerExes(root, files); len(exes) > 0 {
+		if err := fillInstallerPlan(&plan, TypeExeInstaller, exes[0]); err != nil {
+			return Plan{}, err
+		}
+		if err := fillInstallerChain(&plan, exes[1:]); err != nil {
 			return Plan{}, err
 		}
 		return plan, nil
@@ -189,11 +193,26 @@ func fillInstallerPlan(plan *Plan, kind Type, installer string) error {
 	}
 	plan.Type = kind
 	plan.InstallerPath = installer
+	plan.ExtraInstallers = nil
 	plan.WorkingDir = filepath.Dir(installer)
 	plan.Engine = engine
 	plan.Silent = supportsSilent(engine)
 	plan.CanAutoInstall = plan.Silent
 	plan.RequiresUserInteraction = !plan.Silent
+	return nil
+}
+
+func fillInstallerChain(plan *Plan, extras []string) error {
+	for _, extra := range extras {
+		engine, err := DetectEngine(extra)
+		if err != nil {
+			return err
+		}
+		if engine != plan.Engine {
+			return fmt.Errorf("%w: %s", errMixedInstallers, filepath.Base(extra))
+		}
+		plan.ExtraInstallers = append(plan.ExtraInstallers, extra)
+	}
 	return nil
 }
 
@@ -275,29 +294,118 @@ func pickByExt(root string, files []sizedEntry, ext string) string {
 	return best
 }
 
-func pickInstallerExe(root string, files []sizedEntry) string {
-	var exes []sizedEntry
-	hasData := false
+type installerEntry struct {
+	name    string
+	stem    string
+	slug    string
+	payload int64
+	depth   int
+}
+
+func pickInstallerExes(root string, files []sizedEntry) []string {
+	var exes, data, named []sizedEntry
 	for _, f := range files {
 		lower := strings.ToLower(f.name)
 		if strings.HasSuffix(lower, ".exe") {
 			exes = append(exes, f)
+			if strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install") {
+				named = append(named, f)
+			}
 			continue
 		}
 		if installerDataExts[filepath.Ext(lower)] {
-			hasData = true
+			data = append(data, f)
 		}
 	}
+	if len(named) == 0 {
+		if len(exes) == 1 && len(data) > 0 {
+			return []string{filepath.Join(root, exes[0].name)}
+		}
+		return nil
+	}
+	entries := orderInstallers(named, data)
+	out := []string{filepath.Join(root, entries[0].name)}
+	for _, e := range entries[1:] {
+		if dependsOn(e.slug, entries[0].slug) {
+			out = append(out, filepath.Join(root, e.name))
+		}
+	}
+	return out
+}
+
+// orderInstallers ставит первым базовый установщик набора: каталог загрузки GOG
+// содержит и игру, и дополнения, а установщик дополнения без установленной игры
+// завершается с кодом 1 ещё в InitializeSetup.
+func orderInstallers(exes, data []sizedEntry) []installerEntry {
+	entries := make([]installerEntry, 0, len(exes))
 	for _, f := range exes {
+		stem := strings.ToLower(strings.TrimSuffix(f.name, filepath.Ext(f.name)))
+		entries = append(entries, installerEntry{name: f.name, stem: stem, slug: installerSlug(stem), payload: f.size})
+	}
+	for _, f := range data {
 		lower := strings.ToLower(f.name)
-		if strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install") {
-			return filepath.Join(root, f.name)
+		best := -1
+		for i := range entries {
+			if !strings.HasPrefix(lower, entries[i].stem) {
+				continue
+			}
+			if best < 0 || len(entries[i].stem) > len(entries[best].stem) {
+				best = i
+			}
+		}
+		if best >= 0 {
+			entries[best].payload += f.size
 		}
 	}
-	if len(exes) == 1 && hasData {
-		return filepath.Join(root, exes[0].name)
+	for i := range entries {
+		for j := range entries {
+			if i != j && dependsOn(entries[i].slug, entries[j].slug) {
+				entries[i].depth++
+			}
+		}
 	}
-	return ""
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].depth != entries[j].depth {
+			return entries[i].depth < entries[j].depth
+		}
+		if entries[i].payload != entries[j].payload {
+			return entries[i].payload > entries[j].payload
+		}
+		return entries[i].name < entries[j].name
+	})
+	return entries
+}
+
+func dependsOn(slug, base string) bool {
+	return base != "" && len(slug) > len(base) && strings.HasPrefix(slug, base+"_")
+}
+
+func installerSlug(stem string) string {
+	s := stem
+	for strings.HasSuffix(s, ")") {
+		open := strings.LastIndex(s, "(")
+		if open <= 0 || s[open-1] != '_' {
+			break
+		}
+		s = s[:open-1]
+	}
+	if i := strings.LastIndex(s, "_"); i > 0 && versionToken(s[i+1:]) {
+		s = s[:i]
+	}
+	return s
+}
+
+func versionToken(t string) bool {
+	if t == "" || t[0] < '0' || t[0] > '9' {
+		return false
+	}
+	for _, r := range t {
+		if (r >= '0' && r <= '9') || r == '.' || (r >= 'a' && r <= 'z') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func pickDominantArchive(root string, files []sizedEntry, total int64) string {

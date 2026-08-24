@@ -45,6 +45,7 @@ type Plan struct {
 	ContentRoot             string      `json:"contentRoot"`
 	Destination             string      `json:"destination"`
 	InstallerPath           string      `json:"installerPath"`
+	ExtraInstallers         []string    `json:"extraInstallers,omitempty"`
 	WorkingDir              string      `json:"workingDir"`
 	Engine                  Engine      `json:"engine"`
 	Silent                  bool        `json:"silent"`
@@ -79,6 +80,8 @@ type Installation struct {
 	ContentRoot      string            `json:"contentRoot"`
 	Destination      string            `json:"destination"`
 	InstallerPath    string            `json:"installerPath"`
+	ExtraInstallers  []string          `json:"extraInstallers,omitempty"`
+	ManualInstaller  bool              `json:"manualInstaller,omitempty"`
 	WorkingDir       string            `json:"workingDir"`
 	Engine           Engine            `json:"engine"`
 	Silent           bool              `json:"silent"`
@@ -127,6 +130,7 @@ type RemovedEvent struct {
 func snapshotOf(i *Installation) Installation {
 	out := *i
 	out.Candidates = append([]Candidate(nil), i.Candidates...)
+	out.ExtraInstallers = append([]string(nil), i.ExtraInstallers...)
 	if i.CompletedAt != nil {
 		at := *i.CompletedAt
 		out.CompletedAt = &at

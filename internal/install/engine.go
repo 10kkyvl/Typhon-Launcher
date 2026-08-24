@@ -31,6 +31,7 @@ var (
 	errRelativeDestination = errors.New("путь установки должен быть абсолютным")
 	errInstallerCancelled  = errors.New("установка была отменена")
 	errInstallerBusy       = errors.New("в системе уже выполняется другая установка")
+	errEmptyInfPath        = errors.New("путь для inf-файла разведки не задан")
 )
 
 var innoMarkers = []string{"Inno Setup Setup Data", "Inno Setup Messages", "JR.Inno.Setup"}
@@ -231,6 +232,41 @@ func silentArgs(engine Engine, installerPath, dest, logPath string, opts install
 	default:
 		return silentPlan{}, errNoSilent
 	}
+}
+
+// discoverPlan строит план разведочного запуска Inno с /SAVEINF: установщик
+// всё равно распакует файлы (Inno не умеет писать инф без реального прогона),
+// но цель вызова — получить список Components из inf-файла, а не установку.
+func discoverPlan(engine Engine, installerPath, dest, infPath string) (silentPlan, bool, error) {
+	if installerPath == "" {
+		return silentPlan{}, false, errEmptyInstallerPath
+	}
+	if dest == "" {
+		return silentPlan{}, false, errEmptyDestination
+	}
+	if !filepath.IsAbs(dest) {
+		return silentPlan{}, false, errRelativeDestination
+	}
+	if infPath == "" {
+		return silentPlan{}, false, errEmptyInfPath
+	}
+	dest = filepath.Clean(dest)
+
+	switch engine {
+	case EngineInno:
+		args := []string{"/SP-", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=" + dest, "/SAVEINF=" + infPath}
+		return silentPlan{Args: args}, true, nil
+	default:
+		return silentPlan{}, false, nil
+	}
+}
+
+func planWithComponents(plan silentPlan, components []string) silentPlan {
+	if len(components) == 0 {
+		return plan
+	}
+	plan.Args = append(plan.Args, "/COMPONENTS="+strings.Join(components, ","))
+	return plan
 }
 
 func quoteArg(s string) string {

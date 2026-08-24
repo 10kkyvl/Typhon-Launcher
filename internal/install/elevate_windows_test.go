@@ -89,7 +89,7 @@ func TestElevationParams(t *testing.T) {
 
 func TestSilentSpecKeepsNsisTail(t *testing.T) {
 	item := Installation{Engine: EngineNsis, InstallerPath: `C:\downloads\setup.exe`, Destination: `C:\Games\GTA SA`}
-	spec, err := silentSpec(item, "", installOptions{})
+	spec, err := silentSpec(item, item.InstallerPath, "", installOptions{})
 	if err != nil {
 		t.Fatalf("silentSpec error = %v", err)
 	}

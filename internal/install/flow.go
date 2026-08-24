@@ -112,24 +112,26 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	}
 	s.setStatus(id, StatusInstalling)
 
-	spec := runSpec{Path: item.InstallerPath, Dir: item.WorkingDir}
-	if item.Type == TypeMsiInstaller {
-		msiexec, err := systemExecutable("msiexec.exe")
+	for _, installer := range installerChain(item) {
+		spec := runSpec{Path: installer, Dir: item.WorkingDir}
+		if item.Type == TypeMsiInstaller {
+			msiexec, err := systemExecutable("msiexec.exe")
+			if err != nil {
+				return err
+			}
+			spec = runSpec{Path: msiexec, Args: []string{"/i", installer}, Dir: item.WorkingDir}
+		}
+
+		s.setExternal(id, true)
+		code, err := s.runner.run(ctx, spec)
+		s.setExternal(id, false)
 		if err != nil {
 			return err
 		}
-		spec = runSpec{Path: msiexec, Args: []string{"/i", item.InstallerPath}, Dir: item.WorkingDir}
-	}
-
-	s.setExternal(id, true)
-	code, err := s.runner.run(ctx, spec)
-	s.setExternal(id, false)
-	if err != nil {
-		return err
-	}
-	if code != 0 && code != rebootExitCode {
-		slog.Error("installer exit code", "id", id, "path", item.InstallerPath, "code", code)
-		return errInstallerFail
+		if code != 0 && code != rebootExitCode {
+			slog.Error("installer exit code", "id", id, "path", installer, "code", code)
+			return errInstallerFail
+		}
 	}
 
 	after, err := takeSnapshot(roots)
@@ -153,46 +155,81 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 
 func (s *Service) runSilent(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry, shell shellSnapshot) error {
 	logPath := s.installerLogPath(id)
-	spec, err := silentSpec(item, logPath, installOptionsFrom(s.config()))
-	if err != nil {
-		return err
+	statePath := s.workerStatePath(id)
+	infPath := s.workerInfPath(id)
+	cancelPath := s.workerCancelPath(id)
+	opts := installOptionsFrom(s.config())
+	chain := installerChain(item)
+	specs := make([]runSpec, 0, len(chain))
+	for _, installer := range chain {
+		spec, err := silentSpec(item, installer, logPath, opts)
+		if err != nil {
+			return err
+		}
+		spec.StatePath = statePath
+		spec.InfPath = infPath
+		spec.CancelPath = cancelPath
+		specs = append(specs, spec)
 	}
-	dropInstallerLog(logPath)
 	s.setStatus(id, StatusInstalling)
 
 	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal)
-	code, runErr := s.runner.run(ctx, spec)
+	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
 	stop()
 	if runErr != nil {
-		s.discardSilent(item, before)
+		s.discardSilent(item, before, runErr)
 		return runErr
-	}
-	if err := exitError(item.Engine, code); err != nil {
-		done, logErr := installerLogSucceeded(item.Engine, logPath)
-		if logErr != nil {
-			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
-		}
-		if !done {
-			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
-				"path", item.InstallerPath, "code", code, "log", installerLogTail(logPath))
-			s.discardSilent(item, before)
-			return err
-		}
-		// Установщики GOG падают при завершении уже после того, как файлы
-		// разложены: свой лог они при этом закрывают отметкой об успехе.
-		slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine), "code", code)
 	}
 
 	dropInstallerLog(logPath)
 
 	dest, err := s.silentDestination(ctx, id, item, roots, before)
 	if err != nil {
-		s.discardSilent(item, before)
+		s.discardSilent(item, before, err)
 		return err
 	}
 	s.setRemoval(id, dest, before, beforeEntries, item.Name)
 	s.dropShortcuts(ctx, id, shell, dest)
 	return s.finalize(ctx, id)
+}
+
+// runSilentChain прогоняет установщики набора по очереди: дополнение GOG ставится
+// только поверх уже установленной игры, поэтому порядок из плана обязателен, а
+// первая же неудача останавливает цепочку.
+func (s *Service) runSilentChain(ctx context.Context, id string, item Installation, chain []string, specs []runSpec, logPath string) error {
+	for i, spec := range specs {
+		dropInstallerLog(logPath)
+		code, err := s.runner.run(ctx, spec)
+		if err != nil {
+			return err
+		}
+		exitErr := exitError(item.Engine, code)
+		if exitErr == nil {
+			continue
+		}
+		done, logErr := installerLogSucceeded(item.Engine, logPath)
+		if logErr != nil {
+			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
+		}
+		if !done {
+			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
+				"path", chain[i], "code", code, "log", installerLogTail(logPath))
+			return exitErr
+		}
+		// Установщики GOG падают при завершении уже после того, как файлы
+		// разложены: свой лог они при этом закрывают отметкой об успехе.
+		slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
+			"path", chain[i], "code", code)
+	}
+	return nil
+}
+
+func installerChain(item Installation) []string {
+	chain := make([]string, 0, len(item.ExtraInstallers)+1)
+	if item.InstallerPath != "" {
+		chain = append(chain, item.InstallerPath)
+	}
+	return append(chain, item.ExtraInstallers...)
 }
 
 func installOptionsFrom(cfg settings.Settings) installOptions {
@@ -271,8 +308,17 @@ func (s *Service) silentDestination(ctx context.Context, id string, item Install
 	return found, nil
 }
 
-func (s *Service) discardSilent(item Installation, before fsSnapshot) {
+// discardSilent удаляет каталог, в который писала неудавшаяся тихая
+// установка, но только если процесс, который туда писал, точно не жив:
+// errInstallerNotConfirmedStopped значит ровно обратное — установщик под
+// UAC не подтвердил остановку, и RemoveAll на живого писателя — гонка на
+// единственной копии данных (инвариант 9).
+func (s *Service) discardSilent(item Installation, before fsSnapshot, cause error) {
 	if item.Destination == "" || s.isClosing() {
+		return
+	}
+	if errors.Is(cause, errInstallerNotConfirmedStopped) {
+		slog.Warn("keep install dir, installer not confirmed stopped", "path", item.Destination, "error", cause)
 		return
 	}
 	if _, existed := before.dirs[item.Destination]; existed {
@@ -306,12 +352,12 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 	return cancel
 }
 
-func silentSpec(item Installation, logPath string, opts installOptions) (runSpec, error) {
-	plan, err := silentArgs(item.Engine, item.InstallerPath, item.Destination, logPath, opts)
+func silentSpec(item Installation, installer, logPath string, opts installOptions) (runSpec, error) {
+	plan, err := silentArgs(item.Engine, installer, item.Destination, logPath, opts)
 	if err != nil {
 		return runSpec{}, err
 	}
-	path := item.InstallerPath
+	path := installer
 	if item.Engine == EngineMsi {
 		msiexec, err := systemExecutable("msiexec.exe")
 		if err != nil {
@@ -319,7 +365,10 @@ func silentSpec(item Installation, logPath string, opts installOptions) (runSpec
 		}
 		path = msiexec
 	}
-	return runSpec{Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true}, nil
+	return runSpec{
+		Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true,
+		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts,
+	}, nil
 }
 
 func dirEmpty(dir string) (bool, error) {
@@ -609,6 +658,27 @@ func (s *Service) installerLogPath(id string) string {
 		return ""
 	}
 	return filepath.Join(s.store.dir, "installer-"+id+".log")
+}
+
+func (s *Service) workerStatePath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return workerStatePath(s.store.dir, id)
+}
+
+func (s *Service) workerInfPath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return workerInfPath(s.store.dir, id)
+}
+
+func (s *Service) workerCancelPath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return workerCancelPath(s.store.dir, id)
 }
 
 func (s *Service) forceDestination(id, destination string) {
