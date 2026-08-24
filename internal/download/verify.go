@@ -12,6 +12,7 @@ var (
 	errFileMissing    = errors.New("файл отсутствует на диске")
 	errFileIncomplete = errors.New("загрузка не завершена: на диске остался только незавершённый файл (.part)")
 	errFileTruncated  = errors.New("файл на диске меньше ожидаемого размера")
+	errFileOversized  = errors.New("файл на диске больше ожидаемого размера")
 	errFileStatFailed = errors.New("не удалось проверить файл на диске")
 	errBlockedByAV    = errors.New("файл заблокирован или удалён антивирусом Windows")
 )
@@ -37,8 +38,11 @@ func verifyFilesOnDisk(ctx context.Context, files []FileState, paths []string) e
 func verifyOneFile(path string, expected int64) error {
 	info, err := os.Stat(path)
 	if err == nil {
-		if info.Size() < expected {
+		switch {
+		case info.Size() < expected:
 			return errFileTruncated
+		case info.Size() > expected:
+			return errFileOversized
 		}
 		return nil
 	}

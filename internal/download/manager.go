@@ -940,7 +940,7 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 		}
 		before := *d
 		m.updateLocked(d, eng, now)
-		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total {
+		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total && m.jobs[d.ID] == nil {
 			d.Status = StatusVerifying
 			id, dest := d.ID, d.Destination
 			files := append([]FileState(nil), d.Files...)

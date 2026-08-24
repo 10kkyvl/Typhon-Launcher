@@ -1117,3 +1117,34 @@ func TestLogsHideInfoHashAndSource(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionWaitsWhileAnotherJobHoldsDownload(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+
+	_, cancel := context.WithCancel(context.Background())
+	m.mu.Lock()
+	m.jobs["a"] = &jobState{cancel: cancel, done: make(chan struct{})}
+	m.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	if got := m.statusOf(t, "a"); got != StatusDownloading {
+		t.Fatalf("status = %q, want %q while another job holds the download", got, StatusDownloading)
+	}
+
+	m.mu.Lock()
+	delete(m.jobs, "a")
+	m.mu.Unlock()
+	cancel()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete once the job is released", func() bool {
+		return m.statusOf(t, "a") == StatusCompleted
+	})
+}

@@ -57,6 +57,16 @@ func TestVerifyFilesOnDisk(t *testing.T) {
 		}
 	})
 
+	t.Run("file longer than expected", func(t *testing.T) {
+		dir := t.TempDir()
+		path := writeVerifyFile(t, dir, "game.bin", 17)
+		files := []FileState{{Path: "game.bin", Size: 10, Selected: true}}
+		err := verifyFilesOnDisk(context.Background(), files, []string{path})
+		if !errors.Is(err, errFileOversized) {
+			t.Fatalf("err = %v, want errFileOversized", err)
+		}
+	})
+
 	t.Run("full file with unrelated stray part file", func(t *testing.T) {
 		dir := t.TempDir()
 		path := writeVerifyFile(t, dir, "game.bin", 10)
