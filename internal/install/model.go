@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/library"
 )
 
 type Type string
@@ -45,6 +46,8 @@ type Plan struct {
 	Destination             string      `json:"destination"`
 	InstallerPath           string      `json:"installerPath"`
 	WorkingDir              string      `json:"workingDir"`
+	Engine                  Engine      `json:"engine"`
+	Silent                  bool        `json:"silent"`
 	ArchivePath             string      `json:"archivePath"`
 	CompressedSize          int64       `json:"compressedSize"`
 	EstimatedSize           int64       `json:"estimatedSize"`
@@ -65,33 +68,38 @@ const (
 )
 
 type Installation struct {
-	ID              string          `json:"id"`
-	DownloadID      string          `json:"downloadId"`
-	GameID          string          `json:"gameId"`
-	Name            string          `json:"name"`
-	Type            Type            `json:"type"`
-	Status          Status          `json:"status"`
-	Mode            string          `json:"mode"`
-	SourcePath      string          `json:"sourcePath"`
-	ContentRoot     string          `json:"contentRoot"`
-	Destination     string          `json:"destination"`
-	InstallerPath   string          `json:"installerPath"`
-	WorkingDir      string          `json:"workingDir"`
-	ArchivePath     string          `json:"archivePath"`
-	Progress        float64         `json:"progress"`
-	CurrentFile     string          `json:"currentFile"`
-	BytesDone       int64           `json:"bytesDone"`
-	BytesTotal      int64           `json:"bytesTotal"`
-	Executable      string          `json:"executable"`
-	Candidates      []Candidate     `json:"candidates"`
-	Origin          download.Origin `json:"origin"`
-	Unattended      bool            `json:"unattended,omitempty"`
-	SkipRegister    bool            `json:"skipRegister,omitempty"`
-	DetectedVersion string          `json:"detectedVersion"`
-	VersionSource   string          `json:"versionSource"`
-	StartedAt       time.Time       `json:"startedAt"`
-	CompletedAt     *time.Time      `json:"completedAt"`
-	Error           string          `json:"error"`
+	ID               string            `json:"id"`
+	DownloadID       string            `json:"downloadId"`
+	GameID           string            `json:"gameId"`
+	Name             string            `json:"name"`
+	Type             Type              `json:"type"`
+	Status           Status            `json:"status"`
+	Mode             string            `json:"mode"`
+	SourcePath       string            `json:"sourcePath"`
+	ContentRoot      string            `json:"contentRoot"`
+	Destination      string            `json:"destination"`
+	InstallerPath    string            `json:"installerPath"`
+	WorkingDir       string            `json:"workingDir"`
+	Engine           Engine            `json:"engine"`
+	Silent           bool              `json:"silent"`
+	ArchivePath      string            `json:"archivePath"`
+	Progress         float64           `json:"progress"`
+	CurrentFile      string            `json:"currentFile"`
+	BytesDone        int64             `json:"bytesDone"`
+	BytesTotal       int64             `json:"bytesTotal"`
+	Executable       string            `json:"executable"`
+	Candidates       []Candidate       `json:"candidates"`
+	Origin           download.Origin   `json:"origin"`
+	Unattended       bool              `json:"unattended,omitempty"`
+	SkipRegister     bool              `json:"skipRegister,omitempty"`
+	Owned            bool              `json:"owned,omitempty"`
+	Uninstall        library.Uninstall `json:"uninstall,omitzero"`
+	UninstallUnknown bool              `json:"uninstallUnknown,omitempty"`
+	DetectedVersion  string            `json:"detectedVersion"`
+	VersionSource    string            `json:"versionSource"`
+	StartedAt        time.Time         `json:"startedAt"`
+	CompletedAt      *time.Time        `json:"completedAt"`
+	Error            string            `json:"error"`
 }
 
 type PlanInfo struct {
@@ -144,6 +152,10 @@ func archived(t Type) bool {
 
 func external(t Type) bool {
 	return t == TypeExeInstaller || t == TypeMsiInstaller
+}
+
+func ownDestination(t Type, silent bool) bool {
+	return controlled(t) || (external(t) && silent)
 }
 
 func transient(s Status) bool {

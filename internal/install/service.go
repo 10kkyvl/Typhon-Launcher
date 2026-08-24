@@ -18,6 +18,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/titles"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -34,6 +35,12 @@ const (
 	progressEpsilon  = 0.002
 	rebootExitCode   = 3010
 	maxSuffixAttempt = 50
+
+	installPollInterval   = 2 * time.Second
+	installerLogTailLimit = 8 << 10
+	installerLogScanLimit = 256 << 10
+
+	innoSuccessMarker = "Installation process succeeded."
 )
 
 const interruptedMessage = "установка была прервана"
@@ -55,6 +62,8 @@ var (
 	errNoLibrary        = errors.New("библиотека недоступна")
 	errEmptyDestination = errors.New("каталог установки не задан")
 	errNeedsUser        = errors.New("этот пакет требует участия пользователя")
+
+	errInstallerNoOutput = errors.New("установщик не создал файлов в папке установки")
 )
 
 type downloadSource interface {
@@ -64,6 +73,10 @@ type downloadSource interface {
 
 type registrar interface {
 	RegisterInstalled(g library.InstalledGame) (library.Game, error)
+	Find(id string) (library.Game, error)
+	IsRunning(id string) bool
+	RemoveGame(id string) error
+	MarkUninstalled(id string) error
 }
 
 type job struct {
@@ -78,11 +91,14 @@ type Service struct {
 	downloads downloadSource
 	library   registrar
 	store     *store
+	removals  *removalStore
 	runner    runner
 
 	items      []*Installation
 	jobs       map[string]*job
 	onFinished func(Installation)
+	busy       func(gameID string) bool
+	title      func(origin download.Origin) string
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
@@ -118,10 +134,42 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	return &Service{
 		settings:  settingsService,
 		store:     newStore(dir),
+		removals:  newRemovalStore(dir),
 		runner:    newRunner(),
 		jobs:      map[string]*job{},
 		freeSpace: platform.GetStorageInfo,
 	}, nil
+}
+
+//wails:ignore
+func (s *Service) SetBusyCheck(fn func(gameID string) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.busy = fn
+}
+
+//wails:ignore
+func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.title = fn
+}
+
+func (s *Service) titleOf(origin download.Origin) string {
+	s.mu.Lock()
+	resolve := s.title
+	s.mu.Unlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(origin))
+}
+
+func (s *Service) nameFor(d download.Download) string {
+	if title := s.titleOf(d.Origin); title != "" {
+		return title
+	}
+	return gameTitle(d.Name)
 }
 
 func (s *Service) config() settings.Settings {
@@ -168,6 +216,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	go func() {
 		defer s.wg.Done()
 		sweepPartial(stale)
+		s.sweepRemovals()
 	}()
 	return nil
 }
@@ -218,13 +267,17 @@ func (s *Service) findLocked(id string) *Installation {
 }
 
 func (s *Service) persistLocked() {
+	if err := s.persistNowLocked(); err != nil {
+		slog.Error("persist installations", "error", err)
+	}
+}
+
+func (s *Service) persistNowLocked() error {
 	items := make([]Installation, 0, len(s.items))
 	for _, item := range s.items {
 		items = append(items, snapshotOf(item))
 	}
-	if err := s.store.save(items); err != nil {
-		slog.Error("persist installations", "error", err)
-	}
+	return s.store.save(items)
 }
 
 func (s *Service) snapshot(id string) (Installation, bool) {
@@ -263,8 +316,9 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 		return PlanInfo{}, err
 	}
 	cfg := s.config()
-	if controlled(plan.Type) || plan.Type == TypeUnknown {
-		plan.Destination = s.proposeDestination(cfg.GamesPath, d.Name)
+	name := s.nameFor(d)
+	if ownDestination(plan.Type, plan.Silent) || plan.Type == TypeUnknown {
+		plan.Destination = s.proposeDestination(cfg.GamesPath, name)
 	}
 	free, err := s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath))
 	if err != nil {
@@ -273,7 +327,7 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	return PlanInfo{
 		Plan:          plan,
 		DownloadID:    d.ID,
-		Name:          d.Name,
+		Name:          name,
 		RequiredBytes: requiredBytes(plan),
 		FreeBytes:     free,
 		Seeding:       d.Seeding,
@@ -302,13 +356,18 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if opts.Type != "" {
 		plan.Type = opts.Type
 	}
-	if installer := strings.TrimSpace(opts.InstallerPath); installer != "" {
+	if installer := strings.TrimSpace(opts.InstallerPath); installer != "" && !samePath(installer, plan.InstallerPath) {
 		info, err := os.Stat(installer)
 		if err != nil || info.IsDir() {
 			return Installation{}, errNoExecutable
 		}
-		plan.InstallerPath = installer
-		plan.WorkingDir = filepath.Dir(installer)
+		kind := plan.Type
+		if !external(kind) {
+			kind = TypeExeInstaller
+		}
+		if err := fillInstallerPlan(&plan, kind, installer); err != nil {
+			return Installation{}, err
+		}
 	}
 	if plan.Type == TypeUnknown {
 		return Installation{}, errUnknownType
@@ -320,13 +379,15 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	item := &Installation{
 		ID:            newID(),
 		DownloadID:    d.ID,
-		Name:          d.Name,
+		Name:          s.nameFor(d),
 		Type:          plan.Type,
 		Status:        StatusPending,
 		SourcePath:    plan.SourcePath,
 		ContentRoot:   plan.ContentRoot,
 		InstallerPath: plan.InstallerPath,
 		WorkingDir:    plan.WorkingDir,
+		Engine:        plan.Engine,
+		Silent:        plan.Silent,
 		ArchivePath:   plan.ArchivePath,
 		BytesTotal:    plan.EstimatedSize,
 		Origin:        d.Origin,
@@ -335,15 +396,19 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		StartedAt:     time.Now(),
 	}
 
-	if controlled(plan.Type) {
+	if ownDestination(plan.Type, plan.Silent) {
 		dest := strings.TrimSpace(opts.Destination)
 		if dest == "" {
 			return Installation{}, errNoDestination
+		}
+		if !filepath.IsAbs(dest) {
+			return Installation{}, errRelativeDestination
 		}
 		if !destAvailable(dest) {
 			return Installation{}, errDestNotEmpty
 		}
 		item.Destination = filepath.Clean(dest)
+		item.Owned = controlled(plan.Type)
 		if err := s.checkSpace(item.Destination, requiredBytes(plan)); err != nil {
 			return Installation{}, err
 		}
@@ -453,6 +518,10 @@ func (s *Service) Retry(id string) error {
 		return errUnavailable
 	}
 	downloadID := item.DownloadID
+	kind := item.Type
+	installer := item.InstallerPath
+	destination := item.Destination
+	title := item.Name
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -462,6 +531,22 @@ func (s *Service) Retry(id string) error {
 	plan, err := Inspect(s.baseContext(), sourceDir(d))
 	if err != nil {
 		return err
+	}
+
+	// Запись могла быть создана прошлой версией лаунчера или установщиком,
+	// выбранным вручную: движок определяем заново по её собственному файлу.
+	engine := plan.Engine
+	if external(kind) && installer != "" && !samePath(installer, plan.InstallerPath) {
+		engine, err = DetectEngine(installer)
+		if err != nil {
+			return err
+		}
+	}
+	if external(kind) && supportsSilent(engine) && destination == "" {
+		destination = s.proposeDestination(s.config().GamesPath, title)
+		if destination == "" {
+			return errNoDestination
+		}
 	}
 
 	s.mu.Lock()
@@ -485,6 +570,14 @@ func (s *Service) Retry(id string) error {
 		item.ArchivePath = plan.ArchivePath
 		item.BytesTotal = plan.EstimatedSize
 		item.Mode = installMode(item.Mode, d.Seeding)
+	}
+	if external(item.Type) {
+		item.Engine = engine
+		item.Silent = supportsSilent(engine)
+		item.BytesTotal = plan.EstimatedSize
+		if item.Silent {
+			item.Destination = destination
+		}
 	}
 	s.persistLocked()
 	snap := snapshotOf(item)
@@ -564,7 +657,7 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Warn("auto install inspect", "id", d.ID, "error", err)
 		return
 	}
-	if !info.Plan.CanAutoInstall || !controlled(info.Plan.Type) {
+	if !info.Plan.CanAutoInstall || !ownDestination(info.Plan.Type, info.Plan.Silent) {
 		slog.Info("auto install skipped", "id", d.ID, "type", info.Plan.Type)
 		return
 	}
@@ -868,6 +961,13 @@ func validExecutable(path, destination string, kind Type) error {
 		return errOutsideInstall
 	}
 	return nil
+}
+
+func gameTitle(raw string) string {
+	if base := titles.Parse(raw).Base; base != "" {
+		return base
+	}
+	return strings.TrimSpace(raw)
 }
 
 func sanitizeName(name string) string {

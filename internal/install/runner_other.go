@@ -2,7 +2,12 @@
 
 package install
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var errWindowsOnly = errors.New("установка доступна только в Windows")
 
 type unsupportedRunner struct{}
 

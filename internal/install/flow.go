@@ -2,9 +2,15 @@ package install
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"typhon/internal/library"
@@ -73,7 +79,7 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 
 	err := ExtractArchive(ctx, item.ArchivePath, partial, func(p Progress) { s.updateProgress(id, p) })
 	if err == nil {
-		err = s.commit(ctx, partial, item.Destination)
+		err = s.commitExtracted(ctx, partial, item.Destination)
 	}
 	if err != nil {
 		s.cleanupPartial(partial)
@@ -84,13 +90,22 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
 	s.setStatus(id, StatusPreparing)
+	cfg := s.config()
 	roots := s.installRoots()
 	before, err := takeSnapshot(roots)
 	if err != nil {
 		return err
 	}
+	beforeEntries, err := readUninstallEntries()
+	if err != nil {
+		return err
+	}
+	shell := s.shellBaseline(ctx, id, cfg)
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if item.Silent && item.Destination != "" {
+		return s.runSilent(ctx, id, item, roots, before, beforeEntries, shell)
 	}
 	if item.Unattended {
 		return errNeedsUser
@@ -99,7 +114,11 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 
 	spec := runSpec{Path: item.InstallerPath, Dir: item.WorkingDir}
 	if item.Type == TypeMsiInstaller {
-		spec = runSpec{Path: "msiexec", Args: []string{"/i", item.InstallerPath}, Dir: item.WorkingDir}
+		msiexec, err := systemExecutable("msiexec.exe")
+		if err != nil {
+			return err
+		}
+		spec = runSpec{Path: msiexec, Args: []string{"/i", item.InstallerPath}, Dir: item.WorkingDir}
 	}
 
 	s.setExternal(id, true)
@@ -122,10 +141,306 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	if dest := pickInstallDir(dirs, candidates); dest != "" {
+	dest := pickInstallDir(dirs, candidates)
+	if dest != "" {
 		s.setDestination(id, dest)
 	}
+	s.setRemoval(id, dest, before, beforeEntries, item.Name)
+	s.dropShortcuts(ctx, id, shell, dest)
 	s.waitForUser(id, candidates)
+	return nil
+}
+
+func (s *Service) runSilent(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry, shell shellSnapshot) error {
+	logPath := s.installerLogPath(id)
+	spec, err := silentSpec(item, logPath, installOptionsFrom(s.config()))
+	if err != nil {
+		return err
+	}
+	dropInstallerLog(logPath)
+	s.setStatus(id, StatusInstalling)
+
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal)
+	code, runErr := s.runner.run(ctx, spec)
+	stop()
+	if runErr != nil {
+		s.discardSilent(item, before)
+		return runErr
+	}
+	if err := exitError(item.Engine, code); err != nil {
+		done, logErr := installerLogSucceeded(item.Engine, logPath)
+		if logErr != nil {
+			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
+		}
+		if !done {
+			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
+				"path", item.InstallerPath, "code", code, "log", installerLogTail(logPath))
+			s.discardSilent(item, before)
+			return err
+		}
+		// Установщики GOG падают при завершении уже после того, как файлы
+		// разложены: свой лог они при этом закрывают отметкой об успехе.
+		slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine), "code", code)
+	}
+
+	dropInstallerLog(logPath)
+
+	dest, err := s.silentDestination(ctx, id, item, roots, before)
+	if err != nil {
+		s.discardSilent(item, before)
+		return err
+	}
+	s.setRemoval(id, dest, before, beforeEntries, item.Name)
+	s.dropShortcuts(ctx, id, shell, dest)
+	return s.finalize(ctx, id)
+}
+
+func installOptionsFrom(cfg settings.Settings) installOptions {
+	return installOptions{SkipShortcuts: cfg.InstallSkipShortcuts, SkipExtras: cfg.InstallSkipExtras}
+}
+
+// Снимок ярлыков берётся до запуска установщика: без него не отличить ярлык,
+// созданный установкой, от ярлыка пользователя, поэтому ошибка обхода отменяет
+// уборку целиком, а не разрешает удалять наугад.
+func (s *Service) shellBaseline(ctx context.Context, id string, cfg settings.Settings) shellSnapshot {
+	if !cfg.InstallSkipShortcuts {
+		return shellSnapshot{}
+	}
+	roots, err := shortcutRoots()
+	if err != nil {
+		slog.Error("resolve shortcut folders", "id", id, "error", err)
+		return shellSnapshot{}
+	}
+	snap, err := takeShellSnapshot(ctx, roots)
+	if err != nil {
+		slog.Error("scan shortcut folders", "id", id, "error", err)
+		return shellSnapshot{}
+	}
+	return snap
+}
+
+// Ярлыки, созданные установщиком под UAC в общих каталогах, лаунчер удалить не
+// может: он работает без прав администратора. Это не повод считать установку
+// неудачной, поэтому ошибка только логируется.
+func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string) {
+	if !before.taken || dest == "" {
+		return
+	}
+	removed, err := cleanShellShortcuts(ctx, before, dest)
+	if err != nil {
+		slog.Warn("remove installer shortcuts", "id", id, "dest", dest, "error", err)
+	}
+	if len(removed) > 0 {
+		slog.Info("installer shortcuts removed", "id", id, "count", len(removed), "paths", removed)
+	}
+}
+
+// silentDestination доверяет заданному каталогу только после того, как убедился,
+// что установщик действительно в него писал: часть установщиков игнорирует
+// ключ каталога и ставит игру по своему пути, и тогда его надо найти по снимку.
+func (s *Service) silentDestination(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot) (string, error) {
+	empty, err := dirEmpty(item.Destination)
+	if err != nil {
+		return "", err
+	}
+	if !empty {
+		return item.Destination, nil
+	}
+	after, err := takeSnapshot(roots)
+	if err != nil {
+		return "", err
+	}
+	dirs := diffSnapshot(before, after)
+	candidates, err := gather(ctx, dirs, item.Name)
+	if err != nil {
+		return "", err
+	}
+	found := pickInstallDir(dirs, candidates)
+	if found == "" {
+		return "", errInstallerNoOutput
+	}
+	found, err = normalizeRoot(found)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Remove(item.Destination); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("remove empty install dir", "path", item.Destination, "error", err)
+	}
+	slog.Warn("installer ignored target directory", "id", id, "want", item.Destination, "got", found)
+	s.forceDestination(id, found)
+	return found, nil
+}
+
+func (s *Service) discardSilent(item Installation, before fsSnapshot) {
+	if item.Destination == "" || s.isClosing() {
+		return
+	}
+	if _, existed := before.dirs[item.Destination]; existed {
+		return
+	}
+	if err := os.RemoveAll(item.Destination); err != nil {
+		slog.Warn("remove failed install dir", "path", item.Destination, "error", err)
+	}
+}
+
+func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64) func() {
+	ctx, cancel := context.WithCancel(ctx)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(installPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				size, err := DirSize(ctx, dir)
+				if err != nil {
+					continue
+				}
+				s.updateProgress(id, Progress{BytesDone: size, BytesTotal: total})
+			}
+		}
+	}()
+	return cancel
+}
+
+func silentSpec(item Installation, logPath string, opts installOptions) (runSpec, error) {
+	plan, err := silentArgs(item.Engine, item.InstallerPath, item.Destination, logPath, opts)
+	if err != nil {
+		return runSpec{}, err
+	}
+	path := item.InstallerPath
+	if item.Engine == EngineMsi {
+		msiexec, err := systemExecutable("msiexec.exe")
+		if err != nil {
+			return runSpec{}, err
+		}
+		path = msiexec
+	}
+	return runSpec{Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true}, nil
+}
+
+func dirEmpty(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	return len(entries) == 0, nil
+}
+
+func dropInstallerLog(path string) {
+	if path == "" {
+		return
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("remove installer log", "path", path, "error", err)
+	}
+}
+
+// installerLogSucceeded отвечает на вопрос, разложил ли установщик файлы, когда
+// код возврата говорит об обратном: Inno закрывает свой лог отметкой об успехе
+// до кода возврата, и падение на выходе не отменяет уже сделанную установку.
+func installerLogSucceeded(engine Engine, path string) (bool, error) {
+	if engine != EngineInno || path == "" {
+		return false, nil
+	}
+	data, err := readLogTail(path, installerLogScanLimit)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(decodeLogText(data), innoSuccessMarker), nil
+}
+
+func installerLogTail(path string) string {
+	if path == "" {
+		return ""
+	}
+	data, err := readLogTail(path, installerLogTailLimit)
+	if err != nil {
+		return "лог недоступен: " + err.Error()
+	}
+	return strings.TrimSpace(decodeLogText(data))
+}
+
+func readLogTail(path string, limit int64) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Warn("close installer log", "path", path, "error", err)
+		}
+	}()
+	if info.Size() > limit {
+		if _, err := f.Seek(info.Size()-limit, io.SeekStart); err != nil {
+			return nil, err
+		}
+	}
+	return io.ReadAll(io.LimitReader(f, limit))
+}
+
+// Inno пишет лог в UTF-16LE, а на диске он может оказаться и в UTF-8: нулевые
+// байты убираем, чтобы обе кодировки читались одним поиском по подстроке.
+func decodeLogText(data []byte) string {
+	return strings.ReplaceAll(string(data), "\x00", "")
+}
+
+// setRemoval выясняет, чем игру потом удалять: свежая запись в ветке Uninstall
+// даёт деинсталлятор, а отсутствие каталога в снимке до установки — право
+// удалить каталог целиком. Ошибка чтения реестра не превращается в «удалять
+// нечем»: она помечается UninstallUnknown, и UI предложит системный апплет.
+func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEntries map[string]uninstallEntry, name string) {
+	owned := false
+	if destination != "" {
+		_, existed := before.dirs[destination]
+		owned = !existed
+	}
+	uninstall, unknown := library.Uninstall{}, false
+	afterEntries, err := readUninstallEntries()
+	if err != nil {
+		slog.Error("read uninstall entries", "id", id, "error", err)
+		unknown = true
+	} else if picked, ok := pickUninstall(beforeEntries, afterEntries, destination, name); ok {
+		uninstall = picked
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil {
+		return
+	}
+	item.Owned = owned
+	item.Uninstall = uninstall
+	item.UninstallUnknown = unknown
+	s.persistLocked()
+}
+
+func (s *Service) commitExtracted(ctx context.Context, partial, destination string) error {
+	root, err := normalizeRoot(partial)
+	if err != nil {
+		return err
+	}
+	if root == partial {
+		return s.commit(ctx, partial, destination)
+	}
+	if err := s.commit(ctx, root, destination); err != nil {
+		return err
+	}
+	s.cleanupPartial(partial)
 	return nil
 }
 
@@ -236,8 +551,12 @@ func (s *Service) register(item Installation, version, source string) (library.G
 	if item.Destination == "" {
 		return library.Game{}, errEmptyDestination
 	}
+	title := s.titleOf(item.Origin)
+	if title == "" {
+		title = item.Name
+	}
 	return s.library.RegisterInstalled(library.InstalledGame{
-		Title:            item.Name,
+		Title:            title,
 		Executable:       item.Executable,
 		InstallDir:       item.Destination,
 		Version:          version,
@@ -246,6 +565,10 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		ReleaseID:        item.Origin.ReleaseID,
 		SourceID:         item.Origin.SourceID,
 		CanonicalGameID:  item.Origin.GameID,
+		InstallType:      string(item.Type),
+		Owned:            item.Owned,
+		Uninstall:        item.Uninstall,
+		UninstallUnknown: item.UninstallUnknown,
 	})
 }
 
@@ -255,6 +578,7 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 	}
 	d, err := s.downloads.Get(downloadID)
 	if err != nil {
+		slog.Error("cleanup lookup download", "id", downloadID, "error", err)
 		return
 	}
 	if d.Seeding {
@@ -277,6 +601,24 @@ func (s *Service) setExecutable(id, executable string, candidates []Candidate) {
 	}
 	item.Executable = executable
 	item.Candidates = candidates
+	s.persistLocked()
+}
+
+func (s *Service) installerLogPath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return filepath.Join(s.store.dir, "installer-"+id+".log")
+}
+
+func (s *Service) forceDestination(id, destination string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil || destination == "" {
+		return
+	}
+	item.Destination = destination
 	s.persistLocked()
 }
 
@@ -307,7 +649,7 @@ func verifyInstall(item Installation) error {
 		return nil
 	}
 	destination := ""
-	if controlled(item.Type) {
+	if ownDestination(item.Type, item.Silent) {
 		destination = item.Destination
 	}
 	return validExecutable(item.Executable, destination, item.Type)

@@ -91,8 +91,11 @@ func TestInspectMsiInstaller(t *testing.T) {
 	if plan.WorkingDir != root {
 		t.Fatalf("workingDir = %s", plan.WorkingDir)
 	}
-	if !plan.RequiresUserInteraction {
-		t.Fatal("msi must require user interaction")
+	if plan.Engine != EngineMsi {
+		t.Fatalf("engine = %s, want %s", plan.Engine, EngineMsi)
+	}
+	if !plan.Silent || plan.RequiresUserInteraction {
+		t.Fatal("msi installs silently into the chosen directory")
 	}
 }
 

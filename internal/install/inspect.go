@@ -104,18 +104,16 @@ func Inspect(ctx context.Context, dir string) (Plan, error) {
 	plan.EstimatedSize = total
 
 	if msi := pickByExt(root, files, ".msi"); msi != "" {
-		plan.Type = TypeMsiInstaller
-		plan.InstallerPath = msi
-		plan.WorkingDir = filepath.Dir(msi)
-		plan.RequiresUserInteraction = true
+		if err := fillInstallerPlan(&plan, TypeMsiInstaller, msi); err != nil {
+			return Plan{}, err
+		}
 		return plan, nil
 	}
 
 	if exe := pickInstallerExe(root, files); exe != "" {
-		plan.Type = TypeExeInstaller
-		plan.InstallerPath = exe
-		plan.WorkingDir = filepath.Dir(exe)
-		plan.RequiresUserInteraction = true
+		if err := fillInstallerPlan(&plan, TypeExeInstaller, exe); err != nil {
+			return Plan{}, err
+		}
 		return plan, nil
 	}
 
@@ -136,7 +134,7 @@ func Inspect(ctx context.Context, dir string) (Plan, error) {
 		return Plan{}, err
 	}
 	plan.Candidates = candidates
-	if len(candidates) > 0 && (dirCount > 0 || assets) {
+	if installedLayout(candidates, dirCount, assets) {
 		plan.Type = TypePortable
 		plan.CanAutoInstall = true
 		return plan, nil
@@ -158,22 +156,35 @@ func inspectFile(path string, size int64) (Plan, error) {
 			return Plan{}, err
 		}
 	case ".msi":
-		plan.Type = TypeMsiInstaller
-		plan.InstallerPath = path
-		plan.WorkingDir = filepath.Dir(path)
+		if err := fillInstallerPlan(&plan, TypeMsiInstaller, path); err != nil {
+			return Plan{}, err
+		}
 		plan.EstimatedSize = size
-		plan.RequiresUserInteraction = true
 	case ".exe":
-		plan.Type = TypeExeInstaller
-		plan.InstallerPath = path
-		plan.WorkingDir = filepath.Dir(path)
+		if err := fillInstallerPlan(&plan, TypeExeInstaller, path); err != nil {
+			return Plan{}, err
+		}
 		plan.EstimatedSize = size
-		plan.RequiresUserInteraction = true
 	default:
 		plan.EstimatedSize = size
 		plan.RequiresUserInteraction = true
 	}
 	return plan, nil
+}
+
+func fillInstallerPlan(plan *Plan, kind Type, installer string) error {
+	engine, err := DetectEngine(installer)
+	if err != nil {
+		return err
+	}
+	plan.Type = kind
+	plan.InstallerPath = installer
+	plan.WorkingDir = filepath.Dir(installer)
+	plan.Engine = engine
+	plan.Silent = supportsSilent(engine)
+	plan.CanAutoInstall = plan.Silent
+	plan.RequiresUserInteraction = !plan.Silent
+	return nil
 }
 
 func fillArchivePlan(plan *Plan, archive string) error {
