@@ -9,7 +9,6 @@ export interface LibraryGame {
   launchArgs?: string[];
   installDir: string;
   cover: string;
-  hero: string;
   version: string;
   sizeBytes: number;
   lastPlayed: string | null;
@@ -18,13 +17,15 @@ export interface LibraryGame {
   releaseId?: string;
   sourceId?: string;
   canonicalGameId?: string;
+  source?: string;
+  uninstalled?: boolean;
 }
 
 const unavailable = () => new Error('unavailable in browser');
 
-export async function getInstalledGames(): Promise<LibraryGame[]> {
+export async function getGames(): Promise<LibraryGame[]> {
   if (!inWails) return [];
-  return ((await LibraryService.GetInstalledGames()) ?? []) as unknown as LibraryGame[];
+  return ((await LibraryService.GetGames()) ?? []) as unknown as LibraryGame[];
 }
 
 export async function getRunningGames(): Promise<string[]> {
@@ -37,9 +38,9 @@ export async function addGame(executable: string, title: string): Promise<Librar
   return (await LibraryService.AddGame(executable, title)) as unknown as LibraryGame;
 }
 
-export async function removeGame(id: string): Promise<void> {
+export async function setExecutable(id: string, executable: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
-  await LibraryService.RemoveGame(id);
+  return (await LibraryService.SetExecutable(id, executable)) as unknown as LibraryGame;
 }
 
 export async function playGame(id: string): Promise<void> {
