@@ -6,9 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 )
+
+func loopbackClient() *http.Client {
+	return newGuardedClient(guard{blocked: func(netip.Addr) bool { return false }})
+}
 
 const validFeedJSON = `{"name":"Test","version":1,"downloads":[{"title":"Game A","uri":"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}]}`
 
@@ -21,7 +26,7 @@ func TestFetchSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	res, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	res, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
@@ -50,7 +55,7 @@ func TestFetchNotModified(t *testing.T) {
 	defer srv.Close()
 
 	cond := Conditional{ETag: "\"old-etag\"", LastModified: "Mon, 01 Jan 2024 00:00:00 GMT"}
-	res, err := Fetch(context.Background(), nil, srv.URL, cond)
+	res, err := Fetch(context.Background(), loopbackClient(), srv.URL, cond)
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
@@ -71,7 +76,7 @@ func TestFetchServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -92,7 +97,7 @@ func TestFetchBadContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if !errors.Is(err, ErrBadContentType) {
 		t.Errorf("got %v, want ErrBadContentType", err)
 	}
@@ -106,7 +111,7 @@ func TestFetchContentLengthTooLarge(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if !errors.Is(err, ErrTooLarge) {
 		t.Errorf("got %v, want ErrTooLarge", err)
 	}
@@ -135,7 +140,7 @@ func TestFetchBodyTooLargeWithoutContentLength(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if !errors.Is(err, ErrTooLarge) {
 		t.Errorf("got %v, want ErrTooLarge", err)
 	}
@@ -148,7 +153,7 @@ func TestFetchRedirectLoop(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := Fetch(context.Background(), nil, srv.URL, Conditional{})
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
 	if err == nil {
 		t.Fatal("expected redirect loop error")
 	}

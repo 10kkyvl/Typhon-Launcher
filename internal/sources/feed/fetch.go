@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"typhon/internal/redact"
 )
 
 var (
@@ -82,15 +84,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	}
 
 	if client == nil {
-		client = &http.Client{
-			Timeout: FetchTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= MaxRedirects {
-					return fmt.Errorf("слишком много редиректов (лимит %d)", MaxRedirects)
-				}
-				return nil
-			},
-		}
+		client = NewClient()
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, normalized, nil)
@@ -108,7 +102,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return Result{}, fmt.Errorf("ошибка запроса фида: %w", err)
+		return Result{}, fmt.Errorf("ошибка запроса фида: %w", redact.Error(err))
 	}
 	defer resp.Body.Close()
 
@@ -150,7 +144,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		return Result{}, err
 	}
 
-	slog.Info("feed fetched", "url", normalized, "bytes", len(body), "entries", len(parsed.Entries), "invalid", parsed.Invalid)
+	slog.Info("feed fetched", "host", redact.URL(normalized), "bytes", len(body), "entries", len(parsed.Entries), "invalid", parsed.Invalid)
 
 	return Result{
 		Feed:         parsed,

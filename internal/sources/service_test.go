@@ -1,7 +1,9 @@
 package sources
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/sources/feed"
 )
 
 func TestMain(m *testing.M) {
@@ -93,7 +96,25 @@ func (fs *feedServer) fail(status int) {
 	fs.status = status
 }
 
+func (fs *feedServer) count() int {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.hits
+}
+
 func (fs *feedServer) url() string { return fs.server.URL + "/feed.json" }
+
+func markStale(t *testing.T, s *Service, id string) {
+	t.Helper()
+	stale := time.Now().Add(-24 * time.Hour)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	src := s.findLocked(id)
+	if src == nil {
+		t.Fatalf("source %s not found", id)
+	}
+	src.LastUpdatedAt = &stale
+}
 
 func mustCatalog(t testing.TB, dir string) *catalog.Service {
 	t.Helper()
@@ -110,6 +131,8 @@ func mustServiceAt(t testing.TB, dir string, cat *catalog.Service) *Service {
 	if err != nil {
 		t.Fatalf("new sources service at %s: %v", dir, err)
 	}
+	// The shipped client refuses loopback, which is where httptest listens.
+	s.client = &http.Client{Timeout: feed.FetchTimeout}
 	return s
 }
 
@@ -632,5 +655,158 @@ func TestLargeFeedImport(t *testing.T) {
 	}
 	if refreshElapsed := time.Since(refreshStarted); refreshElapsed > 30*time.Second {
 		t.Fatalf("refresh took %s, too slow", refreshElapsed)
+	}
+}
+
+func TestScheduledRefreshBacksOffAfterFailure(t *testing.T) {
+	s, _, _ := testService(t)
+	server := newFeedServer(t, feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+	))
+	src := addSource(t, s, server.url())
+	markStale(t, s, src.ID)
+
+	server.fail(http.StatusInternalServerError)
+	before := server.count()
+
+	s.refreshDue()
+	if got := server.count(); got != before+1 {
+		t.Fatalf("hits = %d, want %d", got, before+1)
+	}
+
+	s.refreshDue()
+	s.refreshDue()
+	if got := server.count(); got != before+1 {
+		t.Fatalf("hits = %d, want %d: failing source must wait for its backoff", got, before+1)
+	}
+}
+
+func TestScheduledRefreshResumesAfterBackoff(t *testing.T) {
+	s, _, _ := testService(t)
+	server := newFeedServer(t, feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+	))
+	src := addSource(t, s, server.url())
+	markStale(t, s, src.ID)
+
+	server.fail(http.StatusInternalServerError)
+	s.refreshDue()
+
+	s.mu.Lock()
+	s.retryAt[src.ID] = time.Now().Add(-time.Second)
+	s.mu.Unlock()
+
+	server.fail(0)
+	before := server.count()
+	s.refreshDue()
+	if got := server.count(); got != before+1 {
+		t.Fatalf("hits = %d, want %d: expired backoff must allow a retry", got, before+1)
+	}
+
+	stored, err := s.GetSource(src.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.LastError != "" || stored.Health == HealthError {
+		t.Fatalf("source = %+v, want recovered state", stored)
+	}
+
+	s.mu.Lock()
+	_, pending := s.retryAt[src.ID]
+	failures := s.failures[src.ID]
+	s.mu.Unlock()
+	if pending || failures != 0 {
+		t.Fatalf("backoff = %v, failures = %d, want cleared after success", pending, failures)
+	}
+}
+
+func TestManualFailureArmsBackoff(t *testing.T) {
+	s, _, _ := testService(t)
+	server := newFeedServer(t, feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+	))
+	src := addSource(t, s, server.url())
+	server.fail(http.StatusInternalServerError)
+
+	if _, err := s.RefreshSource(src.ID); err == nil {
+		t.Fatal("expected refresh error")
+	}
+	s.mu.Lock()
+	failures := s.failures[src.ID]
+	s.mu.Unlock()
+	if failures != 1 {
+		t.Fatalf("failures = %d, want 1", failures)
+	}
+}
+
+func TestRetryDelayGrowsAndIsCapped(t *testing.T) {
+	cases := []struct {
+		failures int
+		interval time.Duration
+		want     time.Duration
+	}{
+		{1, 6 * time.Hour, time.Minute},
+		{2, 6 * time.Hour, 2 * time.Minute},
+		{4, 6 * time.Hour, 8 * time.Minute},
+		{20, 6 * time.Hour, maxRetryDelay},
+		{20, 10 * time.Minute, 10 * time.Minute},
+		{1, 30 * time.Second, 30 * time.Second},
+		{20, 0, maxRetryDelay},
+	}
+	for _, tc := range cases {
+		if got := retryDelay(tc.failures, tc.interval); got != tc.want {
+			t.Errorf("retryDelay(%d, %v) = %v, want %v", tc.failures, tc.interval, got, tc.want)
+		}
+	}
+}
+
+func TestURLSourceFetchPathsRejectLocalAddresses(t *testing.T) {
+	dir := t.TempDir()
+	cat := mustCatalog(t, dir)
+	s, err := newServiceAt(dir, nil, cat)
+	if err != nil {
+		t.Fatalf("new sources service at %s: %v", dir, err)
+	}
+	fs := newFeedServer(t, feedBody(t, "Local", feedEntry{Title: "Game A", URIs: []string{magnetOf("a")}}))
+
+	if _, err := s.TestSource(fs.url()); !errors.Is(err, feed.ErrBlockedAddress) {
+		t.Fatalf("TestSource error = %v, want ErrBlockedAddress", err)
+	}
+
+	added, err := s.AddSource(fs.url())
+	if !errors.Is(err, feed.ErrBlockedAddress) {
+		t.Fatalf("AddSource error = %v, want ErrBlockedAddress", err)
+	}
+	if added.ID == "" {
+		t.Fatal("AddSource returned no source to refresh")
+	}
+
+	if _, err := s.RefreshSource(added.ID); !errors.Is(err, feed.ErrBlockedAddress) {
+		t.Fatalf("RefreshSource error = %v, want ErrBlockedAddress", err)
+	}
+	if _, err := s.refresh(context.Background(), added.ID, true); !errors.Is(err, feed.ErrBlockedAddress) {
+		t.Fatalf("scheduled refresh error = %v, want ErrBlockedAddress", err)
+	}
+	if got := fs.count(); got != 0 {
+		t.Fatalf("feed server saw %d requests, want 0", got)
+	}
+}
+
+func TestSourceErrorHidesFeedURL(t *testing.T) {
+	dir := t.TempDir()
+	cat := mustCatalog(t, dir)
+	s, err := newServiceAt(dir, nil, cat)
+	if err != nil {
+		t.Fatalf("new sources service at %s: %v", dir, err)
+	}
+	const raw = "http://127.0.0.1:9/feed.json?token=s3cret"
+	if _, err := s.TestSource(raw); err == nil {
+		t.Fatal("expected the fetch to be rejected")
+	} else {
+		for _, leak := range []string{"s3cret", "token", "/feed.json"} {
+			if strings.Contains(err.Error(), leak) {
+				t.Fatalf("error leaks %q: %v", leak, err)
+			}
+		}
 	}
 }

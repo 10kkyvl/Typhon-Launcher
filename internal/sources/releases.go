@@ -418,7 +418,7 @@ func (s *Service) FindRelease(id string) (Release, bool) {
 func (s *Service) persistTouchedLocked(touched map[string]bool) {
 	for sourceID := range touched {
 		if err := s.store.saveReleases(sourceID, s.releases[sourceID]); err != nil {
-			slog.Error("save releases", "source", sourceID, "error", err)
+			slog.Error("save releases", "source_id", sourceID, "error", err)
 		}
 	}
 }

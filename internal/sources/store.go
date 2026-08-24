@@ -96,6 +96,6 @@ func (s *store) removeReleases(sourceID string) {
 		return
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Warn("remove releases file", "source", sourceID, "error", err)
+		slog.Warn("remove releases file", "source_id", sourceID, "error", err)
 	}
 }

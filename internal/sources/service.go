@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/sources/feed"
 
@@ -30,6 +33,7 @@ const (
 	refreshConcurrency = 2
 	refreshTimeout     = 3 * time.Minute
 	scheduleTick       = time.Minute
+	maxRetryDelay      = time.Hour
 )
 
 var (
@@ -37,6 +41,7 @@ var (
 	errSourceBusy     = errors.New("источник уже обновляется")
 	errSourceDisabled = errors.New("источник отключён")
 	errSourceExists   = errors.New("этот источник уже добавлен")
+	errNoDialog       = errors.New("диалог выбора файла недоступен")
 )
 
 type Service struct {
@@ -50,6 +55,8 @@ type Service struct {
 	releases map[string][]*Release
 
 	refreshing map[string]bool
+	failures   map[string]int
+	retryAt    map[string]time.Time
 	sem        chan struct{}
 	onChanged  func()
 
@@ -77,8 +84,10 @@ func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Se
 		settings:   settingsService,
 		releases:   map[string][]*Release{},
 		refreshing: map[string]bool{},
+		failures:   map[string]int{},
+		retryAt:    map[string]time.Time{},
 		sem:        make(chan struct{}, refreshConcurrency),
-		client:     &http.Client{Timeout: feed.FetchTimeout},
+		client:     feed.NewClient(),
 	}
 	if err := s.load(); err != nil {
 		return nil, err
@@ -93,6 +102,9 @@ func (s *Service) load() error {
 	}
 	for _, src := range srcs {
 		item := src
+		if item.Type == "" {
+			item.Type = TypeURL
+		}
 		s.sources = append(s.sources, &item)
 		stored, err := s.store.loadReleases(item.ID)
 		if err != nil {
@@ -208,31 +220,73 @@ func (s *Service) TestSource(rawURL string) (Preview, error) {
 
 	result, err := feed.Fetch(ctx, s.client, normalized, feed.Conditional{})
 	if err != nil {
-		slog.Warn("source test failed", "url", normalized, "error", err)
+		slog.Warn("source test failed", "operation", "test", "host", redact.URL(normalized), "error", err)
 		return Preview{}, err
 	}
+	return s.preview(TypeURL, normalized, result), nil
+}
+
+func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
+	path, err := feed.ValidatePath(rawPath)
+	if err != nil {
+		return Preview{}, err
+	}
+	ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
+	defer cancel()
+
+	result, err := feed.ReadFile(ctx, path)
+	if err != nil {
+		slog.Warn("source file test failed", "operation", "test", "error", err)
+		return Preview{}, err
+	}
+	return s.preview(TypeFile, path, result), nil
+}
+
+func (s *Service) SelectFeedFile() (string, error) {
+	app := application.Get()
+	if app == nil {
+		return "", errNoDialog
+	}
+	path, err := app.Dialog.OpenFile().
+		SetTitle("Выберите файл фида").
+		CanChooseFiles(true).
+		AddFilter("Файл фида (*.json)", "*.json").
+		AddFilter("Все файлы", "*.*").
+		PromptForSingleSelection()
+	if err != nil {
+		return "", fmt.Errorf("выбор файла фида: %w", err)
+	}
+	return path, nil
+}
+
+func (s *Service) preview(kind Type, location string, result feed.Result) Preview {
 	preview := Preview{
 		Name:        result.Feed.Name,
-		URL:         normalized,
+		Type:        kind,
 		FeedVersion: result.Feed.Version,
 		Entries:     len(result.Feed.Entries),
 		Invalid:     result.Feed.Invalid,
 		Warnings:    trimWarnings(result.Feed.Warnings),
 		Fingerprint: result.Feed.Fingerprint,
 	}
+	if kind == TypeFile {
+		preview.Path = location
+	} else {
+		preview.URL = location
+	}
 	if preview.Name == "" {
-		preview.Name = hostName(normalized)
+		preview.Name = displayName(kind, location)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, src := range s.sources {
-		if strings.EqualFold(src.URL, normalized) || (src.Fingerprint != "" && src.Fingerprint == preview.Fingerprint) {
+		if sameLocation(src, kind, location) || (src.Fingerprint != "" && src.Fingerprint == preview.Fingerprint) {
 			preview.Duplicate = true
 			break
 		}
 	}
-	return preview, nil
+	return preview
 }
 
 func (s *Service) AddSource(rawURL string) (Source, error) {
@@ -240,22 +294,38 @@ func (s *Service) AddSource(rawURL string) (Source, error) {
 	if err != nil {
 		return Source{}, err
 	}
+	return s.addSource(TypeURL, normalized)
+}
 
+func (s *Service) AddSourceFile(rawPath string) (Source, error) {
+	path, err := feed.ValidatePath(rawPath)
+	if err != nil {
+		return Source{}, err
+	}
+	return s.addSource(TypeFile, path)
+}
+
+func (s *Service) addSource(kind Type, location string) (Source, error) {
 	s.mu.Lock()
 	for _, src := range s.sources {
-		if strings.EqualFold(src.URL, normalized) {
+		if sameLocation(src, kind, location) {
 			s.mu.Unlock()
 			return Source{}, errSourceExists
 		}
 	}
 	src := &Source{
 		ID:        catalog.NewID(),
-		Name:      hostName(normalized),
-		URL:       normalized,
+		Name:      displayName(kind, location),
+		Type:      kind,
 		Enabled:   true,
 		Status:    StatusUpdating,
 		Health:    HealthHealthy,
 		CreatedAt: time.Now(),
+	}
+	if kind == TypeFile {
+		src.Path = location
+	} else {
+		src.URL = location
 	}
 	s.sources = append(s.sources, src)
 	s.releases[src.ID] = nil
@@ -269,7 +339,7 @@ func (s *Service) AddSource(rawURL string) (Source, error) {
 	snapshot := *src
 	s.mu.Unlock()
 
-	slog.Info("source added", "id", id, "url", normalized)
+	slog.Info("source added", "source_id", id, "type", string(kind))
 	emit(eventUpdated, snapshot)
 
 	if _, err := s.RefreshSource(id); err != nil {
@@ -290,13 +360,15 @@ func (s *Service) RemoveSource(id string) error {
 		name := src.Name
 		s.sources = append(s.sources[:i], s.sources[i+1:]...)
 		delete(s.releases, id)
+		delete(s.failures, id)
+		delete(s.retryAt, id)
 		if err := s.store.saveSources(flatten(s.sources)); err != nil {
 			s.mu.Unlock()
 			return err
 		}
 		s.store.removeReleases(id)
 		s.mu.Unlock()
-		slog.Info("source removed", "id", id, "name", name)
+		slog.Info("source removed", "source_id", id, "name", name)
 		emit(eventUpdated, Source{ID: id})
 		return nil
 	}
@@ -320,7 +392,7 @@ func (s *Service) SetSourceEnabled(id string, enabled bool) error {
 	snapshot := *src
 	s.mu.Unlock()
 
-	slog.Info("source enabled changed", "id", id, "enabled", enabled)
+	slog.Info("source enabled changed", "source_id", id, "enabled", enabled)
 	emit(eventUpdated, snapshot)
 	return nil
 }
@@ -395,7 +467,8 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	src.Status = StatusUpdating
 	initial := len(s.releases[id]) == 0
 	cond := feed.Conditional{ETag: src.ETag, LastModified: src.LastModified}
-	url := src.URL
+	kind := src.Type
+	location := locationOf(src)
 	name := src.Name
 	snapshot := *src
 	s.mu.Unlock()
@@ -407,10 +480,10 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.mu.Unlock()
 	}()
 
-	slog.Info("source refresh started", "id", id, "name", name)
-	result, err := feed.Fetch(ctx, s.client, url, cond)
+	slog.Info("source refresh started", "source_id", id, "name", name)
+	result, err := s.fetchFeed(ctx, kind, location, cond)
 	if err != nil {
-		s.fail(id, err)
+		s.fail(id, err, scheduled)
 		return Summary{}, err
 	}
 	if result.NotModified {
@@ -419,7 +492,16 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	return s.settle(id, parseEntries(id, result.Feed.Entries, time.Now()), result, started, initial, false), nil
 }
 
-func (s *Service) fail(id string, err error) {
+func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
+	if kind == TypeFile {
+		return feed.ReadFile(ctx, location)
+	}
+	return feed.Fetch(ctx, s.client, location, cond)
+}
+
+func (s *Service) fail(id string, err error, scheduled bool) {
+	interval := refreshInterval(s.config())
+
 	s.mu.Lock()
 	src := s.findLocked(id)
 	if src == nil {
@@ -429,15 +511,31 @@ func (s *Service) fail(id string, err error) {
 	src.Health = HealthError
 	src.LastError = err.Error()
 	src.Status = statusOf(src)
+	s.failures[id]++
+	s.retryAt[id] = time.Now().Add(retryDelay(s.failures[id], interval))
 	if saveErr := s.store.saveSources(flatten(s.sources)); saveErr != nil {
 		slog.Error("save sources", "error", saveErr)
 	}
 	snapshot := *src
 	s.mu.Unlock()
 
-	slog.Error("source refresh failed", "id", id, "name", snapshot.Name, "error", err)
+	slog.Error("source refresh failed", "source_id", id, "name", snapshot.Name, "error", err)
 	emit(eventUpdated, snapshot)
-	emit(eventError, SourceError{SourceID: id, Name: snapshot.Name, Message: err.Error()})
+	emit(eventError, SourceError{SourceID: id, Name: snapshot.Name, Message: err.Error(), Scheduled: scheduled})
+}
+
+func retryDelay(failures int, interval time.Duration) time.Duration {
+	delay := scheduleTick
+	for i := 1; i < failures && delay < maxRetryDelay; i++ {
+		delay *= 2
+	}
+	if delay > maxRetryDelay {
+		delay = maxRetryDelay
+	}
+	if interval > 0 && delay > interval {
+		delay = interval
+	}
+	return delay
 }
 
 func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool) Summary {
@@ -457,12 +555,12 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 		applyMatches(s.catalog, list)
 		s.releases[id] = list
 		if err := s.store.saveReleases(id, list); err != nil {
-			slog.Error("save releases", "source", id, "error", err)
+			slog.Error("save releases", "source_id", id, "error", err)
 		}
 		if result.Feed.Name != "" {
 			src.Name = result.Feed.Name
 		} else if src.Name == "" {
-			src.Name = hostName(src.URL)
+			src.Name = displayName(src.Type, locationOf(src))
 		}
 		src.FeedVersion = result.Feed.Version
 		src.Fingerprint = result.Feed.Fingerprint
@@ -477,6 +575,8 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	src.Unmatched = unmatched
 	src.LastError = ""
 	src.LastUpdatedAt = &now
+	delete(s.failures, id)
+	delete(s.retryAt, id)
 	if result.ETag != "" {
 		src.ETag = result.ETag
 	}
@@ -504,7 +604,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	s.mu.Unlock()
 
 	slog.Info("source refreshed",
-		"id", id,
+		"source_id", id,
 		"name", snapshot.Name,
 		"entries", summary.Entries,
 		"invalid", summary.Invalid,
@@ -583,6 +683,9 @@ func (s *Service) refreshDue() {
 		if !src.Enabled || s.refreshing[src.ID] {
 			continue
 		}
+		if next, ok := s.retryAt[src.ID]; ok && now.Before(next) {
+			continue
+		}
 		if src.LastUpdatedAt == nil || now.Sub(*src.LastUpdatedAt) >= interval {
 			due = append(due, src.ID)
 		}
@@ -597,7 +700,7 @@ func (s *Service) refreshDue() {
 		}
 		ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
 		if _, err := s.refresh(ctx, id, true); err != nil {
-			slog.Warn("scheduled refresh failed", "source", id, "error", err)
+			slog.Warn("scheduled refresh failed", "source_id", id, "error", err)
 		}
 		cancel()
 		<-s.sem
@@ -650,6 +753,45 @@ func trimWarnings(warnings []string) []string {
 		return append([]string(nil), warnings[:maxWarnings]...)
 	}
 	return warnings
+}
+
+func locationOf(src *Source) string {
+	if src.Type == TypeFile {
+		return src.Path
+	}
+	return src.URL
+}
+
+func sameLocation(src *Source, kind Type, location string) bool {
+	if src.Type != kind {
+		return false
+	}
+	if kind == TypeFile {
+		return samePath(src.Path, location)
+	}
+	return strings.EqualFold(src.URL, location)
+}
+
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+func displayName(kind Type, location string) string {
+	if kind == TypeFile {
+		return fileName(location)
+	}
+	return hostName(location)
+}
+
+func fileName(path string) string {
+	name := filepath.Base(path)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "Источник"
+	}
+	return name
 }
 
 func hostName(rawURL string) string {

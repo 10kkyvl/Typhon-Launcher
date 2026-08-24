@@ -6,6 +6,13 @@ import (
 	"typhon/internal/catalog"
 )
 
+type Type string
+
+const (
+	TypeURL  Type = "url"
+	TypeFile Type = "file"
+)
+
 type Status string
 
 const (
@@ -33,7 +40,9 @@ const (
 type Source struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
+	Type          Type       `json:"type"`
 	URL           string     `json:"url"`
+	Path          string     `json:"path,omitempty"`
 	Enabled       bool       `json:"enabled"`
 	Status        Status     `json:"status"`
 	Health        Health     `json:"health"`
@@ -150,7 +159,9 @@ type ReleasePage struct {
 
 type Preview struct {
 	Name        string   `json:"name"`
+	Type        Type     `json:"type"`
 	URL         string   `json:"url"`
+	Path        string   `json:"path,omitempty"`
 	FeedVersion int      `json:"feedVersion"`
 	Entries     int      `json:"entries"`
 	Invalid     int      `json:"invalid"`
@@ -186,9 +197,10 @@ type Details struct {
 }
 
 type SourceError struct {
-	SourceID string `json:"sourceId"`
-	Name     string `json:"name"`
-	Message  string `json:"message"`
+	SourceID  string `json:"sourceId"`
+	Name      string `json:"name"`
+	Message   string `json:"message"`
+	Scheduled bool   `json:"scheduled"`
 }
 
 type ReleaseBatch struct {
