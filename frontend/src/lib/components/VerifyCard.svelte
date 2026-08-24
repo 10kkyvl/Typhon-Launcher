@@ -6,16 +6,23 @@
   import StatusBadge from './StatusBadge.svelte';
   import type { VerifyState } from '../services/updates';
   import { createManifest, repair, verify } from '../stores/updates';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize, plural, relativeDate, truncateMiddle } from '../utils/format';
 
   let { gameId, state, running }: { gameId: string; state: VerifyState | undefined; running: boolean } =
     $props();
 
   const busy = $derived(Boolean(state?.running || state?.repairing));
-  const checked = $derived(Boolean(state?.checkedAt) && !busy);
   const unavailable = $derived(state?.method === 'unavailable');
-  const damaged = $derived(checked && ((state?.missingFiles ?? 0) > 0 || (state?.corruptedPieces ?? 0) > 0));
+  const checked = $derived(!unavailable && !busy && Boolean(state?.checkedAt));
+  const pending = $derived(!unavailable && !busy && !state?.checkedAt);
+  const missing = $derived(checked ? (state?.missingFiles ?? 0) : 0);
+  const corrupted = $derived(checked ? (state?.corruptedPieces ?? 0) : 0);
+  const unreadable = $derived(checked ? (state?.unreadableFiles ?? 0) : 0);
+  const damaged = $derived(missing > 0 || corrupted > 0);
   const percent = $derived(Math.round((state?.ratio ?? 0) * 1000) / 10);
+  const methodLabel = $derived(
+    state?.method === 'torrent' ? 'по торренту релиза' : 'по сохранённому манифесту',
+  );
 </script>
 
 <div class="section">
@@ -24,8 +31,12 @@
     <h3 class="card-title">Целостность файлов</h3>
     {#if unavailable}
       <StatusBadge kind="neutral" label="Проверка недоступна" dot={false} />
+    {:else if pending}
+      <StatusBadge kind="neutral" label="Не проверялось" dot={false} />
     {:else if damaged}
       <StatusBadge kind="warning" label="Найдены повреждения" />
+    {:else if unreadable > 0}
+      <StatusBadge kind="neutral" label="Проверено не всё" dot={false} />
     {:else if checked}
       <StatusBadge kind="success" label="Файлы в порядке" dot={false} />
     {/if}
@@ -33,15 +44,18 @@
 
   {#if unavailable}
     <p class="muted">
-      Установка не связана с релизом — сверять не с чем. Можно записать манифест текущих файлов, тогда
-      последующие проверки покажут, что изменилось.
+      Сверять не с чем: релиз не даёт пригодного для проверки состава файлов, а манифест ещё не записан.
+      Запишите манифест текущих файлов — последующие проверки покажут, что изменилось.
     </p>
     <div class="actions">
-      <Button disabled={busy} onclick={() => createManifest(gameId)}>
+      <Button disabled={busy || running} onclick={() => createManifest(gameId)}>
         <FileCheck size="1.5rem" strokeWidth={1.8} />
         Создать манифест
       </Button>
     </div>
+    {#if running}
+      <p class="muted">Игра запущена. Закройте её, чтобы записать манифест.</p>
+    {/if}
   {:else if busy}
     <div class="progress">
       <ProgressBar value={(state?.progress ?? 0) * 100} />
@@ -53,28 +67,43 @@
   {:else if checked}
     <dl class="summary">
       <div>
-        <dt>Проверено</dt>
+        <dt>Совпало</dt>
         <dd>{percent}%</dd>
       </div>
       <div>
-        <dt>Совпало</dt>
+        <dt>Проверено</dt>
         <dd>{bytesSize(state?.okBytes ?? 0)} из {bytesSize(state?.totalBytes ?? 0)}</dd>
       </div>
-      {#if (state?.missingFiles ?? 0) > 0}
+      {#if missing > 0}
         <div>
           <dt>Отсутствуют</dt>
-          <dd>{state?.missingFiles} файлов</dd>
+          <dd>{missing} {plural(missing, 'файл', 'файла', 'файлов')}</dd>
         </div>
       {/if}
-      {#if (state?.corruptedPieces ?? 0) > 0}
+      {#if corrupted > 0}
         <div>
           <dt>Повреждены</dt>
-          <dd>{state?.corruptedPieces} блоков</dd>
+          <dd>{corrupted} {plural(corrupted, 'блок', 'блока', 'блоков')}</dd>
+        </div>
+      {/if}
+      {#if unreadable > 0}
+        <div>
+          <dt>Не прочитаны</dt>
+          <dd>{unreadable} {plural(unreadable, 'файл', 'файла', 'файлов')}</dd>
         </div>
       {/if}
     </dl>
+    <p class="muted">
+      Сверка {methodLabel}, {relativeDate(state?.checkedAt ?? null).toLowerCase()}.
+      {#if unreadable > 0}
+        Часть файлов была занята другой программой — это не повреждение, повторите проверку позже.
+      {/if}
+    </p>
   {:else}
-    <p class="muted">Проверка сверяет файлы на диске с торрентом релиза или сохранённым манифестом.</p>
+    <p class="muted">
+      Проверка сверяет файлы на диске с торрентом релиза или с сохранённым манифестом. Результат
+      относится к текущей версии и каталогу установки.
+    </p>
   {/if}
 
   {#if state?.error}
@@ -83,7 +112,7 @@
 
   {#if !unavailable}
     <div class="actions">
-      <Button disabled={busy} onclick={() => verify(gameId)}>
+      <Button disabled={busy || running} onclick={() => verify(gameId)}>
         <FileCheck size="1.5rem" strokeWidth={1.8} />
         Проверить файлы
       </Button>
@@ -94,8 +123,8 @@
         </Button>
       {/if}
     </div>
-    {#if damaged && state?.repairable && running}
-      <p class="muted">Игра запущена. Закройте её перед восстановлением.</p>
+    {#if running}
+      <p class="muted">Игра запущена. Закройте её перед проверкой файлов.</p>
     {/if}
   {/if}
 </Card>

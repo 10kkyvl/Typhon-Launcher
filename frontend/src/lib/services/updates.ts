@@ -12,7 +12,7 @@ export type UpdateState =
 
 export type AvailabilityKind = 'none' | 'update' | 'new_release';
 export type StrategyType = '' | 'full_release' | 'torrent_reuse' | 'patch_chain';
-export type VerifyMethod = 'torrent' | 'manifest' | 'unavailable';
+export type VerifyMethod = 'pending' | 'torrent' | 'manifest' | 'unavailable';
 export type StepKind =
   | 'download'
   | 'recheck'
@@ -90,7 +90,7 @@ export interface Update {
 
 export interface ManifestIssue {
   path: string;
-  kind: 'missing' | 'corrupted' | 'size';
+  kind: 'missing' | 'corrupted' | 'size' | 'unreadable';
 }
 
 export interface VerifyState {
@@ -105,11 +105,16 @@ export interface VerifyState {
   okBytes: number;
   missingFiles: number;
   corruptedPieces: number;
+  unreadableFiles: number;
   issues?: ManifestIssue[];
   extra?: string[];
   repairable: boolean;
   flat?: boolean;
+  layout?: string;
   infoHash?: string;
+  releaseId?: string;
+  version?: string;
+  installDir?: string;
   checkedAt: string | null;
   error?: string;
 }
