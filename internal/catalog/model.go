@@ -13,16 +13,25 @@ func (e ExternalIDs) empty() bool {
 }
 
 type Game struct {
-	ID          string      `json:"id"`
-	Title       string      `json:"title"`
-	SortTitle   string      `json:"sortTitle"`
-	ReleaseYear *int        `json:"releaseYear,omitempty"`
-	Developer   string      `json:"developer,omitempty"`
-	Publisher   string      `json:"publisher,omitempty"`
-	ExternalIDs ExternalIDs `json:"externalIds"`
-	Aliases     []string    `json:"aliases,omitempty"`
-	Provisional bool        `json:"provisional,omitempty"`
-	CreatedAt   time.Time   `json:"createdAt"`
+	ID                string      `json:"id"`
+	Title             string      `json:"title"`
+	SortTitle         string      `json:"sortTitle"`
+	ReleaseYear       *int        `json:"releaseYear,omitempty"`
+	ReleaseDate       *time.Time  `json:"releaseDate,omitempty"`
+	Summary           string      `json:"summary,omitempty"`
+	Developer         string      `json:"developer,omitempty"`
+	Publisher         string      `json:"publisher,omitempty"`
+	Genres            []string    `json:"genres,omitempty"`
+	Themes            []string    `json:"themes,omitempty"`
+	Platforms         []string    `json:"platforms,omitempty"`
+	ExternalIDs       ExternalIDs `json:"externalIds"`
+	Aliases           []string    `json:"aliases,omitempty"`
+	CoverAssetID      string      `json:"coverAssetId,omitempty"`
+	HeroAssetID       string      `json:"heroAssetId,omitempty"`
+	MetadataUpdatedAt *time.Time  `json:"metadataUpdatedAt,omitempty"`
+	MetadataPartial   bool        `json:"metadataPartial,omitempty"`
+	Provisional       bool        `json:"provisional,omitempty"`
+	CreatedAt         time.Time   `json:"createdAt"`
 }
 
 type MatchOverride struct {
