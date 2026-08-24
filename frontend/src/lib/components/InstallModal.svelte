@@ -55,6 +55,7 @@
   const controlled = $derived(plan ? isControlled(plan.type) : false);
   const external = $derived(plan ? isExternal(plan.type) : false);
   const portable = $derived(plan?.type === 'portable');
+  const silent = $derived(plan?.silent ?? false);
   const notEnoughSpace = $derived(
     !!info && info.requiredBytes > 0 && info.freeBytes > 0 && info.freeBytes < info.requiredBytes,
   );
@@ -74,6 +75,7 @@
   const externalWait = $derived(
     !!installation &&
       isExternal(installation.type) &&
+      !installation.silent &&
       (installation.status === 'pending' || installation.status === 'preparing' || installation.status === 'installing'),
   );
 
@@ -96,7 +98,7 @@
         return 'Распаковать и установить';
       case 'exe_installer':
       case 'msi_installer':
-        return 'Запустить установщик';
+        return silent ? 'Установить' : 'Запустить установщик';
       default:
         return '';
     }
@@ -184,7 +186,7 @@
     if (!current) return;
     return run(async () => {
       const item = await startInstall(current.downloadId, {
-        destination: controlled ? destination : '',
+        destination: controlled || silent ? destination : '',
         mode: portable ? (current.seeding ? 'copy' : mode) : '',
         type: current.plan.type,
         installerPath: current.plan.installerPath,
@@ -311,7 +313,7 @@
         <p class="note danger">Недостаточно места на диске для установки.</p>
       {/if}
 
-      {#if controlled}
+      {#if controlled || silent}
         <div class="field">
           <span class="field-label">Папка установки</span>
           <div class="field-controls">
@@ -333,7 +335,11 @@
       {/if}
 
       {#if external}
-        <p class="note">Установщик откроется в отдельном окне</p>
+        {#if silent}
+          <p class="note">Игра установится сама в выбранную папку, окно установщика не появится</p>
+        {:else}
+          <p class="note">Установщик откроется в отдельном окне</p>
+        {/if}
       {/if}
 
       {#if plan.type === 'unknown'}
@@ -434,7 +440,7 @@
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
-          disabled={busy || notEnoughSpace || (controlled && destination.trim() === '')}
+          disabled={busy || notEnoughSpace || ((controlled || silent) && destination.trim() === '')}
           onclick={start}
         >
           {primaryLabel}
