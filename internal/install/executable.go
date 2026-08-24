@@ -130,6 +130,36 @@ func FindExecutables(ctx context.Context, root, title string) ([]Candidate, erro
 	return out, nil
 }
 
+// LooksInstalled отвечает на вопрос «этот каталог — установленная игра»:
+// Inspect тем же правилом опознаёт портируемую сборку, но до него добирается
+// только после проверок на установщик и архив, которые для уже установленной
+// игры дают ложный ответ.
+func LooksInstalled(ctx context.Context, dir, title string) ([]Candidate, bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, false, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	dirCount := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			dirCount++
+		}
+	}
+	candidates, err := FindExecutables(ctx, dir, title)
+	if err != nil {
+		return nil, false, err
+	}
+	assets, err := hasAssets(dir)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, installedLayout(candidates, dirCount, assets), nil
+}
+
+func installedLayout(candidates []Candidate, dirCount int, assets bool) bool {
+	return len(candidates) > 0 && (dirCount > 0 || assets)
+}
+
 func HighConfidence(c []Candidate) bool {
 	if len(c) == 0 {
 		return false
