@@ -22,8 +22,6 @@ Thumbs.db
 
 .claude/*
 !.claude/settings.json
-AGENTS.md
-AGENTS.local.md
 *.local.md
 
 typhon.exe
