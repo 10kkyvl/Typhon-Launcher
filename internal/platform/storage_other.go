@@ -4,11 +4,15 @@ package platform
 
 import (
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
 
 func GetStorageInfo(path string) (StorageInfo, error) {
+	if strings.TrimSpace(path) == "" {
+		return StorageInfo{}, ErrEmptyPath
+	}
 	dir := nearestExistingDir(path)
 	var stat unix.Statfs_t
 	if err := unix.Statfs(dir, &stat); err != nil {

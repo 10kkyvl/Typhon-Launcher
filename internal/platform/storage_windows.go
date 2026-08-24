@@ -3,12 +3,16 @@ package platform
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 func GetStorageInfo(path string) (StorageInfo, error) {
+	if strings.TrimSpace(path) == "" {
+		return StorageInfo{}, ErrEmptyPath
+	}
 	dir := nearestExistingDir(path)
 	dirPtr, err := windows.UTF16PtrFromString(dir)
 	if err != nil {
