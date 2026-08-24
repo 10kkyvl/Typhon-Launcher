@@ -140,6 +140,24 @@ func readSetActivitySafe(conn io.Reader) (setActivityCommand, error) {
 	return cmd, nil
 }
 
+// ackSetActivity отвечает на команду так же, как настоящий Discord: сервис
+// дочитывает ответ на каждую отправленную активность, и без ответа следующая
+// не уйдёт.
+func ackSetActivity(conn io.Writer, cmd setActivityCommand) error {
+	return writeJSON(conn, opFrame, map[string]any{"cmd": cmd.Cmd, "nonce": cmd.Nonce, "evt": nil, "data": nil})
+}
+
+func readAndAckSetActivity(conn io.ReadWriter) (setActivityCommand, error) {
+	cmd, err := readSetActivitySafe(conn)
+	if err != nil {
+		return setActivityCommand{}, err
+	}
+	if err := ackSetActivity(conn, cmd); err != nil {
+		return setActivityCommand{}, err
+	}
+	return cmd, nil
+}
+
 // TestClearAndDisabledSendNullActivity ловит регрессию, где Clear/SetEnabled(false)
 // перестали бы слать активити с "activity":null (например, если бы omitempty
 // проглотил nil-указатель, или снапшот продолжал бы отдавать старое presence).
@@ -183,7 +201,7 @@ func startActivityFeed(t *testing.T) (<-chan bool, <-chan error, *Service) {
 			return
 		}
 		for {
-			cmd, err := readSetActivitySafe(server)
+			cmd, err := readAndAckSetActivity(server)
 			if err != nil {
 				return
 			}
@@ -424,7 +442,7 @@ func TestDisableClosesConnectionAfterNullActivity(t *testing.T) {
 			return
 		}
 		for {
-			cmd, err := readSetActivitySafe(server)
+			cmd, err := readAndAckSetActivity(server)
 			if err != nil {
 				close(closed)
 				return
@@ -466,6 +484,122 @@ func TestDisableClosesConnectionAfterNullActivity(t *testing.T) {
 
 	if got := atomic.LoadInt32(&dials); got != 1 {
 		t.Fatalf("dials after disable = %d, want 1 (service must not reconnect while disabled)", got)
+	}
+}
+
+// serialPipe воспроизводит семантику синхронного хэндла именованного канала в
+// Windows: операции идут по одной, поэтому висящее чтение задерживает запись
+// до своего завершения. net.Pipe так себя не ведёт и потому пропускал
+// регрессию, из-за которой presence не уходил в Discord ни разу за сессию:
+// постоянная читающая горутина занимала хэндл, а Discord первым ничего не
+// шлёт, и отправка активности блокировалась навсегда.
+type serialPipe struct {
+	mu     sync.Mutex
+	in     chan byte
+	out    chan byte
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newSerialPipe() *serialPipe {
+	return &serialPipe{
+		in:     make(chan byte, 4096),
+		out:    make(chan byte, 4096),
+		closed: make(chan struct{}),
+	}
+}
+
+func (p *serialPipe) Read(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return readBytes(b, p.in, p.closed)
+}
+
+func (p *serialPipe) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return writeBytes(b, p.out, p.closed)
+}
+
+func (p *serialPipe) Close() error {
+	p.once.Do(func() { close(p.closed) })
+	return nil
+}
+
+// peer — вторая сторона канала: она не делит хэндл с клиентом и читает с
+// записью параллельно, как настоящий сервер Discord.
+type peer struct{ p *serialPipe }
+
+func (s peer) Read(b []byte) (int, error)  { return readBytes(b, s.p.out, s.p.closed) }
+func (s peer) Write(b []byte) (int, error) { return writeBytes(b, s.p.in, s.p.closed) }
+
+func readBytes(b []byte, src <-chan byte, closed <-chan struct{}) (int, error) {
+	for n := range b {
+		select {
+		case v := <-src:
+			b[n] = v
+		case <-closed:
+			if n == 0 {
+				return 0, io.EOF
+			}
+			return n, io.ErrUnexpectedEOF
+		}
+	}
+	return len(b), nil
+}
+
+func writeBytes(b []byte, dst chan<- byte, closed <-chan struct{}) (int, error) {
+	for n, v := range b {
+		select {
+		case dst <- v:
+		case <-closed:
+			return n, io.ErrClosedPipe
+		}
+	}
+	return len(b), nil
+}
+
+func TestPresenceReachesDiscordOnSerialHandle(t *testing.T) {
+	pipe := newSerialPipe()
+	svc := newTestService(t, func(context.Context) (io.ReadWriteCloser, error) { return pipe, nil })
+
+	server := peer{p: pipe}
+	shown := make(chan setActivityCommand, 4)
+	errCh := make(chan error, 1)
+	go func() {
+		if _, err := writeReadyHandshakeSafe(server); err != nil {
+			errCh <- err
+			return
+		}
+		for {
+			cmd, err := readAndAckSetActivity(server)
+			if err != nil {
+				return
+			}
+			shown <- cmd
+		}
+	}()
+
+	svc.SetEnabled(true)
+	startService(t, svc)
+	svc.Show(Presence{Details: "В игре", State: "Всего 19 мин"})
+
+	deadline := time.After(testTimeout)
+	for {
+		select {
+		case cmd := <-shown:
+			if cmd.Args.Activity == nil || cmd.Args.Activity.Details != "В игре" {
+				continue
+			}
+			return
+		case err := <-errCh:
+			t.Fatalf("fake server: %v", err)
+		case <-deadline:
+			t.Fatal("presence не дошёл до Discord: отправка заблокирована чтением на том же хэндле")
+		}
 	}
 }
 

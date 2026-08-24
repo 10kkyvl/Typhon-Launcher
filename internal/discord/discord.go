@@ -243,12 +243,7 @@ func (s *Service) serve(ctx context.Context, conn io.ReadWriteCloser) error {
 		return err
 	}
 
-	frames := make(chan ipcFrame, 1)
-	readErr := make(chan error, 1)
-	s.wg.Add(1)
-	go s.readLoop(ctx, conn, frames, readErr)
-
-	if err := sendActivity(conn, nextNonce(), s.snapshot()); err != nil {
+	if err := exchange(conn, s.snapshot()); err != nil {
 		closeConn(conn)
 		return err
 	}
@@ -260,51 +255,48 @@ func (s *Service) serve(ctx context.Context, conn io.ReadWriteCloser) error {
 			return ctx.Err()
 		case <-s.wake:
 			if !s.isEnabled() {
-				err := sendActivity(conn, nextNonce(), nil)
+				err := exchange(conn, nil)
 				closeConn(conn)
 				if err != nil {
 					return err
 				}
 				return errDisabled
 			}
-			if err := sendActivity(conn, nextNonce(), s.snapshot()); err != nil {
+			if err := exchange(conn, s.snapshot()); err != nil {
 				closeConn(conn)
 				return err
 			}
-		case f := <-frames:
-			switch f.op {
-			case opPing:
-				if err := writeFrame(conn, opPong, f.payload); err != nil {
-					closeConn(conn)
-					return err
-				}
-			case opClose:
-				closeConn(conn)
-				return ErrConnectionClosed
-			case opFrame:
-				if err := commandError(f.payload); err != nil {
-					slog.Warn("discord отклонил активность", "error", err)
-				}
-			}
-		case err := <-readErr:
-			closeConn(conn)
-			return err
 		}
 	}
 }
 
-func (s *Service) readLoop(ctx context.Context, r io.Reader, frames chan<- ipcFrame, errc chan<- error) {
-	defer s.wg.Done()
+// exchange отправляет активность и сам дочитывает ответ на неё. Отдельной
+// читающей горутины быть не должно: в Windows именованный канал открыт
+// синхронным хэндлом, операции на нём выполняются по одной, и висящее чтение
+// задерживает любую запись до своего завершения. Discord первым ничего не
+// шлёт, поэтому такое чтение не заканчивается никогда, а вместе с ним
+// навсегда застревает и отправка presence.
+func exchange(conn io.ReadWriter, p *Presence) error {
+	if err := sendActivity(conn, nextNonce(), p); err != nil {
+		return err
+	}
 	for {
-		f, err := readFrame(r)
+		f, err := readFrame(conn)
 		if err != nil {
-			errc <- err
-			return
+			return err
 		}
-		select {
-		case frames <- f:
-		case <-ctx.Done():
-			return
+		switch f.op {
+		case opPing:
+			if err := writeFrame(conn, opPong, f.payload); err != nil {
+				return err
+			}
+		case opClose:
+			return ErrConnectionClosed
+		case opFrame:
+			if err := commandError(f.payload); err != nil {
+				slog.Warn("discord отклонил активность", "error", err)
+			}
+			return nil
 		}
 	}
 }
