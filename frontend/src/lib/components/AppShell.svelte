@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { route } from '../stores/router';
+  import { scrollmemory } from '../utils/scrollmemory';
+  import ActivityDock from './ActivityDock.svelte';
   import Sidebar from './Sidebar.svelte';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
@@ -13,7 +15,7 @@
   <div class="main">
     <Topbar />
     {#key $route}
-      <main class="content">
+      <main class="content" use:scrollmemory>
         <div class="page">
           {@render children?.()}
         </div>
@@ -22,9 +24,28 @@
   </div>
 </div>
 
-<Toasts />
+<div class="corner">
+  <Toasts />
+  <ActivityDock />
+</div>
 
 <style>
+  .corner {
+    position: fixed;
+    z-index: 120;
+    right: 2.4rem;
+    bottom: 2.4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.8rem;
+    pointer-events: none;
+  }
+
+  .corner > :global(*) {
+    pointer-events: auto;
+  }
+
   .shell {
     display: flex;
     height: 100vh;

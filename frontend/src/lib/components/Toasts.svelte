@@ -3,29 +3,28 @@
   import { toasts } from '../stores/toasts';
 </script>
 
-<div class="toasts">
-  {#each $toasts as t (t.id)}
-    <div class="toast {t.kind}">
-      {#if t.kind === 'success'}
-        <CircleCheck size="1.6rem" strokeWidth={1.8} />
-      {:else if t.kind === 'danger'}
-        <CircleAlert size="1.6rem" strokeWidth={1.8} />
-      {:else}
-        <Info size="1.6rem" strokeWidth={1.8} />
-      {/if}
-      <span>{t.message}</span>
-    </div>
-  {/each}
-</div>
+{#if $toasts.length > 0}
+  <div class="toasts">
+    {#each $toasts as t (t.id)}
+      <div class="toast {t.kind}">
+        {#if t.kind === 'success'}
+          <CircleCheck size="1.6rem" strokeWidth={1.8} />
+        {:else if t.kind === 'danger'}
+          <CircleAlert size="1.6rem" strokeWidth={1.8} />
+        {:else}
+          <Info size="1.6rem" strokeWidth={1.8} />
+        {/if}
+        <span>{t.message}</span>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .toasts {
-    position: fixed;
-    z-index: 120;
-    right: 2.4rem;
-    bottom: 2.4rem;
     display: flex;
     flex-direction: column;
+    align-items: flex-end;
     gap: 0.8rem;
   }
 
