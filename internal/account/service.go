@@ -78,6 +78,18 @@ func (s *Service) token() (string, error) {
 	return cred.Token, nil
 }
 
+//wails:ignore
+func (s *Service) SessionToken() (string, error) {
+	token, err := s.token()
+	if errors.Is(err, ErrNoCredential) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)

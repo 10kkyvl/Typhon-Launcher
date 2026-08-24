@@ -24,7 +24,7 @@ func BaseURL() string {
 	return strings.TrimSuffix(base, "/")
 }
 
-func validateBaseURL(raw string) (string, error) {
+func ValidateBaseURL(raw string) (string, error) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(raw), "/")
 	if trimmed == "" {
 		return "", ErrEmptyBaseURL

@@ -26,7 +26,7 @@ func TestValidateBaseURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := validateBaseURL(tt.raw)
+			got, err := ValidateBaseURL(tt.raw)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error for %q, got %q", tt.raw, got)
@@ -81,7 +81,7 @@ func TestCheckRedirectDropsAuthorization(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req, via := newRedirectRequest(t, tt.from, tt.to)
-			err := checkRedirect(req, via)
+			err := CheckRedirect(req, via)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected redirect to be rejected")
@@ -104,7 +104,7 @@ func TestCheckRedirectLimit(t *testing.T) {
 	for i := range via {
 		via[i] = &http.Request{URL: req.URL, Header: http.Header{}}
 	}
-	if err := checkRedirect(req, via); err == nil {
+	if err := CheckRedirect(req, via); err == nil {
 		t.Fatal("expected redirect limit error")
 	}
 }

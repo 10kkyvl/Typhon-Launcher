@@ -59,7 +59,7 @@ func newTransport() *http.Transport {
 	}
 }
 
-func checkRedirect(req *http.Request, via []*http.Request) error {
+func CheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
 		return fmt.Errorf("stopped after %d redirects", maxRedirects)
 	}
@@ -74,7 +74,7 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 }
 
 func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
-	base, err := validateBaseURL(baseURL)
+	base, err := ValidateBaseURL(baseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +84,12 @@ func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
 		httpClient: &http.Client{
 			Timeout:       30 * time.Second,
 			Transport:     newTransport(),
-			CheckRedirect: checkRedirect,
+			CheckRedirect: CheckRedirect,
 		},
 		uploadHTTP: &http.Client{
 			Timeout:       120 * time.Second,
 			Transport:     newTransport(),
-			CheckRedirect: checkRedirect,
+			CheckRedirect: CheckRedirect,
 		},
 	}, nil
 }
