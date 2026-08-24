@@ -307,3 +307,32 @@ func TestDiscordRichPresenceMissingInOldConfig(t *testing.T) {
 		t.Fatal("legacy config must keep Discord presence off")
 	}
 }
+
+func TestSourcesNoticeNotAcceptedByDefault(t *testing.T) {
+	if Defaults().SourcesNoticeAccepted {
+		t.Fatal("sources notice accepted by default")
+	}
+}
+
+func TestSourcesNoticeAcceptanceSurvivesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.SourcesNoticeAccepted = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if !mustServiceAt(t, path).GetSettings().SourcesNoticeAccepted {
+		t.Fatal("acceptance not persisted")
+	}
+}
+
+func TestSourcesNoticeMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"minimizeToTray":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if mustServiceAt(t, path).GetSettings().SourcesNoticeAccepted {
+		t.Fatal("legacy config must not count as accepted")
+	}
+}
