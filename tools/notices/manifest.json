@@ -186,10 +186,11 @@
     {
       "name": "@wailsio/runtime",
       "version": "3.0.0-beta.10",
-      "license": "MIT (заявлено в package.json, не подтверждено локально)",
-      "source": "manual",
-      "manualReview": true,
-      "note": "В package.json заявлена лицензия MIT, но файла LICENSE в самом пакете нет; текст нужно сверить с апстрим-репозиторием wailsapp/wails перед распространением."
+      "license": "MIT",
+      "source": "go",
+      "licenseFile": "LICENSE",
+      "licenseFrom": "github.com/wailsapp/wails/v3@v3.0.0-beta.10",
+      "note": "Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля."
     },
     {
       "name": "Microsoft Edge WebView2 Runtime",
@@ -197,7 +198,7 @@
       "license": "Условия распространения Microsoft (не Go/npm-модуль)",
       "source": "manual",
       "manualReview": true,
-      "note": "Bootstrapper скачивается на этапе сборки (build/windows/Taskfile.yml) и устанавливается NSIS-инсталлятором Typhon; распространяется на отдельных условиях Microsoft, текст лицензии в репозитории не хранится."
+      "note": "Bootstrapper скачивается на этапе сборки (build/windows/Taskfile.yml) и устанавливается NSIS-инсталлятором Typhon. Это не Go- и не npm-модуль: текста лицензии в репозитории нет, распространение регулируется отдельными условиями Microsoft для WebView2 Runtime. Перед публичным распространением сверить действующую редакцию условий у Microsoft и приложить её отдельно."
     }
   ]
 }

@@ -107,6 +107,16 @@ func TestLicensePath(t *testing.T) {
 			want: filepath.Join("npm", "left-pad", "LICENSE.md"),
 		},
 		{
+			name: "go module borrowing another module license",
+			c:    Component{Name: "@scope/pkg", Version: "1.0.0", Source: "go", LicenseFile: "LICENSE", LicenseFrom: "github.com/foo/bar@v1.2.3"},
+			want: filepath.Join("cache", "github.com/foo/bar@v1.2.3", "LICENSE"),
+		},
+		{
+			name: "npm package borrowing another package license",
+			c:    Component{Name: "@scope/pkg", Version: "1.0.0", Source: "npm", LicenseFile: "LICENSE", LicenseFrom: "other-pkg"},
+			want: filepath.Join("npm", "other-pkg", "LICENSE"),
+		},
+		{
 			name:    "unknown source",
 			c:       Component{Name: "foo", Source: "cargo"},
 			wantErr: true,

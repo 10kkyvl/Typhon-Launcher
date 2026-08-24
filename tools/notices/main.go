@@ -26,6 +26,7 @@ type Component struct {
 	License      string `json:"license"`
 	Source       string `json:"source"`
 	LicenseFile  string `json:"licenseFile"`
+	LicenseFrom  string `json:"licenseFrom"`
 	ManualReview bool   `json:"manualReview"`
 	Note         string `json:"note"`
 }
@@ -88,9 +89,17 @@ func validateComponent(c Component) error {
 func licensePath(c Component, goModCache, npmRoot string) (string, error) {
 	switch c.Source {
 	case "go":
-		return filepath.Join(goModCache, c.Name+"@"+c.Version, c.LicenseFile), nil
+		dir := c.LicenseFrom
+		if dir == "" {
+			dir = c.Name + "@" + c.Version
+		}
+		return filepath.Join(goModCache, dir, c.LicenseFile), nil
 	case "npm":
-		return filepath.Join(npmRoot, c.Name, c.LicenseFile), nil
+		dir := c.LicenseFrom
+		if dir == "" {
+			dir = c.Name
+		}
+		return filepath.Join(npmRoot, dir, c.LicenseFile), nil
 	default:
 		return "", fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
 	}

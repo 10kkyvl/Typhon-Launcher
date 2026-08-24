@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | @fontsource-variable/inter-tight | 5.3.0 | OFL-1.1 |
 | @lucide/svelte | 1.33.0 | ISC |
-| @wailsio/runtime | 3.0.0-beta.10 | MIT (заявлено в package.json, не подтверждено локально) |
+| @wailsio/runtime | 3.0.0-beta.10 | MIT |
 | Microsoft Edge WebView2 Runtime | - | Условия распространения Microsoft (не Go/npm-модуль) |
 | github.com/anacrolix/btree | v0.0.0-20251201064447-d86c3fa41bd8 | Apache-2.0 |
 | github.com/anacrolix/chansync | v0.7.0 | MIT |
@@ -41,6 +41,8 @@
 | golang.org/x/time | v0.14.0 | BSD-3-Clause |
 | svelte | 5.56.9 | MIT |
 
+Примечание (@wailsio/runtime): Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля.
+
 Примечание (svelte): Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon.
 
 ## MPL-2.0
@@ -59,17 +61,11 @@ Typhon использует перечисленные ниже модули п�
 
 ## Требуют ручной проверки
 
-### @wailsio/runtime 3.0.0-beta.10
-
-Заявленная лицензия: MIT (заявлено в package.json, не подтверждено локально).
-
-В package.json заявлена лицензия MIT, но файла LICENSE в самом пакете нет; текст нужно сверить с апстрим-репозиторием wailsapp/wails перед распространением.
-
 ### Microsoft Edge WebView2 Runtime
 
 Заявленная лицензия: Условия распространения Microsoft (не Go/npm-модуль).
 
-Bootstrapper скачивается на этапе сборки (build/windows/Taskfile.yml) и устанавливается NSIS-инсталлятором Typhon; распространяется на отдельных условиях Microsoft, текст лицензии в репозитории не хранится.
+Bootstrapper скачивается на этапе сборки (build/windows/Taskfile.yml) и устанавливается NSIS-инсталлятором Typhon. Это не Go- и не npm-модуль: текста лицензии в репозитории нет, распространение регулируется отдельными условиями Microsoft для WebView2 Runtime. Перед публичным распространением сверить действующую редакцию условий у Microsoft и приложить её отдельно.
 
 ## Приложение: тексты лицензий
 
@@ -199,6 +195,32 @@ airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circl
 The MIT License (MIT) (for the icons listed above)
 
 Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### MIT — @wailsio/runtime 3.0.0-beta.10, github.com/wailsapp/wails/v3 v3.0.0-beta.10
+
+```
+MIT License
+
+Copyright (c) 2018-Present Lea Anthony
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1332,32 +1354,6 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-### MIT — github.com/wailsapp/wails/v3 v3.0.0-beta.10
-
-```
-MIT License
-
-Copyright (c) 2018-Present Lea Anthony
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 ```
 
 ### BSD-3-Clause — golang.org/x/sync v0.22.0, golang.org/x/sys v0.47.0, golang.org/x/time v0.14.0
