@@ -62,12 +62,12 @@ type client struct {
 }
 
 func newClient(cfg settings.Settings, metaDir string) (*client, error) {
-	tc := clientConfig(cfg, listenPort)
+	tc := clientConfig(cfg, metaDir, listenPort)
 	cl, err := torrent.NewClient(tc)
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, 0)
+		tc = clientConfig(cfg, metaDir, 0)
 		cl, err = torrent.NewClient(tc)
 	}
 	if err != nil {
@@ -78,15 +78,15 @@ func newClient(cfg settings.Settings, metaDir string) (*client, error) {
 	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
 }
 
-func clientConfig(cfg settings.Settings, port int) *torrent.ClientConfig {
+func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.ClientConfig {
 	tc := torrent.NewDefaultClientConfig()
-	tc.DataDir = cfg.DownloadsPath
+	tc.DataDir = dataDir
 	tc.ListenPort = port
 	tc.Seed = true
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)
-	tc.DefaultStorage = storage.NewFileWithCompletion(cfg.DownloadsPath, storage.NewMapPieceCompletion())
+	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, storage.NewMapPieceCompletion())
 	return tc
 }
 
@@ -161,14 +161,16 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	}
 	st := newStorage(destination, opts)
 	spec.Storage = st
-	spec.DisallowDataDownload = true
-	spec.DisallowDataUpload = true
 
 	t, _, err := c.cl.AddTorrentSpec(spec)
 	if err != nil {
 		st.Close()
 		return nil, err
 	}
+	// AddTorrentOpts.DisallowData* are declared but never read by the engine,
+	// so a torrent starts fully enabled and has to be gated after it is added.
+	t.DisallowDataDownload()
+	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
 	return &liveTorrent{t: t, storage: st}, nil
 }

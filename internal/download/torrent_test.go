@@ -4,9 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 
+	"typhon/internal/settings"
+
+	"github.com/anacrolix/torrent"
 	"golang.org/x/time/rate"
 )
 
@@ -77,5 +83,113 @@ func TestApplyLimit(t *testing.T) {
 	applyLimit(l, 0)
 	if l.Limit() != rate.Inf {
 		t.Fatalf("limit = %v, want Inf", l.Limit())
+	}
+}
+
+func offlineClient(t *testing.T) *client {
+	t.Helper()
+	dir := t.TempDir()
+	tc := clientConfig(settings.Defaults(), dir, 0)
+	tc.NoDHT = true
+	tc.DisableTrackers = true
+	tc.DisablePEX = true
+	tc.NoDefaultPortForwarding = true
+	cl, err := torrent.NewClient(tc)
+	if err != nil {
+		closeDefaultStorage(tc)
+		t.Skipf("torrent client unavailable: %v", err)
+	}
+	c := &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: dir}
+	t.Cleanup(c.close)
+	return c
+}
+
+func trackerTiers(spec *torrent.TorrentSpec) []string {
+	var out []string
+	for _, tier := range spec.Trackers {
+		for _, url := range tier {
+			if strings.TrimSpace(url) != "" {
+				out = append(out, url)
+			}
+		}
+	}
+	return out
+}
+
+func announced(lt *liveTorrent) []string {
+	var out []string
+	for _, tier := range lt.t.Metainfo().AnnounceList {
+		for _, url := range tier {
+			if strings.TrimSpace(url) != "" {
+				out = append(out, url)
+			}
+		}
+	}
+	return out
+}
+
+func TestAddDoesNotInjectTrackers(t *testing.T) {
+	const uri = "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&dn=Startup+Panic"
+	spec, err := magnetSpec(uri)
+	if err != nil {
+		t.Fatalf("magnetSpec: %v", err)
+	}
+	if got := trackerTiers(spec); len(got) != 0 {
+		t.Fatalf("magnet already has trackers: %v", got)
+	}
+
+	cl := offlineClient(t)
+	lt, err := cl.add(spec, t.TempDir(), storageOpts{})
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	t.Cleanup(lt.drop)
+
+	if got := trackerTiers(spec); len(got) != 0 {
+		t.Fatalf("spec trackers = %v, want none", got)
+	}
+	if got := announced(lt); len(got) != 0 {
+		t.Fatalf("announce list = %v, want none", got)
+	}
+}
+
+func TestAddKeepsMagnetTrackers(t *testing.T) {
+	const tracker = "udp://tracker.example:80/announce"
+	uri := "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&tr=" + url.QueryEscape(tracker)
+	spec, err := magnetSpec(uri)
+	if err != nil {
+		t.Fatalf("magnetSpec: %v", err)
+	}
+
+	cl := offlineClient(t)
+	lt, err := cl.add(spec, t.TempDir(), storageOpts{})
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	t.Cleanup(lt.drop)
+
+	if got := trackerTiers(spec); !slices.Equal(got, []string{tracker}) {
+		t.Fatalf("spec trackers = %v, want %v", got, []string{tracker})
+	}
+	if got := announced(lt); !slices.Equal(got, []string{tracker}) {
+		t.Fatalf("announce list = %v, want %v", got, []string{tracker})
+	}
+}
+
+func TestAddStartsWithUploadDisallowed(t *testing.T) {
+	const uri = "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&dn=Startup+Panic"
+	spec, err := magnetSpec(uri)
+	if err != nil {
+		t.Fatalf("magnetSpec: %v", err)
+	}
+	cl := offlineClient(t)
+	lt, err := cl.add(spec, t.TempDir(), storageOpts{})
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	t.Cleanup(lt.drop)
+
+	if lt.t.Seeding() {
+		t.Fatal("fresh torrent reports seeding before the upload setting is applied")
 	}
 }
