@@ -20,7 +20,7 @@
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
-  import type { Source, SourceHealth, SourceStatus } from '../../lib/services/sources';
+  import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
   let addOpen = $state(false);
@@ -127,7 +127,7 @@
       <div class="row" class:disabled={!source.enabled}>
         <button class="source" onclick={() => openDetails(source.id)}>
           <span class="source-name">{source.name}</span>
-          <span class="source-url">{source.url}</span>
+          <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
         </button>
         <span class="cell status">
           <StatusBadge kind={badge.kind} label={badge.label} plain />

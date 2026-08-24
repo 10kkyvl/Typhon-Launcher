@@ -1,23 +1,27 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { TriangleAlert } from '@lucide/svelte';
-  import { add as addSource, errorMessage } from '../stores/sources';
-  import { testSource, type SourcePreview } from '../services/sources';
+  import { FileUp, TriangleAlert } from '@lucide/svelte';
+  import { add as addSource, addFile as addSourceFile, errorMessage } from '../stores/sources';
+  import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
-  let step = $state<'url' | 'checking' | 'preview'>('url');
+  let step = $state<'input' | 'checking' | 'preview'>('input');
+  let mode = $state<'url' | 'file'>('url');
   let url = $state('');
+  let path = $state('');
   let preview = $state<SourcePreview | null>(null);
   let error = $state('');
   let adding = $state(false);
 
   function reset() {
-    step = 'url';
+    step = 'input';
+    mode = 'url';
     url = '';
+    path = '';
     preview = null;
     error = '';
     adding = false;
@@ -30,44 +34,81 @@
     });
   });
 
+  async function pickFile() {
+    let selected = '';
+    try {
+      selected = await selectFeedFile();
+    } catch (err) {
+      error = errorMessage(err);
+      return;
+    }
+    if (!selected) return;
+    path = selected;
+    mode = 'file';
+    await check();
+  }
+
   async function check() {
-    const value = url.trim();
+    const value = mode === 'file' ? path : url.trim();
     if (!value) return;
     step = 'checking';
     error = '';
     try {
-      preview = await testSource(value);
+      preview = mode === 'file' ? await testSourceFile(value) : await testSource(value);
       step = 'preview';
     } catch (err) {
       error = errorMessage(err);
-      step = 'url';
+      step = 'input';
     }
   }
 
   async function submit() {
-    const value = url.trim();
+    const value = mode === 'file' ? path : url.trim();
     if (!value) return;
     adding = true;
     try {
-      const source = await addSource(value);
+      const source = mode === 'file' ? await addSourceFile(value) : await addSource(value);
       toast(`Источник «${source.name}» добавлен`, 'success');
       open = false;
     } catch (err) {
       error = errorMessage(err);
-      step = 'url';
+      step = 'input';
     } finally {
       adding = false;
     }
   }
+
+  function back() {
+    preview = null;
+    step = 'input';
+  }
 </script>
 
 <Modal bind:open title="Добавить источник">
-  {#if step === 'url'}
+  {#if step === 'input'}
     <div class="form">
       <label class="field">
         <span class="field-label">URL источника</span>
-        <input class="input" type="text" placeholder="https://example.com/feed.json" bind:value={url} />
+        <input
+          class="input"
+          type="text"
+          placeholder="https://example.com/feed.json"
+          bind:value={url}
+          oninput={() => (mode = 'url')}
+        />
       </label>
+      <div class="or">
+        <span class="line"></span>
+        <span class="or-text">или</span>
+        <span class="line"></span>
+      </div>
+      <Button onclick={pickFile}>
+        <FileUp size="1.6rem" strokeWidth={1.8} />
+        Выбрать файл фида
+      </Button>
+      {#if path}
+        <span class="picked" title={path}>{path}</span>
+      {/if}
       {#if error}
         <p class="error">
           <TriangleAlert size="1.5rem" strokeWidth={1.8} />
@@ -86,6 +127,12 @@
       <div class="preview-row">
         <span class="key">Название</span>
         <span class="value">{preview.name}</span>
+      </div>
+      <div class="preview-row">
+        <span class="key">{preview.type === 'file' ? 'Файл' : 'URL'}</span>
+        <span class="value location" title={preview.type === 'file' ? preview.path : preview.url}>
+          {preview.type === 'file' ? preview.path : preview.url}
+        </span>
       </div>
       <div class="preview-row">
         <span class="key">Версия фида</span>
@@ -119,11 +166,11 @@
   {/if}
 
   {#snippet footer()}
-    {#if step === 'url'}
+    {#if step === 'input'}
       <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={!url.trim()} onclick={check}>Проверить источник</Button>
+      <Button variant="primary" disabled={!url.trim() && !path} onclick={check}>Проверить источник</Button>
     {:else if step === 'preview'}
-      <Button onclick={() => (step = 'url')}>Назад</Button>
+      <Button onclick={back}>Назад</Button>
       <Button variant="primary" disabled={adding} onclick={submit}>{adding ? 'Добавление…' : 'Добавить'}</Button>
     {/if}
   {/snippet}
@@ -146,6 +193,38 @@
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text-2);
+  }
+
+  .or {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .or-text {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .picked {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .location {
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .error {

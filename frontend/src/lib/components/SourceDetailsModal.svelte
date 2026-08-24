@@ -5,6 +5,7 @@
     getRelease,
     getSourceDetails,
     queryReleases,
+    sourceLocation,
     type ReleaseView,
     type SourceDetails,
   } from '../services/sources';
@@ -173,7 +174,7 @@
     <div class="sections">
       <section class="head">
         <div class="head-meta">
-          <span class="url">{source.url}</span>
+          <span class="url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
           <div class="head-badges">
             <StatusBadge kind={statusBadge[source.status]?.kind ?? 'neutral'} label={statusBadge[source.status]?.label ?? source.status} />
             <span class="updated">Обновлено: {relativeDate(source.lastUpdatedAt)}</span>

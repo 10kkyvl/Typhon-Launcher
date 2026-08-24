@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import {
   addSource as addSourceRequest,
+  addSourceFile as addSourceFileRequest,
   listSources,
   refreshAllSources,
   refreshSource,
@@ -22,6 +23,7 @@ interface SourceErrorEvent {
   sourceId: string;
   name: string;
   message: string;
+  scheduled: boolean;
 }
 
 interface ReleaseBatchEvent {
@@ -56,7 +58,8 @@ export async function initSources() {
     upsert(item);
   });
   Events.On('source:error', (event) => {
-    const { name, message } = event.data as SourceErrorEvent;
+    const { name, message, scheduled } = event.data as SourceErrorEvent;
+    if (scheduled) return;
     toast(`Ошибка источника «${name}»: ${message}`, 'danger');
   });
   Events.On('release:added', (event) => {
@@ -107,6 +110,12 @@ export async function remove(id: string) {
 
 export async function add(url: string) {
   const source = await addSourceRequest(url);
+  await reload();
+  return source;
+}
+
+export async function addFile(path: string) {
+  const source = await addSourceFileRequest(path);
   await reload();
   return source;
 }
