@@ -194,14 +194,8 @@ func render(m Manifest, groups []Group, manual []Component) string {
 	b.WriteString("# Сторонние компоненты Typhon\n\n")
 	b.WriteString("Этот файл перечисляет сторонние компоненты (библиотеки и модули), " +
 		"распространяемые вместе с Typhon, и приводит дословные тексты их лицензий. " +
-		"Список курируется вручную в `tools/notices/manifest.json` (лицензия каждого " +
-		"компонента определена человеком — автоматическое определение лицензий ненадёжно) " +
-		"и собирается программой `tools/notices`.\n\n")
-
-	b.WriteString("## Как обновить\n\n")
-	b.WriteString("1. Добавьте или обновите запись в `tools/notices/manifest.json`.\n")
-	b.WriteString("2. Запустите `go run ./tools/notices -o THIRD_PARTY_NOTICES.md` из корня репозитория.\n")
-	b.WriteString("3. Убедитесь, что файл не разошёлся с манифестом, без перезаписи: `go run ./tools/notices -check`.\n\n")
+		"Лицензия каждого компонента определена человеком: автоматическое определение " +
+		"лицензий ненадёжно.\n\n")
 
 	b.WriteString("## Сводная таблица\n\n")
 	b.WriteString("| Компонент | Версия | Лицензия |\n")
@@ -241,7 +235,7 @@ func render(m Manifest, groups []Group, manual []Component) string {
 	}
 
 	if len(manual) > 0 {
-		b.WriteString("## Требуют ручной проверки\n\n")
+		b.WriteString("## Компоненты с отдельными условиями распространения\n\n")
 		for _, c := range manual {
 			fmt.Fprintf(&b, "### %s\n\n", componentLabel(c))
 			fmt.Fprintf(&b, "Заявленная лицензия: %s.\n\n", c.License)
