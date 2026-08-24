@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"log/slog"
 	"os"
 
@@ -18,6 +19,7 @@ import (
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/presence"
 	"typhon/internal/search"
+	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
 	"typhon/internal/updates"
@@ -29,6 +31,9 @@ import (
 var assets embed.FS
 
 const discordClientID = "1541194395964014623"
+
+var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
+var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
@@ -68,10 +73,36 @@ func init() {
 	application.RegisterEvent[updates.VerifyState]("repair:started")
 	application.RegisterEvent[updates.VerifyState]("repair:updated")
 	application.RegisterEvent[updates.VerifyState]("repair:completed")
+	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
+	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 }
 
 func main() {
 	app.InitLogging()
+
+	if len(os.Args) > 1 && os.Args[1] == "--install-worker" {
+		if len(os.Args) < 3 {
+			slog.Error("install worker failed", "error", errNoWorkerSpec)
+			os.Exit(1)
+		}
+		if err := install.RunWorker(os.Args[2]); err != nil {
+			slog.Error("install worker failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--selfupdate-worker" {
+		if len(os.Args) < 3 {
+			slog.Error("selfupdate worker failed", "error", errNoSelfupdateWorkerSpec)
+			os.Exit(1)
+		}
+		if err := selfupdate.RunWorker(os.Args[2]); err != nil {
+			slog.Error("selfupdate worker failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	settingsService, err := settings.NewService()
 	if err != nil {
@@ -114,6 +145,10 @@ func main() {
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
 	if err != nil {
 		fatal("start updates service", err)
+	}
+	selfupdateService, err := selfupdate.NewService()
+	if err != nil {
+		fatal("start selfupdate service", err)
 	}
 	discordService, err := discord.NewService(discordClientID)
 	if err != nil {
@@ -162,6 +197,7 @@ func main() {
 			application.NewService(discoveryService),
 			application.NewService(discordService),
 			application.NewService(legalService),
+			application.NewService(selfupdateService),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),

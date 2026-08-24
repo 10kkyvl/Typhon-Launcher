@@ -1,0 +1,207 @@
+# Reproducible release pipeline for the Typhon launcher.
+#
+# Trigger: push of a `v*` tag, or manual `workflow_dispatch`.
+# Builds the Windows installer, signs the self-update manifest, and uploads
+# both to the Garage/S3-compatible object store the launcher checks for
+# updates.
+#
+# Required repository secrets:
+#   TYPHON_RELEASE_PRIVATE_KEY  base64-encoded ed25519 seed (32 bytes) or
+#                               private key (64 bytes) used to sign the
+#                               self-update manifest. The matching public key
+#                               is embedded in the launcher binary
+#                               (internal/selfupdate/model.go).
+#   TYPHON_MANIFEST_BASE_URL    base URL the launcher downloads release
+#                               artifacts from, e.g.
+#                               https://api.typhon-launcher.com/launcher/download
+#                               (the backend's public download route; kept as
+#                               a secret so no domain is hardcoded here).
+#   S3_RELEASES_BUCKET          bucket the release artifacts and manifest are
+#                               uploaded to.
+#   VPS_SSH_KEY                 private key of the deploy user on the VPS.
+#   VPS_KNOWN_HOSTS             known_hosts entry pinning that VPS.
+#   VPS_HOST                    VPS hostname.
+#   VPS_USER                    deploy user on the VPS.
+#
+# Garage is not reachable from the runner: its S3 port stays firewalled and
+# runs without TLS. Publishing therefore copies the files to the VPS over SSH
+# and uploads them from there over loopback, so the object-store credentials
+# never leave the server -- they are read from /opt/typhon-backend/.env.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Release notes to embed in the signed manifest
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, sign and publish the Windows release
+    runs-on: windows-latest
+    env:
+      TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
+      S3_RELEASES_BUCKET: ${{ secrets.S3_RELEASES_BUCKET }}
+      MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
+      RELEASE_NOTES: ${{ inputs.notes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install wails3 CLI
+        shell: bash
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $nsisDir = "$env:ProgramFiles(x86)\NSIS"
+          if (-not (Test-Path "$nsisDir\makensis.exe")) {
+            $nsisDir = "$env:ProgramFiles\NSIS"
+          }
+          if (-not (Test-Path "$nsisDir\makensis.exe")) {
+            throw "makensis.exe not found after installing NSIS"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
+
+      - name: Verify NSIS is on PATH
+        shell: bash
+        run: makensis /VERSION
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          if [ -z "$version" ]; then
+            echo "VERSION file is empty" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches VERSION
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$RELEASE_VERSION" ]; then
+            echo "tag v$tag does not match VERSION ($RELEASE_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Build application
+        shell: bash
+        run: wails3 task build
+
+      - name: Package installer
+        shell: bash
+        run: wails3 task package
+
+      - name: Verify installer artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          installer="bin/typhon-amd64-installer.exe"
+          if [ ! -s "$installer" ]; then
+            echo "$installer is missing or empty" >&2
+            exit 1
+          fi
+
+      - name: Build and sign the self-update manifest
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          go run ./cmd/signrelease \
+            -version "$RELEASE_VERSION" \
+            -notes "$RELEASE_NOTES" \
+            -base-url "$MANIFEST_BASE_URL" \
+            -out manifest.json \
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
+
+      - name: Publish installer and manifest to Garage over SSH
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/publish
+          chmod 600 ~/.ssh/publish
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          remote_dir="/tmp/typhon-release-${RELEASE_VERSION}-${GITHUB_RUN_ID}"
+
+          cat > publish-remote.sh <<'REMOTE'
+          set -euo pipefail
+          remote_dir="$1"
+          version="$2"
+          bucket_override="$3"
+
+          set -a
+          . /opt/typhon-backend/.env
+          set +a
+
+          bucket="${bucket_override:-${S3_RELEASES_BUCKET:-typhon-releases}}"
+
+          run_aws() {
+            docker run --rm --network host \
+              -e AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" \
+              -e AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+              -e AWS_DEFAULT_REGION="${S3_REGION:-garage}" \
+              -v "$remote_dir":/data \
+              amazon/aws-cli:2 "$@"
+          }
+
+          run_aws s3 cp /data/typhon-amd64-installer.exe \
+            "s3://$bucket/launcher/releases/$version/typhon-amd64-installer.exe" \
+            --endpoint-url http://127.0.0.1:3900
+
+          run_aws s3 cp /data/manifest.json \
+            "s3://$bucket/launcher/manifest.json" \
+            --endpoint-url http://127.0.0.1:3900 \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+          rm -rf "$remote_dir"
+          REMOTE
+
+          ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
+          scp -i ~/.ssh/publish \
+            bin/typhon-amd64-installer.exe \
+            manifest.json \
+            publish-remote.sh \
+            "$VPS_USER@$VPS_HOST:$remote_dir/"
+          ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" \
+            "bash '$remote_dir/publish-remote.sh' '$remote_dir' '$RELEASE_VERSION' '$S3_RELEASES_BUCKET'"

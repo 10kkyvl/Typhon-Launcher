@@ -43,6 +43,10 @@ func ValidateBaseURL(raw string) (string, error) {
 	return trimmed, nil
 }
 
+func CheckURLScheme(u *url.URL) error {
+	return checkURLScheme(u)
+}
+
 func checkURLScheme(u *url.URL) error {
 	switch u.Scheme {
 	case "https":

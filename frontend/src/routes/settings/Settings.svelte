@@ -1,26 +1,30 @@
 <script lang="ts">
   import { FolderOpen, ListChecks, Trash2 } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
+  import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Select from '../../lib/components/Select.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { openFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
   import { navigate } from '../../lib/stores/router';
+  import { requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, leaveGuest, signOut } from '../../lib/stores/user';
-  import { bytesLabel } from '../../lib/utils/format';
+  import { bytesLabel, relativeDate } from '../../lib/utils/format';
 
   let tab = $state('general');
 
@@ -835,6 +839,7 @@
             <span class="account-status">@{$currentUser.username}</span>
           </div>
           <div class="account-avatar-actions">
+            <AvatarEditor size="sm" />
             <Button size="sm" onclick={() => navigate('profile')}>Открыть профиль</Button>
           </div>
         </div>
@@ -843,7 +848,7 @@
           <div class="row">
             <div class="row-text">
               <span class="row-label">Email</span>
-              <span class="row-sub">{$currentUser.email}</span>
+              <span class="row-sub"><MaskedEmail email={$currentUser.email} /></span>
             </div>
           </div>
           <div class="row">
@@ -899,13 +904,23 @@
         <div class="row">
           <div class="row-text">
             <span class="row-label">Проверить обновления клиента</span>
-            <span class="row-sub">Установлена последняя версия</span>
+            <span class="row-sub">
+              {#if $selfUpdateChecking}
+                Проверка обновлений…
+              {:else}
+                Установлена версия {$selfUpdateStatus.currentVersion || appInfo?.version || '—'}
+                {#if $selfUpdateStatus.checkedAt}
+                  · проверено {relativeDate($selfUpdateStatus.checkedAt)}
+                {/if}
+              {/if}
+            </span>
           </div>
-          <Button size="sm" onclick={() => toast('У вас последняя версия', 'success')}>
+          <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
-            Проверить
+            {$selfUpdateChecking ? 'Проверка…' : 'Проверить'}
           </Button>
         </div>
+        <UpdateBanner />
       </div>
     </section>
 
@@ -1134,8 +1149,11 @@
 
   .account-avatar-actions {
     display: flex;
+    align-items: flex-start;
     gap: var(--space-3);
     flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .about-logo {

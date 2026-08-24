@@ -6,6 +6,7 @@
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
+  import { initSelfUpdate } from './lib/stores/selfupdate';
   import { initSettings, settings } from './lib/stores/settings';
   import { initSources } from './lib/stores/sources';
   import { initUpdates } from './lib/stores/updates';
@@ -29,6 +30,7 @@
   initLibrary();
   initSources();
   initUpdates();
+  initSelfUpdate();
   initMetadata();
   initDiscovery();
   initAuth();
