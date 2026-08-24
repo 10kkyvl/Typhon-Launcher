@@ -8,9 +8,14 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/catalog"
+	"typhon/internal/discord"
+	"typhon/internal/discovery"
 	"typhon/internal/download"
 	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/metadata"
+	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/presence"
 	"typhon/internal/search"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
@@ -21,6 +26,8 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+const discordClientID = "1541194395964014623"
 
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
@@ -44,6 +51,10 @@ func init() {
 	application.RegisterEvent[sources.ReleaseBatch]("release:removed")
 	application.RegisterEvent[sources.ReleaseBatch]("release:matched")
 	application.RegisterEvent[sources.ReleaseBatch]("release:needs-review")
+	application.RegisterEvent[metadata.View]("metadata:updated")
+	application.RegisterEvent[discovery.Progress]("discovery:started")
+	application.RegisterEvent[discovery.Progress]("discovery:progress")
+	application.RegisterEvent[discovery.Result]("discovery:completed")
 	application.RegisterEvent[updates.Update]("update:available")
 	application.RegisterEvent[updates.Update]("update:started")
 	application.RegisterEvent[updates.Update]("update:updated")
@@ -90,15 +101,43 @@ func main() {
 	if err != nil {
 		fatal("start sources service", err)
 	}
+	metadataService, err := metadata.NewService(catalogService, metadataProvider(accountService))
+	if err != nil {
+		fatal("start metadata service", err)
+	}
+	discoveryService, err := discovery.NewService(settingsService, libraryService, catalogService, metadataService)
+	if err != nil {
+		fatal("start discovery service", err)
+	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
 	if err != nil {
 		fatal("start updates service", err)
 	}
+	discordService, err := discord.NewService(discordClientID)
+	if err != nil {
+		fatal("start discord presence", err)
+	}
+	presenceWatcher, err := presence.New(discordService, metadataService.CoverSourceURL)
+	if err != nil {
+		fatal("start discord presence", err)
+	}
+	installService.SetTitleResolver(func(origin download.Origin) string {
+		return gameTitle(catalogService, sourcesService, origin.GameID, origin.ReleaseID)
+	})
+	if err := libraryService.SyncTitles(func(canonicalGameID, releaseID string) string {
+		return gameTitle(catalogService, sourcesService, canonicalGameID, releaseID)
+	}); err != nil {
+		fatal("sync library titles", err)
+	}
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
+	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
+	libraryService.SetSessionWatcher(presenceWatcher)
+	presenceWatcher.Apply(settingsService.GetSettings())
+	settingsService.Subscribe(presenceWatcher.Apply)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -114,9 +153,13 @@ func main() {
 			application.NewService(sourcesService),
 			application.NewService(searchService),
 			application.NewService(updateService),
+			application.NewService(metadataService),
+			application.NewService(discoveryService),
+			application.NewService(discordService),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+			Handler:    application.AssetFileServerFS(assets),
+			Middleware: metadataService.Middleware,
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
@@ -143,6 +186,25 @@ func main() {
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
 	}
+}
+
+func metadataProvider(accountService *account.Service) metadata.Provider {
+	client, err := typhonapi.New(account.BaseURL(), accountService.SessionToken)
+	if err != nil {
+		slog.Error("metadata provider disabled", "error", err)
+		return nil
+	}
+	return client
+}
+
+func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, releaseID string) string {
+	if title := cat.TitleOf(canonicalGameID); title != "" {
+		return title
+	}
+	if release, ok := src.FindRelease(releaseID); ok {
+		return release.Title
+	}
+	return ""
 }
 
 func fatal(stage string, err error) {
