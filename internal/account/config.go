@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var apiBaseURL = "http://127.0.0.1:8080"
+var apiBaseURL = "https://api.typhon-launcher.com"
 
 var (
 	ErrEmptyBaseURL    = errors.New("api base url is empty")

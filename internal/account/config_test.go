@@ -7,6 +7,26 @@ import (
 	"testing"
 )
 
+func TestBaseURLDefaultIsProduction(t *testing.T) {
+	t.Setenv("TYPHON_API_URL", "")
+
+	got := BaseURL()
+	if got != "https://api.typhon-launcher.com" {
+		t.Fatalf("default base url = %q", got)
+	}
+	if _, err := ValidateBaseURL(got); err != nil {
+		t.Fatalf("default base url must validate: %v", err)
+	}
+}
+
+func TestBaseURLPrefersEnv(t *testing.T) {
+	t.Setenv("TYPHON_API_URL", "http://127.0.0.1:8080/")
+
+	if got := BaseURL(); got != "http://127.0.0.1:8080" {
+		t.Fatalf("base url = %q, want the environment value without the trailing slash", got)
+	}
+}
+
 func TestValidateBaseURL(t *testing.T) {
 	tests := []struct {
 		name    string
