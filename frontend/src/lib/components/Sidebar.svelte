@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bookmark, Database, Download, LayoutGrid, MonitorDown, Settings, Trophy } from '@lucide/svelte';
+  import { Bookmark, Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings, Trophy } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { authState, currentUser } from '../stores/user';
 
@@ -8,6 +8,7 @@
   const groups: NavItem[][] = [
     [
       { name: 'library', label: 'Библиотека', icon: LayoutGrid },
+      { name: 'catalog', label: 'Все игры', icon: Gamepad2 },
       { name: 'installed', label: 'Установлено', icon: MonitorDown },
     ],
     [
@@ -54,7 +55,7 @@
 
 <aside class="sidebar">
   <div class="logo">
-    <img class="logo-mark" src="/typhon.svg" alt="" draggable="false" />
+    <img class="logo-mark" src="/typhon.png" alt="" draggable="false" />
     <span class="logo-text">Typhon</span>
   </div>
 

@@ -2,6 +2,7 @@ import { Service as SourcesService } from '../../../bindings/typhon/internal/sou
 import { Service as CatalogService } from '../../../bindings/typhon/internal/catalog';
 import { inWails } from './backend';
 
+export type SourceType = 'url' | 'file';
 export type SourceStatus = 'active' | 'disabled' | 'error' | 'updating';
 export type SourceHealth = 'healthy' | 'warning' | 'error';
 export type MatchStatus = 'matched' | 'review' | 'unmatched';
@@ -10,7 +11,9 @@ export type Availability = 'available' | 'removed';
 export interface Source {
   id: string;
   name: string;
+  type: SourceType;
   url: string;
+  path?: string;
   enabled: boolean;
   status: SourceStatus;
   health: SourceHealth;
@@ -91,7 +94,9 @@ export interface ReleasePage {
 
 export interface SourcePreview {
   name: string;
+  type: SourceType;
   url: string;
+  path?: string;
   feedVersion: number;
   entries: number;
   invalid: number;
@@ -144,6 +149,28 @@ export interface CatalogGame {
   aliases?: string[];
   provisional?: boolean;
   createdAt: string;
+  releaseDate?: string;
+  summary?: string;
+  genres?: string[];
+  themes?: string[];
+  platforms?: string[];
+  coverAssetId?: string;
+  heroAssetId?: string;
+  metadataUpdatedAt?: string;
+}
+
+export interface CatalogQuery {
+  search?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CatalogPage {
+  items: CatalogGame[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface ReleaseDownloadRequest {
@@ -181,6 +208,25 @@ export async function testSource(url: string): Promise<SourcePreview> {
 export async function addSource(url: string): Promise<Source> {
   if (!inWails) throw unavailable();
   return (await SourcesService.AddSource(url)) as unknown as Source;
+}
+
+export async function testSourceFile(path: string): Promise<SourcePreview> {
+  if (!inWails) throw unavailable();
+  return (await SourcesService.TestSourceFile(path)) as unknown as SourcePreview;
+}
+
+export async function addSourceFile(path: string): Promise<Source> {
+  if (!inWails) throw unavailable();
+  return (await SourcesService.AddSourceFile(path)) as unknown as Source;
+}
+
+export async function selectFeedFile(): Promise<string> {
+  if (!inWails) throw unavailable();
+  return (await SourcesService.SelectFeedFile()) ?? '';
+}
+
+export function sourceLocation(source: Pick<Source, 'type' | 'url' | 'path'>): string {
+  return source.type === 'file' ? (source.path ?? '') : source.url;
 }
 
 export async function removeSource(id: string): Promise<void> {
@@ -274,7 +320,16 @@ export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
   }
 }
 
-export async function listCatalogGames(): Promise<CatalogGame[]> {
-  if (!inWails) return [];
-  return ((await CatalogService.ListGames()) ?? []) as unknown as CatalogGame[];
+export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPage> {
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 60;
+  if (!inWails) return { items: [], total: 0, page, pageSize };
+  const payload = { search: query.search ?? '', sort: query.sort ?? '', page, pageSize };
+  const result = (await CatalogService.QueryGames(payload as never)) as unknown as CatalogPage;
+  return { ...result, items: result.items ?? [] };
+}
+
+export async function getCatalogGames(ids: string[]): Promise<CatalogGame[]> {
+  if (!inWails || ids.length === 0) return [];
+  return ((await CatalogService.GetGames(ids)) ?? []) as unknown as CatalogGame[];
 }

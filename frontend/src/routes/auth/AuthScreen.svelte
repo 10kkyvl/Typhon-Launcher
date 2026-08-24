@@ -112,7 +112,7 @@
 
   <div class="panel" style="--wails-draggable: no-drag">
     <div class="brand">
-      <img class="brand-mark" src="/typhon.svg" alt="" draggable="false" />
+      <img class="brand-mark" src="/typhon.png" alt="" draggable="false" />
       <span class="brand-name">Typhon</span>
     </div>
 

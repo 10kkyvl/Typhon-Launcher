@@ -1,9 +1,11 @@
 <script lang="ts">
   import AppShell from './lib/components/AppShell.svelte';
+  import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initInstalls } from './lib/stores/install';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
+  import { initMetadata } from './lib/stores/metadata';
   import { initSettings, settings } from './lib/stores/settings';
   import { initSources } from './lib/stores/sources';
   import { initUpdates } from './lib/stores/updates';
@@ -11,6 +13,7 @@
   import { refreshStorage } from './lib/stores/storage';
   import Achievements from './routes/achievements/Achievements.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
+  import Catalog from './routes/catalog/Catalog.svelte';
   import Collections from './routes/collections/Collections.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
@@ -26,6 +29,8 @@
   initLibrary();
   initSources();
   initUpdates();
+  initMetadata();
+  initDiscovery();
   initAuth();
 
   let lastGamesPath: string | undefined;
@@ -40,12 +45,14 @@
 
 {#if $authState === 'bootstrapping'}
   <div class="boot">
-    <img class="boot-mark" src="/typhon.svg" alt="" draggable="false" />
+    <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
   </div>
 {:else if $authState === 'authenticated' || $authState === 'guest'}
   <AppShell>
     {#if $route.name === 'library'}
       <Library />
+    {:else if $route.name === 'catalog'}
+      <Catalog />
     {:else if $route.name === 'game'}
       <GameDetails id={$route.params.id} />
     {:else if $route.name === 'downloads'}

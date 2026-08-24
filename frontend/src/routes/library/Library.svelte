@@ -13,7 +13,7 @@
     Square,
     X,
   } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
@@ -25,9 +25,11 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
-  import { listCatalogGames, type CatalogGame } from '../../lib/services/sources';
-  import { active, moveUp, queue, remove } from '../../lib/stores/downloads';
-  import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
+  import type { Download } from '../../lib/services/downloads';
+  import { active, downloads, moveUp, queue, remove, statusLabels } from '../../lib/stores/downloads';
+  import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
+  import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
@@ -51,18 +53,54 @@
   let filter = $state<Filter>('all');
   let sort = $state<Sort>('alpha');
   let heroIndex = $state(0);
-  let catalog = $state<CatalogGame[]>([]);
+  let catalogGames = $state<Record<string, CatalogGame>>({});
 
-  onMount(async () => {
-    try {
-      catalog = await listCatalogGames();
-    } catch {
-      catalog = [];
+  const installedByGame = $derived.by(() => {
+    const ids = new Set<string>();
+    for (const game of $libraryGames) {
+      if (game.canonicalGameId) ids.add(game.canonicalGameId);
     }
+    return ids;
+  });
+
+  const downloaded = $derived.by(() => {
+    const map = new Map<string, Download>();
+    for (const item of $downloads) {
+      const gameId = item.origin?.gameId;
+      if (!gameId || installedByGame.has(gameId)) continue;
+      const current = map.get(gameId);
+      if (!current || Date.parse(item.addedAt) >= Date.parse(current.addedAt)) map.set(gameId, item);
+    }
+    return map;
+  });
+
+  async function loadCatalogGames(ids: string[]) {
+    try {
+      const games = await getCatalogGames(ids);
+      if (games.length === 0) return;
+      catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось загрузить данные игр', 'danger');
+    }
+  }
+
+  $effect(() => {
+    const ids = [...downloaded.keys()];
+    untrack(() => {
+      const missing = ids.filter((id) => !(id in catalogGames));
+      if (missing.length > 0) loadCatalogGames(missing);
+    });
+  });
+
+  $effect(() => {
+    requestArt([
+      ...downloaded.keys(),
+      ...$libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)),
+    ]);
   });
 
   const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
-    { id: 'all', label: 'Все игры' },
+    { id: 'all', label: 'Все' },
     { id: 'installed', label: 'Установленные', icon: MonitorDown },
     { id: 'recent', label: 'Недавние', icon: Clock },
   ];
@@ -75,21 +113,26 @@
   };
 
   const sectionTitles: Record<Filter, string> = {
-    all: 'Все игры',
+    all: 'Моя библиотека',
     installed: 'Установленные',
     recent: 'Недавние',
   };
 
   function installedEntry(game: LibraryGame): Entry {
     const bits: string[] = [];
-    if (game.version) bits.push(game.version);
-    if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
+    if (game.uninstalled) {
+      bits.push('Не установлена');
+    } else {
+      if (game.version) bits.push(game.version);
+      if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
+    }
+    const art = game.canonicalGameId ? $gameArt[game.canonicalGameId] : undefined;
     return {
       id: game.id,
       title: game.title,
-      cover: game.cover,
-      hero: game.hero,
-      installed: true,
+      cover: art?.cover || game.cover,
+      hero: art?.hero ?? '',
+      installed: !game.uninstalled,
       playtimeSeconds: game.playtimeSeconds,
       sizeBytes: game.sizeBytes,
       lastPlayed: game.lastPlayed,
@@ -97,18 +140,20 @@
     };
   }
 
-  function catalogEntry(game: CatalogGame): Entry {
+  function downloadedEntry(gameId: string, item: Download): Entry {
+    const game = catalogGames[gameId];
     const bits: string[] = [];
-    if (game.releaseYear) bits.push(String(game.releaseYear));
-    if (game.developer) bits.push(game.developer);
+    if (game?.releaseYear) bits.push(String(game.releaseYear));
+    if (game?.developer) bits.push(game.developer);
+    bits.push(statusLabels[item.status]);
     return {
-      id: game.id,
-      title: game.title,
-      cover: '',
-      hero: '',
+      id: gameId,
+      title: game?.title || item.name,
+      cover: $gameArt[gameId]?.cover ?? '',
+      hero: $gameArt[gameId]?.hero ?? '',
       installed: false,
       playtimeSeconds: 0,
-      sizeBytes: 0,
+      sizeBytes: item.total,
       lastPlayed: null,
       subtitle: bits.join(' · '),
     };
@@ -116,12 +161,7 @@
 
   const entries = $derived.by(() => {
     const installed = $libraryGames.map(installedEntry);
-    const claimed = new Set<string>();
-    for (const game of $libraryGames) {
-      claimed.add(game.id);
-      if (game.canonicalGameId) claimed.add(game.canonicalGameId);
-    }
-    const rest = catalog.filter((game) => !claimed.has(game.id)).map(catalogEntry);
+    const rest = [...downloaded].map(([gameId, item]) => downloadedEntry(gameId, item));
     return [...installed, ...rest];
   });
 
@@ -158,7 +198,7 @@
   }
 
   const featured = $derived(
-    $libraryGames
+    $installedGames
       .map(installedEntry)
       .toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed))
       .slice(0, 5),
@@ -176,9 +216,8 @@
   });
 
   function entryMeta(entry: Entry) {
-    if (entry.playtimeSeconds > 0) return playtime(entry.playtimeSeconds);
     if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
-    return entry.installed ? 'Не запускалась' : 'Не установлена';
+    return entry.installed ? '' : 'Не установлена';
   }
 
   async function toggleRun(id: string) {
@@ -285,8 +324,8 @@
 <section class="section">
   <div class="section-head">
     <h2>{sectionTitles[filter]}</h2>
-    <button class="link" onclick={() => navigate('installed')}>
-      Установленные
+    <button class="link" onclick={() => navigate('catalog')}>
+      Все игры
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
     </button>
   </div>
@@ -294,7 +333,7 @@
   {#if visibleGames.length === 0}
     <EmptyState
       title="Здесь пока пусто"
-      description="Добавьте источник и установите игру — она появится в библиотеке."
+      description="Игры появятся тут после установки или загрузки. Каталог источников — в разделе «Все игры»."
     />
   {:else if $libraryView === 'grid'}
     <div class="grid">
