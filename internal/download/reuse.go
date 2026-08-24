@@ -29,6 +29,7 @@ type ReuseRequest struct {
 	Source   string `json:"source"`
 	InfoHash string `json:"infoHash"`
 	Path     string `json:"path"`
+	Flat     *bool  `json:"flat,omitempty"`
 }
 
 type ReuseFile struct {
@@ -43,6 +44,8 @@ type ReuseReport struct {
 	Name         string      `json:"name"`
 	Layout       Layout      `json:"layout"`
 	Flat         bool        `json:"flat"`
+	Applicable   bool        `json:"applicable"`
+	PresentFiles int         `json:"presentFiles"`
 	TotalBytes   int64       `json:"totalBytes"`
 	MatchedBytes int64       `json:"matchedBytes"`
 	MissingBytes int64       `json:"missingBytes"`
@@ -170,27 +173,43 @@ func supportsFlat(info *metainfo.Info) bool {
 	return true
 }
 
-func presentBytes(root string, info *metainfo.Info, flat bool) int64 {
+type mapping struct {
+	flat    bool
+	present int
+	bytes   int64
+}
+
+func inspectMapping(root string, info *metainfo.Info, flat bool) mapping {
 	files := info.UpvertedFiles()
 	paths := relativePaths(info, flat)
-	var present int64
+	found := mapping{flat: flat}
 	for i := range files {
 		stat, err := os.Stat(filepath.Join(root, paths[i]))
-		if err != nil || stat.IsDir() || stat.Size() != files[i].Length {
+		if err != nil || stat.IsDir() {
 			continue
 		}
-		present += files[i].Length
+		found.present++
+		if stat.Size() == files[i].Length {
+			found.bytes += files[i].Length
+		}
 	}
-	return present
+	return found
 }
 
 // chooseMapping picks between laying the torrent out directly inside root and
 // keeping its own top level folder, based on which files are already there.
-func chooseMapping(info *metainfo.Info, root string) bool {
+// A mapping that finds nothing on disk means the torrent does not describe this
+// directory at all, which the caller must tell apart from damaged data.
+func chooseMapping(info *metainfo.Info, root string) mapping {
+	direct := inspectMapping(root, info, false)
 	if !supportsFlat(info) {
-		return false
+		return direct
 	}
-	return presentBytes(root, info, true) >= presentBytes(root, info, false)
+	flat := inspectMapping(root, info, true)
+	if flat.bytes > direct.bytes || (flat.bytes == direct.bytes && flat.present > direct.present) {
+		return flat
+	}
+	return direct
 }
 
 func (m *Manager) engine() (*client, context.Context, error) {
@@ -249,7 +268,7 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 	lt.drop()
 	hash := spec.InfoHash.HexString()
 	if err := m.store.saveMetainfo(hash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", hash, "error", err)
+		slog.Warn("save metainfo", "operation", "inspect_reuse", "error", err)
 	}
 	return &mi, nil
 }
@@ -327,15 +346,40 @@ func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress
 		return ReuseReport{}, errHashBusy
 	}
 
-	flat := chooseMapping(&info, root)
-	lt, err := cl.addMetainfo(mi, root, storageOpts{flat: flat, inPlace: true})
+	chosen := chooseMapping(&info, root)
+	if req.Flat != nil {
+		chosen = inspectMapping(root, &info, *req.Flat)
+	}
+	total := info.TotalLength()
+	files := info.UpvertedFiles()
+	paths := relativePaths(&info, chosen.flat)
+	report := ReuseReport{
+		InfoHash:     infoHash,
+		Name:         info.BestName(),
+		Layout:       ClassifyLayout(&info),
+		Flat:         chosen.flat,
+		Applicable:   chosen.present > 0,
+		PresentFiles: chosen.present,
+		TotalBytes:   total,
+	}
+	if !report.Applicable {
+		report.MissingBytes = total
+		report.MissingFiles = len(files)
+		report.Files = make([]ReuseFile, 0, len(files))
+		for i := range files {
+			report.Files = append(report.Files, ReuseFile{Path: paths[i], Size: files[i].Length, Missing: true})
+		}
+		slog.Info("torrent does not describe path", "operation", "inspect_reuse",
+			"layout", report.Layout, "files", len(files))
+		return report, nil
+	}
+
+	lt, err := cl.addMetainfo(mi, root, storageOpts{flat: chosen.flat, inPlace: true})
 	if err != nil {
 		return ReuseReport{}, err
 	}
 	defer lt.drop()
 
-	paths := relativePaths(&info, flat)
-	total := info.TotalLength()
 	owners := pieceFileIndex(&info)
 
 	var processed int64
@@ -354,18 +398,10 @@ func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress
 	}
 
 	ok, pieces := lt.completePieces()
-	report := ReuseReport{
-		InfoHash:    infoHash,
-		Name:        info.BestName(),
-		Layout:      ClassifyLayout(&info),
-		Flat:        flat,
-		TotalBytes:  total,
-		TotalPieces: pieces,
-		OkPieces:    ok,
-		BadPieces:   pieces - ok,
-	}
+	report.TotalPieces = pieces
+	report.OkPieces = ok
+	report.BadPieces = pieces - ok
 	done := lt.fileBytes()
-	files := info.UpvertedFiles()
 	report.Files = make([]ReuseFile, 0, len(files))
 	for i := range files {
 		entry := ReuseFile{Path: paths[i], Size: files[i].Length}
@@ -380,8 +416,9 @@ func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress
 		report.Files = append(report.Files, entry)
 	}
 	report.MissingBytes = total - report.MatchedBytes
-	slog.Info("torrent reuse inspected", "infoHash", infoHash, "path", root,
-		"layout", report.Layout, "matched", report.MatchedBytes, "missing", report.MissingBytes)
+	slog.Info("torrent reuse inspected", "operation", "inspect_reuse",
+		"layout", report.Layout, "flat", report.Flat, "present", report.PresentFiles,
+		"matched", report.MatchedBytes, "missing", report.MissingBytes)
 	return report, nil
 }
 

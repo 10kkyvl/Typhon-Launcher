@@ -76,15 +76,59 @@ func TestChooseMapping(t *testing.T) {
 	flatRoot := t.TempDir()
 	write(t, filepath.Join(flatRoot, "bin", "game.exe"), 4)
 	write(t, filepath.Join(flatRoot, "data.pak"), 6)
-	if !chooseMapping(info, flatRoot) {
-		t.Fatal("expected the flat mapping for files laid out directly in the root")
+	if got := chooseMapping(info, flatRoot); !got.flat || got.present != 2 || got.bytes != 10 {
+		t.Fatalf("flat root mapping = %+v", got)
 	}
 
 	nestedRoot := t.TempDir()
 	write(t, filepath.Join(nestedRoot, "Game", "bin", "game.exe"), 4)
 	write(t, filepath.Join(nestedRoot, "Game", "data.pak"), 6)
-	if chooseMapping(info, nestedRoot) {
-		t.Fatal("expected the nested mapping when the torrent folder is present")
+	if got := chooseMapping(info, nestedRoot); got.flat || got.present != 2 || got.bytes != 10 {
+		t.Fatalf("nested root mapping = %+v", got)
+	}
+}
+
+// A directory the torrent does not describe must be reported as "found
+// nothing", never as a layout guess that then declares every file missing.
+func TestChooseMappingUnrelatedDirectory(t *testing.T) {
+	info := infoWith("Game", file(4, "bin", "game.exe"), file(6, "data.pak"))
+
+	cases := map[string]func(root string){
+		"empty": func(string) {},
+		"unpacked elsewhere": func(root string) {
+			write(t, filepath.Join(root, "Some Game", "bin", "game.exe"), 4)
+			write(t, filepath.Join(root, "Some Game", "data.pak"), 6)
+		},
+		"only unrelated files": func(root string) {
+			write(t, filepath.Join(root, "readme.txt"), 12)
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			setup(root)
+			got := chooseMapping(info, root)
+			if got.present != 0 || got.bytes != 0 {
+				t.Fatalf("mapping = %+v, want nothing found", got)
+			}
+		})
+	}
+}
+
+// A file that exists but no longer matches its recorded size is damage, and
+// must keep the mapping applicable so that the damage is actually reported.
+func TestInspectMappingSeparatesDamageFromAbsence(t *testing.T) {
+	info := &metainfo.Info{Name: "game.rar", Length: 10, PieceLength: 1 << 18}
+
+	root := t.TempDir()
+	write(t, filepath.Join(root, "game.rar"), 3)
+	got := inspectMapping(root, info, false)
+	if got.present != 1 || got.bytes != 0 {
+		t.Fatalf("truncated file mapping = %+v, want present with no matching bytes", got)
+	}
+
+	if got := inspectMapping(t.TempDir(), info, false); got.present != 0 {
+		t.Fatalf("absent file mapping = %+v, want nothing found", got)
 	}
 }
 
