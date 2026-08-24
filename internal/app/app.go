@@ -43,11 +43,20 @@ func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {
 }
 
 func (s *Service) GetStorageInfo() (platform.StorageInfo, error) {
-	info, err := platform.GetStorageInfo(s.settings.GetSettings().GamesPath)
-	if err != nil {
-		slog.Error("storage info", "error", err)
+	library := s.settings.GetSettings().LibraryPath
+	if library == "" {
+		return platform.StorageInfo{}, settings.ErrLibraryNotConfigured
 	}
-	return info, err
+	return s.GetStorageInfoFor(library)
+}
+
+func (s *Service) GetStorageInfoFor(path string) (platform.StorageInfo, error) {
+	info, err := platform.GetStorageInfo(path)
+	if err != nil {
+		slog.Error("storage info", "path", path, "error", err)
+		return platform.StorageInfo{}, err
+	}
+	return info, nil
 }
 
 func (s *Service) SelectExecutable(title string) (string, error) {
