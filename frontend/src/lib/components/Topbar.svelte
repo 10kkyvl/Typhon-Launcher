@@ -157,6 +157,13 @@
     }
   }
 
+  // Окно без рамки, поэтому поведение нативного заголовка приходится повторять вручную.
+  function onTitlebarDoubleClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.no-drag')) return;
+    win('maximise');
+  }
+
   function win(action: 'minimise' | 'maximise' | 'close') {
     if (!inWails) {
       toast('Доступно только в desktop-сборке');
@@ -170,7 +177,8 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<header class="topbar" style="--wails-draggable: drag">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header class="topbar" style="--wails-draggable: drag" ondblclick={onTitlebarDoubleClick}>
   <div class="no-drag nav-buttons">
     <IconButton label="Назад" disabled={!$canGoBack} onclick={goBack}>
       <ChevronLeft size="1.8rem" strokeWidth={1.8} />
