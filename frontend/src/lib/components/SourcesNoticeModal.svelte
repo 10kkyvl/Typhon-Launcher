@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { get } from 'svelte/store';
-  import { settings, updateSettings } from '../stores/settings';
+  import { acceptSourcesNotice } from '../stores/sourcesNotice';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
 
@@ -19,8 +18,8 @@
   async function confirm() {
     saving = true;
     try {
-      await updateSettings({ sourcesNoticeAccepted: true });
-      if (get(settings)?.sourcesNoticeAccepted !== true) return;
+      const accepted = await acceptSourcesNotice();
+      if (!accepted) return;
       open = false;
       onaccepted?.();
     } finally {

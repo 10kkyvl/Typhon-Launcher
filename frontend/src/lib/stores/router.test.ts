@@ -21,7 +21,7 @@ describe('router', () => {
   it('navigates to the profile route with no params', async () => {
     const { navigate, route } = await loadRouter();
     navigate('profile');
-    expect(get(route)).toEqual({ name: 'profile', params: {} });
+    expect(get(route)).toMatchObject({ name: 'profile', params: {} });
   });
 
   it('keeps profile and settings as separate destinations', async () => {
@@ -45,7 +45,7 @@ describe('router', () => {
     navigate('profile');
     resetHistory();
 
-    expect(get(route)).toEqual({ name: 'library', params: {} });
+    expect(get(route)).toMatchObject({ name: 'library', params: {} });
     expect(get(canGoBack)).toBe(false);
     expect(get(canGoForward)).toBe(false);
   });

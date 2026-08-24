@@ -20,8 +20,8 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
-  import { settings } from '../../lib/stores/settings';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
+  import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
@@ -32,10 +32,10 @@
   let detailsReleaseId = $state<string | null>(null);
 
   function startAddSource() {
-    if ($settings?.sourcesNoticeAccepted) {
-      addOpen = true;
-    } else {
+    if (needsSourcesNotice()) {
       noticeOpen = true;
+    } else {
+      addOpen = true;
     }
   }
 
