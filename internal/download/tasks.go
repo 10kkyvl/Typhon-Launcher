@@ -73,7 +73,7 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	opts := storageOpts{flat: req.Flat, inPlace: req.InPlace}
 	lt, err := cl.addMetainfo(mi, destination, opts)
 	if err != nil {
-		slog.Error("add torrent", "infoHash", infoHash, "error", err)
+		slog.Error("add torrent", "operation", "start_task", "error", err)
 		return Download{}, errors.New("не удалось добавить торрент")
 	}
 
@@ -108,7 +108,7 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	}
 	m.items = append(m.items, d)
 	if err := m.store.saveMetainfo(infoHash, mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
 	}
 	if !req.Verify {
 		m.engines[d.ID] = lt
@@ -122,8 +122,8 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	}
 	m.mu.Unlock()
 
-	slog.Info("download task added", "id", d.ID, "name", d.Name,
-		"infoHash", infoHash, "purpose", req.Origin.Purpose, "inPlace", req.InPlace)
+	slog.Info("download task added", "download_id", d.ID, "name", d.Name,
+		"purpose", req.Origin.Purpose, "inPlace", req.InPlace)
 	emit(eventAdded, snap)
 	return snap, nil
 }

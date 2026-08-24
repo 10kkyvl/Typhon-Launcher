@@ -20,6 +20,7 @@ import (
 	// which keeps files locked on Windows.
 	_ "typhon/internal/download/classicio"
 	"typhon/internal/platform"
+	"typhon/internal/redact"
 	"typhon/internal/settings"
 
 	"github.com/anacrolix/torrent"
@@ -41,8 +42,10 @@ const (
 
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
+var ErrNotFound = errors.New("загрузка не найдена")
+
 var (
-	errNotFound    = errors.New("загрузка не найдена")
+	errNotFound    = ErrNotFound
 	errUnavailable = errors.New("недоступно для этой загрузки")
 	errNoClient    = errors.New("торрент-клиент недоступен")
 	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
@@ -337,7 +340,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 
 	spec, err := buildSpec(source)
 	if err != nil {
-		slog.Error("parse torrent source", "source", source, "error", err)
+		slog.Error("parse torrent source", "operation", "fetch_metadata", "source", redact.Source(source), "error", err)
 		return TorrentInfo{}, err
 	}
 	infoHash := spec.InfoHash.HexString()
@@ -359,7 +362,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 
 	lt, err := cl.add(spec, cl.metaDir, storageOpts{})
 	if err != nil {
-		slog.Error("add torrent for metadata", "source", source, "error", err)
+		slog.Error("add torrent for metadata", "operation", "fetch_metadata", "source", redact.Source(source), "error", err)
 		return TorrentInfo{}, errors.New("не удалось добавить торрент")
 	}
 
@@ -370,20 +373,20 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 		return TorrentInfo{}, errNoMetadata
 	case <-time.After(metadataTimeout):
 		lt.drop()
-		slog.Warn("metadata timeout", "source", source, "infoHash", infoHash)
+		slog.Warn("metadata timeout", "operation", "fetch_metadata", "source", redact.Source(source))
 		return TorrentInfo{}, errNoMetadata
 	}
 
 	info := lt.t.Info()
 	if err := validateInfo(info); err != nil {
 		lt.drop()
-		slog.Warn("unsafe torrent paths", "infoHash", infoHash)
+		slog.Warn("unsafe torrent paths", "operation", "fetch_metadata")
 		return TorrentInfo{}, err
 	}
 
 	mi := lt.t.Metainfo()
 	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+		slog.Warn("save metainfo", "operation", "fetch_metadata", "error", err)
 	}
 
 	m.mu.Lock()
@@ -525,7 +528,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 	lt, err := cl.addMetainfo(&mi, destination, storageOpts{})
 	if err != nil {
-		slog.Error("add torrent", "infoHash", infoHash, "error", err)
+		slog.Error("add torrent", "operation", "start_download", "error", err)
 		return Download{}, errors.New("не удалось добавить торрент")
 	}
 
@@ -551,10 +554,10 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	m.items = append(m.items, d)
 	m.engines[d.ID] = lt
 	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
 	}
 	m.persistLocked()
-	slog.Info("download added", "id", d.ID, "name", d.Name, "infoHash", infoHash)
+	slog.Info("download added", "download_id", d.ID, "name", d.Name)
 	emit(eventAdded, snapshot(d))
 	m.schedule()
 	return snapshot(d), nil
@@ -562,7 +565,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 func (m *Manager) watchWriteErrors(id string, lt *liveTorrent) {
 	lt.t.SetOnWriteChunkError(func(err error) {
-		slog.Error("torrent write error", "id", id, "error", err)
+		slog.Error("torrent write error", "download_id", id, "error", err)
 		go m.markFailed(id, "ошибка записи на диск")
 	})
 }
@@ -636,7 +639,7 @@ func (m *Manager) reattachLocked(d *Download, force bool) error {
 		return errUnavailable
 	}
 	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
-		slog.Warn("cannot reattach download", "id", d.ID, "infoHash", d.InfoHash)
+		slog.Warn("cannot reattach download", "download_id", d.ID)
 		return errNoRestore
 	}
 	if m.client == nil || m.ctx == nil || m.closing {
@@ -708,7 +711,7 @@ func (m *Manager) DeleteData(id string) error {
 	destination, name := d.Destination, d.Name
 
 	m.dropLocked(id)
-	slog.Info("download data deleted", "id", id, "name", name)
+	slog.Info("download data deleted", "download_id", id, "name", name)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
 	m.mu.Unlock()
@@ -747,9 +750,9 @@ func (m *Manager) discard(id string, deleteData bool) error {
 
 	m.dropLocked(id)
 	if deleteData {
-		slog.Info("download cancelled", "id", id, "name", name)
+		slog.Info("download cancelled", "download_id", id, "name", name)
 	} else {
-		slog.Info("download removed", "id", id, "name", name)
+		slog.Info("download removed", "download_id", id, "name", name)
 	}
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
@@ -864,14 +867,22 @@ func (m *Manager) startLocked(d *Download) bool {
 	}
 	eng.setPriorities(selectionOf(d))
 	eng.allowDownload()
-	eng.allowUpload()
+	applyUpload(eng, m.config().UploadWhileDownloading)
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
 	m.rates[d.ID] = newRateState()
-	slog.Info("download started", "id", d.ID, "name", d.Name)
+	slog.Info("download started", "download_id", d.ID, "name", d.Name)
 	emit(eventUpdated, snapshot(d))
 	return true
+}
+
+func applyUpload(eng engineTorrent, allow bool) {
+	if allow {
+		eng.allowUpload()
+		return
+	}
+	eng.disallowUpload()
 }
 
 func (m *Manager) idleLocked(d *Download, status Status) {
@@ -994,7 +1005,7 @@ func (m *Manager) completeLocked(d *Download) {
 		}
 	}
 	m.persistLocked()
-	slog.Info("download completed", "id", d.ID, "name", d.Name)
+	slog.Info("download completed", "download_id", d.ID, "name", d.Name)
 	emit(eventCompleted, snapshot(d))
 	emit(eventUpdated, snapshot(d))
 	if m.onCompleted != nil {
@@ -1022,10 +1033,13 @@ func (m *Manager) applySettings(next settings.Settings) {
 	}
 	m.max = maxActive(next)
 	for _, d := range m.items {
+		eng := m.engines[d.ID]
 		if d.Status != StatusCompleted {
+			if eng != nil && d.Status == StatusDownloading {
+				applyUpload(eng, next.UploadWhileDownloading)
+			}
 			continue
 		}
-		eng := m.engines[d.ID]
 		switch {
 		case !next.SeedAfterDownload:
 			if eng != nil {
@@ -1058,7 +1072,7 @@ func (m *Manager) reseedLocked(d *Download) {
 		return
 	}
 	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
-		slog.Warn("cannot reseed download", "id", d.ID, "infoHash", d.InfoHash)
+		slog.Warn("cannot reseed download", "download_id", d.ID)
 		return
 	}
 	m.spawnRestoreLocked(restoreJob{
@@ -1159,7 +1173,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	defer m.endJob(j.id)
 
 	if m.hashInUse(j.infoHash, j.id) {
-		slog.Warn("torrent already attached elsewhere", "id", j.id, "infoHash", j.infoHash)
+		slog.Warn("torrent already attached elsewhere", "download_id", j.id)
 		if j.complete {
 			m.setSeeding(j.id, false)
 			return
@@ -1173,7 +1187,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 		if jobCtx.Err() != nil {
 			return
 		}
-		slog.Error("restore download", "id", j.id, "infoHash", j.infoHash, "error", err)
+		slog.Error("restore download", "download_id", j.id, "error", err)
 		if j.complete {
 			m.setSeeding(j.id, false)
 			return
@@ -1200,8 +1214,9 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 	m.engines[j.id] = eng
 	eng.setPriorities(selectionOf(d))
 	if j.complete {
-		d.Seeding = true
-		eng.allowUpload()
+		seed := m.config().SeedAfterDownload
+		d.Seeding = seed
+		applyUpload(eng, seed)
 		emit(eventUpdated, snapshot(d))
 		m.persistLocked()
 		m.mu.Unlock()
@@ -1215,7 +1230,7 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 		if ctx.Err() != nil {
 			return
 		}
-		slog.Warn("verify download", "id", j.id, "error", err)
+		slog.Warn("verify download", "download_id", j.id, "error", err)
 	}
 
 	m.mu.Lock()
@@ -1282,7 +1297,7 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 
 	mi := lt.t.Metainfo()
 	if err := m.store.saveMetainfo(j.infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", j.infoHash, "error", err)
+		slog.Warn("save metainfo", "download_id", j.id, "error", err)
 	}
 	return lt, nil
 }

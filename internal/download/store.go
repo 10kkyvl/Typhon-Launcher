@@ -124,6 +124,7 @@ func (s *store) sweepMetainfo(known map[string]bool) {
 	if err != nil {
 		return
 	}
+	removed := 0
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".torrent") {
@@ -133,10 +134,13 @@ func (s *store) sweepMetainfo(known map[string]bool) {
 			continue
 		}
 		if err := os.Remove(filepath.Join(dir, name)); err != nil {
-			slog.Warn("remove orphaned torrent file", "name", name, "error", err)
-		} else {
-			slog.Info("removed orphaned torrent file", "name", name)
+			slog.Warn("remove orphaned torrent file", "operation", "sweep_metainfo", "error", err)
+			continue
 		}
+		removed++
+	}
+	if removed > 0 {
+		slog.Info("removed orphaned torrent files", "operation", "sweep_metainfo", "count", removed)
 	}
 }
 
@@ -145,6 +149,6 @@ func (s *store) removeMetainfo(infoHash string) {
 		return
 	}
 	if err := os.Remove(s.metainfoPath(infoHash)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Warn("remove torrent file", "infoHash", infoHash, "error", err)
+		slog.Warn("remove torrent file", "operation", "sweep_metainfo", "error", err)
 	}
 }

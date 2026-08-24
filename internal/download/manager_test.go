@@ -2,6 +2,8 @@ package download
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -818,5 +820,197 @@ func TestCompletionNotifiesInstaller(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("completion callback not invoked")
+	}
+}
+
+func newManagerWithSettings(t *testing.T, cfg settings.Settings) (*Manager, *settings.Service) {
+	t.Helper()
+	dir := t.TempDir()
+	svc, err := settings.NewServiceAt(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatalf("new settings service: %v", err)
+	}
+	if err := svc.SaveSettings(cfg); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	m, err := newManagerAt(dir, svc)
+	if err != nil {
+		t.Fatalf("new download manager at %s: %v", dir, err)
+	}
+	m.max = 2
+	return m, svc
+}
+
+func TestUploadSettingCombinations(t *testing.T) {
+	cases := []struct {
+		name            string
+		uploadWhile     bool
+		seedAfter       bool
+		duringDownload  bool
+		afterCompletion bool
+	}{
+		{"both off", false, false, false, false},
+		{"seed after only", false, true, false, true},
+		{"upload while only", true, false, true, false},
+		{"both on", true, true, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := settings.Defaults()
+			cfg.UploadWhileDownloading = c.uploadWhile
+			cfg.SeedAfterDownload = c.seedAfter
+			m, _ := newManagerWithSettings(t, cfg)
+
+			eng := m.addTestDownload("a")
+			if got := m.statusOf(t, "a"); got != StatusDownloading {
+				t.Fatalf("status = %s, want %s", got, StatusDownloading)
+			}
+			if got := eng.isUploading(); got != c.duringDownload {
+				t.Fatalf("uploading during download = %v, want %v", got, c.duringDownload)
+			}
+
+			eng.finish()
+			m.sample(time.Now())
+			if got := m.statusOf(t, "a"); got != StatusCompleted {
+				t.Fatalf("status = %s, want %s", got, StatusCompleted)
+			}
+			if got := eng.isUploading(); got != c.afterCompletion {
+				t.Fatalf("uploading after completion = %v, want %v", got, c.afterCompletion)
+			}
+			done, err := m.Get("a")
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if done.Seeding != c.seedAfter {
+				t.Fatalf("seeding = %v, want %v", done.Seeding, c.seedAfter)
+			}
+		})
+	}
+}
+
+func TestStartKeepsUploadOffByDefault(t *testing.T) {
+	m, _ := newManagerWithSettings(t, settings.Defaults())
+	eng := m.addTestDownload("a")
+	if eng.isUploading() {
+		t.Fatal("upload allowed with upload-while-downloading off")
+	}
+}
+
+func TestResumeReappliesUploadSetting(t *testing.T) {
+	cfg := settings.Defaults()
+	cfg.UploadWhileDownloading = true
+	m, svc := newManagerWithSettings(t, cfg)
+
+	eng := m.addTestDownload("a")
+	if !eng.isUploading() {
+		t.Fatal("upload not allowed with the setting on")
+	}
+	if err := m.Pause("a"); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+	if eng.isUploading() {
+		t.Fatal("upload still allowed while paused")
+	}
+
+	cfg.UploadWhileDownloading = false
+	if err := svc.SaveSettings(cfg); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	if err := m.Resume("a"); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if got := m.statusOf(t, "a"); got != StatusDownloading {
+		t.Fatalf("status = %s, want %s", got, StatusDownloading)
+	}
+	if eng.isUploading() {
+		t.Fatal("resume re-enabled upload with the setting off")
+	}
+}
+
+func TestUploadSettingAppliesToActiveDownload(t *testing.T) {
+	cfg := settings.Defaults()
+	m, _ := newManagerWithSettings(t, cfg)
+	eng := m.addTestDownload("a")
+	if eng.isUploading() {
+		t.Fatal("upload allowed with the setting off")
+	}
+
+	cfg.UploadWhileDownloading = true
+	m.applySettings(cfg)
+	if !eng.isUploading() {
+		t.Fatal("upload not allowed after enabling the setting")
+	}
+
+	cfg.UploadWhileDownloading = false
+	m.applySettings(cfg)
+	if eng.isUploading() {
+		t.Fatal("upload still allowed after disabling the setting")
+	}
+}
+
+func TestUploadWhileDownloadingDoesNotSeedCompleted(t *testing.T) {
+	cfg := settings.Defaults()
+	cfg.UploadWhileDownloading = true
+	cfg.SeedAfterDownload = false
+	m, _ := newManagerWithSettings(t, cfg)
+
+	eng := m.addTestDownload("a")
+	eng.finish()
+	m.sample(time.Now())
+
+	if eng.isUploading() {
+		t.Fatal("completed download keeps uploading with seed-after-download off")
+	}
+	waitUntil(t, "engine drop", eng.wasDropped)
+}
+
+type logSink struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (s *logSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *logSink) text() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func captureLogs(t *testing.T) *logSink {
+	t.Helper()
+	sink := &logSink{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return sink
+}
+
+func TestLogsHideInfoHashAndSource(t *testing.T) {
+	const infoHash = "a748597437835a2fd0d2e06f8edd86fee316a84d"
+	m, _ := newManagerWithSettings(t, settings.Defaults())
+	d := m.addTestItem("a", StatusPaused)
+	m.mu.Lock()
+	d.InfoHash = infoHash
+	d.Source = `D:\Downloads\Startup Panic.torrent`
+	m.mu.Unlock()
+
+	sink := captureLogs(t)
+	if err := m.Resume("a"); !errors.Is(err, errNoRestore) {
+		t.Fatalf("resume = %v, want %v", err, errNoRestore)
+	}
+
+	logged := sink.text()
+	if !strings.Contains(logged, "download_id=a") {
+		t.Fatalf("log has no download id: %q", logged)
+	}
+	for _, leak := range []string{infoHash, "Startup Panic", ".torrent"} {
+		if strings.Contains(logged, leak) {
+			t.Fatalf("log leaks %q: %q", leak, logged)
+		}
 	}
 }
