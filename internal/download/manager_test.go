@@ -27,6 +27,7 @@ type fakeTorrent struct {
 	priorities   []bool
 	entered      chan struct{}
 	gate         chan struct{}
+	paths        []string
 }
 
 func (f *fakeTorrent) setPriorities(selected []bool) {
@@ -63,6 +64,12 @@ func (f *fakeTorrent) fileBytes() []int64 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return []int64{f.done}
+}
+
+func (f *fakeTorrent) filePaths(_ string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.paths
 }
 
 func (f *fakeTorrent) stats() engineStats {
@@ -220,7 +227,23 @@ func mustManagerAt(t testing.TB, dir string) *Manager {
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	withTestContext(t, m)
 	return m
+}
+
+func withTestContext(t testing.TB, m *Manager) {
+	t.Helper()
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	t.Cleanup(m.cancel)
+}
+
+func fakeFilePath(t *testing.T, size int64) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "download.bin")
+	if err := os.WriteFile(path, make([]byte, size), 0o644); err != nil {
+		t.Fatalf("write fake file: %v", err)
+	}
+	return path
 }
 
 func TestQueueRespectsMaxActive(t *testing.T) {
@@ -244,8 +267,12 @@ func TestCompletionPromotesNext(t *testing.T) {
 	}
 
 	first.finish()
-	m.sample(time.Now())
+	first.mu.Lock()
+	first.paths = []string{fakeFilePath(t, first.size)}
+	first.mu.Unlock()
+	m.sample(context.Background(), time.Now())
 
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 	assertStatuses(t, m, map[string]Status{
 		"a": StatusCompleted,
 		"b": StatusDownloading,
@@ -317,7 +344,11 @@ func TestPauseCompletedIsRejected(t *testing.T) {
 	m := newTestManager(t, 1)
 	engine := m.addTestDownload("a")
 	engine.finish()
-	m.sample(time.Now())
+	engine.mu.Lock()
+	engine.paths = []string{fakeFilePath(t, engine.size)}
+	engine.mu.Unlock()
+	m.sample(context.Background(), time.Now())
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 
 	if err := m.Pause("a"); err != errUnavailable {
 		t.Fatalf("pause completed = %v, want %v", err, errUnavailable)
@@ -561,11 +592,12 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	m := newTestManager(t, 2)
 	eng := m.addTestDownload("a")
 	eng.finish()
-	m.sample(time.Now())
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+	m.sample(context.Background(), time.Now())
 
-	if got := m.statusOf(t, "a"); got != StatusCompleted {
-		t.Fatalf("status = %s, want %s", got, StatusCompleted)
-	}
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 	if got, _ := m.Get("a"); got.Seeding {
 		t.Fatal("seeding reported with seed-after-download off")
 	}
@@ -810,8 +842,9 @@ func TestCompletionNotifiesInstaller(t *testing.T) {
 	eng := m.addTestDownload("a")
 	eng.mu.Lock()
 	eng.done = 100
+	eng.paths = []string{fakeFilePath(t, eng.size)}
 	eng.mu.Unlock()
-	m.sample(time.Now())
+	m.sample(context.Background(), time.Now())
 
 	select {
 	case d := <-seen:
@@ -837,6 +870,7 @@ func newManagerWithSettings(t *testing.T, cfg settings.Settings) (*Manager, *set
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	withTestContext(t, m)
 	m.max = 2
 	return m, svc
 }
@@ -870,10 +904,11 @@ func TestUploadSettingCombinations(t *testing.T) {
 			}
 
 			eng.finish()
-			m.sample(time.Now())
-			if got := m.statusOf(t, "a"); got != StatusCompleted {
-				t.Fatalf("status = %s, want %s", got, StatusCompleted)
-			}
+			eng.mu.Lock()
+			eng.paths = []string{fakeFilePath(t, eng.size)}
+			eng.mu.Unlock()
+			m.sample(context.Background(), time.Now())
+			waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 			if got := eng.isUploading(); got != c.afterCompletion {
 				t.Fatalf("uploading after completion = %v, want %v", got, c.afterCompletion)
 			}
@@ -956,12 +991,80 @@ func TestUploadWhileDownloadingDoesNotSeedCompleted(t *testing.T) {
 
 	eng := m.addTestDownload("a")
 	eng.finish()
-	m.sample(time.Now())
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+	m.sample(context.Background(), time.Now())
 
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 	if eng.isUploading() {
 		t.Fatal("completed download keeps uploading with seed-after-download off")
 	}
 	waitUntil(t, "engine drop", eng.wasDropped)
+}
+
+func TestCompletionFailsWhenFileMissingFromDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.mu.Lock()
+	eng.done = eng.size
+	eng.paths = []string{filepath.Join(t.TempDir(), "missing.bin")}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to fail", func() bool { return m.statusOf(t, "a") == StatusFailed })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error == "" {
+		t.Fatal("failed download has no error message")
+	}
+}
+
+func TestCompletionFailsWhenFileTruncatedOnDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	path := filepath.Join(t.TempDir(), "game.bin")
+	if err := os.WriteFile(path, make([]byte, 10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng.mu.Lock()
+	eng.done = eng.size
+	eng.paths = []string{path}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to fail", func() bool { return m.statusOf(t, "a") == StatusFailed })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error == "" {
+		t.Fatal("failed download has no error message")
+	}
+}
+
+func TestCompletionSucceedsWhenFileMatchesOnDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error != "" {
+		t.Fatalf("error = %q, want empty", got.Error)
+	}
 }
 
 type logSink struct {

@@ -2,9 +2,12 @@ package install
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"typhon/internal/download"
 )
 
 func TestInspectPortableDir(t *testing.T) {
@@ -246,5 +249,67 @@ func TestInspectIgnoresUninstallerAsGame(t *testing.T) {
 func TestInspectMissingDir(t *testing.T) {
 	if _, err := Inspect(context.Background(), filepath.Join(t.TempDir(), "nope")); err == nil {
 		t.Fatal("expected error for missing dir")
+	}
+}
+
+func TestInspectEmptyDir(t *testing.T) {
+	root := t.TempDir()
+
+	plan, err := Inspect(context.Background(), root)
+	if err == nil {
+		t.Fatalf("Inspect = %+v, want error", plan)
+	}
+	if !errors.Is(err, errEmptySource) {
+		t.Fatalf("err = %v, want errEmptySource", err)
+	}
+	if errors.Is(err, errIncompleteSource) || errors.Is(err, errUnrecognizedSource) {
+		t.Fatalf("err = %v, matches wrong sentinel", err)
+	}
+}
+
+func TestInspectPartialOnly(t *testing.T) {
+	root := t.TempDir()
+	mkFile(t, filepath.Join(root, "game.rar"+download.PartFileSuffix), 4096)
+
+	plan, err := Inspect(context.Background(), root)
+	if err == nil {
+		t.Fatalf("Inspect = %+v, want error", plan)
+	}
+	if !errors.Is(err, errIncompleteSource) {
+		t.Fatalf("err = %v, want errIncompleteSource", err)
+	}
+	if errors.Is(err, errEmptySource) || errors.Is(err, errUnrecognizedSource) {
+		t.Fatalf("err = %v, matches wrong sentinel", err)
+	}
+}
+
+func TestInspectPartialAlongsideContent(t *testing.T) {
+	root := t.TempDir()
+	mkText(t, filepath.Join(root, "readme.txt"), "nothing here")
+	mkFile(t, filepath.Join(root, "extra.rar"+download.PartFileSuffix), 4096)
+
+	plan, err := Inspect(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if !plan.RequiresUserInteraction {
+		t.Fatal("partial file alongside real content must not be reported as incomplete download")
+	}
+}
+
+func TestInspectUnrecognizedSingleFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "save.dat")
+	mkFile(t, path, 128)
+
+	plan, err := Inspect(context.Background(), path)
+	if err == nil {
+		t.Fatalf("Inspect = %+v, want error", plan)
+	}
+	if !errors.Is(err, errUnrecognizedSource) {
+		t.Fatalf("err = %v, want errUnrecognizedSource", err)
+	}
+	if errors.Is(err, errEmptySource) || errors.Is(err, errIncompleteSource) {
+		t.Fatalf("err = %v, matches wrong sentinel", err)
 	}
 }

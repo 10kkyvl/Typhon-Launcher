@@ -49,6 +49,7 @@ type engineTorrent interface {
 	allowUpload()
 	disallowUpload()
 	fileBytes() []int64
+	filePaths(destination string) []string
 	stats() engineStats
 	verify(ctx context.Context) error
 	drop()
@@ -172,7 +173,7 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
-	return &liveTorrent{t: t, storage: st}, nil
+	return &liveTorrent{t: t, storage: st, flat: opts.flat}, nil
 }
 
 func magnetSpec(uri string) (*torrent.TorrentSpec, error) {
@@ -216,6 +217,7 @@ func applyLimit(l *rate.Limiter, bytesPerSecond int64) {
 type liveTorrent struct {
 	t       *torrent.Torrent
 	storage io.Closer
+	flat    bool
 }
 
 func (l *liveTorrent) setPriorities(selected []bool) {
@@ -240,6 +242,15 @@ func (l *liveTorrent) fileBytes() []int64 {
 		done[i] = f.BytesCompleted()
 	}
 	return done
+}
+
+func (l *liveTorrent) filePaths(destination string) []string {
+	rel := relativePaths(l.t.Info(), l.flat)
+	out := make([]string, len(rel))
+	for i, r := range rel {
+		out[i] = filepath.Join(destination, r)
+	}
+	return out
 }
 
 func (l *liveTorrent) stats() engineStats {

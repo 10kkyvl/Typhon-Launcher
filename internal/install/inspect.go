@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"typhon/internal/download"
 )
 
 const (
@@ -17,6 +19,9 @@ const (
 )
 
 var errNoSource = errors.New("папка загрузки недоступна")
+var errEmptySource = errors.New("папка загрузки пуста — файлы не были загружены")
+var errIncompleteSource = errors.New("загрузка не завершена — на диске остались только незавершённые файлы")
+var errUnrecognizedSource = errors.New("формат файла не распознан")
 
 var junkExts = map[string]bool{
 	".nfo": true,
@@ -87,6 +92,9 @@ func Inspect(ctx context.Context, dir string) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	if len(entries) == 0 {
+		return Plan{}, fmt.Errorf("%w: %s", errEmptySource, root)
+	}
 	var files []sizedEntry
 	dirCount := 0
 	for _, e := range entries {
@@ -95,6 +103,9 @@ func Inspect(ctx context.Context, dir string) (Plan, error) {
 			continue
 		}
 		files = append(files, e)
+	}
+	if len(files) > 0 && allPartial(files) {
+		return Plan{}, fmt.Errorf("%w: %s", errIncompleteSource, root)
 	}
 
 	total, err := DirSize(ctx, root)
@@ -166,8 +177,7 @@ func inspectFile(path string, size int64) (Plan, error) {
 		}
 		plan.EstimatedSize = size
 	default:
-		plan.EstimatedSize = size
-		plan.RequiresUserInteraction = true
+		return Plan{}, fmt.Errorf("%w: %s", errUnrecognizedSource, filepath.Base(path))
 	}
 	return plan, nil
 }
@@ -230,6 +240,15 @@ func normalizeRoot(dir string) (string, error) {
 		current = filepath.Join(current, sub)
 	}
 	return current, nil
+}
+
+func allPartial(files []sizedEntry) bool {
+	for _, f := range files {
+		if !download.IsPartFile(f.name) {
+			return false
+		}
+	}
+	return true
 }
 
 func isJunk(e sizedEntry) bool {

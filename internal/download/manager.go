@@ -913,19 +913,20 @@ func (m *Manager) markFailed(id, message string) {
 
 func (m *Manager) tick() {
 	defer m.wg.Done()
+	ctx := m.ctx
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			m.sample(now)
+			m.sample(ctx, now)
 		}
 	}
 }
 
-func (m *Manager) sample(now time.Time) {
+func (m *Manager) sample(ctx context.Context, now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	changed := false
@@ -940,7 +941,11 @@ func (m *Manager) sample(now time.Time) {
 		before := *d
 		m.updateLocked(d, eng, now)
 		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total {
-			m.completeLocked(d)
+			d.Status = StatusVerifying
+			id, dest := d.ID, d.Destination
+			files := append([]FileState(nil), d.Files...)
+			emit(eventUpdated, snapshot(d))
+			m.spawnVerifyLocked(ctx, id, eng, dest, files)
 			changed = true
 			continue
 		}
@@ -953,6 +958,39 @@ func (m *Manager) sample(now time.Time) {
 		m.lastPersist = now
 		m.persistLocked()
 	}
+}
+
+func (m *Manager) spawnVerifyLocked(ctx context.Context, id string, eng engineTorrent, dest string, files []FileState) {
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.verifyCompletion(ctx, id, eng, dest, files)
+	}()
+}
+
+func (m *Manager) verifyCompletion(ctx context.Context, id string, eng engineTorrent, dest string, files []FileState) {
+	jobCtx, started := m.beginJob(ctx, id)
+	if !started {
+		return
+	}
+	defer m.endJob(id)
+
+	err := verifyFilesOnDisk(jobCtx, files, eng.filePaths(dest))
+	if err != nil {
+		if jobCtx.Err() != nil {
+			return
+		}
+		m.markFailed(id, err.Error())
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d := m.findLocked(id)
+	if d == nil {
+		return
+	}
+	m.completeLocked(d)
 }
 
 func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
@@ -1329,7 +1367,7 @@ func removeContent(destination, name string) {
 		return
 	}
 	root := filepath.Join(destination, name)
-	for _, path := range []string{root, root + ".part"} {
+	for _, path := range []string{root, root + PartFileSuffix} {
 		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("remove download data", "path", path, "error", err)
 		}
