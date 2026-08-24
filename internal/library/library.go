@@ -27,7 +27,6 @@ type Game struct {
 	LaunchArgs        []string   `json:"launchArgs,omitempty"`
 	InstallDir        string     `json:"installDir"`
 	Cover             string     `json:"cover"`
-	Hero              string     `json:"hero"`
 	Version           string     `json:"version"`
 	VersionSource     string     `json:"versionSource,omitempty"`
 	VersionConfidence float64    `json:"versionConfidence,omitempty"`
@@ -40,18 +39,44 @@ type Game struct {
 	ReleaseID         string     `json:"releaseId,omitempty"`
 	SourceID          string     `json:"sourceId,omitempty"`
 	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
+	Source            string     `json:"source,omitempty"`
+	InstallType       string     `json:"installType,omitempty"`
+	Owned             bool       `json:"owned,omitempty"`
+	Uninstall         Uninstall  `json:"uninstall,omitzero"`
+	UninstallUnknown  bool       `json:"uninstallUnknown,omitempty"`
+	Uninstalled       bool       `json:"uninstalled,omitempty"`
 }
 
+type Uninstall struct {
+	Key          string `json:"key,omitempty"`
+	Command      string `json:"command,omitempty"`
+	QuietCommand string `json:"quietCommand,omitempty"`
+	ProductCode  string `json:"productCode,omitempty"`
+}
+
+func (u Uninstall) Empty() bool {
+	return u.Command == "" && u.QuietCommand == "" && u.ProductCode == ""
+}
+
+const (
+	SourceManaged    = "managed"
+	SourceDiscovered = "discovered"
+)
+
 type InstalledGame struct {
-	Title            string `json:"title"`
-	Executable       string `json:"executable"`
-	InstallDir       string `json:"installDir"`
-	Version          string `json:"version"`
-	VersionSource    string `json:"versionSource"`
-	SourceDownloadID string `json:"sourceDownloadId"`
-	ReleaseID        string `json:"releaseId"`
-	SourceID         string `json:"sourceId"`
-	CanonicalGameID  string `json:"canonicalGameId"`
+	Title            string    `json:"title"`
+	Executable       string    `json:"executable"`
+	InstallDir       string    `json:"installDir"`
+	Version          string    `json:"version"`
+	VersionSource    string    `json:"versionSource"`
+	SourceDownloadID string    `json:"sourceDownloadId"`
+	ReleaseID        string    `json:"releaseId"`
+	SourceID         string    `json:"sourceId"`
+	CanonicalGameID  string    `json:"canonicalGameId"`
+	InstallType      string    `json:"installType"`
+	Owned            bool      `json:"owned"`
+	Uninstall        Uninstall `json:"uninstall,omitzero"`
+	UninstallUnknown bool      `json:"uninstallUnknown"`
 }
 
 type InstalledUpdate struct {
@@ -64,14 +89,25 @@ type InstalledUpdate struct {
 	SourceID      string `json:"sourceId"`
 }
 
-var errEmptyInstallDir = errors.New("каталог установки не задан")
+var (
+	errEmptyInstallDir = errors.New("каталог установки не задан")
+	errNotFound        = errors.New("игра не найдена")
+)
 
 type Service struct {
-	mu        sync.Mutex
-	path      string
-	games     []Game
-	running   map[string]*session
-	onSession func(gameID string, seconds int64)
+	mu           sync.Mutex
+	path         string
+	excludedPath string
+	games        []Game
+	excluded     []string
+	running      map[string]*session
+	onSession    func(gameID string, seconds int64)
+	watcher      SessionWatcher
+}
+
+type SessionWatcher interface {
+	SessionStarted(game Game)
+	SessionStopped(gameID string)
 }
 
 type session struct {
@@ -87,19 +123,29 @@ func NewService() (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("config dir unavailable")
 	}
-	return newServiceAt(filepath.Join(dir, "library.json"))
+	return NewServiceAt(filepath.Join(dir, "library.json"))
 }
 
-func newServiceAt(path string) (*Service, error) {
+//wails:ignore
+func NewServiceAt(path string) (*Service, error) {
 	if path == "" {
 		return nil, errors.New("library path unavailable")
 	}
-	s := &Service{path: path, running: map[string]*session{}}
+	excludedPath, err := excludedPathFor(path)
+	if err != nil {
+		return nil, err
+	}
+	s := &Service{path: path, excludedPath: excludedPath, running: map[string]*session{}}
 	games, err := s.load()
 	if err != nil {
 		return nil, err
 	}
+	excluded, err := loadExcluded(excludedPath)
+	if err != nil {
+		return nil, err
+	}
 	s.games = games
+	s.excluded = excluded
 	return s, nil
 }
 
@@ -145,11 +191,24 @@ func (s *Service) emitUpdated() {
 	emit("library:updated", s.games)
 }
 
-func (s *Service) GetInstalledGames() []Game {
+func (s *Service) GetGames() []Game {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	games := make([]Game, len(s.games))
 	copy(games, s.games)
+	return games
+}
+
+func (s *Service) GetInstalledGames() []Game {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	games := make([]Game, 0, len(s.games))
+	for _, game := range s.games {
+		if game.Uninstalled {
+			continue
+		}
+		games = append(games, game)
+	}
 	return games
 }
 
@@ -168,7 +227,8 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	if err != nil || info.IsDir() {
 		return Game{}, errors.New("исполняемый файл не найден")
 	}
-	title = strings.TrimSpace(title)
+	provided := strings.TrimSpace(title)
+	title = provided
 	if title == "" {
 		title = TitleFromExecutable(executable)
 	}
@@ -186,14 +246,19 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 		SizeBytes:   size,
 		SizeUnknown: unknown,
 		InstalledAt: time.Now(),
+		Source:      SourceManaged,
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, existing := range s.games {
-		if strings.EqualFold(existing.Executable, executable) {
+	for i := range s.games {
+		if !strings.EqualFold(s.games[i].Executable, executable) {
+			continue
+		}
+		if !s.games[i].Uninstalled {
 			return Game{}, errors.New("эта игра уже добавлена")
 		}
+		return s.reviveLocked(i, provided, installDir, size, unknown)
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
@@ -203,6 +268,41 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	slog.Info("game added", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
+}
+
+// matchRegisteredLocked ищет запись, которую переустанавливают. Совпадение по
+// исполняемому файлу — прежнее правило; запись, снятую с ПК, дополнительно ловим
+// по игре каталога, иначе установка в другую папку заводит вторую карточку той
+// же игры рядом с первой.
+func (s *Service) matchRegisteredLocked(g InstalledGame) int {
+	match := -1
+	for i := range s.games {
+		if strings.EqualFold(s.games[i].Executable, g.Executable) {
+			return i
+		}
+		if match < 0 && s.games[i].Uninstalled && g.CanonicalGameID != "" && s.games[i].CanonicalGameID == g.CanonicalGameID {
+			match = i
+		}
+	}
+	return match
+}
+
+func (s *Service) reviveLocked(pos int, title, installDir string, size int64, unknown bool) (Game, error) {
+	previous := s.games[pos]
+	s.games[pos].Uninstalled = false
+	s.games[pos].InstallDir = installDir
+	s.games[pos].SizeBytes = size
+	s.games[pos].SizeUnknown = unknown
+	if title != "" {
+		s.games[pos].Title = title
+	}
+	if err := s.persist(); err != nil {
+		s.games[pos] = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	slog.Info("game reinstalled", "id", s.games[pos].ID, "title", s.games[pos].Title)
+	s.emitUpdated()
+	return s.games[pos], nil
 }
 
 func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
@@ -218,14 +318,16 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i := range s.games {
-		if !strings.EqualFold(s.games[i].Executable, g.Executable) {
-			continue
-		}
+	if err := s.allowLocked(installDir); err != nil {
+		return Game{}, err
+	}
+	if i := s.matchRegisteredLocked(g); i >= 0 {
 		previous := s.games[i]
 		if title != "" {
 			s.games[i].Title = title
 		}
+		s.games[i].Executable = g.Executable
+		s.games[i].Uninstalled = false
 		s.games[i].InstallDir = installDir
 		s.games[i].Version = g.Version
 		s.games[i].VersionSource = g.VersionSource
@@ -240,10 +342,16 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		if g.CanonicalGameID != "" {
 			s.games[i].CanonicalGameID = g.CanonicalGameID
 		}
+		s.games[i].Source = SourceManaged
+		s.games[i].InstallType = g.InstallType
+		s.games[i].Owned = g.Owned
+		s.games[i].Uninstall = g.Uninstall
+		s.games[i].UninstallUnknown = g.UninstallUnknown
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return Game{}, fmt.Errorf("save library: %w", err)
 		}
+		markInstalled(s.games[i])
 		slog.Info("game updated", "id", s.games[i].ID, "title", s.games[i].Title)
 		s.emitUpdated()
 		return s.games[i], nil
@@ -267,12 +375,18 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		ReleaseID:        g.ReleaseID,
 		SourceID:         g.SourceID,
 		CanonicalGameID:  g.CanonicalGameID,
+		Source:           SourceManaged,
+		InstallType:      g.InstallType,
+		Owned:            g.Owned,
+		Uninstall:        g.Uninstall,
+		UninstallUnknown: g.UninstallUnknown,
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
 		s.games = s.games[:len(s.games)-1]
 		return Game{}, fmt.Errorf("save library: %w", err)
 	}
+	markInstalled(game)
 	slog.Info("game installed", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
@@ -283,6 +397,13 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetSessionWatcher(w SessionWatcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.watcher = w
 }
 
 //wails:ignore
@@ -327,17 +448,88 @@ func (s *Service) RemoveGame(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, game := range s.games {
-		if game.ID == id {
-			s.games = append(s.games[:i], s.games[i+1:]...)
-			if err := s.persist(); err != nil {
-				return err
+		if game.ID != id {
+			continue
+		}
+		if game.InstallDir != "" {
+			_, err := os.Stat(game.InstallDir)
+			switch {
+			case err == nil:
+				if err := s.excludeLocked(game.InstallDir); err != nil {
+					return err
+				}
+			case !errors.Is(err, fs.ErrNotExist):
+				return fmt.Errorf("stat %s: %w", game.InstallDir, err)
 			}
-			slog.Info("game removed", "id", id, "title", game.Title)
-			s.emitUpdated()
-			return nil
+		}
+		previous := append([]Game(nil), s.games...)
+		s.games = append(s.games[:i:i], s.games[i+1:]...)
+		if err := s.persist(); err != nil {
+			s.games = previous
+			if rollback := s.allowLocked(game.InstallDir); rollback != nil {
+				return errors.Join(err, rollback)
+			}
+			return err
+		}
+		slog.Info("game removed", "id", id, "title", game.Title)
+		s.emitUpdated()
+		return nil
+	}
+	return errNotFound
+}
+
+// MarkUninstalled оставляет карточку в библиотеке, но снимает с неё всё, что
+// описывает пропавшую установку: игры на диске больше нет, а наигранное время,
+// привязка к каталогу и путь для повторной установки остаются.
+//
+//wails:ignore
+func (s *Service) MarkUninstalled(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID != id {
+			continue
+		}
+		previous := s.games[i]
+		s.games[i].Uninstalled = true
+		s.games[i].SizeBytes = 0
+		s.games[i].SizeUnknown = false
+		s.games[i].Version = ""
+		s.games[i].VersionSource = ""
+		s.games[i].VersionConfidence = 0
+		s.games[i].InstallType = ""
+		s.games[i].Owned = false
+		s.games[i].Uninstall = Uninstall{}
+		s.games[i].UninstallUnknown = false
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return fmt.Errorf("save library: %w", err)
+		}
+		slog.Info("game uninstalled", "id", id, "title", s.games[i].Title)
+		s.emitUpdated()
+		return nil
+	}
+	return errNotFound
+}
+
+//wails:ignore
+func (s *Service) Find(id string) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID == id {
+			return s.games[i], nil
 		}
 	}
-	return errors.New("игра не найдена")
+	return Game{}, errNotFound
+}
+
+//wails:ignore
+func (s *Service) IsRunning(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.running[id]
+	return ok
 }
 
 func TitleFromExecutable(executable string) string {

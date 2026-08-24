@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewServiceAtRejectsEmptyPath(t *testing.T) {
-	if _, err := newServiceAt(""); err == nil {
+	if _, err := NewServiceAt(""); err == nil {
 		t.Fatal("empty path must not produce a service")
 	}
 }
@@ -27,7 +27,7 @@ func TestCorruptLibraryFailsStartupAndKeepsFile(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.raw), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := newServiceAt(path); err == nil {
+			if _, err := NewServiceAt(path); err == nil {
 				t.Fatal("corrupt library must not produce a service")
 			}
 			got, err := os.ReadFile(filepath.Clean(path))

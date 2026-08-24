@@ -19,7 +19,7 @@ func tempGameExe(t *testing.T) string {
 
 func mustServiceAt(t testing.TB, path string) *Service {
 	t.Helper()
-	s, err := newServiceAt(path)
+	s, err := NewServiceAt(path)
 	if err != nil {
 		t.Fatalf("new library service at %s: %v", path, err)
 	}
