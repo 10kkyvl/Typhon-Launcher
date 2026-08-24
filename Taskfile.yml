@@ -60,6 +60,11 @@ tasks:
     cmds:
       - golangci-lint run --new-from-rev={{.REV}} --whole-files=false ./...
 
+  legal:check:
+    summary: Fails the build while release-blocking placeholders remain in legal documents
+    cmds:
+      - go test -tags release -run TestReleaseReady .
+
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
     cmds:

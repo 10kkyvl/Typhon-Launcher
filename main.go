@@ -12,6 +12,7 @@ import (
 	"typhon/internal/discovery"
 	"typhon/internal/download"
 	"typhon/internal/install"
+	"typhon/internal/legal"
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
@@ -118,6 +119,10 @@ func main() {
 	if err != nil {
 		fatal("start discord presence", err)
 	}
+	legalService, err := legal.NewService(legalDocs)
+	if err != nil {
+		fatal("start legal service", err)
+	}
 	presenceWatcher, err := presence.New(discordService, metadataService.CoverSourceURL)
 	if err != nil {
 		fatal("start discord presence", err)
@@ -156,6 +161,7 @@ func main() {
 			application.NewService(metadataService),
 			application.NewService(discoveryService),
 			application.NewService(discordService),
+			application.NewService(legalService),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
