@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"typhon/internal/download"
@@ -33,13 +35,52 @@ func (s *Service) emitVerify(gameID, event string, apply func(*VerifyState)) Ver
 }
 
 func (s *Service) GetVerifyState(gameID string) (VerifyState, error) {
+	game, tracked := s.installedGame(gameID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state, ok := s.verifications[gameID]
 	if !ok {
-		return VerifyState{GameID: gameID, Method: MethodUnavailable}, nil
+		return VerifyState{GameID: gameID, Method: MethodPending}, nil
+	}
+	if state.Running || state.Repairing {
+		return *state, nil
+	}
+	if !tracked || !state.boundTo(game) {
+		return VerifyState{GameID: gameID, Method: MethodPending}, nil
 	}
 	return *state, nil
+}
+
+// torrentVerdict reports whether a reuse report is a statement about the
+// installed files. A torrent that carries an installer or an archive describes
+// what the install was made from, not what it is, and a mapping that found no
+// file on disk describes some other directory entirely.
+func torrentVerdict(r download.ReuseReport) bool {
+	if !r.Applicable {
+		return false
+	}
+	return r.Layout != download.LayoutArchivePackage && r.Layout != download.LayoutInstallerPackage
+}
+
+// recordedMapping returns the layout the payload was actually written with,
+// which is only meaningful when the download landed in the install directory
+// itself rather than being unpacked into it.
+func (s *Service) recordedMapping(game library.Game, release sources.Release) *bool {
+	if s.downloads == nil || game.SourceDownloadID == "" {
+		return nil
+	}
+	d, err := s.downloads.Get(game.SourceDownloadID)
+	if err != nil {
+		return nil
+	}
+	if !strings.EqualFold(d.InfoHash, release.InfoHash) {
+		return nil
+	}
+	if !strings.EqualFold(filepath.Clean(d.Destination), filepath.Clean(game.InstallDir)) {
+		return nil
+	}
+	flat := d.Flat
+	return &flat
 }
 
 func (s *Service) torrentIdentity(game library.Game) (sources.Release, bool) {
@@ -54,7 +95,8 @@ func (s *Service) torrentIdentity(game library.Game) (sources.Release, bool) {
 }
 
 // VerifyGame checks the installed files against the torrent the game came from,
-// or against a stored manifest when no torrent identity is known.
+// falling back to a stored manifest whenever the torrent describes something
+// other than what sits in the install directory.
 func (s *Service) VerifyGame(gameID string) error {
 	game, ok := s.installedGame(gameID)
 	if !ok {
@@ -62,6 +104,9 @@ func (s *Service) VerifyGame(gameID string) error {
 	}
 	if game.InstallDir == "" {
 		return errEmptyInstallDir
+	}
+	if s.running(gameID) {
+		return errGameRunning
 	}
 	if stat, err := os.Stat(game.InstallDir); err != nil || !stat.IsDir() {
 		return errNoIdentity
@@ -73,10 +118,7 @@ func (s *Service) VerifyGame(gameID string) error {
 	}
 	if !hasTorrent && !hasManifest {
 		s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
-			v.Method = MethodUnavailable
-			v.Running = false
-			v.Repairable = false
-			v.Error = errNoIdentity.Error()
+			*v = unavailableState(game)
 		})
 		return errNoIdentity
 	}
@@ -89,37 +131,81 @@ func (s *Service) VerifyGame(gameID string) error {
 	go func() {
 		defer s.wg.Done()
 		defer s.endJob(gameID)
-		if hasTorrent {
-			s.verifyByTorrent(ctx, game, release)
-			return
-		}
-		s.verifyByManifest(ctx, game, manifest)
+		s.verify(ctx, game, release, hasTorrent, manifest, hasManifest)
 	}()
 	return nil
 }
 
-func (s *Service) verifyByTorrent(ctx context.Context, game library.Game, release sources.Release) {
-	if s.downloads == nil {
+func (s *Service) verify(
+	ctx context.Context,
+	game library.Game,
+	release sources.Release,
+	hasTorrent bool,
+	manifest FileManifest,
+	hasManifest bool,
+) {
+	method := MethodManifest
+	if hasTorrent {
+		method = MethodTorrent
+	}
+	s.emitVerify(game.ID, eventVerifyStarted, func(v *VerifyState) {
+		*v = VerifyState{GameID: game.ID, Method: method, Running: true}
+	})
+	if hasTorrent && s.downloads != nil {
+		report, err := s.inspectInstall(ctx, game, release)
+		switch {
+		case ctx.Err() != nil:
+			s.failVerify(ctx, game.ID, err)
+			return
+		case err != nil && !hasManifest:
+			s.failVerify(ctx, game.ID, err)
+			return
+		case err != nil:
+			slog.Warn("torrent verify unavailable", "game", game.ID, "error", err)
+		case torrentVerdict(report):
+			s.applyReuseReport(game, report)
+			slog.Info("game verified", "game", game.ID, "matched", report.MatchedBytes,
+				"missing", report.MissingBytes, "badPieces", report.BadPieces)
+			return
+		default:
+			slog.Info("torrent does not describe install", "game", game.ID,
+				"layout", report.Layout, "present", report.PresentFiles, "files", len(report.Files))
+		}
+	}
+	if hasManifest {
+		s.verifyByManifest(ctx, game, manifest)
 		return
 	}
+	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
+		*v = unavailableState(game)
+	})
+}
+
+func unavailableState(game library.Game) VerifyState {
+	return VerifyState{
+		GameID:     game.ID,
+		Method:     MethodUnavailable,
+		ReleaseID:  game.ReleaseID,
+		Version:    game.Version,
+		InstallDir: game.InstallDir,
+	}
+}
+
+func (s *Service) inspectInstall(
+	ctx context.Context,
+	game library.Game,
+	release sources.Release,
+) (download.ReuseReport, error) {
 	source := ""
 	if len(release.URIs) > 0 {
 		source = release.URIs[0]
 	}
-	s.emitVerify(game.ID, eventVerifyStarted, func(v *VerifyState) {
-		v.Method = MethodTorrent
-		v.Running = true
-		v.Progress = 0
-		v.CurrentFile = ""
-		v.Issues = nil
-		v.Extra = nil
-		v.Error = ""
-	})
 	last := time.Time{}
-	report, err := s.downloads.InspectReuse(ctx, download.ReuseRequest{
+	return s.downloads.InspectReuse(ctx, download.ReuseRequest{
 		Source:   source,
 		InfoHash: release.InfoHash,
 		Path:     game.InstallDir,
+		Flat:     s.recordedMapping(game, release),
 	}, func(p download.VerifyProgress) {
 		now := time.Now()
 		if now.Sub(last) < verifyEventEvery && p.ProcessedBytes < p.TotalBytes {
@@ -133,24 +219,48 @@ func (s *Service) verifyByTorrent(ctx context.Context, game library.Game, releas
 			v.TotalBytes = p.TotalBytes
 		})
 	})
-	if err != nil {
-		s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
-			v.Running = false
-			v.Progress = 0
-			v.Repairable = false
-			if ctx.Err() == nil {
-				v.Error = err.Error()
-			}
-		})
-		return
-	}
-	s.applyReuseReport(game.ID, report)
-	slog.Info("game verified", "game", game.ID, "matched", report.MatchedBytes,
-		"missing", report.MissingBytes, "badPieces", report.BadPieces)
+}
+
+func (s *Service) failVerify(ctx context.Context, gameID string, cause error) {
+	s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
+		v.Running = false
+		v.Progress = 0
+		v.Repairable = false
+		v.CheckedAt = nil
+		if ctx.Err() == nil && cause != nil {
+			v.Error = cause.Error()
+		}
+	})
+}
+
+func (s *Service) applyReuseReport(game library.Game, report download.ReuseReport) {
+	now := time.Now()
+	damaged := report.MissingFiles > 0 || report.BadPieces > 0
+	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
+		*v = VerifyState{
+			GameID:          game.ID,
+			Method:          MethodTorrent,
+			Progress:        1,
+			ProcessedBytes:  report.TotalBytes,
+			Ratio:           ratio(report.MatchedBytes, report.TotalBytes),
+			TotalBytes:      report.TotalBytes,
+			OkBytes:         report.MatchedBytes,
+			MissingFiles:    report.MissingFiles,
+			CorruptedPieces: report.BadPieces,
+			Repairable:      damaged,
+			Flat:            report.Flat,
+			Layout:          string(report.Layout),
+			InfoHash:        report.InfoHash,
+			ReleaseID:       game.ReleaseID,
+			Version:         game.Version,
+			InstallDir:      game.InstallDir,
+			CheckedAt:       &now,
+		}
+	})
 }
 
 func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manifest FileManifest) {
-	s.emitVerify(game.ID, eventVerifyStarted, func(v *VerifyState) {
+	s.emitVerify(game.ID, eventVerifyUpdated, func(v *VerifyState) {
 		v.Method = MethodManifest
 		v.Running = true
 		v.Progress = 0
@@ -174,40 +284,32 @@ func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manif
 		})
 	})
 	if err != nil {
-		s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
-			v.Running = false
-			v.Progress = 0
-			v.Repairable = false
-			if ctx.Err() == nil {
-				v.Error = err.Error()
-			}
-		})
+		s.failVerify(ctx, game.ID, err)
 		return
 	}
 	now := time.Now()
-	missing := 0
-	for _, issue := range result.Issues {
-		if issue.Kind == IssueMissing {
-			missing++
-		}
-	}
 	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
-		v.Running = false
-		v.Progress = 1
-		v.CurrentFile = ""
-		v.TotalBytes = result.TotalBytes
-		v.OkBytes = result.OkBytes
-		v.Ratio = result.Ratio()
-		v.MissingFiles = missing
-		v.CorruptedPieces = len(result.Issues) - missing
-		v.Issues = result.Issues
-		v.Extra = result.Extra
-		v.Repairable = false
-		v.Error = ""
-		v.CheckedAt = &now
+		*v = VerifyState{
+			GameID:          game.ID,
+			Method:          MethodManifest,
+			Progress:        1,
+			ProcessedBytes:  result.TotalBytes,
+			Ratio:           result.Ratio(),
+			TotalBytes:      result.TotalBytes,
+			OkBytes:         result.OkBytes,
+			MissingFiles:    result.Count(IssueMissing),
+			CorruptedPieces: result.Count(IssueCorrupted, IssueSize),
+			UnreadableFiles: result.Count(IssueUnreadable),
+			Issues:          result.Issues,
+			Extra:           result.Extra,
+			ReleaseID:       game.ReleaseID,
+			Version:         game.Version,
+			InstallDir:      game.InstallDir,
+			CheckedAt:       &now,
+		}
 	})
 	slog.Info("game verified against manifest", "game", game.ID,
-		"ok", result.OkFiles, "issues", len(result.Issues))
+		"ok", result.OkFiles, "issues", len(result.Issues), "extra", len(result.Extra))
 }
 
 // RepairGame downloads only the pieces that no longer match the release torrent.
@@ -226,8 +328,17 @@ func (s *Service) RepairGame(gameID string) error {
 	if !hasTorrent {
 		return errRepairUnavailable
 	}
-	state, _ := s.GetVerifyState(gameID)
+	state, err := s.GetVerifyState(gameID)
+	if err != nil {
+		return err
+	}
 	if state.Method != MethodTorrent || !state.Repairable {
+		return errRepairUnavailable
+	}
+	if !strings.EqualFold(state.InfoHash, release.InfoHash) {
+		return errRepairUnavailable
+	}
+	if state.Layout == string(download.LayoutArchivePackage) || state.Layout == string(download.LayoutInstallerPackage) {
 		return errRepairUnavailable
 	}
 
@@ -333,6 +444,12 @@ func (s *Service) BuildManifest(gameID string) error {
 	if !ok {
 		return errNotTracked
 	}
+	if game.InstallDir == "" {
+		return errEmptyInstallDir
+	}
+	if s.running(gameID) {
+		return errGameRunning
+	}
 	ctx, started := s.beginJob(gameID)
 	if !started {
 		return errBusy
@@ -341,54 +458,61 @@ func (s *Service) BuildManifest(gameID string) error {
 	go func() {
 		defer s.wg.Done()
 		defer s.endJob(gameID)
-		s.emitVerify(gameID, eventVerifyStarted, func(v *VerifyState) {
-			v.Method = MethodManifest
-			v.Running = true
-			v.Progress = 0
-			v.Error = ""
-		})
-		last := time.Time{}
-		manifest, err := BuildManifest(ctx, game.InstallDir, func(p Progress) {
-			now := time.Now()
-			if now.Sub(last) < verifyEventEvery && p.ProcessedBytes < p.TotalBytes {
-				return
-			}
-			last = now
-			s.emitVerify(gameID, eventVerifyUpdated, func(v *VerifyState) {
-				v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
-				v.CurrentFile = p.CurrentFile
-				v.TotalBytes = p.TotalBytes
-			})
-		})
-		if err != nil {
-			s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
-				v.Running = false
-				v.Progress = 0
-				if ctx.Err() == nil {
-					v.Error = err.Error()
-				}
-			})
-			return
-		}
-		manifest.GameID = gameID
-		manifest.ReleaseID = game.ReleaseID
-		manifest.Version = game.Version
-		if err := s.store.saveManifest(manifest); err != nil {
-			slog.Error("save manifest", "game", gameID, "error", err)
-		}
-		now := time.Now()
-		s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
-			v.Running = false
-			v.Progress = 1
-			v.CurrentFile = ""
-			v.TotalBytes = manifest.TotalSize
-			v.OkBytes = manifest.TotalSize
-			v.Ratio = 1
-			v.Issues = nil
-			v.Error = ""
-			v.CheckedAt = &now
-		})
-		slog.Info("manifest built", "game", gameID, "files", len(manifest.Entries))
+		s.runManifest(ctx, game)
 	}()
 	return nil
+}
+
+// runManifest hashes an installation and stores the result. A failure leaves
+// the game without a manifest and says so in the verify state: the caller keeps
+// whatever it was doing, but nothing may claim the installation is described.
+func (s *Service) runManifest(ctx context.Context, game library.Game) {
+	if game.InstallDir == "" {
+		s.failVerify(ctx, game.ID, errEmptyInstallDir)
+		return
+	}
+	s.emitVerify(game.ID, eventVerifyStarted, func(v *VerifyState) {
+		*v = VerifyState{GameID: game.ID, Method: MethodManifest, Running: true}
+	})
+	last := time.Time{}
+	manifest, err := BuildManifest(ctx, game.InstallDir, func(p Progress) {
+		now := time.Now()
+		if now.Sub(last) < verifyEventEvery && p.ProcessedBytes < p.TotalBytes {
+			return
+		}
+		last = now
+		s.emitVerify(game.ID, eventVerifyUpdated, func(v *VerifyState) {
+			v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
+			v.CurrentFile = p.CurrentFile
+			v.TotalBytes = p.TotalBytes
+		})
+	})
+	if err != nil {
+		s.failVerify(ctx, game.ID, err)
+		return
+	}
+	manifest.GameID = game.ID
+	manifest.ReleaseID = game.ReleaseID
+	manifest.Version = game.Version
+	if err := s.store.saveManifest(manifest); err != nil {
+		s.failVerify(ctx, game.ID, fmt.Errorf("сохранение манифеста: %w", err))
+		return
+	}
+	now := time.Now()
+	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
+		*v = VerifyState{
+			GameID:         game.ID,
+			Method:         MethodManifest,
+			Progress:       1,
+			ProcessedBytes: manifest.TotalSize,
+			Ratio:          1,
+			TotalBytes:     manifest.TotalSize,
+			OkBytes:        manifest.TotalSize,
+			ReleaseID:      game.ReleaseID,
+			Version:        game.Version,
+			InstallDir:     game.InstallDir,
+			CheckedAt:      &now,
+		}
+	})
+	slog.Info("manifest built", "game", game.ID, "files", len(manifest.Entries))
 }

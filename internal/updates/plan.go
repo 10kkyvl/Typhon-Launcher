@@ -15,6 +15,7 @@ const (
 	reuseMinRatio    = 0.15
 	stagingOverhead  = 20
 	verifyEventEvery = progressPeriodEvents
+	planScanText     = "Сверка установленных файлов"
 )
 
 var errNoTarget = errors.New("релиз для обновления недоступен")
@@ -164,12 +165,6 @@ func (s *Service) inspectReuse(ctx context.Context, in planInput) *download.Reus
 		source = in.Target.URIs[0]
 	}
 	gameID := in.Installed.GameID
-	s.emitVerify(gameID, eventVerifyStarted, func(v *VerifyState) {
-		v.Method = MethodTorrent
-		v.Running = true
-		v.Progress = 0
-		v.Error = ""
-	})
 	last := time.Time{}
 	report, err := s.downloads.InspectReuse(ctx, download.ReuseRequest{
 		Source:   source,
@@ -181,46 +176,20 @@ func (s *Service) inspectReuse(ctx context.Context, in planInput) *download.Reus
 			return
 		}
 		last = now
-		s.emitVerify(gameID, eventVerifyUpdated, func(v *VerifyState) {
-			v.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
-			v.ProcessedBytes = p.ProcessedBytes
-			v.CurrentFile = p.CurrentFile
-			v.TotalBytes = p.TotalBytes
+		s.planProgress(gameID, func(u *Update) {
+			u.Progress = ratio(p.ProcessedBytes, p.TotalBytes)
+			u.Message = planScanText
 		})
+	})
+	s.planProgress(gameID, func(u *Update) {
+		u.Progress = 0
+		u.Message = ""
 	})
 	if err != nil {
-		s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
-			v.Running = false
-			v.Progress = 0
-			if ctx.Err() == nil {
-				v.Error = err.Error()
-			}
-		})
+		slog.Warn("inspect reuse", "game", gameID, "error", err)
 		return nil
 	}
-	s.applyReuseReport(gameID, report)
 	return &report
-}
-
-func (s *Service) applyReuseReport(gameID string, report download.ReuseReport) {
-	now := time.Now()
-	s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
-		v.Method = MethodTorrent
-		v.Running = false
-		v.Progress = 1
-		v.CurrentFile = ""
-		v.TotalBytes = report.TotalBytes
-		v.ProcessedBytes = report.TotalBytes
-		v.OkBytes = report.MatchedBytes
-		v.Ratio = ratio(report.MatchedBytes, report.TotalBytes)
-		v.MissingFiles = report.MissingFiles
-		v.CorruptedPieces = report.BadPieces
-		v.Repairable = true
-		v.Flat = report.Flat
-		v.InfoHash = report.InfoHash
-		v.Error = ""
-		v.CheckedAt = &now
-	})
 }
 
 func ratio(done, total int64) float64 {

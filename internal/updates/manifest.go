@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -34,9 +36,10 @@ type Progress struct {
 type IssueKind string
 
 const (
-	IssueMissing   IssueKind = "missing"
-	IssueCorrupted IssueKind = "corrupted"
-	IssueSize      IssueKind = "size"
+	IssueMissing    IssueKind = "missing"
+	IssueCorrupted  IssueKind = "corrupted"
+	IssueSize       IssueKind = "size"
+	IssueUnreadable IssueKind = "unreadable"
 )
 
 type ManifestIssue struct {
@@ -51,6 +54,21 @@ type ManifestResult struct {
 	OkBytes    int64           `json:"okBytes"`
 	Issues     []ManifestIssue `json:"issues"`
 	Extra      []string        `json:"extra"`
+}
+
+// Count reports how many issues of one kind the check produced. Unreadable
+// files are not damage: they are files the check could not look at.
+func (r ManifestResult) Count(kinds ...IssueKind) int {
+	n := 0
+	for _, issue := range r.Issues {
+		for _, kind := range kinds {
+			if issue.Kind == kind {
+				n++
+				break
+			}
+		}
+	}
+	return n
 }
 
 func (r ManifestResult) Ratio() float64 {
@@ -229,6 +247,33 @@ func BuildManifest(ctx context.Context, root string, onProgress func(Progress)) 
 	}, nil
 }
 
+// statIssue and hashIssue turn a failure into a named result instead of a bare
+// error: a file that cannot be read is unread, not damaged, and only a hash
+// that was actually computed can disagree with the manifest.
+func statIssue(stat fs.FileInfo, err error, entry FileManifestEntry) IssueKind {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return IssueMissing
+	case err != nil:
+		return IssueUnreadable
+	case stat.Size() != entry.Size:
+		return IssueSize
+	}
+	return ""
+}
+
+func hashIssue(hash string, err error, entry FileManifestEntry) IssueKind {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return IssueMissing
+	case err != nil:
+		return IssueUnreadable
+	case hash != entry.Hash:
+		return IssueCorrupted
+	}
+	return ""
+}
+
 // VerifyManifest re-hashes the files recorded in a manifest and reports what no
 // longer matches. Files outside the manifest are listed separately so that user
 // content is never mistaken for damage.
@@ -259,24 +304,16 @@ func VerifyManifest(ctx context.Context, root string, manifest FileManifest, onP
 		entry := expected[item.rel]
 		path := filepath.Join(root, filepath.FromSlash(item.rel))
 		stat, err := os.Stat(path)
-		switch {
-		case err != nil:
-			record(&ManifestIssue{Path: item.rel, Kind: IssueMissing}, entry)
-			return nil
-		case stat.Size() != entry.Size:
-			record(&ManifestIssue{Path: item.rel, Kind: IssueSize}, entry)
+		if kind := statIssue(stat, err, entry); kind != "" {
+			record(&ManifestIssue{Path: item.rel, Kind: kind}, entry)
 			return nil
 		}
 		hash, _, err := hashFile(ctx, path, buf)
-		if err != nil {
-			if ctx.Err() != nil {
-				return err
-			}
-			record(&ManifestIssue{Path: item.rel, Kind: IssueCorrupted}, entry)
-			return nil
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-		if hash != entry.Hash {
-			record(&ManifestIssue{Path: item.rel, Kind: IssueCorrupted}, entry)
+		if kind := hashIssue(hash, err, entry); kind != "" {
+			record(&ManifestIssue{Path: item.rel, Kind: kind}, entry)
 			return nil
 		}
 		record(nil, entry)
@@ -286,11 +323,13 @@ func VerifyManifest(ctx context.Context, root string, manifest FileManifest, onP
 		return ManifestResult{}, err
 	}
 
-	if present, _, err := scanFiles(root); err == nil {
-		for _, item := range present {
-			if _, ok := expected[item.rel]; !ok {
-				result.Extra = append(result.Extra, item.rel)
-			}
+	present, _, err := scanFiles(root)
+	if err != nil {
+		return ManifestResult{}, fmt.Errorf("обход %s: %w", root, err)
+	}
+	for _, item := range present {
+		if _, ok := expected[item.rel]; !ok {
+			result.Extra = append(result.Extra, item.rel)
 		}
 	}
 	sort.Slice(result.Issues, func(i, j int) bool { return result.Issues[i].Path < result.Issues[j].Path })

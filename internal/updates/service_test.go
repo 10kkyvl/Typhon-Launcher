@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -67,15 +68,21 @@ func (f *fakeReleases) FindRelease(id string) (sources.Release, bool) {
 }
 
 type fakeDownloads struct {
-	mu       sync.Mutex
-	tasks    map[string]*download.Download
-	addErr   error
-	failTask bool
-	requests []download.AddRequest
+	mu        sync.Mutex
+	tasks     map[string]*download.Download
+	addErr    error
+	failTask  bool
+	requests  []download.AddRequest
+	reuse     download.ReuseReport
+	reuseErr  error
+	reuseReqs []download.ReuseRequest
 }
 
 func newFakeDownloads() *fakeDownloads {
-	return &fakeDownloads{tasks: map[string]*download.Download{}}
+	return &fakeDownloads{
+		tasks:    map[string]*download.Download{},
+		reuseErr: errors.New("недоступно"),
+	}
 }
 
 func (f *fakeDownloads) AddTask(_ context.Context, req download.AddRequest) (download.Download, error) {
@@ -103,8 +110,14 @@ func (f *fakeDownloads) AddTask(_ context.Context, req download.AddRequest) (dow
 	return *task, nil
 }
 
-func (f *fakeDownloads) InspectReuse(context.Context, download.ReuseRequest, func(download.VerifyProgress)) (download.ReuseReport, error) {
-	return download.ReuseReport{}, errors.New("недоступно")
+func (f *fakeDownloads) InspectReuse(_ context.Context, req download.ReuseRequest, _ func(download.VerifyProgress)) (download.ReuseReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reuseReqs = append(f.reuseReqs, req)
+	if f.reuseErr != nil {
+		return download.ReuseReport{}, f.reuseErr
+	}
+	return f.reuse, nil
 }
 
 func (f *fakeDownloads) Get(id string) (download.Download, error) {
@@ -435,5 +448,189 @@ func TestPatchesFromReleasesFeedIntoPlan(t *testing.T) {
 	}
 	if plan.DownloadBytes != 1<<20 {
 		t.Fatalf("download bytes = %d", plan.DownloadBytes)
+	}
+}
+
+func TestManifestBuiltAfterInstall(t *testing.T) {
+	cases := []struct {
+		name string
+		item install.Installation
+		want bool
+	}{
+		{
+			name: "registered install",
+			item: install.Installation{ID: "i1", DownloadID: "d1", GameID: "local-1", Status: install.StatusCompleted},
+			want: true,
+		},
+		{
+			name: "failed install",
+			item: install.Installation{ID: "i2", DownloadID: "d2", GameID: "local-1", Status: install.StatusFailed},
+		},
+		{
+			name: "cancelled install",
+			item: install.Installation{ID: "i3", DownloadID: "d3", GameID: "local-1", Status: install.StatusCancelled},
+		},
+		{
+			name: "install without registration",
+			item: install.Installation{ID: "i4", DownloadID: "d4", Status: install.StatusCompleted},
+		},
+		{
+			name: "unknown game",
+			item: install.Installation{ID: "i5", DownloadID: "d5", GameID: "other", Status: install.StatusCompleted},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.service.HandleInstallFinished(tc.item)
+			h.service.wg.Wait()
+
+			manifest, ok, err := h.service.store.loadManifest("local-1")
+			if err != nil {
+				t.Fatalf("load manifest: %v", err)
+			}
+			if ok != tc.want {
+				t.Fatalf("manifest present = %v, want %v", ok, tc.want)
+			}
+			if !tc.want {
+				return
+			}
+			if manifest.GameID != "local-1" || manifest.ReleaseID != "r1" || manifest.Version != "1.0" {
+				t.Fatalf("manifest identity = %+v", manifest)
+			}
+			paths := make([]string, 0, len(manifest.Entries))
+			for _, entry := range manifest.Entries {
+				if entry.Hash == "" || entry.Size == 0 {
+					t.Fatalf("entry = %+v", entry)
+				}
+				paths = append(paths, entry.Path)
+			}
+			want := []string{"data/pak0.pak", "game.exe", "saves/profile.sav"}
+			if !slices.Equal(paths, want) {
+				t.Fatalf("entries = %v, want %v", paths, want)
+			}
+		})
+	}
+}
+
+func TestManifestNotBuiltWhileGameRuns(t *testing.T) {
+	h := newHarness(t)
+	h.library.running = []string{"local-1"}
+	h.service.HandleInstallFinished(install.Installation{
+		ID: "i1", DownloadID: "d1", GameID: "local-1", Status: install.StatusCompleted,
+	})
+	h.service.wg.Wait()
+
+	if _, ok, err := h.service.store.loadManifest("local-1"); ok || err != nil {
+		t.Fatalf("manifest present = %v, err = %v", ok, err)
+	}
+}
+
+func TestInstallFinishedStillFeedsUpdateWaiter(t *testing.T) {
+	h := newHarness(t)
+	waiter := make(chan install.Installation, 1)
+	h.service.mu.Lock()
+	h.service.waiters["d1"] = waiter
+	h.service.mu.Unlock()
+
+	item := install.Installation{ID: "i1", DownloadID: "d1", GameID: "local-1", Status: install.StatusCompleted}
+	h.service.HandleInstallFinished(item)
+	h.service.wg.Wait()
+
+	got, ok := <-waiter
+	if !ok || got.ID != item.ID {
+		t.Fatalf("waiter got %+v (%v)", got, ok)
+	}
+	if _, ok, err := h.service.store.loadManifest("local-1"); ok || err != nil {
+		t.Fatalf("manifest present = %v, err = %v", ok, err)
+	}
+}
+
+func TestManifestRebuiltAfterUpdate(t *testing.T) {
+	h := newHarness(t)
+	h.plan(t)
+	if err := h.service.StartUpdate("local-1"); err != nil {
+		t.Fatal(err)
+	}
+	h.waitState(t, StateIdle)
+	h.service.wg.Wait()
+
+	manifest, ok, err := h.service.store.loadManifest("local-1")
+	if err != nil || !ok {
+		t.Fatalf("manifest present = %v, err = %v", ok, err)
+	}
+	if manifest.ReleaseID != "r2" || manifest.Version != "1.1" {
+		t.Fatalf("manifest identity = %q %q", manifest.ReleaseID, manifest.Version)
+	}
+	result, err := VerifyManifest(context.Background(), h.installDir, manifest, nil)
+	if err != nil {
+		t.Fatalf("verify manifest: %v", err)
+	}
+	if len(result.Issues) != 0 || len(result.Extra) != 0 || result.Ratio() != 1 {
+		t.Fatalf("manifest does not describe the updated install: %+v", result)
+	}
+}
+
+func TestManifestRebuiltAfterRollback(t *testing.T) {
+	h := newHarness(t)
+	h.plan(t)
+	if err := h.service.StartUpdate("local-1"); err != nil {
+		t.Fatal(err)
+	}
+	h.waitState(t, StateIdle)
+	if err := h.service.Rollback("local-1"); err != nil {
+		t.Fatal(err)
+	}
+	h.service.wg.Wait()
+
+	manifest, ok, err := h.service.store.loadManifest("local-1")
+	if err != nil || !ok {
+		t.Fatalf("manifest present = %v, err = %v", ok, err)
+	}
+	if manifest.ReleaseID != "r1" || manifest.Version != "1.0" {
+		t.Fatalf("manifest identity = %q %q", manifest.ReleaseID, manifest.Version)
+	}
+	result, err := VerifyManifest(context.Background(), h.installDir, manifest, nil)
+	if err != nil {
+		t.Fatalf("verify manifest: %v", err)
+	}
+	if len(result.Issues) != 0 || len(result.Extra) != 0 || result.Ratio() != 1 {
+		t.Fatalf("manifest does not describe the restored install: %+v", result)
+	}
+	data, err := os.ReadFile(filepath.Join(h.installDir, "game.exe"))
+	if err != nil || string(data) != "old executable" {
+		t.Fatalf("executable = %q %v", data, err)
+	}
+}
+
+func TestRunManifestReportsFailure(t *testing.T) {
+	cases := []struct {
+		name       string
+		installDir string
+	}{
+		{name: "empty install dir"},
+		{name: "missing install dir", installDir: filepath.Join(t.TempDir(), "gone")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			game := h.library.games[0]
+			game.InstallDir = tc.installDir
+			h.service.runManifest(context.Background(), game)
+
+			if _, ok, err := h.service.store.loadManifest("local-1"); ok || err != nil {
+				t.Fatalf("manifest present = %v, err = %v", ok, err)
+			}
+			h.service.mu.Lock()
+			state, tracked := h.service.verifications["local-1"]
+			var snap VerifyState
+			if tracked {
+				snap = *state
+			}
+			h.service.mu.Unlock()
+			if !tracked || snap.Error == "" || snap.Running {
+				t.Fatalf("verify state = %+v (tracked %v)", snap, tracked)
+			}
+		})
 	}
 }

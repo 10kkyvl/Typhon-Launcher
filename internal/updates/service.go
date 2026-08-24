@@ -356,6 +356,21 @@ func (s *Service) mutate(gameID string, apply func(*Update)) (Update, bool) {
 	return snap, true
 }
 
+// planProgress reports progress of a long planning step without persisting it:
+// the numbers are transient and a disk write every tick would be pointless.
+func (s *Service) planProgress(gameID string, apply func(*Update)) {
+	s.mu.Lock()
+	u, ok := s.updates[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	apply(u)
+	snap := *u
+	s.mu.Unlock()
+	emit(eventUpdated, snap)
+}
+
 func (s *Service) GetUpdates() []Update {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -365,6 +380,13 @@ func (s *Service) GetUpdates() []Update {
 	}
 	sortUpdates(list)
 	return list
+}
+
+//wails:ignore
+func (s *Service) Busy(gameID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.jobs[gameID] != nil
 }
 
 func (s *Service) GetUpdate(gameID string) (Update, error) {
@@ -552,6 +574,8 @@ func (s *Service) HandleSourcesRefreshed() {
 }
 
 // HandleInstallFinished routes installer results back to a waiting update job.
+// An install nobody waits for is a fresh installation: it gets a manifest right
+// away, while the files are still exactly what the installer produced.
 //
 //wails:ignore
 func (s *Service) HandleInstallFinished(item install.Installation) {
@@ -564,6 +588,13 @@ func (s *Service) HandleInstallFinished(item install.Installation) {
 	if ok {
 		waiter <- item
 		close(waiter)
+		return
+	}
+	if item.Status != install.StatusCompleted || item.GameID == "" {
+		return
+	}
+	if err := s.BuildManifest(item.GameID); err != nil {
+		slog.Warn("manifest after install", "game", item.GameID, "install", item.ID, "error", err)
 	}
 }
 

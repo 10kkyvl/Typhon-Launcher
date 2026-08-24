@@ -407,7 +407,7 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 	s.rememberPrevious(game, previous)
 
 	s.setStep(plan.GameID, StepCleanup, "")
-	return s.registerVersion(game, plan, executable, game.InstallDir)
+	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
 }
 
 func (s *Service) applyTorrentReuse(ctx context.Context, plan UpdatePlan) error {
@@ -433,7 +433,7 @@ func (s *Service) applyTorrentReuse(ctx context.Context, plan UpdatePlan) error 
 	if executable == "" {
 		return errNoLaunchTarget
 	}
-	return s.registerVersion(game, plan, executable, game.InstallDir)
+	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
 }
 
 func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
@@ -486,10 +486,10 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	if executable == "" {
 		return errNoLaunchTarget
 	}
-	return s.registerVersion(game, plan, executable, game.InstallDir)
+	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
 }
 
-func (s *Service) registerVersion(game library.Game, plan UpdatePlan, executable, installDir string) error {
+func (s *Service) registerVersion(ctx context.Context, game library.Game, plan UpdatePlan, executable, installDir string) error {
 	if s.library == nil {
 		return errNoLibrary
 	}
@@ -499,7 +499,7 @@ func (s *Service) registerVersion(game library.Game, plan UpdatePlan, executable
 			sourceID = release.SourceID
 		}
 	}
-	if _, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
+	updated, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
 		ID:            game.ID,
 		Executable:    executable,
 		InstallDir:    installDir,
@@ -507,10 +507,12 @@ func (s *Service) registerVersion(game library.Game, plan UpdatePlan, executable
 		VersionSource: string(VersionSourceRelease),
 		ReleaseID:     plan.TargetReleaseID,
 		SourceID:      sourceID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	s.store.removeManifest(game.ID)
+	s.runManifest(ctx, updated)
 	return nil
 }
 
@@ -581,7 +583,9 @@ func (s *Service) Rollback(gameID string) error {
 		return errSwapFailed
 	}
 	removeTree(replaced)
+	s.store.removeManifest(gameID)
 
+	restored := s.library != nil
 	if s.library != nil {
 		if _, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
 			ID:            gameID,
@@ -593,10 +597,15 @@ func (s *Service) Rollback(gameID string) error {
 			SourceID:      entry.SourceID,
 		}); err != nil {
 			slog.Error("register rolled back version", "game", gameID, "error", err)
+			restored = false
 		}
 	}
 	s.forgetPrevious(gameID)
-	s.store.removeManifest(gameID)
+	if restored {
+		if err := s.BuildManifest(gameID); err != nil {
+			slog.Warn("manifest after rollback", "game", gameID, "error", err)
+		}
+	}
 
 	snap, _ := s.mutate(gameID, func(u *Update) {
 		u.State = StateIdle
