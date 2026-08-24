@@ -16,6 +16,7 @@
   import { toast } from '../stores/toasts';
   import { bytesSize, plural } from '../utils/format';
   import Button from './Button.svelte';
+  import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
 
   let {
@@ -33,6 +34,7 @@
   let pendingHash = '';
   let token = 0;
 
+  const libraryReady = $derived(Boolean($settings?.libraryPath));
   const canContinue = $derived(source.trim().startsWith('magnet:'));
   const selectedCount = $derived(selected.filter(Boolean).length);
   const selectedSize = $derived(
@@ -55,9 +57,10 @@
   $effect(() => {
     const isOpen = open;
     const preset = initialSource;
+    const ready = libraryReady;
     untrack(() => {
       reset();
-      if (isOpen) {
+      if (isOpen && ready) {
         destination = get(settings)?.downloadsPath ?? '';
         if (preset) {
           source = preset;
@@ -122,6 +125,9 @@
   }
 </script>
 
+{#if !libraryReady}
+  <LibrarySetupModal bind:open />
+{:else}
 <Modal bind:open title="Добавить загрузку" width={step === 'files' ? '62rem' : '48rem'}>
   {#if step === 'source'}
     <div class="source">
@@ -191,6 +197,7 @@
     {/if}
   {/snippet}
 </Modal>
+{/if}
 
 <style>
   .source {

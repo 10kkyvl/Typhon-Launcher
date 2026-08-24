@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getSettings, saveSettings, type Settings } from '../services/settings';
+import { getSettings, saveSettings, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
 
 export const settings = writable<Settings | null>(null);
@@ -33,4 +33,10 @@ export async function updateSettings(patch: Partial<Settings>) {
     toast('Не удалось сохранить настройки', 'danger');
     settings.set(current);
   }
+}
+
+export async function createLibrary(parent: string): Promise<Settings> {
+  const next = await setupLibrary(parent);
+  settings.set(next);
+  return next;
 }

@@ -6,21 +6,26 @@ export interface Settings {
   theme: string;
   language: string;
   uiScale: number;
+  libraryPath: string;
   downloadsPath: string;
   gamesPath: string;
   screenshotsPath: string;
   launchOnStartup: boolean;
   minimizeToTray: boolean;
+  discordRichPresence: boolean;
   hardwareAcceleration: boolean;
   animationsEnabled: boolean;
   maxActiveDownloads: number;
   downloadRateLimit: number;
   uploadRateLimit: number;
+  uploadWhileDownloading: boolean;
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
   autoInstall: boolean;
   sourceRefreshInterval: string;
   verifyAfterInstall: boolean;
+  installSkipShortcuts: boolean;
+  installSkipExtras: boolean;
   updateCheckAutomatically: boolean;
   updateAutoDownload: boolean;
   updateAutoInstall: boolean;
@@ -35,21 +40,26 @@ const fallbackDefaults: Settings = {
   theme: 'dark',
   language: 'ru',
   uiScale: 1,
-  downloadsPath: 'D:\\Typhon\\Downloads',
-  gamesPath: 'D:\\Typhon\\Games',
-  screenshotsPath: 'D:\\Typhon\\Screenshots',
+  libraryPath: '',
+  downloadsPath: '',
+  gamesPath: '',
+  screenshotsPath: '',
   launchOnStartup: false,
   minimizeToTray: true,
+  discordRichPresence: false,
   hardwareAcceleration: true,
   animationsEnabled: true,
   maxActiveDownloads: 2,
   downloadRateLimit: 0,
   uploadRateLimit: 0,
+  uploadWhileDownloading: false,
   seedAfterDownload: false,
-  installCleanupPolicy: 'keep',
+  installCleanupPolicy: 'delete',
   autoInstall: false,
   sourceRefreshInterval: '6h',
   verifyAfterInstall: true,
+  installSkipShortcuts: true,
+  installSkipExtras: true,
   updateCheckAutomatically: true,
   updateAutoDownload: false,
   updateAutoInstall: false,
@@ -86,4 +96,14 @@ export async function selectFolder(title: string): Promise<string> {
 export async function openFolder(path: string): Promise<void> {
   if (!inWails) throw new Error('unavailable in browser');
   await AppService.OpenFolder(path);
+}
+
+export async function proposeLibraryPath(parent: string): Promise<string> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return await SettingsService.ProposeLibraryPath(parent);
+}
+
+export async function setupLibrary(parent: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await SettingsService.SetupLibrary(parent)) as Settings;
 }

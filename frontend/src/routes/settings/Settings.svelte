@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Select from '../../lib/components/Select.svelte';
@@ -10,7 +11,7 @@
   import Toggle from '../../lib/components/Toggle.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { inWails } from '../../lib/services/backend';
-  import { openFolder, selectFolder, type Settings } from '../../lib/services/settings';
+  import { openFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
@@ -47,11 +48,13 @@
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
 
-  const folderRows: { key: PathKey; label: string; title: string }[] = [
-    { key: 'gamesPath', label: 'Папка с играми', title: 'Выберите папку с играми' },
-    { key: 'downloadsPath', label: 'Папка загрузок', title: 'Выберите папку загрузок' },
-    { key: 'screenshotsPath', label: 'Папка скриншотов', title: 'Выберите папку скриншотов' },
+  const folderRows: { key: PathKey; label: string }[] = [
+    { key: 'gamesPath', label: 'Игры' },
+    { key: 'downloadsPath', label: 'Загрузки' },
+    { key: 'screenshotsPath', label: 'Скриншоты' },
   ];
+
+  let librarySetupOpen = $state(false);
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
@@ -93,17 +96,12 @@
     }
   }
 
-  async function browseFolder(key: PathKey, title: string) {
+  function openLibrarySetup() {
     if (!inWails) {
       toast('Выбор папки доступен только в desktop-сборке');
       return;
     }
-    try {
-      const path = await selectFolder(title);
-      if (path) set({ [key]: path });
-    } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
-    }
+    librarySetupOpen = true;
   }
 
   async function openPath(path: string | undefined) {
@@ -157,8 +155,8 @@
   ];
 
   const cleanupPolicy = $derived.by(() => {
-    const id = current?.installCleanupPolicy ?? 'keep';
-    return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'keep';
+    const id = current?.installCleanupPolicy ?? 'delete';
+    return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'delete';
   });
 
   const sourceRefreshOptions = [
@@ -241,6 +239,17 @@
           </div>
           <div class="row">
             <div class="row-text">
+              <span class="row-label">Discord Rich Presence</span>
+              <span class="row-sub">Показывать в Discord, во что вы играете</span>
+            </div>
+            <Toggle
+              checked={current?.discordRichPresence ?? false}
+              label="Discord Rich Presence"
+              onchange={(v) => set({ discordRichPresence: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">Показывать оверлей в игре</span>
               <span class="row-sub">Игровой оверлей для доступа к функциям Typhon</span>
             </div>
@@ -268,25 +277,48 @@
       </section>
 
       <section class="group">
-        <h3>Папки</h3>
+        <h3>Библиотека</h3>
         <div class="rows">
-          {#each folderRows as folder (folder.key)}
-            <div class="row folder-row">
-              <span class="row-label folder-label">{folder.label}</span>
-              <div class="folder-controls">
-                <input
-                  class="input sm"
-                  type="text"
-                  value={current?.[folder.key] ?? ''}
-                  onchange={(e) => set({ [folder.key]: e.currentTarget.value })}
-                />
-                <Button size="sm" onclick={() => browseFolder(folder.key, folder.title)}>Обзор</Button>
-                <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
-                  <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                </IconButton>
-              </div>
+          <div class="row folder-row">
+            <span class="row-label folder-label">Папка библиотеки</span>
+            <div class="folder-controls">
+              <input
+                class="input sm"
+                type="text"
+                readonly
+                placeholder="Не настроена"
+                value={current?.libraryPath ?? ''}
+              />
+              <Button size="sm" onclick={openLibrarySetup}>
+                {current?.libraryPath ? 'Изменить' : 'Выбрать'}
+              </Button>
+              <IconButton
+                label="Открыть папку"
+                size="sm"
+                disabled={!current?.libraryPath}
+                onclick={() => openPath(current?.libraryPath)}
+              >
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
             </div>
-          {/each}
+          </div>
+          {#if current?.libraryPath}
+            {#each folderRows as folder (folder.key)}
+              <div class="row folder-row">
+                <span class="row-label folder-label">{folder.label}</span>
+                <div class="folder-controls">
+                  <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
+                  <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
+                    <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                  </IconButton>
+                </div>
+              </div>
+            {/each}
+          {:else}
+            <span class="row-sub">
+              Игры, загрузки и скриншоты хранятся внутри папки библиотеки. Пока она не выбрана, скачивать нечего.
+            </span>
+          {/if}
         </div>
       </section>
     </div>
@@ -437,6 +469,17 @@
         </div>
         <div class="row">
           <div class="row-text">
+            <span class="row-label">Отдавать во время загрузки</span>
+            <span class="row-sub">Разрешить отдачу другим пирам, пока загрузка идёт</span>
+          </div>
+          <Toggle
+            checked={current?.uploadWhileDownloading ?? false}
+            label="Отдача"
+            onchange={(v) => set({ uploadWhileDownloading: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
             <span class="row-label">Раздавать после загрузки</span>
             <span class="row-sub">Продолжать отдачу завершённых загрузок</span>
           </div>
@@ -492,6 +535,34 @@
             checked={current?.autoInstall ?? false}
             label="Автоустановка"
             onchange={(v) => set({ autoInstall: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Не создавать ярлыки</span>
+            <span class="row-sub"
+              >Отклонять ярлыки на рабочем столе и папки в меню «Пуск», а созданные установщиком —
+              удалять: игры запускаются из лаунчера</span
+            >
+          </div>
+          <Toggle
+            checked={current?.installSkipShortcuts ?? true}
+            label="Без ярлыков"
+            onchange={(v) => set({ installSkipShortcuts: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Отклонять дополнения установщика</span>
+            <span class="row-sub"
+              >DirectX, .NET, Visual C++, ассоциации файлов и прочие предложения. Если игра не
+              запускается без них — выключите</span
+            >
+          </div>
+          <Toggle
+            checked={current?.installSkipExtras ?? true}
+            label="Без дополнений"
+            onchange={(v) => set({ installSkipExtras: v })}
           />
         </div>
         <div class="row">
@@ -775,7 +846,7 @@
   <div class="single-column">
     <section class="group about">
       <div class="about-logo">
-        <img src="/typhon.svg" alt="" width="44" height="44" draggable="false" />
+        <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
           <h3>Typhon Launcher</h3>
           <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}</span>
@@ -821,6 +892,14 @@
     </section>
   </div>
 {/if}
+
+<LibrarySetupModal
+  bind:open={librarySetupOpen}
+  title={current?.libraryPath ? 'Сменить папку библиотеки' : 'Куда устанавливать игры'}
+  note={current?.libraryPath
+    ? 'Уже установленные игры останутся в прежней папке — лаунчер их не переносит. В новую библиотеку попадёт всё, что скачается дальше.'
+    : ''}
+/>
 
 <Modal bind:open={resetOpen} title="Сбросить все данные?">
   <p class="modal-text">
