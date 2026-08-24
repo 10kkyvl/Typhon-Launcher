@@ -7,7 +7,7 @@ const bindings = {
   Logout: vi.fn(),
   GetCurrentUser: vi.fn(),
   UpdateProfile: vi.fn(),
-  SelectAvatarFile: vi.fn(),
+  PickAvatar: vi.fn(),
   UploadAvatar: vi.fn(),
   RemoveAvatar: vi.fn(),
 };

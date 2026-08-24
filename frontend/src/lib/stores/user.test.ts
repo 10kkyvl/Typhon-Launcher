@@ -21,7 +21,7 @@ vi.mock('../services/account', () => {
     logout: vi.fn(),
     fetchCurrentUser: vi.fn(),
     updateProfile: vi.fn(),
-    selectAvatarFile: vi.fn(),
+    pickAvatar: vi.fn(),
     uploadAvatar: vi.fn(),
     removeAvatar: vi.fn(),
   };
@@ -348,27 +348,68 @@ describe('saveProfile', () => {
   });
 });
 
-describe('changeAvatar', () => {
-  it('updates currentUser.avatarUrl', async () => {
-    const { accountMock, userStore } = await loadModules();
-    vi.mocked(accountMock.selectAvatarFile).mockResolvedValue('C:/avatar.png');
-    vi.mocked(accountMock.uploadAvatar).mockResolvedValue(makeUser({ avatarUrl: 'https://cdn/avatar.png' }));
-
-    await userStore.changeAvatar();
-
-    expect(get(userStore.currentUser)?.avatarUrl).toBe('https://cdn/avatar.png');
-  });
-
-  it('keeps the current user when the file dialog is cancelled', async () => {
+describe('chooseAvatar', () => {
+  it('returns a data url and uploads nothing on its own', async () => {
     const { accountMock, userStore } = await loadModules();
     const original = makeUser({ avatarUrl: 'https://cdn/old.png' });
     userStore.currentUser.set(original);
-    vi.mocked(accountMock.selectAvatarFile).mockResolvedValue('');
+    vi.mocked(accountMock.pickAvatar).mockResolvedValue({ data: 'QUJD', mime: 'image/png' });
 
-    await userStore.changeAvatar();
+    const src = await userStore.chooseAvatar();
 
+    expect(src).toBe('data:image/png;base64,QUJD');
     expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
     expect(get(userStore.currentUser)).toEqual(original);
+  });
+
+  it.each([
+    ['cancelled dialog', { data: '', mime: '' }],
+    ['payload without a type', { data: 'QUJD', mime: '' }],
+    ['type without a payload', { data: '', mime: 'image/png' }],
+  ])('returns nothing for %s', async (_name, image) => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.pickAvatar).mockResolvedValue(image);
+
+    expect(await userStore.chooseAvatar()).toBe('');
+    expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failure instead of returning an empty selection', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.pickAvatar).mockRejectedValue(new accountMock.AccountError('avatar_too_large'));
+
+    await expect(userStore.chooseAvatar()).rejects.toMatchObject({ code: 'avatar_too_large' });
+    expect(get(userStore.pickingAvatar)).toBe(false);
+  });
+});
+
+describe('saveAvatar', () => {
+  it('uploads the cropped payload and updates currentUser.avatarUrl', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.uploadAvatar).mockResolvedValue(makeUser({ avatarUrl: 'https://cdn/avatar.webp' }));
+
+    await userStore.saveAvatar('QUJD');
+
+    expect(accountMock.uploadAvatar).toHaveBeenCalledWith('QUJD');
+    expect(get(userStore.currentUser)?.avatarUrl).toBe('https://cdn/avatar.webp');
+  });
+
+  it('refuses an empty payload', async () => {
+    const { accountMock, userStore } = await loadModules();
+
+    await expect(userStore.saveAvatar('')).rejects.toMatchObject({ code: 'invalid_avatar' });
+    expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
+  });
+
+  it('keeps the previous user and clears the flag when the upload fails', async () => {
+    const { accountMock, userStore } = await loadModules();
+    const original = makeUser({ avatarUrl: 'https://cdn/old.png' });
+    userStore.currentUser.set(original);
+    vi.mocked(accountMock.uploadAvatar).mockRejectedValue(new accountMock.AccountError('unsupported_avatar'));
+
+    await expect(userStore.saveAvatar('QUJD')).rejects.toMatchObject({ code: 'unsupported_avatar' });
+    expect(get(userStore.currentUser)).toEqual(original);
+    expect(get(userStore.uploadingAvatar)).toBe(false);
   });
 });
 

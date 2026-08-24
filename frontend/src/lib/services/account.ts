@@ -10,6 +10,11 @@ export interface CurrentUser {
   createdAt: string;
 }
 
+export interface AvatarImage {
+  data: string;
+  mime: string;
+}
+
 export interface ProfilePatch {
   username?: string;
   displayName?: string;
@@ -160,19 +165,21 @@ export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
   }
 }
 
-export async function selectAvatarFile(): Promise<string> {
+export async function pickAvatar(): Promise<AvatarImage> {
   if (!inWails) throw unauthenticated();
   try {
-    return await AccountService.SelectAvatarFile();
+    const image = (await AccountService.PickAvatar()) as unknown as AvatarImage | null;
+    if (!image) throw new AccountError('server_error');
+    return { data: image.data ?? '', mime: image.mime ?? '' };
   } catch (err) {
     throw toAccountError(err);
   }
 }
 
-export async function uploadAvatar(path: string): Promise<CurrentUser> {
+export async function uploadAvatar(encoded: string): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UploadAvatar(path)) as CurrentUser;
+    return (await AccountService.UploadAvatar(encoded)) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 
@@ -269,7 +268,7 @@ func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 	return s.client.UpdateProfile(ctx, patch)
 }
 
-func (s *Service) SelectAvatarFile() (string, error) {
+func (s *Service) PickAvatar() (AvatarImage, error) {
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle("Выберите аватар").
 		CanChooseFiles(true).
@@ -278,28 +277,18 @@ func (s *Service) SelectAvatarFile() (string, error) {
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		slog.Warn("select avatar file", "error", err)
-		return "", err
+		return AvatarImage{}, err
 	}
-	return path, nil
+	if path == "" {
+		return AvatarImage{}, nil
+	}
+	return readAvatarImage(path)
 }
 
-func (s *Service) UploadAvatar(path string) (CurrentUser, error) {
-	info, err := os.Stat(path)
+func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
+	data, err := decodeAvatar(encoded)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return CurrentUser{}, &Error{Code: CodeInvalidAvatar}
-		}
-		slog.Error("stat avatar file", "error", err)
-		return CurrentUser{}, &Error{Code: CodeInvalidAvatar, cause: err}
-	}
-	if info.Size() > maxAvatarSize {
-		return CurrentUser{}, &Error{Code: CodeAvatarTooLarge}
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		slog.Error("read avatar file", "error", err)
-		return CurrentUser{}, &Error{Code: CodeInvalidAvatar, cause: err}
+		return CurrentUser{}, err
 	}
 
 	ctx, cancel, err := s.requestContext()

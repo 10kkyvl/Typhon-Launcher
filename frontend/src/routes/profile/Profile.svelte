@@ -1,20 +1,18 @@
 <script lang="ts">
   import { LogIn, LogOut, Pencil, UserRound } from '@lucide/svelte';
+  import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import {
     authState,
-    changeAvatar,
     currentUser,
     leaveGuest,
-    deleteAvatar,
-    removingAvatar,
     savingProfile,
     signOut,
-    uploadingAvatar,
     saveProfile,
   } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -22,7 +20,6 @@
   let editing = $state(false);
   let draft = $state({ displayName: '', username: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; general?: string }>({});
-  let avatarError = $state('');
   let avatarFailed = $state(false);
   let signingOut = $state(false);
   const isGuest = $derived($authState === 'guest');
@@ -81,24 +78,6 @@
       if (field === 'username') fieldErrors = { username: message };
       else if (field === 'displayName') fieldErrors = { displayName: message };
       else fieldErrors = { general: message };
-    }
-  }
-
-  async function onChangeAvatar() {
-    avatarError = '';
-    try {
-      await changeAvatar();
-    } catch (err) {
-      avatarError = accountErrorText(err, 'Не удалось обновить аватар');
-    }
-  }
-
-  async function onRemoveAvatar() {
-    avatarError = '';
-    try {
-      await deleteAvatar();
-    } catch (err) {
-      avatarError = accountErrorText(err, 'Не удалось удалить аватар');
     }
   }
 
@@ -163,19 +142,8 @@
           <h2 class="display-name">{$currentUser.displayName}</h2>
           <span class="username">@{$currentUser.username}</span>
           <div class="avatar-actions">
-            <Button size="sm" disabled={$uploadingAvatar || $removingAvatar} onclick={onChangeAvatar}>
-              {$uploadingAvatar ? 'Загрузка…' : 'Сменить аватар'}
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={$uploadingAvatar || $removingAvatar || !$currentUser.avatarUrl}
-              onclick={onRemoveAvatar}
-            >
-              {$removingAvatar ? 'Удаление…' : 'Удалить аватар'}
-            </Button>
+            <AvatarEditor size="sm" />
           </div>
-          {#if avatarError}<span class="error">{avatarError}</span>{/if}
         </div>
 
         <div class="head-actions">
@@ -213,8 +181,8 @@
 
           <div class="field">
             <span class="field-label">Email</span>
-            <input class="input" type="text" value={$currentUser.email} readonly />
-            <span class="hint">Email пока нельзя изменить</span>
+            <MaskedEmail email={$currentUser.email} />
+            <span class="hint">Email пока нельзя изменить и его не видит никто, кроме вас</span>
           </div>
         </div>
 
@@ -237,7 +205,7 @@
           </div>
           <div class="fact">
             <dt>Email</dt>
-            <dd>{$currentUser.email}</dd>
+            <dd><MaskedEmail email={$currentUser.email} /></dd>
           </div>
           <div class="fact">
             <dt>Участник с</dt>
@@ -361,10 +329,6 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-subtle);
-  }
-
-  .input[readonly] {
-    color: var(--text-3);
   }
 
   .username-field {

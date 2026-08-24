@@ -6,9 +6,9 @@ import {
   continueAsGuest,
   login,
   logout,
+  pickAvatar,
   register,
   removeAvatar,
-  selectAvatarFile,
   updateProfile,
   uploadAvatar,
   type CurrentUser,
@@ -25,6 +25,7 @@ export const authState = writable<AuthState>('bootstrapping');
 export const authReason = writable('');
 export const authView = writable<AuthView>('login');
 export const savingProfile = writable(false);
+export const pickingAvatar = writable(false);
 export const uploadingAvatar = writable(false);
 export const removingAvatar = writable(false);
 
@@ -138,13 +139,27 @@ export async function saveProfile(patch: ProfilePatch): Promise<void> {
   }
 }
 
-export async function changeAvatar(): Promise<void> {
+export async function chooseAvatar(): Promise<string> {
+  if (get(pickingAvatar)) return '';
+  pickingAvatar.set(true);
+  try {
+    const image = await pickAvatar();
+    if (!image.data || !image.mime) return '';
+    return `data:${image.mime};base64,${image.data}`;
+  } catch (err) {
+    onUnauthenticated(err);
+    throw err;
+  } finally {
+    pickingAvatar.set(false);
+  }
+}
+
+export async function saveAvatar(encoded: string): Promise<void> {
+  if (!encoded) throw new AccountError('invalid_avatar');
   if (get(uploadingAvatar)) return;
   uploadingAvatar.set(true);
   try {
-    const path = await selectAvatarFile();
-    if (!path) return;
-    currentUser.set(await uploadAvatar(path));
+    currentUser.set(await uploadAvatar(encoded));
   } catch (err) {
     onUnauthenticated(err);
     throw err;
