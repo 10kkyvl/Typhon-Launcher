@@ -131,6 +131,11 @@ export async function removeDownload(id: string): Promise<void> {
   await Manager.Remove(id);
 }
 
+export async function deleteDownloadData(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await Manager.DeleteData(id);
+}
+
 export async function moveDownloadUp(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await Manager.MoveUp(id);

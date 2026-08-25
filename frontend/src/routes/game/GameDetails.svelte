@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
+  import { BookmarkPlus, ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -8,6 +8,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
   import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -22,17 +23,27 @@
     clean,
     facts,
     galleryShots,
+    cancelFreesDisk,
+    hubAction,
+    isGameMissing,
     joinLimited,
     metaLine,
     orderPlatforms,
     pickHero,
     preferView,
-    primaryAction,
     summaryView,
     tagList,
   } from '../../lib/game/view';
-  import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
-  import { playGame, stopGame } from '../../lib/services/library';
+  import {
+    cancelDownload,
+    deleteDownloadData,
+    removeDownload,
+    resumeDownload,
+    type Download as DownloadItem,
+    type DownloadOrigin,
+    type DownloadStatus,
+  } from '../../lib/services/downloads';
+  import { addCatalogGame, playGame, stopGame } from '../../lib/services/library';
   import { ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
   import { openFolder } from '../../lib/services/settings';
   import {
@@ -55,7 +66,9 @@
 
   let { id }: { id: string } = $props();
 
-  const localGame = $derived($libraryGames.find((g) => g.id === id));
+  const localGame = $derived(
+    $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id),
+  );
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
@@ -126,9 +139,11 @@
     });
   });
 
-  const canonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id);
+  const canonicalId = $derived(localGame ? localGame.canonicalGameId : catalogGame?.id || id);
   const releaseTitle = $derived(localGame?.title ?? catalogGame?.title);
   const releaseKey = $derived(`${id}|${canonicalId ?? ''}|${releaseTitle ?? ''}`);
+
+  const anyOwnDownload = $derived($downloads.find((item) => ownsDownload(item)));
 
   let metaView = $state<MetadataView | null>(null);
   let metaToken = 0;
@@ -171,7 +186,9 @@
   });
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
-  const title = $derived(clean(localGame?.title) || clean(catalogGame?.title) || clean(info?.title));
+  const title = $derived(
+    clean(localGame?.title) || clean(catalogGame?.title) || clean(info?.title) || clean(anyOwnDownload?.name),
+  );
   const screenshots = $derived(metaView?.screenshots ?? []);
   const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
   const shots = $derived(galleryShots(screenshots, heroSrc));
@@ -258,6 +275,13 @@
     $downloads.find((item) => ownsDownload(item) && activeDownloadStatuses.includes(item.status)),
   );
 
+  const terminalDownload = $derived.by(() => {
+    if (installed) return undefined;
+    return $downloads.find(
+      (item) => ownsDownload(item) && (item.status === 'completed' || item.status === 'failed'),
+    );
+  });
+
   const ownInstall = $derived.by(() => {
     const ids = new Set($downloads.filter(ownsDownload).map((item) => item.id));
     return $installations.find(
@@ -279,13 +303,14 @@
   const availableGroups = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
 
   const primary = $derived(
-    primaryAction({
+    hubAction({
       installed,
       running,
       updateAvailable,
       releaseCount: availableGroups.length,
       releasesLoading,
       busy,
+      terminalDownload: terminalDownload ? { status: terminalDownload.status as 'completed' | 'failed' } : null,
     }),
   );
 
@@ -303,6 +328,12 @@
     ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
     ...(localGame
       ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
+      : []),
+    ...(terminalDownload
+      ? [
+          { id: 'remove-download', label: 'Удалить загрузку', danger: true, separator: true },
+          { id: 'discard-download', label: 'Удалить загрузку и файлы', danger: true },
+        ]
       : []),
   ]);
 
@@ -324,6 +355,10 @@
       openMatch('change');
     } else if (actionId === 'meta-refresh') {
       refreshMeta();
+    } else if (actionId === 'remove-download') {
+      removeTerminalDownload();
+    } else if (actionId === 'discard-download') {
+      discardTerminalDownload();
     }
   }
 
@@ -377,6 +412,53 @@
   let downloadSource = $state('');
   let downloadOrigin = $state<DownloadOrigin | undefined>(undefined);
 
+  let installModalOpen = $state(false);
+  let installModalDownloadId = $state<string | null>(null);
+
+  async function retryTerminalDownload() {
+    if (!terminalDownload) return;
+    try {
+      await resumeDownload(terminalDownload.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось повторить загрузку', 'danger');
+    }
+  }
+
+  function installFromTerminalDownload() {
+    if (!terminalDownload) return;
+    installModalDownloadId = terminalDownload.id;
+    installModalOpen = true;
+  }
+
+  function leaveWithoutCard() {
+    if (!localGame) navigate('library');
+  }
+
+  async function removeTerminalDownload() {
+    if (!terminalDownload) return;
+    try {
+      await removeDownload(terminalDownload.id);
+      leaveWithoutCard();
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку', 'danger');
+    }
+  }
+
+  // Cancel purges the files only for a download that never completed:
+  // manager.discard keeps a completed one, and DeleteData is the call that
+  // removes its content.
+  async function discardTerminalDownload() {
+    if (!terminalDownload) return;
+    const id = terminalDownload.id;
+    const freesDisk = cancelFreesDisk(terminalDownload.status);
+    try {
+      await (freesDisk ? cancelDownload(id) : deleteDownloadData(id));
+      leaveWithoutCard();
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку и файлы', 'danger');
+    }
+  }
+
   async function downloadRelease(group: ReleaseGroup) {
     try {
       const request = await prepareReleaseDownload(group.release.id);
@@ -424,14 +506,38 @@
     }
   }
 
+  let addingToLibrary = $state(false);
+
+  async function addToLibrary() {
+    if (!canonicalId || addingToLibrary) return;
+    addingToLibrary = true;
+    try {
+      await addCatalogGame(canonicalId, title, coverSrc);
+      toast('Игра добавлена в библиотеку', 'success');
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось добавить игру в библиотеку', 'danger');
+    } finally {
+      addingToLibrary = false;
+    }
+  }
+
   function runPrimary() {
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
     else if (primary.kind === 'install') startInstall();
     else if (primary.kind === 'update') updateCard?.start();
+    else if (primary.kind === 'retry-download') retryTerminalDownload();
+    else if (primary.kind === 'install-download') installFromTerminalDownload();
   }
 
-  const missing = $derived(!localGame && !catalogGame && !catalogLoading);
+  const missing = $derived(
+    isGameMissing({
+      hasLocalGame: Boolean(localGame),
+      hasCatalogGame: Boolean(catalogGame),
+      catalogLoading,
+      hasOwnDownload: Boolean(anyOwnDownload),
+    }),
+  );
 </script>
 
 {#if missing}
@@ -512,7 +618,7 @@
                 <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
               {:else if primary.kind === 'stop'}
                 <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'install'}
+              {:else if primary.kind === 'install' || primary.kind === 'install-download'}
                 <Download size="1.6rem" strokeWidth={1.8} />
               {/if}
               {primary.label}
@@ -523,6 +629,13 @@
             <Button size="lg" onclick={play}>
               <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
               Играть
+            </Button>
+          {/if}
+
+          {#if !localGame && canonicalId}
+            <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
+              <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
+              Добавить в библиотеку
             </Button>
           {/if}
 
@@ -537,7 +650,9 @@
           {/if}
         </div>
 
-        {#if localGame && !installed}
+        {#if primary.kind === 'retry-download' && terminalDownload?.error}
+          <p class="note danger">{terminalDownload.error}</p>
+        {:else if localGame && !installed}
           <p class="note">Игра удалена с компьютера — установите её снова из доступных загрузок.</p>
         {/if}
       </div>
@@ -687,6 +802,7 @@
   />
 
   <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
+  <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
 {/if}
 
 <style>
@@ -887,6 +1003,10 @@
     max-width: 56rem;
     font-size: var(--font-sm);
     color: var(--text-2);
+  }
+
+  .note.danger {
+    color: var(--danger);
   }
 
   .body {

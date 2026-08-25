@@ -144,7 +144,16 @@ export function summaryView(raw: string, expanded: boolean, limit = 520): Summar
   return { text: `${head.replace(/[\s.,;:—-]+$/, '')}…`, expandable: true };
 }
 
-export type PrimaryKind = 'play' | 'stop' | 'update' | 'install' | 'progress' | 'resolving' | 'unavailable';
+export type PrimaryKind =
+  | 'play'
+  | 'stop'
+  | 'update'
+  | 'install'
+  | 'progress'
+  | 'resolving'
+  | 'unavailable'
+  | 'retry-download'
+  | 'install-download';
 
 export interface PrimaryAction {
   kind: PrimaryKind;
@@ -179,6 +188,44 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   if (status.releaseCount > 0) return { kind: 'install', label: 'Установить', disabled: false };
   if (status.releasesLoading) return { kind: 'resolving', label: 'Проверяем загрузки…', disabled: true };
   return { kind: 'unavailable', label: 'Нет доступных загрузок', disabled: true };
+}
+
+export type TerminalDownloadStatus = 'failed' | 'completed';
+
+export interface TerminalDownload {
+  status: TerminalDownloadStatus;
+}
+
+export interface HubStatus extends GameStatus {
+  terminalDownload?: TerminalDownload | null;
+}
+
+export function hubAction(status: HubStatus): PrimaryAction {
+  if (status.installed || status.running || status.busy) return primaryAction(status);
+  if (status.terminalDownload) {
+    if (status.terminalDownload.status === 'failed') {
+      return { kind: 'retry-download', label: 'Повторить загрузку', disabled: false };
+    }
+    return { kind: 'install-download', label: 'Установить', disabled: false };
+  }
+  return primaryAction(status);
+}
+
+export interface MissingStatus {
+  hasLocalGame: boolean;
+  hasCatalogGame: boolean;
+  catalogLoading: boolean;
+  hasOwnDownload: boolean;
+}
+
+export function isGameMissing(status: MissingStatus): boolean {
+  return !status.hasLocalGame && !status.hasCatalogGame && !status.catalogLoading && !status.hasOwnDownload;
+}
+
+// Mirrors download.Manager.discard: it purges content only for a download that
+// never completed, so a completed one needs DeleteData to free the disk.
+export function cancelFreesDisk(status: TerminalDownloadStatus): boolean {
+  return status !== 'completed';
 }
 
 export function busyState(
