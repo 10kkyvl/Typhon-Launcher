@@ -22,6 +22,12 @@
 #   VPS_KNOWN_HOSTS             known_hosts entry pinning that VPS.
 #   VPS_HOST                    VPS hostname.
 #   VPS_USER                    deploy user on the VPS.
+#   SITE_DISPATCH_TOKEN         optional fine-grained token carrying
+#                               "Actions: read and write" on the website
+#                               repository. With it the site republishes the
+#                               download facts as soon as the manifest is up;
+#                               without it the site picks them up on its own
+#                               hourly check.
 #
 # Garage is not reachable from the runner: its S3 port stays firewalled and
 # runs without TLS. Publishing therefore copies the files to the VPS over SSH
@@ -218,3 +224,26 @@ jobs:
             "$VPS_USER@$VPS_HOST:$remote_dir/"
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" \
             "bash '$remote_dir/publish-remote.sh' '$remote_dir' '$RELEASE_VERSION' '$S3_RELEASES_BUCKET'"
+
+      - name: Ask the website to republish the download facts
+        shell: bash
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          SITE_REPOSITORY: ${{ vars.SITE_REPOSITORY || '10kkyvl/typhon-site' }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SITE_DISPATCH_TOKEN:-}" ]; then
+            echo "SITE_DISPATCH_TOKEN is unset; the site picks this release up on its hourly check"
+            exit 0
+          fi
+
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$SITE_REPOSITORY/actions/workflows/deploy.yml/dispatches" \
+            -d '{"ref":"main"}'
+
+          echo "asked $SITE_REPOSITORY to deploy $RELEASE_VERSION"
