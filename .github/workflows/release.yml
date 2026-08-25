@@ -89,8 +89,19 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
 
       - name: Verify NSIS is on PATH
-        shell: bash
+        shell: pwsh
         run: makensis /VERSION
+
+      - name: Put the unix tools of Git for Windows on PATH
+        shell: pwsh
+        run: |
+          # The windows Taskfile reads the VERSION file with `cat`, which lives
+          # in Git's usr/bin and is not always on the runner PATH.
+          $usrBin = Join-Path $env:ProgramFiles 'Git\usr\bin'
+          if (-not (Test-Path (Join-Path $usrBin 'cat.exe'))) {
+            throw "cat.exe not found in $usrBin"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $usrBin
 
       - name: Determine release version
         id: version
