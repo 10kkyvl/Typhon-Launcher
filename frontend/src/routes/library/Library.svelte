@@ -1,39 +1,33 @@
 <script lang="ts">
   import {
     ArrowDownUp,
-    ArrowUp,
     ChevronDown,
-    ChevronRight,
     Clock,
-    FileDown,
     LayoutGrid,
     List,
     MonitorDown,
     Play,
     Square,
-    X,
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
   import GameHero from '../../lib/components/GameHero.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import type { Download } from '../../lib/services/downloads';
-  import { active, downloads, moveUp, queue, remove, statusLabels } from '../../lib/stores/downloads';
+  import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
-  import { bytesSize, playtime, plural, relativeDate } from '../../lib/utils/format';
+  import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
 
   type Filter = 'all' | 'installed' | 'recent';
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
@@ -205,7 +199,6 @@
   );
 
   const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
-  const activeDownload = $derived($active[0]);
 
   onMount(() => {
     const timer = setInterval(() => {
@@ -324,10 +317,6 @@
 <section class="section">
   <div class="section-head">
     <h2>{sectionTitles[filter]}</h2>
-    <button class="link" onclick={() => navigate('catalog')}>
-      Все игры
-      <ChevronRight size="1.4rem" strokeWidth={1.8} />
-    </button>
   </div>
 
   {#if visibleGames.length === 0}
@@ -364,55 +353,6 @@
     </div>
   {/if}
 </section>
-
-{#if activeDownload || $queue.length > 0}
-  <section class="section transfers">
-    <div class="section-head">
-      <h2>Загрузки</h2>
-      <button class="link" onclick={() => navigate('downloads')}>
-        Управление
-        <ChevronRight size="1.4rem" strokeWidth={1.8} />
-      </button>
-    </div>
-    <div class="transfers-grid">
-      <div class="transfers-col">
-        {#if activeDownload}
-          <DownloadItem download={activeDownload} compact />
-        {:else}
-          <p class="muted">Нет активных загрузок</p>
-        {/if}
-      </div>
-      <div class="transfers-col">
-        {#if $queue.length === 0}
-          <p class="muted">Очередь пуста</p>
-        {:else}
-          <div class="queue">
-            {#each $queue.slice(0, 3) as q (q.id)}
-              <div class="queue-row">
-                <span class="queue-icon"><FileDown size="1.6rem" strokeWidth={1.8} /></span>
-                <span class="queue-title">{q.name}</span>
-                <span class="queue-size">{bytesSize(q.total)}</span>
-                <div class="queue-actions">
-                  <IconButton label="Выше" size="sm" onclick={() => moveUp(q.id)}>
-                    <ArrowUp size="1.5rem" strokeWidth={1.8} />
-                  </IconButton>
-                  <IconButton label="Убрать" size="sm" onclick={() => remove(q.id)}>
-                    <X size="1.5rem" strokeWidth={1.8} />
-                  </IconButton>
-                </div>
-              </div>
-            {/each}
-            {#if $queue.length > 3}
-              <p class="muted small">
-                Ещё {$queue.length - 3} {plural($queue.length - 3, 'загрузка', 'загрузки', 'загрузок')} в очереди
-              </p>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    </div>
-  </section>
-{/if}
 
 <style>
   .hero-block {
@@ -548,21 +488,6 @@
     font-size: var(--font-xl);
   }
 
-  .link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-    border-radius: var(--radius-sm);
-    padding: 0.3rem 0.6rem;
-    transition: color var(--dur) var(--ease);
-  }
-
-  .link:hover {
-    color: var(--text);
-  }
-
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
@@ -622,71 +547,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .transfers-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-    gap: var(--space-10);
-    align-items: start;
-  }
-
-  .transfers-col {
-    min-width: 0;
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-  .muted.small {
-    font-size: var(--font-xs);
-    padding-top: 0.8rem;
-  }
-
-  .queue {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .queue-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0.6rem 0;
-  }
-
-  .queue-row + .queue-row {
-    border-top: 1px solid var(--border);
-  }
-
-  .queue-icon {
-    display: inline-flex;
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .queue-title {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-sm);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .queue-size {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .queue-actions {
-    display: flex;
-    gap: 2px;
-  }
-
   @media (min-width: 2200px) {
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -696,13 +556,6 @@
   @media (max-width: 1400px) {
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
-    }
-  }
-
-  @media (max-width: 1240px) {
-    .transfers-grid {
-      grid-template-columns: 1fr;
-      gap: var(--space-6);
     }
   }
 </style>

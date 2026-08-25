@@ -26,7 +26,9 @@
 
 <div class="corner">
   <Toasts />
-  <ActivityDock />
+  {#if $route.name !== 'downloads'}
+    <ActivityDock />
+  {/if}
 </div>
 
 <style>
