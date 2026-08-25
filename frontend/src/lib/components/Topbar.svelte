@@ -13,7 +13,7 @@
   import { inWails } from '../services/backend';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
-  import { notifications, type Notification } from '../stores/notifications';
+  import { markAllRead, notifications, type Notification } from '../stores/notifications';
   import { toast } from '../stores/toasts';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
@@ -218,7 +218,12 @@
       {/if}
       {#if notificationsOpen}
         <div class="notifications">
-          <div class="notifications-head">Уведомления</div>
+          <div class="notifications-head-row">
+            <div class="notifications-head">Уведомления</div>
+            {#if $notifications.length > 0}
+              <button class="notifications-mark-read" onclick={markAllRead}>Прочитать все</button>
+            {/if}
+          </div>
           {#if $notifications.length === 0}
             <div class="notifications-empty">Пока ничего нового</div>
           {:else}
@@ -297,6 +302,27 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-3);
+  }
+
+  .notifications-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+  }
+
+  .notifications-mark-read {
+    flex-shrink: 0;
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-xs);
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+
+  .notifications-mark-read:hover {
+    background: var(--hover-strong);
+    color: var(--text-2);
   }
 
   .result {
