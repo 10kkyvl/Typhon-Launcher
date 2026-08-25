@@ -84,7 +84,7 @@ func (s *Service) ApplyDiscovered(d Discovered) (Game, Outcome, error) {
 		return Game{}, OutcomeIgnored, nil
 	}
 
-	pos, err := s.matchDiscoveredLocked(d.GameID, key, executable)
+	pos, err := s.matchDiscoveredLocked(d.GameID, key, executable, d.CanonicalGameID)
 	if err != nil {
 		return Game{}, "", err
 	}
@@ -94,8 +94,8 @@ func (s *Service) ApplyDiscovered(d Discovered) (Game, Outcome, error) {
 	return s.mergeDiscoveredLocked(pos, d, installDir, executable)
 }
 
-func (s *Service) matchDiscoveredLocked(gameID, key, executable string) (int, error) {
-	byPath, byID, byExecutable := -1, -1, -1
+func (s *Service) matchDiscoveredLocked(gameID, key, executable, canonicalGameID string) (int, error) {
+	byPath, byID, byExecutable, byCanonical := -1, -1, -1, -1
 	for i := range s.games {
 		if s.games[i].InstallDir != "" && byPath < 0 {
 			existing, err := platform.PathKey(s.games[i].InstallDir)
@@ -112,14 +112,19 @@ func (s *Service) matchDiscoveredLocked(gameID, key, executable string) (int, er
 		if executable != "" && byExecutable < 0 && strings.EqualFold(s.games[i].Executable, executable) {
 			byExecutable = i
 		}
+		if canonicalGameID != "" && byCanonical < 0 && s.games[i].Uninstalled && s.games[i].CanonicalGameID == canonicalGameID {
+			byCanonical = i
+		}
 	}
 	switch {
 	case byID >= 0 && (byPath < 0 || byPath == byID):
 		return byID, nil
 	case byPath >= 0:
 		return byPath, nil
-	default:
+	case byExecutable >= 0:
 		return byExecutable, nil
+	default:
+		return byCanonical, nil
 	}
 }
 

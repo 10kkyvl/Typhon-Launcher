@@ -90,8 +90,10 @@ type InstalledUpdate struct {
 }
 
 var (
-	errEmptyInstallDir = errors.New("каталог установки не задан")
-	errNotFound        = errors.New("игра не найдена")
+	errEmptyInstallDir      = errors.New("каталог установки не задан")
+	errNotFound             = errors.New("игра не найдена")
+	errEmptyCanonicalGameID = errors.New("не указан идентификатор игры каталога")
+	errEmptyCatalogTitle    = errors.New("не указано название игры")
 )
 
 type Service struct {

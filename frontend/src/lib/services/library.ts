@@ -38,6 +38,11 @@ export async function addGame(executable: string, title: string): Promise<Librar
   return (await LibraryService.AddGame(executable, title)) as unknown as LibraryGame;
 }
 
+export async function addCatalogGame(canonicalGameId: string, title: string, cover: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.AddCatalogGame(canonicalGameId, title, cover)) as unknown as LibraryGame;
+}
+
 export async function setExecutable(id: string, executable: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetExecutable(id, executable)) as unknown as LibraryGame;
