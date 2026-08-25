@@ -195,7 +195,7 @@ jobs:
               -e AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
               -e AWS_DEFAULT_REGION="${S3_REGION:-garage}" \
               -v "$remote_dir":/data \
-              amazon/aws-cli:latest "$@"
+              amazon/aws-cli:2.36.30@sha256:da37c08f8e00a64c09acd46e8ce5c3dd30b291046029def45566aa9ccd7b398b "$@"
           }
 
           run_aws s3 cp /data/typhon-amd64-installer.exe \
