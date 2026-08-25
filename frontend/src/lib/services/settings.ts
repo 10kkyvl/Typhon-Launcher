@@ -4,7 +4,6 @@ import { inWails } from './backend';
 
 export interface Settings {
   theme: string;
-  language: string;
   uiScale: number;
   libraryPath: string;
   downloadsPath: string;
@@ -39,7 +38,6 @@ const FALLBACK_KEY = 'typhon.settings';
 
 const fallbackDefaults: Settings = {
   theme: 'dark',
-  language: 'ru',
   uiScale: 1,
   libraryPath: '',
   downloadsPath: '',

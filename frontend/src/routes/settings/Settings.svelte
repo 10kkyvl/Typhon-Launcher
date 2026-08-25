@@ -174,6 +174,28 @@
         <div class="rows">
           <div class="row">
             <div class="row-text">
+              <span class="row-label">Запускать при старте системы</span>
+              <span class="row-sub">Открывать Typhon при входе в Windows</span>
+            </div>
+            <Toggle
+              checked={current?.launchOnStartup ?? false}
+              label="Запуск при старте системы"
+              onchange={(v) => set({ launchOnStartup: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Сворачивать в трей</span>
+              <span class="row-sub">При закрытии окна прятать лаунчер в область уведомлений</span>
+            </div>
+            <Toggle
+              checked={current?.minimizeToTray ?? true}
+              label="Сворачивать в трей"
+              onchange={(v) => set({ minimizeToTray: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">Discord Rich Presence</span>
               <span class="row-sub">Показывать в Discord, во что вы играете</span>
             </div>
@@ -278,6 +300,17 @@
               checked={current?.animationsEnabled ?? true}
               label="Анимации"
               onchange={(v) => set({ animationsEnabled: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Аппаратное ускорение</span>
+              <span class="row-sub">Отрисовка интерфейса через GPU. Применится после перезапуска лаунчера</span>
+            </div>
+            <Toggle
+              checked={current?.hardwareAcceleration ?? true}
+              label="Аппаратное ускорение"
+              onchange={(v) => set({ hardwareAcceleration: v })}
             />
           </div>
         </div>
