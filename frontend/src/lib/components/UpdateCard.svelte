@@ -47,6 +47,15 @@
     confirmOpen = false;
     applyUpdate(update.gameId);
   }
+
+  export function start() {
+    if (busy || running) return;
+    if (plan) {
+      confirmOpen = true;
+      return;
+    }
+    if (!update.planning) preparePlan(update.gameId);
+  }
 </script>
 
 <div class="section">

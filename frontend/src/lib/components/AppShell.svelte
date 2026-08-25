@@ -77,8 +77,7 @@
 
   @media (min-width: 2200px) {
     .content {
-      padding-left: var(--space-12);
-      padding-right: var(--space-12);
+      --page-x: var(--space-12);
     }
   }
 

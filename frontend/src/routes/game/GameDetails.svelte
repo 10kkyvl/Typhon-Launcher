@@ -1,50 +1,37 @@
 <script lang="ts">
-  import {
-    Bookmark,
-    Calendar,
-    Check,
-    ChevronDown,
-    ChevronRight,
-    CircleCheck,
-    Download,
-    EllipsisVertical,
-    ExternalLink,
-    FileCheck,
-    FolderOpen,
-    Gamepad2,
-    Globe,
-    Image,
-    NotebookPen,
-    Play,
-    Settings,
-    Square,
-    SquarePen,
-    Terminal,
-    Trash2,
-    Trophy,
-    UploadCloud,
-    UserRound,
-  } from '@lucide/svelte';
+  import { ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameHero from '../../lib/components/GameHero.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Lightbox from '../../lib/components/Lightbox.svelte';
   import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
-  import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
+  import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import Tabs from '../../lib/components/Tabs.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
-  import type { DownloadOrigin } from '../../lib/services/downloads';
+  import {
+    busyState,
+    clean,
+    facts,
+    galleryShots,
+    joinLimited,
+    metaLine,
+    orderPlatforms,
+    pickHero,
+    preferView,
+    primaryAction,
+    summaryView,
+    tagList,
+  } from '../../lib/game/view';
+  import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
   import { playGame, stopGame } from '../../lib/services/library';
   import { ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
   import { openFolder } from '../../lib/services/settings';
@@ -57,34 +44,39 @@
     type ReleaseGroup,
   } from '../../lib/services/sources';
   import { getVerifyState } from '../../lib/services/updates';
+  import { downloads, statusLabels } from '../../lib/stores/downloads';
+  import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { metadataAvailable } from '../../lib/stores/metadata';
-  import { updatesByGame, verifications } from '../../lib/stores/updates';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
-  import { bytesLabel, gb, playtime, relativeDate } from '../../lib/utils/format';
+  import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
+  import { bytesLabel, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
   let { id }: { id: string } = $props();
 
   const localGame = $derived($libraryGames.find((g) => g.id === id));
-  const localInstalled = $derived(Boolean(localGame) && !localGame?.uninstalled);
-  const localRunning = $derived(localGame ? $runningGames.has(localGame.id) : false);
+  const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
+  const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
 
-  const localUpdate = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
-  const localVerify = $derived(localGame ? $verifications[localGame.id] : undefined);
+  const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
+  const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
+  const updateAvailable = $derived(Boolean(update?.availability.available));
   const showUpdateCard = $derived(
     Boolean(
-      localUpdate &&
-        (localUpdate.availability.available ||
-          localUpdate.canRollback ||
-          localUpdate.state === 'updating' ||
-          localUpdate.state === 'update_downloading' ||
-          localUpdate.state === 'update_failed'),
+      update &&
+        (update.availability.available ||
+          update.canRollback ||
+          update.state === 'updating' ||
+          update.state === 'update_downloading' ||
+          update.state === 'update_failed'),
     ),
   );
+
+  let updateCard = $state<UpdateCard | undefined>(undefined);
 
   async function loadVerifyState(gameId: string) {
     const state = await getVerifyState(gameId);
@@ -105,13 +97,19 @@
   let releaseToken = 0;
 
   let catalogGame = $state<CatalogGame | null>(null);
+  let catalogLoading = $state(false);
   let catalogToken = 0;
 
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
-    const found = await getCatalogGame(gameId);
-    if (current !== catalogToken) return;
-    catalogGame = found;
+    catalogLoading = true;
+    try {
+      const found = await getCatalogGame(gameId);
+      if (current !== catalogToken) return;
+      catalogGame = found;
+    } finally {
+      if (current === catalogToken) catalogLoading = false;
+    }
   }
 
   $effect(() => {
@@ -120,6 +118,7 @@
     untrack(() => {
       if (known) {
         catalogToken++;
+        catalogLoading = false;
         catalogGame = null;
         return;
       }
@@ -128,12 +127,8 @@
   });
 
   const canonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id);
-  const catalogMeta = $derived(
-    [catalogGame?.releaseYear, catalogGame?.developer, catalogGame?.publisher].filter(Boolean).join(' · '),
-  );
   const releaseTitle = $derived(localGame?.title ?? catalogGame?.title);
   const releaseKey = $derived(`${id}|${canonicalId ?? ''}|${releaseTitle ?? ''}`);
-  const pageTitle = $derived(localGame?.title ?? catalogGame?.title ?? '');
 
   let metaView = $state<MetadataView | null>(null);
   let metaToken = 0;
@@ -141,14 +136,16 @@
   let matchOpen = $state(false);
   let matchMode = $state<'find' | 'change'>('find');
   let summaryExpanded = $state(false);
-  let screenshotOpen = $state(false);
-  let screenshotSrc = $state('');
+  let lightboxOpen = $state(false);
+  let lightboxIndex = $state(0);
+  let pickerOpen = $state(false);
+  let heroFailed = $state(false);
 
   async function loadMetaView(gameId: string) {
     const current = ++metaToken;
     const view = await getMetadataView(gameId);
     if (current !== metaToken) return;
-    metaView = view;
+    metaView = preferView(metaView, view);
   }
 
   $effect(() => {
@@ -168,41 +165,166 @@
     return Events.On('metadata:updated', (event) => {
       const view = event.data as MetadataView;
       if (view.game?.id && view.game.id === canonicalId) {
-        metaView = view;
+        metaView = preferView(metaView, view);
       }
     });
   });
 
-  const metaCover = $derived(metaView?.cover ?? '');
-  const metaHero = $derived(metaView?.hero ?? '');
-  const heroSrc = $derived(metaHero);
-  const summary = $derived(metaView?.game.summary ?? '');
-  const summaryTooLong = $derived(summary.length > 600);
-  const summaryShown = $derived(summaryExpanded || !summaryTooLong ? summary : `${summary.slice(0, 600)}…`);
+  const info = $derived(metaView?.game ?? catalogGame ?? null);
+  const title = $derived(clean(localGame?.title) || clean(catalogGame?.title) || clean(info?.title));
+  const screenshots = $derived(metaView?.screenshots ?? []);
+  const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
+  const shots = $derived(galleryShots(screenshots, heroSrc));
+  const coverSrc = $derived(clean(metaView?.cover) || clean(localGame?.cover));
+  const showHero = $derived(Boolean(heroSrc) && !heroFailed);
+
+  $effect(() => {
+    heroSrc;
+    untrack(() => {
+      heroFailed = false;
+      lightboxIndex = 0;
+    });
+  });
+
   const releaseDateLabel = $derived.by(() => {
-    const game = metaView?.game;
-    if (!game) return '';
-    if (game.releaseDate) {
-      const date = new Date(game.releaseDate);
+    if (!info) return '';
+    if (info.releaseDate) {
+      const date = new Date(info.releaseDate);
       if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('ru-RU');
     }
-    if (game.releaseYear) return String(game.releaseYear);
+    return info.releaseYear ? String(info.releaseYear) : '';
+  });
+
+  const releaseYear = $derived.by(() => {
+    if (!info) return '';
+    if (info.releaseYear) return String(info.releaseYear);
+    if (info.releaseDate) {
+      const date = new Date(info.releaseDate);
+      if (!Number.isNaN(date.getTime())) return String(date.getFullYear());
+    }
     return '';
   });
-  const developerLabel = $derived(metaView?.game.developer ?? '');
-  const publisherLabel = $derived(metaView?.game.publisher ?? '');
-  const genres = $derived(metaView?.game.genres ?? []);
-  const themes = $derived(metaView?.game.themes ?? []);
-  const platforms = $derived(metaView?.game.platforms ?? []);
-  const screenshots = $derived(metaView?.screenshots ?? []);
+
+  const platforms = $derived(orderPlatforms(info?.platforms));
+
+  const metaParts = $derived(
+    metaLine({
+      year: releaseYear,
+      developer: info?.developer,
+      publisher: info?.publisher,
+      genres: info?.genres,
+      platforms,
+    }),
+  );
+
+  const tags = $derived(tagList([info?.genres, info?.themes]));
+  const summary = $derived(summaryView(info?.summary ?? '', summaryExpanded));
+
+  const gameFacts = $derived(
+    facts([
+      { label: 'Дата выхода', value: releaseDateLabel },
+      { label: 'Разработчик', value: info?.developer },
+      { label: 'Издатель', value: info?.publisher },
+      { label: 'Платформы', value: joinLimited(platforms, 4), full: platforms.join(', ') },
+    ]),
+  );
+
+  const shotCols = $derived(
+    shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
+  );
+
+  const installFacts = $derived.by(() => {
+    if (!localGame || !installed) return [];
+    const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
+    return facts([
+      { label: 'Версия', value: localGame.version },
+      { label: 'Размер', value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
+      { label: 'Исполняемый файл', value: exe, full: localGame.executable, mono: true },
+      { label: 'Наиграно', value: playtime(localGame.playtimeSeconds) },
+      { label: 'Последний запуск', value: relativeDate(localGame.lastPlayed) },
+      { label: 'Добавлена', value: relativeDate(localGame.installedAt) },
+    ]);
+  });
+
+  const activeDownloadStatuses: DownloadStatus[] = ['queued', 'metadata', 'downloading', 'paused', 'verifying'];
+
+  function ownsDownload(item: DownloadItem) {
+    const origin = item.origin ?? {};
+    if (canonicalId && origin.gameId === canonicalId) return true;
+    return Boolean(localGame && origin.libraryId === localGame.id);
+  }
+
+  const ownDownload = $derived(
+    $downloads.find((item) => ownsDownload(item) && activeDownloadStatuses.includes(item.status)),
+  );
+
+  const ownInstall = $derived.by(() => {
+    const ids = new Set($downloads.filter(ownsDownload).map((item) => item.id));
+    return $installations.find(
+      (item) =>
+        installActive(item.status) && (ids.has(item.downloadId) || (localGame && item.gameId === localGame.id)),
+    );
+  });
+
+  const busy = $derived(
+    busyState([
+      ownInstall ? { active: true, label: installStatusLabels[ownInstall.status], progress: ownInstall.progress } : null,
+      update && (update.state === 'updating' || update.state === 'update_downloading')
+        ? { active: true, label: stepLabels[update.step ?? 'download'], progress: update.progress }
+        : null,
+      ownDownload ? { active: true, label: statusLabels[ownDownload.status], progress: ownDownload.progress } : null,
+    ]),
+  );
+
+  const availableGroups = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
+
+  const primary = $derived(
+    primaryAction({
+      installed,
+      running,
+      updateAvailable,
+      releaseCount: availableGroups.length,
+      releasesLoading,
+      busy,
+    }),
+  );
+
+  const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
+
+  const menuItems = $derived([
+    ...($metadataAvailable && canonicalId
+      ? metaView?.resolved
+        ? [
+            { id: 'meta-refresh', label: metaRefreshing ? 'Обновление…' : 'Обновить метаданные' },
+            { id: 'meta-change', label: 'Сменить сопоставление' },
+          ]
+        : [{ id: 'meta-find', label: 'Найти метаданные' }]
+      : []),
+    ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
+    ...(localGame
+      ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
+      : []),
+  ]);
 
   function openMatch(mode: 'find' | 'change') {
     matchMode = mode;
     matchOpen = true;
   }
 
-  function onMetaApplied(view: MetadataView) {
-    metaView = view;
+  function onMenu(actionId: string) {
+    if (actionId === 'remove') {
+      removeMode = 'library';
+      removeOpen = true;
+    } else if (actionId === 'uninstall') {
+      removeMode = 'disk';
+      removeOpen = true;
+    } else if (actionId === 'meta-find') {
+      openMatch('find');
+    } else if (actionId === 'meta-change') {
+      openMatch('change');
+    } else if (actionId === 'meta-refresh') {
+      refreshMeta();
+    }
   }
 
   async function refreshMeta() {
@@ -218,20 +340,19 @@
     }
   }
 
-  function openScreenshot(url: string) {
-    if (!url) return;
-    screenshotSrc = url;
-    screenshotOpen = true;
+  function openShot(index: number) {
+    lightboxIndex = index;
+    lightboxOpen = true;
   }
 
-  async function loadReleases(canonicalGameId: string | undefined, title: string | undefined) {
+  async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined) {
     const current = ++releaseToken;
     releasesLoading = true;
     try {
       const groups = canonicalGameId
         ? await getReleasesForGame(canonicalGameId)
-        : title
-          ? await getReleasesForTitle(title)
+        : gameTitle
+          ? await getReleasesForTitle(gameTitle)
           : [];
       if (current !== releaseToken) return;
       releaseGroups = groups;
@@ -246,9 +367,9 @@
   $effect(() => {
     releaseKey;
     const canonicalGameId = canonicalId;
-    const title = releaseTitle;
+    const gameTitle = releaseTitle;
     untrack(() => {
-      loadReleases(canonicalGameId, title);
+      loadReleases(canonicalGameId, gameTitle);
     });
   });
 
@@ -267,7 +388,16 @@
     }
   }
 
-  async function localPlay() {
+  function startInstall() {
+    if (availableGroups.length === 0) return;
+    if (availableGroups.length === 1) {
+      downloadRelease(availableGroups[0]);
+      return;
+    }
+    pickerOpen = true;
+  }
+
+  async function play() {
     if (!localGame) return;
     try {
       await playGame(localGame.id);
@@ -276,7 +406,7 @@
     }
   }
 
-  async function localStop() {
+  async function stop() {
     if (!localGame) return;
     try {
       await stopGame(localGame.id);
@@ -285,7 +415,7 @@
     }
   }
 
-  async function localOpenFolder() {
+  async function reveal() {
     if (!localGame) return;
     try {
       await openFolder(localGame.installDir);
@@ -294,334 +424,341 @@
     }
   }
 
-</script>
-{#if localGame}
-  <nav class="breadcrumb">
-    {#if localInstalled}
-      <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
-    {:else}
-      <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
-    {/if}
-    <ChevronRight size="1.4rem" strokeWidth={1.8} />
-    <span class="crumb current">{localGame.title}</span>
-  </nav>
+  function runPrimary() {
+    if (primary.kind === 'play') play();
+    else if (primary.kind === 'stop') stop();
+    else if (primary.kind === 'install') startInstall();
+    else if (primary.kind === 'update') updateCard?.start();
+  }
 
-  <section class="local-hero">
-    {#if heroSrc}
-      <div class="local-art">
-        <Artwork src={heroSrc} alt="" />
+  const missing = $derived(!localGame && !catalogGame && !catalogLoading);
+</script>
+
+{#if missing}
+  <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
+    {#snippet actions()}
+      <Button onclick={() => navigate('library')}>В библиотеку</Button>
+    {/snippet}
+  </EmptyState>
+{:else}
+  <section class="hero" class:plain={!showHero}>
+    <div class="art">
+      {#if showHero}
+        <img src={heroSrc} alt="" draggable="false" onerror={() => (heroFailed = true)} />
+      {/if}
+    </div>
+    <div class="veil"></div>
+
+    <nav class="breadcrumb">
+      {#if installed}
+        <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
+      {:else}
+        <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
+      {/if}
+      <ChevronRight size="1.4rem" strokeWidth={1.8} />
+      <span class="crumb current">{title || 'Игра'}</span>
+    </nav>
+
+    <div class="foot">
+      <div class="cover">
+        {#if title}
+          <Artwork src={coverSrc} alt={title} ratio="3 / 4" radius="var(--radius-md)" />
+        {:else}
+          <div class="skeleton cover-skeleton"></div>
+        {/if}
       </div>
-    {/if}
-    <div class="local-content">
-      <div class="local-row">
-        <div class="poster">
-          <Artwork src={metaCover} alt={localGame.title} ratio="3 / 4" radius="var(--radius-md)" />
-        </div>
-        <div class="local-main">
-          <div class="local-head">
-            <h1 class="local-title">{localGame.title}</h1>
-            {#if !localInstalled}
-              <StatusBadge kind="neutral" label="Не установлено" dot={false} />
-            {:else if localRunning}
-              <StatusBadge kind="accent" label="Запущена" />
-            {:else}
-              <StatusBadge kind="success" label="Установлено" dot={false} />
-            {/if}
-          </div>
-          {#if localInstalled}
-            <p class="local-path">{localGame.installDir}</p>
+
+      <div class="ident">
+        <div class="state">
+          {#if running}
+            <StatusBadge kind="accent" label="Запущена" />
+          {:else if installed}
+            <StatusBadge kind="success" label="Установлено" dot={false} />
+          {:else if localGame}
+            <StatusBadge kind="neutral" label="Удалена с компьютера" dot={false} />
+          {:else if title}
+            <StatusBadge kind="neutral" label="Не установлено" dot={false} />
           {/if}
-          <div class="actions">
-            {#if !localInstalled}
-              <span class="local-note">Игра удалена с компьютера — установите её снова из доступных загрузок.</span>
-            {:else if localRunning}
-              <Button size="lg" onclick={localStop}>
-                <Square size="1.5rem" strokeWidth={2} fill="currentColor" />
-                Остановить
-              </Button>
-            {:else}
-              <Button variant="primary" size="lg" onclick={localPlay}>
+          {#if updateAvailable && !busy}
+            <StatusBadge kind="accent" label="Доступно обновление" />
+          {/if}
+        </div>
+
+        {#if title}
+          <h1 class="title">{title}</h1>
+        {:else}
+          <div class="skeleton title-skeleton"></div>
+        {/if}
+
+        {#if metaParts.length > 0}
+          <p class="metaline">
+            {#each metaParts as part, index (part)}
+              {#if index > 0}<span class="sep">·</span>{/if}
+              <span>{part}</span>
+            {/each}
+          </p>
+        {/if}
+
+        <div class="cta">
+          {#if primary.kind === 'progress'}
+            <div class="progress">
+              <span class="progress-label">{primary.label}</span>
+              <ProgressBar value={busyPercent} />
+              <span class="progress-pct">{busyPercent}%</span>
+            </div>
+          {:else}
+            <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
+              {#if primary.kind === 'play'}
                 <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
-                Играть
-              </Button>
-            {/if}
-            {#if localInstalled}
-              <Button size="lg" onclick={localOpenFolder}>
-                <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                Открыть папку
-              </Button>
-            {/if}
-            <DropdownMenu
-              items={[
-                ...($metadataAvailable
-                  ? metaView?.resolved
-                    ? [
-                        { id: 'meta-refresh', label: metaRefreshing ? 'Обновление…' : 'Обновить метаданные' },
-                        { id: 'meta-change', label: 'Сменить сопоставление' },
-                      ]
-                    : [{ id: 'meta-find', label: 'Найти метаданные' }]
-                  : []),
-                ...(localInstalled
-                  ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: $metadataAvailable }]
-                  : []),
-                {
-                  id: 'remove',
-                  label: 'Удалить из библиотеки',
-                  danger: true,
-                  separator: $metadataAvailable && !localInstalled,
-                },
-              ]}
-              onselect={(actionId) => {
-                if (actionId === 'remove') {
-                  removeMode = 'library';
-                  removeOpen = true;
-                } else if (actionId === 'uninstall') {
-                  removeMode = 'disk';
-                  removeOpen = true;
-                } else if (actionId === 'meta-find') {
-                  openMatch('find');
-                } else if (actionId === 'meta-change') {
-                  openMatch('change');
-                } else if (actionId === 'meta-refresh') {
-                  refreshMeta();
-                }
-              }}
-            >
+              {:else if primary.kind === 'stop'}
+                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+              {:else if primary.kind === 'install'}
+                <Download size="1.6rem" strokeWidth={1.8} />
+              {/if}
+              {primary.label}
+            </Button>
+          {/if}
+
+          {#if primary.kind === 'update'}
+            <Button size="lg" onclick={play}>
+              <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+              Играть
+            </Button>
+          {/if}
+
+          {#if menuItems.length > 0}
+            <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
                 <IconButton label="Ещё" onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
-          </div>
+          {/if}
         </div>
+
+        {#if localGame && !installed}
+          <p class="note">Игра удалена с компьютера — установите её снова из доступных загрузок.</p>
+        {/if}
       </div>
     </div>
   </section>
 
-  <div class="local-grid">
-    <div class="local-col">
-      <h3 class="group-title">Сведения</h3>
-      <dl class="local-props">
-        {#if localInstalled}
-          <div class="prop">
-            <dt>Исполняемый файл</dt>
-            <dd class="mono">{localGame.executable}</dd>
-          </div>
-          <div class="prop">
-            <dt>Версия</dt>
-            <dd>{localGame.version || 'Неизвестна'}</dd>
-          </div>
-          <div class="prop">
-            <dt>Размер</dt>
-            <dd>{bytesLabel(localGame.sizeBytes)}</dd>
-          </div>
-        {:else}
-          <div class="prop">
-            <dt>Состояние</dt>
-            <dd>Удалена с компьютера</dd>
-          </div>
+  <div class="body">
+    <div class="main">
+      {#if summary.text}
+        <p class="summary">{summary.text}</p>
+        {#if summary.expandable}
+          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
+            {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
+          </button>
         {/if}
-        <div class="prop">
-          <dt>Добавлена</dt>
-          <dd>{relativeDate(localGame.installedAt)}</dd>
+      {:else if !title}
+        <div class="skeleton line"></div>
+        <div class="skeleton line"></div>
+        <div class="skeleton line short"></div>
+      {/if}
+
+      {#if tags.length > 0}
+        <div class="tags">
+          {#each tags as tag (tag)}
+            <span class="tag">{tag}</span>
+          {/each}
         </div>
-      </dl>
-    </div>
-    <div class="local-col">
-      <h3 class="group-title">Активность</h3>
-      <dl class="local-props">
-        <div class="prop">
-          <dt>Наиграно</dt>
-          <dd>{playtime(localGame.playtimeSeconds)}</dd>
-        </div>
-        <div class="prop">
-          <dt>Последний запуск</dt>
-          <dd>{relativeDate(localGame.lastPlayed)}</dd>
-        </div>
-        {#if localInstalled}
-          <div class="prop">
-            <dt>Состояние</dt>
-            <dd>{localRunning ? 'Запущена' : 'Не запущена'}</dd>
+      {/if}
+
+      {#if shots.length > 0}
+        <section class="section">
+          <h2 class="heading">Скриншоты</h2>
+          <div
+            class="shots"
+            class:featured={shots.length >= 5}
+            class:one={shots.length === 1}
+            style:--cols={shotCols}
+          >
+            {#each shots as shot, index (shot.id)}
+              <button class="shot" onclick={() => openShot(index)} aria-label="Открыть скриншот">
+                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
+              </button>
+            {/each}
           </div>
-        {/if}
-      </dl>
+        </section>
+      {/if}
+
+      {#if showUpdateCard && update}
+        <section class="section">
+          <UpdateCard bind:this={updateCard} {update} {running} />
+        </section>
+      {/if}
+
+      {#if installed && localGame}
+        <section class="section">
+          <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+        </section>
+      {/if}
+
+      {#if releasesLoading || releaseGroups.length > 0}
+        <section class="section">
+          <h2 class="heading">Доступные загрузки</h2>
+          <ReleaseList
+            groups={releaseGroups}
+            loading={releasesLoading}
+            currentReleaseId={localGame?.releaseId ?? ''}
+            updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+            ondownload={downloadRelease}
+          />
+        </section>
+      {/if}
     </div>
+
+    <aside class="side">
+      {#if gameFacts.length > 0}
+        <section class="side-block">
+          <h2 class="heading sm">Об игре</h2>
+          <dl class="facts">
+            {#each gameFacts as fact (fact.label)}
+              <div class="fact">
+                <dt>{fact.label}</dt>
+                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+              </div>
+            {/each}
+          </dl>
+        </section>
+      {/if}
+
+      {#if installed && localGame}
+        <section class="panel">
+          <h2 class="heading sm">Установка</h2>
+          <div class="path">
+            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
+            <IconButton label="Открыть папку" size="sm" onclick={reveal}>
+              <FolderOpen size="1.6rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+          <dl class="facts">
+            {#each installFacts as fact (fact.label)}
+              <div class="fact">
+                <dt>{fact.label}</dt>
+                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+              </div>
+            {/each}
+          </dl>
+        </section>
+      {/if}
+    </aside>
   </div>
 
-  {@render metaBlocks()}
-
-  {#if showUpdateCard && localUpdate}
-    <UpdateCard update={localUpdate} running={localRunning} />
+  {#if localGame}
+    <RemoveGameModal
+      bind:open={removeOpen}
+      bind:mode={removeMode}
+      gameId={localGame.id}
+      title={localGame.title}
+      onremoved={(removed) => {
+        if (removed === 'library') navigate('installed');
+      }}
+    />
   {/if}
 
-  <VerifyCard gameId={localGame.id} state={localVerify} running={localRunning} />
+  <Modal bind:open={pickerOpen} title="Выберите загрузку" width="86rem">
+    <ReleaseList
+      groups={availableGroups}
+      currentReleaseId={localGame?.releaseId ?? ''}
+      ondownload={(group) => {
+        pickerOpen = false;
+        downloadRelease(group);
+      }}
+    />
+  </Modal>
 
-  {#if releasesLoading || releaseGroups.length > 0}
-    <section class="block">
-      <h2 class="section-title">Доступные загрузки</h2>
-      <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
-    </section>
-  {/if}
+  <Lightbox
+    bind:open={lightboxOpen}
+    bind:index={lightboxIndex}
+    items={shots.map((shot) => ({ id: shot.id, url: shot.url ?? '' }))}
+    label={title}
+  />
 
-  <RemoveGameModal
-    bind:open={removeOpen}
-    bind:mode={removeMode}
-    gameId={localGame.id}
-    title={localGame.title}
-    onremoved={(removed) => {
-      if (removed === 'library') navigate('installed');
-    }}
+  <MetadataMatchModal
+    bind:open={matchOpen}
+    gameId={canonicalId ?? ''}
+    gameTitle={title}
+    mode={matchMode}
+    onapplied={(view) => (metaView = view)}
   />
 
   <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
-{:else if catalogGame}
-  <nav class="breadcrumb">
-    <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
-    <ChevronRight size="1.4rem" strokeWidth={1.8} />
-    <span class="crumb current">{catalogGame.title}</span>
-  </nav>
-
-  <section class="local-hero">
-    {#if heroSrc}
-      <div class="local-art">
-        <Artwork src={heroSrc} alt="" />
-      </div>
-    {/if}
-    <div class="local-content">
-      <div class="local-row">
-        <div class="poster">
-          <Artwork src={metaCover} alt={catalogGame.title} ratio="3 / 4" radius="var(--radius-md)" />
-        </div>
-        <div class="local-main">
-          <div class="local-head">
-            <h1 class="local-title">{catalogGame.title}</h1>
-            <StatusBadge kind="neutral" label="Не установлено" dot={false} />
-          </div>
-          {#if catalogMeta}
-            <p class="local-path">{catalogMeta}</p>
-          {/if}
-          {#if $metadataAvailable}
-            <div class="actions">
-              {#if metaView?.resolved}
-                <Button disabled={metaRefreshing} onclick={refreshMeta}>
-                  {metaRefreshing ? 'Обновление…' : 'Обновить метаданные'}
-                </Button>
-                <Button onclick={() => openMatch('change')}>Сменить сопоставление</Button>
-              {:else}
-                <Button variant="primary" onclick={() => openMatch('find')}>Найти метаданные</Button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </div>
-    </div>
-  </section>
-
-  {@render metaBlocks()}
-
-  <section class="block">
-    <h2 class="section-title">Доступные загрузки</h2>
-    {#if releasesLoading || releaseGroups.length > 0}
-      <ReleaseList groups={releaseGroups} loading={releasesLoading} ondownload={downloadRelease} />
-    {:else}
-      <p class="muted">Ни один источник не предлагает релизы для этой игры.</p>
-    {/if}
-  </section>
-
-  <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
-{:else}
-  <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
-    {#snippet actions()}
-      <Button onclick={() => navigate('library')}>В библиотеку</Button>
-    {/snippet}
-  </EmptyState>
 {/if}
 
-{#snippet metaBlocks()}
-  {#if summary}
-    <section class="block">
-      <h2 class="section-title">Об игре</h2>
-      <p class="summary">{summaryShown}</p>
-      {#if summaryTooLong}
-        <button class="link-btn" onclick={() => (summaryExpanded = !summaryExpanded)}>
-          {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
-        </button>
-      {/if}
-    </section>
-  {/if}
-
-  {#if releaseDateLabel || developerLabel || publisherLabel}
-    <section class="block">
-      <h2 class="section-title">Сведения об игре</h2>
-      <dl class="local-props">
-        {#if releaseDateLabel}
-          <div class="prop">
-            <dt>Дата выхода</dt>
-            <dd>{releaseDateLabel}</dd>
-          </div>
-        {/if}
-        {#if developerLabel}
-          <div class="prop">
-            <dt>Разработчик</dt>
-            <dd>{developerLabel}</dd>
-          </div>
-        {/if}
-        {#if publisherLabel}
-          <div class="prop">
-            <dt>Издатель</dt>
-            <dd>{publisherLabel}</dd>
-          </div>
-        {/if}
-      </dl>
-    </section>
-  {/if}
-
-  {#if genres.length > 0 || themes.length > 0 || platforms.length > 0}
-    <section class="block">
-      <h2 class="section-title">Теги</h2>
-      <div class="chips">
-        {#each genres as genre (genre)}
-          <span class="chip">{genre}</span>
-        {/each}
-        {#each themes as theme (theme)}
-          <span class="chip">{theme}</span>
-        {/each}
-        {#each platforms as platform (platform)}
-          <span class="chip">{platform}</span>
-        {/each}
-      </div>
-    </section>
-  {/if}
-
-  {#if screenshots.length > 0}
-    <section class="block">
-      <h2 class="section-title">Скриншоты</h2>
-      <div class="screens">
-        {#each screenshots as shot (shot.id)}
-          <button class="screen" onclick={() => openScreenshot(shot.url ?? '')}>
-            <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-          </button>
-        {/each}
-      </div>
-    </section>
-  {/if}
-{/snippet}
-
-<MetadataMatchModal bind:open={matchOpen} gameId={canonicalId ?? ''} gameTitle={pageTitle} mode={matchMode} onapplied={onMetaApplied} />
-
-<Modal bind:open={screenshotOpen} title="Скриншот" width="fit-content">
-  {#if screenshotSrc}
-    <img class="screenshot-full" src={screenshotSrc} alt="" />
-  {/if}
-</Modal>
-
 <style>
+  .hero {
+    position: relative;
+    margin-inline: calc(var(--page-x) * -1);
+    margin-bottom: var(--space-10);
+    padding: var(--space-4) var(--page-x) var(--space-6);
+    min-height: clamp(31rem, 42vh, 48rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--space-8);
+  }
+
+  .art {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 28%;
+    animation: art-in 320ms var(--ease);
+  }
+
+  .hero.plain {
+    min-height: clamp(24rem, 28vh, 30rem);
+  }
+
+  .hero.plain .art {
+    background:
+      radial-gradient(100% 78% at 6% 0%, rgba(104, 117, 232, 0.2), transparent 64%),
+      radial-gradient(80% 70% at 88% 8%, rgba(255, 255, 255, 0.05), transparent 62%),
+      linear-gradient(180deg, var(--surface-3), var(--bg) 86%);
+  }
+
+  .veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(11, 15, 20, 0.72) 0%,
+        rgba(11, 15, 20, 0.22) 22%,
+        rgba(11, 15, 20, 0.55) 52%,
+        rgba(11, 15, 20, 0.88) 76%,
+        var(--bg) 96%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(11, 15, 20, 0.92) 0%,
+        rgba(11, 15, 20, 0.68) 36%,
+        rgba(11, 15, 20, 0.22) 68%,
+        rgba(11, 15, 20, 0) 90%
+      );
+  }
+
+  .hero.plain .veil {
+    background: linear-gradient(180deg, transparent 60%, rgba(11, 15, 20, 0.6) 82%, var(--bg) 100%);
+  }
+
   .breadcrumb {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    margin: var(--space-3) 0 var(--space-4);
     color: var(--text-3);
   }
 
@@ -637,225 +774,366 @@
   }
 
   .crumb.current {
-    color: var(--text);
+    color: var(--text-2);
     font-weight: 500;
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-top: var(--space-5);
-    flex-wrap: wrap;
-  }
-
-  .block {
-    margin-bottom: var(--space-8);
-  }
-
-  .section-title {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-4);
-  }
-
-  dt {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-  dd {
-    font-size: var(--font-sm);
-    color: var(--text);
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-    margin-top: var(--space-3);
-  }
-
-  @media (max-width: 1400px) {
-  }
-
-  .local-hero {
+  .foot {
     position: relative;
-    padding: var(--space-4) 0 var(--space-6);
-  }
-
-  .local-art {
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 36rem;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.35;
-    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent);
-    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent);
-  }
-
-  .local-content {
-    position: relative;
-    z-index: 1;
-  }
-
-  .local-row {
     display: flex;
     align-items: flex-end;
     gap: var(--space-6);
   }
 
-  .poster {
-    width: 15rem;
+  .cover {
+    width: clamp(11rem, 10vw, 16rem);
     flex-shrink: 0;
+    margin-bottom: -3.6rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-pop);
   }
 
-  .local-main {
+  .cover-skeleton {
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-md);
+  }
+
+  .ident {
     flex: 1;
     min-width: 0;
+    padding-bottom: 0.4rem;
   }
 
-  .local-head {
+  .state {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: 0.8rem;
     flex-wrap: wrap;
+    margin-bottom: 1rem;
+    min-height: 2.4rem;
   }
 
-  .local-title {
-    font-size: var(--font-hero);
+  .title {
+    font-size: clamp(2.8rem, 2.4vw + 1rem, 4.6rem);
     font-weight: 600;
     letter-spacing: var(--tracking-title);
-    line-height: 1.05;
-    min-width: 0;
+    line-height: 1.04;
+    text-wrap: balance;
+    max-width: 26ch;
+    text-shadow: 0 0.2rem 2.4rem rgba(0, 0, 0, 0.5);
   }
 
-  .local-note {
-    max-width: 60rem;
-    color: var(--text-3);
-    line-height: 1.5;
+  .title-skeleton {
+    width: min(48rem, 60%);
+    height: 4.4rem;
+    border-radius: var(--radius-md);
   }
 
-  .local-path {
-    margin-top: 0.8rem;
+  .metaline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem;
+    margin-top: 1rem;
     font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .sep {
     color: var(--text-3);
-    word-break: break-all;
   }
 
-  .local-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 var(--space-12);
-    max-width: 120rem;
-    margin-bottom: var(--space-8);
-  }
-
-  .local-col {
-    min-width: 0;
-  }
-
-  .group-title {
-    font-size: var(--font-lg);
-    font-weight: 600;
-    margin-bottom: var(--space-2);
-  }
-
-  .local-props .prop {
-    display: grid;
-    grid-template-columns: 16rem 1fr;
+  .cta {
+    display: flex;
+    align-items: center;
     gap: var(--space-3);
-    padding: 1rem 0;
-    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    margin-top: var(--space-5);
   }
 
-  .local-props dd {
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: min(42rem, 100%);
+    height: var(--control-lg);
+    padding: 0 1.8rem;
+    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    background: var(--surface-3);
+  }
+
+  .progress-label {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .progress :global(.track) {
+    flex: 1;
+  }
+
+  .progress-pct {
+    font-size: var(--font-xs);
+    color: var(--text-2);
     font-variant-numeric: tabular-nums;
   }
 
-  .mono {
-    word-break: break-all;
+  .note {
+    margin-top: var(--space-4);
+    max-width: 56rem;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 30rem;
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  .main {
+    min-width: 0;
+  }
+
+  .main > :first-child {
+    margin-top: 0;
   }
 
   .summary {
-    max-width: 90rem;
-    font-size: var(--font-sm);
-    line-height: 1.6;
+    max-width: var(--prose-max);
+    font-size: var(--font-md);
+    line-height: 1.65;
     color: var(--text-2);
     white-space: pre-line;
   }
 
-  .link-btn {
-    margin-top: 0.8rem;
+  .more {
+    margin-top: 1rem;
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--accent-text);
     border-radius: var(--radius-sm);
   }
 
-  .link-btn:hover {
+  .more:hover {
     text-decoration: underline;
   }
 
-  .chips {
+  .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.7rem;
+    gap: 0.6rem;
+    margin-top: var(--space-5);
   }
 
-  .chip {
+  .tag {
     display: inline-flex;
     align-items: center;
-    height: 2.6rem;
-    padding: 0 1.1rem;
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
+    height: 2.4rem;
+    padding: 0 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
     color: var(--text-2);
     font-size: var(--font-xs);
-    font-weight: 500;
     white-space: nowrap;
   }
 
-  .screens {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(34rem, 1fr));
-    gap: var(--space-4);
+  .section {
+    margin-top: var(--space-10);
   }
 
-  .screen {
+  .heading {
+    font-size: var(--font-xl);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    margin-bottom: var(--space-4);
+  }
+
+  .heading.sm {
+    font-size: var(--font-md);
+    color: var(--text-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .shots {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .shots.one {
+    max-width: 72rem;
+  }
+
+  .shot {
     display: block;
     width: 100%;
+    aspect-ratio: 16 / 9;
     border-radius: var(--radius-sm);
     overflow: hidden;
-    transition: transform var(--dur) var(--ease);
+    transition:
+      transform var(--dur) var(--ease),
+      opacity var(--dur) var(--ease);
   }
 
-  .screen:hover {
-    transform: scale(1.015);
+  .shot:hover {
+    transform: translateY(-2px);
+    opacity: 0.92;
   }
 
-  .screenshot-full {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: min(150rem, calc(100vw - 9.6rem));
-    max-height: calc(100vh - 17rem);
-    border-radius: var(--radius-md);
+  .shots.featured .shot:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
   }
 
-  @media (max-width: 1100px) {
-    .local-grid {
+  .side {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .panel {
+    padding: var(--space-5);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+  }
+
+  .path {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: var(--space-2);
+  }
+
+  .path-value {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .fact {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  dt {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  dd {
+    font-size: var(--font-sm);
+    color: var(--text);
+    min-width: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+
+  dd.mono {
+    font-size: var(--font-xs);
+    color: var(--text-2);
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: var(--radius-sm);
+  }
+
+  .line {
+    height: 1.6rem;
+    margin-bottom: 1rem;
+    max-width: var(--prose-max);
+  }
+
+  .line.short {
+    width: 40%;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes art-in {
+    from {
+      opacity: 0;
+      transform: scale(1.02);
+    }
+  }
+
+  @media (max-width: 1400px) {
+    .body {
       grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-8);
     }
 
-    .local-row {
-      align-items: flex-start;
+    .side {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: var(--space-8);
+      margin-top: var(--space-10);
     }
 
-    .poster {
-      width: 10rem;
+    .side > :global(*) {
+      flex: 1 1 32rem;
+    }
+
+    .shots {
+      grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
+    }
+
+    .shots.featured {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 1200px) {
+    .hero {
+      min-height: 28rem;
+      gap: var(--space-6);
+    }
+
+    .foot {
+      gap: var(--space-4);
+    }
+
+    .cover {
+      width: 9rem;
+      margin-bottom: -2.4rem;
+    }
+
+    .shots,
+    .shots.featured {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .shots.featured .shot:first-child {
+      grid-row: span 1;
     }
   }
 </style>

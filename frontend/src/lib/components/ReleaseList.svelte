@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
+  import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
   import { bytesSize, plural, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
@@ -8,12 +9,18 @@
   let {
     groups,
     loading = false,
+    currentReleaseId = '',
+    updateReleaseId = '',
     ondownload,
   }: {
     groups: ReleaseGroup[];
     loading?: boolean;
+    currentReleaseId?: string;
+    updateReleaseId?: string;
     ondownload: (group: ReleaseGroup) => void;
   } = $props();
+
+  const showLanguages = $derived(groups.some((group) => languageLabel(group.release.languages) !== ''));
 </script>
 
 <div class="release-list">
@@ -23,7 +30,8 @@
     {#each groups as group (group.release.id)}
       {@const release = group.release}
       {@const removed = release.availability === 'removed'}
-      <div class="release-row">
+      {@const current = Boolean(currentReleaseId) && release.id === currentReleaseId}
+      <div class="release-row" class:current>
         <div class="release-main">
           <span class="release-version">{release.version || '—'}</span>
           {#if release.edition}
@@ -31,6 +39,9 @@
           {/if}
         </div>
         <span class="release-size">{bytesSize(release.size)}</span>
+        {#if showLanguages}
+          <span class="release-lang">{languageLabel(release.languages)}</span>
+        {/if}
         <span class="release-source">
           {group.sourceName}
           {#if group.duplicates && group.duplicates.length > 0}
@@ -45,7 +56,11 @@
         </span>
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>
         <div class="release-badges">
-          {#if release.new}
+          {#if current}
+            <StatusBadge kind="success" label="Установлено" plain />
+          {:else if updateReleaseId && release.id === updateReleaseId}
+            <StatusBadge kind="accent" label="Обновление" plain />
+          {:else if release.new}
             <StatusBadge kind="accent" label="Новое" plain />
           {/if}
           {#if removed}
@@ -74,6 +89,7 @@
   }
 
   .release-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--space-4);
@@ -114,6 +130,31 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
+  }
+
+  .release-row.current .release-version {
+    color: var(--text);
+  }
+
+  .release-row.current::before {
+    content: '';
+    position: absolute;
+    left: -1.2rem;
+    top: 1.2rem;
+    bottom: 1.2rem;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--success);
+  }
+
+  .release-lang {
+    flex: 0 0 9rem;
+    min-width: 0;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .release-source {
