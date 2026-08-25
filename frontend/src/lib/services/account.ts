@@ -56,6 +56,7 @@ const KNOWN_CODES = new Set([
   'invalid_avatar',
   'rate_limited',
   'bad_request',
+  'request_blocked',
   'internal',
   'network_error',
   'server_error',
@@ -89,8 +90,9 @@ export class AccountError extends Error {
 function toAccountError(err: unknown): AccountError {
   if (err instanceof AccountError) return err;
   const raw = err instanceof Error ? err.message : String(err);
-  const code = KNOWN_CODES.has(raw) ? raw : 'server_error';
-  return new AccountError(code);
+  if (KNOWN_CODES.has(raw)) return new AccountError(raw);
+  console.error('account call failed outside the error contract', raw, err);
+  return new AccountError('server_error');
 }
 
 const unauthenticated = () => new AccountError('unauthenticated');

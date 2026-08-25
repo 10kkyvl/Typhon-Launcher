@@ -17,6 +17,9 @@ const MESSAGES: Record<string, string> = {
   network_error: 'Нет связи с сервером',
   rate_limited: 'Слишком много попыток, подождите немного и повторите',
   bad_request: 'Сервер отклонил запрос',
+  request_blocked: 'Запрос заблокирован на подступах к серверу, напишите в поддержку',
+  internal: 'Ошибка на стороне сервера, попробуйте позже',
+  server_error: 'Сервер ответил непонятным образом, попробуйте позже',
 };
 
 export function accountMessage(code: string, fallback = 'Не удалось выполнить операцию'): string {

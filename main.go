@@ -8,6 +8,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
@@ -22,15 +23,22 @@ import (
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/tray"
 	"typhon/internal/updates"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var trayIcon []byte
+
 const discordClientID = "1541194395964014623"
+
+const singleInstanceID = "com.typhon.launcher"
 
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
@@ -179,9 +187,22 @@ func main() {
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
+	current := settingsService.GetSettings()
+
+	var trayController *tray.Controller
+
 	wails := application.New(application.Options{
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
+		Windows: application.WindowsOptions{
+			AdditionalBrowserArgs: browserArgs(current.HardwareAcceleration),
+		},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: singleInstanceID,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				trayController.Open()
+			},
+		},
 		Services: []application.Service{
 			application.NewService(appService),
 			application.NewService(accountService),
@@ -208,7 +229,7 @@ func main() {
 		},
 	})
 
-	wails.Window.NewWithOptions(application.WebviewWindowOptions{
+	window := wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Typhon",
 		Width:            1440,
 		Height:           900,
@@ -224,10 +245,94 @@ func main() {
 		URL: "/",
 	})
 
+	autostartService, err := autostart.NewService(wails.Autostart)
+	if err != nil {
+		fatal("start autostart service", err)
+	}
+	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {
+		return newSystemTray(wails, trayController)
+	}, wails.Quit)
+	if err != nil {
+		fatal("start tray controller", err)
+	}
+	if err := settingsService.AddApplier(func(prev, next settings.Settings) error {
+		if prev.LaunchOnStartup == next.LaunchOnStartup {
+			return nil
+		}
+		return autostartService.Apply(next.LaunchOnStartup)
+	}); err != nil {
+		fatal("register autostart applier", err)
+	}
+	if err := settingsService.AddApplier(func(prev, next settings.Settings) error {
+		if prev.MinimizeToTray == next.MinimizeToTray {
+			return nil
+		}
+		return trayController.Apply(next.MinimizeToTray)
+	}); err != nil {
+		fatal("register tray applier", err)
+	}
+
+	// A locked-down registry or a refused tray icon must not keep the launcher
+	// from starting: the toggle in settings goes through SaveSettings, which
+	// runs the same appliers and does report the failure to the user.
+	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
+		slog.Error("apply autostart", "error", err)
+	}
+	if err := trayController.Apply(current.MinimizeToTray); err != nil {
+		slog.Error("apply tray", "error", err)
+	}
+
+	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if trayController.CloseRequested() {
+			event.Cancel()
+		}
+	})
+
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
 	}
+}
+
+func browserArgs(hardwareAcceleration bool) []string {
+	if hardwareAcceleration {
+		return nil
+	}
+	return []string{"--disable-gpu"}
+}
+
+type windowControl struct {
+	window *application.WebviewWindow
+}
+
+func (w windowControl) Show() {
+	w.window.Show()
+}
+
+func (w windowControl) Hide() {
+	w.window.Hide()
+}
+
+func (w windowControl) Focus() {
+	w.window.Focus()
+}
+
+func newSystemTray(wails *application.App, controller *tray.Controller) (tray.Tray, error) {
+	menu := application.NewMenu()
+	menu.Add("Открыть Typhon").OnClick(func(*application.Context) {
+		controller.Open()
+	})
+	menu.AddSeparator()
+	menu.Add("Выход").OnClick(func(*application.Context) {
+		controller.Quit()
+	})
+
+	systemTray := wails.SystemTray.New()
+	systemTray.SetIcon(trayIcon)
+	systemTray.SetTooltip("Typhon")
+	systemTray.SetMenu(menu)
+	systemTray.OnClick(controller.Open)
+	return systemTray, nil
 }
 
 func metadataProvider(accountService *account.Service) metadata.Provider {

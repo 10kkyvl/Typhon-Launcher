@@ -147,6 +147,49 @@ func TestClientMalformedErrorEnvelope(t *testing.T) {
 	}
 }
 
+func TestClientErrorWithoutEnvelope(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{"proxy rejects the method", http.StatusForbidden, "", CodeBlocked},
+		{"proxy rejects with a page", http.StatusForbidden, "<html>403</html>", CodeBlocked},
+		{"gateway is down", http.StatusBadGateway, "", CodeServer},
+		{"api is broken", http.StatusInternalServerError, "not json", CodeServer},
+		{"token is stale", http.StatusUnauthorized, "", CodeUnauthenticated},
+		{"budget is spent", http.StatusTooManyRequests, "", CodeRateLimited},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				if _, err := io.WriteString(w, tt.body); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer srv.Close()
+
+			name := "newname"
+			c := newTestClient(t, srv.URL, tokenOK("t"))
+			_, err := c.UpdateProfile(context.Background(), Patch{Username: &name})
+
+			var accErr *Error
+			if !errors.As(err, &accErr) {
+				t.Fatalf("expected *Error, got %v", err)
+			}
+			if accErr.Code != tt.want {
+				t.Fatalf("code = %q, want %q", accErr.Code, tt.want)
+			}
+			if accErr.Status != tt.status {
+				t.Fatalf("status = %d, want %d", accErr.Status, tt.status)
+			}
+		})
+	}
+}
+
 func TestClientUndecodableSuccessBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

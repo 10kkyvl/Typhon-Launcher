@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -194,6 +195,15 @@ func (c *Client) do(
 	return resp, nil
 }
 
+func snippet(data []byte) string {
+	const max = 120
+	s := strings.TrimSpace(string(data))
+	if len(s) > max {
+		return s[:max]
+	}
+	return s
+}
+
 func decodeError(status int, body io.Reader) error {
 	data, readErr := io.ReadAll(body)
 	if readErr != nil {
@@ -209,6 +219,11 @@ func decodeError(status int, body io.Reader) error {
 		code = env.Error.Code
 		field = env.Error.Field
 		message = env.Error.Message
+	} else {
+		// A reply without our envelope never reached the API: it comes from
+		// whatever sits in front of it, and only the status says what happened.
+		slog.Error("account api replied outside the error contract",
+			"status", status, "bytes", len(data), "body", snippet(data))
 	}
 
 	if code == CodeServer && status == http.StatusUnauthorized {
@@ -217,6 +232,10 @@ func decodeError(status int, body io.Reader) error {
 
 	if code == CodeServer && status == http.StatusTooManyRequests {
 		code = CodeRateLimited
+	}
+
+	if code == CodeServer && status == http.StatusForbidden {
+		code = CodeBlocked
 	}
 
 	return &Error{Code: code, Field: field, Status: status, Message: message}

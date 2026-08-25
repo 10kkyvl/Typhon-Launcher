@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -334,5 +335,196 @@ func TestSourcesNoticeMissingInOldConfig(t *testing.T) {
 	}
 	if mustServiceAt(t, path).GetSettings().SourcesNoticeAccepted {
 		t.Fatal("legacy config must not count as accepted")
+	}
+}
+
+func TestApplierReceivesSanitizedSettingsBeforePersist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	var seenScale float64
+	var fileExistedDuringApply bool
+	if err := s.AddApplier(func(_, next Settings) error {
+		seenScale = next.UIScale
+		_, statErr := os.Stat(path)
+		fileExistedDuringApply = statErr == nil
+		return nil
+	}); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+
+	next := s.GetSettings()
+	next.UIScale = 3
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if seenScale != 1 {
+		t.Fatalf("applier saw UIScale = %v, want sanitized 1", seenScale)
+	}
+	if fileExistedDuringApply {
+		t.Fatal("applier ran after the settings file was already written")
+	}
+}
+
+func TestApplierErrorPreventsPersistAndNotify(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	base := s.GetSettings()
+	base.Theme = "dark"
+	if err := s.SaveSettings(base); err != nil {
+		t.Fatalf("baseline save: %v", err)
+	}
+	before, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	calls := 0
+	s.Subscribe(func(Settings) { calls++ })
+
+	applyErr := errors.New("registry denied")
+	if err := s.AddApplier(func(Settings, Settings) error { return applyErr }); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+
+	next := s.GetSettings()
+	next.Theme = "light"
+	err = s.SaveSettings(next)
+	if err == nil {
+		t.Fatal("SaveSettings must fail when an applier errors")
+	}
+	if !errors.Is(err, applyErr) {
+		t.Fatalf("SaveSettings error = %v, want wrapped %v", err, applyErr)
+	}
+	if calls != 0 {
+		t.Fatalf("subscriber called %d times, want 0", calls)
+	}
+	if got := s.GetSettings(); got != base {
+		t.Fatalf("in-memory settings changed: got %+v, want %+v", got, base)
+	}
+	after, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("settings file changed despite applier error")
+	}
+}
+
+func TestApplierChainStopsAtFirstError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	firstErr := errors.New("first failed")
+	firstCalls, secondCalls := 0, 0
+	if err := s.AddApplier(func(Settings, Settings) error {
+		firstCalls++
+		return firstErr
+	}); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+	if err := s.AddApplier(func(Settings, Settings) error {
+		secondCalls++
+		return nil
+	}); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+
+	next := s.GetSettings()
+	next.Theme = "light"
+	if err := s.SaveSettings(next); err == nil {
+		t.Fatal("SaveSettings must fail")
+	}
+	if firstCalls != 1 {
+		t.Fatalf("first applier called %d times, want 1", firstCalls)
+	}
+	if secondCalls != 0 {
+		t.Fatalf("second applier called %d times, want 0", secondCalls)
+	}
+}
+
+func TestAddApplierRejectsNil(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	if err := s.AddApplier(nil); err == nil {
+		t.Fatal("AddApplier(nil) must return an error")
+	}
+}
+
+func TestApplierSuccessPathPersistsAndNotifies(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	applyCalls := 0
+	if err := s.AddApplier(func(Settings, Settings) error {
+		applyCalls++
+		return nil
+	}); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+	subCalls := 0
+	s.Subscribe(func(Settings) { subCalls++ })
+
+	next := s.GetSettings()
+	next.Theme = "light"
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	if applyCalls != 1 {
+		t.Fatalf("applier called %d times, want 1", applyCalls)
+	}
+	if subCalls != 1 {
+		t.Fatalf("subscriber called %d times, want 1", subCalls)
+	}
+	if got := mustServiceAt(t, path).GetSettings().Theme; got != "light" {
+		t.Fatalf("theme = %q, want light", got)
+	}
+}
+
+func TestApplierSeesStoredSettingsAsPrevious(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	base := s.GetSettings()
+	base.LaunchOnStartup = false
+	if err := s.SaveSettings(base); err != nil {
+		t.Fatalf("baseline save: %v", err)
+	}
+
+	unrelatedErr := errors.New("registry denied")
+	guardedCalls := 0
+	if err := s.AddApplier(func(prev, next Settings) error {
+		if prev.LaunchOnStartup == next.LaunchOnStartup {
+			return nil
+		}
+		guardedCalls++
+		return unrelatedErr
+	}); err != nil {
+		t.Fatalf("AddApplier: %v", err)
+	}
+
+	unrelated := s.GetSettings()
+	unrelated.Theme = "light"
+	if err := s.SaveSettings(unrelated); err != nil {
+		t.Fatalf("saving an untouched field must not run the applier: %v", err)
+	}
+	if guardedCalls != 0 {
+		t.Fatalf("applier acted %d times on an unrelated change, want 0", guardedCalls)
+	}
+	if got := s.GetSettings().Theme; got != "light" {
+		t.Fatalf("Theme = %q, want light", got)
+	}
+
+	touched := s.GetSettings()
+	touched.LaunchOnStartup = true
+	if err := s.SaveSettings(touched); !errors.Is(err, unrelatedErr) {
+		t.Fatalf("SaveSettings error = %v, want wrapped %v", err, unrelatedErr)
+	}
+	if guardedCalls != 1 {
+		t.Fatalf("applier acted %d times on its own change, want 1", guardedCalls)
+	}
+	if s.GetSettings().LaunchOnStartup {
+		t.Fatal("failed applier must not leave the setting stored as enabled")
 	}
 }

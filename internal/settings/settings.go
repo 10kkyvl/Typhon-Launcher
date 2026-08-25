@@ -47,7 +47,6 @@ var (
 
 type Settings struct {
 	Theme                  string  `json:"theme"`
-	Language               string  `json:"language"`
 	UIScale                float64 `json:"uiScale"`
 	LibraryPath            string  `json:"libraryPath"`
 	DownloadsPath          string  `json:"downloadsPath"`
@@ -83,7 +82,6 @@ type Settings struct {
 func Defaults() Settings {
 	return Settings{
 		Theme:                  "dark",
-		Language:               "ru",
 		UIScale:                1,
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
@@ -220,11 +218,12 @@ func ConfigDir() (string, error) {
 }
 
 type Service struct {
-	mu      sync.Mutex
-	path    string
-	current Settings
-	subs    map[int]func(Settings)
-	nextSub int
+	mu       sync.Mutex
+	path     string
+	current  Settings
+	subs     map[int]func(Settings)
+	nextSub  int
+	appliers []func(prev, next Settings) error
 }
 
 func NewService() (*Service, error) {
@@ -270,6 +269,21 @@ func (s *Service) load() (Settings, error) {
 	return current, nil
 }
 
+// An applier is handed the stored settings alongside the incoming ones so it
+// can sit out saves that do not touch its own field: a registry or tray failure
+// must not block saving an unrelated setting such as the theme.
+//
+//wails:ignore
+func (s *Service) AddApplier(fn func(prev, next Settings) error) error {
+	if fn == nil {
+		return errors.New("settings: nil applier")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.appliers = append(s.appliers, fn)
+	return nil
+}
+
 //wails:ignore
 func (s *Service) Subscribe(fn func(Settings)) func() {
 	s.mu.Lock()
@@ -294,6 +308,23 @@ func (s *Service) GetSettings() Settings {
 }
 
 func (s *Service) SaveSettings(next Settings) error {
+	next, err := sanitize(next)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	prev := s.current
+	appliers := make([]func(prev, next Settings) error, len(s.appliers))
+	copy(appliers, s.appliers)
+	s.mu.Unlock()
+
+	for _, apply := range appliers {
+		if err := apply(prev, next); err != nil {
+			return fmt.Errorf("apply settings: %w", err)
+		}
+	}
+
 	next, subs, err := s.persist(next)
 	if err != nil {
 		return err
@@ -311,10 +342,6 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	next, err := sanitize(next)
-	if err != nil {
-		return Settings{}, nil, err
-	}
 	if s.path == "" {
 		return next, nil, errors.New("settings path unavailable")
 	}

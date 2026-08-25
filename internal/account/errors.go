@@ -16,6 +16,7 @@ const (
 	CodeInvalidAvatar     = "invalid_avatar"
 	CodeRateLimited       = "rate_limited"
 	CodeBadRequest        = "bad_request"
+	CodeBlocked           = "request_blocked"
 	CodeInternal          = "internal"
 	CodeNetwork           = "network_error"
 	CodeServer            = "server_error"
