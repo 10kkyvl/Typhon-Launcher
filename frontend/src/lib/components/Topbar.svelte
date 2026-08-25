@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     Bell,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Minus,
@@ -16,12 +15,9 @@
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
   import { notifications, type Notification } from '../stores/notifications';
   import { toast } from '../stores/toasts';
-  import { authState, currentUser, leaveGuest, signOut } from '../stores/user';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
-  import { accountErrorText } from '../services/accountMessages';
   import Artwork from './Artwork.svelte';
-  import DropdownMenu from './DropdownMenu.svelte';
   import IconButton from './IconButton.svelte';
   import SearchInput from './SearchInput.svelte';
 
@@ -30,19 +26,6 @@
   let results = $state(initialState());
   let resultsBox = $state<HTMLElement | undefined>(undefined);
   let notificationsOpen = $state(false);
-  let avatarFailed = $state(false);
-
-  const isGuest = $derived($authState === 'guest');
-  const accountLabel = $derived($currentUser ? $currentUser.displayName : isGuest ? 'Гость' : 'Не авторизован');
-
-  const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : isGuest ? 'Г' : '?',
-  );
-
-  $effect(() => {
-    $currentUser?.avatarUrl;
-    avatarFailed = false;
-  });
 
   const overlay = new SearchOverlay({
     search: searchAll,
@@ -124,37 +107,6 @@
   function openNotification(item: Notification) {
     notificationsOpen = false;
     navigate(item.route);
-  }
-
-  const accountMenu = $derived(
-    isGuest
-      ? [
-          { id: 'profile', label: 'Профиль' },
-          { id: 'settings', label: 'Настройки' },
-          { id: 'login', label: 'Войти в аккаунт', separator: true },
-        ]
-      : [
-          { id: 'profile', label: 'Профиль' },
-          { id: 'settings', label: 'Настройки' },
-          { id: 'logout', label: 'Выйти', danger: true, separator: true },
-        ],
-  );
-
-  async function onAccountSelect(id: string) {
-    if (id === 'profile') {
-      navigate('profile');
-      return;
-    }
-    if (id === 'settings') {
-      navigate('settings');
-      return;
-    }
-    try {
-      if (id === 'login') await leaveGuest();
-      else await signOut();
-    } catch (err) {
-      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
-    }
   }
 
   // Окно без рамки, поэтому поведение нативного заголовка приходится повторять вручную.
@@ -280,27 +232,6 @@
         </div>
       {/if}
     </div>
-
-    <DropdownMenu items={accountMenu} onselect={onAccountSelect}>
-      {#snippet trigger({ open, toggle })}
-        <button
-          class="account"
-          class:open
-          onclick={toggle}
-          title={accountLabel}
-        >
-          <span class="avatar">
-            {#if avatarFailed || !$currentUser?.avatarUrl}
-              <span class="avatar-fallback">{avatarInitial}</span>
-            {:else}
-              <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-            {/if}
-          </span>
-          <span class="account-name">{accountLabel}</span>
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
 
     <div class="window-controls">
       <button class="wc" aria-label="Свернуть" onclick={() => win('minimise')}>
@@ -500,55 +431,6 @@
     animation: pop var(--dur-fast) var(--ease);
   }
 
-  .account {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    height: 3.6rem;
-    margin-left: 0.4rem;
-    padding: 0 0.8rem 0 0.4rem;
-    border-radius: var(--radius-md);
-    color: var(--text-3);
-    transition: background var(--dur) var(--ease);
-  }
-
-  .account:hover,
-  .account.open {
-    background: var(--hover);
-  }
-
-  .avatar {
-    width: 2.8rem;
-    height: 2.8rem;
-    flex-shrink: 0;
-  }
-
-  .avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .avatar-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: var(--font-xs);
-    font-weight: 600;
-  }
-
-  .account-name {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
   .window-controls {
     display: flex;
     margin-left: 1.2rem;
@@ -585,13 +467,6 @@
     to {
       opacity: 1;
       transform: translateY(0);
-    }
-  }
-
-  @media (max-width: 1240px) {
-    .account-name,
-    .account :global(svg:last-child) {
-      display: none;
     }
   }
 </style>

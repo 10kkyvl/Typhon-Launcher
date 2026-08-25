@@ -12,10 +12,8 @@
   import { initUpdates } from './lib/stores/updates';
   import { authState, initAuth } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
-  import Achievements from './routes/achievements/Achievements.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
   import Catalog from './routes/catalog/Catalog.svelte';
-  import Collections from './routes/collections/Collections.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
   import Installed from './routes/installed/Installed.svelte';
@@ -63,10 +61,6 @@
       <Sources />
     {:else if $route.name === 'installed'}
       <Installed />
-    {:else if $route.name === 'collections'}
-      <Collections />
-    {:else if $route.name === 'achievements'}
-      <Achievements />
     {:else if $route.name === 'profile'}
       <Profile />
     {:else if $route.name === 'settings'}

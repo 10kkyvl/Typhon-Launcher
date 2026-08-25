@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { Bookmark, Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings, Trophy } from '@lucide/svelte';
+  import { Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
-  import { authState, currentUser } from '../stores/user';
+  import { accountErrorText } from '../services/accountMessages';
+  import { authState, currentUser, leaveGuest, signOut } from '../stores/user';
+  import { toast } from '../stores/toasts';
+  import DropdownMenu from './DropdownMenu.svelte';
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -14,10 +17,6 @@
     [
       { name: 'downloads', label: 'Загрузки', icon: Download },
       { name: 'sources', label: 'Источники', icon: Database },
-    ],
-    [
-      { name: 'collections', label: 'Коллекции', icon: Bookmark },
-      { name: 'achievements', label: 'Достижения', icon: Trophy },
     ],
   ];
 
@@ -38,6 +37,31 @@
     $currentUser?.avatarUrl;
     avatarFailed = false;
   });
+
+  const profileMenu = $derived(
+    isGuest
+      ? [
+          { id: 'profile', label: 'Профиль' },
+          { id: 'login', label: 'Войти в аккаунт', separator: true },
+        ]
+      : [
+          { id: 'profile', label: 'Профиль' },
+          { id: 'logout', label: 'Выйти', danger: true, separator: true },
+        ],
+  );
+
+  async function onProfileSelect(id: string) {
+    if (id === 'profile') {
+      navigate('profile');
+      return;
+    }
+    try {
+      if (id === 'login') await leaveGuest();
+      else await signOut();
+    } catch (err) {
+      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
+    }
+  }
 </script>
 
 {#snippet navButton(item: NavItem)}
@@ -71,29 +95,38 @@
 
   <div class="bottom">
     {@render navButton(settingsItem)}
-    <button class="profile" class:active={$route.name === 'profile'} onclick={() => navigate('profile')}>
-      <span class="avatar">
-        {#if avatarFailed || !$currentUser?.avatarUrl}
-          <span class="avatar-fallback">{avatarInitial}</span>
-        {:else}
-          <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-        {/if}
-        {#if $currentUser}
-          <span class="status-dot"></span>
-        {/if}
-      </span>
-      <span class="profile-text">
-        {#if $currentUser}
-          <span class="profile-name">{$currentUser.displayName}</span>
-          <span class="profile-status">@{$currentUser.username}</span>
-        {:else if isGuest}
-          <span class="profile-name">Гость</span>
-          <span class="profile-status">Без аккаунта</span>
-        {:else}
-          <span class="profile-name">Не авторизован</span>
-        {/if}
-      </span>
-    </button>
+    <DropdownMenu items={profileMenu} placement="up" align="left" onselect={onProfileSelect}>
+      {#snippet trigger({ open, toggle })}
+        <button
+          class="profile"
+          class:active={$route.name === 'profile'}
+          class:open
+          onclick={toggle}
+        >
+          <span class="avatar">
+            {#if avatarFailed || !$currentUser?.avatarUrl}
+              <span class="avatar-fallback">{avatarInitial}</span>
+            {:else}
+              <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
+            {/if}
+            {#if $currentUser}
+              <span class="status-dot"></span>
+            {/if}
+          </span>
+          <span class="profile-text">
+            {#if $currentUser}
+              <span class="profile-name">{$currentUser.displayName}</span>
+              <span class="profile-status">@{$currentUser.username}</span>
+            {:else if isGuest}
+              <span class="profile-name">Гость</span>
+              <span class="profile-status">Без аккаунта</span>
+            {:else}
+              <span class="profile-name">Не авторизован</span>
+            {/if}
+          </span>
+        </button>
+      {/snippet}
+    </DropdownMenu>
   </div>
 </aside>
 
@@ -210,9 +243,14 @@
     gap: var(--space-3);
   }
 
+  .bottom :global(.dropdown) {
+    width: 100%;
+  }
+
   .profile {
     display: flex;
     align-items: center;
+    width: 100%;
     gap: 1rem;
     padding: 0.6rem 0.8rem;
     border-radius: var(--radius-md);
@@ -222,7 +260,8 @@
   }
 
   .profile:hover,
-  .profile.active {
+  .profile.active,
+  .profile.open {
     background: var(--hover);
   }
 

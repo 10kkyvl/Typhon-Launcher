@@ -12,11 +12,13 @@
   let {
     items,
     align = 'right',
+    placement = 'down',
     onselect,
     trigger,
   }: {
     items: MenuItem[];
     align?: 'left' | 'right';
+    placement?: 'down' | 'up';
     onselect?: (id: string) => void;
     trigger: Snippet<[{ open: boolean; toggle: () => void }]>;
   } = $props();
@@ -32,7 +34,12 @@
 <div class="dropdown" use:clickOutside={() => (open = false)}>
   {@render trigger({ open, toggle: () => (open = !open) })}
   {#if open}
-    <div class="menu" style:left={align === 'left' ? '0' : 'auto'} style:right={align === 'right' ? '0' : 'auto'}>
+    <div
+      class="menu"
+      class:up={placement === 'up'}
+      style:left={align === 'left' ? '0' : 'auto'}
+      style:right={align === 'right' ? '0' : 'auto'}
+    >
       {#each items as item (item.id)}
         {#if item.separator}
           <div class="separator"></div>
@@ -62,6 +69,12 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
     animation: pop var(--dur-fast) var(--ease);
+  }
+
+  .menu.up {
+    top: auto;
+    bottom: calc(100% + 0.4rem);
+    animation: pop-up var(--dur-fast) var(--ease);
   }
 
   .item {
@@ -101,6 +114,17 @@
     from {
       opacity: 0;
       transform: translateY(-0.3rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pop-up {
+    from {
+      opacity: 0;
+      transform: translateY(0.3rem);
     }
     to {
       opacity: 1;

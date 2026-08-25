@@ -7,8 +7,6 @@ export type RouteName =
   | 'downloads'
   | 'sources'
   | 'installed'
-  | 'collections'
-  | 'achievements'
   | 'profile'
   | 'settings';
 
