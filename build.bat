@@ -53,6 +53,19 @@ if not errorlevel 1 (
     echo.
 )
 
+where cat >nul 2>&1
+if errorlevel 1 (
+    for /f "delims=" %%G in ('where git 2^>nul') do call :add_unix_tools "%%~dpG"
+)
+where cat >nul 2>&1
+if errorlevel 1 if exist "%ProgramFiles%\Git\usr\bin\cat.exe" set "PATH=%PATH%;%ProgramFiles%\Git\usr\bin"
+where cat >nul 2>&1
+if errorlevel 1 (
+    echo  [ОШИБКА] Не найден cat.exe: сборка wails читает им файл VERSION.
+    echo  Он входит в Git for Windows: https://git-scm.com/download/win
+    goto :fail
+)
+
 echo  Собираю. Первый запуск дольше: тянутся зависимости фронта.
 echo.
 call wails3 task build
@@ -90,3 +103,10 @@ exit /b 0
 echo.
 pause
 exit /b 1
+
+:add_unix_tools
+set "_gitdir=%~1"
+set "_gitdir=%_gitdir:~0,-1%"
+for %%P in ("%_gitdir%") do set "_gitroot=%%~dpP"
+if exist "%_gitroot%usr\bin\cat.exe" set "PATH=%PATH%;%_gitroot%usr\bin"
+exit /b 0
