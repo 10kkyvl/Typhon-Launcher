@@ -51,6 +51,7 @@ describe('account service errors', () => {
     ['email_taken', 'email'],
     ['invalid_email', 'email'],
     ['invalid_password', 'password'],
+    ['rate_limited', ''],
     ['invalid_credentials', ''],
   ])('maps auth error %s to field %s', async (code, field) => {
     const { AccountError, login } = await import('./account');
@@ -145,5 +146,14 @@ describe('bootstrapSession', () => {
     const err = await bootstrapSession().catch((e) => e);
     expect(err).toBeInstanceOf(AccountError);
     expect(err.code).toBe('network_error');
+  });
+});
+
+describe('accountMessage', () => {
+  it('has its own text for rate_limited instead of the generic fallback', async () => {
+    const { accountMessage } = await import('./accountMessages');
+    const text = accountMessage('rate_limited', 'FALLBACK');
+    expect(text).not.toBe('FALLBACK');
+    expect(text).toContain('попыток');
   });
 });

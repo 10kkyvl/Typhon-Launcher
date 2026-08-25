@@ -215,5 +215,9 @@ func decodeError(status int, body io.Reader) error {
 		code = CodeUnauthenticated
 	}
 
+	if code == CodeServer && status == http.StatusTooManyRequests {
+		code = CodeRateLimited
+	}
+
 	return &Error{Code: code, Field: field, Status: status, Message: message}
 }

@@ -54,6 +54,7 @@ const KNOWN_CODES = new Set([
   'avatar_too_large',
   'unsupported_avatar',
   'invalid_avatar',
+  'rate_limited',
   'bad_request',
   'internal',
   'network_error',

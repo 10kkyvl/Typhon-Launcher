@@ -14,6 +14,7 @@ const (
 	CodeAvatarTooLarge    = "avatar_too_large"
 	CodeUnsupportedAvatar = "unsupported_avatar"
 	CodeInvalidAvatar     = "invalid_avatar"
+	CodeRateLimited       = "rate_limited"
 	CodeBadRequest        = "bad_request"
 	CodeInternal          = "internal"
 	CodeNetwork           = "network_error"

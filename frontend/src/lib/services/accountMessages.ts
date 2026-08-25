@@ -15,6 +15,7 @@ const MESSAGES: Record<string, string> = {
   invalid_avatar: 'Не удалось прочитать изображение',
   unauthenticated: 'Сессия истекла, войдите заново',
   network_error: 'Нет связи с сервером',
+  rate_limited: 'Слишком много попыток, подождите немного и повторите',
   bad_request: 'Сервер отклонил запрос',
 };
 

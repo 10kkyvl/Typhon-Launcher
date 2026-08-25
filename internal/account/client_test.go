@@ -329,3 +329,47 @@ func TestBaseURL(t *testing.T) {
 		t.Fatalf("expected env override, got %q", got)
 	}
 }
+
+func TestClientMeRateLimited(t *testing.T) {
+	cases := []struct {
+		name string
+		body func(t *testing.T, w http.ResponseWriter)
+	}{
+		{
+			name: "coded envelope",
+			body: func(t *testing.T, w http.ResponseWriter) {
+				writeJSON(t, w, http.StatusTooManyRequests, map[string]any{
+					"error": map[string]string{"code": "rate_limited", "message": "too many requests"},
+				})
+			},
+		},
+		{
+			name: "bare body from a proxy",
+			body: func(_ *testing.T, w http.ResponseWriter) {
+				w.WriteHeader(http.StatusTooManyRequests)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				tc.body(t, w)
+			}))
+			defer srv.Close()
+
+			c := newTestClient(t, srv.URL, tokenOK("t"))
+			_, err := c.Me(context.Background())
+			var accErr *Error
+			if !errors.As(err, &accErr) {
+				t.Fatalf("expected *Error, got %v (%T)", err, err)
+			}
+			if accErr.Code != CodeRateLimited {
+				t.Fatalf("expected code %q, got %q", CodeRateLimited, accErr.Code)
+			}
+			if accErr.Status != http.StatusTooManyRequests {
+				t.Fatalf("expected status 429, got %d", accErr.Status)
+			}
+		})
+	}
+}
