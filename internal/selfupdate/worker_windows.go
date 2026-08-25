@@ -23,9 +23,16 @@ const stillActive = 259
 // detachedProcAttr starts a process fully independent of this one: the worker
 // must keep running after ApplyUpdate calls application.Get().Quit(), and the
 // relaunched launcher must not be tied to the worker's lifetime either.
+//
+// HideWindow must stay off. It fills STARTUPINFO with STARTF_USESHOWWINDOW and
+// SW_HIDE, and Windows applies that to the child's first show of a top-level
+// window instead of what the child asked for. Wails creates the launcher window
+// with WS_VISIBLE, whose implicit show is that first one, so the relaunched
+// launcher used to run with no window at all: the update installed, the process
+// started, and the user saw nothing come back. DETACHED_PROCESS already keeps a
+// console from appearing, which is all this flag was here for.
 func detachedProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{
-		HideWindow:    true,
 		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
 	}
 }

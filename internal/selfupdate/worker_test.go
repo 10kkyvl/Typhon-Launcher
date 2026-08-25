@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestUpdateSpecRoundTrip(t *testing.T) {
@@ -205,12 +208,93 @@ func TestStartUpdateWorkerMissingExecutable(t *testing.T) {
 
 func TestDetachedProcAttrFlags(t *testing.T) {
 	attr := detachedProcAttr()
-	if !attr.HideWindow {
-		t.Fatal("HideWindow = false, want true")
+	if attr.HideWindow {
+		t.Fatal("HideWindow = true: STARTF_USESHOWWINDOW with SW_HIDE overrides the child's first show of a top-level window, and the launcher's is the implicit one from WS_VISIBLE, so the relaunched launcher comes up with no window")
 	}
-	if attr.CreationFlags == 0 {
-		t.Fatal("CreationFlags = 0, want DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP set")
+	if attr.CreationFlags&windows.DETACHED_PROCESS == 0 {
+		t.Fatal("DETACHED_PROCESS not set: the relaunched launcher would die with the worker")
 	}
+	if attr.CreationFlags&windows.CREATE_NEW_PROCESS_GROUP == 0 {
+		t.Fatal("CREATE_NEW_PROCESS_GROUP not set")
+	}
+}
+
+var procIsWindowVisible = user32.NewProc("IsWindowVisible")
+
+const windowProbeEnvVar = "TYPHON_SELFUPDATE_WINDOW_PROBE"
+
+// TestDetachedProcAttrKeepsTheRelaunchedWindowVisible is the bug the user saw:
+// the update installed, the worker started the launcher, cmd.Start returned
+// nil, and no window ever appeared. It re-executes this test binary through the
+// attributes relaunch() uses and has the child create a WS_VISIBLE top-level
+// window the way Wails creates the launcher's; the child fails if Windows kept
+// it hidden.
+func TestDetachedProcAttrKeepsTheRelaunchedWindowVisible(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	//nolint:gosec // G204: exe is this test binary's own path, not external input
+	cmd := exec.Command(exe, "-test.run", "^"+probeHelperName+"$")
+	cmd.Env = append(os.Environ(), windowProbeEnvVar+"=1")
+	cmd.SysProcAttr = detachedProcAttr()
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("probe output: %s", out)
+		t.Fatalf("a launcher started through these process attributes runs with no window: %v", err)
+	}
+}
+
+const probeHelperName = "TestWindowVisibilityProbeHelper"
+
+// TestWindowVisibilityProbeHelper is the child half of the test above and does
+// nothing on its own: only the re-executed copy sees windowProbeEnvVar set.
+func TestWindowVisibilityProbeHelper(t *testing.T) {
+	if os.Getenv(windowProbeEnvVar) == "" {
+		return
+	}
+	if !createsVisibleWindow(t) {
+		t.Fatal("a WS_VISIBLE top-level window came up hidden: the parent's STARTUPINFO decided the first show instead of the window's own style")
+	}
+}
+
+//nolint:gosec // G103: RegisterClassExW and CreateWindowExW take pointers to the class record and the UTF-16 names, all of which outlive the call.
+func createsVisibleWindow(t *testing.T) bool {
+	t.Helper()
+
+	var instance windows.Handle
+	if err := windows.GetModuleHandleEx(0, nil, &instance); err != nil {
+		t.Fatalf("GetModuleHandleEx: %v", err)
+	}
+	className, err := windows.UTF16PtrFromString("TyphonSelfUpdateWindowProbe")
+	if err != nil {
+		t.Fatalf("class name: %v", err)
+	}
+
+	class := wndClassEx{
+		cbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
+		lpfnWndProc:   windows.NewCallback(func(h uintptr, m uint32, w, l uintptr) uintptr { return call(procDefWindowProc, h, uintptr(m), w, l) }),
+		hInstance:     uintptr(instance),
+		lpszClassName: className,
+	}
+	atom, _, callErr := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&class)))
+	if atom == 0 {
+		t.Fatalf("RegisterClassEx: %v", callErr)
+	}
+
+	const wsOverlappedWindow = 0x00CF0000
+	hwnd, _, callErr := procCreateWindowEx.Call(0,
+		uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(className)),
+		wsOverlappedWindow|wsVisible,
+		0, 0, 320, 200, 0, 0, uintptr(instance), 0)
+	if hwnd == 0 {
+		t.Fatalf("CreateWindowEx: %v", callErr)
+	}
+	defer call(procDestroyWindow, hwnd)
+
+	return call(procIsWindowVisible, hwnd) != 0
 }
 
 func TestRunWorkerReturnsErrorWhenSpecUnreadable(t *testing.T) {
