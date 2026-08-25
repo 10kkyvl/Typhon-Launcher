@@ -74,6 +74,22 @@ type Status struct {
 	ErrorCode        string    `json:"errorCode,omitempty"`
 }
 
+func (s Status) MarshalJSON() ([]byte, error) {
+	type alias Status
+	out := struct {
+		alias
+		PublishedAt *time.Time `json:"publishedAt,omitempty"`
+		CheckedAt   *time.Time `json:"checkedAt,omitempty"`
+	}{alias: alias(s)}
+	if !s.PublishedAt.IsZero() {
+		out.PublishedAt = &s.PublishedAt
+	}
+	if !s.CheckedAt.IsZero() {
+		out.CheckedAt = &s.CheckedAt
+	}
+	return json.Marshal(out)
+}
+
 type Progress struct {
 	Version         string `json:"version"`
 	TotalBytes      int64  `json:"totalBytes"`
