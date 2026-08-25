@@ -2,7 +2,7 @@
   let {
     value,
     max = 100,
-    height = 6,
+    height = 4,
     color = 'var(--accent)',
   }: {
     value: number;
@@ -11,7 +11,7 @@
     color?: string;
   } = $props();
 
-  const pct = $derived(Math.min(100, Math.max(0, (value / max) * 100)));
+  const pct = $derived(max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0);
 </script>
 
 <div class="track" style:height="{height / 10}rem">
@@ -22,13 +22,13 @@
   .track {
     width: 100%;
     background: rgba(255, 255, 255, 0.07);
-    border-radius: 9.9rem;
+    border-radius: var(--cut) 99rem 99rem var(--cut);
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    border-radius: 9.9rem;
+    border-radius: var(--cut) 99rem 99rem var(--cut);
     transition: width 600ms linear;
   }
 </style>

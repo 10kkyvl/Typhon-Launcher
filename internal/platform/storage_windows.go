@@ -3,12 +3,16 @@ package platform
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 func GetStorageInfo(path string) (StorageInfo, error) {
+	if strings.TrimSpace(path) == "" {
+		return StorageInfo{}, ErrEmptyPath
+	}
 	dir := nearestExistingDir(path)
 	dirPtr, err := windows.UTF16PtrFromString(dir)
 	if err != nil {
@@ -31,7 +35,7 @@ func GetStorageInfo(path string) (StorageInfo, error) {
 	rootPtr, err := windows.UTF16PtrFromString(filepath.VolumeName(dir) + `\`)
 	if err == nil {
 		fsName := make([]uint16, windows.MAX_PATH+1)
-		err = windows.GetVolumeInformation(rootPtr, nil, 0, nil, nil, nil, &fsName[0], uint32(len(fsName)))
+		err = windows.GetVolumeInformation(rootPtr, nil, 0, nil, nil, nil, &fsName[0], uint32(len(fsName))) //nolint:gosec // G115: len(fsName) — константа MAX_PATH+1
 		if err == nil {
 			info.Filesystem = windows.UTF16ToString(fsName)
 		}

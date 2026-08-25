@@ -3,8 +3,9 @@ package install
 import (
 	"errors"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"typhon/internal/platform"
 )
 
 var errUnsafePath = errors.New("недопустимый путь внутри архива")
@@ -35,22 +36,9 @@ func safeJoin(dest, name string) (string, error) {
 }
 
 func inside(dir, path string) bool {
-	root, err := filepath.Abs(dir)
-	if err != nil {
-		return false
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return false
-	}
-	root = filepath.Clean(root)
-	abs = filepath.Clean(abs)
-	if abs == root {
-		return true
-	}
-	prefix := root + string(filepath.Separator)
-	if runtime.GOOS == "windows" {
-		return strings.HasPrefix(strings.ToLower(abs), strings.ToLower(prefix))
-	}
-	return strings.HasPrefix(abs, prefix)
+	return platform.Inside(dir, path)
+}
+
+func samePath(a, b string) bool {
+	return platform.SamePath(a, b)
 }

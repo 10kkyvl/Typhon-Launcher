@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { route } from '../stores/router';
+  import { scrollmemory } from '../utils/scrollmemory';
+  import ActivityDock from './ActivityDock.svelte';
   import Sidebar from './Sidebar.svelte';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
@@ -13,7 +15,7 @@
   <div class="main">
     <Topbar />
     {#key $route}
-      <main class="content">
+      <main class="content" use:scrollmemory>
         <div class="page">
           {@render children?.()}
         </div>
@@ -22,9 +24,30 @@
   </div>
 </div>
 
-<Toasts />
+<div class="corner">
+  <Toasts />
+  {#if $route.name !== 'downloads'}
+    <ActivityDock />
+  {/if}
+</div>
 
 <style>
+  .corner {
+    position: fixed;
+    z-index: 120;
+    right: 2.4rem;
+    bottom: 2.4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.8rem;
+    pointer-events: none;
+  }
+
+  .corner > :global(*) {
+    pointer-events: auto;
+  }
+
   .shell {
     display: flex;
     height: 100vh;
@@ -43,13 +66,13 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--space-2) var(--page-x) var(--space-10);
+    padding: 0 var(--page-x) var(--space-10);
   }
 
   .page {
-    max-width: 164rem;
+    max-width: var(--page-max);
     margin: 0 auto;
-    animation: page-in var(--dur) var(--ease);
+    animation: page-in var(--dur-panel) var(--ease);
   }
 
   @media (min-width: 2200px) {
@@ -62,11 +85,9 @@
   @keyframes page-in {
     from {
       opacity: 0;
-      transform: translateY(0.4rem);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
     }
   }
 </style>

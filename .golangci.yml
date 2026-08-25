@@ -1,0 +1,105 @@
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - nilerr
+    - errorlint
+    - contextcheck
+    - bodyclose
+    - gosec
+    - forbidigo
+    - sloglint
+
+  settings:
+    errcheck:
+      check-blank: true
+      check-type-assertions: true
+
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+    gosec:
+      # G301/G306: права каталогов и файлов — на Windows (целевая платформа) no-op, ACL правами не задаются.
+      # G304: открытие файла по переменному пути — основная работа лаунчера (каталоги игр, загрузок, архивы).
+      # G103/G115/G204 остаются: unsafe, переполнения при конверсии и exec без абсолютного пути — содержательны.
+      excludes:
+        - G301
+        - G306
+        - G304
+
+    sloglint:
+      kv-only: true
+      static-msg: true
+      no-raw-keys: false
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^os\.WriteFile$'
+          pkg: '^os$'
+          msg: 'усекает файл на месте; состояние пишется только через storage.WriteAtomic'
+        - pattern: '^context\.(Background|TODO)$'
+          pkg: '^context$'
+          msg: 'ctx пробрасывается параметром; Background только в main и тестах'
+        - pattern: '^ioutil\..*'
+          pkg: '^io/ioutil$'
+          msg: 'io/ioutil устарел'
+        - pattern: '^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$'
+          pkg: '^log$'
+          msg: 'логирование только через slog'
+        - pattern: '^fmt\.(Print|Printf|Println)$'
+          pkg: '^fmt$'
+          msg: 'логирование только через slog'
+        - pattern: '^http\.(Get|Head|Post|PostForm)$'
+          pkg: '^net/http$'
+          msg: 'http.Client без таймаута; использовать клиент с Timeout и CheckRedirect'
+        - pattern: '^http\.(DefaultClient|DefaultTransport)$'
+          pkg: '^net/http$'
+          msg: 'глобальный клиент без таймаута; использовать клиент с Timeout и CheckRedirect'
+        - pattern: '^filepath\.Walk$'
+          pkg: '^path/filepath$'
+          msg: 'использовать filepath.WalkDir с ctx и возвратом ошибки обхода'
+        - pattern: '^time\.Sleep$'
+          pkg: '^time$'
+          msg: 'в тестах синхронизация каналами; в коде таймер с ctx'
+        - pattern: '^os\.Exit$'
+          pkg: '^os$'
+          msg: 'завершение процесса только из main'
+        - pattern: '^panic$'
+          msg: 'panic только при нарушении инварианта программы, не на ввод/файл/сеть'
+
+  exclusions:
+    generated: lax
+    paths:
+      - build/
+      - frontend/
+    rules:
+      - path: '^internal/storage/'
+        linters: [forbidigo]
+        text: 'os\.WriteFile'
+      - path: '_test\.go$'
+        linters: [forbidigo]
+        text: 'os\.WriteFile|context\.(Background|TODO)|panic|os\.Exit'
+      - path: '^main\.go$'
+        linters: [forbidigo]
+        text: 'context\.(Background|TODO)|os\.Exit'

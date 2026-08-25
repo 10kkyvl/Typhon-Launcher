@@ -17,6 +17,18 @@ export interface FileState {
   bytesDone: number;
 }
 
+export type DownloadPurpose = 'update' | 'repair';
+
+export interface DownloadOrigin {
+  releaseId?: string;
+  sourceId?: string;
+  gameId?: string;
+  version?: string;
+  purpose?: DownloadPurpose;
+  updatePlanId?: string;
+  libraryId?: string;
+}
+
 export interface Download {
   id: string;
   name: string;
@@ -38,6 +50,7 @@ export interface Download {
   addedAt: string;
   completedAt: string | null;
   error: string;
+  origin: DownloadOrigin;
 }
 
 export interface TorrentInfo {
@@ -76,6 +89,21 @@ export async function startDownload(
 ): Promise<Download> {
   if (!inWails) throw unavailable();
   return (await Manager.StartDownload(infoHash, destination, selectedIndices)) as unknown as Download;
+}
+
+export async function startDownloadFrom(
+  infoHash: string,
+  destination: string,
+  selectedIndices: number[],
+  origin: DownloadOrigin,
+): Promise<Download> {
+  if (!inWails) throw unavailable();
+  return (await Manager.StartDownloadFrom(
+    infoHash,
+    destination,
+    selectedIndices,
+    origin as never,
+  )) as unknown as Download;
 }
 
 export async function selectTorrentFile(): Promise<string> {

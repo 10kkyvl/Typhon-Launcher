@@ -42,6 +42,8 @@ export interface Plan {
   requiresUserInteraction: boolean;
   canAutoInstall: boolean;
   candidates: Candidate[] | null;
+  engine: string;
+  silent: boolean;
 }
 
 export interface PlanInfo {
@@ -78,6 +80,37 @@ export interface Installation {
   startedAt: string;
   completedAt: string | null;
   error: string;
+  engine: string;
+  silent: boolean;
+}
+
+export type RemovalMethod = 'files' | 'installer' | 'record';
+
+export interface RemovalInfo {
+  gameId: string;
+  title: string;
+  installDir: string;
+  installType: string;
+  method: RemovalMethod;
+  owned: boolean;
+  uninstallUnknown: boolean;
+  sizeBytes: number;
+  sizeUnknown: boolean;
+  dirMissing: boolean;
+  quietUninstall: boolean;
+  running: boolean;
+  busy: boolean;
+  downloadId: string;
+  downloadPresent: boolean;
+  downloadSeeding: boolean;
+  downloadBytes: number;
+  downloadPath: string;
+}
+
+export interface RemoveOptions {
+  deleteFiles: boolean;
+  deleteDownload: boolean;
+  keepInLibrary: boolean;
 }
 
 export interface StartOptions {
@@ -139,6 +172,16 @@ export async function retryInstall(id: string): Promise<void> {
 export async function dismissInstall(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await InstallService.Dismiss(id);
+}
+
+export async function inspectRemoval(gameID: string): Promise<RemovalInfo> {
+  if (!inWails) throw unavailable();
+  return (await InstallService.InspectRemoval(gameID)) as unknown as RemovalInfo;
+}
+
+export async function removeGame(gameID: string, opts: RemoveOptions): Promise<void> {
+  if (!inWails) throw unavailable();
+  await InstallService.RemoveGame(gameID, opts as never);
 }
 
 export async function deleteDownloadData(downloadID: string): Promise<void> {

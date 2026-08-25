@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/settings"
 
+	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -33,6 +34,14 @@ type engineStats struct {
 	peers      int
 }
 
+// storageOpts maps torrent files onto an existing directory. flat drops the
+// torrent name folder, inPlace disables .part files so that already installed
+// files are read and repaired where they are.
+type storageOpts struct {
+	flat    bool
+	inPlace bool
+}
+
 type engineTorrent interface {
 	setPriorities(selected []bool)
 	allowDownload()
@@ -40,6 +49,7 @@ type engineTorrent interface {
 	allowUpload()
 	disallowUpload()
 	fileBytes() []int64
+	filePaths(destination string) []string
 	stats() engineStats
 	verify(ctx context.Context) error
 	drop()
@@ -53,12 +63,12 @@ type client struct {
 }
 
 func newClient(cfg settings.Settings, metaDir string) (*client, error) {
-	tc := clientConfig(cfg, listenPort)
+	tc := clientConfig(cfg, metaDir, listenPort)
 	cl, err := torrent.NewClient(tc)
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, 0)
+		tc = clientConfig(cfg, metaDir, 0)
 		cl, err = torrent.NewClient(tc)
 	}
 	if err != nil {
@@ -69,15 +79,15 @@ func newClient(cfg settings.Settings, metaDir string) (*client, error) {
 	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
 }
 
-func clientConfig(cfg settings.Settings, port int) *torrent.ClientConfig {
+func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.ClientConfig {
 	tc := torrent.NewDefaultClientConfig()
-	tc.DataDir = cfg.DownloadsPath
+	tc.DataDir = dataDir
 	tc.ListenPort = port
 	tc.Seed = true
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)
-	tc.DefaultStorage = storage.NewFileWithCompletion(cfg.DownloadsPath, storage.NewMapPieceCompletion())
+	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, storage.NewMapPieceCompletion())
 	return tc
 }
 
@@ -111,38 +121,59 @@ func (c *client) close() {
 	}
 }
 
-func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string) (*liveTorrent, error) {
+func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string, opts storageOpts) (*liveTorrent, error) {
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
 	if err != nil {
 		return nil, err
 	}
-	return c.add(spec, destination)
+	return c.add(spec, destination, opts)
 }
 
-func (c *client) addMagnet(uri, destination string) (*liveTorrent, error) {
+func (c *client) addMagnet(uri, destination string, opts storageOpts) (*liveTorrent, error) {
 	spec, err := magnetSpec(uri)
 	if err != nil {
 		return nil, err
 	}
-	return c.add(spec, destination)
+	return c.add(spec, destination, opts)
 }
 
-func (c *client) add(spec *torrent.TorrentSpec, destination string) (*liveTorrent, error) {
+func newStorage(destination string, opts storageOpts) storage.ClientImplCloser {
+	if !opts.flat && !opts.inPlace {
+		return storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+	}
+	clientOpts := storage.NewFileClientOpts{
+		ClientBaseDir:   destination,
+		PieceCompletion: storage.NewMapPieceCompletion(),
+	}
+	if opts.flat {
+		clientOpts.FilePathMaker = func(o storage.FilePathMakerOpts) string {
+			return filepath.Join(o.File.BestPath()...)
+		}
+	}
+	if opts.inPlace {
+		clientOpts.UsePartFiles = g.Some(false)
+	}
+	return storage.NewFileOpts(clientOpts)
+}
+
+func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storageOpts) (*liveTorrent, error) {
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
-	st := storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+	st := newStorage(destination, opts)
 	spec.Storage = st
-	spec.DisallowDataDownload = true
-	spec.DisallowDataUpload = true
 
 	t, _, err := c.cl.AddTorrentSpec(spec)
 	if err != nil {
 		st.Close()
 		return nil, err
 	}
+	// AddTorrentOpts.DisallowData* are declared but never read by the engine,
+	// so a torrent starts fully enabled and has to be gated after it is added.
+	t.DisallowDataDownload()
+	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
-	return &liveTorrent{t: t, storage: st}, nil
+	return &liveTorrent{t: t, storage: st, flat: opts.flat}, nil
 }
 
 func magnetSpec(uri string) (*torrent.TorrentSpec, error) {
@@ -186,6 +217,7 @@ func applyLimit(l *rate.Limiter, bytesPerSecond int64) {
 type liveTorrent struct {
 	t       *torrent.Torrent
 	storage io.Closer
+	flat    bool
 }
 
 func (l *liveTorrent) setPriorities(selected []bool) {
@@ -212,6 +244,15 @@ func (l *liveTorrent) fileBytes() []int64 {
 	return done
 }
 
+func (l *liveTorrent) filePaths(destination string) []string {
+	rel := relativePaths(l.t.Info(), l.flat)
+	out := make([]string, len(rel))
+	for i, r := range rel {
+		out[i] = filepath.Join(destination, r)
+	}
+	return out
+}
+
 func (l *liveTorrent) stats() engineStats {
 	st := l.t.Stats()
 	return engineStats{
@@ -224,6 +265,30 @@ func (l *liveTorrent) stats() engineStats {
 
 func (l *liveTorrent) verify(ctx context.Context) error {
 	return l.t.VerifyDataContext(ctx)
+}
+
+func (l *liveTorrent) verifyEach(ctx context.Context, done func(index int, length int64)) error {
+	for i := 0; i < l.t.NumPieces(); i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		piece := l.t.Piece(i)
+		if err := piece.VerifyDataContext(ctx); err != nil {
+			return err
+		}
+		done(i, piece.Info().Length())
+	}
+	return nil
+}
+
+func (l *liveTorrent) completePieces() (complete, total int) {
+	total = l.t.NumPieces()
+	for i := 0; i < total; i++ {
+		if l.t.Piece(i).State().Complete {
+			complete++
+		}
+	}
+	return complete, total
 }
 
 func (l *liveTorrent) drop() {

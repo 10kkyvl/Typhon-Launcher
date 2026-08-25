@@ -2,10 +2,14 @@ package install
 
 import (
 	"context"
+	"errors"
+	"math"
 	"os"
 
 	"github.com/bodgit/sevenzip"
 )
+
+var errArchiveSize = errors.New("архив сообщает недостоверный размер содержимого")
 
 func extractSevenZip(ctx context.Context, archivePath, dest string, rep *reporter) error {
 	rc, err := sevenzip.OpenReader(archivePath)
@@ -61,7 +65,23 @@ func estimateSevenZip(archivePath string) (int64, error) {
 		if info.IsDir() || !info.Mode().IsRegular() {
 			continue
 		}
-		total += int64(entry.UncompressedSize)
+		next, err := addEntrySize(total, entry.UncompressedSize)
+		if err != nil {
+			return 0, err
+		}
+		total = next
 	}
 	return total, nil
+}
+
+func addEntrySize(total int64, size uint64) (int64, error) {
+	if size > math.MaxInt64 {
+		return 0, errArchiveSize
+	}
+	//nolint:gosec // G115: size <= MaxInt64 проверено выше
+	signed := int64(size)
+	if total > math.MaxInt64-signed {
+		return 0, errArchiveSize
+	}
+	return total + signed, nil
 }

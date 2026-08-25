@@ -53,9 +53,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(4, 6, 10, 0.6);
-    backdrop-filter: blur(0.3rem);
-    animation: fade var(--dur) var(--ease);
+    background: rgba(4, 6, 10, 0.62);
+    animation: fade var(--dur-panel) var(--ease);
   }
 
   .modal {
@@ -65,20 +64,20 @@
     flex-direction: column;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-xl);
+    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
     box-shadow: var(--shadow-modal);
-    animation: rise var(--dur) var(--ease);
+    animation: rise var(--dur-panel) var(--ease);
   }
 
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.8rem 2rem 0 2.4rem;
+    padding: 1.8rem 1.8rem 0 2.4rem;
   }
 
   h3 {
-    font-size: 1.8rem;
+    font-size: var(--font-lg);
     font-weight: 600;
   }
 
@@ -90,8 +89,8 @@
   .foot {
     display: flex;
     justify-content: flex-end;
-    gap: 1rem;
-    padding: 1.6rem 2.4rem;
+    gap: 0.8rem;
+    padding: 1.4rem 2.4rem;
     border-top: 1px solid var(--border);
   }
 
@@ -107,11 +106,11 @@
   @keyframes rise {
     from {
       opacity: 0;
-      transform: scale(0.98);
+      transform: translateY(0.4rem);
     }
     to {
       opacity: 1;
-      transform: scale(1);
+      transform: translateY(0);
     }
   }
 </style>

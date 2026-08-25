@@ -6,6 +6,7 @@ type BridgeWindow = Window & {
 
 const w = window as BridgeWindow;
 
-export const inWails = Boolean(
-  w.chrome?.webview?.postMessage || w.webkit?.messageHandlers?.external?.postMessage || w.wails?.invoke,
-);
+export const inWails =
+  Boolean(
+    w.chrome?.webview?.postMessage || w.webkit?.messageHandlers?.external?.postMessage || w.wails?.invoke,
+  ) || new URLSearchParams(window.location.search).has('server');

@@ -38,8 +38,8 @@ func TestCopyDirCopiesTree(t *testing.T) {
 	if info, err := os.Stat(filepath.Join(dst, "empty")); err != nil || !info.IsDir() {
 		t.Fatalf("empty dir not copied: %v", err)
 	}
-	if DirSize(src) != DirSize(dst) {
-		t.Fatalf("sizes differ: %d vs %d", DirSize(src), DirSize(dst))
+	if mustDirSize(t, src) != mustDirSize(t, dst) {
+		t.Fatalf("sizes differ: %d vs %d", mustDirSize(t, src), mustDirSize(t, dst))
 	}
 	if last.BytesTotal == 0 || last.BytesDone != last.BytesTotal {
 		t.Fatalf("final progress = %+v", last)
@@ -112,7 +112,7 @@ func TestMoveDirSameVolumeRename(t *testing.T) {
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	mkFile(t, filepath.Join(src, "sub", "b.bin"), 2048)
-	want := DirSize(src)
+	want := mustDirSize(t, src)
 	dst := filepath.Join(tmp, "dst")
 
 	var last Progress
@@ -125,8 +125,8 @@ func TestMoveDirSameVolumeRename(t *testing.T) {
 	if data, err := os.ReadFile(filepath.Join(dst, "a.txt")); err != nil || string(data) != "alpha" {
 		t.Fatalf("a.txt = %q, err = %v", data, err)
 	}
-	if DirSize(dst) != want {
-		t.Fatalf("size = %d, want %d", DirSize(dst), want)
+	if mustDirSize(t, dst) != want {
+		t.Fatalf("size = %d, want %d", mustDirSize(t, dst), want)
 	}
 	if last.BytesDone != want || last.BytesTotal != want {
 		t.Fatalf("final progress = %+v, want %d", last, want)
@@ -192,11 +192,44 @@ func TestDirSize(t *testing.T) {
 	root := t.TempDir()
 	mkFile(t, filepath.Join(root, "a.bin"), 1000)
 	mkFile(t, filepath.Join(root, "sub", "b.bin"), 2000)
-	if got := DirSize(root); got != 3000 {
+	got, err := DirSize(context.Background(), root)
+	if err != nil {
+		t.Fatalf("DirSize: %v", err)
+	}
+	if got != 3000 {
 		t.Fatalf("DirSize = %d, want 3000", got)
 	}
-	if got := DirSize(filepath.Join(root, "nope")); got != 0 {
-		t.Fatalf("DirSize(missing) = %d, want 0", got)
+}
+
+func TestDirSizeReportsFailures(t *testing.T) {
+	root := t.TempDir()
+	mkFile(t, filepath.Join(root, "a.bin"), 1000)
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	cases := []struct {
+		name string
+		ctx  context.Context
+		dir  string
+		want error
+	}{
+		{name: "missing", ctx: context.Background(), dir: filepath.Join(root, "nope"), want: os.ErrNotExist},
+		{name: "file instead of dir", ctx: context.Background(), dir: filepath.Join(root, "a.bin", "sub"), want: nil},
+		{name: "cancelled", ctx: cancelled, dir: root, want: context.Canceled},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			size, err := DirSize(tc.ctx, tc.dir)
+			if err == nil {
+				t.Fatalf("DirSize = %d, want error", size)
+			}
+			if size != 0 {
+				t.Fatalf("size = %d, want 0 alongside the error", size)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }
 
@@ -242,3 +275,12 @@ func TestCopyStreamPropagatesWriteError(t *testing.T) {
 type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("boom") }
+
+func mustDirSize(t *testing.T, dir string) int64 {
+	t.Helper()
+	size, err := DirSize(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("DirSize(%s): %v", dir, err)
+	}
+	return size
+}

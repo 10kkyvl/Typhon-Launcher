@@ -1,46 +1,32 @@
 <script lang="ts">
-  import {
-    Bell,
-    Download,
-    FolderOpen,
-    Info,
-    ListChecks,
-    LogOut,
-    Monitor,
-    Settings as SettingsIcon,
-    Trash2,
-    UserRound,
-    Wifi,
-  } from '@lucide/svelte';
+  import { FolderOpen, ListChecks } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
-  import Modal from '../../lib/components/Modal.svelte';
+  import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
+  import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
+  import PageHeader from '../../lib/components/PageHeader.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import { user } from '../../lib/mock/user';
+  import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import { inWails } from '../../lib/services/backend';
-  import { openFolder, selectFolder, type Settings } from '../../lib/services/settings';
+  import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
+  import { openFolder, type Settings } from '../../lib/services/settings';
   import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
+  import { requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { bytesLabel } from '../../lib/utils/format';
+  import { bytesLabel, relativeDate } from '../../lib/utils/format';
 
   let tab = $state('general');
 
   const tabs = [
-    { id: 'general', label: 'Общие', icon: SettingsIcon },
-    { id: 'downloads', label: 'Загрузки', icon: Download },
-    { id: 'connection', label: 'Соединение', icon: Wifi },
-    { id: 'interface', label: 'Интерфейс', icon: Monitor },
-    { id: 'notifications', label: 'Уведомления', icon: Bell },
-    { id: 'account', label: 'Аккаунт', icon: UserRound },
-    { id: 'about', label: 'О программе', icon: Info },
+    { id: 'general', label: 'Общие' },
+    { id: 'downloads', label: 'Загрузки' },
+    { id: 'about', label: 'О программе' },
   ];
-
-  let overlay = $state(true);
-  let autoUpdate = $state(true);
-  let descriptions = $state(true);
 
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
@@ -48,34 +34,49 @@
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
 
+  let legalDocs = $state<LegalMeta[]>([]);
+  let legalError = $state('');
+  let legalOpen = $state(false);
+  let legalActiveId = $state<string | null>(null);
+  let legalActiveTitle = $state('');
+  let sourcesNoticeReviewOpen = $state(false);
+
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
+    try {
+      legalDocs = await listLegalDocuments();
+    } catch {
+      legalError = inWails ? 'Не удалось загрузить список документов.' : 'Правовые документы недоступны вне приложения.';
+    }
   });
+
+  function openLegalDoc(meta: LegalMeta) {
+    legalActiveId = meta.id;
+    legalActiveTitle = meta.title;
+    legalOpen = true;
+  }
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
 
-  const folderRows: { key: PathKey; label: string; title: string }[] = [
-    { key: 'gamesPath', label: 'Папка с играми', title: 'Выберите папку с играми' },
-    { key: 'downloadsPath', label: 'Папка загрузок', title: 'Выберите папку загрузок' },
-    { key: 'screenshotsPath', label: 'Папка скриншотов', title: 'Выберите папку скриншотов' },
+  const folderRows: { key: PathKey; label: string }[] = [
+    { key: 'gamesPath', label: 'Игры' },
+    { key: 'downloadsPath', label: 'Загрузки' },
+    { key: 'screenshotsPath', label: 'Скриншоты' },
   ];
+
+  let librarySetupOpen = $state(false);
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
   }
 
-  async function browseFolder(key: PathKey, title: string) {
+  function openLibrarySetup() {
     if (!inWails) {
       toast('Выбор папки доступен только в desktop-сборке');
       return;
     }
-    try {
-      const path = await selectFolder(title);
-      if (path) set({ [key]: path });
-    } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
-    }
+    librarySetupOpen = true;
   }
 
   async function openPath(path: string | undefined) {
@@ -129,39 +130,40 @@
   ];
 
   const cleanupPolicy = $derived.by(() => {
-    const id = current?.installCleanupPolicy ?? 'keep';
-    return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'keep';
+    const id = current?.installCleanupPolicy ?? 'delete';
+    return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'delete';
   });
 
-  let scheduleEnabled = $state(false);
-
-  let port = $state('42815');
-  let upnp = $state(true);
-  let proxy = $state(false);
-
-  let notifyDone = $state(true);
-  let notifyUpdates = $state(true);
-  let notifyAchievements = $state(true);
-  let notifySound = $state(false);
-
-  let resetOpen = $state(false);
-
-  const cleanupItems = [
-    { id: 'cache', label: 'Очистить кэш', sub: 'Временные файлы приложений и загрузок', size: '2,45 ГБ' },
-    { id: 'shaders', label: 'Очистить кэш шейдеров', sub: 'Скомпилированные шейдеры для игр', size: '1,12 ГБ' },
-    { id: 'logs', label: 'Очистить журналы', sub: 'Файлы логов и диагностические данные', size: '156 МБ' },
+  const sourceRefreshOptions = [
+    { id: 'manual', label: 'Вручную' },
+    { id: '1h', label: 'Каждый час' },
+    { id: '6h', label: 'Каждые 6 часов' },
+    { id: '12h', label: 'Каждые 12 часов' },
+    { id: '24h', label: 'Раз в сутки' },
   ];
+
+  const sourceRefreshInterval = $derived.by(() => {
+    const id = current?.sourceRefreshInterval ?? '6h';
+    return sourceRefreshOptions.some((o) => o.id === id) ? id : '6h';
+  });
+
+  const keepPreviousOptions = [
+    { id: 'off', label: 'Не сохранять' },
+    { id: 'first_launch', label: 'До первого успешного запуска' },
+    { id: '24h', label: '24 часа' },
+  ];
+
+  const keepPreviousVersion = $derived.by(() => {
+    const id = current?.keepPreviousVersion ?? 'first_launch';
+    return keepPreviousOptions.some((o) => o.id === id) ? id : 'first_launch';
+  });
+
 </script>
 
-<h1 class="page-title">Настройки</h1>
+<PageHeader title="Настройки" />
 
-<div class="tabs">
-  {#each tabs as t (t.id)}
-    <button class="tab" class:selected={tab === t.id} onclick={() => (tab = t.id)}>
-      <t.icon size="1.7rem" strokeWidth={1.8} />
-      {t.label}
-    </button>
-  {/each}
+<div class="tabs-wrap">
+  <Tabs {tabs} bind:value={tab} />
 </div>
 
 {#if tab === 'general'}
@@ -172,73 +174,61 @@
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Запускать Typhon при старте системы</span>
-              <span class="row-sub">Приложение будет запускаться автоматически</span>
+              <span class="row-label">Discord Rich Presence</span>
+              <span class="row-sub">Показывать в Discord, во что вы играете</span>
             </div>
             <Toggle
-              checked={current?.launchOnStartup ?? false}
-              label="Запускать при старте"
-              onchange={(v) => set({ launchOnStartup: v })}
+              checked={current?.discordRichPresence ?? false}
+              label="Discord Rich Presence"
+              onchange={(v) => set({ discordRichPresence: v })}
             />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Сворачивать в трей</span>
-              <span class="row-sub">При закрытии окна сворачивать в область уведомлений</span>
-            </div>
-            <Toggle
-              checked={current?.minimizeToTray ?? true}
-              label="Сворачивать в трей"
-              onchange={(v) => set({ minimizeToTray: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Показывать оверлей в игре</span>
-              <span class="row-sub">Игровой оверлей для доступа к функциям Typhon</span>
-            </div>
-            <Toggle bind:checked={overlay} label="Оверлей" />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Аппаратное ускорение</span>
-              <span class="row-sub">Использовать GPU для улучшения производительности</span>
-            </div>
-            <Toggle
-              checked={current?.hardwareAcceleration ?? true}
-              label="Аппаратное ускорение"
-              onchange={(v) => set({ hardwareAcceleration: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Автоматические обновления</span>
-              <span class="row-sub">Обновлять установленные игры в фоне</span>
-            </div>
-            <Toggle bind:checked={autoUpdate} label="Автообновления" />
           </div>
         </div>
       </section>
 
       <section class="group">
-        <h3>Папки</h3>
+        <h3>Библиотека</h3>
         <div class="rows">
-          {#each folderRows as folder (folder.key)}
-            <div class="row folder-row">
-              <span class="row-label folder-label">{folder.label}</span>
-              <div class="folder-controls">
-                <input
-                  type="text"
-                  value={current?.[folder.key] ?? ''}
-                  onchange={(e) => set({ [folder.key]: e.currentTarget.value })}
-                />
-                <Button size="sm" onclick={() => browseFolder(folder.key, folder.title)}>Обзор</Button>
-                <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
-                  <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                </IconButton>
-              </div>
+          <div class="row folder-row">
+            <span class="row-label folder-label">Папка библиотеки</span>
+            <div class="folder-controls">
+              <input
+                class="input sm"
+                type="text"
+                readonly
+                placeholder="Не настроена"
+                value={current?.libraryPath ?? ''}
+              />
+              <Button size="sm" onclick={openLibrarySetup}>
+                {current?.libraryPath ? 'Изменить' : 'Выбрать'}
+              </Button>
+              <IconButton
+                label="Открыть папку"
+                size="sm"
+                disabled={!current?.libraryPath}
+                onclick={() => openPath(current?.libraryPath)}
+              >
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
             </div>
-          {/each}
+          </div>
+          {#if current?.libraryPath}
+            {#each folderRows as folder (folder.key)}
+              <div class="row folder-row">
+                <span class="row-label folder-label">{folder.label}</span>
+                <div class="folder-controls">
+                  <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
+                  <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
+                    <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                  </IconButton>
+                </div>
+              </div>
+            {/each}
+          {:else}
+            <span class="row-sub">
+              Игры, загрузки и скриншоты хранятся внутри папки библиотеки. Пока она не выбрана, скачивать нечего.
+            </span>
+          {/if}
         </div>
       </section>
     </div>
@@ -254,7 +244,7 @@
             </div>
             <Select
               value={current?.theme ?? 'dark'}
-              width="18rem"
+              width="22rem"
               options={[
                 { id: 'dark', label: 'Тёмная' },
                 { id: 'system', label: 'Как в системе' },
@@ -264,27 +254,12 @@
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Язык</span>
-              <span class="row-sub">Язык интерфейса Typhon</span>
-            </div>
-            <Select
-              value={current?.language ?? 'ru'}
-              width="18rem"
-              options={[
-                { id: 'ru', label: 'Русский' },
-                { id: 'en', label: 'English' },
-              ]}
-              onchange={(id) => set({ language: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
               <span class="row-label">Размер интерфейса</span>
               <span class="row-sub">Масштаб элементов интерфейса</span>
             </div>
             <Select
               value={scaleValue}
-              width="18rem"
+              width="22rem"
               options={[
                 { id: '90', label: '90%' },
                 { id: '100', label: '100% (по умолчанию)' },
@@ -305,43 +280,6 @@
               onchange={(v) => set({ animationsEnabled: v })}
             />
           </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Показывать описания игр</span>
-              <span class="row-sub">Отображать описания на карточках игр в библиотеке</span>
-            </div>
-            <Toggle bind:checked={descriptions} label="Описания игр" />
-          </div>
-        </div>
-      </section>
-
-      <section class="group">
-        <h3>Очистка данных</h3>
-        <div class="rows">
-          {#each cleanupItems as item (item.id)}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{item.label}</span>
-                <span class="row-sub">{item.sub}</span>
-              </div>
-              <div class="cleanup-controls">
-                <span class="cleanup-size">{item.size}</span>
-                <Button size="sm" onclick={() => toast(`${item.label.replace('Очистить ', '')}: очищено`, 'success')}>
-                  Очистить
-                </Button>
-              </div>
-            </div>
-          {/each}
-        </div>
-        <div class="danger-zone">
-          <div class="row-text">
-            <span class="row-label">Все данные приложения</span>
-            <span class="row-sub">Сбросить настройки и удалить все данные Typhon</span>
-          </div>
-          <Button variant="danger" onclick={() => (resetOpen = true)}>
-            <Trash2 size="1.5rem" strokeWidth={1.8} />
-            Сбросить
-          </Button>
         </div>
       </section>
     </div>
@@ -389,8 +327,21 @@
         </div>
         <div class="row">
           <div class="row-text">
+            <span class="row-label">Отдавать во время загрузки</span>
+            <span class="row-sub"
+              >Разрешает передавать другим участникам уже загруженные части во время активной BitTorrent-загрузки.</span
+            >
+          </div>
+          <Toggle
+            checked={current?.uploadWhileDownloading ?? false}
+            label="Отдача"
+            onchange={(v) => set({ uploadWhileDownloading: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
             <span class="row-label">Раздавать после загрузки</span>
-            <span class="row-sub">Продолжать отдачу завершённых загрузок</span>
+            <span class="row-sub">Продолжать отдавать завершённую загрузку другим участникам.</span>
           </div>
           <Toggle
             checked={current?.seedAfterDownload ?? false}
@@ -400,10 +351,15 @@
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Загружать по расписанию</span>
-            <span class="row-sub">Ограничивать загрузки в определённые часы</span>
+            <span class="row-label">Обновление источников</span>
+            <span class="row-sub">Как часто проверять источники на новые релизы</span>
           </div>
-          <Toggle bind:checked={scheduleEnabled} label="Расписание" />
+          <Select
+            value={sourceRefreshInterval}
+            width="20rem"
+            options={sourceRefreshOptions}
+            onchange={(id) => set({ sourceRefreshInterval: id })}
+          />
         </div>
       </div>
     </section>
@@ -436,6 +392,34 @@
         </div>
         <div class="row">
           <div class="row-text">
+            <span class="row-label">Не создавать ярлыки</span>
+            <span class="row-sub"
+              >Отклонять ярлыки на рабочем столе и папки в меню «Пуск», а созданные установщиком —
+              удалять: игры запускаются из лаунчера</span
+            >
+          </div>
+          <Toggle
+            checked={current?.installSkipShortcuts ?? true}
+            label="Без ярлыков"
+            onchange={(v) => set({ installSkipShortcuts: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Отклонять дополнения установщика</span>
+            <span class="row-sub"
+              >DirectX, .NET, Visual C++, ассоциации файлов и прочие предложения. Если игра не
+              запускается без них — выключите</span
+            >
+          </div>
+          <Toggle
+            checked={current?.installSkipExtras ?? true}
+            label="Без дополнений"
+            onchange={(v) => set({ installSkipExtras: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
             <span class="row-label">Проверять установку после завершения</span>
             <span class="row-sub">Искать исполняемый файл и проверять содержимое папки</span>
           </div>
@@ -447,152 +431,66 @@
         </div>
       </div>
     </section>
-  </div>
-{:else if tab === 'connection'}
-  <div class="single-column">
+
     <section class="group">
-      <h3>Соединение</h3>
+      <h3>Обновления</h3>
       <div class="rows">
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Порт для входящих соединений</span>
-            <span class="row-sub">Используется для обмена данными с пирами</span>
-          </div>
-          <input class="port-input" type="text" bind:value={port} />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">UPnP / NAT-PMP</span>
-            <span class="row-sub">Автоматически пробрасывать порт на маршрутизаторе</span>
-          </div>
-          <Toggle bind:checked={upnp} label="UPnP" />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Прокси-сервер</span>
-            <span class="row-sub">Направлять трафик через прокси</span>
-          </div>
-          <Toggle bind:checked={proxy} label="Прокси" />
-        </div>
-      </div>
-    </section>
-  </div>
-{:else if tab === 'interface'}
-  <div class="single-column">
-    <section class="group">
-      <h3>Интерфейс</h3>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Тема</span>
-          </div>
-          <Select
-            value={current?.theme ?? 'dark'}
-            width="20rem"
-            options={[
-              { id: 'dark', label: 'Тёмная' },
-              { id: 'system', label: 'Как в системе' },
-            ]}
-            onchange={(id) => set({ theme: id })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Размер интерфейса</span>
-          </div>
-          <Select
-            value={scaleValue}
-            width="20rem"
-            options={[
-              { id: '90', label: '90%' },
-              { id: '100', label: '100% (по умолчанию)' },
-              { id: '110', label: '110%' },
-              { id: '125', label: '125%' },
-            ]}
-            onchange={(id) => set({ uiScale: Number(id) / 100 })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Анимации интерфейса</span>
+            <span class="row-label">Проверять автоматически</span>
+            <span class="row-sub">Искать новые релизы после обновления источников</span>
           </div>
           <Toggle
-            checked={current?.animationsEnabled ?? true}
-            label="Анимации"
-            onchange={(v) => set({ animationsEnabled: v })}
+            checked={current?.updateCheckAutomatically ?? true}
+            label="Проверка обновлений"
+            onchange={(v) => set({ updateCheckAutomatically: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Показывать описания игр</span>
+            <span class="row-label">Скачивать обновления автоматически</span>
+            <span class="row-sub">Данные загружаются заранее, установка остаётся ручной</span>
           </div>
-          <Toggle bind:checked={descriptions} label="Описания" />
-        </div>
-      </div>
-    </section>
-  </div>
-{:else if tab === 'notifications'}
-  <div class="single-column">
-    <section class="group">
-      <h3>Уведомления</h3>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Завершение загрузки</span>
-            <span class="row-sub">Уведомлять, когда игра установлена</span>
-          </div>
-          <Toggle bind:checked={notifyDone} label="Загрузки" />
+          <Toggle
+            checked={current?.updateAutoDownload ?? false}
+            label="Автозагрузка обновлений"
+            onchange={(v) => set({ updateAutoDownload: v })}
+          />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Обновления игр</span>
-            <span class="row-sub">Уведомлять о доступных обновлениях</span>
+            <span class="row-label">Резервная копия сохранений</span>
+            <span class="row-sub">Создавать снимок сохранений, когда их расположение известно</span>
           </div>
-          <Toggle bind:checked={notifyUpdates} label="Обновления" />
+          <Toggle
+            checked={current?.updateSaveBackup ?? true}
+            label="Резервная копия"
+            onchange={(v) => set({ updateSaveBackup: v })}
+          />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Достижения</span>
-            <span class="row-sub">Показывать уведомления о полученных достижениях</span>
+            <span class="row-label">Хранить предыдущую версию</span>
+            <span class="row-sub">Позволяет откатиться, если обновление оказалось неудачным</span>
           </div>
-          <Toggle bind:checked={notifyAchievements} label="Достижения" />
+          <Select
+            value={keepPreviousVersion}
+            width="28rem"
+            options={keepPreviousOptions}
+            onchange={(id) => set({ keepPreviousVersion: id })}
+          />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Звук уведомлений</span>
-            <span class="row-sub">Воспроизводить звук при уведомлениях</span>
+            <span class="row-label">Переиспользовать файлы торрента</span>
+            <span class="row-sub">Скачивать только изменившиеся блоки, когда раскладка совпадает</span>
           </div>
-          <Toggle bind:checked={notifySound} label="Звук" />
+          <Toggle
+            checked={current?.allowTorrentReuse ?? true}
+            label="Повторное использование файлов"
+            onchange={(v) => set({ allowTorrentReuse: v })}
+          />
         </div>
-      </div>
-    </section>
-  </div>
-{:else if tab === 'account'}
-  <div class="single-column">
-    <section class="group">
-      <h3>Аккаунт</h3>
-      <div class="account-card">
-        <img class="account-avatar" src={user.avatar} alt="" draggable="false" />
-        <div class="account-info">
-          <span class="account-name">{user.name}</span>
-          <span class="account-status">{user.status} · Локальный профиль</span>
-        </div>
-        <Button onclick={() => toast('Редактирование профиля недоступно в demo')}>Изменить профиль</Button>
-      </div>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">Синхронизация сохранений</span>
-            <span class="row-sub">Резервное копирование сохранений между устройствами</span>
-          </div>
-          <Toggle checked={false} label="Синхронизация" onchange={() => toast('Синхронизация недоступна в demo')} />
-        </div>
-      </div>
-      <div class="group-foot">
-        <Button variant="danger" onclick={() => toast('Выход недоступен в demo')}>
-          <LogOut size="1.5rem" strokeWidth={1.8} />
-          Выйти из профиля
-        </Button>
       </div>
     </section>
   </div>
@@ -600,7 +498,7 @@
   <div class="single-column">
     <section class="group about">
       <div class="about-logo">
-        <img src="/typhon.svg" alt="" width="44" height="44" draggable="false" />
+        <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
           <h3>Typhon Launcher</h3>
           <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}</span>
@@ -630,127 +528,94 @@
         <div class="row">
           <div class="row-text">
             <span class="row-label">Проверить обновления клиента</span>
-            <span class="row-sub">Установлена последняя версия</span>
+            <span class="row-sub">
+              {#if $selfUpdateChecking}
+                Проверка обновлений…
+              {:else}
+                Установлена версия {$selfUpdateStatus.currentVersion || appInfo?.version || '—'}
+                {#if $selfUpdateStatus.checkedAt}
+                  · проверено {relativeDate($selfUpdateStatus.checkedAt)}
+                {/if}
+              {/if}
+            </span>
           </div>
-          <Button size="sm" onclick={() => toast('У вас последняя версия', 'success')}>
+          <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
-            Проверить
+            {$selfUpdateChecking ? 'Проверка…' : 'Проверить'}
           </Button>
         </div>
+        <UpdateBanner />
       </div>
-      <div class="about-links">
-        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
-        <span class="about-sep">·</span>
-        <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
-      </div>
+    </section>
+
+    <section class="group">
+      <h3>Правовая информация</h3>
+      {#if legalError}
+        <p class="row-sub">{legalError}</p>
+      {:else}
+        <div class="rows">
+          {#each legalDocs as meta (meta.id)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{meta.title}</span>
+              </div>
+              <Button size="sm" onclick={() => openLegalDoc(meta)}>Открыть</Button>
+            </div>
+          {/each}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Уведомление об источниках</span>
+              <span class="row-sub">Правила добавления сторонних источников релизов</span>
+            </div>
+            <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>Открыть</Button>
+          </div>
+        </div>
+      {/if}
     </section>
   </div>
 {/if}
 
-<footer class="footer">
-  <span>Typhon Launcher {appInfo?.version ?? ''}</span>
-  <div class="footer-links">
-    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Условия использования</button>
-    <span class="about-sep">|</span>
-    <button class="about-link" onclick={() => toast('Недоступно в demo')}>Политика конфиденциальности</button>
-  </div>
-</footer>
+<LibrarySetupModal
+  bind:open={librarySetupOpen}
+  title={current?.libraryPath ? 'Сменить папку библиотеки' : 'Куда устанавливать игры'}
+  note={current?.libraryPath
+    ? 'Уже установленные игры останутся в прежней папке — лаунчер их не переносит. В новую библиотеку попадёт всё, что скачается дальше.'
+    : ''}
+/>
 
-<Modal bind:open={resetOpen} title="Сбросить все данные?">
-  <p class="modal-text">
-    Настройки, кэш и локальные данные Typhon будут удалены. Установленные игры останутся на диске. Это действие нельзя
-    отменить.
-  </p>
-  {#snippet footer()}
-    <Button onclick={() => (resetOpen = false)}>Отмена</Button>
-    <Button
-      variant="danger"
-      onclick={() => {
-        resetOpen = false;
-        toast('Сброс недоступен в demo', 'danger');
-      }}
-    >
-      Сбросить все данные
-    </Button>
-  {/snippet}
-</Modal>
+<LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
+<SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 
 <style>
-  .page-title {
-    font-size: var(--font-title);
-    letter-spacing: -0.01em;
-    margin: var(--space-4) 0 var(--space-5);
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0.4rem;
-    padding: 0.4rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    width: fit-content;
-    max-width: 100%;
-    overflow-x: auto;
-    margin-bottom: var(--space-6);
-  }
-
-  .tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.8rem;
-    height: 4.4rem;
-    padding: 0 1.6rem;
-    border-radius: 0.8rem;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text-2);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .tab:hover {
-    color: var(--text);
-  }
-
-  .tab.selected {
-    background: var(--accent);
-    color: #fff;
+  .tabs-wrap {
+    margin-bottom: var(--space-8);
   }
 
   .columns {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-5);
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
     align-items: start;
+    max-width: 96rem;
   }
 
   .column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
     min-width: 0;
   }
 
   .single-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-    max-width: 72rem;
+    max-width: 96rem;
   }
 
   .group {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-5) var(--space-6);
+    margin-bottom: var(--space-10);
   }
 
   .group h3 {
-    font-size: 1.7rem;
-    margin-bottom: var(--space-4);
+    font-size: var(--font-xl);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    margin-bottom: var(--space-3);
   }
 
   .rows {
@@ -762,8 +627,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-5);
-    padding: 1.2rem 0;
+    gap: var(--space-6);
+    padding: 1.3rem 0;
   }
 
   .row + .row {
@@ -778,134 +643,29 @@
   }
 
   .row-label {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
   .row-sub {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
   .folder-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.8rem;
+    gap: var(--space-2);
   }
 
   .folder-label {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .folder-controls {
     display: flex;
-    gap: 0.8rem;
-  }
-
-  .folder-controls input {
-    flex: 1;
-    min-width: 0;
-    height: 3.6rem;
-    padding: 0 1.1rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 1.4rem;
-    color: var(--text-2);
-    outline: none;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  .folder-controls input:hover {
-    border-color: var(--border-strong);
-  }
-
-  .folder-controls input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-    color: var(--text);
-  }
-
-  .group-foot {
-    margin-top: var(--space-4);
-  }
-
-  .cleanup-controls {
-    display: flex;
     align-items: center;
-    gap: var(--space-4);
-    flex-shrink: 0;
-  }
-
-  .cleanup-size {
-    font-size: 1.4rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .danger-zone {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-5);
-    margin-top: var(--space-4);
-    padding: var(--space-4);
-    border: 1px solid rgba(217, 105, 105, 0.25);
-    border-radius: var(--radius-md);
-    background: rgba(217, 105, 105, 0.05);
-  }
-
-  .port-input {
-    width: 12rem;
-    height: 4rem;
-    padding: 0 1.2rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  .port-input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
-  }
-
-  .account-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-4);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-4);
-  }
-
-  .account-avatar {
-    width: 5.2rem;
-    height: 5.2rem;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .account-info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .account-name {
-    font-size: 1.6rem;
-    font-weight: 600;
-  }
-
-  .account-status {
-    font-size: 1.4rem;
-    color: var(--text-3);
+    gap: var(--space-2);
   }
 
   .about-logo {
@@ -919,46 +679,10 @@
     margin-bottom: 2px;
   }
 
-  .about-links {
-    margin-top: var(--space-4);
-  }
-
-  .about-link {
-    font-size: 1.3rem;
-    color: var(--text-3);
-    border-radius: 0.4rem;
-    transition: color var(--dur) var(--ease);
-  }
-
-  .about-link:hover {
-    color: var(--text-2);
-  }
-
-  .about-sep {
-    margin: 0 0.8rem;
-    color: var(--text-3);
-  }
-
-  .footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: var(--space-8);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--border);
-    font-size: 1.3rem;
-    color: var(--text-3);
-  }
-
-  .modal-text {
-    font-size: 1.5rem;
-    line-height: 1.55;
-    color: var(--text-2);
-  }
-
-  @media (max-width: 1240px) {
+  @media (min-width: 1600px) {
     .columns {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-12);
     }
   }
 </style>

@@ -55,6 +55,7 @@
   const controlled = $derived(plan ? isControlled(plan.type) : false);
   const external = $derived(plan ? isExternal(plan.type) : false);
   const portable = $derived(plan?.type === 'portable');
+  const silent = $derived(plan?.silent ?? false);
   const notEnoughSpace = $derived(
     !!info && info.requiredBytes > 0 && info.freeBytes > 0 && info.freeBytes < info.requiredBytes,
   );
@@ -74,6 +75,7 @@
   const externalWait = $derived(
     !!installation &&
       isExternal(installation.type) &&
+      !installation.silent &&
       (installation.status === 'pending' || installation.status === 'preparing' || installation.status === 'installing'),
   );
 
@@ -96,7 +98,7 @@
         return 'Распаковать и установить';
       case 'exe_installer':
       case 'msi_installer':
-        return 'Запустить установщик';
+        return silent ? 'Установить' : 'Запустить установщик';
       default:
         return '';
     }
@@ -184,7 +186,7 @@
     if (!current) return;
     return run(async () => {
       const item = await startInstall(current.downloadId, {
-        destination: controlled ? destination : '',
+        destination: controlled || silent ? destination : '',
         mode: portable ? (current.seeding ? 'copy' : mode) : '',
         type: current.plan.type,
         installerPath: current.plan.installerPath,
@@ -311,11 +313,11 @@
         <p class="note danger">Недостаточно места на диске для установки.</p>
       {/if}
 
-      {#if controlled}
+      {#if controlled || silent}
         <div class="field">
           <span class="field-label">Папка установки</span>
           <div class="field-controls">
-            <input type="text" bind:value={destination} />
+            <input class="input sm" type="text" bind:value={destination} />
             <Button size="sm" onclick={browseDestination}>Обзор</Button>
           </div>
         </div>
@@ -333,7 +335,11 @@
       {/if}
 
       {#if external}
-        <p class="note">Установщик откроется в отдельном окне</p>
+        {#if silent}
+          <p class="note">Игра установится сама в выбранную папку, окно установщика не появится</p>
+        {:else}
+          <p class="note">Установщик откроется в отдельном окне</p>
+        {/if}
       {/if}
 
       {#if plan.type === 'unknown'}
@@ -434,7 +440,7 @@
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
-          disabled={busy || notEnoughSpace || (controlled && destination.trim() === '')}
+          disabled={busy || notEnoughSpace || ((controlled || silent) && destination.trim() === '')}
           onclick={start}
         >
           {primaryLabel}
@@ -480,7 +486,7 @@
   }
 
   .loading-text {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
@@ -492,7 +498,7 @@
   }
 
   .pkg-name {
-    font-size: 1.6rem;
+    font-size: var(--font-lg);
     font-weight: 600;
     min-width: 0;
     overflow: hidden;
@@ -501,7 +507,7 @@
   }
 
   .pkg-type {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     flex-shrink: 0;
   }
@@ -517,7 +523,7 @@
     justify-content: space-between;
     gap: var(--space-4);
     padding: 0.8rem 0;
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
   }
 
   .row + .row {
@@ -550,36 +556,23 @@
   }
 
   .field-label {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
   .field-controls {
     display: flex;
+    align-items: center;
     gap: 0.8rem;
     width: 100%;
   }
 
-  input {
+  .field-controls .input {
     flex: 1;
-    min-width: 0;
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1.5rem;
-    color: var(--text);
-    outline: none;
-    transition: border-color var(--dur) var(--ease);
-  }
-
-  input:focus {
-    border-color: rgba(104, 117, 232, 0.55);
   }
 
   .note {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);
   }
@@ -602,7 +595,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -613,7 +606,7 @@
   }
 
   .current-file {
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -621,7 +614,7 @@
   }
 
   .lead {
-    font-size: 1.5rem;
+    font-size: var(--font-md);
     font-weight: 500;
   }
 
@@ -630,9 +623,8 @@
     flex-direction: column;
     max-height: 26rem;
     overflow-y: auto;
-    padding: 0.4rem;
+    padding: var(--space-1);
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
 
@@ -642,13 +634,17 @@
     gap: var(--space-3);
     width: 100%;
     padding: 0.8rem;
-    border-radius: 0.7rem;
+    border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }
 
   .cand:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--hover);
+  }
+
+  .cand[aria-checked='true'] {
+    background: var(--hover-strong);
   }
 
   .radio {
@@ -678,8 +674,8 @@
   }
 
   .cand-name {
-    font-size: 1.4rem;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

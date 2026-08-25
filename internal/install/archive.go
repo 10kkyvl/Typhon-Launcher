@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -49,9 +50,11 @@ func ExtractArchive(ctx context.Context, archivePath, dest string, onProgress fu
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}
+	// Размер нужен только для прогресса, но причина, по которой его не удалось
+	// получить (не тот формат, нет прав, нет тома), — та же, что помешает распаковке.
 	total, err := EstimateExtracted(archivePath)
 	if err != nil {
-		total = 0
+		return err
 	}
 	rep := newReporter(onProgress, total)
 
@@ -73,15 +76,33 @@ func ExtractArchive(ctx context.Context, archivePath, dest string, onProgress fu
 }
 
 func EstimateExtracted(archivePath string) (int64, error) {
+	var (
+		size int64
+		err  error
+	)
 	switch archiveExt(archivePath) {
 	case ".zip":
-		return estimateZip(archivePath)
+		size, err = estimateZip(archivePath)
 	case ".7z":
-		return estimateSevenZip(archivePath)
+		size, err = estimateSevenZip(archivePath)
 	case ".rar":
-		return estimateRar(archivePath)
+		size, err = estimateRar(archivePath)
+	default:
+		return 0, fmt.Errorf("%w: %s", errUnsupportedArchive, archiveExt(archivePath))
 	}
-	return 0, errUnsupportedArchive
+	if err != nil {
+		return 0, classifyArchiveError(archivePath, err)
+	}
+	return size, nil
+}
+
+// Недоступный файл и нечитаемый формат — разные причины: первая пробрасывается
+// как есть, вторая означает, что перед нами не архив заявленного типа.
+func classifyArchiveError(archivePath string, err error) error {
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("чтение %s: %w", filepath.Base(archivePath), err)
+	}
+	return fmt.Errorf("%w: %s: %w", errUnsupportedArchive, filepath.Base(archivePath), err)
 }
 
 func skipEntry(archivePath, name string) {

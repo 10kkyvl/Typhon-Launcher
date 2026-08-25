@@ -1,22 +1,26 @@
 :root {
   --ui-scale: 1;
 
-  --bg: #0b1016;
-  --bg-sidebar: #0a0e13;
-  --surface: #111821;
-  --surface-2: #151d27;
-  --surface-3: #19222d;
-  --border: rgba(255, 255, 255, 0.065);
+  --bg: #0b0f14;
+  --bg-sidebar: #0a0d12;
+  --surface: #10161d;
+  --surface-2: #141b23;
+  --surface-3: #19212b;
+  --surface-4: #1f2933;
+  --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.1);
+  --hover: rgba(255, 255, 255, 0.04);
+  --hover-strong: rgba(255, 255, 255, 0.07);
 
-  --text: #f3f5f7;
-  --text-2: #9aa5b1;
-  --text-3: #66717e;
+  --text: #eef2f6;
+  --text-2: #9ba6b2;
+  --text-3: #657180;
 
   --accent: #6875e8;
-  --accent-hover: #7884f1;
+  --accent-hover: #7a86f0;
   --accent-subtle: rgba(104, 117, 232, 0.14);
-  --accent-text: #97a1f5;
+  --accent-text: #9ea8f6;
+  --accent-ring: rgba(104, 117, 232, 0.5);
 
   --success: #65b883;
   --success-subtle: rgba(101, 184, 131, 0.13);
@@ -25,10 +29,12 @@
   --danger: #d96969;
   --danger-subtle: rgba(217, 105, 105, 0.12);
 
-  --radius-sm: 0.8rem;
-  --radius-md: 1rem;
-  --radius-lg: 1.3rem;
-  --radius-xl: 1.6rem;
+  --radius-xs: 0.4rem;
+  --radius-sm: 0.6rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.2rem;
+  --cut: 0.2rem;
 
   --space-1: 0.4rem;
   --space-2: 0.8rem;
@@ -41,27 +47,33 @@
   --space-12: 4.8rem;
 
   --page-x: 3.6rem;
-  --sidebar-w: 25.6rem;
-  --topbar-h: 7rem;
+  --page-max: 232rem;
+  --prose-max: 76rem;
+  --sidebar-w: 23.2rem;
+  --topbar-h: 5.6rem;
 
   --font-xs: 1.3rem;
   --font-sm: 1.4rem;
   --font-md: 1.5rem;
   --font-lg: 1.7rem;
-  --font-xl: 2rem;
-  --font-title: 3.5rem;
+  --font-xl: 1.9rem;
+  --font-title: 3.2rem;
+  --font-hero: clamp(3.6rem, 2.6vw, 4.4rem);
 
-  --control-sm: 3.6rem;
-  --control-md: 4.2rem;
-  --control-lg: 4.6rem;
+  --tracking-title: -0.024em;
+  --tracking-heading: -0.012em;
 
-  --font-sans: "Geist Variable", "Geist", "Inter", "Segoe UI", system-ui, sans-serif;
+  --control-sm: 3.2rem;
+  --control-md: 3.8rem;
+  --control-lg: 4.4rem;
+
+  --font-sans: "Inter Tight Variable", "Inter", "Segoe UI", system-ui, sans-serif;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur: 180ms;
-  --dur-fast: 140ms;
+  --dur: 160ms;
+  --dur-fast: 120ms;
+  --dur-panel: 180ms;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-pop: 0 0.8rem 2.8rem rgba(0, 0, 0, 0.45), 0 2px 0.8rem rgba(0, 0, 0, 0.3);
   --shadow-modal: 0 2rem 6rem rgba(0, 0, 0, 0.55);
 }

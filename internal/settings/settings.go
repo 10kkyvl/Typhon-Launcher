@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+
+	"typhon/internal/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -16,56 +20,149 @@ const (
 	CleanupKeep   = "keep"
 	CleanupAsk    = "ask"
 	CleanupDelete = "delete"
+
+	RefreshManual   = "manual"
+	RefreshHourly   = "1h"
+	RefreshSixHours = "6h"
+	RefreshHalfDay  = "12h"
+	RefreshDaily    = "24h"
+
+	KeepPreviousOff         = "off"
+	KeepPreviousFirstLaunch = "first_launch"
+	KeepPreviousDay         = "24h"
+
+	LibraryFolderName = "TyphonLibrary"
+
+	dirGames       = "Games"
+	dirDownloads   = "Downloads"
+	dirScreenshots = "Screenshots"
+)
+
+var (
+	ErrLibraryNotConfigured = errors.New("библиотека не настроена")
+	ErrLibraryPathRelative  = errors.New("путь библиотеки должен быть абсолютным")
+	ErrLibraryPathRoot      = errors.New("библиотека не может быть корнем диска")
+	ErrLibraryParentEmpty   = errors.New("не выбрана папка для библиотеки")
 )
 
 type Settings struct {
-	Theme                string  `json:"theme"`
-	Language             string  `json:"language"`
-	UIScale              float64 `json:"uiScale"`
-	DownloadsPath        string  `json:"downloadsPath"`
-	GamesPath            string  `json:"gamesPath"`
-	ScreenshotsPath      string  `json:"screenshotsPath"`
-	LaunchOnStartup      bool    `json:"launchOnStartup"`
-	MinimizeToTray       bool    `json:"minimizeToTray"`
-	HardwareAcceleration bool    `json:"hardwareAcceleration"`
-	AnimationsEnabled    bool    `json:"animationsEnabled"`
-	MaxActiveDownloads   int     `json:"maxActiveDownloads"`
-	DownloadRateLimit    int64   `json:"downloadRateLimit"`
-	UploadRateLimit      int64   `json:"uploadRateLimit"`
-	SeedAfterDownload    bool    `json:"seedAfterDownload"`
-	InstallCleanupPolicy string  `json:"installCleanupPolicy"`
-	AutoInstall          bool    `json:"autoInstall"`
-	VerifyAfterInstall   bool    `json:"verifyAfterInstall"`
+	Theme                  string  `json:"theme"`
+	Language               string  `json:"language"`
+	UIScale                float64 `json:"uiScale"`
+	LibraryPath            string  `json:"libraryPath"`
+	DownloadsPath          string  `json:"downloadsPath"`
+	GamesPath              string  `json:"gamesPath"`
+	ScreenshotsPath        string  `json:"screenshotsPath"`
+	LaunchOnStartup        bool    `json:"launchOnStartup"`
+	MinimizeToTray         bool    `json:"minimizeToTray"`
+	DiscordRichPresence    bool    `json:"discordRichPresence"`
+	HardwareAcceleration   bool    `json:"hardwareAcceleration"`
+	AnimationsEnabled      bool    `json:"animationsEnabled"`
+	MaxActiveDownloads     int     `json:"maxActiveDownloads"`
+	DownloadRateLimit      int64   `json:"downloadRateLimit"`
+	UploadRateLimit        int64   `json:"uploadRateLimit"`
+	UploadWhileDownloading bool    `json:"uploadWhileDownloading"`
+	SeedAfterDownload      bool    `json:"seedAfterDownload"`
+	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
+	AutoInstall            bool    `json:"autoInstall"`
+	SourceRefreshInterval  string  `json:"sourceRefreshInterval"`
+	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
+	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
+	InstallSkipExtras      bool    `json:"installSkipExtras"`
+
+	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
+	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
+	UpdateAutoInstall        bool   `json:"updateAutoInstall"`
+	UpdateSaveBackup         bool   `json:"updateSaveBackup"`
+	KeepPreviousVersion      string `json:"keepPreviousVersion"`
+	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
+
+	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 }
 
 func Defaults() Settings {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "."
-	}
-	base := filepath.Join(home, "Typhon")
 	return Settings{
-		Theme:                "dark",
-		Language:             "ru",
-		UIScale:              1,
-		DownloadsPath:        filepath.Join(base, "Downloads"),
-		GamesPath:            filepath.Join(base, "Games"),
-		ScreenshotsPath:      filepath.Join(base, "Screenshots"),
-		LaunchOnStartup:      false,
-		MinimizeToTray:       true,
-		HardwareAcceleration: true,
-		AnimationsEnabled:    true,
-		MaxActiveDownloads:   2,
-		DownloadRateLimit:    0,
-		UploadRateLimit:      0,
-		SeedAfterDownload:    false,
-		InstallCleanupPolicy: CleanupKeep,
-		AutoInstall:          false,
-		VerifyAfterInstall:   true,
+		Theme:                  "dark",
+		Language:               "ru",
+		UIScale:                1,
+		LaunchOnStartup:        false,
+		MinimizeToTray:         true,
+		DiscordRichPresence:    false,
+		HardwareAcceleration:   true,
+		AnimationsEnabled:      true,
+		MaxActiveDownloads:     2,
+		DownloadRateLimit:      0,
+		UploadRateLimit:        0,
+		UploadWhileDownloading: false,
+		SeedAfterDownload:      false,
+		InstallCleanupPolicy:   CleanupDelete,
+		AutoInstall:            false,
+		SourceRefreshInterval:  RefreshSixHours,
+		VerifyAfterInstall:     true,
+		InstallSkipShortcuts:   true,
+		InstallSkipExtras:      true,
+
+		UpdateCheckAutomatically: true,
+		UpdateAutoDownload:       false,
+		UpdateAutoInstall:        false,
+		UpdateSaveBackup:         true,
+		KeepPreviousVersion:      KeepPreviousFirstLaunch,
+		AllowTorrentReuse:        true,
+
+		SourcesNoticeAccepted: false,
 	}
 }
 
-func sanitize(s Settings) Settings {
+func normalizeLibraryPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("%w: %s", ErrLibraryPathRelative, path)
+	}
+	path = filepath.Clean(path)
+	if filepath.Dir(path) == path {
+		return "", fmt.Errorf("%w: %s", ErrLibraryPathRoot, path)
+	}
+	return path, nil
+}
+
+func derivePaths(s Settings) Settings {
+	if s.LibraryPath == "" {
+		s.GamesPath = ""
+		s.DownloadsPath = ""
+		s.ScreenshotsPath = ""
+		return s
+	}
+	s.GamesPath = filepath.Join(s.LibraryPath, dirGames)
+	s.DownloadsPath = filepath.Join(s.LibraryPath, dirDownloads)
+	s.ScreenshotsPath = filepath.Join(s.LibraryPath, dirScreenshots)
+	return s
+}
+
+func legacyLibraryPath(gamesPath string) string {
+	gamesPath = strings.TrimSpace(gamesPath)
+	if gamesPath == "" || !filepath.IsAbs(gamesPath) {
+		return ""
+	}
+	root := filepath.Clean(gamesPath)
+	if filepath.Base(root) == dirGames {
+		root = filepath.Dir(root)
+	}
+	if filepath.Dir(root) == root {
+		return ""
+	}
+	return root
+}
+
+func sanitize(s Settings) (Settings, error) {
+	library, err := normalizeLibraryPath(s.LibraryPath)
+	if err != nil {
+		return Settings{}, err
+	}
+	s.LibraryPath = library
+	s = derivePaths(s)
 	if s.UIScale < 0.9 || s.UIScale > 1.25 {
 		s.UIScale = 1
 	}
@@ -84,9 +181,19 @@ func sanitize(s Settings) Settings {
 	switch s.InstallCleanupPolicy {
 	case CleanupKeep, CleanupAsk, CleanupDelete:
 	default:
-		s.InstallCleanupPolicy = CleanupKeep
+		s.InstallCleanupPolicy = CleanupDelete
 	}
-	return s
+	switch s.SourceRefreshInterval {
+	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
+	default:
+		s.SourceRefreshInterval = RefreshSixHours
+	}
+	switch s.KeepPreviousVersion {
+	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
+	default:
+		s.KeepPreviousVersion = KeepPreviousFirstLaunch
+	}
+	return s, nil
 }
 
 var migrateConfigDirOnce sync.Once
@@ -120,36 +227,47 @@ type Service struct {
 	nextSub int
 }
 
-func NewService() *Service {
+func NewService() (*Service, error) {
 	dir, err := ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		return &Service{current: Defaults()}
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	return newServiceAt(filepath.Join(dir, "settings.json"))
+	return NewServiceAt(filepath.Join(dir, "settings.json"))
 }
 
-func newServiceAt(path string) *Service {
+func NewServiceAt(path string) (*Service, error) {
+	if path == "" {
+		return nil, errors.New("settings path unavailable")
+	}
 	s := &Service{current: Defaults(), path: path}
-	s.load()
-	return s
+	current, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	s.current = current
+	return s, nil
 }
 
-func (s *Service) load() {
+func (s *Service) load() (Settings, error) {
 	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return
+	if errors.Is(err, fs.ErrNotExist) {
+		return Defaults(), nil
 	}
 	if err != nil {
-		slog.Error("read settings", "path", s.path, "error", err)
-		return
+		return Settings{}, fmt.Errorf("read settings %s: %w", s.path, err)
 	}
 	loaded := Defaults()
 	if err := json.Unmarshal(data, &loaded); err != nil {
-		slog.Error("parse settings", "path", s.path, "error", err)
-		return
+		return Settings{}, fmt.Errorf("parse settings %s: %w", s.path, err)
 	}
-	s.current = sanitize(loaded)
+	if loaded.LibraryPath == "" {
+		loaded.LibraryPath = legacyLibraryPath(loaded.GamesPath)
+	}
+	current, err := sanitize(loaded)
+	if err != nil {
+		return Settings{}, fmt.Errorf("settings %s: %w", s.path, err)
+	}
+	return current, nil
 }
 
 //wails:ignore
@@ -193,20 +311,21 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	next = sanitize(next)
+	next, err := sanitize(next)
+	if err != nil {
+		return Settings{}, nil, err
+	}
 	if s.path == "" {
 		return next, nil, errors.New("settings path unavailable")
 	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		slog.Error("create config dir", "error", err)
 		return next, nil, fmt.Errorf("create config dir: %w", err)
 	}
 	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return next, nil, err
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		slog.Error("write settings", "path", s.path, "error", err)
+	if err := storage.WriteAtomic(s.path, data); err != nil {
 		return next, nil, fmt.Errorf("write settings: %w", err)
 	}
 	s.current = next
@@ -216,4 +335,85 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 		subs = append(subs, fn)
 	}
 	return next, subs, nil
+}
+
+func libraryRootFor(parent string) (string, error) {
+	parent = strings.TrimSpace(parent)
+	if parent == "" {
+		return "", ErrLibraryParentEmpty
+	}
+	if !filepath.IsAbs(parent) {
+		return "", fmt.Errorf("%w: %s", ErrLibraryPathRelative, parent)
+	}
+	parent = filepath.Clean(parent)
+	root := parent
+	if !strings.EqualFold(filepath.Base(parent), LibraryFolderName) {
+		root = filepath.Join(parent, LibraryFolderName)
+	}
+	return normalizeLibraryPath(root)
+}
+
+func (s *Service) ProposeLibraryPath(parent string) (string, error) {
+	return libraryRootFor(parent)
+}
+
+func (s *Service) SetupLibrary(parent string) (Settings, error) {
+	root, err := libraryRootFor(parent)
+	if err != nil {
+		return Settings{}, err
+	}
+	if err := createLibrary(root); err != nil {
+		return Settings{}, err
+	}
+	next := s.GetSettings()
+	next.LibraryPath = root
+	if err := s.SaveSettings(next); err != nil {
+		return Settings{}, err
+	}
+	return s.GetSettings(), nil
+}
+
+func createLibrary(root string) error {
+	dirs := []string{
+		root,
+		filepath.Join(root, dirGames),
+		filepath.Join(root, dirDownloads),
+		filepath.Join(root, dirScreenshots),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("создать папку %s: %w", dir, err)
+		}
+		if err := checkWritable(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkWritable(dir string) error {
+	f, err := os.CreateTemp(dir, ".typhon-probe-*")
+	if err != nil {
+		return fmt.Errorf("нет доступа на запись в %s: %w", dir, err)
+	}
+	name := f.Name()
+	writeErr := writeProbe(f)
+	closeErr := f.Close()
+	removeErr := os.Remove(name)
+	switch {
+	case writeErr != nil:
+		return fmt.Errorf("нет доступа на запись в %s: %w", dir, writeErr)
+	case closeErr != nil:
+		return fmt.Errorf("нет доступа на запись в %s: %w", dir, closeErr)
+	case removeErr != nil:
+		return fmt.Errorf("нет доступа на запись в %s: %w", dir, removeErr)
+	}
+	return nil
+}
+
+func writeProbe(f *os.File) error {
+	if _, err := f.Write([]byte("typhon")); err != nil {
+		return err
+	}
+	return f.Sync()
 }

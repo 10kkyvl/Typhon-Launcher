@@ -5,17 +5,37 @@
     value = $bindable(''),
     placeholder = 'Поиск',
     shortcut,
+    loading = false,
+    oninput,
+    onfocus,
+    onkeydown,
+    input = $bindable<HTMLInputElement | undefined>(undefined),
   }: {
     value?: string;
     placeholder?: string;
     shortcut?: string;
+    loading?: boolean;
+    oninput?: (value: string) => void;
+    onfocus?: () => void;
+    onkeydown?: (event: KeyboardEvent) => void;
+    input?: HTMLInputElement;
   } = $props();
 </script>
 
 <div class="search">
-  <Search size="1.7rem" strokeWidth={1.8} />
-  <input type="text" {placeholder} bind:value />
-  {#if shortcut}
+  <Search size="1.6rem" strokeWidth={1.8} />
+  <input
+    type="text"
+    {placeholder}
+    bind:value
+    bind:this={input}
+    oninput={() => oninput?.(value)}
+    onfocus={() => onfocus?.()}
+    onkeydown={(event) => onkeydown?.(event)}
+  />
+  {#if loading}
+    <span class="spinner" aria-label="Поиск"></span>
+  {:else if shortcut}
     <kbd>{shortcut}</kbd>
   {/if}
 </div>
@@ -24,11 +44,11 @@
   .search {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    height: 4.4rem;
-    padding: 0 1.2rem 0 1.5rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+    gap: 0.9rem;
+    height: var(--control-md);
+    padding: 0 1rem 0 1.2rem;
+    background: var(--surface);
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     color: var(--text-3);
     transition:
@@ -37,12 +57,12 @@
   }
 
   .search:hover {
-    border-color: var(--border-strong);
+    background: var(--surface-2);
   }
 
   .search:focus-within {
-    border-color: rgba(104, 117, 232, 0.55);
-    background: var(--surface-3);
+    border-color: var(--accent-ring);
+    background: var(--surface-2);
   }
 
   input {
@@ -51,7 +71,7 @@
     background: none;
     border: none;
     outline: none;
-    font-size: var(--font-md);
+    font-size: var(--font-sm);
     color: var(--text);
   }
 
@@ -60,12 +80,31 @@
   }
 
   kbd {
-    padding: 2px 0.7rem;
-    border-radius: 0.6rem;
-    border: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.04);
+    padding: 1px 0.6rem;
+    border-radius: var(--radius-xs);
+    background: var(--hover-strong);
     font-family: inherit;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     color: var(--text-3);
+  }
+
+  .search:focus-within kbd {
+    display: none;
+  }
+
+  .spinner {
+    width: 1.4rem;
+    height: 1.4rem;
+    flex-shrink: 0;
+    border: 2px solid var(--hover-strong);
+    border-top-color: var(--text-3);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

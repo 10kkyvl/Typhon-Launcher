@@ -1,6 +1,8 @@
 package install
 
 import (
+	"context"
+	"fmt"
 	"io/fs"
 	"math"
 	"os"
@@ -85,12 +87,15 @@ var assetDirs = map[string]bool{
 	"locale":  true,
 }
 
-func FindExecutables(root, title string) []Candidate {
+func FindExecutables(ctx context.Context, root, title string) ([]Candidate, error) {
 	wanted := normalizeName(title)
 	var out []Candidate
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".exe") {
 			return nil
@@ -101,15 +106,18 @@ func FindExecutables(root, title string) []Candidate {
 		}
 		info, err := d.Info()
 		if err != nil {
-			return nil
+			return fmt.Errorf("stat %s: %w", path, err)
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
-			return nil
+			return fmt.Errorf("relative path %s: %w", path, err)
 		}
 		out = append(out, Candidate{Path: path, Score: scoreExe(rel, base, wanted, info.Size())})
 		return nil
 	})
+	if walkErr != nil {
+		return nil, fmt.Errorf("scan executables %s: %w", root, walkErr)
+	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Score == out[j].Score {
 			return out[i].Path < out[j].Path
@@ -119,7 +127,37 @@ func FindExecutables(root, title string) []Candidate {
 	if len(out) > maxCandidates {
 		out = out[:maxCandidates]
 	}
-	return out
+	return out, nil
+}
+
+// LooksInstalled отвечает на вопрос «этот каталог — установленная игра»:
+// Inspect тем же правилом опознаёт портируемую сборку, но до него добирается
+// только после проверок на установщик и архив, которые для уже установленной
+// игры дают ложный ответ.
+func LooksInstalled(ctx context.Context, dir, title string) ([]Candidate, bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, false, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	dirCount := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			dirCount++
+		}
+	}
+	candidates, err := FindExecutables(ctx, dir, title)
+	if err != nil {
+		return nil, false, err
+	}
+	assets, err := hasAssets(dir)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, installedLayout(candidates, dirCount, assets), nil
+}
+
+func installedLayout(candidates []Candidate, dirCount int, assets bool) bool {
+	return len(candidates) > 0 && (dirCount > 0 || assets)
 }
 
 func HighConfidence(c []Candidate) bool {
@@ -204,22 +242,22 @@ func excludedExe(base string) bool {
 	return false
 }
 
-func hasAssets(root string) bool {
+func hasAssets(root string) (bool, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("read dir %s: %w", root, err)
 	}
 	for _, e := range entries {
 		name := strings.ToLower(e.Name())
 		if e.IsDir() {
 			if assetDirs[name] || strings.HasSuffix(name, "_data") || strings.HasSuffix(name, "content") {
-				return true
+				return true, nil
 			}
 			continue
 		}
 		if assetExts[strings.ToLower(filepath.Ext(name))] {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }

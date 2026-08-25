@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	// which keeps files locked on Windows.
 	_ "typhon/internal/download/classicio"
 	"typhon/internal/platform"
+	"typhon/internal/redact"
 	"typhon/internal/settings"
 
 	"github.com/anacrolix/torrent"
@@ -40,13 +42,17 @@ const (
 
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
+var ErrNotFound = errors.New("загрузка не найдена")
+
 var (
-	errNotFound    = errors.New("загрузка не найдена")
+	errNotFound    = ErrNotFound
 	errUnavailable = errors.New("недоступно для этой загрузки")
 	errNoClient    = errors.New("торрент-клиент недоступен")
 	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
 	errNoRestore   = errors.New(restoreFailedMessage)
 	errSeeding     = errors.New("файлы сейчас раздаются — сначала остановите раздачу")
+	errBadSizes    = errors.New("недопустимые размеры файлов в торренте")
+	errNoFreeSpace = errors.New("не удалось определить свободное место на диске")
 )
 
 type pending struct {
@@ -83,16 +89,18 @@ type Manager struct {
 	lastPersist time.Time
 }
 
-func NewManager(settingsService *settings.Service) *Manager {
+func NewManager(settingsService *settings.Service) (*Manager, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		dir = ""
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newManagerAt(dir, settingsService)
 }
 
-func newManagerAt(dir string, settingsService *settings.Service) *Manager {
+func newManagerAt(dir string, settingsService *settings.Service) (*Manager, error) {
+	if dir == "" {
+		return nil, errors.New("downloads path unavailable")
+	}
 	m := &Manager{
 		settings: settingsService,
 		store:    newStore(dir),
@@ -101,11 +109,9 @@ func newManagerAt(dir string, settingsService *settings.Service) *Manager {
 		pending:  map[string]*pending{},
 		jobs:     map[string]*jobState{},
 	}
-	if dir != "" {
-		m.metaDir = filepath.Join(dir, "meta")
-	}
+	m.metaDir = filepath.Join(dir, "meta")
 	m.max = maxActive(m.config())
-	return m
+	return m, nil
 }
 
 func (m *Manager) config() settings.Settings {
@@ -130,13 +136,19 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	cfg := m.config()
 	m.max = maxActive(cfg)
+	if err := m.loadLocked(); err != nil {
+		cancel := m.cancel
+		m.cancel = nil
+		m.mu.Unlock()
+		cancel()
+		return err
+	}
 	cl, err := newClient(cfg, m.metaDir)
 	if err != nil {
 		slog.Error("start torrent client", "error", err)
 	} else {
 		m.client = cl
 	}
-	m.loadLocked()
 	known := make(map[string]bool, len(m.items))
 	for _, d := range m.items {
 		known[strings.ToLower(d.InfoHash)] = true
@@ -180,8 +192,12 @@ func (m *Manager) ServiceShutdown() error {
 	return nil
 }
 
-func (m *Manager) loadLocked() {
-	for _, r := range m.store.load() {
+func (m *Manager) loadLocked() error {
+	records, err := m.store.load()
+	if err != nil {
+		return err
+	}
+	for _, r := range records {
 		d := &Download{
 			ID:          r.ID,
 			Name:        r.Name,
@@ -194,6 +210,9 @@ func (m *Manager) loadLocked() {
 			Total:       r.Total,
 			ETASeconds:  -1,
 			Seeding:     r.Seeding,
+			Flat:        r.Flat,
+			InPlace:     r.InPlace,
+			Origin:      r.Origin,
 			AddedAt:     r.AddedAt,
 			CompletedAt: r.CompletedAt,
 			Error:       r.Error,
@@ -213,6 +232,7 @@ func (m *Manager) loadLocked() {
 		d.Progress = ratio(d.Downloaded, d.Total)
 		m.items = append(m.items, d)
 	}
+	return nil
 }
 
 func (m *Manager) persistLocked() {
@@ -230,6 +250,9 @@ func (m *Manager) persistLocked() {
 			Downloaded:  d.Downloaded,
 			Total:       d.Total,
 			Seeding:     d.Seeding,
+			Flat:        d.Flat,
+			InPlace:     d.InPlace,
+			Origin:      d.Origin,
 			AddedAt:     d.AddedAt,
 			CompletedAt: d.CompletedAt,
 			Error:       d.Error,
@@ -317,7 +340,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 
 	spec, err := buildSpec(source)
 	if err != nil {
-		slog.Error("parse torrent source", "source", source, "error", err)
+		slog.Error("parse torrent source", "operation", "fetch_metadata", "source", redact.Source(source), "error", err)
 		return TorrentInfo{}, err
 	}
 	infoHash := spec.InfoHash.HexString()
@@ -337,9 +360,9 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	}
 	m.mu.Unlock()
 
-	lt, err := cl.add(spec, cl.metaDir)
+	lt, err := cl.add(spec, cl.metaDir, storageOpts{})
 	if err != nil {
-		slog.Error("add torrent for metadata", "source", source, "error", err)
+		slog.Error("add torrent for metadata", "operation", "fetch_metadata", "source", redact.Source(source), "error", err)
 		return TorrentInfo{}, errors.New("не удалось добавить торрент")
 	}
 
@@ -350,20 +373,20 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 		return TorrentInfo{}, errNoMetadata
 	case <-time.After(metadataTimeout):
 		lt.drop()
-		slog.Warn("metadata timeout", "source", source, "infoHash", infoHash)
+		slog.Warn("metadata timeout", "operation", "fetch_metadata", "source", redact.Source(source))
 		return TorrentInfo{}, errNoMetadata
 	}
 
 	info := lt.t.Info()
 	if err := validateInfo(info); err != nil {
 		lt.drop()
-		slog.Warn("unsafe torrent paths", "infoHash", infoHash)
+		slog.Warn("unsafe torrent paths", "operation", "fetch_metadata")
 		return TorrentInfo{}, err
 	}
 
 	mi := lt.t.Metainfo()
 	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+		slog.Warn("save metainfo", "operation", "fetch_metadata", "error", err)
 	}
 
 	m.mu.Lock()
@@ -453,6 +476,10 @@ func (m *Manager) returnPending(infoHash string, p *pending) {
 }
 
 func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []int) (Download, error) {
+	return m.StartDownloadFrom(infoHash, destination, selectedIndices, Origin{})
+}
+
+func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
 	m.mu.Lock()
 	p := m.pending[infoHash]
 	delete(m.pending, infoHash)
@@ -482,23 +509,26 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 
 	info := p.torrent.t.Info()
 	files := fileStates(info, selectedIndices)
-	needed := selectedTotal(files)
+	needed, err := requiredBytes(files)
+	if err != nil {
+		m.returnPending(infoHash, p)
+		return Download{}, err
+	}
 	if needed == 0 {
 		m.returnPending(infoHash, p)
 		return Download{}, errors.New("не выбрано ни одного файла")
 	}
-	if st, err := platform.GetStorageInfo(destination); err == nil && st.FreeBytes < uint64(needed) {
+	if err := checkFreeSpace(destination, needed); err != nil {
 		m.returnPending(infoHash, p)
-		return Download{}, fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
-			humanSize(needed), humanSize(int64(st.FreeBytes)))
+		return Download{}, err
 	}
 
 	mi := p.torrent.t.Metainfo()
 	p.torrent.drop()
 
-	lt, err := cl.addMetainfo(&mi, destination)
+	lt, err := cl.addMetainfo(&mi, destination, storageOpts{})
 	if err != nil {
-		slog.Error("add torrent", "infoHash", infoHash, "error", err)
+		slog.Error("add torrent", "operation", "start_download", "error", err)
 		return Download{}, errors.New("не удалось добавить торрент")
 	}
 
@@ -513,6 +543,7 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 		Total:       needed,
 		ETASeconds:  -1,
 		Files:       files,
+		Origin:      origin,
 		AddedAt:     time.Now(),
 	}
 	lt.setPriorities(selectionOf(d))
@@ -523,10 +554,10 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 	m.items = append(m.items, d)
 	m.engines[d.ID] = lt
 	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", infoHash, "error", err)
+		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
 	}
 	m.persistLocked()
-	slog.Info("download added", "id", d.ID, "name", d.Name, "infoHash", infoHash)
+	slog.Info("download added", "download_id", d.ID, "name", d.Name)
 	emit(eventAdded, snapshot(d))
 	m.schedule()
 	return snapshot(d), nil
@@ -534,7 +565,7 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 
 func (m *Manager) watchWriteErrors(id string, lt *liveTorrent) {
 	lt.t.SetOnWriteChunkError(func(err error) {
-		slog.Error("torrent write error", "id", id, "error", err)
+		slog.Error("torrent write error", "download_id", id, "error", err)
 		go m.markFailed(id, "ошибка записи на диск")
 	})
 }
@@ -608,7 +639,7 @@ func (m *Manager) reattachLocked(d *Download, force bool) error {
 		return errUnavailable
 	}
 	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
-		slog.Warn("cannot reattach download", "id", d.ID, "infoHash", d.InfoHash)
+		slog.Warn("cannot reattach download", "download_id", d.ID)
 		return errNoRestore
 	}
 	if m.client == nil || m.ctx == nil || m.closing {
@@ -620,6 +651,8 @@ func (m *Manager) reattachLocked(d *Download, force bool) error {
 		infoHash: d.InfoHash,
 		source:   d.Source,
 		dest:     d.Destination,
+		flat:     d.Flat,
+		inPlace:  d.InPlace,
 		force:    force,
 	}
 	d.Status = StatusVerifying
@@ -678,7 +711,7 @@ func (m *Manager) DeleteData(id string) error {
 	destination, name := d.Destination, d.Name
 
 	m.dropLocked(id)
-	slog.Info("download data deleted", "id", id, "name", name)
+	slog.Info("download data deleted", "download_id", id, "name", name)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
 	m.mu.Unlock()
@@ -717,9 +750,9 @@ func (m *Manager) discard(id string, deleteData bool) error {
 
 	m.dropLocked(id)
 	if deleteData {
-		slog.Info("download cancelled", "id", id, "name", name)
+		slog.Info("download cancelled", "download_id", id, "name", name)
 	} else {
-		slog.Info("download removed", "id", id, "name", name)
+		slog.Info("download removed", "download_id", id, "name", name)
 	}
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
@@ -834,14 +867,22 @@ func (m *Manager) startLocked(d *Download) bool {
 	}
 	eng.setPriorities(selectionOf(d))
 	eng.allowDownload()
-	eng.allowUpload()
+	applyUpload(eng, m.config().UploadWhileDownloading)
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
 	m.rates[d.ID] = newRateState()
-	slog.Info("download started", "id", d.ID, "name", d.Name)
+	slog.Info("download started", "download_id", d.ID, "name", d.Name)
 	emit(eventUpdated, snapshot(d))
 	return true
+}
+
+func applyUpload(eng engineTorrent, allow bool) {
+	if allow {
+		eng.allowUpload()
+		return
+	}
+	eng.disallowUpload()
 }
 
 func (m *Manager) idleLocked(d *Download, status Status) {
@@ -872,19 +913,20 @@ func (m *Manager) markFailed(id, message string) {
 
 func (m *Manager) tick() {
 	defer m.wg.Done()
+	ctx := m.ctx
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			m.sample(now)
+			m.sample(ctx, now)
 		}
 	}
 }
 
-func (m *Manager) sample(now time.Time) {
+func (m *Manager) sample(ctx context.Context, now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	changed := false
@@ -898,8 +940,12 @@ func (m *Manager) sample(now time.Time) {
 		}
 		before := *d
 		m.updateLocked(d, eng, now)
-		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total {
-			m.completeLocked(d)
+		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total && m.jobs[d.ID] == nil {
+			d.Status = StatusVerifying
+			id, dest := d.ID, d.Destination
+			files := append([]FileState(nil), d.Files...)
+			emit(eventUpdated, snapshot(d))
+			m.spawnVerifyLocked(ctx, id, eng, dest, files)
 			changed = true
 			continue
 		}
@@ -912,6 +958,39 @@ func (m *Manager) sample(now time.Time) {
 		m.lastPersist = now
 		m.persistLocked()
 	}
+}
+
+func (m *Manager) spawnVerifyLocked(ctx context.Context, id string, eng engineTorrent, dest string, files []FileState) {
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.verifyCompletion(ctx, id, eng, dest, files)
+	}()
+}
+
+func (m *Manager) verifyCompletion(ctx context.Context, id string, eng engineTorrent, dest string, files []FileState) {
+	jobCtx, started := m.beginJob(ctx, id)
+	if !started {
+		return
+	}
+	defer m.endJob(id)
+
+	err := verifyFilesOnDisk(jobCtx, files, eng.filePaths(dest))
+	if err != nil {
+		if jobCtx.Err() != nil {
+			return
+		}
+		m.markFailed(id, err.Error())
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d := m.findLocked(id)
+	if d == nil {
+		return
+	}
+	m.completeLocked(d)
 }
 
 func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
@@ -964,7 +1043,7 @@ func (m *Manager) completeLocked(d *Download) {
 		}
 	}
 	m.persistLocked()
-	slog.Info("download completed", "id", d.ID, "name", d.Name)
+	slog.Info("download completed", "download_id", d.ID, "name", d.Name)
 	emit(eventCompleted, snapshot(d))
 	emit(eventUpdated, snapshot(d))
 	if m.onCompleted != nil {
@@ -992,10 +1071,13 @@ func (m *Manager) applySettings(next settings.Settings) {
 	}
 	m.max = maxActive(next)
 	for _, d := range m.items {
+		eng := m.engines[d.ID]
 		if d.Status != StatusCompleted {
+			if eng != nil && d.Status == StatusDownloading {
+				applyUpload(eng, next.UploadWhileDownloading)
+			}
 			continue
 		}
-		eng := m.engines[d.ID]
 		switch {
 		case !next.SeedAfterDownload:
 			if eng != nil {
@@ -1028,7 +1110,7 @@ func (m *Manager) reseedLocked(d *Download) {
 		return
 	}
 	if !m.store.hasMetainfo(d.InfoHash) && !strings.HasPrefix(d.Source, "magnet:") {
-		slog.Warn("cannot reseed download", "id", d.ID, "infoHash", d.InfoHash)
+		slog.Warn("cannot reseed download", "download_id", d.ID)
 		return
 	}
 	m.spawnRestoreLocked(restoreJob{
@@ -1036,6 +1118,8 @@ func (m *Manager) reseedLocked(d *Download) {
 		infoHash: d.InfoHash,
 		source:   d.Source,
 		dest:     d.Destination,
+		flat:     d.Flat,
+		inPlace:  d.InPlace,
 		complete: true,
 	})
 }
@@ -1045,6 +1129,8 @@ type restoreJob struct {
 	infoHash string
 	source   string
 	dest     string
+	flat     bool
+	inPlace  bool
 	paused   bool
 	complete bool
 	seeding  bool
@@ -1065,6 +1151,8 @@ func (m *Manager) restore() {
 			infoHash: d.InfoHash,
 			source:   d.Source,
 			dest:     d.Destination,
+			flat:     d.Flat,
+			inPlace:  d.InPlace,
 			paused:   d.Status == StatusPaused,
 			complete: d.Status == StatusCompleted,
 			seeding:  d.Seeding,
@@ -1122,12 +1210,22 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	}
 	defer m.endJob(j.id)
 
+	if m.hashInUse(j.infoHash, j.id) {
+		slog.Warn("torrent already attached elsewhere", "download_id", j.id)
+		if j.complete {
+			m.setSeeding(j.id, false)
+			return
+		}
+		m.markFailed(j.id, errHashBusy.Error())
+		return
+	}
+
 	lt, err := m.reattach(jobCtx, cl, j)
 	if err != nil {
 		if jobCtx.Err() != nil {
 			return
 		}
-		slog.Error("restore download", "id", j.id, "infoHash", j.infoHash, "error", err)
+		slog.Error("restore download", "download_id", j.id, "error", err)
 		if j.complete {
 			m.setSeeding(j.id, false)
 			return
@@ -1154,8 +1252,9 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 	m.engines[j.id] = eng
 	eng.setPriorities(selectionOf(d))
 	if j.complete {
-		d.Seeding = true
-		eng.allowUpload()
+		seed := m.config().SeedAfterDownload
+		d.Seeding = seed
+		applyUpload(eng, seed)
 		emit(eventUpdated, snapshot(d))
 		m.persistLocked()
 		m.mu.Unlock()
@@ -1169,7 +1268,7 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 		if ctx.Err() != nil {
 			return
 		}
-		slog.Warn("verify download", "id", j.id, "error", err)
+		slog.Warn("verify download", "download_id", j.id, "error", err)
 	}
 
 	m.mu.Lock()
@@ -1199,15 +1298,16 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 }
 
 func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*liveTorrent, error) {
+	opts := storageOpts{flat: j.flat, inPlace: j.inPlace}
 	if mi, err := m.store.loadMetainfo(j.infoHash); err == nil {
-		return cl.addMetainfo(mi, j.dest)
+		return cl.addMetainfo(mi, j.dest, opts)
 	}
 	if !strings.HasPrefix(j.source, "magnet:") {
 		return nil, errors.New("metainfo unavailable")
 	}
 
 	m.setStatus(j.id, StatusMetadata)
-	lt, err := cl.addMagnet(j.source, j.dest)
+	lt, err := cl.addMagnet(j.source, j.dest, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -1235,7 +1335,7 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 
 	mi := lt.t.Metainfo()
 	if err := m.store.saveMetainfo(j.infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "infoHash", j.infoHash, "error", err)
+		slog.Warn("save metainfo", "download_id", j.id, "error", err)
 	}
 	return lt, nil
 }
@@ -1267,11 +1367,43 @@ func removeContent(destination, name string) {
 		return
 	}
 	root := filepath.Join(destination, name)
-	for _, path := range []string{root, root + ".part"} {
+	for _, path := range []string{root, root + PartFileSuffix} {
 		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("remove download data", "path", path, "error", err)
 		}
 	}
+}
+
+func requiredBytes(files []FileState) (int64, error) {
+	var total int64
+	for _, f := range files {
+		if !f.Selected {
+			continue
+		}
+		if f.Size < 0 || total > math.MaxInt64-f.Size {
+			return 0, errBadSizes
+		}
+		total += f.Size
+	}
+	return total, nil
+}
+
+func checkFreeSpace(destination string, needed int64) error {
+	if needed < 0 {
+		return errBadSizes
+	}
+	st, err := platform.GetStorageInfo(destination)
+	if err != nil {
+		slog.Error("storage info", "path", destination, "error", err)
+		return fmt.Errorf("%w: %w", errNoFreeSpace, err)
+	}
+	//nolint:gosec // G115: needed >= 0 проверено выше, конверсия int64 -> uint64 точная
+	if st.FreeBytes >= uint64(needed) {
+		return nil
+	}
+	//nolint:gosec // G115: в этой ветке FreeBytes < needed <= MaxInt64
+	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
+		humanSize(needed), humanSize(int64(st.FreeBytes)))
 }
 
 func humanSize(bytes int64) string {

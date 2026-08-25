@@ -15,39 +15,99 @@ import (
 	"time"
 
 	"typhon/internal/settings"
+	"typhon/internal/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type Game struct {
-	ID               string     `json:"id"`
-	Title            string     `json:"title"`
-	Executable       string     `json:"executable"`
-	LaunchArgs       []string   `json:"launchArgs,omitempty"`
-	InstallDir       string     `json:"installDir"`
-	Cover            string     `json:"cover"`
-	Hero             string     `json:"hero"`
-	Version          string     `json:"version"`
-	SizeBytes        int64      `json:"sizeBytes"`
-	LastPlayed       *time.Time `json:"lastPlayed"`
-	PlaytimeSeconds  int64      `json:"playtimeSeconds"`
-	InstalledAt      time.Time  `json:"installedAt"`
-	SourceDownloadID string     `json:"sourceDownloadId,omitempty"`
+	ID                string     `json:"id"`
+	Title             string     `json:"title"`
+	Executable        string     `json:"executable"`
+	LaunchArgs        []string   `json:"launchArgs,omitempty"`
+	InstallDir        string     `json:"installDir"`
+	Cover             string     `json:"cover"`
+	Version           string     `json:"version"`
+	VersionSource     string     `json:"versionSource,omitempty"`
+	VersionConfidence float64    `json:"versionConfidence,omitempty"`
+	SizeBytes         int64      `json:"sizeBytes"`
+	SizeUnknown       bool       `json:"sizeUnknown,omitempty"`
+	LastPlayed        *time.Time `json:"lastPlayed"`
+	PlaytimeSeconds   int64      `json:"playtimeSeconds"`
+	InstalledAt       time.Time  `json:"installedAt"`
+	SourceDownloadID  string     `json:"sourceDownloadId,omitempty"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
+	Source            string     `json:"source,omitempty"`
+	InstallType       string     `json:"installType,omitempty"`
+	Owned             bool       `json:"owned,omitempty"`
+	Uninstall         Uninstall  `json:"uninstall,omitzero"`
+	UninstallUnknown  bool       `json:"uninstallUnknown,omitempty"`
+	Uninstalled       bool       `json:"uninstalled,omitempty"`
 }
+
+type Uninstall struct {
+	Key          string `json:"key,omitempty"`
+	Command      string `json:"command,omitempty"`
+	QuietCommand string `json:"quietCommand,omitempty"`
+	ProductCode  string `json:"productCode,omitempty"`
+}
+
+func (u Uninstall) Empty() bool {
+	return u.Command == "" && u.QuietCommand == "" && u.ProductCode == ""
+}
+
+const (
+	SourceManaged    = "managed"
+	SourceDiscovered = "discovered"
+)
 
 type InstalledGame struct {
-	Title            string `json:"title"`
-	Executable       string `json:"executable"`
-	InstallDir       string `json:"installDir"`
-	Version          string `json:"version"`
-	SourceDownloadID string `json:"sourceDownloadId"`
+	Title            string    `json:"title"`
+	Executable       string    `json:"executable"`
+	InstallDir       string    `json:"installDir"`
+	Version          string    `json:"version"`
+	VersionSource    string    `json:"versionSource"`
+	SourceDownloadID string    `json:"sourceDownloadId"`
+	ReleaseID        string    `json:"releaseId"`
+	SourceID         string    `json:"sourceId"`
+	CanonicalGameID  string    `json:"canonicalGameId"`
+	InstallType      string    `json:"installType"`
+	Owned            bool      `json:"owned"`
+	Uninstall        Uninstall `json:"uninstall,omitzero"`
+	UninstallUnknown bool      `json:"uninstallUnknown"`
 }
 
+type InstalledUpdate struct {
+	ID            string `json:"id"`
+	Executable    string `json:"executable"`
+	InstallDir    string `json:"installDir"`
+	Version       string `json:"version"`
+	VersionSource string `json:"versionSource"`
+	ReleaseID     string `json:"releaseId"`
+	SourceID      string `json:"sourceId"`
+}
+
+var (
+	errEmptyInstallDir = errors.New("каталог установки не задан")
+	errNotFound        = errors.New("игра не найдена")
+)
+
 type Service struct {
-	mu      sync.Mutex
-	path    string
-	games   []Game
-	running map[string]*session
+	mu           sync.Mutex
+	path         string
+	excludedPath string
+	games        []Game
+	excluded     []string
+	running      map[string]*session
+	onSession    func(gameID string, seconds int64)
+	watcher      SessionWatcher
+}
+
+type SessionWatcher interface {
+	SessionStarted(game Game)
+	SessionStopped(gameID string)
 }
 
 type session struct {
@@ -55,36 +115,53 @@ type session struct {
 	startedAt time.Time
 }
 
-func NewService() *Service {
+func NewService() (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
-		slog.Error("resolve config dir", "error", err)
-		return newServiceAt("")
+		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	return newServiceAt(filepath.Join(dir, "library.json"))
+	if dir == "" {
+		return nil, errors.New("config dir unavailable")
+	}
+	return NewServiceAt(filepath.Join(dir, "library.json"))
 }
 
-func newServiceAt(path string) *Service {
-	s := &Service{path: path, running: map[string]*session{}}
-	s.load()
-	return s
+//wails:ignore
+func NewServiceAt(path string) (*Service, error) {
+	if path == "" {
+		return nil, errors.New("library path unavailable")
+	}
+	excludedPath, err := excludedPathFor(path)
+	if err != nil {
+		return nil, err
+	}
+	s := &Service{path: path, excludedPath: excludedPath, running: map[string]*session{}}
+	games, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	excluded, err := loadExcluded(excludedPath)
+	if err != nil {
+		return nil, err
+	}
+	s.games = games
+	s.excluded = excluded
+	return s, nil
 }
 
-func (s *Service) load() {
-	if s.path == "" {
-		return
-	}
+func (s *Service) load() ([]Game, error) {
 	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
 	if err != nil {
-		slog.Error("read library", "path", s.path, "error", err)
-		return
+		return nil, fmt.Errorf("read library %s: %w", s.path, err)
 	}
-	if err := json.Unmarshal(data, &s.games); err != nil {
-		slog.Error("parse library", "path", s.path, "error", err)
+	var games []Game
+	if err := json.Unmarshal(data, &games); err != nil {
+		return nil, fmt.Errorf("parse library %s: %w", s.path, err)
 	}
+	return games, nil
 }
 
 func (s *Service) persist() error {
@@ -98,9 +175,8 @@ func (s *Service) persist() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		slog.Error("write library", "path", s.path, "error", err)
-		return err
+	if err := storage.WriteAtomic(s.path, data); err != nil {
+		return fmt.Errorf("write library %s: %w", s.path, err)
 	}
 	return nil
 }
@@ -115,10 +191,25 @@ func (s *Service) emitUpdated() {
 	emit("library:updated", s.games)
 }
 
+func (s *Service) GetGames() []Game {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	games := make([]Game, len(s.games))
+	copy(games, s.games)
+	return games
+}
+
 func (s *Service) GetInstalledGames() []Game {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]Game(nil), s.games...)
+	games := make([]Game, 0, len(s.games))
+	for _, game := range s.games {
+		if game.Uninstalled {
+			continue
+		}
+		games = append(games, game)
+	}
+	return games
 }
 
 func (s *Service) GetRunningGames() []string {
@@ -136,27 +227,38 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	if err != nil || info.IsDir() {
 		return Game{}, errors.New("исполняемый файл не найден")
 	}
-	title = strings.TrimSpace(title)
+	provided := strings.TrimSpace(title)
+	title = provided
 	if title == "" {
 		title = TitleFromExecutable(executable)
 	}
 
-	installDir := filepath.Dir(executable)
+	installDir := strings.TrimSpace(filepath.Dir(executable))
+	if installDir == "" {
+		return Game{}, errEmptyInstallDir
+	}
+	size, unknown := measureInstall("", installDir)
 	game := Game{
 		ID:          newID(),
 		Title:       title,
 		Executable:  executable,
 		InstallDir:  installDir,
-		SizeBytes:   dirSize(installDir),
+		SizeBytes:   size,
+		SizeUnknown: unknown,
 		InstalledAt: time.Now(),
+		Source:      SourceManaged,
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, existing := range s.games {
-		if strings.EqualFold(existing.Executable, executable) {
+	for i := range s.games {
+		if !strings.EqualFold(s.games[i].Executable, executable) {
+			continue
+		}
+		if !s.games[i].Uninstalled {
 			return Game{}, errors.New("эта игра уже добавлена")
 		}
+		return s.reviveLocked(i, provided, installDir, size, unknown)
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
@@ -168,6 +270,41 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	return game, nil
 }
 
+// matchRegisteredLocked ищет запись, которую переустанавливают. Совпадение по
+// исполняемому файлу — прежнее правило; запись, снятую с ПК, дополнительно ловим
+// по игре каталога, иначе установка в другую папку заводит вторую карточку той
+// же игры рядом с первой.
+func (s *Service) matchRegisteredLocked(g InstalledGame) int {
+	match := -1
+	for i := range s.games {
+		if strings.EqualFold(s.games[i].Executable, g.Executable) {
+			return i
+		}
+		if match < 0 && s.games[i].Uninstalled && g.CanonicalGameID != "" && s.games[i].CanonicalGameID == g.CanonicalGameID {
+			match = i
+		}
+	}
+	return match
+}
+
+func (s *Service) reviveLocked(pos int, title, installDir string, size int64, unknown bool) (Game, error) {
+	previous := s.games[pos]
+	s.games[pos].Uninstalled = false
+	s.games[pos].InstallDir = installDir
+	s.games[pos].SizeBytes = size
+	s.games[pos].SizeUnknown = unknown
+	if title != "" {
+		s.games[pos].Title = title
+	}
+	if err := s.persist(); err != nil {
+		s.games[pos] = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	slog.Info("game reinstalled", "id", s.games[pos].ID, "title", s.games[pos].Title)
+	s.emitUpdated()
+	return s.games[pos], nil
+}
+
 func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	info, err := os.Stat(g.Executable)
 	if err != nil || info.IsDir() {
@@ -175,28 +312,46 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	}
 	installDir := strings.TrimSpace(g.InstallDir)
 	if installDir == "" {
-		installDir = filepath.Dir(g.Executable)
+		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i := range s.games {
-		if !strings.EqualFold(s.games[i].Executable, g.Executable) {
-			continue
-		}
+	if err := s.allowLocked(installDir); err != nil {
+		return Game{}, err
+	}
+	if i := s.matchRegisteredLocked(g); i >= 0 {
 		previous := s.games[i]
 		if title != "" {
 			s.games[i].Title = title
 		}
+		s.games[i].Executable = g.Executable
+		s.games[i].Uninstalled = false
 		s.games[i].InstallDir = installDir
 		s.games[i].Version = g.Version
-		s.games[i].SizeBytes = dirSize(installDir)
+		s.games[i].VersionSource = g.VersionSource
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, installDir)
 		s.games[i].SourceDownloadID = g.SourceDownloadID
+		if g.ReleaseID != "" {
+			s.games[i].ReleaseID = g.ReleaseID
+		}
+		if g.SourceID != "" {
+			s.games[i].SourceID = g.SourceID
+		}
+		if g.CanonicalGameID != "" {
+			s.games[i].CanonicalGameID = g.CanonicalGameID
+		}
+		s.games[i].Source = SourceManaged
+		s.games[i].InstallType = g.InstallType
+		s.games[i].Owned = g.Owned
+		s.games[i].Uninstall = g.Uninstall
+		s.games[i].UninstallUnknown = g.UninstallUnknown
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return Game{}, fmt.Errorf("save library: %w", err)
 		}
+		markInstalled(s.games[i])
 		slog.Info("game updated", "id", s.games[i].ID, "title", s.games[i].Title)
 		s.emitUpdated()
 		return s.games[i], nil
@@ -205,41 +360,176 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	if title == "" {
 		title = TitleFromExecutable(g.Executable)
 	}
+	size, unknown := measureInstall("", installDir)
 	game := Game{
 		ID:               newID(),
 		Title:            title,
 		Executable:       g.Executable,
 		InstallDir:       installDir,
 		Version:          g.Version,
-		SizeBytes:        dirSize(installDir),
+		VersionSource:    g.VersionSource,
+		SizeBytes:        size,
+		SizeUnknown:      unknown,
 		InstalledAt:      time.Now(),
 		SourceDownloadID: g.SourceDownloadID,
+		ReleaseID:        g.ReleaseID,
+		SourceID:         g.SourceID,
+		CanonicalGameID:  g.CanonicalGameID,
+		Source:           SourceManaged,
+		InstallType:      g.InstallType,
+		Owned:            g.Owned,
+		Uninstall:        g.Uninstall,
+		UninstallUnknown: g.UninstallUnknown,
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
 		s.games = s.games[:len(s.games)-1]
 		return Game{}, fmt.Errorf("save library: %w", err)
 	}
+	markInstalled(game)
 	slog.Info("game installed", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
+}
+
+//wails:ignore
+func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetSessionWatcher(w SessionWatcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.watcher = w
+}
+
+//wails:ignore
+func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID != u.ID {
+			continue
+		}
+		previous := s.games[i]
+		if u.Executable != "" {
+			s.games[i].Executable = u.Executable
+		}
+		if u.InstallDir != "" {
+			s.games[i].InstallDir = u.InstallDir
+		}
+		if s.games[i].InstallDir == "" {
+			return Game{}, errEmptyInstallDir
+		}
+		s.games[i].Version = u.Version
+		s.games[i].VersionSource = u.VersionSource
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, s.games[i].InstallDir)
+		if u.ReleaseID != "" {
+			s.games[i].ReleaseID = u.ReleaseID
+		}
+		if u.SourceID != "" {
+			s.games[i].SourceID = u.SourceID
+		}
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+		slog.Info("game version updated", "id", u.ID, "version", u.Version)
+		s.emitUpdated()
+		return s.games[i], nil
+	}
+	return Game{}, errors.New("игра не найдена")
 }
 
 func (s *Service) RemoveGame(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, game := range s.games {
-		if game.ID == id {
-			s.games = append(s.games[:i], s.games[i+1:]...)
-			if err := s.persist(); err != nil {
-				return err
+		if game.ID != id {
+			continue
+		}
+		if game.InstallDir != "" {
+			_, err := os.Stat(game.InstallDir)
+			switch {
+			case err == nil:
+				if err := s.excludeLocked(game.InstallDir); err != nil {
+					return err
+				}
+			case !errors.Is(err, fs.ErrNotExist):
+				return fmt.Errorf("stat %s: %w", game.InstallDir, err)
 			}
-			slog.Info("game removed", "id", id, "title", game.Title)
-			s.emitUpdated()
-			return nil
+		}
+		previous := append([]Game(nil), s.games...)
+		s.games = append(s.games[:i:i], s.games[i+1:]...)
+		if err := s.persist(); err != nil {
+			s.games = previous
+			if rollback := s.allowLocked(game.InstallDir); rollback != nil {
+				return errors.Join(err, rollback)
+			}
+			return err
+		}
+		slog.Info("game removed", "id", id, "title", game.Title)
+		s.emitUpdated()
+		return nil
+	}
+	return errNotFound
+}
+
+// MarkUninstalled оставляет карточку в библиотеке, но снимает с неё всё, что
+// описывает пропавшую установку: игры на диске больше нет, а наигранное время,
+// привязка к каталогу и путь для повторной установки остаются.
+//
+//wails:ignore
+func (s *Service) MarkUninstalled(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID != id {
+			continue
+		}
+		previous := s.games[i]
+		s.games[i].Uninstalled = true
+		s.games[i].SizeBytes = 0
+		s.games[i].SizeUnknown = false
+		s.games[i].Version = ""
+		s.games[i].VersionSource = ""
+		s.games[i].VersionConfidence = 0
+		s.games[i].InstallType = ""
+		s.games[i].Owned = false
+		s.games[i].Uninstall = Uninstall{}
+		s.games[i].UninstallUnknown = false
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return fmt.Errorf("save library: %w", err)
+		}
+		slog.Info("game uninstalled", "id", id, "title", s.games[i].Title)
+		s.emitUpdated()
+		return nil
+	}
+	return errNotFound
+}
+
+//wails:ignore
+func (s *Service) Find(id string) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID == id {
+			return s.games[i], nil
 		}
 	}
-	return errors.New("игра не найдена")
+	return Game{}, errNotFound
+}
+
+//wails:ignore
+func (s *Service) IsRunning(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.running[id]
+	return ok
 }
 
 func TitleFromExecutable(executable string) string {
@@ -256,18 +546,38 @@ func newID() string {
 	return hex.EncodeToString(buf)
 }
 
-func dirSize(dir string) int64 {
+func dirSize(dir string) (int64, error) {
+	if dir == "" {
+		return 0, errEmptyInstallDir
+	}
 	var total int64
-	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
-		if !d.IsDir() {
-			if info, err := d.Info(); err == nil {
-				total += info.Size()
-			}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
 		}
+		total += info.Size()
 		return nil
 	})
-	return total
+	if err != nil {
+		return 0, fmt.Errorf("measure %s: %w", dir, err)
+	}
+	return total, nil
+}
+
+// measureInstall не роняет регистрацию игры: недоступный подкаталог не повод
+// потерять запись, но и нулевой размер выдавать за настоящий нельзя.
+func measureInstall(id, dir string) (int64, bool) {
+	size, err := dirSize(dir)
+	if err != nil {
+		slog.Warn("measure install dir", "id", id, "error", err)
+		return 0, true
+	}
+	return size, false
 }

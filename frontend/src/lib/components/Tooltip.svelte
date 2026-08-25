@@ -24,17 +24,19 @@
   .tip {
     position: absolute;
     z-index: 60;
-    bottom: calc(100% + 0.7rem);
+    bottom: calc(100% + 0.6rem);
     left: 50%;
     transform: translateX(-50%) translateY(2px);
-    padding: 0.5rem 0.9rem;
-    background: var(--surface-3);
+    padding: 0.5rem 0.8rem;
+    max-width: 32rem;
+    background: var(--surface-4);
     border: 1px solid var(--border-strong);
-    border-radius: 0.7rem;
+    border-radius: var(--radius-sm);
     box-shadow: var(--shadow-pop);
-    font-size: 1.3rem;
+    font-size: var(--font-xs);
     color: var(--text-2);
-    white-space: nowrap;
+    white-space: normal;
+    width: max-content;
     opacity: 0;
     pointer-events: none;
     transition:

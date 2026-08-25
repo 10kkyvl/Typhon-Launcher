@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -26,12 +27,20 @@ func (s *Service) PlayGame(id string) error {
 	if game == nil {
 		return errors.New("игра не найдена")
 	}
+	if game.Uninstalled {
+		return errors.New("игра не установлена")
+	}
 	if _, err := os.Stat(game.Executable); err != nil {
 		return errors.New("исполняемый файл больше не существует")
 	}
 
+	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
+	if err != nil {
+		return fmt.Errorf("рабочая папка игры: %w", err)
+	}
+
 	cmd := exec.Command(game.Executable, game.LaunchArgs...)
-	cmd.Dir = game.InstallDir
+	cmd.Dir = workDir
 	if err := cmd.Start(); err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		return fmt.Errorf("не удалось запустить игру: %w", err)
@@ -40,6 +49,9 @@ func (s *Service) PlayGame(id string) error {
 	startedAt := time.Now()
 	s.running[id] = &session{process: cmd.Process, startedAt: startedAt}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", cmd.Process.Pid)
+	if s.watcher != nil {
+		s.watcher.SessionStarted(*game)
+	}
 	emit("game:started", SessionEvent{GameID: id})
 
 	go func() {
@@ -64,7 +76,14 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 	defer s.mu.Unlock()
 
 	delete(s.running, id)
+	if s.watcher != nil {
+		s.watcher.SessionStopped(id)
+	}
 	seconds := int64(time.Since(startedAt).Seconds())
+	if s.onSession != nil {
+		notify := s.onSession
+		go notify(id, seconds)
+	}
 	game := s.findLocked(id)
 	if game == nil {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})

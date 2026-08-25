@@ -1,5 +1,6 @@
 node_modules/
-dist/
+**/dist/*
+!frontend/dist/.gitkeep
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 build/ios/xcode/overlay.json
@@ -19,14 +20,10 @@ frontend/bindings/
 Thumbs.db
 *.log
 
-CLAUDE.md
-.claude/
-.codex/
-.cursor/
-.aider*
-.ai/
-AGENTS.md
-AGENTS.local.md
+.claude/*
+!.claude/settings.json
 *.local.md
 
 typhon.exe
+docs/
+notices.exe

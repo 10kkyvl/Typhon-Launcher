@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/platform"
+	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -57,16 +59,103 @@ func (f *fakeDownloads) DeleteData(id string) error {
 	return nil
 }
 
+var errFakeNoGame = errors.New("игра не найдена")
+
 type fakeRegistrar struct {
-	mu    sync.Mutex
-	games []library.InstalledGame
+	mu      sync.Mutex
+	games   []library.InstalledGame
+	records map[string]library.Game
+	running map[string]bool
+	removed []string
+
+	uninstalled []string
+	next        int
 }
 
 func (f *fakeRegistrar) RegisterInstalled(g library.InstalledGame) (library.Game, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.games = append(f.games, g)
-	return library.Game{ID: "game-1", Title: g.Title, Executable: g.Executable}, nil
+	f.next++
+	game := library.Game{
+		ID:               fmt.Sprintf("game-%d", f.next),
+		Title:            g.Title,
+		Executable:       g.Executable,
+		InstallDir:       g.InstallDir,
+		SourceDownloadID: g.SourceDownloadID,
+		InstallType:      g.InstallType,
+		Owned:            g.Owned,
+		Uninstall:        g.Uninstall,
+		UninstallUnknown: g.UninstallUnknown,
+	}
+	f.putLocked(game)
+	return game, nil
+}
+
+func (f *fakeRegistrar) putLocked(game library.Game) {
+	if f.records == nil {
+		f.records = map[string]library.Game{}
+	}
+	f.records[game.ID] = game
+}
+
+func (f *fakeRegistrar) put(game library.Game) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.putLocked(game)
+}
+
+func (f *fakeRegistrar) Find(id string) (library.Game, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	game, ok := f.records[id]
+	if !ok {
+		return library.Game{}, errFakeNoGame
+	}
+	return game, nil
+}
+
+func (f *fakeRegistrar) IsRunning(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.running[id]
+}
+
+func (f *fakeRegistrar) setRunning(id string, running bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.running == nil {
+		f.running = map[string]bool{}
+	}
+	f.running[id] = running
+}
+
+func (f *fakeRegistrar) RemoveGame(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.records[id]; !ok {
+		return errFakeNoGame
+	}
+	delete(f.records, id)
+	f.removed = append(f.removed, id)
+	return nil
+}
+
+func (f *fakeRegistrar) MarkUninstalled(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	game, ok := f.records[id]
+	if !ok {
+		return errFakeNoGame
+	}
+	game.Uninstalled = true
+	game.SizeBytes = 0
+	game.Owned = false
+	game.InstallType = ""
+	game.Uninstall = library.Uninstall{}
+	f.records[id] = game
+	f.uninstalled = append(f.uninstalled, id)
+	return nil
 }
 
 func (f *fakeRegistrar) registered() []library.InstalledGame {
@@ -100,9 +189,31 @@ func (f *fakeRunner) calls() []runSpec {
 	return append([]runSpec(nil), f.specs...)
 }
 
+func newTestSettings(t *testing.T) *settings.Service {
+	t.Helper()
+	svc, err := settings.NewServiceAt(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("new settings service: %v", err)
+	}
+	if _, err := svc.SetupLibrary(t.TempDir()); err != nil {
+		t.Fatalf("setup library: %v", err)
+	}
+	return svc
+}
+
+func setCleanupPolicy(t *testing.T, s *Service, policy string) {
+	t.Helper()
+	cfg := s.settings.GetSettings()
+	cfg.InstallCleanupPolicy = policy
+	if err := s.settings.SaveSettings(cfg); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+}
+
 func newTestService(t *testing.T) (*Service, *fakeDownloads, *fakeRegistrar) {
 	t.Helper()
-	s := newServiceAt(t.TempDir(), nil)
+	s := mustServiceAt(t, t.TempDir())
+	s.settings = newTestSettings(t)
 	downloads := newFakeDownloads()
 	registrar := &fakeRegistrar{}
 	s.downloads = downloads
@@ -152,6 +263,15 @@ func portableSource(t *testing.T, root, name string) string {
 	return dir
 }
 
+func mustServiceAt(t testing.TB, dir string) *Service {
+	t.Helper()
+	s, err := newServiceAt(dir, nil)
+	if err != nil {
+		t.Fatalf("new install service at %s: %v", dir, err)
+	}
+	return s
+}
+
 func TestStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	completed := time.Now().Truncate(time.Second)
@@ -173,7 +293,10 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := st.save(items); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	loaded := st.load()
+	loaded, err := st.load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
 	if len(loaded) != 1 {
 		t.Fatalf("loaded %d items", len(loaded))
 	}
@@ -234,6 +357,191 @@ func TestPortableInstallCompletes(t *testing.T) {
 	}
 }
 
+func TestInstallUsesParsedTitle(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "Startup Company")
+	downloads.add("d1", "Startup Company v11.04.2023.rar", root)
+
+	info, err := s.InspectDownload("d1")
+	if err != nil {
+		t.Fatalf("inspect: %v", err)
+	}
+	if filepath.Base(info.Plan.Destination) != "Startup Company" {
+		t.Fatalf("destination = %q", info.Plan.Destination)
+	}
+
+	item, err := s.Start("d1", StartOptions{Destination: info.Plan.Destination, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if item.Name != "Startup Company" {
+		t.Fatalf("name = %q", item.Name)
+	}
+	s.waitStatus(t, item.ID, StatusCompleted)
+	games := registrar.registered()
+	if len(games) != 1 || games[0].Title != "Startup Company" {
+		t.Fatalf("registered = %+v", games)
+	}
+}
+
+func TestInstallPrefersCatalogTitle(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "DRIVERally")
+	downloads.add("d1", "setup drive rally 1.5 1 (93251)", root)
+	downloads.mu.Lock()
+	d := downloads.items["d1"]
+	d.Origin = download.Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "canon-1"}
+	downloads.items["d1"] = d
+	downloads.mu.Unlock()
+
+	s.SetTitleResolver(func(origin download.Origin) string {
+		if origin.GameID != "canon-1" {
+			return ""
+		}
+		return "#DRIVE Rally"
+	})
+
+	info, err := s.InspectDownload("d1")
+	if err != nil {
+		t.Fatalf("inspect: %v", err)
+	}
+	if info.Name != "#DRIVE Rally" {
+		t.Fatalf("plan name = %q", info.Name)
+	}
+	if filepath.Base(info.Plan.Destination) != "#DRIVE Rally" {
+		t.Fatalf("destination = %q", info.Plan.Destination)
+	}
+
+	item, err := s.Start("d1", StartOptions{Destination: info.Plan.Destination, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if item.Name != "#DRIVE Rally" {
+		t.Fatalf("name = %q", item.Name)
+	}
+	s.waitStatus(t, item.ID, StatusCompleted)
+	games := registrar.registered()
+	if len(games) != 1 || games[0].Title != "#DRIVE Rally" {
+		t.Fatalf("registered = %+v, want the catalog title", games)
+	}
+}
+
+func TestInstallFallsBackToDownloadNameWithoutResolver(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "Game")
+	downloads.add("d1", "Game", root)
+	s.SetTitleResolver(func(download.Origin) string { return "   " })
+
+	dest := filepath.Join(t.TempDir(), "Games", "Game")
+	item, err := s.Start("d1", StartOptions{Destination: dest, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if item.Name != "Game" {
+		t.Fatalf("name = %q", item.Name)
+	}
+	s.waitStatus(t, item.ID, StatusCompleted)
+	games := registrar.registered()
+	if len(games) != 1 || games[0].Title != "Game" {
+		t.Fatalf("registered = %+v, want the parsed download name", games)
+	}
+}
+
+func TestGameTitle(t *testing.T) {
+	cases := []struct{ raw, want string }{
+		{"Startup Company v11.04.2023.rar", "Startup Company"},
+		{"Startup.Company.v1.10-CODEX.zip", "Startup Company"},
+		{"Game", "Game"},
+		{"v1.2.3", "v1.2.3"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := gameTitle(tc.raw); got != tc.want {
+			t.Fatalf("gameTitle(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestInstallDeletesDownloadDataByDefault(t *testing.T) {
+	s, downloads, _ := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "Game")
+	downloads.add("d1", "Game", root)
+
+	dest := filepath.Join(t.TempDir(), "Game")
+	item, err := s.Start("d1", StartOptions{Destination: dest, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	s.waitStatus(t, item.ID, StatusCompleted)
+	waitFor(t, "download data removed", func() bool {
+		return len(downloads.deletedIDs()) == 1
+	})
+	if got := downloads.deletedIDs()[0]; got != "d1" {
+		t.Fatalf("removed = %q", got)
+	}
+}
+
+func TestApplyCleanupPolicy(t *testing.T) {
+	cases := []struct {
+		name    string
+		policy  string
+		seeding bool
+		want    bool
+	}{
+		{name: "delete removes data", policy: settings.CleanupDelete, want: true},
+		{name: "delete keeps seeding data", policy: settings.CleanupDelete, seeding: true},
+		{name: "keep leaves data", policy: settings.CleanupKeep},
+		{name: "ask leaves data", policy: settings.CleanupAsk},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, downloads, _ := newTestService(t)
+			downloads.add("d1", "Game", t.TempDir())
+			if tc.seeding {
+				downloads.setSeeding("d1", true)
+			}
+			s.applyCleanup(settings.Settings{InstallCleanupPolicy: tc.policy}, "d1")
+			if got := len(downloads.deletedIDs()) == 1; got != tc.want {
+				t.Fatalf("removed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInstallKeepsDownloadProvenance(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	root := t.TempDir()
+	portableSource(t, root, "Game")
+	downloads.add("d1", "Game", root)
+	downloads.mu.Lock()
+	d := downloads.items["d1"]
+	d.Origin = download.Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "canon-1"}
+	downloads.items["d1"] = d
+	downloads.mu.Unlock()
+
+	dest := filepath.Join(t.TempDir(), "Games", "Game")
+	item, err := s.Start("d1", StartOptions{Destination: dest, Mode: ModeCopy})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if item.Origin.ReleaseID != "rel-1" {
+		t.Fatalf("installation origin = %+v", item.Origin)
+	}
+
+	s.waitStatus(t, item.ID, StatusCompleted)
+	games := registrar.registered()
+	if len(games) != 1 {
+		t.Fatalf("registered = %+v", games)
+	}
+	if games[0].ReleaseID != "rel-1" || games[0].SourceID != "src-1" || games[0].CanonicalGameID != "canon-1" {
+		t.Fatalf("registered game = %+v, want provenance from the download", games[0])
+	}
+}
+
 func TestPortableMoveIsForcedToCopyWhileSeeding(t *testing.T) {
 	s, downloads, _ := newTestService(t)
 	root := t.TempDir()
@@ -287,7 +595,7 @@ func TestArchiveInstallCompletes(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	done := s.waitStatus(t, item.ID, StatusCompleted)
-	if done.Executable != filepath.Join(dest, "Game", "Game.exe") {
+	if done.Executable != filepath.Join(dest, "Game.exe") {
 		t.Fatalf("executable = %q", done.Executable)
 	}
 	if exists(dest + partialSuffix) {
@@ -295,6 +603,41 @@ func TestArchiveInstallCompletes(t *testing.T) {
 	}
 	if len(registrar.registered()) != 1 {
 		t.Fatalf("registered = %+v", registrar.registered())
+	}
+}
+
+func TestArchiveInstallDropsWrapperDir(t *testing.T) {
+	s, downloads, _ := newTestService(t)
+	root := t.TempDir()
+	dir := filepath.Join(root, "Startup.Company.v1.10-RELEASE")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	payload := strings.Repeat("g", 200<<10)
+	writeZip(t, filepath.Join(dir, "Startup.Company.v1.10-RELEASE.zip"), []zipEntry{
+		{name: "release.nfo", data: []byte("scene")},
+		{name: "Startup Company/Startup Company.exe", data: []byte(payload)},
+		{name: "Startup Company/data/content.pak", data: []byte("assets")},
+	})
+	downloads.add("d1", "Startup.Company.v1.10-RELEASE", root)
+
+	dest := filepath.Join(t.TempDir(), "Startup Company")
+	item, err := s.Start("d1", StartOptions{Destination: dest})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	done := s.waitStatus(t, item.ID, StatusCompleted)
+	if done.Executable != filepath.Join(dest, "Startup Company.exe") {
+		t.Fatalf("executable = %q", done.Executable)
+	}
+	if !exists(filepath.Join(dest, "data", "content.pak")) {
+		t.Fatal("payload not installed at the destination root")
+	}
+	if exists(filepath.Join(dest, "Startup Company")) {
+		t.Fatal("wrapper dir kept")
+	}
+	if exists(dest + partialSuffix) {
+		t.Fatal("partial dir left behind")
 	}
 }
 
@@ -389,7 +732,7 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := newServiceAt(dir, nil)
+	s := mustServiceAt(t, dir)
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("startup: %v", err)
 	}
@@ -503,6 +846,7 @@ func TestCancelRefusedWhileInstallerRuns(t *testing.T) {
 
 func TestRetryAfterFailure(t *testing.T) {
 	s, downloads, _ := newTestService(t)
+	setCleanupPolicy(t, s, settings.CleanupKeep)
 	root := t.TempDir()
 	source := portableSource(t, root, "Game")
 	downloads.add("d1", "Game", root)
@@ -590,7 +934,7 @@ func TestSanitizeName(t *testing.T) {
 }
 
 func TestProposeDestinationAvoidsCollision(t *testing.T) {
-	s := newServiceAt(t.TempDir(), nil)
+	s := mustServiceAt(t, t.TempDir())
 	games := t.TempDir()
 	mkFile(t, filepath.Join(games, "Game", "taken.txt"), 4)
 

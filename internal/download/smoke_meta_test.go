@@ -44,7 +44,7 @@ func TestSmokeClientMetadataOnly(t *testing.T) {
 }
 
 func TestSmokeMagnetMetadataOnly(t *testing.T) {
-	m := newManagerAt(t.TempDir(), nil)
+	m := mustManagerAt(t, t.TempDir())
 	if err := m.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
 	}

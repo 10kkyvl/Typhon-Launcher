@@ -1,10 +1,11 @@
-import { writable } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getInstalledGames, getRunningGames, type LibraryGame } from '../services/library';
+import { getGames, getRunningGames, type LibraryGame } from '../services/library';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
+export const installedGames = derived(libraryGames, (games) => games.filter((game) => !game.uninstalled));
 export const runningGames = writable<Set<string>>(new Set());
 
 interface SessionEvent {
@@ -14,7 +15,7 @@ interface SessionEvent {
 }
 
 export async function initLibrary() {
-  libraryGames.set(await getInstalledGames());
+  libraryGames.set(await getGames());
   runningGames.set(new Set(await getRunningGames()));
   if (!inWails) return;
 

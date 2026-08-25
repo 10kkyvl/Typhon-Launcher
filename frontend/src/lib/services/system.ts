@@ -49,3 +49,8 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   if (inWails) return (await AppService.GetStorageInfo()) as StorageInfo;
   return fixtureStorage;
 }
+
+export async function getStorageInfoFor(path: string): Promise<StorageInfo> {
+  if (inWails) return (await AppService.GetStorageInfoFor(path)) as StorageInfo;
+  return { ...fixtureStorage, path };
+}

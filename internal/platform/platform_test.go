@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -46,5 +47,13 @@ func TestGetSystemInfo(t *testing.T) {
 	}
 	if info.OS == "" || info.CPU == "" {
 		t.Fatalf("empty os/cpu: %+v", info)
+	}
+}
+
+func TestGetStorageInfoEmptyPath(t *testing.T) {
+	for _, path := range []string{"", "   "} {
+		if _, err := GetStorageInfo(path); !errors.Is(err, ErrEmptyPath) {
+			t.Fatalf("GetStorageInfo(%q) err = %v, want ErrEmptyPath", path, err)
+		}
 	}
 }

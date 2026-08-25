@@ -1,5 +1,9 @@
 package platform
 
+import "errors"
+
+var ErrEmptyPath = errors.New("path is empty")
+
 type StorageInfo struct {
 	Path       string `json:"path"`
 	Volume     string `json:"volume"`

@@ -1,148 +1,230 @@
 <script lang="ts">
   import {
     ArrowDownUp,
-    ArrowUp,
-    Bookmark,
     ChevronDown,
-    ChevronRight,
-    CircleCheck,
     Clock,
-    FileDown,
     LayoutGrid,
     List,
+    MonitorDown,
     Play,
-    SlidersHorizontal,
-    Star,
-    X,
+    Square,
   } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
   import GameHero from '../../lib/components/GameHero.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
+  import PageHeader from '../../lib/components/PageHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
-  import { games } from '../../lib/mock/games';
-  import { active, moveUp, queue, remove } from '../../lib/stores/downloads';
+  import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
+  import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
+  import type { Download } from '../../lib/services/downloads';
+  import { downloads, statusLabels } from '../../lib/stores/downloads';
+  import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
+  import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
-  import { bytesSize, gb, plural } from '../../lib/utils/format';
+  import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
 
-  type Filter = 'all' | 'favorites' | 'recent' | 'completed';
+  type Filter = 'all' | 'installed' | 'recent';
+  type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
+
+  interface Entry {
+    id: string;
+    title: string;
+    cover: string;
+    hero: string;
+    installed: boolean;
+    playtimeSeconds: number;
+    sizeBytes: number;
+    lastPlayed: string | null;
+    subtitle: string;
+  }
 
   let filter = $state<Filter>('all');
+  let sort = $state<Sort>('alpha');
   let heroIndex = $state(0);
+  let catalogGames = $state<Record<string, CatalogGame>>({});
 
-  const featured = games.filter((g) => g.installed && g.favorite).slice(0, 5);
-
-  const filters: { id: Filter; label: string; icon?: typeof Star }[] = [
-    { id: 'all', label: 'Все игры' },
-    { id: 'favorites', label: 'Избранное', icon: Star },
-    { id: 'recent', label: 'Недавние', icon: Clock },
-    { id: 'completed', label: 'Пройденные', icon: CircleCheck },
-  ];
-
-  const sectionTitles: Record<Filter, string> = {
-    all: 'Недавние игры',
-    favorites: 'Избранное',
-    recent: 'Недавние игры',
-    completed: 'Пройденные',
-  };
-
-  const visibleGames = $derived.by(() => {
-    switch (filter) {
-      case 'favorites':
-        return games.filter((g) => g.favorite);
-      case 'recent':
-        return games.filter((g) => g.lastPlayed !== null);
-      case 'completed':
-        return games.filter((g) => g.completed);
-      default:
-        return games;
+  const installedByGame = $derived.by(() => {
+    const ids = new Set<string>();
+    for (const game of $libraryGames) {
+      if (game.canonicalGameId) ids.add(game.canonicalGameId);
     }
+    return ids;
   });
 
-  const hero = $derived(featured[heroIndex]);
-  const activeDownload = $derived($active[0]);
+  const downloaded = $derived.by(() => {
+    const map = new Map<string, Download>();
+    for (const item of $downloads) {
+      const gameId = item.origin?.gameId;
+      if (!gameId || installedByGame.has(gameId)) continue;
+      const current = map.get(gameId);
+      if (!current || Date.parse(item.addedAt) >= Date.parse(current.addedAt)) map.set(gameId, item);
+    }
+    return map;
+  });
+
+  async function loadCatalogGames(ids: string[]) {
+    try {
+      const games = await getCatalogGames(ids);
+      if (games.length === 0) return;
+      catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось загрузить данные игр', 'danger');
+    }
+  }
+
+  $effect(() => {
+    const ids = [...downloaded.keys()];
+    untrack(() => {
+      const missing = ids.filter((id) => !(id in catalogGames));
+      if (missing.length > 0) loadCatalogGames(missing);
+    });
+  });
+
+  $effect(() => {
+    requestArt([
+      ...downloaded.keys(),
+      ...$libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)),
+    ]);
+  });
+
+  const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
+    { id: 'all', label: 'Все' },
+    { id: 'installed', label: 'Установленные', icon: MonitorDown },
+    { id: 'recent', label: 'Недавние', icon: Clock },
+  ];
+
+  const sortLabels: Record<Sort, string> = {
+    alpha: 'По алфавиту',
+    recent: 'По последнему запуску',
+    playtime: 'По наигранному времени',
+    size: 'По размеру',
+  };
+
+  const sectionTitles: Record<Filter, string> = {
+    all: 'Моя библиотека',
+    installed: 'Установленные',
+    recent: 'Недавние',
+  };
+
+  function installedEntry(game: LibraryGame): Entry {
+    const bits: string[] = [];
+    if (game.uninstalled) {
+      bits.push('Не установлена');
+    } else {
+      if (game.version) bits.push(game.version);
+      if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
+    }
+    const art = game.canonicalGameId ? $gameArt[game.canonicalGameId] : undefined;
+    return {
+      id: game.id,
+      title: game.title,
+      cover: art?.cover || game.cover,
+      hero: art?.hero ?? '',
+      installed: !game.uninstalled,
+      playtimeSeconds: game.playtimeSeconds,
+      sizeBytes: game.sizeBytes,
+      lastPlayed: game.lastPlayed,
+      subtitle: bits.join(' · '),
+    };
+  }
+
+  function downloadedEntry(gameId: string, item: Download): Entry {
+    const game = catalogGames[gameId];
+    const bits: string[] = [];
+    if (game?.releaseYear) bits.push(String(game.releaseYear));
+    if (game?.developer) bits.push(game.developer);
+    bits.push(statusLabels[item.status]);
+    return {
+      id: gameId,
+      title: game?.title || item.name,
+      cover: $gameArt[gameId]?.cover ?? '',
+      hero: $gameArt[gameId]?.hero ?? '',
+      installed: false,
+      playtimeSeconds: 0,
+      sizeBytes: item.total,
+      lastPlayed: null,
+      subtitle: bits.join(' · '),
+    };
+  }
+
+  const entries = $derived.by(() => {
+    const installed = $libraryGames.map(installedEntry);
+    const rest = [...downloaded].map(([gameId, item]) => downloadedEntry(gameId, item));
+    return [...installed, ...rest];
+  });
+
+  const visibleGames = $derived.by(() => {
+    const filtered = entries.filter((entry) => {
+      switch (filter) {
+        case 'installed':
+          return entry.installed;
+        case 'recent':
+          return entry.lastPlayed !== null;
+        default:
+          return true;
+      }
+    });
+
+    return filtered.toSorted((a, b) => {
+      switch (sort) {
+        case 'recent':
+          return time(b.lastPlayed) - time(a.lastPlayed) || a.title.localeCompare(b.title, 'ru');
+        case 'playtime':
+          return b.playtimeSeconds - a.playtimeSeconds || a.title.localeCompare(b.title, 'ru');
+        case 'size':
+          return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title, 'ru');
+        default:
+          return a.title.localeCompare(b.title, 'ru');
+      }
+    });
+  });
+
+  function time(value: string | null) {
+    if (!value) return 0;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  const featured = $derived(
+    $installedGames
+      .map(installedEntry)
+      .toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed))
+      .slice(0, 5),
+  );
+
+  const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
 
   onMount(() => {
     const timer = setInterval(() => {
+      if (featured.length === 0) return;
       heroIndex = (heroIndex + 1) % featured.length;
     }, 8000);
     return () => clearInterval(timer);
   });
 
-  function playtime(hours: number) {
-    return `${hours} ч`;
+  function entryMeta(entry: Entry) {
+    if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
+    return entry.installed ? '' : 'Не установлена';
+  }
+
+  async function toggleRun(id: string) {
+    try {
+      if ($runningGames.has(id)) await stopGame(id);
+      else await playGame(id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+    }
   }
 </script>
 
-<h1 class="page-title">Библиотека</h1>
-
-<div class="toolbar">
-  <div class="filters">
-    <DropdownMenu
-      align="left"
-      items={[
-        { id: 'all', label: 'Все игры' },
-        { id: 'installed', label: 'Установленные' },
-        { id: 'not-installed', label: 'Не установленные' },
-      ]}
-      onselect={() => (filter = 'all')}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="pill primary-pill" class:open onclick={toggle}>
-          Все игры
-          <ChevronDown size="1.5rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
-    {#each filters.slice(1) as f (f.id)}
-      <button class="pill" class:selected={filter === f.id} onclick={() => (filter = filter === f.id ? 'all' : f.id)}>
-        {#if f.icon}
-          <f.icon size="1.5rem" strokeWidth={1.8} />
-        {/if}
-        {f.label}
-      </button>
-    {/each}
-  </div>
-  <div class="toolbar-right">
-    <DropdownMenu
-      items={[
-        { id: 'genre', label: 'По жанру' },
-        { id: 'installed', label: 'Установленные' },
-        { id: 'size', label: 'По размеру' },
-      ]}
-      onselect={() => toast('Фильтры недоступны в demo')}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="pill" class:open onclick={toggle}>
-          <SlidersHorizontal size="1.5rem" strokeWidth={1.8} />
-          Фильтры
-          <ChevronDown size="1.5rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
-    <DropdownMenu
-      items={[
-        { id: 'alpha', label: 'По алфавиту' },
-        { id: 'recent', label: 'По последнему запуску' },
-        { id: 'playtime', label: 'По наигранному времени' },
-        { id: 'size', label: 'По размеру' },
-      ]}
-      onselect={() => toast('Сортировка применена')}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="pill" class:open onclick={toggle}>
-          <ArrowDownUp size="1.5rem" strokeWidth={1.8} />
-          Сортировка: По алфавиту
-          <ChevronDown size="1.5rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
+<PageHeader title="Библиотека">
+  {#snippet actions()}
     <SegmentedControl
       bind:value={$libraryView}
       options={[
@@ -158,256 +240,171 @@
         {/if}
       {/snippet}
     </SegmentedControl>
-  </div>
-</div>
+  {/snippet}
+</PageHeader>
 
 {#if hero}
   <div class="hero-block">
-    <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem">
+    <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem" maxHeight="34rem">
       <h2 class="hero-title">{hero.title}</h2>
-      <div class="hero-genres">
-        {#each hero.genres.slice(0, 4) as genre (genre)}
-          <span class="genre">{genre}</span>
-        {/each}
-      </div>
-      <p class="hero-tagline">{hero.tagline}</p>
+      {#if hero.subtitle}
+        <p class="hero-genres">{hero.subtitle}</p>
+      {/if}
+      <p class="hero-tagline">
+        {hero.lastPlayed ? `Последний запуск: ${relativeDate(hero.lastPlayed)}` : 'Ещё не запускалась'}
+        {hero.playtimeSeconds > 0 ? ` · ${playtime(hero.playtimeSeconds)}` : ''}
+      </p>
       <div class="hero-actions">
-        <Button variant="primary" size="lg" onclick={() => toast(`Запуск «${hero.title}»...`)}>
-          <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
-          Играть
+        <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
+          {#if $runningGames.has(hero.id)}
+            <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+            Остановить
+          {:else}
+            <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+            Играть
+          {/if}
         </Button>
         <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>Подробнее</Button>
-        <IconButton label="В коллекцию" onclick={() => toast('Добавлено в коллекцию')}>
-          <Bookmark size="1.8rem" strokeWidth={1.8} />
-        </IconButton>
       </div>
     </GameHero>
-    <div class="hero-dots">
-      {#each featured as g, i (g.id)}
-        <button
-          class="dot"
-          class:on={i === heroIndex}
-          aria-label={g.title}
-          onclick={() => (heroIndex = i)}
-        ></button>
-      {/each}
-    </div>
+    {#if featured.length > 1}
+      <div class="hero-dots">
+        {#each featured as g, i (g.id)}
+          <button
+            class="dot"
+            class:on={i === heroIndex}
+            aria-label={g.title}
+            onclick={() => (heroIndex = i)}
+          ></button>
+        {/each}
+      </div>
+    {/if}
   </div>
 {/if}
+
+<div class="toolbar">
+  <div class="filters">
+    {#each filters as f (f.id)}
+      <button class="chip" class:selected={filter === f.id} onclick={() => (filter = f.id)}>
+        {#if f.icon}
+          <f.icon size="1.4rem" strokeWidth={1.8} />
+        {/if}
+        {f.label}
+      </button>
+    {/each}
+  </div>
+  <div class="toolbar-right">
+    <DropdownMenu
+      items={[
+        { id: 'alpha', label: sortLabels.alpha },
+        { id: 'recent', label: sortLabels.recent },
+        { id: 'playtime', label: sortLabels.playtime },
+        { id: 'size', label: sortLabels.size },
+      ]}
+      onselect={(id) => (sort = id as Sort)}
+    >
+      {#snippet trigger({ open, toggle })}
+        <button class="chip quiet" class:open onclick={toggle}>
+          <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+          {sortLabels[sort]}
+          <ChevronDown size="1.4rem" strokeWidth={1.8} />
+        </button>
+      {/snippet}
+    </DropdownMenu>
+  </div>
+</div>
 
 <section class="section">
   <div class="section-head">
     <h2>{sectionTitles[filter]}</h2>
-    <button class="link" onclick={() => navigate('installed')}>
-      Показать все
-      <ChevronRight size="1.5rem" strokeWidth={1.8} />
-    </button>
   </div>
 
-  {#if $libraryView === 'grid'}
+  {#if visibleGames.length === 0}
+    <EmptyState
+      title="Здесь пока пусто"
+      description="Игры появятся тут после установки или загрузки. Каталог источников — в разделе «Все игры»."
+    />
+  {:else if $libraryView === 'grid'}
     <div class="grid">
-      {#each visibleGames as game (game.id)}
-        <GameCard {game} meta={game.playtimeHours > 0 ? playtime(game.playtimeHours) : gb(game.sizeGb)} />
+      {#each visibleGames as entry (entry.id)}
+        <GameCard
+          id={entry.id}
+          title={entry.title}
+          cover={entry.cover}
+          installed={entry.installed}
+          running={$runningGames.has(entry.id)}
+          meta={entryMeta(entry)}
+          onplay={() => toggleRun(entry.id)}
+        />
       {/each}
     </div>
   {:else}
     <div class="list">
-      {#each visibleGames as game (game.id)}
-        <button class="list-row" onclick={() => navigate('game', { id: game.id })}>
+      {#each visibleGames as entry (entry.id)}
+        <button class="list-row" onclick={() => navigate('game', { id: entry.id })}>
           <div class="list-thumb">
-            <Artwork src={game.cover} alt={game.title} radius="0.6rem" />
+            <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
           </div>
-          <span class="list-title">{game.title}</span>
-          <span class="list-meta">{game.genres.slice(0, 2).join(' · ')}</span>
-          <span class="list-meta right">
-            {game.playtimeHours > 0 ? playtime(game.playtimeHours) : gb(game.sizeGb)}
-          </span>
+          <span class="list-title">{entry.title}</span>
+          <span class="list-meta">{entry.subtitle}</span>
+          <span class="list-meta right">{entryMeta(entry)}</span>
         </button>
       {/each}
     </div>
   {/if}
 </section>
 
-<div class="bottom-row">
-  <section class="panel">
-    <div class="panel-head">
-      <h3>Активная загрузка</h3>
-    </div>
-    {#if activeDownload}
-      <DownloadItem download={activeDownload} compact />
-    {:else}
-      <p class="panel-empty">Нет активных загрузок</p>
-    {/if}
-  </section>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h3>Очередь загрузки ({$queue.length})</h3>
-    </div>
-    {#if $queue.length === 0}
-      <p class="panel-empty">Очередь пуста</p>
-    {:else}
-      <div class="queue">
-        {#each $queue.slice(0, 3) as q (q.id)}
-          <div class="queue-row">
-            <div class="queue-thumb">
-              <FileDown size="1.7rem" strokeWidth={1.7} />
-            </div>
-            <span class="queue-title">{q.name}</span>
-            <span class="queue-size">{bytesSize(q.total)}</span>
-            <span class="queue-state">В очереди</span>
-            <div class="queue-actions">
-              <IconButton label="Выше" size="sm" onclick={() => moveUp(q.id)}>
-                <ArrowUp size="1.5rem" strokeWidth={1.8} />
-              </IconButton>
-              <IconButton label="Убрать" size="sm" onclick={() => remove(q.id)}>
-                <X size="1.5rem" strokeWidth={1.8} />
-              </IconButton>
-            </div>
-          </div>
-        {/each}
-      </div>
-      <div class="panel-foot">
-        <span class="panel-note">
-          {$queue.length}
-          {plural($queue.length, 'загрузка', 'загрузки', 'загрузок')} в очереди
-        </span>
-        <Button size="sm" onclick={() => navigate('downloads')}>Управление</Button>
-      </div>
-    {/if}
-  </section>
-</div>
-
 <style>
-  .page-title {
-    font-size: var(--font-title);
-    letter-spacing: -0.01em;
-    margin: var(--space-4) 0 var(--space-5);
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-6);
-    flex-wrap: wrap;
-  }
-
-  .filters,
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.8rem;
-    height: 4rem;
-    padding: 0 1.4rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    background: var(--surface);
-    font-size: 1.4rem;
-    font-weight: 500;
-    color: var(--text-2);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
-  }
-
-  .pill:hover,
-  .pill.open {
-    background: var(--surface-3);
-    color: var(--text);
-    border-color: var(--border-strong);
-  }
-
-  .pill.selected {
-    background: var(--accent-subtle);
-    border-color: rgba(104, 117, 232, 0.4);
-    color: var(--accent-text);
-  }
-
-  .pill.primary-pill {
-    background: var(--accent);
-    border-color: transparent;
-    color: #fff;
-  }
-
-  .pill.primary-pill:hover {
-    background: var(--accent-hover);
-  }
-
   .hero-block {
     position: relative;
     margin-bottom: var(--space-8);
   }
 
   .hero-title {
-    font-size: clamp(3.2rem, 3vw, 4.4rem);
+    font-size: var(--font-hero);
     font-weight: 600;
-    letter-spacing: -0.01em;
+    line-height: 1.05;
+    letter-spacing: var(--tracking-title);
     text-shadow: 0 2px 1.8rem rgba(0, 0, 0, 0.5);
   }
 
   .hero-genres {
-    display: flex;
-    gap: 0.8rem;
-    margin-top: 1.4rem;
-    flex-wrap: wrap;
-  }
-
-  .genre {
-    padding: 0.4rem 1.2rem;
-    border-radius: 0.8rem;
-    background: rgba(10, 14, 19, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 1.3rem;
-    color: var(--text-2);
-    backdrop-filter: blur(0.4rem);
+    margin-top: 1rem;
+    font-size: var(--font-sm);
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
   }
 
   .hero-tagline {
-    margin-top: 1.4rem;
-    max-width: 42rem;
-    font-size: 1.5rem;
-    color: rgba(243, 245, 247, 0.85);
+    margin-top: 1.2rem;
+    max-width: 46rem;
+    font-size: var(--font-md);
+    line-height: 1.5;
+    color: rgba(238, 242, 246, 0.85);
     text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .hero-actions {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     margin-top: var(--space-5);
   }
 
   .hero-dots {
     position: absolute;
     right: 2rem;
-    bottom: 1.6rem;
+    bottom: 1.8rem;
     display: flex;
-    gap: 0.7rem;
+    gap: 0.6rem;
   }
 
   .dot {
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.28);
-    transition:
-      background var(--dur) var(--ease),
-      transform var(--dur) var(--ease);
+    width: 1.8rem;
+    height: 0.3rem;
+    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
+    background: rgba(255, 255, 255, 0.25);
+    transition: background var(--dur) var(--ease);
   }
 
   .dot:hover {
@@ -415,86 +412,131 @@
   }
 
   .dot.on {
-    background: var(--accent);
-    transform: scale(1.25);
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .filters,
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: var(--control-sm);
+    padding: 0 1.1rem;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .chip :global(svg) {
+    color: var(--text-3);
+    transition: color var(--dur) var(--ease);
+  }
+
+  .chip:hover,
+  .chip.open {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .chip.selected {
+    background: var(--hover-strong);
+    color: var(--text);
+    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+  }
+
+  .chip.selected :global(svg),
+  .chip:hover :global(svg) {
+    color: var(--text-2);
+  }
+
+  .chip.quiet {
+    color: var(--text-3);
   }
 
   .section {
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
   }
 
   .section-head {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     margin-bottom: var(--space-4);
   }
 
   .section-head h2 {
-    font-size: 2rem;
-  }
-
-  .link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    font-size: 1.4rem;
-    color: var(--text-3);
-    border-radius: 0.7rem;
-    padding: 0.4rem 0.8rem;
-    transition: color var(--dur) var(--ease);
-  }
-
-  .link:hover {
-    color: var(--text);
+    font-size: var(--font-xl);
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18.5rem, 1fr));
-    gap: var(--space-5);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-6) var(--space-5);
   }
 
   .list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .list-row {
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 0.8rem 1.2rem;
+    padding: 0.8rem 0.8rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
   }
 
+  .list-row + .list-row {
+    border-top: 1px solid var(--border);
+  }
+
   .list-row:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--hover);
   }
 
   .list-thumb {
-    width: 3.4rem;
-    height: 4.6rem;
+    width: 3.2rem;
+    height: 4.2rem;
     flex-shrink: 0;
-    border-radius: 0.6rem;
+    border-radius: var(--radius-xs);
     overflow: hidden;
   }
 
   .list-title {
     flex: 1;
     min-width: 0;
-    font-size: 1.5rem;
-    font-weight: 550;
+    font-size: var(--font-md);
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .list-meta {
-    font-size: 1.4rem;
+    font-size: var(--font-sm);
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -505,118 +547,15 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .bottom-row {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: var(--space-5);
-    align-items: start;
-  }
-
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-5);
-  }
-
-  .panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-  }
-
-  .panel-head h3 {
-    font-size: 1.6rem;
-    font-weight: 600;
-  }
-
-  .panel-empty {
-    font-size: 1.4rem;
-    color: var(--text-3);
-    padding: var(--space-2) 0 var(--space-1);
-  }
-
-  .queue {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .queue-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0.7rem 0;
-  }
-
-  .queue-row + .queue-row {
-    border-top: 1px solid var(--border);
-  }
-
-  .queue-thumb {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.6rem;
-    height: 3.6rem;
-    flex-shrink: 0;
-    border-radius: 0.6rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    color: var(--text-3);
-  }
-
-  .queue-title {
-    flex: 1;
-    min-width: 0;
-    font-size: 1.4rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .queue-size {
-    font-size: 1.3rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .queue-state {
-    font-size: 1.3rem;
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .queue-actions {
-    display: flex;
-    gap: 2px;
-  }
-
-  .panel-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: var(--space-4);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--border);
-  }
-
-  .panel-note {
-    font-size: 1.3rem;
-    color: var(--text-3);
-  }
-
-  @media (max-width: 1400px) {
-    .queue-state {
-      display: none;
+  @media (min-width: 2200px) {
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     }
   }
 
-  @media (max-width: 1240px) {
-    .bottom-row {
-      grid-template-columns: 1fr;
+  @media (max-width: 1400px) {
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
     }
   }
 </style>

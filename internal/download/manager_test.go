@@ -2,6 +2,8 @@ package download
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +27,7 @@ type fakeTorrent struct {
 	priorities   []bool
 	entered      chan struct{}
 	gate         chan struct{}
+	paths        []string
 }
 
 func (f *fakeTorrent) setPriorities(selected []bool) {
@@ -61,6 +64,12 @@ func (f *fakeTorrent) fileBytes() []int64 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return []int64{f.done}
+}
+
+func (f *fakeTorrent) filePaths(_ string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.paths
 }
 
 func (f *fakeTorrent) stats() engineStats {
@@ -138,7 +147,7 @@ func (f *fakeTorrent) isUploading() bool {
 
 func newTestManager(t *testing.T, max int) *Manager {
 	t.Helper()
-	m := newManagerAt(t.TempDir(), nil)
+	m := mustManagerAt(t, t.TempDir())
 	m.max = max
 	return m
 }
@@ -212,6 +221,31 @@ func assertStatuses(t *testing.T, m *Manager, want map[string]Status) {
 	}
 }
 
+func mustManagerAt(t testing.TB, dir string) *Manager {
+	t.Helper()
+	m, err := newManagerAt(dir, nil)
+	if err != nil {
+		t.Fatalf("new download manager at %s: %v", dir, err)
+	}
+	withTestContext(t, m)
+	return m
+}
+
+func withTestContext(t testing.TB, m *Manager) {
+	t.Helper()
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	t.Cleanup(m.cancel)
+}
+
+func fakeFilePath(t *testing.T, size int64) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "download.bin")
+	if err := os.WriteFile(path, make([]byte, size), 0o644); err != nil {
+		t.Fatalf("write fake file: %v", err)
+	}
+	return path
+}
+
 func TestQueueRespectsMaxActive(t *testing.T) {
 	m := newTestManager(t, 2)
 	for _, id := range []string{"a", "b", "c", "d"} {
@@ -233,8 +267,12 @@ func TestCompletionPromotesNext(t *testing.T) {
 	}
 
 	first.finish()
-	m.sample(time.Now())
+	first.mu.Lock()
+	first.paths = []string{fakeFilePath(t, first.size)}
+	first.mu.Unlock()
+	m.sample(context.Background(), time.Now())
 
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 	assertStatuses(t, m, map[string]Status{
 		"a": StatusCompleted,
 		"b": StatusDownloading,
@@ -306,7 +344,11 @@ func TestPauseCompletedIsRejected(t *testing.T) {
 	m := newTestManager(t, 1)
 	engine := m.addTestDownload("a")
 	engine.finish()
-	m.sample(time.Now())
+	engine.mu.Lock()
+	engine.paths = []string{fakeFilePath(t, engine.size)}
+	engine.mu.Unlock()
+	m.sample(context.Background(), time.Now())
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 
 	if err := m.Pause("a"); err != errUnavailable {
 		t.Fatalf("pause completed = %v, want %v", err, errUnavailable)
@@ -550,11 +592,12 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	m := newTestManager(t, 2)
 	eng := m.addTestDownload("a")
 	eng.finish()
-	m.sample(time.Now())
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+	m.sample(context.Background(), time.Now())
 
-	if got := m.statusOf(t, "a"); got != StatusCompleted {
-		t.Fatalf("status = %s, want %s", got, StatusCompleted)
-	}
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 	if got, _ := m.Get("a"); got.Seeding {
 		t.Fatal("seeding reported with seed-after-download off")
 	}
@@ -721,9 +764,11 @@ func TestPersistedStateReloads(t *testing.T) {
 	m.addTestDownload("a")
 	m.addTestDownload("b")
 
-	reloaded := newManagerAt(m.store.dir, nil)
+	reloaded := mustManagerAt(t, m.store.dir)
 	reloaded.mu.Lock()
-	reloaded.loadLocked()
+	if err := reloaded.loadLocked(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
 	reloaded.mu.Unlock()
 
 	items := reloaded.List()
@@ -797,8 +842,9 @@ func TestCompletionNotifiesInstaller(t *testing.T) {
 	eng := m.addTestDownload("a")
 	eng.mu.Lock()
 	eng.done = 100
+	eng.paths = []string{fakeFilePath(t, eng.size)}
 	eng.mu.Unlock()
-	m.sample(time.Now())
+	m.sample(context.Background(), time.Now())
 
 	select {
 	case d := <-seen:
@@ -808,4 +854,297 @@ func TestCompletionNotifiesInstaller(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("completion callback not invoked")
 	}
+}
+
+func newManagerWithSettings(t *testing.T, cfg settings.Settings) (*Manager, *settings.Service) {
+	t.Helper()
+	dir := t.TempDir()
+	svc, err := settings.NewServiceAt(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatalf("new settings service: %v", err)
+	}
+	if err := svc.SaveSettings(cfg); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	m, err := newManagerAt(dir, svc)
+	if err != nil {
+		t.Fatalf("new download manager at %s: %v", dir, err)
+	}
+	withTestContext(t, m)
+	m.max = 2
+	return m, svc
+}
+
+func TestUploadSettingCombinations(t *testing.T) {
+	cases := []struct {
+		name            string
+		uploadWhile     bool
+		seedAfter       bool
+		duringDownload  bool
+		afterCompletion bool
+	}{
+		{"both off", false, false, false, false},
+		{"seed after only", false, true, false, true},
+		{"upload while only", true, false, true, false},
+		{"both on", true, true, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := settings.Defaults()
+			cfg.UploadWhileDownloading = c.uploadWhile
+			cfg.SeedAfterDownload = c.seedAfter
+			m, _ := newManagerWithSettings(t, cfg)
+
+			eng := m.addTestDownload("a")
+			if got := m.statusOf(t, "a"); got != StatusDownloading {
+				t.Fatalf("status = %s, want %s", got, StatusDownloading)
+			}
+			if got := eng.isUploading(); got != c.duringDownload {
+				t.Fatalf("uploading during download = %v, want %v", got, c.duringDownload)
+			}
+
+			eng.finish()
+			eng.mu.Lock()
+			eng.paths = []string{fakeFilePath(t, eng.size)}
+			eng.mu.Unlock()
+			m.sample(context.Background(), time.Now())
+			waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
+			if got := eng.isUploading(); got != c.afterCompletion {
+				t.Fatalf("uploading after completion = %v, want %v", got, c.afterCompletion)
+			}
+			done, err := m.Get("a")
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if done.Seeding != c.seedAfter {
+				t.Fatalf("seeding = %v, want %v", done.Seeding, c.seedAfter)
+			}
+		})
+	}
+}
+
+func TestStartKeepsUploadOffByDefault(t *testing.T) {
+	m, _ := newManagerWithSettings(t, settings.Defaults())
+	eng := m.addTestDownload("a")
+	if eng.isUploading() {
+		t.Fatal("upload allowed with upload-while-downloading off")
+	}
+}
+
+func TestResumeReappliesUploadSetting(t *testing.T) {
+	cfg := settings.Defaults()
+	cfg.UploadWhileDownloading = true
+	m, svc := newManagerWithSettings(t, cfg)
+
+	eng := m.addTestDownload("a")
+	if !eng.isUploading() {
+		t.Fatal("upload not allowed with the setting on")
+	}
+	if err := m.Pause("a"); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+	if eng.isUploading() {
+		t.Fatal("upload still allowed while paused")
+	}
+
+	cfg.UploadWhileDownloading = false
+	if err := svc.SaveSettings(cfg); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	if err := m.Resume("a"); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if got := m.statusOf(t, "a"); got != StatusDownloading {
+		t.Fatalf("status = %s, want %s", got, StatusDownloading)
+	}
+	if eng.isUploading() {
+		t.Fatal("resume re-enabled upload with the setting off")
+	}
+}
+
+func TestUploadSettingAppliesToActiveDownload(t *testing.T) {
+	cfg := settings.Defaults()
+	m, _ := newManagerWithSettings(t, cfg)
+	eng := m.addTestDownload("a")
+	if eng.isUploading() {
+		t.Fatal("upload allowed with the setting off")
+	}
+
+	cfg.UploadWhileDownloading = true
+	m.applySettings(cfg)
+	if !eng.isUploading() {
+		t.Fatal("upload not allowed after enabling the setting")
+	}
+
+	cfg.UploadWhileDownloading = false
+	m.applySettings(cfg)
+	if eng.isUploading() {
+		t.Fatal("upload still allowed after disabling the setting")
+	}
+}
+
+func TestUploadWhileDownloadingDoesNotSeedCompleted(t *testing.T) {
+	cfg := settings.Defaults()
+	cfg.UploadWhileDownloading = true
+	cfg.SeedAfterDownload = false
+	m, _ := newManagerWithSettings(t, cfg)
+
+	eng := m.addTestDownload("a")
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
+	if eng.isUploading() {
+		t.Fatal("completed download keeps uploading with seed-after-download off")
+	}
+	waitUntil(t, "engine drop", eng.wasDropped)
+}
+
+func TestCompletionFailsWhenFileMissingFromDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.mu.Lock()
+	eng.done = eng.size
+	eng.paths = []string{filepath.Join(t.TempDir(), "missing.bin")}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to fail", func() bool { return m.statusOf(t, "a") == StatusFailed })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error == "" {
+		t.Fatal("failed download has no error message")
+	}
+}
+
+func TestCompletionFailsWhenFileTruncatedOnDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	path := filepath.Join(t.TempDir(), "game.bin")
+	if err := os.WriteFile(path, make([]byte, 10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng.mu.Lock()
+	eng.done = eng.size
+	eng.paths = []string{path}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to fail", func() bool { return m.statusOf(t, "a") == StatusFailed })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error == "" {
+		t.Fatal("failed download has no error message")
+	}
+}
+
+func TestCompletionSucceedsWhenFileMatchesOnDisk(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Error != "" {
+		t.Fatalf("error = %q, want empty", got.Error)
+	}
+}
+
+type logSink struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (s *logSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *logSink) text() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func captureLogs(t *testing.T) *logSink {
+	t.Helper()
+	sink := &logSink{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return sink
+}
+
+func TestLogsHideInfoHashAndSource(t *testing.T) {
+	const infoHash = "a748597437835a2fd0d2e06f8edd86fee316a84d"
+	m, _ := newManagerWithSettings(t, settings.Defaults())
+	d := m.addTestItem("a", StatusPaused)
+	m.mu.Lock()
+	d.InfoHash = infoHash
+	d.Source = `D:\Downloads\Startup Panic.torrent`
+	m.mu.Unlock()
+
+	sink := captureLogs(t)
+	if err := m.Resume("a"); !errors.Is(err, errNoRestore) {
+		t.Fatalf("resume = %v, want %v", err, errNoRestore)
+	}
+
+	logged := sink.text()
+	if !strings.Contains(logged, "download_id=a") {
+		t.Fatalf("log has no download id: %q", logged)
+	}
+	for _, leak := range []string{infoHash, "Startup Panic", ".torrent"} {
+		if strings.Contains(logged, leak) {
+			t.Fatalf("log leaks %q: %q", leak, logged)
+		}
+	}
+}
+
+func TestCompletionWaitsWhileAnotherJobHoldsDownload(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+
+	_, cancel := context.WithCancel(context.Background())
+	m.mu.Lock()
+	m.jobs["a"] = &jobState{cancel: cancel, done: make(chan struct{})}
+	m.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	if got := m.statusOf(t, "a"); got != StatusDownloading {
+		t.Fatalf("status = %q, want %q while another job holds the download", got, StatusDownloading)
+	}
+
+	m.mu.Lock()
+	delete(m.jobs, "a")
+	m.mu.Unlock()
+	cancel()
+
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete once the job is released", func() bool {
+		return m.statusOf(t, "a") == StatusCompleted
+	})
 }
