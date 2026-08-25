@@ -16,6 +16,7 @@ vi.mock('../services/backend', () => ({ inWails: true }));
 
 vi.mock('../services/selfupdate', () => ({
   getStatus: vi.fn(),
+  getOutcome: vi.fn(),
   checkForUpdate: vi.fn(),
   downloadUpdate: vi.fn(),
   applyUpdate: vi.fn(),
@@ -261,5 +262,73 @@ describe('retryFailed', () => {
     await store.retryFailed();
 
     expect(service.checkForUpdate).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('update outcome from the previous run', () => {
+  it('surfaces a failed install left behind by the update worker', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    const outcome = {
+      version: '1.2.0',
+      ok: false,
+      error: 'selfupdate: installer finished but left the launcher binary unchanged',
+      finishedAt: '2026-08-25T12:00:00Z',
+    };
+    vi.mocked(service.getOutcome).mockResolvedValue(outcome as never);
+
+    await store.initSelfUpdate();
+
+    expect(get(store.selfUpdateOutcome)).toEqual(outcome);
+  });
+
+  it('surfaces a successful install', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({
+      version: '1.2.0',
+      ok: true,
+      finishedAt: '2026-08-25T12:00:00Z',
+    } as never);
+
+    await store.initSelfUpdate();
+
+    expect(get(store.selfUpdateOutcome)?.ok).toBe(true);
+  });
+
+  it('keeps the outcome empty when the worker left nothing', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue(null as never);
+
+    await store.initSelfUpdate();
+
+    expect(get(store.selfUpdateOutcome)).toBeNull();
+  });
+
+  it('can be dismissed', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({
+      version: '1.2.0',
+      ok: true,
+      finishedAt: '2026-08-25T12:00:00Z',
+    } as never);
+
+    await store.initSelfUpdate();
+    store.dismissOutcome();
+
+    expect(get(store.selfUpdateOutcome)).toBeNull();
+  });
+
+  it('still loads the status when the outcome lookup fails', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus({ state: 'available' }) as never);
+    vi.mocked(service.getOutcome).mockRejectedValue(new Error('boom'));
+
+    await store.initSelfUpdate();
+
+    expect(get(store.selfUpdateStatus).state).toBe('available');
+    expect(get(store.selfUpdateOutcome)).toBeNull();
   });
 });

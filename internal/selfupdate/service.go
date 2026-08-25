@@ -29,6 +29,9 @@ var checkInterval = 6 * time.Hour
 
 var errNoUpdateChecked = errors.New("selfupdate: check for an update before downloading")
 
+// startWorker is a seam for tests: the real one spawns a detached process.
+var startWorker = startUpdateWorker
+
 type Service struct {
 	mu     sync.Mutex
 	dir    string
@@ -45,6 +48,7 @@ type Service struct {
 	pendingVersion  string
 	readyPath       string
 	readyArtifact   *Artifact
+	outcome         Outcome
 }
 
 func NewService() (*Service, error) {
@@ -113,6 +117,31 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return fmt.Errorf("selfupdate: load state: %w", err)
 	}
+	s.mu.Unlock()
+
+	if err := s.takeOutcome(); err != nil {
+		return err
+	}
+	if err := s.dropStaleWorker(); err != nil {
+		return err
+	}
+
+	// currentVersion moves only when an update is actually installed, so a
+	// record kept from before the restart still claims the version this build
+	// already is. Left alone it shows up as "update available" for the running
+	// version and keeps its installer alive in the cache forever.
+	stale, err := s.staleForCurrent(v)
+	if err != nil {
+		return err
+	}
+	if stale {
+		v = stored{CheckedAt: v.CheckedAt}
+		if serr := s.store.Save(v); serr != nil {
+			return fmt.Errorf("selfupdate: persist cleared state: %w", serr)
+		}
+	}
+
+	s.mu.Lock()
 	s.status = statusFromStored(v, s.currentVersion)
 	if s.status.State == StateReady {
 		s.readyPath = v.ReadyPath
@@ -165,6 +194,80 @@ func (s *Service) ServiceShutdown() error {
 	return nil
 }
 
+// takeOutcome picks up what the update worker left behind. The install runs
+// with no UI on screen, so this record is the only way a failed update reaches
+// the user instead of looking like a launcher that restarted for no reason.
+func (s *Service) takeOutcome() error {
+	path, err := OutcomePath(s.dir)
+	if err != nil {
+		return err
+	}
+	o, readErr := readOutcome(path)
+	switch {
+	case errors.Is(readErr, fs.ErrNotExist):
+		return nil
+	case readErr != nil:
+		o = Outcome{OK: false, Error: readErr.Error(), FinishedAt: time.Now()}
+	case time.Since(o.FinishedAt) > outcomeMaxAge:
+		o = Outcome{}
+	}
+
+	s.mu.Lock()
+	s.outcome = o
+	s.mu.Unlock()
+
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("selfupdate: remove update outcome: %w", err)
+	}
+	return nil
+}
+
+// dropStaleWorker removes the copy of the launcher the worker ran from. The
+// copy is the process that relaunched us and may still be exiting, and Windows
+// keeps a running image locked, so a failure here is expected and retried on
+// the next start rather than blocking it.
+func (s *Service) dropStaleWorker() error {
+	dir, err := WorkerDir(s.dir)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		slog.Warn("remove selfupdate worker copy", "dir", dir, "error", err)
+	}
+	return nil
+}
+
+func (s *Service) staleForCurrent(v stored) (bool, error) {
+	if v.AvailableVersion == "" {
+		return false, nil
+	}
+	newer, err := IsNewer(v.AvailableVersion, s.currentVersion)
+	if err != nil {
+		return false, fmt.Errorf("selfupdate: compare stored version %q: %w", v.AvailableVersion, err)
+	}
+	return !newer, nil
+}
+
+// stageWorker names the copy after this process so a leftover copy from an
+// earlier attempt, which Windows may still hold open, cannot block a new one.
+func (s *Service) stageWorker(exe string) (string, error) {
+	dir, err := WorkerDir(s.dir)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("typhon-update-%d.exe", os.Getpid()))
+	if err := copyExecutable(exe, path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (s *Service) GetOutcome() Outcome {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.outcome
+}
+
 // Removal goes through an os.Root scoped to the cache directory: absolute
 // paths handed to os.Remove race with anything swapping a directory entry
 // between the walk's stat and the removal (gosec G122).
@@ -199,6 +302,12 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 		depth := strings.Count(relPath, "/") + 1
 		switch {
 		case depth == 1 && d.IsDir():
+			// dropStaleWorker owns the worker directory: it holds a running
+			// image right after a restart, and a failed removal there must not
+			// abort the cache sweep.
+			if d.Name() == workerDirName {
+				return fs.SkipDir
+			}
 			if keepVersion != "" && d.Name() == keepVersion {
 				return nil
 			}
@@ -207,7 +316,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			}
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" {
+			if d.Name() == "state.json" || d.Name() == outcomeName {
 				return nil
 			}
 			return root.Remove(relPath)
@@ -293,14 +402,14 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 		return status, st, nil
 	}
 
-	st := stored{
-		AvailableVersion: m.Version,
-		Notes:            m.Notes,
-		PublishedAt:      m.PublishedAt,
-		CheckedAt:        time.Now(),
-	}
+	// A version that is not newer is not an update: recording it makes the
+	// next start derive StateAvailable for the build already running.
+	st := stored{CheckedAt: time.Now()}
 	state := StateIdle
 	if newer {
+		st.AvailableVersion = m.Version
+		st.Notes = m.Notes
+		st.PublishedAt = m.PublishedAt
 		state = StateAvailable
 	}
 	status := Status{
@@ -459,39 +568,53 @@ func (s *Service) ApplyUpdate() error {
 		return ErrNotReady
 	}
 	readyPath := s.readyPath
+	version := s.status.AvailableVersion
 	s.busy = true
 	s.status.State = StateApplying
+	applying := s.status
 	s.mu.Unlock()
+	emit(eventStatus, applying)
 
-	rollback := func() {
+	rollback := func(cause error) error {
 		s.mu.Lock()
 		s.busy = false
 		s.status.State = StateReady
+		status := s.status
 		s.mu.Unlock()
+		emit(eventStatus, status)
+		return cause
 	}
 
 	exe, err := os.Executable()
 	if err != nil {
-		rollback()
-		return err
+		return rollback(err)
 	}
 
-	spec := updateSpec{InstallerPath: readyPath, ParentPID: os.Getpid(), RelaunchPath: exe}
-
-	cacheDir, err := CacheDir(s.dir)
+	// The worker must not run from the binary the installer replaces: Windows
+	// keeps a running image locked, NSIS then skips the file, still exits 0,
+	// and the launcher comes back on the version it started from.
+	workerPath, err := s.stageWorker(exe)
 	if err != nil {
-		rollback()
-		return err
-	}
-	specPath := filepath.Join(cacheDir, "update-spec.json")
-	if err := writeUpdateSpec(specPath, spec); err != nil {
-		rollback()
-		return err
+		return rollback(err)
 	}
 
-	if err := startUpdateWorker(exe, specPath); err != nil {
-		rollback()
-		return err
+	spec := updateSpec{
+		InstallerPath: readyPath,
+		ParentPID:     os.Getpid(),
+		RelaunchPath:  exe,
+		Version:       version,
+	}
+
+	specPath, err := SpecPath(s.dir)
+	if err != nil {
+		return rollback(err)
+	}
+	if err := writeUpdateSpec(specPath, spec); err != nil {
+		return rollback(err)
+	}
+
+	if err := startWorker(workerPath, specPath); err != nil {
+		return rollback(err)
 	}
 
 	if a := application.Get(); a != nil {

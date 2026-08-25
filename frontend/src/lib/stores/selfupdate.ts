@@ -6,7 +6,9 @@ import {
   checkForUpdate as checkForUpdateRequest,
   dismissUpdate as dismissUpdateRequest,
   downloadUpdate as downloadUpdateRequest,
+  getOutcome,
   getStatus,
+  type SelfUpdateOutcome,
   type SelfUpdateProgress,
   type SelfUpdateStatus,
 } from '../services/selfupdate';
@@ -18,10 +20,20 @@ export const selfUpdateProgress = writable<SelfUpdateProgress | null>(null);
 export const selfUpdateChecking = writable(false);
 export const selfUpdateDownloading = writable(false);
 export const selfUpdateLastAction = writable<'check' | 'download' | null>(null);
+export const selfUpdateOutcome = writable<SelfUpdateOutcome | null>(null);
 
 export const selfUpdateView = derived(selfUpdateStatus, ($status) =>
   $status.error || $status.state === 'failed' ? 'failed' : $status.state,
 );
+
+export const selfUpdateBusy = derived(
+  [selfUpdateStatus, selfUpdateDownloading],
+  ([$status, $downloading]) => $downloading || $status.state === 'downloading' || $status.state === 'applying',
+);
+
+export function dismissOutcome() {
+  selfUpdateOutcome.set(null);
+}
 
 let announcedVersion = '';
 
@@ -36,6 +48,20 @@ function applyStatus(status: SelfUpdateStatus) {
 export async function initSelfUpdate() {
   try {
     applyStatus(await getStatus());
+  } catch (err) {
+    toast(errorMessage(err), 'danger');
+  }
+  try {
+    const outcome = await getOutcome();
+    if (outcome) {
+      selfUpdateOutcome.set(outcome);
+      toast(
+        outcome.ok
+          ? `Лаунчер обновлён до версии ${outcome.version}`
+          : `Не удалось установить обновление ${outcome.version}`,
+        outcome.ok ? 'success' : 'danger',
+      );
+    }
   } catch (err) {
     toast(errorMessage(err), 'danger');
   }

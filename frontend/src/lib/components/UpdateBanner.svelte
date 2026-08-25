@@ -43,15 +43,22 @@
       Повторить
     </Button>
   </div>
-{:else if downloading}
+{:else if downloading || view === 'downloading'}
   <div class="banner">
     <div class="banner-text">
       <span>Загрузка обновления {status.availableVersion}</span>
     </div>
     <div class="progress">
       <ProgressBar value={pct} />
-      <span class="muted">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)}</span>
+      <span class="muted">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)} · {Math.round(pct)}%</span>
     </div>
+  </div>
+{:else if view === 'applying'}
+  <div class="banner">
+    <div class="banner-text">
+      <span>Устанавливаем обновление {status.availableVersion}</span>
+    </div>
+    <p class="muted">Лаунчер закроется и запустится заново.</p>
   </div>
 {:else if view === 'ready'}
   <div class="banner">

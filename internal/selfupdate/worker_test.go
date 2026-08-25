@@ -229,17 +229,180 @@ func TestRunWorkerRemovesSpecFileEvenOnFailure(t *testing.T) {
 	t.Cleanup(func() { parentPollInterval, parentExitTimeout = restorePoll, restoreTimeout })
 
 	dir := t.TempDir()
+	t.Setenv("APPDATA", dir)
 	specPath := filepath.Join(dir, "spec.json")
 	spec := updateSpec{InstallerPath: filepath.Join(dir, "missing-setup.exe"), ParentPID: os.Getpid(), RelaunchPath: filepath.Join(dir, "missing-launcher.exe")}
 	if err := writeUpdateSpec(specPath, spec); err != nil {
 		t.Fatalf("writeUpdateSpec: %v", err)
 	}
 
-	if err := RunWorker(specPath); err == nil {
-		t.Fatal("RunWorker() error = nil, want an error: this test process (the parent) never exits")
+	if err := runWorker(specPath, quietReporter); err == nil {
+		t.Fatal("runWorker() error = nil, want an error: this test process (the parent) never exits")
 	}
 
 	if _, err := os.Stat(specPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("spec file survived RunWorker: %v", err)
+	}
+}
+
+func quietReporter(string, string) stageReporter { return silentReporter{} }
+
+// TestEnsureReplacedDetectsUntouchedLauncher closes the bug that made the
+// whole feature look like a no-op: the worker used to run from the very
+// binary the NSIS installer has to overwrite, Windows kept that image locked,
+// the installer skipped the file and still exited 0, and the launcher came
+// back on the version it started from with nothing reported anywhere.
+func TestEnsureReplacedDetectsUntouchedLauncher(t *testing.T) {
+	tests := []struct {
+		name   string
+		before string
+		after  string
+		want   error
+	}{
+		{"installer left the binary byte-identical", "aa", "aa", ErrNotReplaced},
+		{"binary disappeared", "aa", "", ErrNotReplaced},
+		{"binary was never there and still is not", "", "", ErrNotReplaced},
+		{"binary was replaced", "aa", "bb", nil},
+		{"fresh install where nothing existed before", "", "bb", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ensureReplaced(tc.before, tc.after, `C:\Typhon\typhon.exe`)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("ensureReplaced() error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFileDigest(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	missing, err := fileDigest(ctx, filepath.Join(dir, "absent.exe"))
+	if err != nil {
+		t.Fatalf("fileDigest on a missing file returned an error: %v", err)
+	}
+	if missing != "" {
+		t.Fatalf("fileDigest on a missing file = %q, want an empty digest", missing)
+	}
+
+	first := filepath.Join(dir, "first.exe")
+	writeTestFile(t, first, []byte("old build"))
+	second := filepath.Join(dir, "second.exe")
+	writeTestFile(t, second, []byte("new build"))
+
+	a, err := fileDigest(ctx, first)
+	if err != nil {
+		t.Fatalf("fileDigest(first): %v", err)
+	}
+	b, err := fileDigest(ctx, second)
+	if err != nil {
+		t.Fatalf("fileDigest(second): %v", err)
+	}
+	if a == "" || a == b {
+		t.Fatalf("fileDigest gave %q and %q, want two different non-empty digests", a, b)
+	}
+
+	again, err := fileDigest(ctx, first)
+	if err != nil {
+		t.Fatalf("fileDigest(first) again: %v", err)
+	}
+	if again != a {
+		t.Fatalf("fileDigest is not stable: %q then %q", a, again)
+	}
+}
+
+func TestFileDigestHonoursCancelledContext(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "build.exe")
+	writeTestFile(t, path, []byte("payload"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := fileDigest(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("fileDigest() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestCopyExecutableProducesAnIndependentCopy(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "typhon.exe")
+	writeTestFile(t, src, []byte("launcher bytes"))
+	dst := filepath.Join(dir, "worker", "typhon-update.exe")
+
+	if err := copyExecutable(src, dst); err != nil {
+		t.Fatalf("copyExecutable: %v", err)
+	}
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read copy: %v", err)
+	}
+	if string(got) != "launcher bytes" {
+		t.Fatalf("copy content = %q, want the source bytes", got)
+	}
+	if err := os.Remove(src); err != nil {
+		t.Fatalf("the copy still depends on the source: %v", err)
+	}
+	if _, err := os.Stat(dst); err != nil {
+		t.Fatalf("copy vanished with the source: %v", err)
+	}
+}
+
+func TestCopyExecutableMissingSource(t *testing.T) {
+	dir := t.TempDir()
+	if err := copyExecutable(filepath.Join(dir, "absent.exe"), filepath.Join(dir, "worker", "copy.exe")); err == nil {
+		t.Fatal("copyExecutable() error = nil, want an error for a missing source")
+	}
+}
+
+// TestRunWorkerRecordsFailureForTheRelaunchedLauncher closes the other half of
+// the same bug: the install happens with no UI on screen, so a failure that is
+// not written down looks to the user like a launcher that closed and came back
+// for no reason.
+func TestRunWorkerRecordsFailureForTheRelaunchedLauncher(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("APPDATA", dir)
+
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("UserConfigDir: %v", err)
+	}
+	appDir := filepath.Join(configDir, "Typhon")
+
+	specPath := filepath.Join(dir, "spec.json")
+	spec := updateSpec{
+		InstallerPath: filepath.Join(dir, "missing-setup.exe"),
+		ParentPID:     0,
+		RelaunchPath:  filepath.Join(dir, "missing-launcher.exe"),
+		Version:       "1.2.3",
+	}
+	if err := writeUpdateSpec(specPath, spec); err != nil {
+		t.Fatalf("writeUpdateSpec: %v", err)
+	}
+
+	if err := runWorker(specPath, quietReporter); err == nil {
+		t.Fatal("runWorker() error = nil, want the failed install surfaced")
+	}
+
+	outcomePath, err := OutcomePath(appDir)
+	if err != nil {
+		t.Fatalf("OutcomePath: %v", err)
+	}
+	got, err := readOutcome(outcomePath)
+	if err != nil {
+		t.Fatalf("readOutcome: %v", err)
+	}
+	if got.OK {
+		t.Fatalf("outcome.OK = true, want false: the installer never ran")
+	}
+	if got.Version != "1.2.3" {
+		t.Fatalf("outcome.Version = %q, want %q", got.Version, "1.2.3")
+	}
+	if got.Error == "" {
+		t.Fatal("outcome.Error is empty, want the reason the update failed")
+	}
+	if got.FinishedAt.IsZero() {
+		t.Fatal("outcome.FinishedAt is zero")
 	}
 }

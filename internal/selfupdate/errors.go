@@ -22,4 +22,5 @@ var (
 	ErrApplyUnsupported    = errors.New("selfupdate: applying updates is not supported on this platform")
 	ErrBusy                = errors.New("selfupdate: another update operation is in progress")
 	ErrReadOnly            = errors.New("selfupdate: state failed to load, refusing to persist")
+	ErrNotReplaced         = errors.New("selfupdate: installer finished but left the launcher binary unchanged")
 )

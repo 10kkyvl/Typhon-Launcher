@@ -22,11 +22,36 @@ export interface SelfUpdateProgress {
   downloadedBytes: number;
 }
 
+export interface SelfUpdateOutcome {
+  version: string;
+  ok: boolean;
+  error?: string;
+  finishedAt: string;
+}
+
 const SENTINEL_CODES: Record<string, string> = {
   'selfupdate: another update operation is in progress': 'busy',
   'selfupdate: no verified update is ready to apply': 'not_ready',
   'selfupdate: check for an update before downloading': 'not_checked',
 };
+
+const OUTCOME_REASONS: [string, string][] = [
+  [
+    'left the launcher binary unchanged',
+    'Установщик не заменил файлы запущенного лаунчера. Откройте Typhon из меню Пуск или переустановите вручную.',
+  ],
+  ['launcher did not exit', 'Лаунчер не закрылся вовремя, обновление отменено.'],
+  ['downloaded hash differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
+  ['downloaded size differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
+  ['no verified update is ready', 'Установщик не найден. Скачайте обновление заново.'],
+  ['run installer', 'Установщик завершился с ошибкой.'],
+];
+
+export function outcomeReason(outcome: SelfUpdateOutcome): string {
+  const raw = outcome.error ?? '';
+  const known = OUTCOME_REASONS.find(([marker]) => raw.includes(marker));
+  return known ? known[1] : raw;
+}
 
 export class SelfUpdateError extends Error {
   code: string;
@@ -54,6 +79,16 @@ export async function getStatus(): Promise<SelfUpdateStatus> {
   if (!inWails) return idleStatus();
   try {
     return (await SelfUpdateService.GetStatus()) as unknown as SelfUpdateStatus;
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function getOutcome(): Promise<SelfUpdateOutcome | null> {
+  if (!inWails) return null;
+  try {
+    const outcome = (await SelfUpdateService.GetOutcome()) as unknown as SelfUpdateOutcome;
+    return outcome?.version ? outcome : null;
   } catch (err) {
     throw toSelfUpdateError(err);
   }

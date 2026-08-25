@@ -6,6 +6,7 @@ const bindings = {
   DownloadUpdate: vi.fn(),
   ApplyUpdate: vi.fn(),
   DismissUpdate: vi.fn(),
+  GetOutcome: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/selfupdate', () => ({ Service: bindings }));
@@ -112,6 +113,27 @@ describe('selfupdate service errors', () => {
   });
 });
 
+describe('getOutcome', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the outcome recorded by the update worker', async () => {
+    const { getOutcome } = await import('./selfupdate');
+    const outcome = { version: '1.2.0', ok: false, error: 'boom', finishedAt: '2026-08-25T12:00:00Z' };
+    bindings.GetOutcome.mockResolvedValueOnce(outcome);
+
+    await expect(getOutcome()).resolves.toEqual(outcome);
+  });
+
+  it('returns null when no update has run', async () => {
+    const { getOutcome } = await import('./selfupdate');
+    bindings.GetOutcome.mockResolvedValueOnce({ version: '', ok: false, finishedAt: '0001-01-01T00:00:00Z' });
+
+    await expect(getOutcome()).resolves.toBeNull();
+  });
+});
+
 describe('selfupdate service outside Wails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,4 +156,30 @@ describe('selfupdate service outside Wails', () => {
       await expect((module[fnName] as () => Promise<unknown>)()).rejects.toMatchObject({ code: 'unavailable' });
     },
   );
+});
+
+describe('outcomeReason', () => {
+  it.each([
+    ['selfupdate: installer finished but left the launcher binary unchanged', 'Установщик не заменил файлы'],
+    ['selfupdate: launcher did not exit before the timeout', 'Лаунчер не закрылся вовремя'],
+    ['selfupdate: downloaded hash differs from the manifest', 'повреждён'],
+  ])('translates %s', async (raw, expected) => {
+    const { outcomeReason } = await import('./selfupdate');
+
+    expect(outcomeReason({ version: '1.2.0', ok: false, error: raw, finishedAt: '' })).toContain(expected);
+  });
+
+  it('falls back to the raw error it does not know', async () => {
+    const { outcomeReason } = await import('./selfupdate');
+
+    expect(outcomeReason({ version: '1.2.0', ok: false, error: 'something else', finishedAt: '' })).toBe(
+      'something else',
+    );
+  });
+
+  it('returns an empty string when there is no error', async () => {
+    const { outcomeReason } = await import('./selfupdate');
+
+    expect(outcomeReason({ version: '1.2.0', ok: true, finishedAt: '' })).toBe('');
+  });
 });
