@@ -77,12 +77,14 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis -y --no-progress
-          $nsisDir = "$env:ProgramFiles(x86)\NSIS"
-          if (-not (Test-Path "$nsisDir\makensis.exe")) {
-            $nsisDir = "$env:ProgramFiles\NSIS"
-          }
-          if (-not (Test-Path "$nsisDir\makensis.exe")) {
-            throw "makensis.exe not found after installing NSIS"
+          # "$env:ProgramFiles(x86)" parses as $env:ProgramFiles plus a literal "(x86)".
+          $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) | Where-Object { $_ }
+          $nsisDir = $roots |
+            ForEach-Object { Join-Path $_ 'NSIS' } |
+            Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } |
+            Select-Object -First 1
+          if (-not $nsisDir) {
+            throw "makensis.exe not found after installing NSIS; looked in: $($roots -join ', ')"
           }
           Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
 
