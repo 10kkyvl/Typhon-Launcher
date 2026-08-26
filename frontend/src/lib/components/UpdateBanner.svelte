@@ -13,6 +13,7 @@
     selfUpdateStatus,
     selfUpdateView,
   } from '../stores/selfupdate';
+  import { statusReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
 
   let confirmOpen = $state(false);
@@ -36,7 +37,7 @@
   <div class="banner banner-danger">
     <div class="banner-text">
       <AlertTriangle size="1.8rem" strokeWidth={1.8} />
-      <span>{status.error || 'Не удалось проверить обновления'}</span>
+      <span>{statusReason(status) || 'Не удалось проверить обновления'}</span>
     </div>
     <Button size="sm" onclick={retryFailed}>
       <RefreshCw size="1.5rem" strokeWidth={1.8} />

@@ -10,7 +10,7 @@
     selfUpdateStatus,
   } from '../stores/selfupdate';
   import { route } from '../stores/router';
-  import { outcomeReason } from '../services/selfupdate';
+  import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
 
   const status = $derived($selfUpdateStatus);

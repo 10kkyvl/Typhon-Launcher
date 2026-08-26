@@ -15,9 +15,12 @@ import (
 
 var ErrManifestStatus = errors.New("selfupdate: manifest endpoint returned an error status")
 
+var httpTimeout = 30 * time.Second
+
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL        string
+	httpClient     *http.Client
+	downloadClient *http.Client
 }
 
 func NewClient(baseURL string) (*Client, error) {
@@ -25,18 +28,26 @@ func NewClient(baseURL string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 10 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+		ExpectContinueTimeout: 5 * time.Second,
+	}
 	return &Client{
 		baseURL: base,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				DialContext: (&net.Dialer{
-					Timeout: 10 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 20 * time.Second,
-				ExpectContinueTimeout: 5 * time.Second,
-			},
+			Timeout:       httpTimeout,
+			Transport:     transport,
+			CheckRedirect: account.CheckRedirect,
+		},
+		// Артефакт весит до MaxArtifactSize: дедлайн на весь запрос убивает
+		// исправную медленную загрузку, поэтому здесь его нет, а зависшую
+		// передачу обрывает stallTimeout в Download.
+		downloadClient: &http.Client{
+			Transport:     transport,
 			CheckRedirect: account.CheckRedirect,
 		},
 	}, nil

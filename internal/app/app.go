@@ -10,7 +10,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var Version = "0.2.0"
+var Version = "0.2.1"
 
 type AppInfo struct {
 	Version  string `json:"version"`

@@ -157,29 +157,3 @@ describe('selfupdate service outside Wails', () => {
     },
   );
 });
-
-describe('outcomeReason', () => {
-  it.each([
-    ['selfupdate: installer finished but left the launcher binary unchanged', 'Установщик не заменил файлы'],
-    ['selfupdate: launcher did not exit before the timeout', 'Лаунчер не закрылся вовремя'],
-    ['selfupdate: downloaded hash differs from the manifest', 'повреждён'],
-  ])('translates %s', async (raw, expected) => {
-    const { outcomeReason } = await import('./selfupdate');
-
-    expect(outcomeReason({ version: '1.2.0', ok: false, error: raw, finishedAt: '' })).toContain(expected);
-  });
-
-  it('falls back to the raw error it does not know', async () => {
-    const { outcomeReason } = await import('./selfupdate');
-
-    expect(outcomeReason({ version: '1.2.0', ok: false, error: 'something else', finishedAt: '' })).toBe(
-      'something else',
-    );
-  });
-
-  it('returns an empty string when there is no error', async () => {
-    const { outcomeReason } = await import('./selfupdate');
-
-    expect(outcomeReason({ version: '1.2.0', ok: true, finishedAt: '' })).toBe('');
-  });
-});
