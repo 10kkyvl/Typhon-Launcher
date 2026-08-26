@@ -164,7 +164,7 @@ func applyMatches(m matcher, list []*Release) {
 		if r.Locked || r.Ignored {
 			continue
 		}
-		if r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil {
+		if r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil && stableMatch(r.MatchMethod) {
 			continue
 		}
 		targets = append(targets, r)
@@ -222,6 +222,17 @@ func applyMatches(m matcher, list []*Release) {
 		r.MatchConfidence = 1
 		r.MatchMethod = string(catalog.MethodProvisional)
 	}
+}
+
+// Матч по псевдониму или похожести держится на данных каталога, а они
+// меняются: псевдоним могут выбросить, игру — переименовать. Такой матч
+// пересчитывается на каждом обновлении, точный и ручной — нет.
+func stableMatch(method string) bool {
+	switch catalog.Method(method) {
+	case catalog.MethodExactTitle, catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodProvisional:
+		return true
+	}
+	return false
 }
 
 func queryKey(r *Release) string {

@@ -480,6 +480,37 @@ func TestEnsureArtFallsBackToSearchForTitlesTheBatchMissed(t *testing.T) {
 	}
 }
 
+func TestEnsureArtRejectsAForeignGameFromTheBatch(t *testing.T) {
+	srv := imageServer(t)
+	provider := newBatchProvider(t, srv.URL, "Adorable Adventures")
+	foreign := provider.resolve["Adorable Adventures"]
+	foreign.Title = "The Incredible Adventures of Van Helsing"
+	foreign.ProviderID = "2638"
+	provider.resolve["Adorable Adventures"] = foreign
+	svc, cat, _ := newTestService(t, provider)
+
+	game := addGame(t, cat, catalog.Game{Title: "Adorable Adventures", Provisional: true})
+
+	if _, err := svc.EnsureArt([]string{game.ID}); err != nil {
+		t.Fatalf("ensure art: %v", err)
+	}
+	svc.wg.Wait()
+
+	stored, err := cat.GetGame(game.ID)
+	if err != nil {
+		t.Fatalf("reload game: %v", err)
+	}
+	if stored.Title != "Adorable Adventures" {
+		t.Fatalf("title = %q, want the game left under its own name", stored.Title)
+	}
+	if stored.ExternalIDs.IGDB != "" || stored.CoverAssetID != "" {
+		t.Fatalf("foreign metadata applied: %+v", stored)
+	}
+	if len(stored.Aliases) != 0 {
+		t.Fatalf("aliases = %v, want none", stored.Aliases)
+	}
+}
+
 func TestEnsureArtFallsBackWhenTheBatchFails(t *testing.T) {
 	srv := imageServer(t)
 	provider := newBatchProvider(t, srv.URL, "Prey")

@@ -15,6 +15,13 @@ export interface SystemInfo {
   ramBytes: number;
 }
 
+export interface LogBundle {
+  path: string;
+  name: string;
+  dir: string;
+  sizeBytes: number;
+}
+
 export interface StorageInfo {
   path: string;
   volume: string;
@@ -53,4 +60,9 @@ export async function getStorageInfo(): Promise<StorageInfo> {
 export async function getStorageInfoFor(path: string): Promise<StorageInfo> {
   if (inWails) return (await AppService.GetStorageInfoFor(path)) as StorageInfo;
   return { ...fixtureStorage, path };
+}
+
+export async function exportLogs(): Promise<LogBundle> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await AppService.ExportLogs()) as LogBundle;
 }

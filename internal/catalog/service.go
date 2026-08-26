@@ -65,7 +65,15 @@ func (s *Service) load() error {
 	if err := loadList(s.overridesPath, overridesVersion, &s.overrides); err != nil {
 		return fmt.Errorf("load match overrides: %w", err)
 	}
+	games, changed := sanitize(s.games)
+	s.games = games
 	s.rebuildLocked()
+	if changed {
+		if err := s.persistGamesLocked(); err != nil {
+			return fmt.Errorf("save catalog: %w", err)
+		}
+		slog.Info("catalog sanitized", "games", len(s.games))
+	}
 	return nil
 }
 

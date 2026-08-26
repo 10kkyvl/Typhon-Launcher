@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"typhon/internal/titles"
 )
 
 var (
@@ -100,26 +98,12 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 }
 
 func applyTitle(game Game, title string) Game {
-	if title == "" {
+	if title == "" || !game.Provisional {
 		return game
 	}
-	previous := titles.Normalize(game.Title)
-	if game.Provisional {
-		game.Title = title
-		game.SortTitle = sortTitle(title)
-		game.Provisional = false
-		return rememberAlias(game, previous)
-	}
-	return rememberAlias(game, titles.Normalize(title))
-}
-
-func rememberAlias(game Game, alias string) Game {
-	if alias == "" || !learnable(alias, game) {
-		return game
-	}
-	aliases := make([]string, 0, len(game.Aliases)+1)
-	aliases = append(aliases, game.Aliases...)
-	game.Aliases = append(aliases, alias)
+	game.Title = title
+	game.SortTitle = sortTitle(title)
+	game.Provisional = false
 	return game
 }
 

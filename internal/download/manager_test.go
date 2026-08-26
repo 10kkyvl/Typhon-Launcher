@@ -24,6 +24,7 @@ type fakeTorrent struct {
 	droppedEarly bool
 	verified     bool
 	verifying    bool
+	hashed       bool
 	priorities   []bool
 	entered      chan struct{}
 	gate         chan struct{}
@@ -64,6 +65,12 @@ func (f *fakeTorrent) fileBytes() []int64 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return []int64{f.done}
+}
+
+func (f *fakeTorrent) filesHashed() []bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return []bool{f.hashed}
 }
 
 func (f *fakeTorrent) filePaths(_ string) []string {
@@ -117,6 +124,7 @@ func (f *fakeTorrent) finish() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.done = f.size
+	f.hashed = true
 }
 
 func (f *fakeTorrent) blockVerify() <-chan struct{} {
@@ -834,14 +842,48 @@ func TestDeleteDataRemovesRecordAndFiles(t *testing.T) {
 	})
 }
 
+func TestBytesWithoutHashKeepsDownloading(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := m.addTestDownload("a")
+	final := filepath.Join(t.TempDir(), "download.bin")
+	if err := os.WriteFile(final+PartFileSuffix, make([]byte, eng.size), 0o644); err != nil {
+		t.Fatalf("write part file: %v", err)
+	}
+	eng.mu.Lock()
+	eng.done = eng.size
+	eng.paths = []string{final}
+	eng.mu.Unlock()
+
+	m.sample(context.Background(), time.Now())
+
+	if got := m.statusOf(t, "a"); got != StatusDownloading {
+		t.Fatalf("status = %s, want %s", got, StatusDownloading)
+	}
+	d, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if d.Error != "" {
+		t.Fatalf("error = %q, want empty", d.Error)
+	}
+
+	eng.finish()
+	eng.mu.Lock()
+	eng.paths = []string{fakeFilePath(t, eng.size)}
+	eng.mu.Unlock()
+	m.sample(context.Background(), time.Now())
+
+	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
+}
+
 func TestCompletionNotifiesInstaller(t *testing.T) {
 	m := newTestManager(t, 2)
 	seen := make(chan Download, 1)
 	m.SetOnCompleted(func(d Download) { seen <- d })
 
 	eng := m.addTestDownload("a")
+	eng.finish()
 	eng.mu.Lock()
-	eng.done = 100
 	eng.paths = []string{fakeFilePath(t, eng.size)}
 	eng.mu.Unlock()
 	m.sample(context.Background(), time.Now())
@@ -1008,6 +1050,7 @@ func TestCompletionFailsWhenFileMissingFromDisk(t *testing.T) {
 	eng := m.addTestDownload("a")
 	eng.mu.Lock()
 	eng.done = eng.size
+	eng.hashed = true
 	eng.paths = []string{filepath.Join(t.TempDir(), "missing.bin")}
 	eng.mu.Unlock()
 
@@ -1032,6 +1075,7 @@ func TestCompletionFailsWhenFileTruncatedOnDisk(t *testing.T) {
 	}
 	eng.mu.Lock()
 	eng.done = eng.size
+	eng.hashed = true
 	eng.paths = []string{path}
 	eng.mu.Unlock()
 

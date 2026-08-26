@@ -940,7 +940,7 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 		}
 		before := *d
 		m.updateLocked(d, eng, now)
-		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total && m.jobs[d.ID] == nil {
+		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total && m.jobs[d.ID] == nil && selectedHashed(d, eng) {
 			d.Status = StatusVerifying
 			id, dest := d.ID, d.Destination
 			files := append([]FileState(nil), d.Files...)
@@ -958,6 +958,19 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 		m.lastPersist = now
 		m.persistLocked()
 	}
+}
+
+func selectedHashed(d *Download, eng engineTorrent) bool {
+	hashed := eng.filesHashed()
+	for i := range d.Files {
+		if !d.Files[i].Selected {
+			continue
+		}
+		if i >= len(hashed) || !hashed[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Manager) spawnVerifyLocked(ctx context.Context, id string, eng engineTorrent, dest string, files []FileState) {

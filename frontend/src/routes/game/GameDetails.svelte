@@ -33,6 +33,7 @@
     preferView,
     summaryView,
     tagList,
+    type TerminalDownloadStatus,
   } from '../../lib/game/view';
   import {
     cancelDownload,
@@ -278,7 +279,8 @@
   const terminalDownload = $derived.by(() => {
     if (installed) return undefined;
     return $downloads.find(
-      (item) => ownsDownload(item) && (item.status === 'completed' || item.status === 'failed'),
+      (item): item is DownloadItem & { status: TerminalDownloadStatus } =>
+        ownsDownload(item) && (item.status === 'completed' || item.status === 'failed'),
     );
   });
 
@@ -310,7 +312,7 @@
       releaseCount: availableGroups.length,
       releasesLoading,
       busy,
-      terminalDownload: terminalDownload ? { status: terminalDownload.status as 'completed' | 'failed' } : null,
+      terminalDownload: terminalDownload ? { status: terminalDownload.status } : null,
     }),
   );
 

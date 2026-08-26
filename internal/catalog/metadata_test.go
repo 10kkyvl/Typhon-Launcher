@@ -85,7 +85,7 @@ func TestApplyMetadataStoresFields(t *testing.T) {
 	}
 }
 
-func TestApplyMetadataRenamesProvisionalGameAndKeepsAlias(t *testing.T) {
+func TestApplyMetadataRenamesProvisionalGameWithoutLearningAlias(t *testing.T) {
 	svc, _ := metadataService(t)
 	game, err := svc.AddGame(Game{Title: "Prey 2017 Repack", Provisional: true})
 	if err != nil {
@@ -107,13 +107,14 @@ func TestApplyMetadataRenamesProvisionalGameAndKeepsAlias(t *testing.T) {
 		t.Fatalf("sort title = %q", updated.SortTitle)
 	}
 
-	found, ok := svc.LookupByTitle(oldNormalized)
-	if !ok || found.ID != game.ID {
-		t.Fatalf("release matching broken: the previous title no longer resolves (%v)", ok)
+	if len(updated.Aliases) != 0 {
+		t.Fatalf("aliases = %v, want none learned automatically", updated.Aliases)
 	}
-	match := svc.Resolve(Query{Title: "Prey 2017 Repack"})
-	if match.Status != StatusMatched || match.GameID != game.ID {
-		t.Fatalf("resolve = %+v", match)
+	if _, ok := svc.LookupByTitle(oldNormalized); ok {
+		t.Fatal("the previous title still resolves as an alias")
+	}
+	if match := svc.Resolve(Query{Title: "Prey 2017 Repack"}); match.Method == MethodAlias {
+		t.Fatalf("resolve = %+v, want anything but an alias", match)
 	}
 }
 
@@ -131,9 +132,11 @@ func TestApplyMetadataKeepsConfirmedTitle(t *testing.T) {
 	if updated.Title != "Прей" {
 		t.Fatalf("title = %q, want the canonical title kept", updated.Title)
 	}
-	found, ok := svc.LookupByTitle("Prey")
-	if !ok || found.ID != game.ID {
-		t.Fatalf("provider title was not remembered as an alias (%v)", ok)
+	if len(updated.Aliases) != 0 {
+		t.Fatalf("aliases = %v, want none learned automatically", updated.Aliases)
+	}
+	if _, ok := svc.LookupByTitle("Prey"); ok {
+		t.Fatal("the provider title was learned as an alias")
 	}
 }
 

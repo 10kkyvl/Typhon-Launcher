@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FolderOpen, ListChecks } from '@lucide/svelte';
+  import { Download, FolderOpen, ListChecks } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -13,8 +13,16 @@
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
+  import { logsReason } from '../../lib/services/logsMessages';
   import { openFolder, type Settings } from '../../lib/services/settings';
-  import { getAppInfo, getSystemInfo, type AppInfo, type SystemInfo } from '../../lib/services/system';
+  import {
+    exportLogs,
+    getAppInfo,
+    getSystemInfo,
+    type AppInfo,
+    type LogBundle,
+    type SystemInfo,
+  } from '../../lib/services/system';
   import { requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
@@ -41,6 +49,9 @@
   let legalActiveTitle = $state('');
   let sourcesNoticeReviewOpen = $state(false);
 
+  let logsBundle = $state<LogBundle | null>(null);
+  let logsSaving = $state(false);
+
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
@@ -50,6 +61,29 @@
       legalError = inWails ? 'Не удалось загрузить список документов.' : 'Правовые документы недоступны вне приложения.';
     }
   });
+
+  async function saveLogs() {
+    if (!inWails) {
+      toast('Логи доступны только в desktop-сборке');
+      return;
+    }
+    logsSaving = true;
+    try {
+      const bundle = await exportLogs();
+      logsBundle = bundle;
+      toast('Логи сохранены в папку «Загрузки»', 'success');
+      try {
+        await openFolder(bundle.dir);
+      } catch {
+        toast(bundle.path);
+      }
+    } catch (err) {
+      logsBundle = null;
+      toast(logsReason(err), 'danger');
+    } finally {
+      logsSaving = false;
+    }
+  }
 
   function openLegalDoc(meta: LegalMeta) {
     legalActiveId = meta.id;
@@ -578,6 +612,28 @@
           </Button>
         </div>
         <UpdateBanner />
+      </div>
+    </section>
+
+    <section class="group">
+      <h3>Диагностика</h3>
+      <div class="rows">
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">Логи лаунчера</span>
+            <span class="row-sub">
+              {#if logsBundle}
+                {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} — приложите архив к сообщению об ошибке
+              {:else}
+                Архив с журналом сохранится в папку «Загрузки» — приложите его к сообщению об ошибке
+              {/if}
+            </span>
+          </div>
+          <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
+            <Download size="1.5rem" strokeWidth={1.8} />
+            {logsSaving ? 'Сохраняем…' : 'Скачать логи'}
+          </Button>
+        </div>
       </div>
     </section>
 
