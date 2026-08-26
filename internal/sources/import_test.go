@@ -170,6 +170,58 @@ func TestApplyMatchesKeepsAmbiguousForReview(t *testing.T) {
 	}
 }
 
+func TestApplyMatchesRecomputesAliasMatch(t *testing.T) {
+	cat := mustCatalog(t, t.TempDir())
+	wrong, err := cat.AddGame(catalog.Game{Title: "The Incredible Adventures of Van Helsing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	list := parseEntries("src", []feed.Entry{entry("Adorable Adventures", magnetOf("11"), 10)}, now)
+	list, _ = merge(nil, list, now, true)
+	stale := wrong.ID
+	list[0].CanonicalGameID = &stale
+	list[0].MatchStatus = catalog.StatusMatched
+	list[0].MatchMethod = string(catalog.MethodAlias)
+	list[0].MatchConfidence = 0.97
+
+	applyMatches(cat, list)
+
+	if list[0].CanonicalGameID == nil {
+		t.Fatal("release lost its game instead of getting a fresh one")
+	}
+	if *list[0].CanonicalGameID == wrong.ID {
+		t.Fatal("stale alias match survived the refresh")
+	}
+	if list[0].MatchMethod != string(catalog.MethodProvisional) {
+		t.Fatalf("method = %q, want a freshly provisioned game", list[0].MatchMethod)
+	}
+}
+
+func TestApplyMatchesKeepsExactMatch(t *testing.T) {
+	cat := mustCatalog(t, t.TempDir())
+	game, err := cat.AddGame(catalog.Game{Title: "Some Game"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	list := parseEntries("src", []feed.Entry{entry("Some Game v1.0", magnetOf("11"), 10)}, now)
+	list, _ = merge(nil, list, now, true)
+	id := game.ID
+	list[0].CanonicalGameID = &id
+	list[0].MatchStatus = catalog.StatusMatched
+	list[0].MatchMethod = string(catalog.MethodExactTitle)
+	list[0].MatchConfidence = 0.98
+
+	applyMatches(cat, list)
+
+	if list[0].MatchConfidence != 0.98 || list[0].CanonicalGameID == nil || *list[0].CanonicalGameID != game.ID {
+		t.Fatalf("exact match was recomputed: %+v", list[0])
+	}
+}
+
 func TestApplyMatchesSkipsLocked(t *testing.T) {
 	cat := mustCatalog(t, t.TempDir())
 	now := time.Now()

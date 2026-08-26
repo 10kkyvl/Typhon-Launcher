@@ -19,6 +19,7 @@ import (
 	"typhon/internal/catalog"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/titles"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -435,6 +436,11 @@ func (s *Service) resolveArt(ctx context.Context, resolver BatchProvider, games 
 			rest = append(rest, game)
 			continue
 		}
+		if !sameGame(game, meta) {
+			slog.Info("batch metadata rejected", "game", game.Title, "offered", meta.Title)
+			rest = append(rest, game)
+			continue
+		}
 		view, err := s.apply(applyCtx, game, meta, modeArt)
 		if err != nil {
 			s.report(game, view, err)
@@ -443,6 +449,16 @@ func (s *Service) resolveArt(ctx context.Context, resolver BatchProvider, games 
 		s.report(game, view, nil)
 	}
 	return rest
+}
+
+// Пачка приходит от чужого матчера: бэкенд отвечает на название лучшим
+// кандидатом, а не точным совпадением. Поштучный путь режет такие ответы
+// порогом pick, у пачки своего порога не было.
+func sameGame(game catalog.Game, meta GameMetadata) bool {
+	if id := strings.TrimSpace(game.ExternalIDs.IGDB); id != "" && id == strings.TrimSpace(meta.ProviderID) {
+		return true
+	}
+	return titles.Similarity(game.Title, meta.Title) >= autoThreshold
 }
 
 func (s *Service) resolve(ctx context.Context, resolver BatchProvider, titles []string) ([]Resolved, error) {
