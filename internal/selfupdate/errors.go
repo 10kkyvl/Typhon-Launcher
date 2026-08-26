@@ -16,6 +16,7 @@ var (
 	ErrInvalidArtifactSize = errors.New("selfupdate: artifact size is out of range")
 	ErrInvalidHash         = errors.New("selfupdate: artifact hash is not a sha-256 digest")
 	ErrNoArtifact          = errors.New("selfupdate: manifest has no artifact for this platform")
+	ErrStalled             = errors.New("selfupdate: artifact download stalled")
 	ErrSizeMismatch        = errors.New("selfupdate: downloaded size differs from the manifest")
 	ErrHashMismatch        = errors.New("selfupdate: downloaded hash differs from the manifest")
 	ErrNotReady            = errors.New("selfupdate: no verified update is ready to apply")

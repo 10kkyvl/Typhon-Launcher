@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,6 +23,8 @@ const (
 	progressMinInterval = 250 * time.Millisecond
 )
 
+var stallTimeout = 60 * time.Second
+
 func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onProgress func(downloaded int64)) (path string, err error) {
 	if err := art.Validate(); err != nil {
 		return "", err
@@ -30,12 +33,15 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 		return "", ErrEmptyConfigDir
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, art.URL, nil)
+	dlCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, art.URL, nil)
 	if err != nil {
 		return "", fmt.Errorf("build artifact request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.downloadClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("download artifact: %w", err)
 	}
@@ -68,8 +74,14 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 		}
 	}()
 
-	written, sum, err := copyWithHash(ctx, f, resp.Body, art.Size, onProgress)
+	guard := newStallGuard(resp.Body, cancel)
+	defer guard.stop()
+
+	written, sum, err := copyWithHash(dlCtx, f, guard, art.Size, onProgress)
 	if err != nil {
+		if guard.tripped() && ctx.Err() == nil {
+			return "", fmt.Errorf("%w: %s", ErrStalled, stallTimeout)
+		}
 		return "", err
 	}
 	if written != art.Size {
@@ -156,4 +168,35 @@ func copyWithHash(ctx context.Context, dst io.Writer, src io.Reader, limit int64
 		onProgress(written)
 	}
 	return written, hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+type stallGuard struct {
+	r     io.Reader
+	timer *time.Timer
+	fired atomic.Bool
+}
+
+func newStallGuard(r io.Reader, cancel context.CancelFunc) *stallGuard {
+	g := &stallGuard{r: r}
+	g.timer = time.AfterFunc(stallTimeout, func() {
+		g.fired.Store(true)
+		cancel()
+	})
+	return g
+}
+
+func (g *stallGuard) Read(p []byte) (int, error) {
+	n, err := g.r.Read(p)
+	if n > 0 {
+		g.timer.Reset(stallTimeout)
+	}
+	return n, err
+}
+
+func (g *stallGuard) stop() {
+	g.timer.Stop()
+}
+
+func (g *stallGuard) tripped() bool {
+	return g.fired.Load()
 }

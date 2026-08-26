@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func hashOf(data []byte) string {
@@ -320,4 +321,102 @@ func TestVerifyFile(t *testing.T) {
 			t.Fatalf("VerifyFile() error = %v, want context.Canceled", err)
 		}
 	})
+}
+
+func TestDownloadStalled(t *testing.T) {
+	full := bytes.Repeat([]byte("s"), 256*1024)
+	half := len(full) / 2
+	release := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := w.Write(full[:half]); err != nil {
+			return
+		}
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		if _, err := w.Write(full[half:]); err != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	prev := stallTimeout
+	stallTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { stallTimeout = prev })
+
+	art := testArtifact(full, "typhon-setup.exe")
+	art.URL = srv.URL
+
+	c, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	destDir := t.TempDir()
+	_, err = c.Download(context.Background(), art, destDir, nil)
+	if !errors.Is(err, ErrStalled) {
+		t.Fatalf("Download() error = %v, want ErrStalled", err)
+	}
+	assertDirEmpty(t, destDir)
+}
+
+func TestDownloadOutlivesRequestTimeout(t *testing.T) {
+	full := bytes.Repeat([]byte("l"), 256*1024)
+	half := len(full) / 2
+	pause := 250 * time.Millisecond
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := w.Write(full[:half]); err != nil {
+			return
+		}
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		timer := time.NewTimer(pause)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-r.Context().Done():
+			return
+		}
+		if _, err := w.Write(full[half:]); err != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+
+	prevTimeout := httpTimeout
+	httpTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { httpTimeout = prevTimeout })
+	prevStall := stallTimeout
+	stallTimeout = 5 * time.Second
+	t.Cleanup(func() { stallTimeout = prevStall })
+
+	art := testArtifact(full, "typhon-setup.exe")
+	art.URL = srv.URL
+
+	c, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	destDir := t.TempDir()
+	path, err := c.Download(context.Background(), art, destDir, nil)
+	if err != nil {
+		t.Fatalf("Download() error = %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(got, full) {
+		t.Fatalf("artifact content differs from the served body")
+	}
 }
