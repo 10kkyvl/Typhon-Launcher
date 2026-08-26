@@ -35,24 +35,6 @@ const SENTINEL_CODES: Record<string, string> = {
   'selfupdate: check for an update before downloading': 'not_checked',
 };
 
-const OUTCOME_REASONS: [string, string][] = [
-  [
-    'left the launcher binary unchanged',
-    'Установщик не заменил файлы запущенного лаунчера. Откройте Typhon из меню Пуск или переустановите вручную.',
-  ],
-  ['launcher did not exit', 'Лаунчер не закрылся вовремя, обновление отменено.'],
-  ['downloaded hash differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
-  ['downloaded size differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
-  ['no verified update is ready', 'Установщик не найден. Скачайте обновление заново.'],
-  ['run installer', 'Установщик завершился с ошибкой.'],
-];
-
-export function outcomeReason(outcome: SelfUpdateOutcome): string {
-  const raw = outcome.error ?? '';
-  const known = OUTCOME_REASONS.find(([marker]) => raw.includes(marker));
-  return known ? known[1] : raw;
-}
-
 export class SelfUpdateError extends Error {
   code: string;
 

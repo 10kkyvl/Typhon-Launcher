@@ -12,7 +12,7 @@ import {
   type SelfUpdateProgress,
   type SelfUpdateStatus,
 } from '../services/selfupdate';
-import { errorMessage } from '../utils/errors';
+import { updateReason } from '../services/selfupdateMessages';
 import { toast } from './toasts';
 
 export const selfUpdateStatus = writable<SelfUpdateStatus>({ state: 'idle', currentVersion: '' });
@@ -49,7 +49,7 @@ export async function initSelfUpdate() {
   try {
     applyStatus(await getStatus());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   }
   try {
     const outcome = await getOutcome();
@@ -63,7 +63,7 @@ export async function initSelfUpdate() {
       );
     }
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   }
   if (!inWails) return () => {};
 
@@ -82,7 +82,7 @@ export async function requestCheck() {
   try {
     applyStatus(await checkForUpdateRequest());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   } finally {
     selfUpdateChecking.set(false);
   }
@@ -94,7 +94,7 @@ export async function requestDownload() {
   try {
     applyStatus(await downloadUpdateRequest());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   } finally {
     selfUpdateDownloading.set(false);
   }
@@ -104,7 +104,7 @@ export async function requestApply() {
   try {
     await applyUpdateRequest();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   }
 }
 
@@ -112,7 +112,7 @@ export async function requestDismiss() {
   try {
     await dismissUpdateRequest();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateReason(err), 'danger');
   }
 }
 

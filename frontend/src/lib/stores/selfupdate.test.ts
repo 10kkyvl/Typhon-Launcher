@@ -217,6 +217,19 @@ describe('requestDownload', () => {
     expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
     expect(get(store.selfUpdateDownloading)).toBe(false);
   });
+
+  it('toasts the failure in russian instead of the go error text', async () => {
+    const { service, store } = await load();
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    vi.mocked(service.downloadUpdate).mockRejectedValue(
+      new Error('download artifact: context deadline exceeded (Client.Timeout or context cancellation while reading body)'),
+    );
+
+    await store.requestDownload();
+
+    expect(get(toasts.toasts)[0].message).toContain('не ответил вовремя');
+  });
 });
 
 describe('requestApply / requestDismiss', () => {
