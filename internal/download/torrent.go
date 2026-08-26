@@ -49,6 +49,7 @@ type engineTorrent interface {
 	allowUpload()
 	disallowUpload()
 	fileBytes() []int64
+	filesHashed() []bool
 	filePaths(destination string) []string
 	stats() engineStats
 	verify(ctx context.Context) error
@@ -242,6 +243,35 @@ func (l *liveTorrent) fileBytes() []int64 {
 		done[i] = f.BytesCompleted()
 	}
 	return done
+}
+
+// fileBytes counts chunks that are written but not hashed yet, so a file reads
+// as full while its .part is still being flushed and renamed by the storage.
+// filesHashed reports piece completion, which the engine publishes only after
+// that rename.
+func (l *liveTorrent) filesHashed() []bool {
+	files := l.t.Files()
+	out := make([]bool, len(files))
+	for i, f := range files {
+		out[i] = fileHashed(f)
+	}
+	return out
+}
+
+func fileHashed(f *torrent.File) bool {
+	if f.Length() == 0 {
+		return true
+	}
+	states := f.State()
+	if len(states) == 0 {
+		return false
+	}
+	for _, s := range states {
+		if !s.Ok || s.Err != nil || !s.Complete || s.Marking || s.Checking {
+			return false
+		}
+	}
+	return true
 }
 
 func (l *liveTorrent) filePaths(destination string) []string {
