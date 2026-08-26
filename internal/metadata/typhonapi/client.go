@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"typhon/internal/account"
+	"typhon/internal/app"
 	"typhon/internal/metadata"
 )
 
@@ -32,6 +33,7 @@ const (
 var (
 	ErrUpstream   = errors.New("сервер метаданных недоступен")
 	ErrBadRequest = errors.New("сервер метаданных отклонил запрос")
+	ErrOutdated   = errors.New("лаунчер устарел, нужно обновление")
 )
 
 type TokenFunc func() (string, error)
@@ -87,7 +89,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]metadat
 	params.Set("limit", strconv.Itoa(limit))
 
 	var payload searchResponse
-	if err := c.get(ctx, "/metadata/search?"+params.Encode(), &payload); err != nil {
+	if err := c.get(ctx, account.APIPrefix+"/metadata/search?"+params.Encode(), &payload); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +117,7 @@ func (c *Client) Get(ctx context.Context, providerID string) (metadata.GameMetad
 	}
 
 	var payload gameResponse
-	if err := c.get(ctx, "/metadata/games/"+providerID, &payload); err != nil {
+	if err := c.get(ctx, account.APIPrefix+"/metadata/games/"+providerID, &payload); err != nil {
 		return metadata.GameMetadata{}, err
 	}
 	return gameMetadata(payload)
@@ -143,7 +145,7 @@ func (c *Client) Resolve(ctx context.Context, titles []string) ([]metadata.Resol
 	}
 
 	var payload resolveResponse
-	if err := c.post(ctx, "/metadata/resolve", body, &payload); err != nil {
+	if err := c.post(ctx, account.APIPrefix+"/metadata/resolve", body, &payload); err != nil {
 		return nil, err
 	}
 
@@ -222,6 +224,8 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", account.UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -255,6 +259,8 @@ func statusError(resp *http.Response, body io.Reader) error {
 		return &metadata.RateLimitError{RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
 		return fmt.Errorf("%w: %d %s", ErrBadRequest, status, code)
+	case status == http.StatusUpgradeRequired:
+		return fmt.Errorf("%w: %d %s", ErrOutdated, status, code)
 	default:
 		return fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
 	}

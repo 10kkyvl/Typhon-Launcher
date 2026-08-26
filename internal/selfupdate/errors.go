@@ -24,4 +24,5 @@ var (
 	ErrBusy                = errors.New("selfupdate: another update operation is in progress")
 	ErrReadOnly            = errors.New("selfupdate: state failed to load, refusing to persist")
 	ErrNotReplaced         = errors.New("selfupdate: installer finished but left the launcher binary unchanged")
+	ErrManifestOutdated    = errors.New("selfupdate: launcher version is rejected by the manifest endpoint")
 )

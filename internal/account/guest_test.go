@@ -128,9 +128,9 @@ func TestLeavingGuestModeClearsTheMarker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
-				case "/auth/logout":
+				case APIPrefix + "/auth/logout":
 					w.WriteHeader(http.StatusNoContent)
-				case "/auth/register":
+				case APIPrefix + "/auth/register":
 					writeSession(t, w, http.StatusCreated, "fresh-token")
 				default:
 					writeSession(t, w, http.StatusOK, "fresh-token")

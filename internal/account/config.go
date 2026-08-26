@@ -6,10 +6,17 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
+
+	"typhon/internal/app"
 )
 
+const APIPrefix = "/v1"
+
 var apiBaseURL = "https://api.typhon-launcher.com"
+
+var UserAgent = fmt.Sprintf("Typhon/%s (%s/%s)", app.Version, runtime.GOOS, runtime.GOARCH)
 
 var (
 	ErrEmptyBaseURL    = errors.New("api base url is empty")

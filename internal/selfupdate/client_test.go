@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"typhon/internal/account"
+	"typhon/internal/app"
 )
 
 func TestNewClient(t *testing.T) {
@@ -82,6 +85,77 @@ func TestFetchManifestContentLengthLies(t *testing.T) {
 	m, err := c.FetchManifest(context.Background())
 	if err == nil {
 		t.Fatalf("FetchManifest() error = nil, want an error for a truncated body, got manifest %+v", m)
+	}
+}
+
+func TestFetchManifestSendsVersionHeaders(t *testing.T) {
+	var gotUserAgent, gotVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUserAgent = r.Header.Get("User-Agent")
+		gotVersion = r.Header.Get("X-Typhon-Version")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if _, err := c.FetchManifest(context.Background()); err == nil {
+		t.Fatalf("FetchManifest() error = nil, want an error for status 500")
+	}
+
+	if gotUserAgent != account.UserAgent {
+		t.Fatalf("User-Agent header = %q, want %q", gotUserAgent, account.UserAgent)
+	}
+	if gotVersion != app.Version {
+		t.Fatalf("X-Typhon-Version header = %q, want %q", gotVersion, app.Version)
+	}
+}
+
+func TestFetchManifestUsesUnversionedManifestPath(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if _, err := c.FetchManifest(context.Background()); err == nil {
+		t.Fatalf("FetchManifest() error = nil, want an error for status 500")
+	}
+
+	if gotPath != "/launcher/manifest" {
+		t.Fatalf("request path = %q, want %q (self-update must stay unversioned)", gotPath, "/launcher/manifest")
+	}
+}
+
+func TestFetchManifestOutdatedVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUpgradeRequired)
+		if _, err := w.Write([]byte("upgrade required")); err != nil {
+			t.Errorf("write response body: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = c.FetchManifest(context.Background())
+	if !errors.Is(err, ErrManifestOutdated) {
+		t.Fatalf("FetchManifest() error = %v, want ErrManifestOutdated", err)
+	}
+	if errors.Is(err, ErrManifestStatus) {
+		t.Fatalf("FetchManifest() error = %v, must not also be ErrManifestStatus", err)
 	}
 }
 

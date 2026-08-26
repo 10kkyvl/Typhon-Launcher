@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"typhon/internal/account"
+	"typhon/internal/app"
 )
 
 var ErrManifestStatus = errors.New("selfupdate: manifest endpoint returned an error status")
@@ -58,6 +59,8 @@ func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("build manifest request: %w", err)
 	}
+	req.Header.Set("User-Agent", account.UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -68,6 +71,10 @@ func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
 			slog.Debug("close manifest response body", "error", cerr)
 		}
 	}()
+
+	if resp.StatusCode == http.StatusUpgradeRequired {
+		return Manifest{}, ErrManifestOutdated
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return Manifest{}, fmt.Errorf("%w: status %d", ErrManifestStatus, resp.StatusCode)

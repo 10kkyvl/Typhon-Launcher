@@ -232,7 +232,7 @@ func TestRegisterAndLoginStoreTheSession(t *testing.T) {
 	}{
 		{
 			name:   "register",
-			path:   "/auth/register",
+			path:   APIPrefix + "/auth/register",
 			status: http.StatusCreated,
 			call: func(s *Service) (CurrentUser, error) {
 				return s.Register(RegisterInput{
@@ -245,7 +245,7 @@ func TestRegisterAndLoginStoreTheSession(t *testing.T) {
 		},
 		{
 			name:   "login",
-			path:   "/auth/login",
+			path:   APIPrefix + "/auth/login",
 			status: http.StatusOK,
 			call: func(s *Service) (CurrentUser, error) {
 				return s.Login(LoginInput{Identifier: "PLAYERONE", Password: "  secret pass  "})
@@ -300,9 +300,9 @@ func TestLoginRevokesSessionWhenCredentialWriteFails(t *testing.T) {
 	var logouts []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/auth/login":
+		case APIPrefix + "/auth/login":
 			writeSession(t, w, http.StatusOK, "orphan-token")
-		case "/auth/logout":
+		case APIPrefix + "/auth/logout":
 			logouts = append(logouts, r.Header.Get("Authorization"))
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -331,7 +331,7 @@ func TestLogout(t *testing.T) {
 	t.Run("revokes the session and clears the credential", func(t *testing.T) {
 		var authorization string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/auth/logout" || r.Method != http.MethodPost {
+			if r.URL.Path != APIPrefix+"/auth/logout" || r.Method != http.MethodPost {
 				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			}
 			authorization = r.Header.Get("Authorization")

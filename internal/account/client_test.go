@@ -7,8 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"typhon/internal/app"
 )
 
 func newTestClient(t *testing.T, baseURL string, token func() (string, error)) *Client {
@@ -35,7 +38,7 @@ func writeJSON(t *testing.T, w http.ResponseWriter, status int, v any) {
 
 func TestClientMe(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/me" {
+		if r.Method != http.MethodGet || r.URL.Path != APIPrefix+"/me" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
@@ -264,7 +267,7 @@ func TestClientUploadAvatarSendsRawBytes(t *testing.T) {
 	var receivedBody []byte
 	var receivedAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/me/avatar" {
+		if r.Method != http.MethodPut || r.URL.Path != APIPrefix+"/me/avatar" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		receivedAuth = r.Header.Get("Authorization")
@@ -340,7 +343,7 @@ func TestClientUploadAvatarEmptyRejectedLocally(t *testing.T) {
 
 func TestClientRemoveAvatarIssuesDelete(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete || r.URL.Path != "/me/avatar" {
+		if r.Method != http.MethodDelete || r.URL.Path != APIPrefix+"/me/avatar" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		writeJSON(t, w, http.StatusOK, CurrentUser{ID: "u1", AvatarURL: ""})
@@ -370,6 +373,95 @@ func TestBaseURL(t *testing.T) {
 	t.Setenv("TYPHON_API_URL", "https://override.example/api/")
 	if got := BaseURL(); got != "https://override.example/api" {
 		t.Fatalf("expected env override, got %q", got)
+	}
+}
+
+func TestClientEndpointsUseVersionedPathAndHeaders(t *testing.T) {
+	tests := []struct {
+		name       string
+		wantMethod string
+		call       func(c *Client) (CurrentUser, error)
+	}{
+		{
+			name:       "Me",
+			wantMethod: http.MethodGet,
+			call: func(c *Client) (CurrentUser, error) {
+				return c.Me(context.Background())
+			},
+		},
+		{
+			name:       "UpdateProfile",
+			wantMethod: http.MethodPatch,
+			call: func(c *Client) (CurrentUser, error) {
+				name := "newname"
+				return c.UpdateProfile(context.Background(), Patch{Username: &name})
+			},
+		},
+		{
+			name:       "UploadAvatar",
+			wantMethod: http.MethodPut,
+			call: func(c *Client) (CurrentUser, error) {
+				return c.UploadAvatar(context.Background(), []byte{1, 2, 3})
+			},
+		},
+		{
+			name:       "RemoveAvatar",
+			wantMethod: http.MethodDelete,
+			call: func(c *Client) (CurrentUser, error) {
+				return c.RemoveAvatar(context.Background())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotPath, gotMethod, gotUA, gotVersion string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				gotMethod = r.Method
+				gotUA = r.Header.Get("User-Agent")
+				gotVersion = r.Header.Get("X-Typhon-Version")
+				writeJSON(t, w, http.StatusOK, CurrentUser{ID: "u1"})
+			}))
+			defer srv.Close()
+
+			c := newTestClient(t, srv.URL, tokenOK("t"))
+			if _, err := tt.call(c); err != nil {
+				t.Fatalf("%s() error = %v", tt.name, err)
+			}
+			if gotMethod != tt.wantMethod {
+				t.Fatalf("method = %q, want %q", gotMethod, tt.wantMethod)
+			}
+			if !strings.HasPrefix(gotPath, APIPrefix) {
+				t.Fatalf("path = %q, want prefix %q", gotPath, APIPrefix)
+			}
+			if gotUA != UserAgent {
+				t.Fatalf("User-Agent = %q, want %q", gotUA, UserAgent)
+			}
+			if gotVersion != app.Version {
+				t.Fatalf("X-Typhon-Version = %q, want %q", gotVersion, app.Version)
+			}
+		})
+	}
+}
+
+func TestClientOutdatedLauncher(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUpgradeRequired)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("t"))
+	_, err := c.Me(context.Background())
+	var accErr *Error
+	if !errors.As(err, &accErr) {
+		t.Fatalf("expected *Error, got %v (%T)", err, err)
+	}
+	if accErr.Code != CodeOutdated {
+		t.Fatalf("expected code %q, got %q", CodeOutdated, accErr.Code)
+	}
+	if accErr.Status != http.StatusUpgradeRequired {
+		t.Fatalf("expected status 426, got %d", accErr.Status)
 	}
 }
 

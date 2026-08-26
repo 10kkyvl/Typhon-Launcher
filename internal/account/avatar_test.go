@@ -128,7 +128,7 @@ func TestDecodeAvatar(t *testing.T) {
 func TestUploadAvatarSendsDecodedBytes(t *testing.T) {
 	var received []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/me/avatar" {
+		if r.Method != http.MethodPut || r.URL.Path != APIPrefix+"/me/avatar" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return

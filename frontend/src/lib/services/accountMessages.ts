@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   invalid_email: 'Введите корректный email',
   invalid_password: 'От 8 до 128 символов',
   email_immutable: 'Email пока нельзя изменить',
+  launcher_outdated: 'Версия лаунчера устарела, обновите Typhon, чтобы пользоваться аккаунтом',
   no_changes: 'Нечего сохранять',
   avatar_too_large: 'Файл больше 10 МБ',
   unsupported_avatar: 'Поддерживаются PNG, JPEG и WebP',

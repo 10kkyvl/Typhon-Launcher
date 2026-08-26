@@ -30,15 +30,15 @@ type Session struct {
 }
 
 func (c *Client) Register(ctx context.Context, in RegisterInput) (Session, error) {
-	return c.authRequest(ctx, "/auth/register", in, http.StatusCreated)
+	return c.authRequest(ctx, APIPrefix+"/auth/register", in, http.StatusCreated)
 }
 
 func (c *Client) Login(ctx context.Context, in LoginInput) (Session, error) {
-	return c.authRequest(ctx, "/auth/login", in, http.StatusOK)
+	return c.authRequest(ctx, APIPrefix+"/auth/login", in, http.StatusOK)
 }
 
 func (c *Client) Logout(ctx context.Context, token string) error {
-	resp, err := c.do(ctx, http.MethodPost, "/auth/logout", nil, "", c.httpClient, token)
+	resp, err := c.do(ctx, http.MethodPost, APIPrefix+"/auth/logout", nil, "", c.httpClient, token)
 	if err != nil {
 		return err
 	}
