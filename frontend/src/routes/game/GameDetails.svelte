@@ -45,7 +45,7 @@
     type DownloadOrigin,
     type DownloadStatus,
   } from '../../lib/services/downloads';
-  import { addCatalogGame, playGame, stopGame } from '../../lib/services/library';
+  import { addCatalogGame, createShortcut, playGame, removeShortcut, stopGame } from '../../lib/services/library';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -349,6 +349,13 @@
           ]
         : [{ id: 'meta-find', label: 'Найти метаданные' }]
       : []),
+    ...(installed
+      ? [
+          localGame?.shortcutPath
+            ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }
+            : { id: 'shortcut-create', label: 'Создать ярлык на рабочем столе' },
+        ]
+      : []),
     ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
     ...(localGame
       ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
@@ -383,6 +390,28 @@
       removeTerminalDownload();
     } else if (actionId === 'discard-download') {
       discardTerminalDownload();
+    } else if (actionId === 'shortcut-create') {
+      createDesktopShortcut();
+    } else if (actionId === 'shortcut-remove') {
+      removeDesktopShortcut();
+    }
+  }
+
+  async function createDesktopShortcut() {
+    if (!localGame) return;
+    try {
+      await createShortcut(localGame.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось создать ярлык', 'danger');
+    }
+  }
+
+  async function removeDesktopShortcut() {
+    if (!localGame) return;
+    try {
+      await removeShortcut(localGame.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить ярлык', 'danger');
     }
   }
 

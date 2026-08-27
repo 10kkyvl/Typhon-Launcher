@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/procs"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/usagestats"
@@ -46,6 +48,7 @@ type Game struct {
 	Uninstall         Uninstall  `json:"uninstall,omitzero"`
 	UninstallUnknown  bool       `json:"uninstallUnknown,omitempty"`
 	Uninstalled       bool       `json:"uninstalled,omitempty"`
+	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 }
 
 type Uninstall struct {
@@ -98,16 +101,26 @@ var (
 )
 
 type Service struct {
-	mu           sync.Mutex
-	path         string
-	excludedPath string
-	games        []Game
-	excluded     []string
-	running      map[string]*session
-	onSession    func(gameID string, seconds int64)
-	watchers     []SessionWatcher
-	usageRecord  func(ev usagestats.Event)
-	wg           sync.WaitGroup
+	mu            sync.Mutex
+	path          string
+	excludedPath  string
+	games         []Game
+	excluded      []string
+	running       map[string]*session
+	onSession     func(gameID string, seconds int64)
+	watchers      []SessionWatcher
+	usageRecord   func(ev usagestats.Event)
+	wg            sync.WaitGroup
+	sessionWG     sync.WaitGroup
+	scan          func(context.Context) ([]procs.Process, error)
+	watchInterval time.Duration
+	now           func() time.Time
+	ctx           context.Context
+	cancel        context.CancelFunc
+	closed        bool
+	watching      bool
+	shortcuts     shortcutBackend
+	launcherPath  func() (string, error)
 }
 
 type SessionWatcher interface {
@@ -116,8 +129,12 @@ type SessionWatcher interface {
 }
 
 type session struct {
-	process   *os.Process
-	startedAt time.Time
+	process   *os.Process // nil у сессии, обнаруженной в системе, а не запущенной нами
+	pid       uint32
+	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
+	startedAt time.Time // с этого момента считается наигранное время
+	lastSeen  time.Time
+	external  bool
 }
 
 func NewService() (*Service, error) {
@@ -140,7 +157,16 @@ func NewServiceAt(path string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Service{path: path, excludedPath: excludedPath, running: map[string]*session{}}
+	s := &Service{
+		path:          path,
+		excludedPath:  excludedPath,
+		running:       map[string]*session{},
+		scan:          procs.List,
+		watchInterval: defaultWatchInterval,
+		now:           time.Now,
+		shortcuts:     systemShortcuts{},
+		launcherPath:  os.Executable,
+	}
 	games, err := s.load()
 	if err != nil {
 		return nil, err
@@ -484,6 +510,7 @@ func (s *Service) RemoveGame(id string) error {
 				return fmt.Errorf("stat %s: %w", game.InstallDir, err)
 			}
 		}
+		s.dropShortcutLocked(&s.games[i])
 		previous := append([]Game(nil), s.games...)
 		s.games = append(s.games[:i:i], s.games[i+1:]...)
 		if err := s.persist(); err != nil {
@@ -512,6 +539,7 @@ func (s *Service) MarkUninstalled(id string) error {
 		if s.games[i].ID != id {
 			continue
 		}
+		s.dropShortcutLocked(&s.games[i])
 		previous := s.games[i]
 		s.games[i].Uninstalled = true
 		s.games[i].SizeBytes = 0

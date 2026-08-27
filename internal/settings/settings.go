@@ -68,6 +68,7 @@ type Settings struct {
 	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
 	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
 	InstallSkipExtras      bool    `json:"installSkipExtras"`
+	DesktopShortcuts       bool    `json:"desktopShortcuts"`
 
 	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
 	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
@@ -101,6 +102,7 @@ func Defaults() Settings {
 		VerifyAfterInstall:     true,
 		InstallSkipShortcuts:   true,
 		InstallSkipExtras:      true,
+		DesktopShortcuts:       true,
 
 		UpdateCheckAutomatically: true,
 		UpdateAutoDownload:       false,

@@ -83,6 +83,7 @@ type registrar interface {
 	IsRunning(id string) bool
 	RemoveGame(id string) error
 	MarkUninstalled(id string) error
+	CreateShortcut(id string) error
 }
 
 type job struct {

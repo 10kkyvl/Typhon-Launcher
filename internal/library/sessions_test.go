@@ -1,12 +1,15 @@
 package library
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"typhon/internal/procs"
 	"typhon/internal/usagestats"
 )
 
@@ -381,5 +384,213 @@ func TestServiceShutdownWaitsForSessionCallbacks(t *testing.T) {
 	}
 	if got.gameID != "game-1" {
 		t.Fatalf("callback did not complete before shutdown returned: %+v", got)
+	}
+}
+
+// TestServiceShutdownDoesNotWaitForChildProcess is defect (1): before the
+// fix, PlayGame's cmd.Wait() goroutine was tracked in s.wg, and
+// ServiceShutdown waited on s.wg — so quitting the launcher while a game
+// was running blocked until the game itself exited. Run against the
+// pre-fix sessions.go (git show HEAD~1 or the version before this change),
+// this test times out instead of completing quickly; see report for the
+// captured failure output.
+func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+
+	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Long Runner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	// ~3s child process that survives well past the assertion window below.
+	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 4 127.0.0.1 >nul"}
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.ServiceShutdown() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServiceShutdown: %v", err)
+		}
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("ServiceShutdown blocked waiting for the running game process to exit")
+	}
+}
+
+// TestPlayGameGoroutineSkipsPersistAfterShutdown covers the other half of
+// defect (1): ServiceShutdown must return without waiting for the game's
+// process (previous test), and the untracked sessionWG goroutine that later
+// observes cmd.Wait() returning must not persist into a state directory the
+// owner already considers closed.
+func TestPlayGameGoroutineSkipsPersistAfterShutdown(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Shutdown Race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 2 127.0.0.1 >nul"}
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ServiceShutdown(); err != nil {
+		t.Fatalf("ServiceShutdown: %v", err)
+	}
+	// Waits for the still-running child's cmd.Wait() goroutine to observe
+	// the process exiting and reach its post-shutdown closed check.
+	s.sessionWG.Wait()
+
+	reloaded, err := NewServiceAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	games := reloaded.GetInstalledGames()
+	if len(games) != 1 || games[0].LastPlayed != nil || games[0].PlaytimeSeconds != 0 {
+		t.Fatalf("session finished after shutdown was persisted: %+v", games)
+	}
+	if err := reloaded.ServiceShutdown(); err != nil {
+		t.Fatalf("reloaded ServiceShutdown: %v", err)
+	}
+}
+
+func fakeExternalSession(s *Service, id string, pid uint32, createdAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	s.running[id] = &session{pid: pid, createdAt: createdAt, startedAt: createdAt, lastSeen: now, external: true}
+}
+
+func TestStopGameExternalSessionRejectsMismatchedCreatedAt(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "External")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Now().Add(-time.Minute)
+	fakeExternalSession(s, game.ID, 4242, created)
+
+	s.mu.Lock()
+	s.ctx = context.Background()
+	s.scan = func(context.Context) ([]procs.Process, error) {
+		return []procs.Process{{PID: 4242, Path: exe, CreatedAt: created.Add(3 * time.Second)}}, nil
+	}
+	s.mu.Unlock()
+
+	err = s.StopGame(game.ID)
+	if !errors.Is(err, errSessionIdentityMismatch) {
+		t.Fatalf("StopGame error = %v, want errSessionIdentityMismatch", err)
+	}
+}
+
+func TestStopGameExternalSessionRejectsScanError(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "External Scan Fail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeExternalSession(s, game.ID, 4243, time.Now().Add(-time.Minute))
+
+	scanErr := errors.New("enumerate failed")
+	s.mu.Lock()
+	s.ctx = context.Background()
+	s.scan = func(context.Context) ([]procs.Process, error) { return nil, scanErr }
+	s.mu.Unlock()
+
+	err = s.StopGame(game.ID)
+	if !errors.Is(err, errSessionCannotConfirm) || !errors.Is(err, scanErr) {
+		t.Fatalf("StopGame error = %v, want errSessionCannotConfirm wrapping %v", err, scanErr)
+	}
+}
+
+func TestStopGameExternalSessionRejectsMissingPID(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "External Gone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeExternalSession(s, game.ID, 4244, time.Now().Add(-time.Minute))
+
+	s.mu.Lock()
+	s.ctx = context.Background()
+	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
+	s.mu.Unlock()
+
+	err = s.StopGame(game.ID)
+	if !errors.Is(err, errSessionProcessGone) {
+		t.Fatalf("StopGame error = %v, want errSessionProcessGone", err)
+	}
+}
+
+func TestStopGameExternalSessionRejectsUnstartedService(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "Not Started")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeExternalSession(s, game.ID, 4245, time.Now().Add(-time.Minute))
+	// ServiceStartup was never called, so s.ctx is still nil: StopGame must
+	// refuse to confirm identity rather than pass a nil ctx to s.scan.
+
+	err = s.StopGame(game.ID)
+	if !errors.Is(err, errSessionCannotConfirm) {
+		t.Fatalf("StopGame error = %v, want errSessionCannotConfirm", err)
+	}
+}
+
+func TestStopGameExternalSessionRejectsUnknownCreatedAt(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "Unknown Start Time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeExternalSession(s, game.ID, 4246, time.Now().Add(-time.Minute))
+
+	s.mu.Lock()
+	s.ctx = context.Background()
+	s.scan = func(context.Context) ([]procs.Process, error) {
+		return []procs.Process{{PID: 4246, Path: exe, CreatedAtUnknown: true}}, nil
+	}
+	s.mu.Unlock()
+
+	err = s.StopGame(game.ID)
+	if !errors.Is(err, errSessionIdentityUnknown) {
+		t.Fatalf("StopGame error = %v, want errSessionIdentityUnknown", err)
+	}
+}
+
+func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Killable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 20 127.0.0.1 >nul"}
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StopGame(game.ID); err != nil {
+		t.Fatalf("StopGame: %v", err)
+	}
+	s.sessionWG.Wait()
+	if s.IsRunning(game.ID) {
+		t.Fatal("session still running after StopGame")
 	}
 }

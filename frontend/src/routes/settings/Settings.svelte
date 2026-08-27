@@ -525,6 +525,17 @@
         </div>
         <div class="row">
           <div class="row-text">
+            <span class="row-label">Ярлыки на рабочем столе</span>
+            <span class="row-sub">Создавать ярлык игры после установки</span>
+          </div>
+          <Toggle
+            checked={current?.desktopShortcuts ?? true}
+            label="Ярлыки игр"
+            onchange={(v) => set({ desktopShortcuts: v })}
+          />
+        </div>
+        <div class="row">
+          <div class="row-text">
             <span class="row-label">Отклонять дополнения установщика</span>
             <span class="row-sub"
               >DirectX, .NET, Visual C++, ассоциации файлов и прочие предложения. Если игра не

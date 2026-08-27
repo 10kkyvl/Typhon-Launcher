@@ -19,6 +19,7 @@ export interface LibraryGame {
   canonicalGameId?: string;
   source?: string;
   uninstalled?: boolean;
+  shortcutPath?: string;
 }
 
 const unavailable = () => new Error('unavailable in browser');
@@ -56,6 +57,16 @@ export async function playGame(id: string): Promise<void> {
 export async function stopGame(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await LibraryService.StopGame(id);
+}
+
+export async function createShortcut(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.CreateShortcut(id);
+}
+
+export async function removeShortcut(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveShortcut(id);
 }
 
 export async function selectExecutable(title: string): Promise<string> {
