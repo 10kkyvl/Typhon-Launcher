@@ -350,6 +350,7 @@ func TestDownloadStalled(t *testing.T) {
 	prev := stallTimeout
 	stallTimeout = 50 * time.Millisecond
 	t.Cleanup(func() { stallTimeout = prev })
+	shortBackoff(t)
 
 	art := testArtifact(full, "typhon-setup.exe")
 	art.URL = srv.URL

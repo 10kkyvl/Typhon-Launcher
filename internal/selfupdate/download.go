@@ -18,14 +18,40 @@ import (
 
 var ErrArtifactStatus = errors.New("selfupdate: artifact endpoint returned an error status")
 
+// errArtifactRead separates a body that never arrived from a disk that refused
+// to take it: only the first is worth another attempt.
+var errArtifactRead = errors.New("download artifact")
+
 const (
 	downloadBufSize     = 32 * 1024
 	progressMinInterval = 250 * time.Millisecond
 )
 
-var stallTimeout = 60 * time.Second
+var (
+	stallTimeout    = 60 * time.Second
+	downloadBackoff = []time.Duration{2 * time.Second, 5 * time.Second}
+)
 
-func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onProgress func(downloaded int64)) (path string, err error) {
+type statusError struct {
+	code int
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("%s: status %d", ErrArtifactStatus.Error(), e.code)
+}
+
+func (e *statusError) Is(target error) bool {
+	return target == ErrArtifactStatus
+}
+
+func (e *statusError) retryable() bool {
+	return e.code == http.StatusTooManyRequests || e.code >= http.StatusInternalServerError
+}
+
+// Nothing resumes: the endpoint answers Accept-Ranges: none, so a dropped
+// connection costs the whole artifact and the only recovery is another attempt
+// from zero.
+func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onProgress func(downloaded int64)) (string, error) {
 	if err := art.Validate(); err != nil {
 		return "", err
 	}
@@ -33,6 +59,56 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 		return "", ErrEmptyConfigDir
 	}
 
+	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			if err := waitBackoff(ctx, downloadBackoff[attempt-1]); err != nil {
+				return "", err
+			}
+			if onProgress != nil {
+				onProgress(0)
+			}
+		}
+		path, err := c.download(ctx, art, destDir, onProgress)
+		if err == nil {
+			return path, nil
+		}
+		if attempt == len(downloadBackoff) || !worthRetrying(err) {
+			return "", err
+		}
+		slog.Warn("artifact download failed, retrying",
+			"attempt", attempt+1, "attempts", len(downloadBackoff)+1, "error", err)
+	}
+}
+
+func worthRetrying(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, ErrStalled) || errors.Is(err, errArtifactRead) {
+		return true
+	}
+	var status *statusError
+	if errors.As(err, &status) {
+		return status.retryable()
+	}
+	return false
+}
+
+func waitBackoff(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (c *Client) download(ctx context.Context, art Artifact, destDir string, onProgress func(downloaded int64)) (path string, err error) {
 	dlCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -43,7 +119,7 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 
 	resp, err := c.downloadClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("download artifact: %w", err)
+		return "", fmt.Errorf("%w: %w", errArtifactRead, err)
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
@@ -52,7 +128,7 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("%w: status %d", ErrArtifactStatus, resp.StatusCode)
+		return "", &statusError{code: resp.StatusCode}
 	}
 
 	f, err := os.CreateTemp(destDir, ".selfupdate-*")
@@ -160,7 +236,7 @@ func copyWithHash(ctx context.Context, dst io.Writer, src io.Reader, limit int64
 			break
 		}
 		if rerr != nil {
-			return written, "", fmt.Errorf("download artifact: %w", rerr)
+			return written, "", fmt.Errorf("%w: %w", errArtifactRead, rerr)
 		}
 	}
 
