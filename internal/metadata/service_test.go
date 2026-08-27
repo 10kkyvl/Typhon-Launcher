@@ -1243,3 +1243,180 @@ func TestCoverSourceURLRejectsBadID(t *testing.T) {
 		t.Fatal("unknown game must be an error, not an empty cover")
 	}
 }
+
+func TestGetViewReportsSearchingWhileTheLookupRuns(t *testing.T) {
+	provider := &blockingProvider{entered: make(chan struct{}, 1), proceed: make(chan struct{})}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey", Provisional: true})
+
+	if view, err := svc.GetView(game.ID); err != nil {
+		t.Fatalf("view before the lookup: %v", err)
+	} else if view.Match != MatchIdle {
+		t.Fatalf("match = %q, want %q before anything started", view.Match, MatchIdle)
+	}
+
+	started, err := svc.EnsureFresh(game.ID)
+	if err != nil {
+		t.Fatalf("ensure fresh: %v", err)
+	}
+	if !started {
+		t.Fatal("lookup was not started")
+	}
+	<-provider.entered
+
+	view, err := svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view during the lookup: %v", err)
+	}
+	if view.Match != MatchSearching {
+		t.Fatalf("match = %q, want %q while the provider is being asked", view.Match, MatchSearching)
+	}
+
+	close(provider.proceed)
+	svc.wg.Wait()
+
+	view, err = svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view after the lookup: %v", err)
+	}
+	if view.Match != MatchUnmatched {
+		t.Fatalf("match = %q, want %q once the search came back empty", view.Match, MatchUnmatched)
+	}
+}
+
+func TestViewReportsWhyTheCardIsEmpty(t *testing.T) {
+	cases := []struct {
+		name     string
+		provider *fakeProvider
+		want     MatchState
+	}{
+		{
+			name: "кандидаты неоднозначны",
+			provider: &fakeProvider{candidates: []Candidate{
+				{ProviderID: "2657", Title: "Prey", ReleaseYear: 2017},
+				{ProviderID: "7", Title: "Prey", ReleaseYear: 2006},
+			}},
+			want: MatchUnmatched,
+		},
+		{
+			name:     "провайдер не ответил",
+			provider: &fakeProvider{searchErr: errors.New("сервер прилёг")},
+			want:     MatchFailed,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, cat, _ := newTestService(t, tc.provider)
+			game := addGame(t, cat, catalog.Game{Title: "Prey", Provisional: true})
+
+			if _, err := svc.EnsureFresh(game.ID); err != nil {
+				t.Fatalf("ensure fresh: %v", err)
+			}
+			svc.wg.Wait()
+
+			view, err := svc.GetView(game.ID)
+			if err != nil {
+				t.Fatalf("view: %v", err)
+			}
+			if view.Match != tc.want {
+				t.Fatalf("match = %q, want %q", view.Match, tc.want)
+			}
+			if view.Resolved {
+				t.Fatal("an unmatched game reported itself as resolved")
+			}
+		})
+	}
+}
+
+func TestResolvedGameReportsIdle(t *testing.T) {
+	srv := imageServer(t)
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": fullMetadata(srv.URL)}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey", Provisional: true})
+
+	if _, err := svc.ApplyMatch(game.ID, "2657"); err != nil {
+		t.Fatalf("apply match: %v", err)
+	}
+	view, err := svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	if view.Match != MatchIdle {
+		t.Fatalf("match = %q, want %q for a matched game", view.Match, MatchIdle)
+	}
+}
+
+func TestDismissMatchStopsAskingAndSurvivesARestart(t *testing.T) {
+	provider := &fakeProvider{searchErr: errors.New("сервер прилёг")}
+	svc, cat, dir := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey", Provisional: true})
+
+	view, err := svc.DismissMatch(game.ID)
+	if err != nil {
+		t.Fatalf("dismiss match: %v", err)
+	}
+	if view.Match != MatchSkipped {
+		t.Fatalf("match = %q, want %q", view.Match, MatchSkipped)
+	}
+
+	searches, _ := provider.counts()
+	started, err := svc.EnsureFresh(game.ID)
+	if err != nil {
+		t.Fatalf("ensure fresh: %v", err)
+	}
+	if started {
+		t.Fatal("a dismissed game was searched for again")
+	}
+	svc.wg.Wait()
+	if again, _ := provider.counts(); again != searches {
+		t.Fatalf("searches = %d, want no extra provider call", again)
+	}
+
+	stored, err := newAttemptStore(dir, time.Now)
+	if err != nil {
+		t.Fatalf("reopen attempts: %v", err)
+	}
+	rec, ok := stored.state(game.ID)
+	if !ok || !rec.Dismissed {
+		t.Fatalf("record = %+v present = %v, want the dismissal on disk", rec, ok)
+	}
+}
+
+func TestDismissMatchRejectsAnUnknownGame(t *testing.T) {
+	cases := []struct {
+		name   string
+		gameID string
+	}{
+		{"пустой идентификатор", "   "},
+		{"игры нет в каталоге", "нет-такой-игры"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, _ := newTestService(t, &fakeProvider{})
+			if _, err := svc.DismissMatch(tc.gameID); err == nil {
+				t.Fatal("dismiss reported success for a game it cannot know")
+			}
+		})
+	}
+}
+
+func TestManualMatchClearsTheDismissal(t *testing.T) {
+	srv := imageServer(t)
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": fullMetadata(srv.URL)}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey", Provisional: true})
+
+	if _, err := svc.DismissMatch(game.ID); err != nil {
+		t.Fatalf("dismiss match: %v", err)
+	}
+	view, err := svc.ApplyMatch(game.ID, "2657")
+	if err != nil {
+		t.Fatalf("apply match: %v", err)
+	}
+	if view.Match != MatchIdle || !view.Resolved {
+		t.Fatalf("view = %q resolved = %v, want a matched game", view.Match, view.Resolved)
+	}
+	if rec, ok := svc.attempts.state(game.ID); ok {
+		t.Fatalf("record = %+v, want the dismissal gone after a manual match", rec)
+	}
+}

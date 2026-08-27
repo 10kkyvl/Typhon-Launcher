@@ -53,6 +53,19 @@ var (
 	errBusy       = errors.New("метаданные этой игры уже обновляются")
 )
 
+// MatchState рассказывает карточке игры, на какой стадии поиск метаданных:
+// пустая карточка без этого поля неотличима от карточки, поиск для которой
+// провалился ещё вчера.
+type MatchState string
+
+const (
+	MatchIdle      MatchState = "idle"
+	MatchSearching MatchState = "searching"
+	MatchUnmatched MatchState = "unmatched"
+	MatchFailed    MatchState = "failed"
+	MatchSkipped   MatchState = "skipped"
+)
+
 type View struct {
 	Game        catalog.Game `json:"game"`
 	Cover       string       `json:"cover"`
@@ -61,6 +74,7 @@ type View struct {
 	Resolved    bool         `json:"resolved"`
 	Stale       bool         `json:"stale"`
 	Provider    string       `json:"provider"`
+	Match       MatchState   `json:"match"`
 }
 
 type Art struct {
@@ -176,11 +190,22 @@ func (s *Service) Available() bool {
 }
 
 func (s *Service) GetView(gameID string) (View, error) {
-	game, err := s.catalog.GetGame(strings.TrimSpace(gameID))
+	gameID = strings.TrimSpace(gameID)
+	game, err := s.catalog.GetGame(gameID)
 	if err != nil {
 		return View{}, err
 	}
-	return s.view(game), nil
+	view := s.view(game)
+	if !view.Resolved && s.busy(gameID) {
+		view.Match = MatchSearching
+	}
+	return view, nil
+}
+
+func (s *Service) busy(gameID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.refreshing[gameID]
 }
 
 func (s *Service) GetArt(gameIDs []string) (map[string]Art, error) {
@@ -273,6 +298,27 @@ func (s *Service) ApplyMatch(gameID, providerID string) (View, error) {
 
 func (s *Service) Refresh(gameID string) (View, error) {
 	return s.runRefresh(strings.TrimSpace(gameID), "")
+}
+
+// DismissMatch — это «забить»: пользователь согласился жить без описания и
+// обложки, и ни фон, ни открытая карточка больше об этой игре не спрашивают.
+func (s *Service) DismissMatch(gameID string) (View, error) {
+	gameID = strings.TrimSpace(gameID)
+	if gameID == "" {
+		return View{}, errNoGameID
+	}
+	game, err := s.catalog.GetGame(gameID)
+	if err != nil {
+		return View{}, err
+	}
+	prev, existed := s.attempts.dismiss(gameID)
+	if err := s.attempts.flush(); err != nil {
+		s.attempts.restore(gameID, prev, existed)
+		return View{}, err
+	}
+	view := s.view(game)
+	emit("metadata:updated", view)
+	return view, nil
 }
 
 func (s *Service) EnsureFresh(gameID string) (bool, error) {
@@ -495,13 +541,28 @@ func (s *Service) report(game catalog.Game, view View, err error) {
 	case isRateLimited(err), errors.Is(err, errBudgetBusy),
 		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		slog.Debug("metadata refresh postponed", "game", game.ID)
+		s.emitState(game, MatchFailed)
 	case errors.Is(err, ErrAmbiguous), errors.Is(err, ErrNoMatch):
 		s.attempts.fail(game.ID, attemptUnmatched)
 		slog.Info("metadata match needs a manual choice", "game", game.ID, "title", game.Title)
+		s.emitState(game, MatchUnmatched)
 	default:
 		s.attempts.fail(game.ID, attemptTransient)
 		slog.Warn("background metadata refresh", "game", game.ID, "error", err)
+		s.emitState(game, MatchFailed)
 	}
+}
+
+// emitState говорит открытой карточке, чем кончился поиск. Без него страница,
+// показавшая «ищем метаданные», остаётся с этой надписью навсегда: успешный
+// поиск событие шлёт, а неудачный до сих пор не слал ничего.
+func (s *Service) emitState(game catalog.Game, state MatchState) {
+	view := s.view(game)
+	if view.Resolved {
+		return
+	}
+	view.Match = state
+	emit("metadata:updated", view)
 }
 
 func (s *Service) baseContext() context.Context {
@@ -587,6 +648,8 @@ func (s *Service) runRefresh(gameID, providerID string) (View, error) {
 	s.refreshing[gameID] = true
 	s.mu.Unlock()
 	defer s.release(gameID)
+
+	s.attempts.resume(gameID)
 
 	view, err := s.refresh(gameID, providerID, modeFull, classUser)
 	if err != nil {
@@ -833,7 +896,25 @@ func (s *Service) view(game catalog.Game) View {
 		view.Provider = s.provider.Name()
 	}
 	view.Hero = heroURL(game, view.Screenshots)
+	view.Match = s.matchState(game)
 	return view
+}
+
+func (s *Service) matchState(game catalog.Game) MatchState {
+	if s.provider == nil || game.ExternalIDs.IGDB != "" {
+		return MatchIdle
+	}
+	rec, ok := s.attempts.state(game.ID)
+	switch {
+	case !ok:
+		return MatchIdle
+	case rec.Dismissed:
+		return MatchSkipped
+	case rec.Kind == attemptUnmatched:
+		return MatchUnmatched
+	default:
+		return MatchFailed
+	}
 }
 
 func (s *Service) screenshots(gameID string) []MediaAsset {

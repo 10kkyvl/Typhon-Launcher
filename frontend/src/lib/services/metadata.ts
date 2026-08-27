@@ -28,6 +28,8 @@ export interface GameArt {
   hero: string;
 }
 
+export type MetadataMatch = 'idle' | 'searching' | 'unmatched' | 'failed' | 'skipped';
+
 export interface MetadataView {
   game: CatalogGame;
   cover: string;
@@ -36,6 +38,7 @@ export interface MetadataView {
   resolved: boolean;
   stale: boolean;
   provider: string;
+  match: MetadataMatch;
 }
 
 const unavailable = () => new Error('unavailable in browser');
@@ -48,6 +51,7 @@ const emptyView = (gameId: string): MetadataView => ({
   resolved: false,
   stale: false,
   provider: '',
+  match: 'idle',
 });
 
 export async function isMetadataAvailable(): Promise<boolean> {
@@ -95,6 +99,11 @@ export async function searchMetadataCandidates(query: string): Promise<MetadataC
 export async function applyMetadataMatch(gameId: string, providerId: string): Promise<MetadataView> {
   if (!inWails) throw unavailable();
   return (await MetadataService.ApplyMatch(gameId, providerId)) as unknown as MetadataView;
+}
+
+export async function dismissMetadataMatch(gameId: string): Promise<MetadataView> {
+  if (!inWails) throw unavailable();
+  return (await MetadataService.DismissMatch(gameId)) as unknown as MetadataView;
 }
 
 export async function refreshMetadata(gameId: string): Promise<MetadataView> {
