@@ -22,6 +22,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/redact"
 	"typhon/internal/settings"
+	"typhon/internal/usagestats"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -77,9 +78,10 @@ type Manager struct {
 	pending map[string]*pending
 	jobs    map[string]*jobState
 
-	client      *client
-	max         int
-	onCompleted func(Download)
+	client        *client
+	max           int
+	onCompleted   func(Download)
+	usageRecorder func(usagestats.Event)
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -559,6 +561,13 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	m.persistLocked()
 	slog.Info("download added", "download_id", d.ID, "name", d.Name)
 	emit(eventAdded, snapshot(d))
+	m.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeDownloadStarted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID: origin.GameID,
+		},
+	})
 	m.schedule()
 	return snapshot(d), nil
 }
@@ -566,7 +575,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 func (m *Manager) watchWriteErrors(id string, lt *liveTorrent) {
 	lt.t.SetOnWriteChunkError(func(err error) {
 		slog.Error("torrent write error", "download_id", id, "error", err)
-		go m.markFailed(id, "ошибка записи на диск")
+		go m.markFailed(id, "ошибка записи на диск", err)
 	})
 }
 
@@ -680,6 +689,23 @@ func (m *Manager) SetOnCompleted(fn func(Download)) {
 	m.onCompleted = fn
 }
 
+//wails:ignore
+func (m *Manager) SetUsageRecorder(rec func(usagestats.Event)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.usageRecorder = rec
+}
+
+// recordUsage assumes the caller already holds m.mu, same as the other
+// *Locked helpers; every call site below records the event before
+// releasing the lock it took for the surrounding state change.
+func (m *Manager) recordUsage(ev usagestats.Event) {
+	if m.usageRecorder == nil {
+		return
+	}
+	m.usageRecorder(ev)
+}
+
 func (m *Manager) Cancel(id string) error { return m.discard(id, true) }
 
 func (m *Manager) Remove(id string) error { return m.discard(id, false) }
@@ -747,6 +773,20 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
 	purge := deleteData && d.Status != StatusCompleted
+
+	// Cancelling a finished download only deletes its data: it already reported
+	// download_completed, and a second terminal event would double-count it.
+	if purge {
+		m.recordUsage(usagestats.Event{
+			Type:      usagestats.TypeDownloadCancelled,
+			Timestamp: time.Now(),
+			Properties: usagestats.Properties{
+				GameID:          d.Origin.GameID,
+				DurationSeconds: int64(time.Since(d.AddedAt).Seconds()),
+				BytesTotal:      d.Total,
+			},
+		})
+	}
 
 	m.dropLocked(id)
 	if deleteData {
@@ -893,7 +933,7 @@ func (m *Manager) idleLocked(d *Download, status Status) {
 	delete(m.rates, d.ID)
 }
 
-func (m *Manager) markFailed(id, message string) {
+func (m *Manager) markFailed(id, message string, cause error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	d := m.findLocked(id)
@@ -906,6 +946,20 @@ func (m *Manager) markFailed(id, message string) {
 	m.idleLocked(d, StatusFailed)
 	d.Error = message
 	m.persistLocked()
+	errorCode := usagestats.Classify(cause)
+	if cause == nil {
+		errorCode = usagestats.CodeUnknown
+	}
+	m.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeDownloadFailed,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          d.Origin.GameID,
+			DurationSeconds: int64(time.Since(d.AddedAt).Seconds()),
+			BytesTotal:      d.Total,
+			ErrorCode:       errorCode,
+		},
+	})
 	emit(eventFailed, snapshot(d))
 	emit(eventUpdated, snapshot(d))
 	m.schedule()
@@ -993,7 +1047,7 @@ func (m *Manager) verifyCompletion(ctx context.Context, id string, eng engineTor
 		if jobCtx.Err() != nil {
 			return
 		}
-		m.markFailed(id, err.Error())
+		m.markFailed(id, err.Error(), err)
 		return
 	}
 
@@ -1057,6 +1111,21 @@ func (m *Manager) completeLocked(d *Download) {
 	}
 	m.persistLocked()
 	slog.Info("download completed", "download_id", d.ID, "name", d.Name)
+	duration := int64(now.Sub(d.AddedAt).Seconds())
+	var avgSpeed int64
+	if duration > 0 {
+		avgSpeed = d.Downloaded / duration
+	}
+	m.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeDownloadCompleted,
+		Timestamp: now,
+		Properties: usagestats.Properties{
+			GameID:            d.Origin.GameID,
+			DurationSeconds:   duration,
+			BytesTotal:        d.Total,
+			AverageSpeedBytes: avgSpeed,
+		},
+	})
 	emit(eventCompleted, snapshot(d))
 	emit(eventUpdated, snapshot(d))
 	if m.onCompleted != nil {
@@ -1210,6 +1279,16 @@ func (m *Manager) failWithoutClient() {
 		}
 		m.idleLocked(d, StatusFailed)
 		d.Error = errNoClient.Error()
+		m.recordUsage(usagestats.Event{
+			Type:      usagestats.TypeDownloadFailed,
+			Timestamp: time.Now(),
+			Properties: usagestats.Properties{
+				GameID:          d.Origin.GameID,
+				DurationSeconds: int64(time.Since(d.AddedAt).Seconds()),
+				BytesTotal:      d.Total,
+				ErrorCode:       usagestats.Classify(errNoClient),
+			},
+		})
 		emit(eventFailed, snapshot(d))
 		emit(eventUpdated, snapshot(d))
 	}
@@ -1229,7 +1308,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 			m.setSeeding(j.id, false)
 			return
 		}
-		m.markFailed(j.id, errHashBusy.Error())
+		m.markFailed(j.id, errHashBusy.Error(), errHashBusy)
 		return
 	}
 
@@ -1243,7 +1322,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 			m.setSeeding(j.id, false)
 			return
 		}
-		m.markFailed(j.id, restoreFailedMessage)
+		m.markFailed(j.id, restoreFailedMessage, err)
 		return
 	}
 	m.watchWriteErrors(j.id, lt)

@@ -338,6 +338,120 @@ func TestSourcesNoticeMissingInOldConfig(t *testing.T) {
 	}
 }
 
+func TestAnonymousUsageStatsNotAcceptedByDefault(t *testing.T) {
+	if Defaults().AnonymousUsageStats {
+		t.Fatal("anonymous usage stats enabled by default")
+	}
+}
+
+func TestAnonymousUsageStatsSurvivesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.AnonymousUsageStats = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if !mustServiceAt(t, path).GetSettings().AnonymousUsageStats {
+		t.Fatal("AnonymousUsageStats not persisted")
+	}
+}
+
+func TestAnonymousUsageStatsMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"minimizeToTray":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if mustServiceAt(t, path).GetSettings().AnonymousUsageStats {
+		t.Fatal("legacy config must not count as opted in")
+	}
+}
+
+func TestAnonymousDiagnosticsNotAcceptedByDefault(t *testing.T) {
+	if Defaults().AnonymousDiagnostics {
+		t.Fatal("anonymous diagnostics enabled by default")
+	}
+}
+
+func TestAnonymousDiagnosticsSurvivesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.AnonymousDiagnostics = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if !mustServiceAt(t, path).GetSettings().AnonymousDiagnostics {
+		t.Fatal("AnonymousDiagnostics not persisted")
+	}
+}
+
+func TestAnonymousDiagnosticsMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"minimizeToTray":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if mustServiceAt(t, path).GetSettings().AnonymousDiagnostics {
+		t.Fatal("legacy config must not count as opted in")
+	}
+}
+
+func TestAnonymousDiagnosticsIndependentFromUsageStats(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	next := s.GetSettings()
+	next.AnonymousDiagnostics = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got := s.GetSettings()
+	if !got.AnonymousDiagnostics {
+		t.Fatal("AnonymousDiagnostics not saved")
+	}
+	if got.AnonymousUsageStats {
+		t.Fatal("enabling AnonymousDiagnostics must not enable AnonymousUsageStats")
+	}
+
+	next = s.GetSettings()
+	next.AnonymousUsageStats = true
+	next.AnonymousDiagnostics = false
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got = s.GetSettings()
+	if !got.AnonymousUsageStats {
+		t.Fatal("AnonymousUsageStats not saved")
+	}
+	if got.AnonymousDiagnostics {
+		t.Fatal("enabling AnonymousUsageStats must not enable AnonymousDiagnostics")
+	}
+}
+
+func TestSubscribeNotifiedOnAnonymousUsageStatsChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	var seen Settings
+	calls := 0
+	s.Subscribe(func(next Settings) {
+		seen = next
+		calls++
+	})
+
+	next := s.GetSettings()
+	next.AnonymousUsageStats = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("subscriber called %d times, want 1", calls)
+	}
+	if !seen.AnonymousUsageStats {
+		t.Fatal("subscriber saw stale AnonymousUsageStats value")
+	}
+}
+
 func TestApplierReceivesSanitizedSettingsBeforePersist(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	s := mustServiceAt(t, path)

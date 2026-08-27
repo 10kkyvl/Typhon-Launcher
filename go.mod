@@ -6,6 +6,7 @@ require (
 	github.com/anacrolix/generics v0.1.1-0.20251125230353-15d98d46693b
 	github.com/anacrolix/torrent v1.61.0
 	github.com/bodgit/sevenzip v1.6.5
+	github.com/google/uuid v1.6.0
 	github.com/nwaples/rardecode/v2 v2.3.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.10
 	golang.org/x/sync v0.22.0
@@ -52,7 +53,6 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect

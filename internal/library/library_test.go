@@ -23,6 +23,14 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	if err != nil {
 		t.Fatalf("new library service at %s: %v", path, err)
 	}
+	// Registered after the t.TempDir() that produced path, so it runs before
+	// that directory is removed: a session goroutine still persisting into it
+	// would otherwise race the cleanup.
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
 	return s
 }
 

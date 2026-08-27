@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"typhon/internal/usagestats"
 )
 
 var errDuplicateTask = errors.New("такая загрузка уже добавлена")
@@ -114,6 +116,13 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		m.engines[d.ID] = lt
 	}
 	m.persistLocked()
+	m.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeDownloadStarted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID: d.Origin.GameID,
+		},
+	})
 	snap := snapshot(d)
 	if req.Verify {
 		m.spawnSettleLocked(d.ID, lt)

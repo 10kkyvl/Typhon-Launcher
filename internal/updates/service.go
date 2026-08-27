@@ -17,6 +17,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -108,6 +109,8 @@ type Service struct {
 
 	jobs    map[string]*job
 	waiters map[string]chan install.Installation
+
+	usageRecorder func(usagestats.Event)
 
 	ctx     context.Context
 	cancel  context.CancelFunc

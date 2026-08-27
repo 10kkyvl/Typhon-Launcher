@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/account"
+	"typhon/internal/app"
 	"typhon/internal/metadata"
 )
 
@@ -75,7 +77,7 @@ func TestSearchMapsCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
-	if gotPath != "/metadata/search" {
+	if gotPath != account.APIPrefix+"/metadata/search" {
 		t.Fatalf("path = %q", gotPath)
 	}
 	if !strings.Contains(gotQuery, "q=Prey") || !strings.Contains(gotQuery, "limit=5") {
@@ -164,7 +166,7 @@ func TestGetMapsGame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if gotPath != "/metadata/games/2657" {
+	if gotPath != account.APIPrefix+"/metadata/games/2657" {
 		t.Fatalf("path = %q", gotPath)
 	}
 	if meta.ProviderID != "2657" || meta.Title != "Prey" {
@@ -240,6 +242,7 @@ func TestStatusErrorsMapToDomainErrors(t *testing.T) {
 		{"server error", http.StatusInternalServerError, `{"error":{"code":"internal","message":"x"}}`, ErrUpstream},
 		{"upstream error", http.StatusBadGateway, `{"error":{"code":"upstream_unavailable","message":"x"}}`, ErrUpstream},
 		{"unavailable without code", http.StatusServiceUnavailable, `nonsense`, ErrUpstream},
+		{"client outdated", http.StatusUpgradeRequired, `{"error":{"code":"client_outdated","message":"x"}}`, ErrOutdated},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -250,6 +253,69 @@ func TestStatusErrorsMapToDomainErrors(t *testing.T) {
 			_, err := client.Get(context.Background(), "1")
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestOutdatedClientDoesNotMatchErrUpstream(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusUpgradeRequired, `{"error":{"code":"client_outdated","message":"x"}}`)
+	}), nil)
+
+	_, err := client.Get(context.Background(), "1")
+	if !errors.Is(err, ErrOutdated) {
+		t.Fatalf("err = %v, want ErrOutdated", err)
+	}
+	if errors.Is(err, ErrUpstream) {
+		t.Fatalf("err = %v, must not match ErrUpstream", err)
+	}
+}
+
+func TestRequestsCarryVersionHeaders(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(t *testing.T, client *Client)
+	}{
+		{"search", func(t *testing.T, client *Client) {
+			if _, err := client.Search(context.Background(), "Prey", 5); err != nil {
+				t.Fatalf("search: %v", err)
+			}
+		}},
+		{"get", func(t *testing.T, client *Client) {
+			if _, err := client.Get(context.Background(), "1"); err != nil {
+				t.Fatalf("get: %v", err)
+			}
+		}},
+		{"resolve", func(t *testing.T, client *Client) {
+			if _, err := client.Resolve(context.Background(), []string{"Prey"}); err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotUserAgent, gotVersion string
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotUserAgent = r.Header.Get("User-Agent")
+				gotVersion = r.Header.Get("X-Typhon-Version")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/metadata/search"):
+					writeJSON(t, w, http.StatusOK, `{"candidates":[]}`)
+				case strings.HasPrefix(r.URL.Path, account.APIPrefix+"/metadata/games/"):
+					writeJSON(t, w, http.StatusOK, `{"providerId":"1","title":"Игра"}`)
+				default:
+					writeJSON(t, w, http.StatusOK, `{"games":[]}`)
+				}
+			}), nil)
+
+			tc.call(t, client)
+
+			if gotUserAgent != account.UserAgent {
+				t.Fatalf("user-agent = %q, want %q", gotUserAgent, account.UserAgent)
+			}
+			if gotVersion != app.Version {
+				t.Fatalf("x-typhon-version = %q, want %q", gotVersion, app.Version)
 			}
 		})
 	}
@@ -367,8 +433,8 @@ func TestResolveSendsOneRequestForTheWholeBatch(t *testing.T) {
 	if requests != 1 {
 		t.Fatalf("requests = %d, want one batched request", requests)
 	}
-	if gotMethod != http.MethodPost || gotPath != "/metadata/resolve" {
-		t.Fatalf("request = %s %s, want POST /metadata/resolve", gotMethod, gotPath)
+	if gotMethod != http.MethodPost || gotPath != account.APIPrefix+"/metadata/resolve" {
+		t.Fatalf("request = %s %s, want POST %s/metadata/resolve", gotMethod, gotPath, account.APIPrefix)
 	}
 	if gotType != "application/json" {
 		t.Fatalf("content type = %q", gotType)

@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"typhon/internal/app"
 )
 
 const (
@@ -96,7 +98,7 @@ func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
 }
 
 func (c *Client) Me(ctx context.Context) (CurrentUser, error) {
-	return c.doUser(ctx, http.MethodGet, "/me", nil, "", c.httpClient)
+	return c.doUser(ctx, http.MethodGet, APIPrefix+"/me", nil, "", c.httpClient)
 }
 
 func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, error) {
@@ -104,7 +106,7 @@ func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, e
 	if err != nil {
 		return CurrentUser{}, fmt.Errorf("encode profile patch: %w", err)
 	}
-	return c.doUser(ctx, http.MethodPatch, "/me", bytes.NewReader(body), "application/json", c.httpClient)
+	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient)
 }
 
 func (c *Client) UploadAvatar(ctx context.Context, data []byte) (CurrentUser, error) {
@@ -114,11 +116,11 @@ func (c *Client) UploadAvatar(ctx context.Context, data []byte) (CurrentUser, er
 	if len(data) > maxAvatarSize {
 		return CurrentUser{}, &Error{Code: CodeAvatarTooLarge}
 	}
-	return c.doUser(ctx, http.MethodPut, "/me/avatar", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+	return c.doUser(ctx, http.MethodPut, APIPrefix+"/me/avatar", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
 }
 
 func (c *Client) RemoveAvatar(ctx context.Context) (CurrentUser, error) {
-	return c.doUser(ctx, http.MethodDelete, "/me/avatar", nil, "", c.httpClient)
+	return c.doUser(ctx, http.MethodDelete, APIPrefix+"/me/avatar", nil, "", c.httpClient)
 }
 
 func (c *Client) doUser(
@@ -186,6 +188,8 @@ func (c *Client) do(
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
 
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -236,6 +240,10 @@ func decodeError(status int, body io.Reader) error {
 
 	if code == CodeServer && status == http.StatusForbidden {
 		code = CodeBlocked
+	}
+
+	if code == CodeServer && status == http.StatusUpgradeRequired {
+		code = CodeOutdated
 	}
 
 	return &Error{Code: code, Field: field, Status: status, Message: message}

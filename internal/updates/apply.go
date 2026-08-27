@@ -15,6 +15,7 @@ import (
 	"typhon/internal/download"
 	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/usagestats"
 )
 
 const (
@@ -56,6 +57,8 @@ func (s *Service) StartUpdate(gameID string) error {
 		return errBusy
 	}
 
+	canonicalID := s.canonicalGameID(gameID)
+
 	plan := *current.Plan
 	entry := UpdateHistory{
 		ID:            newID(),
@@ -77,6 +80,11 @@ func (s *Service) StartUpdate(gameID string) error {
 		u.Message = ""
 	})
 	emit(eventStarted, snap)
+	s.recordUsage(usagestats.Event{
+		Type:       usagestats.TypeUpdateStarted,
+		Timestamp:  time.Now(),
+		Properties: usagestats.Properties{GameID: canonicalID},
+	})
 	slog.Info("update started", "game", gameID, "strategy", plan.Strategy,
 		"from", plan.InstalledVersion, "to", plan.TargetVersion, "bytes", plan.DownloadBytes)
 
@@ -97,9 +105,30 @@ func (s *Service) StartUpdate(gameID string) error {
 				u.Availability = UpdateAvailability{Kind: KindNone, GameID: gameID, InstalledVersion: plan.TargetVersion}
 			})
 			emit(eventCompleted, done)
+			s.recordUsage(usagestats.Event{
+				Type:      usagestats.TypeUpdateCompleted,
+				Timestamp: time.Now(),
+				Properties: usagestats.Properties{
+					GameID:          canonicalID,
+					DurationSeconds: int64(time.Since(entry.StartedAt).Seconds()),
+				},
+			})
 			slog.Info("update completed", "game", gameID, "version", plan.TargetVersion)
 			s.recheck(gameID)
 		case ctx.Err() != nil:
+			// Отмена через CancelUpdate или остановка сервиса. В UI это не
+			// «обновление упало», но терминальное событие всё равно нужно:
+			// без него update_started никогда не сойдётся с суммой исходов.
+			// Отличается по error_code "cancelled".
+			s.recordUsage(usagestats.Event{
+				Type:      usagestats.TypeUpdateFailed,
+				Timestamp: time.Now(),
+				Properties: usagestats.Properties{
+					GameID:          canonicalID,
+					DurationSeconds: int64(time.Since(entry.StartedAt).Seconds()),
+					ErrorCode:       usagestats.Classify(ctx.Err()),
+				},
+			})
 			s.finishHistory(entry.ID, HistoryFailed, interruptedUpdateText)
 			s.mutate(gameID, func(u *Update) {
 				u.State = StateAvailable
@@ -116,6 +145,15 @@ func (s *Service) StartUpdate(gameID string) error {
 				u.Error = err.Error()
 			})
 			emit(eventFailed, failed)
+			s.recordUsage(usagestats.Event{
+				Type:      usagestats.TypeUpdateFailed,
+				Timestamp: time.Now(),
+				Properties: usagestats.Properties{
+					GameID:          canonicalID,
+					DurationSeconds: int64(time.Since(entry.StartedAt).Seconds()),
+					ErrorCode:       usagestats.Classify(err),
+				},
+			})
 			slog.Error("update failed", "game", gameID, "error", err)
 		}
 	}()
@@ -174,6 +212,7 @@ func (s *Service) downloadRelease(ctx context.Context, plan UpdatePlan, releaseI
 		Origin: download.Origin{
 			ReleaseID:    release.ID,
 			SourceID:     release.SourceID,
+			GameID:       s.canonicalGameID(plan.GameID),
 			Version:      releaseVersion(release),
 			Purpose:      download.PurposeUpdate,
 			UpdatePlanID: plan.ID,
@@ -848,4 +887,36 @@ func removeTree(path string) {
 	if err := os.RemoveAll(path); err != nil {
 		slog.Warn("remove directory", "path", path, "error", err)
 	}
+}
+
+// canonicalGameID resolves the catalog id usagestats expects. It returns ""
+// when the game is not (or no longer) installed, which usagestats accepts as
+// "no game id" rather than rejecting the event.
+func (s *Service) canonicalGameID(gameID string) string {
+	game, ok := s.installedGame(gameID)
+	if !ok {
+		return ""
+	}
+	return game.CanonicalGameID
+}
+
+// SetUsageRecorder wires the usage-stats sink. Nil clears it.
+//
+//wails:ignore
+func (s *Service) SetUsageRecorder(rec func(usagestats.Event)) {
+	s.mu.Lock()
+	s.usageRecorder = rec
+	s.mu.Unlock()
+}
+
+// recordUsage is nil-safe and never blocks the caller: usagestats.Record
+// already validates and enqueues without blocking, so this only forwards.
+func (s *Service) recordUsage(ev usagestats.Event) {
+	s.mu.Lock()
+	rec := s.usageRecorder
+	s.mu.Unlock()
+	if rec == nil {
+		return
+	}
+	rec(ev)
 }

@@ -21,7 +21,7 @@ func TestClientRegisterAndLogin(t *testing.T) {
 	}{
 		{
 			name:   "register",
-			path:   "/auth/register",
+			path:   APIPrefix + "/auth/register",
 			status: http.StatusCreated,
 			call: func(c *Client) (Session, error) {
 				return c.Register(context.Background(), RegisterInput{
@@ -40,7 +40,7 @@ func TestClientRegisterAndLogin(t *testing.T) {
 		},
 		{
 			name:   "login",
-			path:   "/auth/login",
+			path:   APIPrefix + "/auth/login",
 			status: http.StatusOK,
 			call: func(c *Client) (Session, error) {
 				return c.Login(context.Background(), LoginInput{Identifier: "PLAYERONE", Password: "  secret pass  "})
@@ -149,7 +149,7 @@ func TestClientRegisterRejectsEmptyToken(t *testing.T) {
 func TestClientLogoutSendsTheGivenToken(t *testing.T) {
 	var authorization string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/auth/logout" {
+		if r.Method != http.MethodPost || r.URL.Path != APIPrefix+"/auth/logout" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		authorization = r.Header.Get("Authorization")

@@ -50,6 +50,7 @@ const KNOWN_CODES = new Set([
   'invalid_username',
   'invalid_display_name',
   'email_immutable',
+  'launcher_outdated',
   'no_changes',
   'avatar_too_large',
   'unsupported_avatar',

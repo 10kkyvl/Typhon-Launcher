@@ -20,6 +20,7 @@ const (
 	CodeInternal          = "internal"
 	CodeNetwork           = "network_error"
 	CodeServer            = "server_error"
+	CodeOutdated          = "launcher_outdated"
 )
 
 type Error struct {
