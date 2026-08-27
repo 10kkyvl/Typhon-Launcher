@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"typhon/internal/usagestats"
 )
 
 type SessionEvent struct {
@@ -49,15 +51,33 @@ func (s *Service) PlayGame(id string) error {
 	startedAt := time.Now()
 	s.running[id] = &session{process: cmd.Process, startedAt: startedAt}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", cmd.Process.Pid)
-	if s.watcher != nil {
-		s.watcher.SessionStarted(*game)
+	for _, w := range s.watchers {
+		w.SessionStarted(*game)
 	}
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeGameStarted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID: game.CanonicalGameID,
+		},
+	})
 	emit("game:started", SessionEvent{GameID: id})
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		_ = cmd.Wait()
 		s.finishSession(id, startedAt)
 	}()
+	return nil
+}
+
+// ServiceShutdown waits for the session watchers and the session-finished
+// callbacks to return. Without it those goroutines outlive the service and
+// can run their persist after shutdown, against a state directory the owner
+// already considers closed.
+func (s *Service) ServiceShutdown() error {
+	s.wg.Wait()
 	return nil
 }
 
@@ -76,15 +96,31 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 	defer s.mu.Unlock()
 
 	delete(s.running, id)
-	if s.watcher != nil {
-		s.watcher.SessionStopped(id)
+	for _, w := range s.watchers {
+		w.SessionStopped(id)
 	}
 	seconds := int64(time.Since(startedAt).Seconds())
 	if s.onSession != nil {
 		notify := s.onSession
-		go notify(id, seconds)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			notify(id, seconds)
+		}()
 	}
 	game := s.findLocked(id)
+	usageGameID := ""
+	if game != nil {
+		usageGameID = game.CanonicalGameID
+	}
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeGameStopped,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          usageGameID,
+			DurationSeconds: seconds,
+		},
+	})
 	if game == nil {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})
 		return

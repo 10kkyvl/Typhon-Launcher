@@ -13,6 +13,7 @@ import (
 	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/sources"
+	"typhon/internal/usagestats"
 )
 
 var errRepairUnavailable = errors.New("восстановление недоступно для этой установки")
@@ -144,6 +145,7 @@ func (s *Service) verify(
 	manifest FileManifest,
 	hasManifest bool,
 ) {
+	started := time.Now()
 	method := MethodManifest
 	if hasTorrent {
 		method = MethodTorrent
@@ -151,19 +153,26 @@ func (s *Service) verify(
 	s.emitVerify(game.ID, eventVerifyStarted, func(v *VerifyState) {
 		*v = VerifyState{GameID: game.ID, Method: method, Running: true}
 	})
+	s.recordUsage(usagestats.Event{
+		Type:       usagestats.TypeVerifyStarted,
+		Timestamp:  time.Now(),
+		Properties: usagestats.Properties{GameID: game.CanonicalGameID},
+	})
 	if hasTorrent && s.downloads != nil {
 		report, err := s.inspectInstall(ctx, game, release)
 		switch {
 		case ctx.Err() != nil:
+			s.recordVerifyFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
 			s.failVerify(ctx, game.ID, err)
 			return
 		case err != nil && !hasManifest:
+			s.recordVerifyFailure(game.CanonicalGameID, started, err)
 			s.failVerify(ctx, game.ID, err)
 			return
 		case err != nil:
 			slog.Warn("torrent verify unavailable", "game", game.ID, "error", err)
 		case torrentVerdict(report):
-			s.applyReuseReport(game, report)
+			s.applyReuseReport(game, report, started)
 			slog.Info("game verified", "game", game.ID, "matched", report.MatchedBytes,
 				"missing", report.MissingBytes, "badPieces", report.BadPieces)
 			return
@@ -173,11 +182,19 @@ func (s *Service) verify(
 		}
 	}
 	if hasManifest {
-		s.verifyByManifest(ctx, game, manifest)
+		s.verifyByManifest(ctx, game, manifest, started)
 		return
 	}
 	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
 		*v = unavailableState(game)
+	})
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeVerifyCompleted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          game.CanonicalGameID,
+			DurationSeconds: int64(time.Since(started).Seconds()),
+		},
 	})
 }
 
@@ -221,6 +238,32 @@ func (s *Service) inspectInstall(
 	})
 }
 
+// terminalCause reports the cause a terminal usage event should carry. A
+// cancelled ctx wins over whatever error the aborted step happened to return,
+// so cancellation lands as error_code "cancelled" instead of being dropped:
+// every *_started needs a terminal event, or started counts stop adding up.
+func terminalCause(ctx context.Context, cause error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return cause
+}
+
+// recordVerifyFailure emits usagestats.TypeVerifyFailed. Cancellation is
+// reported too, with error_code "cancelled", so it stays distinguishable from
+// a real failure without leaving verify_started unanswered.
+func (s *Service) recordVerifyFailure(canonicalID string, started time.Time, cause error) {
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeVerifyFailed,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          canonicalID,
+			DurationSeconds: int64(time.Since(started).Seconds()),
+			ErrorCode:       usagestats.Classify(cause),
+		},
+	})
+}
+
 func (s *Service) failVerify(ctx context.Context, gameID string, cause error) {
 	s.emitVerify(gameID, eventVerifyCompleted, func(v *VerifyState) {
 		v.Running = false
@@ -233,7 +276,7 @@ func (s *Service) failVerify(ctx context.Context, gameID string, cause error) {
 	})
 }
 
-func (s *Service) applyReuseReport(game library.Game, report download.ReuseReport) {
+func (s *Service) applyReuseReport(game library.Game, report download.ReuseReport, started time.Time) {
 	now := time.Now()
 	damaged := report.MissingFiles > 0 || report.BadPieces > 0
 	s.emitVerify(game.ID, eventVerifyCompleted, func(v *VerifyState) {
@@ -257,9 +300,17 @@ func (s *Service) applyReuseReport(game library.Game, report download.ReuseRepor
 			CheckedAt:       &now,
 		}
 	})
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeVerifyCompleted,
+		Timestamp: now,
+		Properties: usagestats.Properties{
+			GameID:          game.CanonicalGameID,
+			DurationSeconds: int64(now.Sub(started).Seconds()),
+		},
+	})
 }
 
-func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manifest FileManifest) {
+func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manifest FileManifest, started time.Time) {
 	s.emitVerify(game.ID, eventVerifyUpdated, func(v *VerifyState) {
 		v.Method = MethodManifest
 		v.Running = true
@@ -284,6 +335,7 @@ func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manif
 		})
 	})
 	if err != nil {
+		s.recordVerifyFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
 		s.failVerify(ctx, game.ID, err)
 		return
 	}
@@ -307,6 +359,14 @@ func (s *Service) verifyByManifest(ctx context.Context, game library.Game, manif
 			InstallDir:      game.InstallDir,
 			CheckedAt:       &now,
 		}
+	})
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeVerifyCompleted,
+		Timestamp: now,
+		Properties: usagestats.Properties{
+			GameID:          game.CanonicalGameID,
+			DurationSeconds: int64(now.Sub(started).Seconds()),
+		},
 	})
 	slog.Info("game verified against manifest", "game", game.ID,
 		"ok", result.OkFiles, "issues", len(result.Issues), "extra", len(result.Extra))
@@ -356,10 +416,16 @@ func (s *Service) RepairGame(gameID string) error {
 }
 
 func (s *Service) repair(ctx context.Context, game library.Game, release sources.Release, flat bool) {
+	started := time.Now()
 	s.emitVerify(game.ID, eventRepairStarted, func(v *VerifyState) {
 		v.Repairing = true
 		v.Progress = 0
 		v.Error = ""
+	})
+	s.recordUsage(usagestats.Event{
+		Type:       usagestats.TypeRepairStarted,
+		Timestamp:  time.Now(),
+		Properties: usagestats.Properties{GameID: game.CanonicalGameID},
 	})
 	source := ""
 	if len(release.URIs) > 0 {
@@ -376,12 +442,14 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		Origin: download.Origin{
 			ReleaseID: release.ID,
 			SourceID:  release.SourceID,
+			GameID:    game.CanonicalGameID,
 			Version:   releaseVersion(release),
 			Purpose:   download.PurposeRepair,
 			LibraryID: game.ID,
 		},
 	})
 	if err != nil {
+		s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
 		s.failRepair(ctx, game.ID, err)
 		return
 	}
@@ -391,12 +459,14 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 	for {
 		select {
 		case <-ctx.Done():
+			s.recordRepairFailure(game.CanonicalGameID, started, ctx.Err())
 			s.failRepair(ctx, game.ID, ctx.Err())
 			return
 		case <-ticker.C:
 		}
 		current, err := s.downloads.Get(task.ID)
 		if err != nil {
+			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, errDownloadFailed))
 			s.failRepair(ctx, game.ID, errDownloadFailed)
 			return
 		}
@@ -418,13 +488,38 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 				v.Error = ""
 				v.CheckedAt = &now
 			})
+			s.recordUsage(usagestats.Event{
+				Type:      usagestats.TypeRepairCompleted,
+				Timestamp: now,
+				Properties: usagestats.Properties{
+					GameID:          game.CanonicalGameID,
+					DurationSeconds: int64(now.Sub(started).Seconds()),
+				},
+			})
 			slog.Info("game repaired", "game", game.ID, "release", release.ID)
 			return
 		case download.StatusFailed:
-			s.failRepair(ctx, game.ID, errors.New(current.Error))
+			cause := errors.New(current.Error)
+			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, cause))
+			s.failRepair(ctx, game.ID, cause)
 			return
 		}
 	}
+}
+
+// recordRepairFailure emits usagestats.TypeRepairFailed. Cancellation is
+// reported too, with error_code "cancelled", so it stays distinguishable from
+// a real failure without leaving repair_started unanswered.
+func (s *Service) recordRepairFailure(canonicalID string, started time.Time, cause error) {
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeRepairFailed,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          canonicalID,
+			DurationSeconds: int64(time.Since(started).Seconds()),
+			ErrorCode:       usagestats.Classify(cause),
+		},
+	})
 }
 
 func (s *Service) failRepair(ctx context.Context, gameID string, cause error) {

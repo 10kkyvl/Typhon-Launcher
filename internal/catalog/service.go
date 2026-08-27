@@ -378,6 +378,20 @@ func (s *Service) TitleOf(id string) string {
 }
 
 //wails:ignore
+func (s *Service) IGDBIDOf(id string) string {
+	if id == "" {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game, ok := s.idx.game(id)
+	if !ok {
+		return ""
+	}
+	return game.ExternalIDs.IGDB
+}
+
+//wails:ignore
 func (s *Service) LookupByTitle(title string) (Game, bool) {
 	normalized := titles.Normalize(title)
 	if normalized == "" {

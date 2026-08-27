@@ -19,6 +19,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/titles"
+	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -104,6 +105,7 @@ type Service struct {
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
+	usage      func(usagestats.Event)
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
@@ -158,6 +160,42 @@ func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.title = fn
+}
+
+//wails:ignore
+func (s *Service) SetUsageRecorder(rec func(usagestats.Event)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.usage = rec
+}
+
+func (s *Service) recordUsage(ev usagestats.Event) {
+	s.mu.Lock()
+	rec := s.usage
+	s.mu.Unlock()
+	if rec == nil {
+		return
+	}
+	rec(ev)
+}
+
+// installerType переводит внутренний Type в строку, ожидаемую usagestats:
+// будущий Type, добавленный в model.go, обязан свестись к "unknown", а не
+// молча провалить валидацию всего события в usagestats.
+func installerType(t Type) string {
+	switch t {
+	case TypePortable, TypeArchiveZip, TypeArchive7z, TypeArchiveRar, TypeExeInstaller, TypeMsiInstaller:
+		return string(t)
+	default:
+		return "unknown"
+	}
+}
+
+func usageDurationSeconds(d time.Duration) int64 {
+	if d < 0 {
+		return 0
+	}
+	return int64(d.Seconds())
 }
 
 func (s *Service) titleOf(origin download.Origin) string {
@@ -603,6 +641,14 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 
 	slog.Info("install started", "id", item.ID, "name", item.Name, "type", item.Type, "mode", item.Mode)
 	emit(eventStarted, snap)
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeInstallStarted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:        snap.Origin.GameID,
+			InstallerType: installerType(snap.Type),
+		},
+	})
 	emit(eventUpdated, snap)
 	return snap, nil
 }
@@ -1008,14 +1054,26 @@ func (s *Service) fail(id string, cause error) {
 		s.mu.Unlock()
 		slog.Error("install failed, installer still running", "id", id, "name", snap.Name, "error", cause)
 		emit(eventFailed, snap)
+		s.recordUsage(usagestats.Event{
+			Type:      usagestats.TypeInstallFailed,
+			Timestamp: time.Now(),
+			Properties: usagestats.Properties{
+				GameID:          snap.Origin.GameID,
+				InstallerType:   installerType(snap.Type),
+				DurationSeconds: usageDurationSeconds(time.Since(snap.StartedAt)),
+				ErrorCode:       usagestats.Classify(cause),
+			},
+		})
 		emit(eventUpdated, snap)
 		s.notifyFinished(snap)
 	case j != nil && j.cancelled:
+		// пользовательская отмена — не провал, событие install_failed не шлём
 		s.markCancelledLocked(item)
 		snap := snapshotOf(item)
 		s.mu.Unlock()
 		s.notifyFinished(snap)
 	case s.closing || errors.Is(cause, context.Canceled):
+		// лаунчер закрывается — событие всё равно не успеет улететь
 		s.persistLocked()
 		s.mu.Unlock()
 		slog.Info("install interrupted", "id", id, "name", item.Name)
@@ -1027,6 +1085,16 @@ func (s *Service) fail(id string, cause error) {
 		s.mu.Unlock()
 		slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
 		emit(eventFailed, snap)
+		s.recordUsage(usagestats.Event{
+			Type:      usagestats.TypeInstallFailed,
+			Timestamp: time.Now(),
+			Properties: usagestats.Properties{
+				GameID:          snap.Origin.GameID,
+				InstallerType:   installerType(snap.Type),
+				DurationSeconds: usageDurationSeconds(time.Since(snap.StartedAt)),
+				ErrorCode:       usagestats.Classify(cause),
+			},
+		})
 		emit(eventUpdated, snap)
 		s.notifyFinished(snap)
 	}

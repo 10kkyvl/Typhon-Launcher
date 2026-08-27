@@ -15,6 +15,7 @@ import (
 
 	"typhon/internal/library"
 	"typhon/internal/settings"
+	"typhon/internal/usagestats"
 )
 
 func (s *Service) run(ctx context.Context, id string) {
@@ -585,6 +586,19 @@ func (s *Service) complete(id string) error {
 
 	slog.Info("install completed", "id", id, "name", snap.Name, "game", game.ID, "version", version)
 	emit(eventCompleted, snap)
+	duration := time.Duration(0)
+	if snap.CompletedAt != nil {
+		duration = snap.CompletedAt.Sub(snap.StartedAt)
+	}
+	s.recordUsage(usagestats.Event{
+		Type:      usagestats.TypeInstallCompleted,
+		Timestamp: time.Now(),
+		Properties: usagestats.Properties{
+			GameID:          snap.Origin.GameID,
+			InstallerType:   installerType(snap.Type),
+			DurationSeconds: usageDurationSeconds(duration),
+		},
+	})
 	emit(eventUpdated, snap)
 	if !item.SkipRegister {
 		s.applyCleanup(cfg, snap.DownloadID)

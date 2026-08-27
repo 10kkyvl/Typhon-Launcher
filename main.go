@@ -5,14 +5,18 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"runtime/debug"
 
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
+	"typhon/internal/clientid"
+	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/download"
+	"typhon/internal/heartbeat"
 	"typhon/internal/install"
 	"typhon/internal/legal"
 	"typhon/internal/library"
@@ -25,6 +29,7 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
+	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -86,7 +91,26 @@ func init() {
 }
 
 func main() {
-	app.InitLogging()
+	// A locked or unwritable log file must not stop the launcher from
+	// starting, but it must not pass silently either: stderr logging is
+	// already live here, so the failure is recorded rather than discarded.
+	if err := app.InitLogging(); err != nil {
+		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
+	}
+
+	// diagService is assigned once the identity/telemetry block below
+	// constructs it; the defer reads the variable itself at panic time, not
+	// a snapshot taken here, so it still reports panics that happen after
+	// the service exists.
+	var diagService *diagnostics.Service
+	defer func() {
+		if r := recover(); r != nil {
+			if diagService != nil {
+				diagService.CapturePanic("launcher", r, debug.Stack())
+			}
+			panic(r) //nolint:forbidigo // re-throws an already-recovered invariant violation so the process still crashes as it would have; this is not a new panic on input/file/network
+		}
+	}()
 
 	if len(os.Args) > 1 && os.Args[1] == "--install-worker" {
 		if len(os.Args) < 3 {
@@ -183,13 +207,76 @@ func main() {
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
-	libraryService.SetSessionWatcher(presenceWatcher)
+	libraryService.AddSessionWatcher(presenceWatcher)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
+
+	var extraServices []application.Service
+
+	// Битый или недоступный installation.json — не повод не пускать пользователя
+	// играть: presence и телеметрия в этом запуске просто не поднимаются, лаунчер
+	// работает дальше без них.
+	identity, err := clientid.Load()
+	if err != nil {
+		slog.Error("load client identity", "error", err)
+	} else {
+		resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
+		heartbeatService, err := heartbeat.NewService(identity, resolveGameID)
+		if err != nil {
+			fatal("start presence", err)
+		}
+		usageService, err := usagestats.NewService(identity,
+			func() bool { return settingsService.GetSettings().AnonymousUsageStats }, resolveGameID)
+		if err != nil {
+			fatal("start usage stats", err)
+		}
+		usageService.SetEnabled(settingsService.GetSettings().AnonymousUsageStats)
+		settingsService.Subscribe(func(s settings.Settings) { usageService.SetEnabled(s.AnonymousUsageStats) })
+
+		diagnosticsService, err := diagnostics.NewService(identity,
+			func() bool { return settingsService.GetSettings().AnonymousDiagnostics })
+		if err != nil {
+			fatal("start diagnostics", err)
+		}
+		diagnosticsService.SetEnabled(settingsService.GetSettings().AnonymousDiagnostics)
+		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.AnonymousDiagnostics) })
+		diagService = diagnosticsService
+
+		libraryService.AddSessionWatcher(heartbeatService)
+		libraryService.SetUsageRecorder(usageService.Record)
+		downloadManager.SetUsageRecorder(usageService.Record)
+		installService.SetUsageRecorder(usageService.Record)
+		updateService.SetUsageRecorder(usageService.Record)
+
+		extraServices = append(extraServices,
+			application.NewService(heartbeatService),
+			application.NewService(usageService),
+			application.NewService(diagnosticsService),
+		)
+	}
 
 	current := settingsService.GetSettings()
 
 	var trayController *tray.Controller
+
+	services := []application.Service{
+		application.NewService(appService),
+		application.NewService(accountService),
+		application.NewService(settingsService),
+		application.NewService(libraryService),
+		application.NewService(downloadManager),
+		application.NewService(installService),
+		application.NewService(catalogService),
+		application.NewService(sourcesService),
+		application.NewService(searchService),
+		application.NewService(updateService),
+		application.NewService(metadataService),
+		application.NewService(discoveryService),
+		application.NewService(discordService),
+		application.NewService(legalService),
+		application.NewService(selfupdateService),
+	}
+	services = append(services, extraServices...)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -203,23 +290,7 @@ func main() {
 				trayController.Open()
 			},
 		},
-		Services: []application.Service{
-			application.NewService(appService),
-			application.NewService(accountService),
-			application.NewService(settingsService),
-			application.NewService(libraryService),
-			application.NewService(downloadManager),
-			application.NewService(installService),
-			application.NewService(catalogService),
-			application.NewService(sourcesService),
-			application.NewService(searchService),
-			application.NewService(updateService),
-			application.NewService(metadataService),
-			application.NewService(discoveryService),
-			application.NewService(discordService),
-			application.NewService(legalService),
-			application.NewService(selfupdateService),
-		},
+		Services: services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
 			Middleware: metadataService.Middleware,

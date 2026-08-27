@@ -77,6 +77,8 @@ type Settings struct {
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
+	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
+	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
 }
 
 func Defaults() Settings {
@@ -108,6 +110,8 @@ func Defaults() Settings {
 		AllowTorrentReuse:        true,
 
 		SourcesNoticeAccepted: false,
+		AnonymousUsageStats:   false,
+		AnonymousDiagnostics:  false,
 	}
 }
 

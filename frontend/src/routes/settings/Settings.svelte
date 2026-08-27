@@ -349,6 +349,58 @@
           </div>
         </div>
       </section>
+
+      <section class="group">
+        <h3>Приватность</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Анонимная статистика использования</span>
+              <span class="row-sub"
+                >Отправлять анонимные события о запусках игр, загрузках, установках и обновлениях: только
+                идентификатор игры, длительность, объём и код ошибки. По умолчанию выключено.</span
+              >
+            </div>
+            <Toggle
+              checked={current?.anonymousUsageStats ?? false}
+              label="Анонимная статистика использования"
+              onchange={(v) => set({ anonymousUsageStats: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Анонимная диагностика</span>
+              <span class="row-sub"
+                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой пути
+                и чувствительные сетевые идентификаторы удаляются. По умолчанию выключено.</span
+              >
+            </div>
+            <Toggle
+              checked={current?.anonymousDiagnostics ?? false}
+              label="Анонимная диагностика"
+              onchange={(v) => set({ anonymousDiagnostics: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Состояние сессии</span>
+              <span class="row-sub"
+                >Typhon передаёт минимальное анонимное состояние активной сессии — включён ли лаунчер и
+                идентификатор игры, если она запущена, — для агрегированной статистики сервиса в реальном
+                времени. Эти данные не связаны с учётной записью, хранятся недолго и не зависят от переключателя
+                выше.</span
+              >
+              <button
+                type="button"
+                class="privacy-link"
+                onclick={() => openLegalDoc({ id: 'privacy', title: 'Политика конфиденциальности' })}
+              >
+                Политика конфиденциальности
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 {:else if tab === 'downloads'}
@@ -766,6 +818,20 @@
 
   .about-logo h3 {
     margin-bottom: 2px;
+  }
+
+  .privacy-link {
+    align-self: flex-start;
+    color: var(--accent-text);
+    font-size: var(--font-xs);
+    font-weight: 500;
+    padding: 0.2rem 0.3rem;
+    margin-left: -0.3rem;
+    border-radius: var(--radius-xs);
+  }
+
+  .privacy-link:hover {
+    color: var(--text);
   }
 
   @media (min-width: 1600px) {

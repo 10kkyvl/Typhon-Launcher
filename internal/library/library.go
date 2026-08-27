@@ -16,6 +16,7 @@ import (
 
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -104,7 +105,9 @@ type Service struct {
 	excluded     []string
 	running      map[string]*session
 	onSession    func(gameID string, seconds int64)
-	watcher      SessionWatcher
+	watchers     []SessionWatcher
+	usageRecord  func(ev usagestats.Event)
+	wg           sync.WaitGroup
 }
 
 type SessionWatcher interface {
@@ -402,10 +405,27 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 }
 
 //wails:ignore
-func (s *Service) SetSessionWatcher(w SessionWatcher) {
+func (s *Service) AddSessionWatcher(w SessionWatcher) {
+	if w == nil {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.watcher = w
+	s.watchers = append(s.watchers, w)
+}
+
+//wails:ignore
+func (s *Service) SetUsageRecorder(rec func(ev usagestats.Event)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.usageRecord = rec
+}
+
+func (s *Service) recordUsage(ev usagestats.Event) {
+	if s.usageRecord == nil {
+		return
+	}
+	s.usageRecord(ev)
 }
 
 //wails:ignore

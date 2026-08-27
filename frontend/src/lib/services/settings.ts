@@ -32,6 +32,8 @@ export interface Settings {
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
   sourcesNoticeAccepted: boolean;
+  anonymousUsageStats: boolean;
+  anonymousDiagnostics: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -66,6 +68,8 @@ const fallbackDefaults: Settings = {
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
   sourcesNoticeAccepted: false,
+  anonymousUsageStats: false,
+  anonymousDiagnostics: false,
 };
 
 export async function getSettings(): Promise<Settings> {
