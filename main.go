@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -25,6 +26,7 @@ import (
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/presence"
+	"typhon/internal/redact"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -93,6 +95,27 @@ func init() {
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 }
 
+// registerLocalIdentity hands the machine and account names to redact so they
+// are scrubbed from diagnostics text wherever they appear, not only inside a
+// path: a username in "account egor is not authorized" matches no path rule.
+// A name that will not resolve is logged and skipped rather than fatal — the
+// pattern rules still run, and a launcher that refuses to start over a
+// hostname lookup trades far more than it gains.
+func registerLocalIdentity() {
+	host, err := os.Hostname()
+	if err != nil {
+		slog.Warn("resolve hostname for redaction", "error", err)
+	}
+	user := ""
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("resolve home dir for redaction", "error", err)
+	} else {
+		user = filepath.Base(home)
+	}
+	redact.SetLocal(host, user)
+}
+
 func main() {
 	// A locked or unwritable log file must not stop the launcher from
 	// starting, but it must not pass silently either: stderr logging is
@@ -100,6 +123,8 @@ func main() {
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
 	}
+
+	registerLocalIdentity()
 
 	// diagService is assigned once the identity/telemetry block below
 	// constructs it; the defer reads the variable itself at panic time, not
