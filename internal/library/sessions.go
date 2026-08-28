@@ -206,11 +206,19 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})
 		return
 	}
+	previousLastPlayed := game.LastPlayed
+	previousPlaytime := game.PlaytimeSeconds
 	now := s.now()
 	game.LastPlayed = &now
 	game.PlaytimeSeconds += seconds
 	if err := s.persist(); err != nil {
+		game.LastPlayed = previousLastPlayed
+		game.PlaytimeSeconds = previousPlaytime
+		// Вызывающие — cmd.Wait()-горутина и detect-цикл watch.go, вернуть
+		// ошибку им наверх некому: это единственное место в пакете, где
+		// логирование, а не return err, оправдано.
 		slog.Error("persist session", "id", id, "error", err)
+		return
 	}
 	slog.Info("game stopped", "id", id, "title", game.Title, "sessionSeconds", seconds)
 	emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds})

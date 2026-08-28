@@ -572,6 +572,42 @@ func TestStopGameExternalSessionRejectsUnknownCreatedAt(t *testing.T) {
 	}
 }
 
+func TestFinishSessionPersistFailureRollsBackMemory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	exe := tempGameExe(t)
+	game, err := s.AddGame(exe, "Rollback Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	when := time.Now().Add(-time.Hour)
+	s.mu.Lock()
+	stored := s.findLocked(game.ID)
+	stored.LastPlayed = &when
+	stored.PlaytimeSeconds = 50
+	s.mu.Unlock()
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	s.finishSession(game.ID, time.Now().Add(-10*time.Second))
+
+	got, err := s.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PlaytimeSeconds != 50 {
+		t.Fatalf("PlaytimeSeconds = %d, want 50 (rolled back after failed persist)", got.PlaytimeSeconds)
+	}
+	if got.LastPlayed == nil || !got.LastPlayed.Equal(when) {
+		t.Fatalf("LastPlayed = %v, want %v (rolled back after failed persist)", got.LastPlayed, when)
+	}
+}
+
 func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)

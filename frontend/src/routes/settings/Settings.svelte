@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, FolderOpen, ListChecks, ScrollText } from '@lucide/svelte';
+  import { Download, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -14,10 +14,12 @@
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
+  import { forgetRemote, syncNow } from '../../lib/services/accountSync';
+  import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
-  import { openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
     getAppInfo,
@@ -29,6 +31,7 @@
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
+  import { authState } from '../../lib/stores/user';
   import { bytesLabel, relativeDate } from '../../lib/utils/format';
 
   let { tab: initialTab }: { tab?: string } = $props();
@@ -64,6 +67,10 @@
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
 
+  const accountReady = $derived($authState === 'authenticated');
+  let syncingNow = $state(false);
+  let forgettingRemote = $state(false);
+
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
@@ -94,6 +101,34 @@
       toast(logsReason(err), 'danger');
     } finally {
       logsSaving = false;
+    }
+  }
+
+  async function runSyncNow() {
+    if (syncingNow) return;
+    syncingNow = true;
+    try {
+      await syncNow();
+      toast('Синхронизация выполнена', 'success');
+    } catch (err) {
+      toast(accountSyncReason(err, 'Не удалось синхронизировать данные'), 'danger');
+    } finally {
+      syncingNow = false;
+    }
+  }
+
+  async function runForgetRemote() {
+    if (forgettingRemote) return;
+    if (!window.confirm('Удалить синхронизированные данные с сервера? Это действие необратимо.')) return;
+    forgettingRemote = true;
+    try {
+      await forgetRemote();
+      settings.set(await getSettings());
+      toast('Данные удалены с сервера', 'success');
+    } catch (err) {
+      toast(accountSyncReason(err, 'Не удалось удалить данные с сервера'), 'danger');
+    } finally {
+      forgettingRemote = false;
     }
   }
 
@@ -391,6 +426,59 @@
                 Политика конфиденциальности
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Синхронизация</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Синхронизация между устройствами</span>
+              <span class="row-sub"
+                >Переносит между вашими устройствами часть настроек приложения, список игр каталога, дату
+                последнего запуска и наигранное время. Источники, ссылки на релизы, их названия, пути на
+                диске, лимиты скорости и согласия на сбор статистики и диагностики не передаются. По
+                умолчанию выключено.</span
+              >
+              {#if !accountReady}
+                <span class="row-sub">Нужен вход в аккаунт — в гостевом режиме синхронизация недоступна.</span>
+              {/if}
+            </div>
+            <Toggle
+              checked={current?.accountSync ?? false}
+              label="Синхронизация между устройствами"
+              disabled={!accountReady}
+              onchange={(v) => set({ accountSync: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Синхронизировать сейчас</span>
+              <span class="row-sub">Отправить и получить изменения немедленно, не дожидаясь фонового цикла</span>
+            </div>
+            <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
+              <RefreshCw size="1.5rem" strokeWidth={1.8} />
+              {syncingNow ? 'Синхронизация…' : 'Синхронизировать сейчас'}
+            </Button>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Удалить данные с сервера</span>
+              <span class="row-sub"
+                >Необратимо удаляет всё, что синхронизировано с сервером, и выключает синхронизацию</span
+              >
+            </div>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={!accountReady || forgettingRemote}
+              onclick={runForgetRemote}
+            >
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
+              {forgettingRemote ? 'Удаляем…' : 'Удалить данные с сервера'}
+            </Button>
           </div>
         </div>
       </section>

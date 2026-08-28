@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"typhon/internal/account"
+	"typhon/internal/accountsync"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
@@ -176,9 +177,26 @@ func main() {
 	if err != nil {
 		fatal("start sources service", err)
 	}
-	metadataService, err := metadata.NewService(catalogService, metadataProvider(accountService))
+	provider := metadataProvider(accountService)
+	metadataService, err := metadata.NewService(catalogService, provider)
 	if err != nil {
 		fatal("start metadata service", err)
+	}
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		fatal("resolve config dir", err)
+	}
+	accountSyncService, err := accountsync.NewService(
+		configDir,
+		account.BaseURL(),
+		accountService.SessionToken,
+		syncSettings{settingsService},
+		syncLibrary{libraryService},
+		syncCatalog{catalogService},
+		syncMetadata{provider},
+	)
+	if err != nil {
+		fatal("start account sync service", err)
 	}
 	discoveryService, err := discovery.NewService(settingsService, libraryService, catalogService, metadataService)
 	if err != nil {
@@ -273,6 +291,7 @@ func main() {
 	services := []application.Service{
 		application.NewService(appService),
 		application.NewService(accountService),
+		application.NewService(accountSyncService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(downloadManager),

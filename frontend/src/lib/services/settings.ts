@@ -35,6 +35,7 @@ export interface Settings {
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
+  accountSync: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -72,6 +73,7 @@ const fallbackDefaults: Settings = {
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
   anonymousDiagnostics: false,
+  accountSync: false,
 };
 
 export async function getSettings(): Promise<Settings> {

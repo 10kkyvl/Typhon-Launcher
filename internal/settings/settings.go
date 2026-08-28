@@ -77,6 +77,7 @@ type Settings struct {
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
+	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
 	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
@@ -111,6 +112,7 @@ func Defaults() Settings {
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
 
+		AccountSync:           false,
 		SourcesNoticeAccepted: false,
 		AnonymousUsageStats:   false,
 		AnonymousDiagnostics:  false,
