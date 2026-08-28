@@ -122,6 +122,42 @@ describe('installDiagnostics inside Wails', () => {
     }
   });
 
+  it('collapses paths that contain spaces and network identifiers', async () => {
+    vi.doMock('./backend', () => ({ inWails: true }));
+    bindings.ReportClientError.mockResolvedValueOnce(undefined);
+    const { installDiagnostics } = await import('./diagnostics');
+    installDiagnostics();
+
+    // A tail left behind the placeholder cannot be recovered by the Go pass:
+    // this pass has already removed the drive letter that Go keys on, so a
+    // rule that stops at the first space leaks the rest of the path outright.
+    const secrets = [
+      'D:\\Games\\Cyberpunk 2077\\bin\\x64\\game.exe: Access is denied.',
+      '/home/egor/My Games/save.dat',
+      'peer 192.168.1.77:6881 lost',
+      'adapter 00:1A:2B:3C:4D:5E down',
+      'host DESKTOP-9F3KQ1 unreachable',
+    ].join(' | ');
+
+    const err = new Error(secrets);
+    err.stack = `Error: ${secrets}`;
+    win.dispatchEvent(errorEvent(err, err.message));
+
+    const [, , message, stack] = bindings.ReportClientError.mock.calls[0];
+    for (const value of [message, stack]) {
+      expect(value).not.toContain('Cyberpunk');
+      expect(value).not.toContain('2077');
+      expect(value).not.toContain('game.exe');
+      expect(value).not.toContain('My Games');
+      expect(value).not.toContain('save.dat');
+      expect(value).not.toContain('192.168.1.77');
+      expect(value).not.toContain('00:1A:2B');
+      expect(value).not.toContain('DESKTOP-9F3KQ1');
+      expect(value).toContain('<path>');
+      expect(value).toContain('Access is denied.');
+    }
+  });
+
   it('truncates message and stack at the caps shared with the backend', async () => {
     vi.doMock('./backend', () => ({ inWails: true }));
     bindings.ReportClientError.mockResolvedValueOnce(undefined);
