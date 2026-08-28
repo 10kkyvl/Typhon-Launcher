@@ -117,3 +117,8 @@ export async function setupLibrary(parent: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SetupLibrary(parent)) as Settings;
 }
+
+export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+}

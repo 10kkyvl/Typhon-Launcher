@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppShell from './lib/components/AppShell.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
+  import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
@@ -11,6 +12,7 @@
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { initSettings, settings } from './lib/stores/settings';
   import { initSources } from './lib/stores/sources';
+  import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
   import { authState, initAuth } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
@@ -49,6 +51,8 @@
   <div class="boot">
     <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
   </div>
+{:else if $showTelemetryConsent}
+  <TelemetryConsentScreen />
 {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
   <AppShell>
     {#if $route.name === 'library'}
