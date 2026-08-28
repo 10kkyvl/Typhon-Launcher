@@ -28,6 +28,7 @@ const (
 
 type updateSpec struct {
 	InstallerPath string `json:"installerPath"`
+	InstallDir    string `json:"installDir"`
 	ParentPID     int    `json:"parentPid"`
 	RelaunchPath  string `json:"relaunchPath"`
 	Version       string `json:"version"`

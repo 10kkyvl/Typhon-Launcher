@@ -78,6 +78,11 @@ func TestApplyUpdateStartsTheWorkerFromACopy(t *testing.T) {
 	if spec.RelaunchPath != exe {
 		t.Fatalf("spec.RelaunchPath = %q, want the launcher itself %q", spec.RelaunchPath, exe)
 	}
+	// Without this the silent installer falls back to the directory compiled
+	// into it and installs beside the running launcher instead of over it.
+	if spec.InstallDir != filepath.Dir(exe) {
+		t.Fatalf("spec.InstallDir = %q, want the directory the launcher runs from %q", spec.InstallDir, filepath.Dir(exe))
+	}
 	if spec.Version != "1.2.3" {
 		t.Fatalf("spec.Version = %q, want %q: the worker names the version on screen", spec.Version, "1.2.3")
 	}

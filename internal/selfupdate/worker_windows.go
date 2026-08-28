@@ -159,7 +159,7 @@ func runUpdate(waitCtx, applyCtx context.Context, spec updateSpec, ui stageRepor
 	if err != nil {
 		return err
 	}
-	if err := Apply(applyCtx, spec.InstallerPath); err != nil {
+	if err := Apply(applyCtx, spec.InstallerPath, spec.InstallDir); err != nil {
 		return err
 	}
 	after, err := fileDigest(applyCtx, spec.RelaunchPath)

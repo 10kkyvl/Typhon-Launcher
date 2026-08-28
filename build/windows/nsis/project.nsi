@@ -63,6 +63,8 @@ ManifestDPIAware true
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipComponentsOnUpgrade
+!insertmacro MUI_PAGE_COMPONENTS # Which shortcuts to create.
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
@@ -82,39 +84,100 @@ OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the i
 !else
     InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 !endif
+# Applied before .onInit and before /D=, so a caller naming a directory still
+# wins while everyone else lands back on the installation they already have.
+InstallDirRegKey HKCU "Software\${INFO_PRODUCTNAME}" "InstallDir"
 ShowInstDetails show # This will always show the installation details.
+
+## Where an earlier installation lives, empty on a first install. It decides
+## whether this run may create shortcuts: a silent update must not put back an
+## icon the user moved elsewhere or deleted.
+Var PrevInstallDir
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+
+   ReadRegStr $PrevInstallDir HKCU "Software\${INFO_PRODUCTNAME}" "InstallDir"
+   ${If} $PrevInstallDir == ""
+       # Installs made before that value existed are only recorded by the
+       # uninstall entry, whose DisplayIcon is "$INSTDIR\${PRODUCT_EXECUTABLE}".
+       ReadRegStr $0 HKCU "${UNINST_KEY}" "DisplayIcon"
+       ${If} $0 != ""
+           ${GetParent} "$0" $PrevInstallDir
+       ${EndIf}
+   ${EndIf}
 FunctionEnd
 
-Section
+Function SkipComponentsOnUpgrade
+    ${If} $PrevInstallDir != ""
+        Abort
+    ${EndIf}
+FunctionEnd
+
+Section "-Core"
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
 
     SetOutPath $INSTDIR
-    
-    !insertmacro wails.files
 
-    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    !insertmacro wails.files
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
-    
+
     !insertmacro wails.writeUninstaller
+
+    # .onInit reads these back under the default registry view, so write them
+    # with that view rather than the 64-bit one wails.writeUninstaller leaves set.
+    SetRegView default
+    WriteRegStr HKCU "Software\${INFO_PRODUCTNAME}" "InstallDir" "$INSTDIR"
+    WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+
+    ${If} $PrevInstallDir != ""
+    ${AndIf} $PrevInstallDir != $INSTDIR
+        ${If} ${FileExists} "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
+            CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+        ${EndIf}
+        ${If} ${FileExists} "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+            CreateShortcut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+        ${EndIf}
+
+        # RMDir without /r: an earlier install may have been pointed at a
+        # directory that holds something else of the user's.
+        Delete "$PrevInstallDir\${PRODUCT_EXECUTABLE}"
+        Delete "$PrevInstallDir\uninstall.exe"
+        RMDir "$PrevInstallDir"
+    ${EndIf}
 SectionEnd
 
-Section "uninstall" 
-    !insertmacro wails.setShellContext
+Section "Start Menu shortcut" SecStartMenu
+    ${If} $PrevInstallDir != ""
+        Return
+    ${EndIf}
+    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+SectionEnd
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+Section "Desktop shortcut" SecDesktop
+    ${If} $PrevInstallDir != ""
+        Return
+    ${EndIf}
+    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+SectionEnd
+
+Section "uninstall"
+    !insertmacro wails.setShellContext
 
     RMDir /r $INSTDIR
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+
+    SetRegView default
+    DeleteRegKey HKCU "Software\${INFO_PRODUCTNAME}"
+    # Value name is autostartSlug(Options.Name) from the Wails runtime, and
+    # main.go names the application "Typhon".
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "typhon"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols

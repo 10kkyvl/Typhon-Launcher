@@ -119,6 +119,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	s.mu.Unlock()
 
+	// Best effort on purpose: this only tells a future installer run where the
+	// launcher lives, and a registry it cannot write is no reason to refuse to
+	// start. Updates still carry the directory on the installer command line.
+	if err := recordInstallDir(); err != nil {
+		slog.Warn("record install dir", "error", err)
+	}
+
 	if err := s.takeOutcome(); err != nil {
 		return err
 	}
@@ -590,6 +597,15 @@ func (s *Service) ApplyUpdate() error {
 		return rollback(err)
 	}
 
+	// The installer has to land on the installation this launcher runs from.
+	// Left to itself a silent NSIS run uses the directory compiled into it, so
+	// anyone who installed elsewhere would get a second copy while the running
+	// one stayed on the old build.
+	installDir := filepath.Dir(exe)
+	if err := validateInstallDir(installDir); err != nil {
+		return rollback(err)
+	}
+
 	// The worker must not run from the binary the installer replaces: Windows
 	// keeps a running image locked, NSIS then skips the file, still exits 0,
 	// and the launcher comes back on the version it started from.
@@ -600,6 +616,7 @@ func (s *Service) ApplyUpdate() error {
 
 	spec := updateSpec{
 		InstallerPath: readyPath,
+		InstallDir:    installDir,
 		ParentPID:     os.Getpid(),
 		RelaunchPath:  exe,
 		Version:       version,
