@@ -251,7 +251,9 @@ func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, erro
 	saveErr := s.store.Save(Credential{Token: session.Token, Username: session.User.Username})
 	if saveErr == nil {
 		if err := s.rememberProfile(ctx, session.User); err != nil {
-			return CurrentUser{}, err
+			// The credential is already stored, so the session is real: a cache failure only
+			// costs offline mode on the next launch and must not read as a failed sign-in.
+			slog.Warn("cache profile after sign-in", "error", err)
 		}
 		return session.User, nil
 	}

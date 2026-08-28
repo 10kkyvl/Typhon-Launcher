@@ -571,6 +571,44 @@ func TestLoginRevokesSessionWhenCredentialWriteFails(t *testing.T) {
 	}
 }
 
+func TestLoginKeepsTheSessionWhenTheProfileCacheCannotBeWritten(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != APIPrefix+"/auth/login" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		writeSession(t, w, http.StatusOK, "fresh-token")
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{}
+	s := startedService(t, store, srv.URL)
+
+	blocked := filepath.Join(t.TempDir(), "profile.json")
+	if err := os.Mkdir(blocked, 0o755); err != nil {
+		t.Fatalf("mkdir profile path: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(blocked, "keep.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed non-empty dir: %v", err)
+	}
+	s.profilePath = blocked
+
+	user, err := s.Login(LoginInput{Identifier: "playerone", Password: "password"})
+	if err != nil {
+		t.Fatalf("Login() error = %v, want a stored session to survive a profile cache failure", err)
+	}
+	if user.Username != "playerone" {
+		t.Errorf("user = %+v, want playerone", user)
+	}
+
+	cred, present := store.snapshot()
+	if !present || cred.Token != "fresh-token" {
+		t.Fatalf("stored credential = %+v present = %v, want the session kept", cred, present)
+	}
+	if got := s.currentProfile(); got.User.ID != "" {
+		t.Errorf("cached profile = %+v, want it dropped rather than left stale", got)
+	}
+}
+
 func TestLogout(t *testing.T) {
 	t.Run("revokes the session and clears the credential", func(t *testing.T) {
 		var authorization string
