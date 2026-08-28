@@ -31,6 +31,7 @@ import (
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/telemetrylog"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
@@ -333,6 +334,9 @@ func main() {
 		application.NewService(discoveryService),
 		application.NewService(discordService),
 		application.NewService(legalService),
+		// Registered whether or not telemetry ever started: the window that
+		// shows what was sent must open and say "nothing" rather than fail.
+		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
 	}
 	services = append(services, extraServices...)
