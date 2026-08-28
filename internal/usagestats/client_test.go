@@ -1,6 +1,7 @@
 package usagestats
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -8,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"typhon/internal/telemetrylog"
 )
 
 func TestNewClientRejectsInvalidBaseURL(t *testing.T) {
@@ -102,5 +105,34 @@ func TestClientSendUnreachableServer(t *testing.T) {
 	}
 	if err := cl.send(context.Background(), batchPayload{}); err == nil {
 		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestClientSendRecordsTelemetryLog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	cl, err := newClient(srv.URL)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+
+	marker := "usage-marker-" + time.Now().Format(time.RFC3339Nano)
+	payload := batchPayload{InstallationID: marker}
+	if err := cl.send(context.Background(), payload); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	found := false
+	for _, e := range telemetrylog.Entries() {
+		if e.Kind == telemetrylog.KindUsageStats && e.Endpoint == "/v1/telemetry/events" && bytes.Contains(e.Payload, []byte(marker)) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected send to record an entry in the telemetry log")
 	}
 }
