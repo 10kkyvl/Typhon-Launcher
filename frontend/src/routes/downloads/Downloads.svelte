@@ -29,7 +29,7 @@
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { bytesSize, plural, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, plural, rateLimitLabel, speedBytes } from '../../lib/utils/format';
 
   const MB = 1024 * 1024;
 
@@ -38,12 +38,18 @@
     { id: '10', label: '10 МБ/с' },
     { id: '25', label: '25 МБ/с' },
     { id: '50', label: '50 МБ/с' },
+    { id: 'custom', label: 'Своё значение…' },
   ];
 
-  const limitLabel = $derived(
-    limitItems.find((item) => item.id === String(($settings?.downloadRateLimit ?? 0) / MB))?.label ??
-      'Без ограничений',
-  );
+  const limitLabel = $derived(rateLimitLabel($settings?.downloadRateLimit ?? 0));
+
+  function pickLimit(id: string) {
+    if (id === 'custom') {
+      navigate('settings', { tab: 'downloads' });
+      return;
+    }
+    updateSettings({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB });
+  }
 
   let addOpen = $state(false);
   let detailsOpen = $state(false);
@@ -89,7 +95,7 @@
   {#snippet actions()}
     <DropdownMenu
       items={limitItems}
-      onselect={(id) => updateSettings({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
+      onselect={pickLimit}
     >
       {#snippet trigger({ toggle })}
         <Button variant="ghost" onclick={toggle}>
@@ -99,7 +105,7 @@
         </Button>
       {/snippet}
     </DropdownMenu>
-    <IconButton label="Настройки загрузок" onclick={() => navigate('settings')}>
+    <IconButton label="Настройки загрузок" onclick={() => navigate('settings', { tab: 'downloads' })}>
       <Settings size="1.7rem" strokeWidth={1.8} />
     </IconButton>
     <Button variant="primary" onclick={() => (addOpen = true)}>

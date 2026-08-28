@@ -1,11 +1,12 @@
 <script lang="ts">
   import { Download, FolderOpen, ListChecks } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
@@ -28,13 +29,22 @@
   import { toast } from '../../lib/stores/toasts';
   import { bytesLabel, relativeDate } from '../../lib/utils/format';
 
-  let tab = $state('general');
+  let { tab: initialTab }: { tab?: string } = $props();
 
   const tabs = [
     { id: 'general', label: 'Общие' },
     { id: 'downloads', label: 'Загрузки' },
     { id: 'about', label: 'О программе' },
   ];
+
+  let tab = $state('general');
+
+  $effect(() => {
+    const next = initialTab;
+    untrack(() => {
+      if (next && tabs.some((t) => t.id === next)) tab = next;
+    });
+  });
 
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
@@ -122,21 +132,8 @@
     }
   }
 
-  const MB = 1024 * 1024;
-
-  const downloadLimitOptions = [
-    { id: 'none', label: 'Без ограничений' },
-    { id: '10', label: '10 МБ/с' },
-    { id: '25', label: '25 МБ/с' },
-    { id: '50', label: '50 МБ/с' },
-  ];
-
-  const uploadLimitOptions = [
-    { id: 'none', label: 'Без ограничений' },
-    { id: '1', label: '1 МБ/с' },
-    { id: '5', label: '5 МБ/с' },
-    { id: '10', label: '10 МБ/с' },
-  ];
+  const downloadLimitPresets = [10, 25, 50];
+  const uploadLimitPresets = [1, 5, 10];
 
   const maxActiveOptions = [
     { id: '1', label: '1' },
@@ -145,13 +142,6 @@
     { id: '5', label: '5' },
   ];
 
-  function rateId(bytes: number | undefined, options: { id: string }[]) {
-    const id = String((bytes ?? 0) / MB);
-    return options.some((o) => o.id === id) ? id : 'none';
-  }
-
-  const downloadLimit = $derived(rateId(current?.downloadRateLimit, downloadLimitOptions));
-  const uploadLimit = $derived(rateId(current?.uploadRateLimit, uploadLimitOptions));
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
     return maxActiveOptions.some((o) => o.id === id) ? id : '2';
@@ -413,11 +403,10 @@
             <span class="row-label">Ограничение скорости загрузки</span>
             <span class="row-sub">Максимальная скорость входящего трафика</span>
           </div>
-          <Select
-            value={downloadLimit}
-            width="20rem"
-            options={downloadLimitOptions}
-            onchange={(id) => set({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
+          <RateLimitInput
+            value={current?.downloadRateLimit ?? 0}
+            presets={downloadLimitPresets}
+            onchange={(bytes) => set({ downloadRateLimit: bytes })}
           />
         </div>
         <div class="row">
@@ -425,11 +414,10 @@
             <span class="row-label">Ограничение скорости отдачи</span>
             <span class="row-sub">Максимальная скорость исходящего трафика</span>
           </div>
-          <Select
-            value={uploadLimit}
-            width="20rem"
-            options={uploadLimitOptions}
-            onchange={(id) => set({ uploadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
+          <RateLimitInput
+            value={current?.uploadRateLimit ?? 0}
+            presets={uploadLimitPresets}
+            onchange={(bytes) => set({ uploadRateLimit: bytes })}
           />
         </div>
         <div class="row">

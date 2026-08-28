@@ -65,7 +65,7 @@
     {:else if $route.name === 'profile'}
       <Profile />
     {:else if $route.name === 'settings'}
-      <Settings />
+      <Settings tab={$route.params.tab} />
     {/if}
   </AppShell>
   <UpdateOverlay />
