@@ -7,29 +7,36 @@
     open = $bindable(false),
     title,
     width = '46rem',
+    onclose,
     children,
     footer,
   }: {
     open?: boolean;
     title: string;
     width?: string;
+    onclose?: () => void;
     children?: Snippet;
     footer?: Snippet;
   } = $props();
 
+  function close() {
+    open = false;
+    onclose?.();
+  }
+
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') open = false;
+    if (e.key === 'Escape') close();
   }
 </script>
 
 <svelte:window onkeydown={open ? onKeydown : undefined} />
 
 {#if open}
-  <div class="overlay" role="presentation" onpointerdown={(e) => e.target === e.currentTarget && (open = false)}>
+  <div class="overlay" role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
     <div class="modal" style:width role="dialog" aria-modal="true" aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
-        <IconButton label="Закрыть" size="sm" onclick={() => (open = false)}>
+        <IconButton label="Закрыть" size="sm" onclick={close}>
           <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>

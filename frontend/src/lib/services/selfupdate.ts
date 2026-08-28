@@ -22,6 +22,26 @@ export interface SelfUpdateProgress {
   downloadedBytes: number;
 }
 
+export type ReleaseChangeKind = 'added' | 'changed' | 'fixed' | 'removed';
+
+export interface ReleaseChange {
+  kind: ReleaseChangeKind;
+  text: string;
+}
+
+export interface ReleaseNote {
+  version: string;
+  publishedAt: string;
+  summary?: string;
+  changes: ReleaseChange[];
+}
+
+export interface ReleaseNotes {
+  currentVersion: string;
+  unseen: ReleaseNote[];
+  history: ReleaseNote[];
+}
+
 export interface SelfUpdateOutcome {
   version: string;
   ok: boolean;
@@ -98,6 +118,33 @@ export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
     await SelfUpdateService.ApplyUpdate();
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export function emptyReleaseNotes(): ReleaseNotes {
+  return { currentVersion: '', unseen: [], history: [] };
+}
+
+export async function getReleaseNotes(): Promise<ReleaseNotes> {
+  if (!inWails) return emptyReleaseNotes();
+  try {
+    const notes = (await SelfUpdateService.GetReleaseNotes()) as unknown as Partial<ReleaseNotes> | null;
+    return {
+      currentVersion: notes?.currentVersion ?? '',
+      unseen: notes?.unseen ?? [],
+      history: notes?.history ?? [],
+    };
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function acknowledgeReleaseNotes(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.AcknowledgeReleaseNotes();
   } catch (err) {
     throw toSelfUpdateError(err);
   }

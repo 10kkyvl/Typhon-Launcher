@@ -35,6 +35,15 @@ func writeTestFile(t *testing.T, path string, data []byte) {
 	}
 }
 
+func mustNotesStore(t *testing.T, dir string) *notesStore {
+	t.Helper()
+	s, err := newNotesStore(dir)
+	if err != nil {
+		t.Fatalf("newNotesStore: %v", err)
+	}
+	return s
+}
+
 func mustStore(t *testing.T, dir string) *Store {
 	t.Helper()
 	s, err := NewStore(dir)
@@ -80,7 +89,7 @@ func TestServiceStartupCorruptStateFailsAndBlocksFurtherPersist(t *testing.T) {
 	statePath := filepath.Join(cacheDir, "state.json")
 	writeTestFile(t, statePath, []byte("{not valid json"))
 
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err == nil {
 		t.Fatal("ServiceStartup on corrupt state.json returned nil error")
 	}
@@ -126,7 +135,7 @@ func TestServiceStartupInvalidReadyArtifactIsCleared(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
@@ -178,7 +187,7 @@ func TestServiceStartupCleansStaleCacheEntries(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
@@ -373,7 +382,7 @@ func TestCheckForUpdateNetworkFailureDoesNotClearReadyState(t *testing.T) {
 
 	dir := t.TempDir()
 	store := mustStore(t, dir)
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
 	s.pendingArtifact = &art
 	s.pendingVersion = "1.2.3"
 
@@ -416,7 +425,7 @@ func TestCheckForUpdateNetworkFailureDoesNotTouchStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	s := &Service{dir: dir, store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
 
 	status, err := s.CheckForUpdate(context.Background())
 	if err == nil {
@@ -449,7 +458,7 @@ func TestCheckForUpdateCancelledContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	s := &Service{dir: dir, store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -492,7 +501,7 @@ func TestCheckForUpdateBusyRejectsConcurrentDownload(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	dir := t.TempDir()
-	s := &Service{dir: dir, store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
 
 	checkErr := make(chan error, 1)
 	go func() {
@@ -514,7 +523,7 @@ func TestCheckForUpdateBusyRejectsConcurrentDownload(t *testing.T) {
 
 func TestDownloadUpdateNotCheckedYet(t *testing.T) {
 	dir := t.TempDir()
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 
 	status, err := s.DownloadUpdate(context.Background())
 	if !errors.Is(err, errNoUpdateChecked) {
@@ -527,7 +536,7 @@ func TestDownloadUpdateNotCheckedYet(t *testing.T) {
 
 func TestDownloadUpdateReturnsCurrentStatusWhenAlreadyReady(t *testing.T) {
 	dir := t.TempDir()
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 	s.status = Status{State: StateReady, AvailableVersion: "1.2.3"}
 	art := Artifact{Name: "setup.exe"}
 	s.pendingArtifact = &art
@@ -565,7 +574,7 @@ func TestDownloadUpdateSuccessPersistsReadyState(t *testing.T) {
 
 	dir := t.TempDir()
 	store := mustStore(t, dir)
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
 	s.pendingArtifact = &art
 	s.pendingVersion = "1.2.3"
 
@@ -621,7 +630,7 @@ func TestDownloadUpdatePersistFailureLeavesStoreUntouched(t *testing.T) {
 
 	content := []byte("payload-for-readonly-store-test")
 	_, art := newArtifactServer(t, content)
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
 	s.pendingArtifact = &art
 	s.pendingVersion = "9.9.9"
 
@@ -647,7 +656,7 @@ func TestDownloadUpdateCancelledContext(t *testing.T) {
 	_, art := newArtifactServer(t, content)
 
 	dir := t.TempDir()
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 	s.pendingArtifact = &art
 	s.pendingVersion = "1.2.3"
 
@@ -729,7 +738,7 @@ func TestDismissUpdateSuccess(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	s := &Service{dir: dir, store: store, readyPath: readyPath,
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, readyPath: readyPath,
 		status: Status{State: StateReady, AvailableVersion: "1.2.3"}}
 
 	if err := s.DismissUpdate(); err != nil {
@@ -760,7 +769,7 @@ func TestDismissUpdateWhenNoAvailableVersionGoesIdle(t *testing.T) {
 	writeTestFile(t, readyPath, []byte("ready-artifact"))
 	store := mustStore(t, dir)
 
-	s := &Service{dir: dir, store: store, readyPath: readyPath, status: Status{State: StateReady}}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, readyPath: readyPath, status: Status{State: StateReady}}
 	if err := s.DismissUpdate(); err != nil {
 		t.Fatalf("DismissUpdate() error = %v, want nil", err)
 	}
@@ -774,7 +783,7 @@ func TestDismissUpdateReadyFileAlreadyMissing(t *testing.T) {
 	readyPath := filepath.Join(dir, "selfupdate", "1.2.3", "setup.exe")
 	store := mustStore(t, dir)
 
-	s := &Service{dir: dir, store: store, readyPath: readyPath, status: Status{State: StateReady, AvailableVersion: "1.2.3"}}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, readyPath: readyPath, status: Status{State: StateReady, AvailableVersion: "1.2.3"}}
 	if err := s.DismissUpdate(); err != nil {
 		t.Fatalf("DismissUpdate() error = %v, want nil even when the file is already gone", err)
 	}
@@ -797,7 +806,7 @@ func TestDismissUpdateReadOnlyStoreLeavesStateUntouched(t *testing.T) {
 	readyPath := filepath.Join(cacheDir, "1.2.3", "setup.exe")
 	writeTestFile(t, readyPath, []byte("still-there"))
 
-	s := &Service{dir: dir, store: store, readyPath: readyPath, status: Status{State: StateReady, AvailableVersion: "1.2.3"}}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, readyPath: readyPath, status: Status{State: StateReady, AvailableVersion: "1.2.3"}}
 	if err := s.DismissUpdate(); !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("DismissUpdate() error = %v, want ErrReadOnly", err)
 	}

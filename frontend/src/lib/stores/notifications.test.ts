@@ -47,6 +47,9 @@ vi.mock('../services/selfupdate', () => ({
   downloadUpdate: vi.fn(),
   getOutcome: vi.fn(),
   getStatus: vi.fn(),
+  getReleaseNotes: vi.fn(),
+  acknowledgeReleaseNotes: vi.fn(),
+  emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
 }));
 
 const READ_KEY = 'typhon.notifications.read';

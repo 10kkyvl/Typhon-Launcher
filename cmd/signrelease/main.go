@@ -108,6 +108,8 @@ type config struct {
 	notes       string
 	baseURL     string
 	out         string
+	changelog   string
+	maxReleases int
 	artifacts   artifactFlags
 }
 
@@ -120,6 +122,8 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.notes, "notes", "", "release notes")
 	fs.StringVar(&cfg.baseURL, "base-url", "", "base URL artifacts are served from, e.g. https://api.typhon-launcher.com/launcher/download")
 	fs.StringVar(&cfg.out, "out", "", "path to write the signed manifest to")
+	fs.StringVar(&cfg.changelog, "changelog", "", "path to CHANGELOG.md; its entries ship in the manifest as the in-app release notes")
+	fs.IntVar(&cfg.maxReleases, "max-releases", 10, "how many changelog entries the manifest carries")
 	fs.Var(&cfg.artifacts, "artifact", "artifact spec os=...,arch=...,kind=...,path=...[,name=...] (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
@@ -190,17 +194,32 @@ func buildArtifact(spec artifactSpec, baseURL, version string) (selfupdate.Artif
 	return a, nil
 }
 
-func buildManifest(version, notes string, publishedAt time.Time, artifacts []selfupdate.Artifact) (selfupdate.Manifest, error) {
+func buildManifest(version, notes string, publishedAt time.Time, releases []selfupdate.ReleaseNote, artifacts []selfupdate.Artifact) (selfupdate.Manifest, error) {
+	if notes == "" && len(releases) > 0 {
+		notes = releases[0].Summary
+	}
 	m := selfupdate.Manifest{
 		Version:     version,
 		PublishedAt: publishedAt,
 		Notes:       notes,
+		Releases:    releases,
 		Artifacts:   artifacts,
 	}
 	if err := m.Validate(); err != nil {
 		return selfupdate.Manifest{}, fmt.Errorf("signrelease: manifest: %w", err)
 	}
 	return m, nil
+}
+
+func loadReleaseNotes(cfg config) ([]selfupdate.ReleaseNote, error) {
+	if cfg.changelog == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(cfg.changelog)
+	if err != nil {
+		return nil, fmt.Errorf("signrelease: read changelog %q: %w", cfg.changelog, err)
+	}
+	return releaseNotesFor(data, cfg.version, cfg.maxReleases)
 }
 
 func decodePrivateKey(encoded string) (ed25519.PrivateKey, error) {
@@ -274,7 +293,12 @@ func run(args []string, stderr io.Writer, getenv func(string) string) ([]byte, e
 		artifacts = append(artifacts, a)
 	}
 
-	manifest, err := buildManifest(cfg.version, cfg.notes, publishedAt, artifacts)
+	releases, err := loadReleaseNotes(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	manifest, err := buildManifest(cfg.version, cfg.notes, publishedAt, releases, artifacts)
 	if err != nil {
 		return nil, err
 	}

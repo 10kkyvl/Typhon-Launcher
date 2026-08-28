@@ -4,12 +4,15 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"typhon/internal/account"
+	"typhon/internal/version"
 )
 
 const (
@@ -49,10 +52,11 @@ type Artifact struct {
 }
 
 type Manifest struct {
-	Version     string     `json:"version"`
-	PublishedAt time.Time  `json:"publishedAt"`
-	Notes       string     `json:"notes,omitempty"`
-	Artifacts   []Artifact `json:"artifacts"`
+	Version     string        `json:"version"`
+	PublishedAt time.Time     `json:"publishedAt"`
+	Notes       string        `json:"notes,omitempty"`
+	Releases    []ReleaseNote `json:"releases,omitempty"`
+	Artifacts   []Artifact    `json:"artifacts"`
 }
 
 type SignedManifest struct {
@@ -182,6 +186,109 @@ func validateHash(h string) error {
 		case r >= 'a' && r <= 'f':
 		default:
 			return ErrInvalidHash
+		}
+	}
+	return nil
+}
+
+type ChangeKind string
+
+const (
+	ChangeAdded   ChangeKind = "added"
+	ChangeChanged ChangeKind = "changed"
+	ChangeFixed   ChangeKind = "fixed"
+	ChangeRemoved ChangeKind = "removed"
+)
+
+const (
+	MaxReleaseNotes   = 30
+	MaxChangesPerNote = 40
+	MaxChangeLen      = 300
+	MaxSummaryLen     = 300
+)
+
+type Change struct {
+	Kind ChangeKind `json:"kind"`
+	Text string     `json:"text"`
+}
+
+type ReleaseNote struct {
+	Version     string    `json:"version"`
+	PublishedAt time.Time `json:"publishedAt"`
+	Summary     string    `json:"summary,omitempty"`
+	Changes     []Change  `json:"changes"`
+}
+
+type ReleaseNotes struct {
+	CurrentVersion string        `json:"currentVersion"`
+	Unseen         []ReleaseNote `json:"unseen"`
+	History        []ReleaseNote `json:"history"`
+}
+
+func (c Change) Validate() error {
+	switch c.Kind {
+	case ChangeAdded, ChangeChanged, ChangeFixed, ChangeRemoved:
+	default:
+		return fmt.Errorf("%w: %q", ErrInvalidChangeKind, c.Kind)
+	}
+	return validateNoteText(c.Text, MaxChangeLen)
+}
+
+func (n ReleaseNote) Validate() error {
+	if !version.Parse(n.Version).Comparable {
+		return fmt.Errorf("%w: version %q", ErrInvalidReleaseNote, n.Version)
+	}
+	if n.PublishedAt.IsZero() {
+		return fmt.Errorf("%w: %s has no publish date", ErrInvalidReleaseNote, n.Version)
+	}
+	if n.Summary != "" {
+		if err := validateNoteText(n.Summary, MaxSummaryLen); err != nil {
+			return err
+		}
+	}
+	if len(n.Changes) == 0 || len(n.Changes) > MaxChangesPerNote {
+		return fmt.Errorf("%w: %s has %d changes", ErrInvalidReleaseNote, n.Version, len(n.Changes))
+	}
+	for _, c := range n.Changes {
+		if err := c.Validate(); err != nil {
+			return fmt.Errorf("%s: %w", n.Version, err)
+		}
+	}
+	return nil
+}
+
+func validateNoteText(s string, max int) error {
+	if s == "" {
+		return ErrEmptyNoteText
+	}
+	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > max {
+		return fmt.Errorf("%w: %d runes", ErrInvalidNoteText, utf8.RuneCountInString(s))
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return ErrInvalidNoteText
+		}
+	}
+	return nil
+}
+
+func validateReleaseNotes(notes []ReleaseNote) error {
+	if len(notes) > MaxReleaseNotes {
+		return fmt.Errorf("%w: %d entries", ErrTooManyReleaseNotes, len(notes))
+	}
+	for i, n := range notes {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+		if i == 0 {
+			continue
+		}
+		newer, err := IsNewer(notes[i-1].Version, n.Version)
+		if err != nil {
+			return err
+		}
+		if !newer {
+			return fmt.Errorf("%w: %q does not precede %q", ErrUnorderedReleaseNotes, notes[i-1].Version, n.Version)
 		}
 	}
 	return nil

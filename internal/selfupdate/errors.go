@@ -25,4 +25,11 @@ var (
 	ErrReadOnly            = errors.New("selfupdate: state failed to load, refusing to persist")
 	ErrNotReplaced         = errors.New("selfupdate: installer finished but left the launcher binary unchanged")
 	ErrManifestOutdated    = errors.New("selfupdate: launcher version is rejected by the manifest endpoint")
+
+	ErrInvalidReleaseNote    = errors.New("selfupdate: release note is malformed")
+	ErrInvalidChangeKind     = errors.New("selfupdate: release note change kind is unknown")
+	ErrEmptyNoteText         = errors.New("selfupdate: release note text is empty")
+	ErrInvalidNoteText       = errors.New("selfupdate: release note text is unsafe")
+	ErrTooManyReleaseNotes   = errors.New("selfupdate: release notes exceed the entry limit")
+	ErrUnorderedReleaseNotes = errors.New("selfupdate: release notes are not ordered newest first")
 )

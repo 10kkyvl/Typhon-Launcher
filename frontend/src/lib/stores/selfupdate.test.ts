@@ -21,7 +21,19 @@ vi.mock('../services/selfupdate', () => ({
   downloadUpdate: vi.fn(),
   applyUpdate: vi.fn(),
   dismissUpdate: vi.fn(),
+  getReleaseNotes: vi.fn(),
+  acknowledgeReleaseNotes: vi.fn(),
+  emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
 }));
+
+function makeNote(version: string) {
+  return {
+    version,
+    publishedAt: '2026-08-28T12:00:00Z',
+    summary: 'коротко о версии',
+    changes: [{ kind: 'fixed', text: 'что-то починили' }],
+  };
+}
 
 function makeStatus(overrides: Partial<Record<string, unknown>> = {}) {
   return { state: 'idle', currentVersion: '1.0.0', ...overrides };
@@ -32,6 +44,7 @@ async function load() {
   for (const key of Object.keys(handlers)) delete handlers[key];
   const service = await import('../services/selfupdate');
   const store = await import('./selfupdate');
+  vi.mocked(service.getReleaseNotes).mockResolvedValue({ currentVersion: '1.0.0', unseen: [], history: [] } as never);
   return { service, store };
 }
 
@@ -121,17 +134,141 @@ describe('initSelfUpdate', () => {
     expect(get(toasts.toasts)).toHaveLength(1);
   });
 
-  it('returns a disposer that unsubscribes both listeners', async () => {
+  it('returns a disposer that unsubscribes every listener', async () => {
     const { service, store } = await load();
     vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
     const runtime = await import('@wailsio/runtime');
 
     const dispose = await store.initSelfUpdate();
     const offFns = vi.mocked(runtime.Events.On).mock.results.map((r) => r.value as ReturnType<typeof vi.fn>);
-    expect(offFns).toHaveLength(2);
+    expect(offFns).toHaveLength(3);
 
     dispose();
     for (const off of offFns) expect(off).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('release notes', () => {
+  it('loads what the user has not seen yet', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getReleaseNotes).mockResolvedValue({
+      currentVersion: '1.1.0',
+      unseen: [makeNote('1.1.0')],
+      history: [makeNote('1.1.0'), makeNote('1.0.0')],
+    } as never);
+
+    await store.initSelfUpdate();
+
+    expect(get(store.unseenReleaseNotes).map((n) => n.version)).toEqual(['1.1.0']);
+    expect(get(store.releaseNotesHistory)).toHaveLength(2);
+  });
+
+  it('lets the what-is-new window replace the success toast', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getReleaseNotes).mockResolvedValue({
+      currentVersion: '1.1.0',
+      unseen: [makeNote('1.1.0')],
+      history: [makeNote('1.1.0')],
+    } as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts)).toHaveLength(0);
+    expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
+  });
+
+  it('still toasts a successful update when there is nothing to show', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts)).toHaveLength(1);
+  });
+
+  it('still toasts a failed update even when notes are waiting', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getReleaseNotes).mockResolvedValue({
+      currentVersion: '1.1.0',
+      unseen: [makeNote('1.1.0')],
+      history: [makeNote('1.1.0')],
+    } as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: false, finishedAt: '' } as never);
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
+  });
+
+  it('picks up notes that arrive with launcher:release_notes', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    handlers['launcher:release_notes']({
+      data: { currentVersion: '1.1.0', unseen: [makeNote('1.1.0')], history: [makeNote('1.1.0')] },
+    });
+
+    expect(get(store.unseenReleaseNotes)).toHaveLength(1);
+  });
+
+  it('acknowledges the notes it just hid', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getReleaseNotes).mockResolvedValue({
+      currentVersion: '1.1.0',
+      unseen: [makeNote('1.1.0')],
+      history: [makeNote('1.1.0')],
+    } as never);
+    vi.mocked(service.acknowledgeReleaseNotes).mockResolvedValue(undefined as never);
+
+    await store.initSelfUpdate();
+    await store.dismissReleaseNotes();
+
+    expect(service.acknowledgeReleaseNotes).toHaveBeenCalledTimes(1);
+    expect(get(store.unseenReleaseNotes)).toHaveLength(0);
+    expect(get(store.releaseNotesHistory)).toHaveLength(1);
+  });
+
+  it('toasts when the acknowledgement cannot be saved', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getReleaseNotes).mockResolvedValue({
+      currentVersion: '1.1.0',
+      unseen: [makeNote('1.1.0')],
+      history: [makeNote('1.1.0')],
+    } as never);
+    vi.mocked(service.acknowledgeReleaseNotes).mockRejectedValue(
+      new Error('selfupdate: state failed to load, refusing to persist'),
+    );
+
+    await store.initSelfUpdate();
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.dismissReleaseNotes();
+
+    expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
+  });
+
+  it('does not call the backend when there is nothing to acknowledge', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    await store.dismissReleaseNotes();
+
+    expect(service.acknowledgeReleaseNotes).not.toHaveBeenCalled();
   });
 });
 

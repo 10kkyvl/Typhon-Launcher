@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       notes:
-        description: Release notes to embed in the signed manifest
+        description: One-line summary for the update banner; defaults to the summary of the top CHANGELOG.md entry
         required: false
         default: ""
 
@@ -161,6 +161,7 @@ jobs:
           go run ./cmd/signrelease \
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
+            -changelog CHANGELOG.md \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"

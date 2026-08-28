@@ -46,6 +46,9 @@ func (m Manifest) Validate() error {
 	if len(m.Artifacts) == 0 {
 		return ErrInvalidManifest
 	}
+	if err := validateReleaseNotes(m.Releases); err != nil {
+		return err
+	}
 	seen := make(map[string]bool, len(m.Artifacts))
 	for _, a := range m.Artifacts {
 		if err := a.Validate(); err != nil {

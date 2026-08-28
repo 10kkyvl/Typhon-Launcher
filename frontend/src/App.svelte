@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppShell from './lib/components/AppShell.svelte';
+  import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
@@ -69,6 +70,7 @@
     {/if}
   </AppShell>
   <UpdateOverlay />
+  <ReleaseNotesModal />
 {:else}
   <AuthScreen />
 {/if}

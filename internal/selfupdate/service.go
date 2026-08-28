@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -21,8 +22,9 @@ import (
 )
 
 const (
-	eventStatus   = "launcher:update_status"
-	eventProgress = "launcher:update_progress"
+	eventStatus       = "launcher:update_status"
+	eventProgress     = "launcher:update_progress"
+	eventReleaseNotes = "launcher:release_notes"
 )
 
 var checkInterval = 6 * time.Hour
@@ -37,6 +39,7 @@ type Service struct {
 	dir    string
 	client *Client
 	store  *Store
+	notes  *notesStore
 	status Status
 	busy   bool
 	ctx    context.Context
@@ -49,6 +52,7 @@ type Service struct {
 	readyPath       string
 	readyArtifact   *Artifact
 	outcome         Outcome
+	notesState      notesState
 }
 
 func NewService() (*Service, error) {
@@ -64,10 +68,15 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: create store: %w", err)
 	}
+	notes, err := newNotesStore(dir)
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: create release notes store: %w", err)
+	}
 	return &Service{
 		dir:            dir,
 		client:         client,
 		store:          store,
+		notes:          notes,
 		currentVersion: app.Version,
 	}, nil
 }
@@ -117,6 +126,17 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return fmt.Errorf("selfupdate: load state: %w", err)
 	}
+	s.mu.Unlock()
+
+	// A release-notes file this launcher cannot read costs the user a
+	// changelog, not the ability to update: the store switches to read-only
+	// and every later save reports why.
+	notes, notesErr := s.notes.Load()
+	if notesErr != nil {
+		slog.Warn("selfupdate: load release notes", "error", notesErr)
+	}
+	s.mu.Lock()
+	s.notesState = notes
 	s.mu.Unlock()
 
 	// Best effort on purpose: this only tells a future installer run where the
@@ -323,7 +343,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			}
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" || d.Name() == outcomeName {
+			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName {
 				return nil
 			}
 			return root.Remove(relPath)
@@ -491,6 +511,10 @@ func (s *Service) CheckForUpdate(ctx context.Context) (Status, error) {
 	}
 	s.mu.Unlock()
 	emit(eventStatus, status)
+
+	if err := s.storeReleaseNotes(m.Releases); err != nil {
+		return status, err
+	}
 	return status, nil
 }
 
@@ -685,5 +709,90 @@ func (s *Service) DismissUpdate() error {
 	if err := os.Remove(readyPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	return nil
+}
+
+// storeReleaseNotes runs after the status is committed on purpose: a
+// changelog that cannot be written must not turn a working update check into
+// a failed one, but the caller still hears about it.
+func (s *Service) storeReleaseNotes(incoming []ReleaseNote) error {
+	s.mu.Lock()
+	current := s.notesState
+	currentVersion := s.currentVersion
+	s.mu.Unlock()
+
+	merged, err := mergeReleaseNotes(current.Releases, incoming)
+	if err != nil {
+		return fmt.Errorf("selfupdate: merge release notes: %w", err)
+	}
+	next := notesState{Releases: merged, LastSeenVersion: current.LastSeenVersion}
+	// The first successful check is where "everything up to this build has
+	// been seen" becomes true. Without it a fresh install has nothing to
+	// compare against and the first update would show no changelog at all.
+	if next.LastSeenVersion == "" {
+		next.LastSeenVersion = currentVersion
+	}
+	if reflect.DeepEqual(current, next) {
+		return nil
+	}
+	if err := s.notes.Save(next); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.notesState = next
+	s.mu.Unlock()
+	s.emitReleaseNotes()
+	return nil
+}
+
+func (s *Service) releaseNotesView() (ReleaseNotes, error) {
+	s.mu.Lock()
+	notes := s.notesState
+	currentVersion := s.currentVersion
+	s.mu.Unlock()
+
+	unseen, err := unseenReleaseNotes(notes.Releases, notes.LastSeenVersion, currentVersion)
+	if err != nil {
+		return ReleaseNotes{}, fmt.Errorf("selfupdate: select unseen release notes: %w", err)
+	}
+	return ReleaseNotes{
+		CurrentVersion: currentVersion,
+		Unseen:         unseen,
+		History:        notes.Releases,
+	}, nil
+}
+
+func (s *Service) emitReleaseNotes() {
+	view, err := s.releaseNotesView()
+	if err != nil {
+		slog.Warn("selfupdate: release notes event", "error", err)
+		return
+	}
+	emit(eventReleaseNotes, view)
+}
+
+func (s *Service) GetReleaseNotes() (ReleaseNotes, error) {
+	return s.releaseNotesView()
+}
+
+func (s *Service) AcknowledgeReleaseNotes() error {
+	s.mu.Lock()
+	current := s.notesState
+	next := current
+	next.LastSeenVersion = s.currentVersion
+	s.mu.Unlock()
+
+	if next.LastSeenVersion == current.LastSeenVersion {
+		return nil
+	}
+	if err := s.notes.Save(next); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.notesState = next
+	s.mu.Unlock()
+	s.emitReleaseNotes()
 	return nil
 }

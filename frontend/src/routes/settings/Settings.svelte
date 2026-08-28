@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, FolderOpen, ListChecks } from '@lucide/svelte';
+  import { Download, FolderOpen, ListChecks, ScrollText } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -8,6 +8,8 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import Modal from '../../lib/components/Modal.svelte';
+  import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
@@ -24,7 +26,7 @@
     type LogBundle,
     type SystemInfo,
   } from '../../lib/services/system';
-  import { requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { bytesLabel, relativeDate } from '../../lib/utils/format';
@@ -110,6 +112,7 @@
   ];
 
   let librarySetupOpen = $state(false);
+  let historyOpen = $state(false);
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
@@ -662,6 +665,22 @@
             {$selfUpdateChecking ? 'Проверка…' : 'Проверить'}
           </Button>
         </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">История обновлений</span>
+            <span class="row-sub">
+              {#if $releaseNotesHistory.length > 0}
+                Что менялось в лаунчере от версии к версии
+              {:else}
+                Появится после первой проверки обновлений
+              {/if}
+            </span>
+          </div>
+          <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
+            <ScrollText size="1.5rem" strokeWidth={1.8} />
+            Что нового
+          </Button>
+        </div>
         <UpdateBanner />
       </div>
     </section>
@@ -725,6 +744,9 @@
 
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
+<Modal bind:open={historyOpen} title="История обновлений" width="52rem">
+  <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
+</Modal>
 
 <style>
   .tabs-wrap {
