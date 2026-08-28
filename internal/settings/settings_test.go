@@ -367,9 +367,23 @@ func TestAnonymousUsageStatsMissingInOldConfig(t *testing.T) {
 	}
 }
 
-func TestAnonymousDiagnosticsNotAcceptedByDefault(t *testing.T) {
-	if Defaults().AnonymousDiagnostics {
-		t.Fatal("anonymous diagnostics enabled by default")
+// The diagnostics switch now defaults on, but the default is only the state
+// the consent prompt starts from. Nothing may act on it until the prompt has
+// been answered, which is what DiagnosticsAllowed reports and what every
+// caller asks.
+func TestAnonymousDiagnosticsDefaultIsNotConsent(t *testing.T) {
+	d := Defaults()
+	if !d.AnonymousDiagnostics {
+		t.Fatal("the consent prompt must start with diagnostics selected")
+	}
+	if d.TelemetryConsentRecorded() {
+		t.Fatal("a fresh install must not count as having answered the prompt")
+	}
+	if d.DiagnosticsAllowed() {
+		t.Fatal("diagnostics allowed before the user was asked")
+	}
+	if d.UsageStatsAllowed() {
+		t.Fatal("usage stats allowed before the user was asked")
 	}
 }
 

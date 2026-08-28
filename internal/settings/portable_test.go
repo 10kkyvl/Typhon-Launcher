@@ -44,6 +44,7 @@ var localNames = []string{
 	"sourcesNoticeAccepted",
 	"anonymousUsageStats",
 	"anonymousDiagnostics",
+	"telemetryConsentVersion",
 }
 
 func jsonNames(v any) []string {

@@ -279,21 +279,25 @@ func main() {
 		if err != nil {
 			fatal("start presence", err)
 		}
+		// Both services ask *Allowed, never the switch itself: on a fresh
+		// install the diagnostics switch already reads true so the consent
+		// prompt can start with it selected, and sending on the strength of
+		// that would be collecting from someone who has not been asked yet.
 		usageService, err := usagestats.NewService(identity,
-			func() bool { return settingsService.GetSettings().AnonymousUsageStats }, resolveGameID)
+			func() bool { return settingsService.GetSettings().UsageStatsAllowed() }, resolveGameID)
 		if err != nil {
 			fatal("start usage stats", err)
 		}
-		usageService.SetEnabled(settingsService.GetSettings().AnonymousUsageStats)
-		settingsService.Subscribe(func(s settings.Settings) { usageService.SetEnabled(s.AnonymousUsageStats) })
+		usageService.SetEnabled(settingsService.GetSettings().UsageStatsAllowed())
+		settingsService.Subscribe(func(s settings.Settings) { usageService.SetEnabled(s.UsageStatsAllowed()) })
 
 		diagnosticsService, err := diagnostics.NewService(identity,
-			func() bool { return settingsService.GetSettings().AnonymousDiagnostics })
+			func() bool { return settingsService.GetSettings().DiagnosticsAllowed() })
 		if err != nil {
 			fatal("start diagnostics", err)
 		}
-		diagnosticsService.SetEnabled(settingsService.GetSettings().AnonymousDiagnostics)
-		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.AnonymousDiagnostics) })
+		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
+		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
 
 		libraryService.AddSessionWatcher(heartbeatService)

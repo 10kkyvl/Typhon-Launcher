@@ -35,6 +35,7 @@ export interface Settings {
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
+  telemetryConsentVersion: number;
   accountSync: boolean;
 }
 
@@ -72,7 +73,8 @@ const fallbackDefaults: Settings = {
   allowTorrentReuse: true,
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
-  anonymousDiagnostics: false,
+  anonymousDiagnostics: true,
+  telemetryConsentVersion: 0,
   accountSync: false,
 };
 
