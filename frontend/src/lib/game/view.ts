@@ -1,4 +1,4 @@
-import type { MediaAsset, MetadataView } from '../services/metadata';
+import type { MediaAsset, MetadataMatch, MetadataView } from '../services/metadata';
 
 const blanks = new Set(['', '-', '--', '—', 'n/a', 'na', 'null', 'undefined', 'unknown', 'неизвестно']);
 
@@ -44,6 +44,22 @@ export function preferView(previous: MetadataView | null, next: MetadataView): M
   if (!previous || previous.game.id !== next.game.id) return next;
   if (hasContent(next) || !hasContent(previous)) return next;
   return previous;
+}
+
+export type MetaStatus = 'ready' | 'searching' | 'unmatched' | 'failed' | 'skipped';
+
+export interface MetaStatusInput {
+  available: boolean;
+  busy: boolean;
+  match?: MetadataMatch | null;
+  resolved?: boolean;
+}
+
+export function metaStatus(input: MetaStatusInput): MetaStatus {
+  if (!input.available || input.resolved) return 'ready';
+  if (input.busy || input.match === 'searching') return 'searching';
+  if (input.match === 'unmatched' || input.match === 'failed' || input.match === 'skipped') return input.match;
+  return 'ready';
 }
 
 export interface MetaLineInput {

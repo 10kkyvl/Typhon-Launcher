@@ -28,6 +28,7 @@
     isGameMissing,
     joinLimited,
     metaLine,
+    metaStatus,
     orderPlatforms,
     pickHero,
     preferView,
@@ -44,8 +45,14 @@
     type DownloadOrigin,
     type DownloadStatus,
   } from '../../lib/services/downloads';
-  import { addCatalogGame, playGame, stopGame } from '../../lib/services/library';
-  import { ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
+  import { addCatalogGame, createShortcut, playGame, removeShortcut, stopGame } from '../../lib/services/library';
+  import {
+    dismissMetadataMatch,
+    ensureMetadataFresh,
+    getMetadataView,
+    refreshMetadata,
+    type MetadataView,
+  } from '../../lib/services/metadata';
   import { openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
@@ -149,6 +156,8 @@
   let metaView = $state<MetadataView | null>(null);
   let metaToken = 0;
   let metaRefreshing = $state(false);
+  let metaSearching = $state(false);
+  let metaSkipping = $state(false);
   let matchOpen = $state(false);
   let matchMode = $state<'find' | 'change'>('find');
   let summaryExpanded = $state(false);
@@ -162,18 +171,21 @@
     const view = await getMetadataView(gameId);
     if (current !== metaToken) return;
     metaView = preferView(metaView, view);
+    const started = await ensureMetadataFresh(gameId);
+    if (current !== metaToken || !started) return;
+    metaSearching = true;
   }
 
   $effect(() => {
     const metaGameId = canonicalId;
     untrack(() => {
+      metaSearching = false;
       if (!metaGameId) {
         metaToken++;
         metaView = null;
         return;
       }
       loadMetaView(metaGameId);
-      ensureMetadataFresh(metaGameId);
     });
   });
 
@@ -181,10 +193,20 @@
     return Events.On('metadata:updated', (event) => {
       const view = event.data as MetadataView;
       if (view.game?.id && view.game.id === canonicalId) {
+        metaSearching = false;
         metaView = preferView(metaView, view);
       }
     });
   });
+
+  const metaState = $derived(
+    metaStatus({
+      available: $metadataAvailable,
+      busy: metaSearching || metaRefreshing || metaSkipping,
+      match: metaView?.match,
+      resolved: metaView?.resolved,
+    }),
+  );
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
@@ -327,6 +349,13 @@
           ]
         : [{ id: 'meta-find', label: 'Найти метаданные' }]
       : []),
+    ...(installed
+      ? [
+          localGame?.shortcutPath
+            ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }
+            : { id: 'shortcut-create', label: 'Создать ярлык на рабочем столе' },
+        ]
+      : []),
     ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
     ...(localGame
       ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
@@ -361,6 +390,28 @@
       removeTerminalDownload();
     } else if (actionId === 'discard-download') {
       discardTerminalDownload();
+    } else if (actionId === 'shortcut-create') {
+      createDesktopShortcut();
+    } else if (actionId === 'shortcut-remove') {
+      removeDesktopShortcut();
+    }
+  }
+
+  async function createDesktopShortcut() {
+    if (!localGame) return;
+    try {
+      await createShortcut(localGame.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось создать ярлык', 'danger');
+    }
+  }
+
+  async function removeDesktopShortcut() {
+    if (!localGame) return;
+    try {
+      await removeShortcut(localGame.id);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить ярлык', 'danger');
     }
   }
 
@@ -374,6 +425,18 @@
       toast(err instanceof Error && err.message ? err.message : 'Не удалось обновить метаданные', 'danger');
     } finally {
       metaRefreshing = false;
+    }
+  }
+
+  async function skipMeta() {
+    if (!canonicalId || metaSkipping) return;
+    metaSkipping = true;
+    try {
+      metaView = await dismissMetadataMatch(canonicalId);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось отложить поиск метаданных', 'danger');
+    } finally {
+      metaSkipping = false;
     }
   }
 
@@ -663,6 +726,40 @@
 
   <div class="body">
     <div class="main">
+      {#if metaState === 'searching'}
+        <div class="meta-note" role="status">
+          <span class="spinner"></span>
+          <div class="meta-text">
+            <p class="meta-title">Ищем описание и обложку</p>
+            <p class="meta-hint">Сопоставляем «{title || 'игру'}» с базой IGDB — это занимает несколько секунд.</p>
+          </div>
+        </div>
+      {:else if metaState === 'unmatched' || metaState === 'failed'}
+        <div class="meta-note">
+          <div class="meta-text">
+            <p class="meta-title">
+              {metaState === 'unmatched' ? 'Не удалось подобрать описание' : 'Метаданные не загрузились'}
+            </p>
+            <p class="meta-hint">
+              {metaState === 'unmatched'
+                ? 'В базе IGDB нет однозначного совпадения. Выберите игру вручную или оставьте карточку как есть.'
+                : 'Сервис метаданных не ответил. Попробуйте ещё раз или выберите игру вручную.'}
+            </p>
+          </div>
+          <div class="meta-actions">
+            {#if metaState === 'failed'}
+              <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
+                {metaRefreshing ? 'Повторяем…' : 'Повторить'}
+              </Button>
+              <Button size="sm" onclick={() => openMatch('find')}>Выбрать вручную</Button>
+            {:else}
+              <Button size="sm" variant="primary" onclick={() => openMatch('find')}>Выбрать вручную</Button>
+            {/if}
+            <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>Не искать</Button>
+          </div>
+        </div>
+      {/if}
+
       {#if summary.text}
         <p class="summary">{summary.text}</p>
         {#if summary.expandable}
@@ -670,7 +767,7 @@
             {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
           </button>
         {/if}
-      {:else if !title}
+      {:else if !title || metaState === 'searching'}
         <div class="skeleton line"></div>
         <div class="skeleton line"></div>
         <div class="skeleton line short"></div>
@@ -1024,6 +1121,60 @@
 
   .main > :first-child {
     margin-top: 0;
+  }
+
+  .meta-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    max-width: var(--prose-max);
+    margin-bottom: var(--space-6);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .meta-text {
+    flex: 1;
+    min-width: 22rem;
+  }
+
+  .meta-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .meta-hint {
+    margin-top: 0.4rem;
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--text-3);
+  }
+
+  .meta-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .spinner {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 800ms linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .summary {

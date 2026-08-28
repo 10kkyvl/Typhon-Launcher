@@ -642,3 +642,32 @@ func TestApplierSeesStoredSettingsAsPrevious(t *testing.T) {
 		t.Fatal("failed applier must not leave the setting stored as enabled")
 	}
 }
+
+func TestDesktopShortcutsDefaultsOn(t *testing.T) {
+	if !Defaults().DesktopShortcuts {
+		t.Fatal("DesktopShortcuts disabled by default")
+	}
+}
+
+func TestDesktopShortcutsSurvivesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.DesktopShortcuts = false
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if mustServiceAt(t, path).GetSettings().DesktopShortcuts {
+		t.Fatal("DesktopShortcuts not persisted")
+	}
+}
+
+func TestDesktopShortcutsMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"minimizeToTray":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !mustServiceAt(t, path).GetSettings().DesktopShortcuts {
+		t.Fatal("legacy config must keep desktop shortcuts on")
+	}
+}

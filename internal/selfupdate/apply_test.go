@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -126,7 +127,7 @@ func TestApplyRejectsPathOutsideCache(t *testing.T) {
 	outside := filepath.Join(dir, "not-cached-setup.exe")
 	writeTestFile(t, outside, []byte("x"))
 
-	if err := Apply(context.Background(), outside); err == nil {
+	if err := Apply(context.Background(), outside, dir); err == nil {
 		t.Fatal("Apply() error = nil, want an error for a path outside the selfupdate cache")
 	}
 }
@@ -146,7 +147,7 @@ func TestApplyNotReadyWhenNothingStored(t *testing.T) {
 	installerPath := filepath.Join(cacheDir, "1.2.3", "setup.exe")
 	writeTestFile(t, installerPath, []byte("installer"))
 
-	if err := Apply(context.Background(), installerPath); !errors.Is(err, ErrNotReady) {
+	if err := Apply(context.Background(), installerPath, dir); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("Apply() error = %v, want ErrNotReady when nothing was ever downloaded", err)
 	}
 }
@@ -188,7 +189,7 @@ func TestApplyHashMismatchAfterTampering(t *testing.T) {
 	tampered[0] ^= 0xff
 	writeTestFile(t, installerPath, tampered)
 
-	if err := Apply(context.Background(), installerPath); !errors.Is(err, ErrHashMismatch) {
+	if err := Apply(context.Background(), installerPath, dir); !errors.Is(err, ErrHashMismatch) {
 		t.Fatalf("Apply() error = %v, want ErrHashMismatch", err)
 	}
 }
@@ -228,7 +229,75 @@ func TestApplyNotReadyWhenReadyPathDiffers(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	if err := Apply(context.Background(), otherPath); !errors.Is(err, ErrNotReady) {
+	if err := Apply(context.Background(), otherPath, dir); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("Apply() error = %v, want ErrNotReady when the path does not match the recorded ReadyPath", err)
+	}
+}
+
+func TestValidateInstallDir(t *testing.T) {
+	existing := t.TempDir()
+	regular := filepath.Join(existing, "typhon.exe")
+	writeTestFile(t, regular, []byte("x"))
+
+	tests := []struct {
+		name string
+		dir  string
+		want error
+	}{
+		{name: "empty", dir: "", want: errInstallDirEmpty},
+		{name: "relative", dir: `Programs\Typhon`, want: errInstallDirNotAbsolute},
+		{name: "trailing separator", dir: existing + string(filepath.Separator), want: errInstallDirNotClean},
+		{name: "dot dot", dir: filepath.Join(existing, "sub", "..") + string(filepath.Separator) + ".", want: errInstallDirNotClean},
+		{name: "quote", dir: `C:\Programs\Ty"phon`, want: errInstallDirUnsafe},
+		{name: "control char", dir: "C:" + string(filepath.Separator) + "Typ" + string(rune(1)) + "hon", want: errInstallDirUnsafe},
+		{name: "missing", dir: filepath.Join(existing, "gone"), want: os.ErrNotExist},
+		{name: "regular file", dir: regular, want: errInstallDirNotDir},
+		{name: "valid", dir: existing, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateInstallDir(tt.dir)
+			if tt.want == nil {
+				if err != nil {
+					t.Fatalf("validateInstallDir(%q) = %v, want nil", tt.dir, err)
+				}
+				return
+			}
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("validateInstallDir(%q) = %v, want %v", tt.dir, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestInstallerCmdLine(t *testing.T) {
+	installDir := filepath.Join(t.TempDir(), "Program Files", "Typhon")
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	installer := filepath.Join(t.TempDir(), "typhon-amd64-installer.exe")
+
+	got, err := installerCmdLine(installer, installDir)
+	if err != nil {
+		t.Fatalf("installerCmdLine: %v", err)
+	}
+	want := `"` + installer + `" /S /D=` + installDir
+	if got != want {
+		t.Fatalf("installerCmdLine() = %q, want %q", got, want)
+	}
+	if !strings.HasSuffix(got, " /D="+installDir) {
+		t.Fatalf("installerCmdLine() = %q, /D= must come last and stay unquoted", got)
+	}
+}
+
+func TestInstallerCmdLineRejectsBadInput(t *testing.T) {
+	installDir := t.TempDir()
+	installer := filepath.Join(t.TempDir(), "setup.exe")
+
+	if _, err := installerCmdLine(installer, filepath.Join(installDir, "gone")); err == nil {
+		t.Fatal("installerCmdLine() error = nil, want an error for a missing install dir")
+	}
+	if _, err := installerCmdLine(installer+"\"", installDir); !errors.Is(err, errInstallerPathUnsafe) {
+		t.Fatalf("installerCmdLine() error = %v, want errInstallerPathUnsafe", err)
 	}
 }

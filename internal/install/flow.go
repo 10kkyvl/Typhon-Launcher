@@ -563,6 +563,15 @@ func (s *Service) complete(id string) error {
 			return err
 		}
 		game = registered
+		if cfg.DesktopShortcuts {
+			// Ярлык — удобство поверх установки, а не её часть: рабочий
+			// стол может быть недоступен, и объявлять из-за этого
+			// установленную игру неустановленной нельзя. Кнопка «создать
+			// ярлык» на странице игры остаётся ручным повтором.
+			if err := s.library.CreateShortcut(game.ID); err != nil {
+				slog.Warn("create desktop shortcut", "id", game.ID, "error", err)
+			}
+		}
 	}
 
 	s.mu.Lock()

@@ -231,3 +231,94 @@ func gameKey(i int) string {
 	}
 	return string(buf)
 }
+
+func TestDismissedGameIsNeverAskedAgain(t *testing.T) {
+	clock := newClock()
+	store, _ := newAttempts(t, clock)
+	store.fail("prey", attemptUnmatched)
+	store.dismiss("prey")
+
+	clock.advance(unmatchedMax + 24*time.Hour)
+	if store.due("prey", false) {
+		t.Fatal("background asked about a game the user gave up on")
+	}
+	if store.due("prey", true) {
+		t.Fatal("an open card asked about a game the user gave up on")
+	}
+}
+
+func TestDismissalSurvivesARestart(t *testing.T) {
+	clock := newClock()
+	store, dir := newAttempts(t, clock)
+	store.dismiss("prey")
+	if err := store.flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+
+	clock.advance(unmatchedMax + 24*time.Hour)
+	reopened, err := newAttemptStore(dir, clock.Now)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if reopened.due("prey", true) {
+		t.Fatal("dismissal lost on restart: the card asks again after every launch")
+	}
+}
+
+func TestResumeClearsTheDismissal(t *testing.T) {
+	clock := newClock()
+	store, _ := newAttempts(t, clock)
+	store.fail("prey", attemptUnmatched)
+	store.dismiss("prey")
+	store.resume("prey")
+
+	if !store.due("prey", false) {
+		t.Fatal("an explicit retry stayed blocked by the old dismissal")
+	}
+	if rec, ok := store.state("prey"); ok {
+		t.Fatalf("record = %+v, want it gone after an explicit retry", rec)
+	}
+}
+
+func TestRestoreRollsBackAFailedDismissal(t *testing.T) {
+	cases := []struct {
+		name  string
+		seed  func(*attemptStore)
+		wantK attemptKind
+		wantR bool
+	}{
+		{"без прежней записи", func(*attemptStore) {}, "", false},
+		{"поверх неудачной попытки", func(s *attemptStore) { s.fail("prey", attemptTransient) }, attemptTransient, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := newClock()
+			store, _ := newAttempts(t, clock)
+			tc.seed(store)
+
+			prev, existed := store.dismiss("prey")
+			store.restore("prey", prev, existed)
+
+			rec, ok := store.state("prey")
+			if ok != tc.wantR {
+				t.Fatalf("record present = %v, want %v", ok, tc.wantR)
+			}
+			if ok && (rec.Dismissed || rec.Kind != tc.wantK) {
+				t.Fatalf("record = %+v, want the pre-dismissal state", rec)
+			}
+		})
+	}
+}
+
+func TestDismissedRecordsSurviveTrim(t *testing.T) {
+	clock := newClock()
+	store, _ := newAttempts(t, clock)
+	store.dismiss("prey")
+	for i := range maxAttempts + 500 {
+		store.fail(gameKey(i), attemptUnmatched)
+	}
+
+	if store.due("prey", true) {
+		t.Fatal("trim threw away the user's decision")
+	}
+}

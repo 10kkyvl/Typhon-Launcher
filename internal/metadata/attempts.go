@@ -34,11 +34,12 @@ const (
 )
 
 type attempt struct {
-	GameID   string      `json:"gameId"`
-	Kind     attemptKind `json:"kind"`
-	Failures int         `json:"failures"`
-	LastAt   time.Time   `json:"lastAt"`
-	NextAt   time.Time   `json:"nextAt"`
+	GameID    string      `json:"gameId"`
+	Kind      attemptKind `json:"kind"`
+	Failures  int         `json:"failures"`
+	LastAt    time.Time   `json:"lastAt"`
+	NextAt    time.Time   `json:"nextAt"`
+	Dismissed bool        `json:"dismissed,omitempty"`
 }
 
 type attemptStore struct {
@@ -78,7 +79,7 @@ func (s *attemptStore) load() error {
 	}
 	now := s.now()
 	for _, a := range stored {
-		if a.GameID == "" || !a.NextAt.After(now) {
+		if a.GameID == "" || (!a.Dismissed && !a.NextAt.After(now)) {
 			continue
 		}
 		s.records[a.GameID] = a
@@ -99,6 +100,9 @@ func (s *attemptStore) due(gameID string, foreground bool) bool {
 	rec, ok := s.records[gameID]
 	if !ok {
 		return true
+	}
+	if rec.Dismissed {
+		return false
 	}
 	now := s.now()
 	if !now.Before(rec.NextAt) {
@@ -129,6 +133,67 @@ func (s *attemptStore) fail(gameID string, kind attemptKind) {
 	s.trimLocked()
 }
 
+// dismiss запоминает, что пользователь отказался от поиска для этой игры, и
+// возвращает прежнюю запись: неудачная запись файла обязана вернуть память в
+// исходное состояние через restore.
+func (s *attemptStore) dismiss(gameID string) (attempt, bool) {
+	if gameID == "" {
+		return attempt{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	prev, existed := s.records[gameID]
+	rec := prev
+	rec.GameID = gameID
+	if rec.Kind == "" {
+		rec.Kind = attemptUnmatched
+	}
+	rec.Dismissed = true
+	rec.LastAt = s.now()
+	s.records[gameID] = rec
+	s.dirty = true
+	s.trimLocked()
+	return prev, existed
+}
+
+func (s *attemptStore) restore(gameID string, prev attempt, existed bool) {
+	if gameID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existed {
+		s.records[gameID] = prev
+	} else {
+		delete(s.records, gameID)
+	}
+	s.dirty = true
+}
+
+func (s *attemptStore) resume(gameID string) {
+	if gameID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rec, ok := s.records[gameID]; !ok || !rec.Dismissed {
+		return
+	}
+	delete(s.records, gameID)
+	s.dirty = true
+}
+
+func (s *attemptStore) state(gameID string) (attempt, bool) {
+	if gameID == "" {
+		return attempt{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec, ok := s.records[gameID]
+	return rec, ok
+}
+
 func (s *attemptStore) succeed(gameID string) {
 	if gameID == "" {
 		return
@@ -151,7 +216,7 @@ func (s *attemptStore) flush() error {
 	now := s.now()
 	out := make([]attempt, 0, len(s.records))
 	for _, rec := range s.records {
-		if !rec.NextAt.After(now) {
+		if !rec.Dismissed && !rec.NextAt.After(now) {
 			continue
 		}
 		out = append(out, rec)
@@ -175,7 +240,7 @@ func (s *attemptStore) trimLocked() {
 	}
 	now := s.now()
 	for id, rec := range s.records {
-		if !rec.NextAt.After(now) {
+		if !rec.Dismissed && !rec.NextAt.After(now) {
 			delete(s.records, id)
 		}
 	}
@@ -187,7 +252,11 @@ func (s *attemptStore) trimLocked() {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(a, b int) bool {
-		return s.records[ids[a]].NextAt.Before(s.records[ids[b]].NextAt)
+		ra, rb := s.records[ids[a]], s.records[ids[b]]
+		if ra.Dismissed != rb.Dismissed {
+			return !ra.Dismissed
+		}
+		return ra.NextAt.Before(rb.NextAt)
 	})
 	for _, id := range ids[:len(s.records)-maxAttempts] {
 		delete(s.records, id)

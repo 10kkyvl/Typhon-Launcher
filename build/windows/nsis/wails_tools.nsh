@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "Typhon"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.2.3"
+    !define INFO_PRODUCTVERSION "0.2.4"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "(c) 2026 Typhon"

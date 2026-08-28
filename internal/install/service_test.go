@@ -69,7 +69,19 @@ type fakeRegistrar struct {
 	removed []string
 
 	uninstalled []string
+	shortcuts   []string
+	shortcutErr error
 	next        int
+}
+
+func (f *fakeRegistrar) CreateShortcut(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.shortcutErr != nil {
+		return f.shortcutErr
+	}
+	f.shortcuts = append(f.shortcuts, id)
+	return nil
 }
 
 func (f *fakeRegistrar) RegisterInstalled(g library.InstalledGame) (library.Game, error) {

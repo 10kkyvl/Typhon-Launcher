@@ -10,6 +10,7 @@ import {
   joinLimited,
   languageLabel,
   metaLine,
+  metaStatus,
   orderPlatforms,
   pickHero,
   preferView,
@@ -31,6 +32,7 @@ function view(patch: Partial<MetadataView> = {}): MetadataView {
     resolved: false,
     stale: false,
     provider: "",
+    match: "idle",
     ...patch,
   };
 }
@@ -523,6 +525,62 @@ describe("cancelFreesDisk", () => {
   for (const c of cases) {
     it(`reports ${c.want} for a ${c.status} download`, () => {
       expect(cancelFreesDisk(c.status)).toBe(c.want);
+    });
+  }
+});
+
+describe("metaStatus", () => {
+  const cases: { name: string; input: Parameters<typeof metaStatus>[0]; want: string }[] = [
+    {
+      name: "keeps the card quiet while the provider is missing",
+      input: { available: false, busy: true, match: "unmatched" },
+      want: "ready",
+    },
+    {
+      name: "keeps the card quiet for a matched game",
+      input: { available: true, busy: false, match: "failed", resolved: true },
+      want: "ready",
+    },
+    {
+      name: "reports a lookup started by the card itself",
+      input: { available: true, busy: true, match: "idle" },
+      want: "searching",
+    },
+    {
+      name: "reports a lookup already running in the background",
+      input: { available: true, busy: false, match: "searching" },
+      want: "searching",
+    },
+    {
+      name: "asks for a manual match once the search came back empty",
+      input: { available: true, busy: false, match: "unmatched" },
+      want: "unmatched",
+    },
+    {
+      name: "offers a retry after a provider error",
+      input: { available: true, busy: false, match: "failed" },
+      want: "failed",
+    },
+    {
+      name: "stays out of the way once the user gave up",
+      input: { available: true, busy: false, match: "skipped" },
+      want: "skipped",
+    },
+    {
+      name: "shows nothing for an unresolved game nobody has looked up yet",
+      input: { available: true, busy: false, match: "idle" },
+      want: "ready",
+    },
+    {
+      name: "shows nothing without a view",
+      input: { available: true, busy: false, match: null },
+      want: "ready",
+    },
+  ];
+
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(metaStatus(c.input)).toBe(c.want);
     });
   }
 });

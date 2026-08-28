@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"typhon/internal/account"
 	"typhon/internal/app"
@@ -47,6 +48,7 @@ const singleInstanceID = "com.typhon.launcher"
 
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
+var errNoPlayTarget = errors.New("--play требует идентификатор игры")
 
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
@@ -134,6 +136,15 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	// A shortcut with a broken argument must not keep the launcher from
+	// starting: the window opens as usual and the user can launch the game
+	// by hand, which is strictly better than refusing to start at all.
+	playID, playRequested, err := playTarget(os.Args)
+	if err != nil {
+		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
+		playRequested = false
 	}
 
 	settingsService, err := settings.NewService()
@@ -286,8 +297,19 @@ func main() {
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: singleInstanceID,
-			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
-				trayController.Open()
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				id, requested, err := playTarget(data.Args)
+				if err != nil {
+					slog.Error("parse play argument", "args", data.Args, "error", err)
+				}
+				if !requested {
+					trayController.Open()
+					return
+				}
+				if err := libraryService.PlayGame(id); err != nil {
+					slog.Error("play from shortcut", "id", id, "error", err)
+					trayController.Open()
+				}
 			},
 		},
 		Services: services,
@@ -308,6 +330,10 @@ func main() {
 		MinHeight:        680,
 		Frameless:        true,
 		BackgroundColour: application.NewRGB(11, 16, 22),
+		// Started from a game shortcut the launcher stays out of the way, but
+		// only when the tray icon is there to bring it back: hiding a window
+		// nobody can reopen leaves a process the user cannot reach.
+		Hidden: playRequested && current.MinimizeToTray,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
@@ -359,10 +385,34 @@ func main() {
 		}
 	})
 
+	if playRequested {
+		if err := libraryService.PlayGame(playID); err != nil {
+			slog.Error("play from shortcut", "id", playID, "error", err)
+			window.Show()
+		}
+	}
+
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
 	}
+}
+
+func playTarget(args []string) (string, bool, error) {
+	for i := 1; i < len(args); i++ {
+		if args[i] != "--play" {
+			continue
+		}
+		if i+1 >= len(args) {
+			return "", true, errNoPlayTarget
+		}
+		id := strings.TrimSpace(args[i+1])
+		if id == "" {
+			return "", true, errNoPlayTarget
+		}
+		return id, true, nil
+	}
+	return "", false, nil
 }
 
 func browserArgs(hardwareAcceleration bool) []string {

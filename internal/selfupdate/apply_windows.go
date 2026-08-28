@@ -11,12 +11,16 @@ import (
 	"typhon/internal/settings"
 )
 
-func Apply(ctx context.Context, installerPath string) error {
+func Apply(ctx context.Context, installerPath, installDir string) error {
 	dir, err := settings.ConfigDir()
 	if err != nil {
 		return err
 	}
 	if err := validateInstallerPath(dir, installerPath); err != nil {
+		return err
+	}
+	cmdLine, err := installerCmdLine(installerPath, installDir)
+	if err != nil {
 		return err
 	}
 
@@ -37,10 +41,26 @@ func Apply(ctx context.Context, installerPath string) error {
 	}
 
 	//nolint:gosec // G204: installerPath was just verified against the recorded manifest hash inside our own cache dir (invariant 32/33)
-	cmd := exec.CommandContext(ctx, installerPath, "/S")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd := exec.CommandContext(ctx, installerPath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CmdLine: cmdLine}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("selfupdate: run installer: %w", err)
 	}
 	return nil
+}
+
+// installerCmdLine builds the command line by hand because NSIS reads
+// everything after /D= literally to the end of the line: the switch has to come
+// last and the path must stay unquoted, which exec.Cmd.Args cannot express — it
+// quotes any argument holding a space. Without /D= a silent install ignores
+// where the launcher actually lives and drops the new build into the compiled
+// default directory, leaving the running installation untouched.
+func installerCmdLine(installerPath, installDir string) (string, error) {
+	if hasUnsafePathChars(installerPath) {
+		return "", errInstallerPathUnsafe
+	}
+	if err := validateInstallDir(installDir); err != nil {
+		return "", err
+	}
+	return `"` + installerPath + `" /S /D=` + installDir, nil
 }
