@@ -6,6 +6,7 @@
   import ActivityDock from './ActivityDock.svelte';
   import OfflineBanner from './OfflineBanner.svelte';
   import Sidebar from './Sidebar.svelte';
+  import GameQuickMenu from './GameQuickMenu.svelte';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
 
@@ -35,6 +36,8 @@
     <ActivityDock />
   {/if}
 </div>
+
+<GameQuickMenu />
 
 <style>
   .corner {

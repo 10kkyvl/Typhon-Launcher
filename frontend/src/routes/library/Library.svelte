@@ -24,6 +24,7 @@
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
+  import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
@@ -244,7 +245,7 @@
 </PageHeader>
 
 {#if hero}
-  <div class="hero-block">
+  <div class="hero-block" role="presentation" oncontextmenu={(event) => openGameMenu(event, hero.id)}>
     <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem" maxHeight="34rem">
       <h2 class="hero-title">{hero.title}</h2>
       {#if hero.subtitle}
@@ -341,7 +342,11 @@
   {:else}
     <div class="list">
       {#each visibleGames as entry (entry.id)}
-        <button class="list-row" onclick={() => navigate('game', { id: entry.id })}>
+        <button
+          class="list-row"
+          onclick={() => navigate('game', { id: entry.id })}
+          oncontextmenu={(event) => openGameMenu(event, entry.id)}
+        >
           <div class="list-thumb">
             <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
           </div>

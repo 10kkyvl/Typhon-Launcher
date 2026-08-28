@@ -20,6 +20,13 @@ export interface LibraryGame {
   source?: string;
   uninstalled?: boolean;
   shortcutPath?: string;
+  savesDir?: string;
+}
+
+export interface SavesResult {
+  path: string;
+  candidates: string[] | null;
+  unreadable: number;
 }
 
 const unavailable = () => new Error('unavailable in browser');
@@ -67,6 +74,16 @@ export async function createShortcut(id: string): Promise<void> {
 export async function removeShortcut(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await LibraryService.RemoveShortcut(id);
+}
+
+export async function locateSaves(id: string): Promise<SavesResult> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.LocateSaves(id)) as unknown as SavesResult;
+}
+
+export async function setSavesDir(id: string, dir: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetSavesDir(id, dir)) as unknown as LibraryGame;
 }
 
 export async function selectExecutable(title: string): Promise<string> {

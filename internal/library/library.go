@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/platform"
 	"typhon/internal/procs"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
@@ -49,6 +50,7 @@ type Game struct {
 	UninstallUnknown  bool       `json:"uninstallUnknown,omitempty"`
 	Uninstalled       bool       `json:"uninstalled,omitempty"`
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
+	SavesDir          string     `json:"savesDir,omitempty"`
 }
 
 type Uninstall struct {
@@ -121,6 +123,7 @@ type Service struct {
 	watching      bool
 	shortcuts     shortcutBackend
 	launcherPath  func() (string, error)
+	saveRoots     func() ([]platform.SaveRoot, error)
 }
 
 type SessionWatcher interface {
@@ -166,6 +169,7 @@ func NewServiceAt(path string) (*Service, error) {
 		now:           time.Now,
 		shortcuts:     systemShortcuts{},
 		launcherPath:  os.Executable,
+		saveRoots:     platform.SaveRoots,
 	}
 	games, err := s.load()
 	if err != nil {
