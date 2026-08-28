@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
+  import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -8,6 +8,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
@@ -63,6 +64,7 @@
   let legalActiveId = $state<string | null>(null);
   let legalActiveTitle = $state('');
   let sourcesNoticeReviewOpen = $state(false);
+  let sentDataOpen = $state(false);
 
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
@@ -399,8 +401,8 @@
             <div class="row-text">
               <span class="row-label">Анонимная диагностика</span>
               <span class="row-sub"
-                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой пути
-                и чувствительные сетевые идентификаторы удаляются. По умолчанию выключено.</span
+                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой из них
+                удаляются пути, имя устройства и сетевые адреса.</span
               >
             </div>
             <Toggle
@@ -408,6 +410,18 @@
               label="Анонимная диагностика"
               onchange={(v) => set({ anonymousDiagnostics: v })}
             />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Показать отправленные данные</span>
+              <span class="row-sub"
+                >Последние события и отчёты, ушедшие на сервер, в том виде, в котором они были отправлены</span
+              >
+            </div>
+            <Button size="sm" onclick={() => (sentDataOpen = true)}>
+              <Eye size="1.5rem" strokeWidth={1.8} />
+              Показать
+            </Button>
           </div>
           <div class="row">
             <div class="row-text">
@@ -832,6 +846,7 @@
 
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
+<SentDataModal bind:open={sentDataOpen} />
 <Modal bind:open={historyOpen} title="История обновлений" width="52rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>
