@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { resetHistory } from './router';
 import {
   AccountError,
@@ -17,7 +17,7 @@ import {
   type RegisterInput,
 } from '../services/account';
 
-export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest';
+export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest' | 'offline';
 export type AuthView = 'login' | 'register';
 
 export const currentUser = writable<CurrentUser | null>(null);
@@ -28,6 +28,7 @@ export const savingProfile = writable(false);
 export const pickingAvatar = writable(false);
 export const uploadingAvatar = writable(false);
 export const removingAvatar = writable(false);
+export const isOffline = derived(authState, (state) => state === 'offline');
 
 let bootstrapping: Promise<void> | null = null;
 
@@ -41,6 +42,10 @@ export function initAuth(): Promise<void> {
 
 export function retryBootstrap(): Promise<void> {
   if (bootstrapping) return bootstrapping;
+  if (get(authState) === 'offline') {
+    reconnectAttempt = 0;
+    return performReconnectAttempt();
+  }
   authState.set('bootstrapping');
   return initAuth();
 }
@@ -52,6 +57,12 @@ async function runBootstrap(): Promise<void> {
       currentUser.set(state.user);
       authReason.set('');
       authState.set('authenticated');
+      return;
+    }
+    if (state.status === 'offline') {
+      currentUser.set(state.user);
+      authReason.set(state.reason);
+      authState.set('offline');
       return;
     }
     currentUser.set(null);
@@ -67,6 +78,68 @@ async function runBootstrap(): Promise<void> {
     authState.set('unavailable');
   }
 }
+
+const RECONNECT_DELAYS_MS = [15000, 30000, 60000];
+
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+let onlineListenerAttached = false;
+
+function nextReconnectDelay(): number {
+  const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)];
+  reconnectAttempt += 1;
+  return delay;
+}
+
+function clearReconnectTimer(): void {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect(): void {
+  clearReconnectTimer();
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void performReconnectAttempt();
+  }, nextReconnectDelay());
+}
+
+async function performReconnectAttempt(): Promise<void> {
+  if (get(authState) !== 'offline') return;
+  clearReconnectTimer();
+  await initAuth();
+  if (get(authState) === 'offline') scheduleReconnect();
+}
+
+function onWindowOnline(): void {
+  if (get(authState) !== 'offline') return;
+  void performReconnectAttempt();
+}
+
+function startReconnectLoop(): void {
+  reconnectAttempt = 0;
+  if (!onlineListenerAttached) {
+    window.addEventListener('online', onWindowOnline);
+    onlineListenerAttached = true;
+  }
+  scheduleReconnect();
+}
+
+function stopReconnectLoop(): void {
+  clearReconnectTimer();
+  reconnectAttempt = 0;
+  if (onlineListenerAttached) {
+    window.removeEventListener('online', onWindowOnline);
+    onlineListenerAttached = false;
+  }
+}
+
+authState.subscribe((state) => {
+  if (state === 'offline') startReconnectLoop();
+  else stopReconnectLoop();
+});
 
 export async function enterAsGuest(): Promise<void> {
   await continueAsGuest();

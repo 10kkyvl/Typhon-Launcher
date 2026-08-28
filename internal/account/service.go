@@ -18,6 +18,7 @@ const (
 	StatusUnauthenticated = "unauthenticated"
 	StatusUnavailable     = "unavailable"
 	StatusGuest           = "guest"
+	StatusOffline         = "offline"
 )
 
 var errNotStarted = errors.New("account service is not started")
@@ -29,14 +30,19 @@ type State struct {
 }
 
 type Service struct {
-	client    *Client
-	store     CredentialStore
-	statePath string
+	client      *Client
+	store       CredentialStore
+	statePath   string
+	profilePath string
 
-	mu     sync.Mutex
-	guest  bool
-	ctx    context.Context
-	cancel context.CancelFunc
+	mu           sync.Mutex
+	guest        bool
+	profile      cachedProfile
+	profileEpoch uint64
+	ctx          context.Context
+	cancel       context.CancelFunc
+
+	profileMu sync.Mutex
 }
 
 func NewService() (*Service, error) {
@@ -60,7 +66,16 @@ func newService(store CredentialStore, baseURL, path string) (*Service, error) {
 		return nil, err
 	}
 
-	s := &Service{store: store, statePath: path, guest: loaded.Guest}
+	profPath := profilePathFrom(path)
+	if profPath == "" {
+		return nil, errors.New("account profile cache path is empty")
+	}
+	profile, err := loadProfile(profPath)
+	if err != nil {
+		return nil, fmt.Errorf("load cached profile: %w", err)
+	}
+
+	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile}
 	client, err := NewClient(baseURL, s.token)
 	if err != nil {
 		return nil, err
@@ -138,6 +153,9 @@ func (s *Service) Bootstrap() (State, error) {
 
 	user, err := s.client.Me(ctx)
 	if err == nil {
+		if rememberErr := s.rememberProfile(ctx, user); rememberErr != nil {
+			return State{}, rememberErr
+		}
 		return State{Status: StatusAuthenticated, User: user}, nil
 	}
 
@@ -150,10 +168,40 @@ func (s *Service) Bootstrap() (State, error) {
 		if delErr := s.store.Delete(); delErr != nil {
 			return State{}, fmt.Errorf("discard rejected credential: %w", delErr)
 		}
+		if delErr := s.forgetProfile(); delErr != nil {
+			return State{}, fmt.Errorf("discard cached profile: %w", delErr)
+		}
 		return s.signedOutState(), nil
 	}
 
+	if isOfflineError(apiErr) {
+		if state, ok := s.offlineState(apiErr.Code); ok {
+			return state, nil
+		}
+	}
+
 	return State{Status: StatusUnavailable, Reason: apiErr.Code}, nil
+}
+
+func isOfflineError(apiErr *Error) bool {
+	if apiErr.Code == CodeNetwork {
+		return true
+	}
+	return apiErr.Code == CodeServer && (apiErr.Status == 0 || apiErr.Status >= 500)
+}
+
+func (s *Service) offlineState(reason string) (State, bool) {
+	profile := s.currentProfile()
+	if profile.User.ID == "" {
+		return State{}, false
+	}
+	user := profile.User
+	if profile.Avatar.Data != "" {
+		user.AvatarURL = fmt.Sprintf("data:%s;base64,%s", profile.Avatar.MIME, profile.Avatar.Data)
+	} else {
+		user.AvatarURL = ""
+	}
+	return State{Status: StatusOffline, User: user, Reason: reason}, true
 }
 
 func (s *Service) signedOutState() State {
@@ -178,7 +226,7 @@ func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	if err != nil {
 		return CurrentUser{}, err
 	}
-	return s.adopt(session)
+	return s.adopt(ctx, session)
 }
 
 func (s *Service) Login(input LoginInput) (CurrentUser, error) {
@@ -196,12 +244,15 @@ func (s *Service) Login(input LoginInput) (CurrentUser, error) {
 	if err != nil {
 		return CurrentUser{}, err
 	}
-	return s.adopt(session)
+	return s.adopt(ctx, session)
 }
 
-func (s *Service) adopt(session Session) (CurrentUser, error) {
+func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, error) {
 	saveErr := s.store.Save(Credential{Token: session.Token, Username: session.User.Username})
 	if saveErr == nil {
+		if err := s.rememberProfile(ctx, session.User); err != nil {
+			return CurrentUser{}, err
+		}
 		return session.User, nil
 	}
 
@@ -234,20 +285,23 @@ func (s *Service) Logout() error {
 	var revokeErr error
 	if cred.Token != "" {
 		revokeErr = s.revoke(cred.Token)
-	}
-
-	if err := s.store.Delete(); err != nil {
-		return fmt.Errorf("delete stored credential: %w", err)
-	}
-
-	if revokeErr != nil {
 		var apiErr *Error
 		if errors.As(revokeErr, &apiErr) && apiErr.Code == CodeUnauthenticated {
-			return nil
+			revokeErr = nil
 		}
-		return revokeErr
 	}
-	return nil
+
+	deleteErr := s.store.Delete()
+	if deleteErr != nil {
+		deleteErr = fmt.Errorf("delete stored credential: %w", deleteErr)
+	}
+
+	forgetErr := s.forgetProfile()
+	if forgetErr != nil {
+		forgetErr = fmt.Errorf("delete cached profile: %w", forgetErr)
+	}
+
+	return errors.Join(revokeErr, deleteErr, forgetErr)
 }
 
 func (s *Service) GetCurrentUser() (CurrentUser, error) {
@@ -265,7 +319,14 @@ func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	defer cancel()
-	return s.client.UpdateProfile(ctx, patch)
+	user, err := s.client.UpdateProfile(ctx, patch)
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	if err := s.rememberProfile(ctx, user); err != nil {
+		return CurrentUser{}, err
+	}
+	return user, nil
 }
 
 func (s *Service) PickAvatar() (AvatarImage, error) {
@@ -296,7 +357,14 @@ func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	defer cancel()
-	return s.client.UploadAvatar(ctx, data)
+	user, err := s.client.UploadAvatar(ctx, data)
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	if err := s.rememberProfile(ctx, user); err != nil {
+		return CurrentUser{}, err
+	}
+	return user, nil
 }
 
 func (s *Service) RemoveAvatar() (CurrentUser, error) {
@@ -305,5 +373,12 @@ func (s *Service) RemoveAvatar() (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	defer cancel()
-	return s.client.RemoveAvatar(ctx)
+	user, err := s.client.RemoveAvatar(ctx)
+	if err != nil {
+		return CurrentUser{}, err
+	}
+	if err := s.rememberProfile(ctx, user); err != nil {
+		return CurrentUser{}, err
+	}
+	return user, nil
 }

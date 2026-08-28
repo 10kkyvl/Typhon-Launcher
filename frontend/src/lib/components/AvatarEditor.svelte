@@ -13,7 +13,7 @@
   } from '../stores/user';
   import { toast } from '../stores/toasts';
 
-  let { size = 'md' }: { size?: 'md' | 'sm' } = $props();
+  let { size = 'md', disabled = false }: { size?: 'md' | 'sm'; disabled?: boolean } = $props();
 
   let cropOpen = $state(false);
   let cropSrc = $state('');
@@ -58,10 +58,10 @@
 
 <div class="avatar-editor">
   <div class="buttons">
-    <Button {size} disabled={busy} onclick={pick}>
+    <Button {size} disabled={busy || disabled} onclick={pick}>
       {$pickingAvatar ? 'Выбор файла…' : 'Сменить аватар'}
     </Button>
-    <Button {size} variant="danger" disabled={busy || !$currentUser?.avatarUrl} onclick={remove}>
+    <Button {size} variant="danger" disabled={busy || disabled || !$currentUser?.avatarUrl} onclick={remove}>
       {$removingAvatar ? 'Удаление…' : 'Удалить аватар'}
     </Button>
   </div>

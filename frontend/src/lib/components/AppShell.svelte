@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { route } from '../stores/router';
+  import { isOffline } from '../stores/user';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
+  import OfflineBanner from './OfflineBanner.svelte';
   import Sidebar from './Sidebar.svelte';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
@@ -14,6 +16,9 @@
   <Sidebar />
   <div class="main">
     <Topbar />
+    {#if $isOffline}
+      <OfflineBanner />
+    {/if}
     {#key $route}
       <main class="content" use:scrollmemory>
         <div class="page">

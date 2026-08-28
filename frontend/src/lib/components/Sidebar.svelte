@@ -2,7 +2,7 @@
   import { Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
-  import { authState, currentUser, leaveGuest, signOut } from '../stores/user';
+  import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { toast } from '../stores/toasts';
   import DropdownMenu from './DropdownMenu.svelte';
 
@@ -116,7 +116,7 @@
           <span class="profile-text">
             {#if $currentUser}
               <span class="profile-name">{$currentUser.displayName}</span>
-              <span class="profile-status">@{$currentUser.username}</span>
+              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title="Нет связи с сервером аккаунтов, показан кэш профиля"> · офлайн</span>{/if}</span>
             {:else if isGuest}
               <span class="profile-name">Гость</span>
               <span class="profile-status">Без аккаунта</span>
@@ -324,6 +324,10 @@
     font-size: 1.2rem;
     color: var(--text-3);
     line-height: 1.3;
+  }
+
+  .offline-mark {
+    color: var(--warning);
   }
 
   @media (max-width: 1140px) {
