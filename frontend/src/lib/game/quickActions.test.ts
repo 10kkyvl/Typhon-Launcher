@@ -6,6 +6,8 @@ const state = (over: Partial<QuickActionState> = {}): QuickActionState => ({
   running: false,
   hasExecutable: true,
   hasShortcut: false,
+  lanEnabled: false,
+  lanShared: false,
   ...over,
 });
 
@@ -19,6 +21,7 @@ describe('quickActions', () => {
       'folder',
       'saves',
       'verify',
+      'move',
       'shortcut-create',
       'uninstall',
       'remove',
@@ -49,5 +52,24 @@ describe('quickActions', () => {
       .filter((item) => item.danger)
       .map((item) => item.id);
     expect(danger).toEqual(['uninstall', 'remove']);
+  });
+
+  it('hides the move action while the game is running', () => {
+    expect(ids({ running: true })).not.toContain('move');
+  });
+
+  it('hides local network sharing until the setting is on', () => {
+    expect(ids()).not.toContain('lan-share');
+    expect(ids({ lanEnabled: true })).toContain('lan-share');
+  });
+
+  it('offers to stop sharing a game that is already shared', () => {
+    const shown = ids({ lanEnabled: true, lanShared: true });
+    expect(shown).toContain('lan-unshare');
+    expect(shown).not.toContain('lan-share');
+  });
+
+  it('offers nothing but removal for a game that is not installed', () => {
+    expect(ids({ installed: false, lanEnabled: true })).toEqual(['remove']);
   });
 });

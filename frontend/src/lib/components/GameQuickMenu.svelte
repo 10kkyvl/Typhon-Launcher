@@ -15,6 +15,9 @@
     type SavesResult,
   } from '../services/library';
   import { openFolder, selectFolder } from '../services/settings';
+  import { openMoveGame } from '../game/actions/move';
+  import { share as shareLan, shares, unshare as unshareLan } from '../stores/lan';
+  import { settings } from '../stores/settings';
   import { closeGameMenu, gameMenu } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
@@ -32,6 +35,8 @@
           running: $runningGames.has(game.id),
           hasExecutable: Boolean(game.executable),
           hasShortcut: Boolean(game.shortcutPath),
+          lanEnabled: Boolean($settings?.lanSharing),
+          lanShared: $shares.some((s) => s.gameId === game.id),
         })
       : [],
   );
@@ -56,6 +61,14 @@
       case 'verify':
         navigate('game', { id: current.id });
         return verify(current.id);
+      case 'move':
+        openMoveGame(current.id);
+        return;
+      case 'lan-share':
+        shareLan(current.id);
+        return;
+      case 'lan-unshare':
+        return guard(() => unshareLan(current.id));
       case 'shortcut-create':
         return guard(() => createShortcut(current.id));
       case 'shortcut-remove':

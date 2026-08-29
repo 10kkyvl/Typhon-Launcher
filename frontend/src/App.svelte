@@ -1,14 +1,18 @@
 <script lang="ts">
   import AppShell from './lib/components/AppShell.svelte';
+  import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
+  import { initHistory } from './lib/stores/history';
   import { initInstalls } from './lib/stores/install';
+  import { initLan } from './lib/stores/lan';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
+  import { initMoves } from './lib/stores/relocate';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { initSettings, settings } from './lib/stores/settings';
   import { initSources } from './lib/stores/sources';
@@ -20,7 +24,9 @@
   import Catalog from './routes/catalog/Catalog.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
+  import History from './routes/history/History.svelte';
   import Installed from './routes/installed/Installed.svelte';
+  import Lan from './routes/lan/Lan.svelte';
   import Library from './routes/library/Library.svelte';
   import Profile from './routes/profile/Profile.svelte';
   import Settings from './routes/settings/Settings.svelte';
@@ -30,12 +36,15 @@
   initInstalls();
   initSettings().then(refreshStorage);
   initLibrary();
+  initMoves();
   initSources();
   initUpdates();
   initSelfUpdate();
   initMetadata();
   initDiscovery();
   initAuth();
+  initHistory();
+  initLan();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -67,6 +76,10 @@
       <Sources />
     {:else if $route.name === 'installed'}
       <Installed />
+    {:else if $route.name === 'history'}
+      <History />
+    {:else if $route.name === 'lan'}
+      <Lan />
     {:else if $route.name === 'profile'}
       <Profile />
     {:else if $route.name === 'settings'}
@@ -75,6 +88,7 @@
   </AppShell>
   <UpdateOverlay />
   <ReleaseNotesModal />
+  <MoveGameModal />
 {:else}
   <AuthScreen />
 {/if}

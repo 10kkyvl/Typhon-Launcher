@@ -4,6 +4,9 @@ export type QuickAction =
   | 'folder'
   | 'saves'
   | 'verify'
+  | 'move'
+  | 'lan-share'
+  | 'lan-unshare'
   | 'shortcut-create'
   | 'shortcut-remove'
   | 'uninstall'
@@ -21,6 +24,8 @@ export interface QuickActionState {
   running: boolean;
   hasExecutable: boolean;
   hasShortcut: boolean;
+  lanEnabled: boolean;
+  lanShared: boolean;
 }
 
 export function quickActions(state: QuickActionState): QuickActionItem[] {
@@ -36,6 +41,16 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   items.push({ id: 'folder', label: 'Открыть папку' });
   items.push({ id: 'saves', label: 'Открыть сохранения' });
   items.push({ id: 'verify', label: 'Проверить файлы' });
+  if (!state.running) {
+    items.push({ id: 'move', label: 'Переместить на другой диск' });
+  }
+  if (state.lanEnabled) {
+    items.push(
+      state.lanShared
+        ? { id: 'lan-unshare', label: 'Не раздавать в локальной сети' }
+        : { id: 'lan-share', label: 'Раздать в локальной сети' },
+    );
+  }
   items.push(
     state.hasShortcut
       ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }

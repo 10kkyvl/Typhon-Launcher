@@ -15,6 +15,9 @@
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
+  import AppearanceTab from './AppearanceTab.svelte';
+  import LanSettingsRow from './LanSettingsRow.svelte';
+  import LibraryLocationRow from './LibraryLocationRow.svelte';
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
@@ -40,6 +43,7 @@
   const tabs = [
     { id: 'general', label: 'Общие' },
     { id: 'downloads', label: 'Загрузки' },
+    { id: 'appearance', label: 'Оформление' },
     { id: 'about', label: 'О программе' },
   ];
 
@@ -315,6 +319,14 @@
               Игры, загрузки и скриншоты хранятся внутри папки библиотеки. Пока она не выбрана, скачивать нечего.
             </span>
           {/if}
+          <LibraryLocationRow />
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Экспериментальное</h3>
+        <div class="rows">
+          <LanSettingsRow />
         </div>
       </section>
     </div>
@@ -323,21 +335,6 @@
       <section class="group">
         <h3>Интерфейс</h3>
         <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Тема</span>
-              <span class="row-sub">Выберите внешний вид приложения</span>
-            </div>
-            <Select
-              value={current?.theme ?? 'dark'}
-              width="22rem"
-              options={[
-                { id: 'dark', label: 'Тёмная' },
-                { id: 'system', label: 'Как в системе' },
-              ]}
-              onchange={(id) => set({ theme: id })}
-            />
-          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">Размер интерфейса</span>
@@ -717,6 +714,8 @@
       </div>
     </section>
   </div>
+{:else if tab === 'appearance'}
+  <AppearanceTab />
 {:else if tab === 'about'}
   <div class="single-column">
     <section class="group about">

@@ -20,18 +20,22 @@ import (
 	"typhon/internal/discovery"
 	"typhon/internal/download"
 	"typhon/internal/heartbeat"
+	"typhon/internal/history"
 	"typhon/internal/install"
+	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/presence"
 	"typhon/internal/redact"
+	"typhon/internal/relocate"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
+	"typhon/internal/theme"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
@@ -92,6 +96,22 @@ func init() {
 	application.RegisterEvent[updates.VerifyState]("repair:started")
 	application.RegisterEvent[updates.VerifyState]("repair:updated")
 	application.RegisterEvent[updates.VerifyState]("repair:completed")
+	application.RegisterEvent[relocate.Job]("move:started")
+	application.RegisterEvent[relocate.Job]("move:progress")
+	application.RegisterEvent[relocate.Job]("move:completed")
+	application.RegisterEvent[relocate.Job]("move:failed")
+	application.RegisterEvent[relocate.Job]("move:cancelled")
+	application.RegisterEvent[[]lan.Peer]("lan:peers")
+	application.RegisterEvent[[]lan.Share]("lan:shares")
+	application.RegisterEvent[lan.HashProgress]("lan:hashing")
+	application.RegisterEvent[lan.Transfer]("lan:transfer")
+	application.RegisterEvent[lan.Stats]("lan:stats")
+	application.RegisterEvent[history.Record]("history:recorded")
+	application.RegisterEvent[[]history.Record]("history:updated")
+	application.RegisterEvent[history.Status]("history:degraded")
+	application.RegisterEvent[theme.Theme]("theme:updated")
+	application.RegisterEvent[[]theme.Theme]("theme:list")
+	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 }
@@ -183,6 +203,14 @@ func main() {
 	if err != nil {
 		fatal("start account service", err)
 	}
+	historyService, err := history.NewService()
+	if err != nil {
+		fatal("start history service", err)
+	}
+	themeService, err := theme.NewService()
+	if err != nil {
+		fatal("start theme service", err)
+	}
 	libraryService, err := library.NewService()
 	if err != nil {
 		fatal("start library service", err)
@@ -233,6 +261,14 @@ func main() {
 	if err != nil {
 		fatal("start updates service", err)
 	}
+	relocateService, err := relocate.NewService(settingsService, libraryService, downloadManager, installService, updateService)
+	if err != nil {
+		fatal("start relocate service", err)
+	}
+	lanService, err := lan.NewService(settingsService, libraryService)
+	if err != nil {
+		fatal("start lan service", err)
+	}
 	selfupdateService, err := selfupdate.NewService()
 	if err != nil {
 		fatal("start selfupdate service", err)
@@ -257,6 +293,12 @@ func main() {
 	}); err != nil {
 		fatal("sync library titles", err)
 	}
+	libraryService.SetHistoryRecorder(historyService.Record)
+	downloadManager.SetHistoryRecorder(historyService.Record)
+	installService.SetHistoryRecorder(historyService.Record)
+	updateService.SetHistoryRecorder(historyService.Record)
+	lanService.SetHistoryRecorder(historyService.Record)
+	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
@@ -334,6 +376,10 @@ func main() {
 		application.NewService(discoveryService),
 		application.NewService(discordService),
 		application.NewService(legalService),
+		application.NewService(historyService),
+		application.NewService(themeService),
+		application.NewService(lanService),
+		application.NewService(relocateService),
 		// Registered whether or not telemetry ever started: the window that
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),

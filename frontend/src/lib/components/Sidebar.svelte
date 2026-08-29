@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings } from '@lucide/svelte';
+  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
+  import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import DropdownMenu from './DropdownMenu.svelte';
 
@@ -17,8 +18,11 @@
     [
       { name: 'downloads', label: 'Загрузки', icon: Download },
       { name: 'sources', label: 'Источники', icon: Database },
+      { name: 'history', label: 'История', icon: History },
     ],
   ];
+
+  const lanItem: NavItem = { name: 'lan', label: 'Локальная сеть', icon: Wifi };
 
   const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
 
@@ -91,6 +95,11 @@
         {/each}
       </div>
     {/each}
+    {#if $settings?.lanSharing}
+      <div class="group">
+        {@render navButton(lanItem)}
+      </div>
+    {/if}
   </nav>
 
   <div class="bottom">
