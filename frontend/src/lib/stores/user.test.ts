@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 
 vi.mock('../services/account', () => {
@@ -422,5 +422,151 @@ describe('deleteAvatar', () => {
     await userStore.deleteAvatar();
 
     expect(get(userStore.currentUser)?.avatarUrl).toBe('');
+  });
+});
+
+describe('offline mode and reconnect', () => {
+  class FakeWindow {
+    listeners = new Map<string, Array<(event: unknown) => void>>();
+
+    addEventListener(type: string, handler: (event: unknown) => void) {
+      const list = this.listeners.get(type) ?? [];
+      list.push(handler);
+      this.listeners.set(type, list);
+    }
+
+    removeEventListener(type: string, handler: (event: unknown) => void) {
+      const next = (this.listeners.get(type) ?? []).filter((item) => item !== handler);
+      if (next.length) this.listeners.set(type, next);
+      else this.listeners.delete(type);
+    }
+
+    dispatchEvent(type: string) {
+      for (const handler of this.listeners.get(type) ?? []) handler({ type });
+      return true;
+    }
+
+    listenerCount(type: string) {
+      return (this.listeners.get(type) ?? []).length;
+    }
+  }
+
+  let win: FakeWindow;
+
+  beforeEach(() => {
+    win = new FakeWindow();
+    vi.stubGlobal('window', win);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function offlineState() {
+    return { status: 'offline', user: makeUser({ avatarUrl: 'data:image/webp;base64,AAAA' }), reason: 'network_error' };
+  }
+
+  it('enters offline mode with the cached profile when the server cannot be reached', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue(offlineState() as never);
+
+    await userStore.initAuth();
+
+    expect(get(userStore.authState)).toBe('offline');
+    expect(get(userStore.isOffline)).toBe(true);
+    expect(get(userStore.currentUser)?.username).toBe('egor');
+    expect(get(userStore.currentUser)?.avatarUrl).toBe('data:image/webp;base64,AAAA');
+    expect(get(userStore.authReason)).toBe('network_error');
+    expect(win.listenerCount('online')).toBe(1);
+  });
+
+  it('retries bootstrap once the first backoff delay elapses while still offline', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue(offlineState() as never);
+
+    await userStore.initAuth();
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(14999);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops retrying once a retry restores the authenticated session', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession)
+      .mockResolvedValueOnce(offlineState() as never)
+      .mockResolvedValue({ status: 'authenticated', user: makeUser(), reason: '' } as never);
+
+    await userStore.initAuth();
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(get(userStore.authState)).toBe('authenticated');
+    expect(get(userStore.authReason)).toBe('');
+    expect(win.listenerCount('online')).toBe(0);
+
+    const settled = vi.mocked(accountMock.bootstrapSession).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(settled);
+  });
+
+  it('stops retrying and clears the cached user once the server rejects the credential', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession)
+      .mockResolvedValueOnce(offlineState() as never)
+      .mockResolvedValue({ status: 'unauthenticated', user: emptyUser(), reason: '' } as never);
+
+    await userStore.initAuth();
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+    expect(win.listenerCount('online')).toBe(0);
+
+    const settled = vi.mocked(accountMock.bootstrapSession).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(settled);
+  });
+
+  it('retries immediately when the system reports the network is back', async () => {
+    const { accountMock, userStore } = await loadModules();
+    vi.mocked(accountMock.bootstrapSession).mockResolvedValue(offlineState() as never);
+
+    await userStore.initAuth();
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(1);
+
+    win.dispatchEvent('online');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a single pending retry when the network event races the backoff timer', async () => {
+    const { accountMock, userStore } = await loadModules();
+    let release!: (value: unknown) => void;
+    vi.mocked(accountMock.bootstrapSession)
+      .mockResolvedValueOnce(offlineState() as never)
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          release = r as (value: unknown) => void;
+        }) as never,
+      )
+      .mockResolvedValue(offlineState() as never);
+
+    await userStore.initAuth();
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(2);
+
+    win.dispatchEvent('online');
+    release(offlineState());
+    await vi.advanceTimersByTimeAsync(0);
+
+    const settled = vi.mocked(accountMock.bootstrapSession).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(settled + 1);
   });
 });

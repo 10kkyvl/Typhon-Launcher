@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/history"
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/usagestats"
@@ -613,6 +614,22 @@ func (s *Service) complete(id string) error {
 		s.applyCleanup(cfg, snap.DownloadID)
 	}
 	s.notifyFinished(snap)
+	if s.historyRecorder != nil {
+		if err := s.historyRecorder(history.Record{
+			Kind:      history.KindInstalled,
+			GameID:    game.ID,
+			Title:     snap.Name,
+			ToVersion: version,
+			RefID:     id,
+		}); err != nil {
+			// complete() runs at the end of a background install job (or of
+			// ConfirmExecutable, which already succeeded) with no caller left
+			// to fail an install that just finished; Record already flipped
+			// history into Degraded and emitted history:degraded, so the
+			// user learns about the journal problem from the banner.
+			slog.Error("record install history", "id", id, "error", err)
+		}
+	}
 	return nil
 }
 

@@ -24,7 +24,11 @@ const (
 	defaultSearchCap = 20
 )
 
-var errNotFound = errors.New("игра не найдена")
+var (
+	errNotFound          = errors.New("игра не найдена")
+	errEmptyIGDBID       = errors.New("не указан IGDB id")
+	errEmptyCatalogTitle = errors.New("укажите название игры")
+)
 
 type Service struct {
 	mu            sync.Mutex
@@ -389,6 +393,63 @@ func (s *Service) IGDBIDOf(id string) string {
 		return ""
 	}
 	return game.ExternalIDs.IGDB
+}
+
+//wails:ignore
+func (s *Service) GameByIGDB(igdbID string) (Game, bool) {
+	igdbID = strings.TrimSpace(igdbID)
+	if igdbID == "" {
+		return Game{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.gameByIGDBLocked(igdbID)
+}
+
+// gameByIGDBLocked assumes s.mu is already held; sync.Mutex is not reentrant,
+// so it must not call GameByIGDB itself.
+func (s *Service) gameByIGDBLocked(igdbID string) (Game, bool) {
+	pos, ok := s.idx.byExternal["igdb:"+strings.ToLower(igdbID)]
+	if !ok {
+		return Game{}, false
+	}
+	return s.idx.entries[pos].game, true
+}
+
+//wails:ignore
+func (s *Service) EnsureByIGDB(igdbID, title string) (Game, error) {
+	igdbID = strings.TrimSpace(igdbID)
+	title = strings.TrimSpace(title)
+	if igdbID == "" {
+		return Game{}, errEmptyIGDBID
+	}
+	if title == "" {
+		return Game{}, errEmptyCatalogTitle
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if game, ok := s.gameByIGDBLocked(igdbID); ok {
+		return game, nil
+	}
+
+	game := Game{
+		ID:          NewID(),
+		Title:       title,
+		SortTitle:   sortTitle(title),
+		ExternalIDs: ExternalIDs{IGDB: igdbID},
+		Provisional: true,
+		CreatedAt:   time.Now(),
+	}
+	s.games = append(s.games, game)
+	s.rebuildLocked()
+	if err := s.persistGamesLocked(); err != nil {
+		s.games = s.games[:len(s.games)-1]
+		s.rebuildLocked()
+		return Game{}, fmt.Errorf("save catalog: %w", err)
+	}
+	return game, nil
 }
 
 //wails:ignore

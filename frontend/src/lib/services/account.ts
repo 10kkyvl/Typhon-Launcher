@@ -32,7 +32,7 @@ export interface LoginInput {
   password: string;
 }
 
-export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest';
+export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest' | 'offline';
 
 export interface BootstrapState {
   status: AuthStatus;

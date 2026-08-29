@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,7 +45,7 @@ func TestCopyDirCopiesTree(t *testing.T) {
 	if last.BytesTotal == 0 || last.BytesDone != last.BytesTotal {
 		t.Fatalf("final progress = %+v", last)
 	}
-	if err := verifyCopy(src, dst); err != nil {
+	if err := verifyCopy(context.Background(), src, dst); err != nil {
 		t.Fatalf("verifyCopy: %v", err)
 	}
 }
@@ -158,7 +159,7 @@ func TestMoveDirCopyFallback(t *testing.T) {
 	if err := CopyDir(context.Background(), src, dst, nil); err != nil {
 		t.Fatalf("CopyDir: %v", err)
 	}
-	if err := verifyCopy(src, dst); err != nil {
+	if err := verifyCopy(context.Background(), src, dst); err != nil {
 		t.Fatalf("verifyCopy: %v", err)
 	}
 	if err := os.RemoveAll(src); err != nil {
@@ -169,13 +170,24 @@ func TestMoveDirCopyFallback(t *testing.T) {
 	}
 }
 
+func TestVerifyCopyDetectsSameSizeDifferentContent(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	mkText(t, filepath.Join(dst, "a.txt"), "gamma")
+	if err := verifyCopy(context.Background(), src, dst); err == nil {
+		t.Fatal("expected verifyCopy to detect same-size, different-content corruption")
+	}
+}
+
 func TestVerifyCopyDetectsMismatch(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	dst := filepath.Join(tmp, "dst")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	mkText(t, filepath.Join(dst, "a.txt"), "al")
-	if err := verifyCopy(src, dst); !errors.Is(err, errCopyVerify) {
+	if err := verifyCopy(context.Background(), src, dst); !errors.Is(err, errCopyVerify) {
 		t.Fatalf("err = %v, want errCopyVerify", err)
 	}
 
@@ -183,7 +195,7 @@ func TestVerifyCopyDetectsMismatch(t *testing.T) {
 	if err := os.MkdirAll(missing, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := verifyCopy(src, missing); err == nil {
+	if err := verifyCopy(context.Background(), src, missing); err == nil {
 		t.Fatal("expected error for missing file")
 	}
 }
@@ -275,6 +287,228 @@ func TestCopyStreamPropagatesWriteError(t *testing.T) {
 type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("boom") }
+
+// mkSymlink creates a symlink or, on a Windows machine without Developer
+// Mode or elevation, skips the test: the fixture itself needs the same
+// privilege the code under test is expected to reject.
+func mkSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", link, err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("cannot create symlink fixture (no Developer Mode/elevation): %v", err)
+		}
+		t.Fatalf("symlink: %v", err)
+	}
+}
+
+func TestCopyDirRecreatesSymlink(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "real.txt"), "alpha")
+	mkSymlink(t, filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt"))
+	dst := filepath.Join(tmp, "dst")
+
+	err := CopyDir(context.Background(), src, dst, nil)
+	if errors.Is(err, errSymlinkPrivilege) {
+		t.Skipf("symlink creation requires a privilege this account lacks: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("CopyDir: %v", err)
+	}
+	info, lerr := os.Lstat(filepath.Join(dst, "link.txt"))
+	if lerr != nil {
+		t.Fatalf("lstat copied link: %v", lerr)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link.txt was not recreated as a symlink, mode = %v", info.Mode())
+	}
+	got, rerr := os.Readlink(filepath.Join(dst, "link.txt"))
+	if rerr != nil {
+		t.Fatalf("readlink: %v", rerr)
+	}
+	if got != filepath.Join(src, "real.txt") {
+		t.Fatalf("link target = %q, want %q", got, filepath.Join(src, "real.txt"))
+	}
+}
+
+func TestMergeDirRecreatesSymlinkOverExisting(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "real.txt"), "alpha")
+	mkSymlink(t, filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt"))
+	dst := filepath.Join(tmp, "dst")
+	mkText(t, filepath.Join(dst, "link.txt"), "stale regular file")
+
+	err := MergeDir(context.Background(), src, dst, nil)
+	if errors.Is(err, errSymlinkPrivilege) {
+		t.Skipf("symlink creation requires a privilege this account lacks: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("MergeDir: %v", err)
+	}
+	info, lerr := os.Lstat(filepath.Join(dst, "link.txt"))
+	if lerr != nil {
+		t.Fatalf("lstat merged link: %v", lerr)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link.txt was not replaced by a symlink, mode = %v", info.Mode())
+	}
+}
+
+// mkUnixSocket lays down a bound Unix-domain socket file: a directory entry
+// that is neither a regular file nor a symlink, without needing cgo or a
+// non-stdlib dependency.
+func mkUnixSocket(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", path, err)
+	}
+	l, err := net.Listen("unix", path)
+	if err != nil {
+		t.Skipf("unix sockets unavailable on this OS/build: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := l.Close(); err != nil {
+			t.Errorf("close socket listener: %v", err)
+		}
+	})
+}
+
+func TestCopyDirRejectsNonRegularNonSymlink(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	mkUnixSocket(t, filepath.Join(src, "weird.sock"))
+	dst := filepath.Join(tmp, "dst")
+
+	if err := CopyDir(context.Background(), src, dst, nil); !errors.Is(err, errNonRegular) {
+		t.Fatalf("err = %v, want errNonRegular", err)
+	}
+}
+
+func TestMergeDirRejectsNonRegularNonSymlink(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	mkUnixSocket(t, filepath.Join(src, "weird.sock"))
+	dst := filepath.Join(tmp, "dst")
+
+	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNonRegular) {
+		t.Fatalf("err = %v, want errNonRegular", err)
+	}
+}
+
+func TestCopyDirRejectsDestinationInsideSource(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	dst := filepath.Join(src, "nested", "dst")
+
+	if err := CopyDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+		t.Fatalf("err = %v, want errNestedPaths", err)
+	}
+	if exists(dst) {
+		t.Fatal("nested destination must not be created")
+	}
+}
+
+func TestCopyDirRejectsSourceInsideDestination(t *testing.T) {
+	tmp := t.TempDir()
+	dst := filepath.Join(tmp, "dst")
+	src := filepath.Join(dst, "sub")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+
+	if err := CopyDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+		t.Fatalf("err = %v, want errNestedPaths", err)
+	}
+}
+
+func TestMergeDirRejectsNestedPaths(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	dst := filepath.Join(src, "nested", "dst")
+
+	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+		t.Fatalf("err = %v, want errNestedPaths", err)
+	}
+}
+
+func TestMoveDirRejectsNestedPaths(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	dst := filepath.Join(src, "nested", "dst")
+
+	if err := MoveDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+		t.Fatalf("err = %v, want errNestedPaths", err)
+	}
+	if !exists(filepath.Join(src, "a.txt")) {
+		t.Fatal("source must survive a rejected nested move")
+	}
+}
+
+func TestCopyDirMissingSource(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "does-not-exist")
+	dst := filepath.Join(tmp, "dst")
+	if err := CopyDir(context.Background(), src, dst, nil); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want ErrNotExist", err)
+	}
+}
+
+func TestCopyDirEmptySource(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	dst := filepath.Join(tmp, "dst")
+	if err := CopyDir(context.Background(), src, dst, nil); err != nil {
+		t.Fatalf("CopyDir: %v", err)
+	}
+	info, err := os.Stat(dst)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("dst not created as a directory: %v", err)
+	}
+}
+
+func TestMoveDirCancelledContextLeavesSourceIntact(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	mkText(t, filepath.Join(src, "a.txt"), "alpha")
+	dst := filepath.Join(tmp, "dst")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := MoveDir(ctx, src, dst, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if !exists(filepath.Join(src, "a.txt")) {
+		t.Fatal("source removed despite a cancelled context")
+	}
+}
+
+func TestCopyFileProducesReadableFileAfterSync(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src.bin")
+	mkFile(t, src, 512*1024)
+	dst := filepath.Join(tmp, "dst.bin")
+	rep := newReporter(nil, 0)
+	if err := copyFile(context.Background(), src, dst, 0o644, rep, make([]byte, copyBufferSize)); err != nil {
+		t.Fatalf("copyFile: %v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read copied file: %v", err)
+	}
+	if len(got) != 512*1024 {
+		t.Fatalf("copied size = %d, want %d", len(got), 512*1024)
+	}
+}
 
 func mustDirSize(t *testing.T, dir string) int64 {
 	t.Helper()

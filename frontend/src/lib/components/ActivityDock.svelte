@@ -1,8 +1,12 @@
 <script lang="ts">
   import { ChevronUp, Download, Pause, Play, Wrench } from '@lucide/svelte';
-  import { activity, activitySummary, type ActivityItem } from '../stores/activity';
+  import { stageLabel, movePercent } from '../relocate/moveText';
+  import type { MoveJob } from '../services/relocate';
+  import { activity, type ActivityItem } from '../stores/activity';
   import { pause, resume } from '../stores/downloads';
+  import { activeMove } from '../stores/relocate';
   import { navigate } from '../stores/router';
+  import { bytesSize, truncateMiddle } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -15,8 +19,38 @@
   let dismissed = $state(false);
   let root = $state<HTMLElement | undefined>(undefined);
 
-  const items = $derived($activity);
-  const summary = $derived($activitySummary);
+  function moveDetail(job: MoveJob) {
+    if (job.currentFile) return truncateMiddle(job.currentFile, 44);
+    if (job.totalBytes > 0) return `${bytesSize(job.copiedBytes)} / ${bytesSize(job.totalBytes)}`;
+    return '';
+  }
+
+  function fromMove(job: MoveJob): ActivityItem {
+    return {
+      key: `move:${job.id}`,
+      kind: 'install',
+      downloadId: job.id,
+      name: job.title || 'Библиотека',
+      status: stageLabel(job.stage),
+      detail: moveDetail(job),
+      progress: movePercent(job) / 100,
+      tone: 'accent',
+      attention: false,
+      pausable: false,
+      resumable: false,
+    };
+  }
+
+  const items = $derived(
+    [...$activity, ...($activeMove ? [fromMove($activeMove)] : [])].sort(
+      (a, b) => Number(b.attention) - Number(a.attention),
+    ),
+  );
+  const summary = $derived({
+    primary: items[0] ?? null,
+    progress: items.length === 0 ? 0 : items.reduce((sum, i) => sum + i.progress, 0) / items.length,
+    attention: items.some((i) => i.attention),
+  });
   const expanded = $derived(items.length > 0 && (pinned || ((hovered || focused) && !dismissed)));
   const headline = $derived(summary.primary ? `${summary.primary.status} · ${summary.primary.name}` : '');
 
@@ -45,10 +79,19 @@
     if (!hovered && !focused) dismissed = false;
   }
 
-  function open() {
+  function openDownloads() {
     pinned = false;
     dismissed = false;
     navigate('downloads');
+  }
+
+  function open(item: ActivityItem) {
+    pinned = false;
+    dismissed = false;
+    // Переносы не показываются на странице загрузок: их прогресс живёт в
+    // настройках библиотеки, и отправлять туда клик — единственный переход,
+    // который не заканчивается пустой страницей.
+    navigate(item.key.startsWith('move:') ? 'settings' : 'downloads');
   }
 
   function onFocusOut(event: FocusEvent) {
@@ -88,7 +131,7 @@
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">Активность</span>
-          <button class="panel-link" onclick={open}>Все загрузки</button>
+          <button class="panel-link" onclick={openDownloads}>Все загрузки</button>
         </div>
         <div class="rows">
           {#each items as item (item.key)}
@@ -96,11 +139,11 @@
               class="row"
               role="button"
               tabindex="0"
-              onclick={open}
+              onclick={() => open(item)}
               onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  open();
+                  open(item);
                 }
               }}
             >

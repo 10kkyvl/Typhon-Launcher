@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Database, Download, Gamepad2, LayoutGrid, MonitorDown, Settings } from '@lucide/svelte';
+  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
-  import { authState, currentUser, leaveGuest, signOut } from '../stores/user';
+  import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
+  import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import DropdownMenu from './DropdownMenu.svelte';
 
@@ -17,8 +18,11 @@
     [
       { name: 'downloads', label: 'Загрузки', icon: Download },
       { name: 'sources', label: 'Источники', icon: Database },
+      { name: 'history', label: 'История', icon: History },
     ],
   ];
+
+  const lanItem: NavItem = { name: 'lan', label: 'Локальная сеть', icon: Wifi };
 
   const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
 
@@ -91,6 +95,11 @@
         {/each}
       </div>
     {/each}
+    {#if $settings?.lanSharing}
+      <div class="group">
+        {@render navButton(lanItem)}
+      </div>
+    {/if}
   </nav>
 
   <div class="bottom">
@@ -116,7 +125,7 @@
           <span class="profile-text">
             {#if $currentUser}
               <span class="profile-name">{$currentUser.displayName}</span>
-              <span class="profile-status">@{$currentUser.username}</span>
+              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title="Нет связи с сервером аккаунтов, показан кэш профиля"> · офлайн</span>{/if}</span>
             {:else if isGuest}
               <span class="profile-name">Гость</span>
               <span class="profile-status">Без аккаунта</span>
@@ -324,6 +333,10 @@
     font-size: 1.2rem;
     color: var(--text-3);
     line-height: 1.3;
+  }
+
+  .offline-mark {
+    color: var(--warning);
   }
 
   @media (max-width: 1140px) {

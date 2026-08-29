@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -121,6 +122,46 @@ func (c *Client) UploadAvatar(ctx context.Context, data []byte) (CurrentUser, er
 
 func (c *Client) RemoveAvatar(ctx context.Context) (CurrentUser, error) {
 	return c.doUser(ctx, http.MethodDelete, APIPrefix+"/me/avatar", nil, "", c.httpClient)
+}
+
+func (c *Client) FetchAvatar(ctx context.Context, rawURL string) (AvatarImage, error) {
+	if rawURL == "" {
+		return AvatarImage{}, &Error{Code: CodeBadRequest, cause: errors.New("empty avatar url")}
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return AvatarImage{}, &Error{Code: CodeBadRequest, cause: fmt.Errorf("parse avatar url: %w", err)}
+	}
+	if err := checkURLScheme(parsed); err != nil {
+		return AvatarImage{}, &Error{Code: CodeBadRequest, cause: err}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return AvatarImage{}, fmt.Errorf("build avatar request: %w", err)
+	}
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		slog.Debug("fetch avatar failed", "url", rawURL, "error", err)
+		return AvatarImage{}, &Error{Code: CodeNetwork, cause: err}
+	}
+	defer closeBody(resp)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return AvatarImage{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("fetch avatar: unexpected status %d", resp.StatusCode)}
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAvatarSize+1))
+	if err != nil {
+		return AvatarImage{}, fmt.Errorf("read avatar body: %w", err)
+	}
+	if len(data) > maxAvatarSize {
+		return AvatarImage{}, &Error{Code: CodeAvatarTooLarge}
+	}
+	return avatarImage(data)
 }
 
 func (c *Client) doUser(

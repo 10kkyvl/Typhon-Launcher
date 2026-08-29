@@ -10,12 +10,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+
+	"typhon/internal/hashdir"
+	"typhon/internal/platform"
 )
 
+// errnoPrivilegeNotHeld is Windows ERROR_PRIVILEGE_NOT_HELD, the error
+// os.Symlink returns without Developer Mode or elevation. It is not the
+// generic access-denied code, so errors.Is(err, os.ErrPermission) misses it.
+const errnoPrivilegeNotHeld = syscall.Errno(1314)
+
 var (
-	errDestExists = errors.New("путь назначения уже существует")
-	errNotDir     = errors.New("источник не является папкой")
-	errCopyVerify = errors.New("копирование завершилось с ошибкой проверки")
+	errDestExists       = errors.New("путь назначения уже существует")
+	errNotDir           = errors.New("источник не является папкой")
+	errCopyVerify       = errors.New("копирование завершилось с ошибкой проверки")
+	errNonRegular       = errors.New("неподдерживаемый тип файла в источнике")
+	errSymlinkPrivilege = errors.New("нет прав на создание символических ссылок")
+	errNestedPaths      = errors.New("источник и назначение не должны быть вложены друг в друга")
 )
 
 func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
@@ -25,6 +37,9 @@ func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	}
 	if !info.IsDir() {
 		return errNotDir
+	}
+	if err := checkNotNested(src, dst); err != nil {
+		return err
 	}
 	if !destAvailable(dst) {
 		return errDestExists
@@ -57,8 +72,11 @@ func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return copySymlink(path, target)
+		}
 		if !d.Type().IsRegular() {
-			return nil
+			return fmt.Errorf("%w: %s", errNonRegular, rel)
 		}
 		entry, err := d.Info()
 		if err != nil {
@@ -82,6 +100,9 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 	if !info.IsDir() {
 		return errNotDir
 	}
+	if err := checkNotNested(src, dst); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
@@ -110,14 +131,20 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			if err := removeExisting(target); err != nil {
+				return err
+			}
+			return copySymlink(path, target)
+		}
 		if !d.Type().IsRegular() {
-			return nil
+			return fmt.Errorf("%w: %s", errNonRegular, rel)
 		}
 		entry, err := d.Info()
 		if err != nil {
 			return err
 		}
-		if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := removeExisting(target); err != nil {
 			return err
 		}
 		rep.setFile(rel)
@@ -130,6 +157,45 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 	return nil
 }
 
+// removeExisting clears the way for a fresh write in MergeDir; the caller
+// writes the replacement right after, so a missing target is not an error.
+func removeExisting(target string) error {
+	if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// copySymlink recreates a symlink instead of silently skipping it: skipping
+// followed by a source RemoveAll (MoveDir's fallback path) would otherwise
+// delete the link's only record.
+func copySymlink(src, dst string) error {
+	target, err := os.Readlink(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := removeExisting(dst); err != nil {
+		return err
+	}
+	if err := os.Symlink(target, dst); err != nil {
+		if runtime.GOOS == "windows" && (errors.Is(err, errnoPrivilegeNotHeld) || errors.Is(err, os.ErrPermission)) {
+			return fmt.Errorf("%w: %s: %w", errSymlinkPrivilege, dst, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func checkNotNested(src, dst string) error {
+	if platform.Inside(src, dst) || platform.Inside(dst, src) {
+		return fmt.Errorf("%w: %s, %s", errNestedPaths, src, dst)
+	}
+	return nil
+}
+
 func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
 	info, err := os.Stat(src)
 	if err != nil {
@@ -138,10 +204,16 @@ func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	if !info.IsDir() {
 		return errNotDir
 	}
+	if err := checkNotNested(src, dst); err != nil {
+		return err
+	}
 	if !destAvailable(dst) {
 		return errDestExists
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	renameErr := os.Rename(src, dst)
@@ -160,7 +232,7 @@ func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	if err := CopyDir(ctx, src, dst, onProgress); err != nil {
 		return err
 	}
-	if err := verifyCopy(src, dst); err != nil {
+	if err := verifyCopy(ctx, src, dst); err != nil {
 		return err
 	}
 	return os.RemoveAll(src)
@@ -180,38 +252,40 @@ func copyFile(ctx context.Context, src, dst string, mode fs.FileMode, rep *repor
 		return err
 	}
 	if err := copyStream(ctx, out, in, rep, buf); err != nil {
-		out.Close()
+		if cerr := out.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		if cerr := out.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
 		return err
 	}
 	return out.Close()
 }
 
-func verifyCopy(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !d.Type().IsRegular() {
-			return nil
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		want, err := d.Info()
-		if err != nil {
-			return err
-		}
-		got, err := os.Stat(filepath.Join(dst, rel))
-		if err != nil {
-			return err
-		}
-		if got.Size() != want.Size() {
-			slog.Error("copy size mismatch", "file", rel, "want", want.Size(), "got", got.Size())
-			return errCopyVerify
-		}
-		return nil
-	})
+// verifyCopy hashes both trees and compares content, not just size: two
+// files of equal length can still differ, and a size-only check would let
+// the caller delete the only good copy of the data.
+func verifyCopy(ctx context.Context, src, dst string) error {
+	m, err := hashdir.Build(ctx, src, nil)
+	if err != nil {
+		return err
+	}
+	result, err := hashdir.Verify(ctx, dst, m, nil)
+	if err != nil {
+		return err
+	}
+	if len(result.Issues) > 0 {
+		issue := result.Issues[0]
+		return fmt.Errorf("%w: %s: %s", errCopyVerify, issue.Path, issue.Kind)
+	}
+	if len(result.Extra) > 0 {
+		return fmt.Errorf("%w: unexpected extra file %s", errCopyVerify, result.Extra[0])
+	}
+	return nil
 }
 
 func DirSize(ctx context.Context, dir string) (int64, error) {

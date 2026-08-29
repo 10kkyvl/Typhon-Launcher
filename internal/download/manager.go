@@ -19,6 +19,7 @@ import (
 	// TORRENT_STORAGE_DEFAULT_FILE_IO: mmap file IO never releases mappings,
 	// which keeps files locked on Windows.
 	_ "typhon/internal/download/classicio"
+	"typhon/internal/history"
 	"typhon/internal/platform"
 	"typhon/internal/redact"
 	"typhon/internal/settings"
@@ -78,10 +79,11 @@ type Manager struct {
 	pending map[string]*pending
 	jobs    map[string]*jobState
 
-	client        *client
-	max           int
-	onCompleted   func(Download)
-	usageRecorder func(usagestats.Event)
+	client          *client
+	max             int
+	onCompleted     func(Download)
+	usageRecorder   func(usagestats.Event)
+	historyRecorder func(history.Record) error
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -1128,6 +1130,23 @@ func (m *Manager) completeLocked(d *Download) {
 	})
 	emit(eventCompleted, snapshot(d))
 	emit(eventUpdated, snapshot(d))
+	if m.historyRecorder != nil {
+		if err := m.historyRecorder(history.Record{
+			Kind:       history.KindDownloaded,
+			GameID:     d.Origin.GameID,
+			Title:      d.Name,
+			Bytes:      d.Total,
+			BytesKnown: true,
+			RefID:      d.ID,
+		}); err != nil {
+			// completeLocked runs at the end of a background job with no
+			// caller to return the error to; Record already flipped the
+			// journal into a degraded state and emitted history:degraded,
+			// so the user still learns about it, without failing a download
+			// that actually completed.
+			slog.Error("record download history", "download_id", d.ID, "error", err)
+		}
+	}
 	if m.onCompleted != nil {
 		notify, done := m.onCompleted, snapshot(d)
 		go notify(done)

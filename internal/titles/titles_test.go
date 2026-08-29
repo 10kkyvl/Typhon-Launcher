@@ -196,6 +196,28 @@ func TestParsedNormalizedMatchesNormalizeOfBase(t *testing.T) {
 	}
 }
 
+func TestTitlesDLCCount(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want int
+	}{
+		{"Cyberpunk 2077 + 5 DLCs", 5},
+		{"Some Game +5 DLC", 5},
+		{"Some Game + 12 DLC's", 12},
+		{"Игра + 5 дополнений", 5},
+		{"Cyberpunk 2077", 0},
+	}
+	for _, tc := range cases {
+		p := Parse(tc.raw)
+		if p.DLCCount != tc.want {
+			t.Errorf("Parse(%q).DLCCount = %d, want %d", tc.raw, p.DLCCount, tc.want)
+		}
+		if strings.Contains(strings.ToLower(p.Base), "dlc") {
+			t.Errorf("Parse(%q).Base = %q still contains DLC phrase", tc.raw, p.Base)
+		}
+	}
+}
+
 func want(t *testing.T, field, got, expected string) {
 	t.Helper()
 	if got != expected {

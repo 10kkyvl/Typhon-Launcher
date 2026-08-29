@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Play, Square } from '@lucide/svelte';
+  import { openGameMenu } from '../stores/gameMenu';
   import { navigate } from '../stores/router';
   import Artwork from './Artwork.svelte';
 
@@ -22,7 +23,7 @@
   } = $props();
 </script>
 
-<div class="card">
+<div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)}>
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt={title} ratio="3 / 4" radius="var(--radius-md)" />

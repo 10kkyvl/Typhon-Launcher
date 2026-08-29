@@ -84,7 +84,11 @@ type Release struct {
 	Edition         string         `json:"edition,omitempty"`
 	Languages       []string       `json:"languages,omitempty"`
 	Year            int            `json:"year,omitempty"`
+	Tags            []string       `json:"tags,omitempty"`
+	Repacker        string         `json:"repacker,omitempty"`
+	DLCCount        int            `json:"dlcCount,omitempty"`
 	Size            int64          `json:"size"`
+	SizeUnknown     bool           `json:"sizeUnknown,omitempty"`
 	UploadedAt      *time.Time     `json:"uploadedAt"`
 	URIs            []string       `json:"uris"`
 	InfoHash        string         `json:"infoHash,omitempty"`

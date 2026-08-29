@@ -15,6 +15,7 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/clientid"
+	"typhon/internal/telemetrylog"
 )
 
 const (
@@ -66,6 +67,7 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 	if err != nil {
 		return fmt.Errorf("encode %s payload: %w", path, err)
 	}
+	telemetrylog.Record(telemetrylog.KindDiagnostics, path, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request %s: %w", path, err)

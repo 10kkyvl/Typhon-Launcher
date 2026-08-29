@@ -47,7 +47,11 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			Edition:         parsed.Edition,
 			Languages:       parsed.Languages,
 			Year:            parsed.Year,
+			Tags:            parsed.Tags,
+			Repacker:        repackerOf(parsed.Tags),
+			DLCCount:        parsed.DLCCount,
 			Size:            e.Size,
+			SizeUnknown:     e.SizeUnknown,
 			UploadedAt:      e.UploadedAt,
 			URIs:            e.URIs,
 			Availability:    AvailabilityAvailable,
@@ -70,6 +74,21 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		out = append(out, r)
 	}
 	return out
+}
+
+var repackerPriority = []string{"fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade"}
+
+func repackerOf(tags []string) string {
+	set := make(map[string]bool, len(tags))
+	for _, t := range tags {
+		set[t] = true
+	}
+	for _, p := range repackerPriority {
+		if set[p] {
+			return p
+		}
+	}
+	return ""
 }
 
 func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {
@@ -114,7 +133,11 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		current.Edition = next.Edition
 		current.Languages = next.Languages
 		current.Year = next.Year
+		current.Tags = next.Tags
+		current.Repacker = next.Repacker
+		current.DLCCount = next.DLCCount
 		current.Size = next.Size
+		current.SizeUnknown = next.SizeUnknown
 		current.UploadedAt = next.UploadedAt
 		current.URIs = next.URIs
 		current.InfoHash = next.InfoHash
@@ -140,6 +163,10 @@ func changed(current, next *Release) bool {
 		current.ToVersion != next.ToVersion ||
 		current.Sequence != next.Sequence ||
 		current.Size != next.Size ||
+		current.SizeUnknown != next.SizeUnknown ||
+		current.Repacker != next.Repacker ||
+		current.DLCCount != next.DLCCount ||
+		strings.Join(current.Tags, "|") != strings.Join(next.Tags, "|") ||
 		strings.Join(current.URIs, "|") != strings.Join(next.URIs, "|") ||
 		!sameTime(current.UploadedAt, next.UploadedAt)
 }

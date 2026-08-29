@@ -95,6 +95,15 @@ export function speedBytes(bytesPerSec: number) {
   return `${Math.round(value / KB_BYTES)} КБ/с`;
 }
 
+export function rateMbText(bytesPerSec: number) {
+  return String(Math.round((bytesPerSec / MB_BYTES) * 100) / 100).replace('.', ',');
+}
+
+export function rateLimitLabel(bytesPerSec: number) {
+  if (bytesPerSec <= 0) return 'Без ограничений';
+  return `${rateMbText(bytesPerSec)} МБ/с`;
+}
+
 export function truncateMiddle(text: string, max = 56) {
   if (text.length <= max) return text;
   const head = Math.ceil((max - 1) / 2);

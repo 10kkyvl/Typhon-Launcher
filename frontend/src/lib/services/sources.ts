@@ -33,16 +33,24 @@ export interface Source {
 export interface Release {
   id: string;
   sourceId: string;
+  kind?: 'release' | 'patch';
   rawTitle: string;
   title: string;
   normalizedTitle: string;
   canonicalGameId: string | null;
   version: string;
   rawVersion?: string;
+  fromVersion?: string;
+  toVersion?: string;
+  sequence?: number;
   edition?: string;
   languages?: string[];
   year?: number;
+  tags?: string[];
+  repacker?: string;
+  dlcCount?: number;
   size: number;
+  sizeUnknown?: boolean;
   uploadedAt: string | null;
   uris: string[];
   infoHash?: string;
@@ -179,6 +187,7 @@ export interface ReleaseDownloadRequest {
   releaseId: string;
   sourceId: string;
   gameId: string;
+  version?: string;
 }
 
 const unavailable = () => new Error('unavailable in browser');

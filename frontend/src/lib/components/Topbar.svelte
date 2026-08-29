@@ -13,7 +13,7 @@
   import { inWails } from '../services/backend';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
-  import { markAllRead, notifications, type Notification } from '../stores/notifications';
+  import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
   import { toast } from '../stores/toasts';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
@@ -234,6 +234,13 @@
               </button>
             {/each}
           {/if}
+          <button
+            class="notifications-all"
+            onclick={() => {
+              notificationsOpen = false;
+              openHistory();
+            }}>Вся история</button
+          >
         </div>
       {/if}
     </div>
@@ -395,6 +402,22 @@
   .notification-text {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .notifications-all {
+    display: block;
+    width: 100%;
+    padding: 1rem 1.4rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    transition: background var(--dur) var(--ease);
+  }
+
+  .notifications-all:hover {
+    background: var(--hover);
+    color: var(--text);
   }
 
   .notifications-empty {

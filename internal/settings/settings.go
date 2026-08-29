@@ -33,6 +33,12 @@ const (
 
 	LibraryFolderName = "TyphonLibrary"
 
+	// CurrentTelemetryConsent is the version of the consent prompt this build
+	// shows. A stored version of zero means the user has never been asked,
+	// which is a different state from having been asked and declined: the
+	// first is worth one prompt, the second must never be re-prompted.
+	CurrentTelemetryConsent = 1
+
 	dirGames       = "Games"
 	dirDownloads   = "Downloads"
 	dirScreenshots = "Screenshots"
@@ -77,9 +83,31 @@ type Settings struct {
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
+	LANSharing bool `json:"lanSharing"`
+
+	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
 	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
+
+	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
+}
+
+// TelemetryConsentRecorded reports whether the user has answered the consent
+// prompt. Until they have, the switches hold defaults nobody agreed to.
+func (s Settings) TelemetryConsentRecorded() bool {
+	return s.TelemetryConsentVersion > 0
+}
+
+// UsageStatsAllowed and DiagnosticsAllowed are the only two questions callers
+// may ask before sending anything. Reading the switch on its own would send
+// the default answer of a question that has not been put to the user yet.
+func (s Settings) UsageStatsAllowed() bool {
+	return s.TelemetryConsentRecorded() && s.AnonymousUsageStats
+}
+
+func (s Settings) DiagnosticsAllowed() bool {
+	return s.TelemetryConsentRecorded() && s.AnonymousDiagnostics
 }
 
 func Defaults() Settings {
@@ -111,10 +139,66 @@ func Defaults() Settings {
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
 
+		LANSharing: false,
+
+		AccountSync:           false,
 		SourcesNoticeAccepted: false,
-		AnonymousUsageStats:   false,
-		AnonymousDiagnostics:  false,
+
+		// These are the values the consent prompt starts from on a fresh
+		// install, not values anything may act on: DiagnosticsAllowed stays
+		// false until the prompt is answered. Crash reports carry no game and
+		// no behaviour, only what broke, so the prompt starts with them
+		// selected; usage statistics describe what the user does and start
+		// unselected.
+		AnonymousUsageStats:     false,
+		AnonymousDiagnostics:    true,
+		TelemetryConsentVersion: 0,
 	}
+}
+
+// consentProbe re-reads the consent keys with pointers so an absent key can be
+// told from a stored false. Unmarshalling into Defaults() cannot make that
+// distinction, and the two mean opposite things here.
+type consentProbe struct {
+	UsageStats     *bool `json:"anonymousUsageStats"`
+	Diagnostics    *bool `json:"anonymousDiagnostics"`
+	ConsentVersion *int  `json:"telemetryConsentVersion"`
+}
+
+// applyStoredConsent decides what an existing settings file means. It runs for
+// every file that has one, and its whole job is to make sure a launcher update
+// never turns telemetry on for somebody who was already installed: the new
+// default applies to installations with no settings file at all, and to
+// nothing else.
+func applyStoredConsent(s Settings, p consentProbe) Settings {
+	if p.ConsentVersion != nil {
+		// A build that knows about the prompt wrote this file, so the stored
+		// version is the whole answer: above zero it was answered, at zero it
+		// was not. Nothing may be inferred from the switches here — at zero
+		// they hold the prompt's preselection, and reading a preselection as
+		// an answer is how a settings save made before the prompt was ever
+		// shown would turn into consent.
+		return s
+	}
+
+	// No version key at all: the file predates the prompt. Defaults() is the
+	// wrong fallback for a missing switch here, because before the prompt
+	// both switches shipped off — an absent key means the user never touched
+	// one, not that they wanted the value this build now starts from.
+	s.AnonymousUsageStats = p.UsageStats != nil && *p.UsageStats
+	s.AnonymousDiagnostics = p.Diagnostics != nil && *p.Diagnostics
+
+	// A switch found on in a file this old can only have been turned on by
+	// hand, in settings, on purpose. That is an answer, and asking again would
+	// be asking someone to repeat themselves. Both off is genuinely ambiguous
+	// — it is equally the shipped default nobody ever touched — so those
+	// installs see the prompt once.
+	if s.AnonymousUsageStats || s.AnonymousDiagnostics {
+		s.TelemetryConsentVersion = CurrentTelemetryConsent
+	} else {
+		s.TelemetryConsentVersion = 0
+	}
+	return s
 }
 
 func normalizeLibraryPath(path string) (string, error) {
@@ -181,6 +265,9 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	if s.UploadRateLimit < 0 {
 		s.UploadRateLimit = 0
+	}
+	if s.TelemetryConsentVersion < 0 {
+		s.TelemetryConsentVersion = 0
 	}
 	switch s.InstallCleanupPolicy {
 	case CleanupKeep, CleanupAsk, CleanupDelete:
@@ -265,6 +352,11 @@ func (s *Service) load() (Settings, error) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		return Settings{}, fmt.Errorf("parse settings %s: %w", s.path, err)
 	}
+	var probe consentProbe
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return Settings{}, fmt.Errorf("parse settings consent %s: %w", s.path, err)
+	}
+	loaded = applyStoredConsent(loaded, probe)
 	if loaded.LibraryPath == "" {
 		loaded.LibraryPath = legacyLibraryPath(loaded.GamesPath)
 	}
@@ -325,6 +417,15 @@ func (s *Service) SaveSettings(next Settings) error {
 	copy(appliers, s.appliers)
 	s.mu.Unlock()
 
+	// The consent version only ever moves forward. Every other field here
+	// comes straight from a caller that may have assembled the struct without
+	// knowing this field exists, and a zero from such a caller would erase the
+	// record that the user was asked — after which the prompt reappears and
+	// the defaults apply again to somebody who already answered.
+	if next.TelemetryConsentVersion < prev.TelemetryConsentVersion {
+		next.TelemetryConsentVersion = prev.TelemetryConsentVersion
+	}
+
 	for _, apply := range appliers {
 		if err := apply(prev, next); err != nil {
 			return fmt.Errorf("apply settings: %w", err)
@@ -342,6 +443,24 @@ func (s *Service) SaveSettings(next Settings) error {
 		notify(next)
 	}
 	return nil
+}
+
+// SaveConsent records the answer to the consent prompt together with the
+// version of the prompt that was answered, in a single write. Recording them
+// separately would leave a window where the switches are set and nothing
+// remembers that anyone was asked; a launcher killed inside that window comes
+// back, asks again, and shows the user a question they have already answered.
+// Callers get the stored settings back so the prompt closes on what was
+// written rather than on what it sent.
+func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
+	next := s.GetSettings()
+	next.AnonymousUsageStats = usageStats
+	next.AnonymousDiagnostics = diagnostics
+	next.TelemetryConsentVersion = CurrentTelemetryConsent
+	if err := s.SaveSettings(next); err != nil {
+		return Settings{}, fmt.Errorf("save telemetry consent: %w", err)
+	}
+	return s.GetSettings(), nil
 }
 
 func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {

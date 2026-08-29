@@ -10,6 +10,7 @@
   import {
     authState,
     currentUser,
+    isOffline,
     leaveGuest,
     savingProfile,
     signOut,
@@ -49,7 +50,7 @@
   );
 
   function startEditing() {
-    if (!$currentUser) return;
+    if (!$currentUser || $isOffline) return;
     draft = { displayName: $currentUser.displayName, username: $currentUser.username };
     fieldErrors = {};
     editing = true;
@@ -61,7 +62,7 @@
   }
 
   async function save() {
-    if (!$currentUser || !dirty || $savingProfile) return;
+    if (!$currentUser || !dirty || $savingProfile || $isOffline) return;
     fieldErrors = {};
 
     const patch: { displayName?: string; username?: string } = {};
@@ -142,13 +143,13 @@
           <h2 class="display-name">{$currentUser.displayName}</h2>
           <span class="username">@{$currentUser.username}</span>
           <div class="avatar-actions">
-            <AvatarEditor size="sm" />
+            <AvatarEditor size="sm" disabled={$isOffline} />
           </div>
         </div>
 
         <div class="head-actions">
           {#if !editing}
-            <Button onclick={startEditing}>
+            <Button onclick={startEditing} disabled={$isOffline}>
               <Pencil size="1.5rem" strokeWidth={1.8} />
               Редактировать
             </Button>
@@ -157,6 +158,9 @@
             <LogOut size="1.5rem" strokeWidth={1.8} />
             {signingOut ? 'Выход…' : 'Выйти'}
           </Button>
+          {#if $isOffline}
+            <span class="hint">Изменить профиль можно только при связи с сервером</span>
+          {/if}
         </div>
       </div>
     </Card>
@@ -166,7 +170,7 @@
         <div class="fields">
           <label class="field">
             <span class="field-label">Отображаемое имя</span>
-            <input class="input" type="text" maxlength="32" bind:value={draft.displayName} />
+            <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
             {#if fieldErrors.displayName}<span class="error">{fieldErrors.displayName}</span>{/if}
           </label>
 
@@ -174,7 +178,7 @@
             <span class="field-label">Имя пользователя</span>
             <div class="username-field">
               <span class="username-prefix">@</span>
-              <input class="input" type="text" maxlength="24" bind:value={draft.username} />
+              <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
             </div>
             {#if fieldErrors.username}<span class="error">{fieldErrors.username}</span>{/if}
           </label>
@@ -189,7 +193,7 @@
         <div class="foot">
           {#if fieldErrors.general}<span class="error">{fieldErrors.general}</span>{/if}
           <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>Отмена</Button>
-          <Button variant="primary" disabled={!dirty || $savingProfile} onclick={save}>
+          <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
             {$savingProfile ? 'Сохранение…' : 'Сохранить'}
           </Button>
         </div>

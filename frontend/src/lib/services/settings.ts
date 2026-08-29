@@ -32,9 +32,12 @@ export interface Settings {
   updateSaveBackup: boolean;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
+  lanSharing: boolean;
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
+  telemetryConsentVersion: number;
+  accountSync: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -69,9 +72,12 @@ const fallbackDefaults: Settings = {
   updateSaveBackup: true,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
+  lanSharing: false,
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
-  anonymousDiagnostics: false,
+  anonymousDiagnostics: true,
+  telemetryConsentVersion: 0,
+  accountSync: false,
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -112,4 +118,9 @@ export async function proposeLibraryPath(parent: string): Promise<string> {
 export async function setupLibrary(parent: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SetupLibrary(parent)) as Settings;
+}
+
+export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
 }

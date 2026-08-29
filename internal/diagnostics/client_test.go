@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 	"typhon/internal/clientid"
+	"typhon/internal/telemetrylog"
 )
 
 func TestNewClientRejectsInvalidBaseURL(t *testing.T) {
@@ -128,5 +130,34 @@ func TestClientSendRespectsCancelledContext(t *testing.T) {
 	cancel()
 	if err := cl.send(ctx, clientid.Identity{}, nil); err == nil {
 		t.Fatal("expected error for a cancelled context")
+	}
+}
+
+func TestClientSendRecordsTelemetryLog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	cl, err := newClient(srv.URL)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+
+	marker := "diag-marker-" + time.Now().Format(time.RFC3339Nano)
+	reports := []reportPayload{{ErrorID: marker}}
+	if err := cl.send(context.Background(), clientid.Identity{InstallationID: "i", SessionID: "s"}, reports); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	found := false
+	for _, e := range telemetrylog.Entries() {
+		if e.Kind == telemetrylog.KindDiagnostics && e.Endpoint == "/v1/diagnostics/errors" && bytes.Contains(e.Payload, []byte(marker)) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected send to record an entry in the telemetry log")
 	}
 }

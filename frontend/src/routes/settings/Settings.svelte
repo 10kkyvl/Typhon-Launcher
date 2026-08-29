@@ -1,20 +1,29 @@
 <script lang="ts">
-  import { Download, FolderOpen, ListChecks } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
+  import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SentDataModal from '../../lib/components/SentDataModal.svelte';
+  import Modal from '../../lib/components/Modal.svelte';
+  import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
+  import AppearanceTab from './AppearanceTab.svelte';
+  import LanSettingsRow from './LanSettingsRow.svelte';
+  import LibraryLocationRow from './LibraryLocationRow.svelte';
+  import { forgetRemote, syncNow } from '../../lib/services/accountSync';
+  import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
-  import { openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
     getAppInfo,
@@ -23,18 +32,29 @@
     type LogBundle,
     type SystemInfo,
   } from '../../lib/services/system';
-  import { requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
+  import { authState } from '../../lib/stores/user';
   import { bytesLabel, relativeDate } from '../../lib/utils/format';
 
-  let tab = $state('general');
+  let { tab: initialTab }: { tab?: string } = $props();
 
   const tabs = [
     { id: 'general', label: 'Общие' },
     { id: 'downloads', label: 'Загрузки' },
+    { id: 'appearance', label: 'Оформление' },
     { id: 'about', label: 'О программе' },
   ];
+
+  let tab = $state('general');
+
+  $effect(() => {
+    const next = initialTab;
+    untrack(() => {
+      if (next && tabs.some((t) => t.id === next)) tab = next;
+    });
+  });
 
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
@@ -48,9 +68,14 @@
   let legalActiveId = $state<string | null>(null);
   let legalActiveTitle = $state('');
   let sourcesNoticeReviewOpen = $state(false);
+  let sentDataOpen = $state(false);
 
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
+
+  const accountReady = $derived($authState === 'authenticated');
+  let syncingNow = $state(false);
+  let forgettingRemote = $state(false);
 
   onMount(async () => {
     appInfo = await getAppInfo();
@@ -85,6 +110,34 @@
     }
   }
 
+  async function runSyncNow() {
+    if (syncingNow) return;
+    syncingNow = true;
+    try {
+      await syncNow();
+      toast('Синхронизация выполнена', 'success');
+    } catch (err) {
+      toast(accountSyncReason(err, 'Не удалось синхронизировать данные'), 'danger');
+    } finally {
+      syncingNow = false;
+    }
+  }
+
+  async function runForgetRemote() {
+    if (forgettingRemote) return;
+    if (!window.confirm('Удалить синхронизированные данные с сервера? Это действие необратимо.')) return;
+    forgettingRemote = true;
+    try {
+      await forgetRemote();
+      settings.set(await getSettings());
+      toast('Данные удалены с сервера', 'success');
+    } catch (err) {
+      toast(accountSyncReason(err, 'Не удалось удалить данные с сервера'), 'danger');
+    } finally {
+      forgettingRemote = false;
+    }
+  }
+
   function openLegalDoc(meta: LegalMeta) {
     legalActiveId = meta.id;
     legalActiveTitle = meta.title;
@@ -100,6 +153,7 @@
   ];
 
   let librarySetupOpen = $state(false);
+  let historyOpen = $state(false);
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
@@ -122,21 +176,8 @@
     }
   }
 
-  const MB = 1024 * 1024;
-
-  const downloadLimitOptions = [
-    { id: 'none', label: 'Без ограничений' },
-    { id: '10', label: '10 МБ/с' },
-    { id: '25', label: '25 МБ/с' },
-    { id: '50', label: '50 МБ/с' },
-  ];
-
-  const uploadLimitOptions = [
-    { id: 'none', label: 'Без ограничений' },
-    { id: '1', label: '1 МБ/с' },
-    { id: '5', label: '5 МБ/с' },
-    { id: '10', label: '10 МБ/с' },
-  ];
+  const downloadLimitPresets = [10, 25, 50];
+  const uploadLimitPresets = [1, 5, 10];
 
   const maxActiveOptions = [
     { id: '1', label: '1' },
@@ -145,13 +186,6 @@
     { id: '5', label: '5' },
   ];
 
-  function rateId(bytes: number | undefined, options: { id: string }[]) {
-    const id = String((bytes ?? 0) / MB);
-    return options.some((o) => o.id === id) ? id : 'none';
-  }
-
-  const downloadLimit = $derived(rateId(current?.downloadRateLimit, downloadLimitOptions));
-  const uploadLimit = $derived(rateId(current?.uploadRateLimit, uploadLimitOptions));
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
     return maxActiveOptions.some((o) => o.id === id) ? id : '2';
@@ -285,6 +319,14 @@
               Игры, загрузки и скриншоты хранятся внутри папки библиотеки. Пока она не выбрана, скачивать нечего.
             </span>
           {/if}
+          <LibraryLocationRow />
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Экспериментальное</h3>
+        <div class="rows">
+          <LanSettingsRow />
         </div>
       </section>
     </div>
@@ -293,21 +335,6 @@
       <section class="group">
         <h3>Интерфейс</h3>
         <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">Тема</span>
-              <span class="row-sub">Выберите внешний вид приложения</span>
-            </div>
-            <Select
-              value={current?.theme ?? 'dark'}
-              width="22rem"
-              options={[
-                { id: 'dark', label: 'Тёмная' },
-                { id: 'system', label: 'Как в системе' },
-              ]}
-              onchange={(id) => set({ theme: id })}
-            />
-          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">Размер интерфейса</span>
@@ -371,8 +398,8 @@
             <div class="row-text">
               <span class="row-label">Анонимная диагностика</span>
               <span class="row-sub"
-                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой пути
-                и чувствительные сетевые идентификаторы удаляются. По умолчанию выключено.</span
+                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой из них
+                удаляются пути, имя устройства и сетевые адреса.</span
               >
             </div>
             <Toggle
@@ -380,6 +407,18 @@
               label="Анонимная диагностика"
               onchange={(v) => set({ anonymousDiagnostics: v })}
             />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Показать отправленные данные</span>
+              <span class="row-sub"
+                >Последние события и отчёты, ушедшие на сервер, в том виде, в котором они были отправлены</span
+              >
+            </div>
+            <Button size="sm" onclick={() => (sentDataOpen = true)}>
+              <Eye size="1.5rem" strokeWidth={1.8} />
+              Показать
+            </Button>
           </div>
           <div class="row">
             <div class="row-text">
@@ -401,6 +440,59 @@
           </div>
         </div>
       </section>
+
+      <section class="group">
+        <h3>Синхронизация</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Синхронизация между устройствами</span>
+              <span class="row-sub"
+                >Переносит между вашими устройствами часть настроек приложения, список игр каталога, дату
+                последнего запуска и наигранное время. Источники, ссылки на релизы, их названия, пути на
+                диске, лимиты скорости и согласия на сбор статистики и диагностики не передаются. По
+                умолчанию выключено.</span
+              >
+              {#if !accountReady}
+                <span class="row-sub">Нужен вход в аккаунт — в гостевом режиме синхронизация недоступна.</span>
+              {/if}
+            </div>
+            <Toggle
+              checked={current?.accountSync ?? false}
+              label="Синхронизация между устройствами"
+              disabled={!accountReady}
+              onchange={(v) => set({ accountSync: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Синхронизировать сейчас</span>
+              <span class="row-sub">Отправить и получить изменения немедленно, не дожидаясь фонового цикла</span>
+            </div>
+            <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
+              <RefreshCw size="1.5rem" strokeWidth={1.8} />
+              {syncingNow ? 'Синхронизация…' : 'Синхронизировать сейчас'}
+            </Button>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">Удалить данные с сервера</span>
+              <span class="row-sub"
+                >Необратимо удаляет всё, что синхронизировано с сервером, и выключает синхронизацию</span
+              >
+            </div>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={!accountReady || forgettingRemote}
+              onclick={runForgetRemote}
+            >
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
+              {forgettingRemote ? 'Удаляем…' : 'Удалить данные с сервера'}
+            </Button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 {:else if tab === 'downloads'}
@@ -413,11 +505,10 @@
             <span class="row-label">Ограничение скорости загрузки</span>
             <span class="row-sub">Максимальная скорость входящего трафика</span>
           </div>
-          <Select
-            value={downloadLimit}
-            width="20rem"
-            options={downloadLimitOptions}
-            onchange={(id) => set({ downloadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
+          <RateLimitInput
+            value={current?.downloadRateLimit ?? 0}
+            presets={downloadLimitPresets}
+            onchange={(bytes) => set({ downloadRateLimit: bytes })}
           />
         </div>
         <div class="row">
@@ -425,11 +516,10 @@
             <span class="row-label">Ограничение скорости отдачи</span>
             <span class="row-sub">Максимальная скорость исходящего трафика</span>
           </div>
-          <Select
-            value={uploadLimit}
-            width="20rem"
-            options={uploadLimitOptions}
-            onchange={(id) => set({ uploadRateLimit: id === 'none' ? 0 : Number(id) * MB })}
+          <RateLimitInput
+            value={current?.uploadRateLimit ?? 0}
+            presets={uploadLimitPresets}
+            onchange={(bytes) => set({ uploadRateLimit: bytes })}
           />
         </div>
         <div class="row">
@@ -624,6 +714,8 @@
       </div>
     </section>
   </div>
+{:else if tab === 'appearance'}
+  <AppearanceTab />
 {:else if tab === 'about'}
   <div class="single-column">
     <section class="group about">
@@ -672,6 +764,22 @@
           <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
             {$selfUpdateChecking ? 'Проверка…' : 'Проверить'}
+          </Button>
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">История обновлений</span>
+            <span class="row-sub">
+              {#if $releaseNotesHistory.length > 0}
+                Что менялось в лаунчере от версии к версии
+              {:else}
+                Появится после первой проверки обновлений
+              {/if}
+            </span>
+          </div>
+          <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
+            <ScrollText size="1.5rem" strokeWidth={1.8} />
+            Что нового
           </Button>
         </div>
         <UpdateBanner />
@@ -737,6 +845,10 @@
 
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
+<SentDataModal bind:open={sentDataOpen} />
+<Modal bind:open={historyOpen} title="История обновлений" width="52rem">
+  <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
+</Modal>
 
 <style>
   .tabs-wrap {

@@ -25,7 +25,7 @@ func TestApplyUpdateStartsTheWorkerFromACopy(t *testing.T) {
 	readyPath := filepath.Join(dir, "selfupdate", "1.2.3", "setup.exe")
 	writeTestFile(t, readyPath, []byte("installer"))
 
-	s := &Service{dir: dir, store: store, currentVersion: "1.0.0", readyPath: readyPath}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, currentVersion: "1.0.0", readyPath: readyPath}
 	s.status = Status{State: StateReady, CurrentVersion: "1.0.0", AvailableVersion: "1.2.3"}
 
 	exe, err := os.Executable()
@@ -96,7 +96,7 @@ func TestApplyUpdateStartsTheWorkerFromACopy(t *testing.T) {
 
 func TestApplyUpdateRollsBackWhenTheWorkerCannotStart(t *testing.T) {
 	dir := t.TempDir()
-	s := &Service{dir: dir, store: mustStore(t, dir), currentVersion: "1.0.0", readyPath: filepath.Join(dir, "setup.exe")}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), currentVersion: "1.0.0", readyPath: filepath.Join(dir, "setup.exe")}
 	s.status = Status{State: StateReady, CurrentVersion: "1.0.0", AvailableVersion: "1.2.3"}
 
 	wantErr := errors.New("worker refused to start")
@@ -129,7 +129,7 @@ func TestServiceStartupSurfacesWorkerOutcome(t *testing.T) {
 		t.Fatalf("writeOutcome: %v", err)
 	}
 
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestServiceStartupIgnoresStaleOutcome(t *testing.T) {
 		t.Fatalf("writeOutcome: %v", err)
 	}
 
-	s := &Service{dir: dir, store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: mustQuietClient(t), currentVersion: "1.0.0"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestServiceStartupDropsRecordForTheVersionAlreadyInstalled(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	s := &Service{dir: dir, store: store, client: mustQuietClient(t), currentVersion: "1.2.3"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.2.3"}
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestCleanupCacheKeepsTheOutcomeFileAndTheWorkerDir(t *testing.T) {
 	orphan := filepath.Join(cacheDir, "orphan.txt")
 	writeTestFile(t, orphan, []byte("x"))
 
-	s := &Service{dir: dir, currentVersion: "1.0.0"}
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), currentVersion: "1.0.0"}
 	if err := s.cleanupCache(context.Background(), ""); err != nil {
 		t.Fatalf("cleanupCache: %v", err)
 	}

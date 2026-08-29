@@ -36,6 +36,7 @@
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
+  import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { settings } from '../../lib/stores/settings';
   import { storageInfo } from '../../lib/stores/storage';
@@ -251,7 +252,7 @@
     {#each $installedGames as game (game.id)}
       {@const running = $runningGames.has(game.id)}
       {@const update = $updatesByGame.get(game.id)?.availability}
-      <div class="row" class:running>
+      <div class="row" class:running role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
         <button class="game" onclick={() => navigate('game', { id: game.id })}>
           <div class="thumb">
             <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
@@ -317,7 +318,7 @@
   <div class="grid">
     {#each $installedGames as game (game.id)}
       {@const update = $updatesByGame.get(game.id)?.availability}
-      <div class="card">
+      <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
         <button class="card-cover" onclick={() => navigate('game', { id: game.id })} aria-label={game.title}>
           <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
         </button>

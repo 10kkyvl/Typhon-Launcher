@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -462,6 +463,140 @@ func TestClientOutdatedLauncher(t *testing.T) {
 	}
 	if accErr.Status != http.StatusUpgradeRequired {
 		t.Fatalf("expected status 426, got %d", accErr.Status)
+	}
+}
+
+type closeTrackingBody struct {
+	io.ReadCloser
+	closed *bool
+}
+
+func (b closeTrackingBody) Close() error {
+	*b.closed = true
+	return b.ReadCloser.Close()
+}
+
+type closeTrackingTransport struct {
+	base   http.RoundTripper
+	closed *bool
+}
+
+func (t closeTrackingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	resp.Body = closeTrackingBody{resp.Body, t.closed}
+	return resp, nil
+}
+
+func TestClientFetchAvatarRejectsSchemesBeforeAnyRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"empty url", ""},
+		{"unsupported scheme", "ftp://example.com/a.png"},
+		{"plain http on a non-loopback host", "http://example.com/a.png"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, "https://account-api.invalid", tokenOK("t"))
+			_, err := c.FetchAvatar(context.Background(), tt.url)
+			var accErr *Error
+			if !errors.As(err, &accErr) {
+				t.Fatalf("expected *Error, got %v (%T)", err, err)
+			}
+			if accErr.Code != CodeBadRequest {
+				t.Fatalf("code = %q, want %q", accErr.Code, CodeBadRequest)
+			}
+		})
+	}
+}
+
+func TestClientFetchAvatarSuccessSendsNoAuthorization(t *testing.T) {
+	payload := append([]byte("\x89PNG\r\n\x1a\n"), []byte{0, 0, 0, 0}...)
+	var authorization string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		if _, err := w.Write(payload); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, "https://account-api.invalid", tokenOK("t"))
+	img, err := c.FetchAvatar(context.Background(), srv.URL+"/a.png")
+	if err != nil {
+		t.Fatalf("FetchAvatar() error = %v", err)
+	}
+	if img.MIME != "image/png" {
+		t.Fatalf("mime = %q, want image/png", img.MIME)
+	}
+	if authorization != "" {
+		t.Fatalf("authorization = %q, want none for a public avatar request", authorization)
+	}
+}
+
+func TestClientFetchAvatarNotFoundClosesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, "https://account-api.invalid", tokenOK("t"))
+	closed := false
+	c.httpClient.Transport = closeTrackingTransport{base: c.httpClient.Transport, closed: &closed}
+
+	_, err := c.FetchAvatar(context.Background(), srv.URL+"/missing.png")
+	var accErr *Error
+	if !errors.As(err, &accErr) {
+		t.Fatalf("expected *Error, got %v (%T)", err, err)
+	}
+	if accErr.Status != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", accErr.Status)
+	}
+	if !closed {
+		t.Error("response body was not closed")
+	}
+}
+
+func TestClientFetchAvatarOversizedBodyRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write(bytes.Repeat([]byte{'a'}, maxAvatarSize+1024)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, "https://account-api.invalid", tokenOK("t"))
+	_, err := c.FetchAvatar(context.Background(), srv.URL+"/big.png")
+	var accErr *Error
+	if !errors.As(err, &accErr) {
+		t.Fatalf("expected *Error, got %v (%T)", err, err)
+	}
+	if accErr.Code != CodeAvatarTooLarge {
+		t.Fatalf("code = %q, want %q", accErr.Code, CodeAvatarTooLarge)
+	}
+}
+
+func TestClientFetchAvatarUnsupportedContentRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte("not an image")); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, "https://account-api.invalid", tokenOK("t"))
+	_, err := c.FetchAvatar(context.Background(), srv.URL+"/a.png")
+	var accErr *Error
+	if !errors.As(err, &accErr) {
+		t.Fatalf("expected *Error, got %v (%T)", err, err)
+	}
+	if accErr.Code != CodeUnsupportedAvatar {
+		t.Fatalf("code = %q, want %q", accErr.Code, CodeUnsupportedAvatar)
 	}
 }
 

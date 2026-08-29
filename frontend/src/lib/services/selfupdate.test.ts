@@ -7,6 +7,8 @@ const bindings = {
   ApplyUpdate: vi.fn(),
   DismissUpdate: vi.fn(),
   GetOutcome: vi.fn(),
+  GetReleaseNotes: vi.fn(),
+  AcknowledgeReleaseNotes: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/selfupdate', () => ({ Service: bindings }));
@@ -134,6 +136,53 @@ describe('getOutcome', () => {
   });
 });
 
+describe('release notes calls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the notes from GetReleaseNotes', async () => {
+    const { getReleaseNotes } = await import('./selfupdate');
+    const notes = {
+      currentVersion: '1.1.0',
+      unseen: [{ version: '1.1.0', publishedAt: '2026-08-28T12:00:00Z', changes: [{ kind: 'fixed', text: 'x' }] }],
+      history: [{ version: '1.1.0', publishedAt: '2026-08-28T12:00:00Z', changes: [{ kind: 'fixed', text: 'x' }] }],
+    };
+    bindings.GetReleaseNotes.mockResolvedValueOnce(notes);
+
+    await expect(getReleaseNotes()).resolves.toEqual(notes);
+  });
+
+  it('turns the nil slices Go sends into empty lists', async () => {
+    const { getReleaseNotes } = await import('./selfupdate');
+    bindings.GetReleaseNotes.mockResolvedValueOnce({ currentVersion: '1.0.0', unseen: null, history: null });
+
+    await expect(getReleaseNotes()).resolves.toEqual({ currentVersion: '1.0.0', unseen: [], history: [] });
+  });
+
+  it('reports a failed GetReleaseNotes instead of returning empty notes', async () => {
+    const { getReleaseNotes } = await import('./selfupdate');
+    bindings.GetReleaseNotes.mockRejectedValueOnce(new Error('selfupdate: state failed to load, refusing to persist'));
+
+    await expect(getReleaseNotes()).rejects.toThrow('refusing to persist');
+  });
+
+  it('calls AcknowledgeReleaseNotes through the backend', async () => {
+    const { acknowledgeReleaseNotes } = await import('./selfupdate');
+    bindings.AcknowledgeReleaseNotes.mockResolvedValueOnce(undefined);
+
+    await expect(acknowledgeReleaseNotes()).resolves.toBeUndefined();
+    expect(bindings.AcknowledgeReleaseNotes).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed acknowledgement', async () => {
+    const { acknowledgeReleaseNotes } = await import('./selfupdate');
+    bindings.AcknowledgeReleaseNotes.mockRejectedValueOnce(new Error('selfupdate: state failed to load, refusing to persist'));
+
+    await expect(acknowledgeReleaseNotes()).rejects.toThrow('refusing to persist');
+  });
+});
+
 describe('selfupdate service outside Wails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -147,7 +196,14 @@ describe('selfupdate service outside Wails', () => {
     await expect(getStatus()).resolves.toEqual({ state: 'idle', currentVersion: '' });
   });
 
-  it.each(['checkForUpdate', 'downloadUpdate', 'applyUpdate', 'dismissUpdate'] as const)(
+  it('getReleaseNotes returns empty notes instead of throwing', async () => {
+    vi.doMock('./backend', () => ({ inWails: false }));
+    const { getReleaseNotes } = await import('./selfupdate');
+
+    await expect(getReleaseNotes()).resolves.toEqual({ currentVersion: '', unseen: [], history: [] });
+  });
+
+  it.each(['checkForUpdate', 'downloadUpdate', 'applyUpdate', 'dismissUpdate', 'acknowledgeReleaseNotes'] as const)(
     '%s throws instead of pretending to succeed',
     async (fnName) => {
       vi.doMock('./backend', () => ({ inWails: false }));

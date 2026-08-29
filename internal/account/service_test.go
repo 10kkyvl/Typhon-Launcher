@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,6 +15,8 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"typhon/internal/storage"
 )
 
 type fakeStore struct {
@@ -223,6 +227,246 @@ func TestBootstrapKeepsCredentialOnServerError(t *testing.T) {
 	}
 }
 
+func TestBootstrapOfflineOnNetworkFailureWithCachedProfile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	unreachable := srv.URL
+	srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "still-valid"}, present: true}
+	s := startedService(t, store, unreachable)
+	cached := sampleUser()
+	cached.ID = "cached-user"
+	s.mu.Lock()
+	s.profile = cachedProfile{
+		User:      cached,
+		Avatar:    AvatarImage{Data: "YWJj", MIME: "image/png"},
+		AvatarURL: "https://cdn.example/a.png",
+	}
+	s.mu.Unlock()
+
+	state, err := s.Bootstrap()
+	if err != nil {
+		t.Fatalf("Bootstrap() error = %v", err)
+	}
+	if state.Status != StatusOffline {
+		t.Fatalf("status = %q, want %q", state.Status, StatusOffline)
+	}
+	if state.User.ID != "cached-user" {
+		t.Fatalf("user = %+v, want the cached user", state.User)
+	}
+	if want := "data:image/png;base64,YWJj"; state.User.AvatarURL != want {
+		t.Fatalf("avatar url = %q, want %q", state.User.AvatarURL, want)
+	}
+	if state.Reason != CodeNetwork {
+		t.Fatalf("reason = %q, want %q", state.Reason, CodeNetwork)
+	}
+	if _, present := store.snapshot(); !present {
+		t.Error("credential was discarded while offline")
+	}
+}
+
+func TestBootstrapOfflineOnServerErrorWithCachedProfile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "still-valid"}, present: true}
+	s := startedService(t, store, srv.URL)
+	s.mu.Lock()
+	s.profile = cachedProfile{User: sampleUser()}
+	s.mu.Unlock()
+
+	state, err := s.Bootstrap()
+	if err != nil {
+		t.Fatalf("Bootstrap() error = %v", err)
+	}
+	if state.Status != StatusOffline {
+		t.Fatalf("status = %q, want %q", state.Status, StatusOffline)
+	}
+	if state.User.ID != sampleUser().ID {
+		t.Fatalf("user = %+v, want the cached user", state.User)
+	}
+}
+
+func TestBootstrapStaysUnavailableWithCacheOnCodedErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		code   string
+	}{
+		{"rate limited", http.StatusTooManyRequests, CodeRateLimited},
+		{"launcher outdated", http.StatusUpgradeRequired, CodeOutdated},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			store := &fakeStore{cred: Credential{Token: "still-valid"}, present: true}
+			s := startedService(t, store, srv.URL)
+			s.mu.Lock()
+			s.profile = cachedProfile{User: sampleUser()}
+			s.mu.Unlock()
+
+			state, err := s.Bootstrap()
+			if err != nil {
+				t.Fatalf("Bootstrap() error = %v", err)
+			}
+			if state.Status != StatusUnavailable {
+				t.Fatalf("status = %q, want %q even though a profile is cached", state.Status, StatusUnavailable)
+			}
+			if state.Reason != tt.code {
+				t.Fatalf("reason = %q, want %q", state.Reason, tt.code)
+			}
+		})
+	}
+}
+
+func TestBootstrapUnauthenticatedDeletesCredentialAndProfileCache(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusUnauthorized, map[string]any{
+			"error": map[string]string{"code": "unauthenticated"},
+		})
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "revoked"}, present: true}
+	s := startedService(t, store, srv.URL)
+	if err := s.setProfile(s.profileEpoch, cachedProfile{User: sampleUser()}); err != nil {
+		t.Fatalf("seed profile cache: %v", err)
+	}
+	if _, err := os.Stat(s.profilePath); err != nil {
+		t.Fatalf("profile cache file missing before bootstrap: %v", err)
+	}
+
+	state, err := s.Bootstrap()
+	if err != nil {
+		t.Fatalf("Bootstrap() error = %v", err)
+	}
+	if state.Status != StatusUnauthenticated {
+		t.Fatalf("status = %q, want %q", state.Status, StatusUnauthenticated)
+	}
+	if store.deletes != 1 {
+		t.Fatalf("credential deletes = %d, want 1", store.deletes)
+	}
+	if _, err := os.Stat(s.profilePath); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("profile cache file still exists after an unauthenticated bootstrap")
+	}
+	if got := s.currentProfile(); got.User.ID != "" {
+		t.Fatalf("profile cache in memory = %+v, want cleared", got)
+	}
+}
+
+func TestBootstrapCachesProfileOnSuccessAndAvoidsRefetch(t *testing.T) {
+	avatarRequests := 0
+	avatarSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		avatarRequests++
+		if _, err := w.Write([]byte("\x89PNG\r\n\x1a\n")); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer avatarSrv.Close()
+
+	user := sampleUser()
+	user.AvatarURL = avatarSrv.URL + "/a.png"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusOK, user)
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "tok"}, present: true}
+	s := startedService(t, store, srv.URL)
+
+	if _, err := s.Bootstrap(); err != nil {
+		t.Fatalf("Bootstrap() #1 error = %v", err)
+	}
+	if _, err := s.Bootstrap(); err != nil {
+		t.Fatalf("Bootstrap() #2 error = %v", err)
+	}
+
+	if avatarRequests != 1 {
+		t.Fatalf("avatar requests = %d, want 1 (a repeat bootstrap must reuse the cache)", avatarRequests)
+	}
+	cached := s.currentProfile()
+	if cached.User.ID != user.ID || cached.Avatar.Data == "" {
+		t.Fatalf("cached profile = %+v, want the user with a cached avatar", cached)
+	}
+
+	var onDisk cachedProfile
+	if err := storage.Load(s.profilePath, profileVersion, nil, &onDisk); err != nil {
+		t.Fatalf("read cached profile from disk: %v", err)
+	}
+	if onDisk.User.ID != user.ID {
+		t.Fatalf("cache on disk = %+v, want the user persisted", onDisk)
+	}
+}
+
+func TestBootstrapAvatarURLChangeWithFailedDownloadClearsAvatar(t *testing.T) {
+	failingAvatarSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer failingAvatarSrv.Close()
+
+	user := sampleUser()
+	user.AvatarURL = failingAvatarSrv.URL + "/new.png"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusOK, user)
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "tok"}, present: true}
+	s := startedService(t, store, srv.URL)
+	s.mu.Lock()
+	s.profile = cachedProfile{
+		User:      sampleUser(),
+		Avatar:    AvatarImage{Data: "b2xk", MIME: "image/png"},
+		AvatarURL: "https://cdn.example/old.png",
+	}
+	s.mu.Unlock()
+
+	state, err := s.Bootstrap()
+	if err != nil {
+		t.Fatalf("Bootstrap() error = %v", err)
+	}
+	if state.Status != StatusAuthenticated {
+		t.Fatalf("status = %q, want %q", state.Status, StatusAuthenticated)
+	}
+
+	cached := s.currentProfile()
+	if cached.User.ID != user.ID {
+		t.Fatalf("cached user = %+v, want %+v", cached.User, user)
+	}
+	if cached.Avatar.Data != "" || cached.AvatarURL != "" {
+		t.Fatalf("cached avatar = %+v url=%q, want cleared after a failed download for the new url", cached.Avatar, cached.AvatarURL)
+	}
+}
+
+func TestLogoutRemovesProfileCacheFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "live"}, present: true}
+	s := startedService(t, store, srv.URL)
+	if err := s.setProfile(s.profileEpoch, cachedProfile{User: sampleUser()}); err != nil {
+		t.Fatalf("seed profile cache: %v", err)
+	}
+
+	if err := s.Logout(); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+	if _, err := os.Stat(s.profilePath); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("profile cache file still exists after logout")
+	}
+}
+
 func TestRegisterAndLoginStoreTheSession(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -324,6 +568,44 @@ func TestLoginRevokesSessionWhenCredentialWriteFails(t *testing.T) {
 	}
 	if _, present := store.snapshot(); present {
 		t.Error("a credential was stored despite the write failure")
+	}
+}
+
+func TestLoginKeepsTheSessionWhenTheProfileCacheCannotBeWritten(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != APIPrefix+"/auth/login" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		writeSession(t, w, http.StatusOK, "fresh-token")
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{}
+	s := startedService(t, store, srv.URL)
+
+	blocked := filepath.Join(t.TempDir(), "profile.json")
+	if err := os.Mkdir(blocked, 0o755); err != nil {
+		t.Fatalf("mkdir profile path: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(blocked, "keep.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed non-empty dir: %v", err)
+	}
+	s.profilePath = blocked
+
+	user, err := s.Login(LoginInput{Identifier: "playerone", Password: "password"})
+	if err != nil {
+		t.Fatalf("Login() error = %v, want a stored session to survive a profile cache failure", err)
+	}
+	if user.Username != "playerone" {
+		t.Errorf("user = %+v, want playerone", user)
+	}
+
+	cred, present := store.snapshot()
+	if !present || cred.Token != "fresh-token" {
+		t.Fatalf("stored credential = %+v present = %v, want the session kept", cred, present)
+	}
+	if got := s.currentProfile(); got.User.ID != "" {
+		t.Errorf("cached profile = %+v, want it dropped rather than left stale", got)
 	}
 }
 

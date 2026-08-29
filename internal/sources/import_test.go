@@ -258,6 +258,93 @@ func TestRefreshIntervalMapping(t *testing.T) {
 	}
 }
 
+func TestParseEntriesCarriesTags(t *testing.T) {
+	now := time.Now()
+	list := parseEntries("src", []feed.Entry{
+		entry("Hogwarts Legacy Digital Deluxe Edition [FitGirl Repack] + 5 DLCs", magnetOf("a1"), 10),
+	}, now)
+	if len(list) != 1 {
+		t.Fatalf("releases = %d, want 1", len(list))
+	}
+	r := list[0]
+	if r.Repacker != "fitgirl" {
+		t.Fatalf("repacker = %q, want fitgirl", r.Repacker)
+	}
+	if r.DLCCount != 5 {
+		t.Fatalf("dlcCount = %d, want 5", r.DLCCount)
+	}
+	found := false
+	for _, tag := range r.Tags {
+		if tag == "fitgirl" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("tags = %v, want to contain fitgirl", r.Tags)
+	}
+}
+
+func TestMergeCarriesTags(t *testing.T) {
+	now := time.Now()
+	first := parseEntries("src", []feed.Entry{
+		entry("Some Game v1.0", magnetOf("11"), 10),
+	}, now)
+	merged, _ := merge(nil, first, now, true)
+	merged[0].ID = "id0"
+
+	later := now.Add(time.Hour)
+	second := parseEntries("src", []feed.Entry{
+		entry("Some Game v1.0 [DODI Repack] + 3 DLCs", magnetOf("11"), 20),
+	}, later)
+	merged, _ = merge(merged, second, later, false)
+
+	if merged[0].Repacker != "dodi" {
+		t.Fatalf("repacker = %q, want dodi", merged[0].Repacker)
+	}
+	if merged[0].DLCCount != 3 {
+		t.Fatalf("dlcCount = %d, want 3", merged[0].DLCCount)
+	}
+	found := false
+	for _, tag := range merged[0].Tags {
+		if tag == "dodi" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("tags = %v, want to contain dodi after update", merged[0].Tags)
+	}
+}
+
+func TestChangedDetectsTags(t *testing.T) {
+	current := &Release{RawTitle: "Game", Version: "1.0"}
+	next := &Release{RawTitle: "Game", Version: "1.0"}
+	if changed(current, next) {
+		t.Fatal("identical releases should not be reported as changed")
+	}
+	next.Tags = []string{"fitgirl"}
+	if !changed(current, next) {
+		t.Fatal("tag change was not detected")
+	}
+	current.Tags = []string{"fitgirl"}
+	if changed(current, next) {
+		t.Fatal("equal tags should not be reported as changed")
+	}
+	next.Repacker = "fitgirl"
+	if !changed(current, next) {
+		t.Fatal("repacker change was not detected")
+	}
+	current.Repacker = "fitgirl"
+	next.DLCCount = 5
+	if !changed(current, next) {
+		t.Fatal("dlcCount change was not detected")
+	}
+	current.DLCCount = 5
+	next.SizeUnknown = true
+	if !changed(current, next) {
+		t.Fatal("sizeUnknown change was not detected")
+	}
+}
+
 func TestParseEntriesMapsPatchMetadata(t *testing.T) {
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
 	"typhon/internal/account"
+	"typhon/internal/accountsync"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
@@ -18,16 +20,22 @@ import (
 	"typhon/internal/discovery"
 	"typhon/internal/download"
 	"typhon/internal/heartbeat"
+	"typhon/internal/history"
 	"typhon/internal/install"
+	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/presence"
+	"typhon/internal/redact"
+	"typhon/internal/relocate"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/telemetrylog"
+	"typhon/internal/theme"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
@@ -88,8 +96,45 @@ func init() {
 	application.RegisterEvent[updates.VerifyState]("repair:started")
 	application.RegisterEvent[updates.VerifyState]("repair:updated")
 	application.RegisterEvent[updates.VerifyState]("repair:completed")
+	application.RegisterEvent[relocate.Job]("move:started")
+	application.RegisterEvent[relocate.Job]("move:progress")
+	application.RegisterEvent[relocate.Job]("move:completed")
+	application.RegisterEvent[relocate.Job]("move:failed")
+	application.RegisterEvent[relocate.Job]("move:cancelled")
+	application.RegisterEvent[[]lan.Peer]("lan:peers")
+	application.RegisterEvent[[]lan.Share]("lan:shares")
+	application.RegisterEvent[lan.HashProgress]("lan:hashing")
+	application.RegisterEvent[lan.Transfer]("lan:transfer")
+	application.RegisterEvent[lan.Stats]("lan:stats")
+	application.RegisterEvent[history.Record]("history:recorded")
+	application.RegisterEvent[[]history.Record]("history:updated")
+	application.RegisterEvent[history.Status]("history:degraded")
+	application.RegisterEvent[theme.Theme]("theme:updated")
+	application.RegisterEvent[[]theme.Theme]("theme:list")
+	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
+}
+
+// registerLocalIdentity hands the machine and account names to redact so they
+// are scrubbed from diagnostics text wherever they appear, not only inside a
+// path: a username in "account egor is not authorized" matches no path rule.
+// A name that will not resolve is logged and skipped rather than fatal — the
+// pattern rules still run, and a launcher that refuses to start over a
+// hostname lookup trades far more than it gains.
+func registerLocalIdentity() {
+	host, err := os.Hostname()
+	if err != nil {
+		slog.Warn("resolve hostname for redaction", "error", err)
+	}
+	user := ""
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("resolve home dir for redaction", "error", err)
+	} else {
+		user = filepath.Base(home)
+	}
+	redact.SetLocal(host, user)
 }
 
 func main() {
@@ -99,6 +144,8 @@ func main() {
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
 	}
+
+	registerLocalIdentity()
 
 	// diagService is assigned once the identity/telemetry block below
 	// constructs it; the defer reads the variable itself at panic time, not
@@ -156,6 +203,14 @@ func main() {
 	if err != nil {
 		fatal("start account service", err)
 	}
+	historyService, err := history.NewService()
+	if err != nil {
+		fatal("start history service", err)
+	}
+	themeService, err := theme.NewService()
+	if err != nil {
+		fatal("start theme service", err)
+	}
 	libraryService, err := library.NewService()
 	if err != nil {
 		fatal("start library service", err)
@@ -176,9 +231,26 @@ func main() {
 	if err != nil {
 		fatal("start sources service", err)
 	}
-	metadataService, err := metadata.NewService(catalogService, metadataProvider(accountService))
+	provider := metadataProvider(accountService)
+	metadataService, err := metadata.NewService(catalogService, provider)
 	if err != nil {
 		fatal("start metadata service", err)
+	}
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		fatal("resolve config dir", err)
+	}
+	accountSyncService, err := accountsync.NewService(
+		configDir,
+		account.BaseURL(),
+		accountService.SessionToken,
+		syncSettings{settingsService},
+		syncLibrary{libraryService},
+		syncCatalog{catalogService},
+		syncMetadata{provider},
+	)
+	if err != nil {
+		fatal("start account sync service", err)
 	}
 	discoveryService, err := discovery.NewService(settingsService, libraryService, catalogService, metadataService)
 	if err != nil {
@@ -188,6 +260,14 @@ func main() {
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
 	if err != nil {
 		fatal("start updates service", err)
+	}
+	relocateService, err := relocate.NewService(settingsService, libraryService, downloadManager, installService, updateService)
+	if err != nil {
+		fatal("start relocate service", err)
+	}
+	lanService, err := lan.NewService(settingsService, libraryService)
+	if err != nil {
+		fatal("start lan service", err)
 	}
 	selfupdateService, err := selfupdate.NewService()
 	if err != nil {
@@ -213,6 +293,12 @@ func main() {
 	}); err != nil {
 		fatal("sync library titles", err)
 	}
+	libraryService.SetHistoryRecorder(historyService.Record)
+	downloadManager.SetHistoryRecorder(historyService.Record)
+	installService.SetHistoryRecorder(historyService.Record)
+	updateService.SetHistoryRecorder(historyService.Record)
+	lanService.SetHistoryRecorder(historyService.Record)
+	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
@@ -236,21 +322,25 @@ func main() {
 		if err != nil {
 			fatal("start presence", err)
 		}
+		// Both services ask *Allowed, never the switch itself: on a fresh
+		// install the diagnostics switch already reads true so the consent
+		// prompt can start with it selected, and sending on the strength of
+		// that would be collecting from someone who has not been asked yet.
 		usageService, err := usagestats.NewService(identity,
-			func() bool { return settingsService.GetSettings().AnonymousUsageStats }, resolveGameID)
+			func() bool { return settingsService.GetSettings().UsageStatsAllowed() }, resolveGameID)
 		if err != nil {
 			fatal("start usage stats", err)
 		}
-		usageService.SetEnabled(settingsService.GetSettings().AnonymousUsageStats)
-		settingsService.Subscribe(func(s settings.Settings) { usageService.SetEnabled(s.AnonymousUsageStats) })
+		usageService.SetEnabled(settingsService.GetSettings().UsageStatsAllowed())
+		settingsService.Subscribe(func(s settings.Settings) { usageService.SetEnabled(s.UsageStatsAllowed()) })
 
 		diagnosticsService, err := diagnostics.NewService(identity,
-			func() bool { return settingsService.GetSettings().AnonymousDiagnostics })
+			func() bool { return settingsService.GetSettings().DiagnosticsAllowed() })
 		if err != nil {
 			fatal("start diagnostics", err)
 		}
-		diagnosticsService.SetEnabled(settingsService.GetSettings().AnonymousDiagnostics)
-		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.AnonymousDiagnostics) })
+		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
+		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
 
 		libraryService.AddSessionWatcher(heartbeatService)
@@ -273,6 +363,7 @@ func main() {
 	services := []application.Service{
 		application.NewService(appService),
 		application.NewService(accountService),
+		application.NewService(accountSyncService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(downloadManager),
@@ -285,6 +376,13 @@ func main() {
 		application.NewService(discoveryService),
 		application.NewService(discordService),
 		application.NewService(legalService),
+		application.NewService(historyService),
+		application.NewService(themeService),
+		application.NewService(lanService),
+		application.NewService(relocateService),
+		// Registered whether or not telemetry ever started: the window that
+		// shows what was sent must open and say "nothing" rather than fail.
+		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
 	}
 	services = append(services, extraServices...)
