@@ -1,6 +1,9 @@
 package updates
 
-import "time"
+import (
+	"time"
+	"typhon/internal/hashdir"
+)
 
 type VersionSource string
 
@@ -178,18 +181,6 @@ const (
 	HistoryRolledBack = "rolled_back"
 )
 
-type FileManifestEntry struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
-	Hash string `json:"hash"`
-}
+type FileManifestEntry = hashdir.Entry
 
-type FileManifest struct {
-	GameID    string              `json:"gameId"`
-	ReleaseID string              `json:"releaseId,omitempty"`
-	Version   string              `json:"version,omitempty"`
-	Root      string              `json:"root"`
-	TotalSize int64               `json:"totalSize"`
-	Entries   []FileManifestEntry `json:"entries"`
-	CreatedAt time.Time           `json:"createdAt"`
-}
+type FileManifest = hashdir.Manifest
