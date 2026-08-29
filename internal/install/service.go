@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/history"
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
@@ -107,6 +108,8 @@ type Service struct {
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
 	usage      func(usagestats.Event)
+
+	historyRecorder func(history.Record) error
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
@@ -1067,6 +1070,7 @@ func (s *Service) fail(id string, cause error) {
 		})
 		emit(eventUpdated, snap)
 		s.notifyFinished(snap)
+		s.recordInstallFailure(id, snap, cause)
 	case j != nil && j.cancelled:
 		// пользовательская отмена — не провал, событие install_failed не шлём
 		s.markCancelledLocked(item)
@@ -1098,6 +1102,28 @@ func (s *Service) fail(id string, cause error) {
 		})
 		emit(eventUpdated, snap)
 		s.notifyFinished(snap)
+		s.recordInstallFailure(id, snap, cause)
+	}
+}
+
+// recordInstallFailure writes the terminal install_failed entry. fail() runs
+// at the end of a background job (or of ConfirmExecutable) with no caller
+// left to propagate a journal error to; Record already flipped history into
+// Degraded and emitted history:degraded, so the user learns about the
+// journal problem from the banner instead of a failed install turning into
+// a failed-twice report.
+func (s *Service) recordInstallFailure(id string, snap Installation, cause error) {
+	if s.historyRecorder == nil {
+		return
+	}
+	if err := s.historyRecorder(history.Record{
+		Kind:   history.KindInstallFailed,
+		GameID: snap.Origin.GameID,
+		Title:  snap.Name,
+		Detail: cause.Error(),
+		RefID:  id,
+	}); err != nil {
+		slog.Error("record install history", "id", id, "error", err)
 	}
 }
 

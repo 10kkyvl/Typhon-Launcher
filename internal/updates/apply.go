@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/history"
 	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/usagestats"
@@ -115,6 +116,14 @@ func (s *Service) StartUpdate(gameID string) error {
 			})
 			slog.Info("update completed", "game", gameID, "version", plan.TargetVersion)
 			s.recheck(gameID)
+			s.recordUpdateHistory(history.Record{
+				Kind:        history.KindUpdated,
+				GameID:      canonicalID,
+				Title:       s.gameTitle(gameID),
+				FromVersion: plan.InstalledVersion,
+				ToVersion:   plan.TargetVersion,
+				RefID:       gameID,
+			})
 		case ctx.Err() != nil:
 			// Отмена через CancelUpdate или остановка сервиса. В UI это не
 			// «обновление упало», но терминальное событие всё равно нужно:
@@ -136,6 +145,15 @@ func (s *Service) StartUpdate(gameID string) error {
 				u.Progress = 0
 				u.Error = interruptedUpdateText
 			})
+			s.recordUpdateHistory(history.Record{
+				Kind:        history.KindUpdateFailed,
+				GameID:      canonicalID,
+				Title:       s.gameTitle(gameID),
+				FromVersion: plan.InstalledVersion,
+				ToVersion:   plan.TargetVersion,
+				Detail:      interruptedUpdateText,
+				RefID:       gameID,
+			})
 		default:
 			s.finishHistory(entry.ID, HistoryFailed, err.Error())
 			failed, _ := s.mutate(gameID, func(u *Update) {
@@ -155,6 +173,15 @@ func (s *Service) StartUpdate(gameID string) error {
 				},
 			})
 			slog.Error("update failed", "game", gameID, "error", err)
+			s.recordUpdateHistory(history.Record{
+				Kind:        history.KindUpdateFailed,
+				GameID:      canonicalID,
+				Title:       s.gameTitle(gameID),
+				FromVersion: plan.InstalledVersion,
+				ToVersion:   plan.TargetVersion,
+				Detail:      err.Error(),
+				RefID:       gameID,
+			})
 		}
 	}()
 	return nil
@@ -606,6 +633,7 @@ func (s *Service) Rollback(gameID string) error {
 	if entry.InstallDir == "" {
 		return errEmptyInstallDir
 	}
+	current, _ := s.installedGame(gameID)
 	replaced := entry.InstallDir + replacedSuffix
 	removeTree(replaced)
 	if _, err := os.Stat(entry.InstallDir); err == nil {
@@ -657,6 +685,20 @@ func (s *Service) Rollback(gameID string) error {
 	slog.Info("update rolled back", "game", gameID, "version", entry.Version)
 	emit(eventRollback, snap)
 	s.recheck(gameID)
+	// Откат уже выполнен и зафиксирован. Ошибка журнала не должна превращать
+	// успешный откат в неуспешный: о сбое журнала сообщает он сам.
+	if s.historyRecorder != nil {
+		if err := s.historyRecorder(history.Record{
+			Kind:        history.KindRolledBack,
+			GameID:      s.canonicalGameID(gameID),
+			Title:       s.gameTitle(gameID),
+			FromVersion: current.Version,
+			ToVersion:   entry.Version,
+			RefID:       gameID,
+		}); err != nil {
+			slog.Error("record history", "kind", history.KindRolledBack, "game", gameID, "error", err)
+		}
+	}
 	return nil
 }
 

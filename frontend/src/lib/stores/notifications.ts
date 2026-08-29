@@ -1,7 +1,9 @@
 import { derived, get, writable } from 'svelte/store';
 import { active } from './downloads';
+import { historyRecent } from './history';
 import { installActive, installations } from './install';
-import type { RouteName } from './router';
+import { mergeNotifications } from '../notifications/merge';
+import { navigate, type RouteName } from './router';
 import { selfUpdateStatus } from './selfupdate';
 import type { SelfUpdateStatus } from '../services/selfupdate';
 import { sources } from './sources';
@@ -16,6 +18,8 @@ export interface Notification {
   title: string;
   text: string;
   route: RouteName;
+  refId?: string;
+  terminal: boolean;
 }
 
 const READ_STORAGE_KEY = 'typhon.notifications.read';
@@ -58,6 +62,7 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
       title: 'Обновление лаунчера',
       text,
       route: 'settings',
+      terminal: false,
     };
   }
   if (status.state === 'ready' && status.availableVersion) {
@@ -66,6 +71,7 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
       title: 'Обновление лаунчера',
       text: `Версия ${status.availableVersion} готова к установке`,
       route: 'settings',
+      terminal: false,
     };
   }
   if (status.state === 'available' && status.availableVersion) {
@@ -74,14 +80,15 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
       title: 'Обновление лаунчера',
       text: `Доступна версия ${status.availableVersion}`,
       route: 'settings',
+      terminal: false,
     };
   }
   return null;
 }
 
 const allNotifications = derived(
-  [active, installations, updates, sources, selfUpdateStatus],
-  ([$active, $installations, $updates, $sources, $selfUpdateStatus]): Notification[] => {
+  [active, installations, updates, sources, selfUpdateStatus, historyRecent],
+  ([$active, $installations, $updates, $sources, $selfUpdateStatus, $historyRecent]): Notification[] => {
     const items: Notification[] = [];
 
     const launcherUpdate = launcherUpdateNotification($selfUpdateStatus);
@@ -94,6 +101,7 @@ const allNotifications = derived(
         title: source.name,
         text: source.lastError,
         route: 'sources',
+        terminal: false,
       });
     }
 
@@ -104,6 +112,8 @@ const allNotifications = derived(
           title: update.title,
           text: `Обновление не удалось: ${update.error}`,
           route: 'installed',
+          refId: update.gameId,
+          terminal: true,
         });
         continue;
       }
@@ -113,6 +123,7 @@ const allNotifications = derived(
           title: update.title,
           text: `Обновление идёт — ${pct(update.progress)}`,
           route: 'installed',
+          terminal: false,
         });
         continue;
       }
@@ -122,6 +133,7 @@ const allNotifications = derived(
           title: update.title,
           text: 'Доступно обновление',
           route: 'installed',
+          terminal: false,
         });
       }
     }
@@ -133,6 +145,7 @@ const allNotifications = derived(
         title: install.name,
         text: `Установка — ${pct(install.progress)}`,
         route: 'downloads',
+        terminal: false,
       });
     }
 
@@ -142,10 +155,11 @@ const allNotifications = derived(
         title: download.name,
         text: `Загрузка — ${pct(download.progress)}`,
         route: 'downloads',
+        terminal: false,
       });
     }
 
-    return items;
+    return mergeNotifications(items, $historyRecent);
   },
 );
 
@@ -171,4 +185,8 @@ export function markAllRead() {
   for (const item of current) next.add(item.id);
   readIds.set(next);
   persistRead(next);
+}
+
+export function openHistory() {
+  navigate('history');
 }

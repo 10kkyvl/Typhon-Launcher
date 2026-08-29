@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/history"
 	"typhon/internal/platform"
 	"typhon/internal/procs"
 	"typhon/internal/settings"
@@ -112,6 +113,7 @@ type Service struct {
 	onSession     func(gameID string, seconds int64)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
+	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
 	sessionWG     sync.WaitGroup
 	scan          func(context.Context) ([]procs.Process, error)
@@ -526,6 +528,20 @@ func (s *Service) RemoveGame(id string) error {
 		}
 		slog.Info("game removed", "id", id, "title", game.Title)
 		s.emitUpdated()
+		// Игра уже удалена и сохранена. Вернуть отсюда ошибку журнала значит
+		// сказать пользователю «не удалось удалить» про удалённую игру; о сбое
+		// самого журнала он узнаёт из его признака degraded.
+		if s.historyRecord != nil {
+			if err := s.historyRecord(history.Record{
+				Kind:       history.KindRemoved,
+				GameID:     game.ID,
+				Title:      game.Title,
+				Bytes:      game.SizeBytes,
+				BytesKnown: !game.SizeUnknown,
+			}); err != nil {
+				slog.Error("record history", "kind", history.KindRemoved, "id", id, "error", err)
+			}
+		}
 		return nil
 	}
 	return errNotFound
@@ -561,6 +577,18 @@ func (s *Service) MarkUninstalled(id string) error {
 		}
 		slog.Info("game uninstalled", "id", id, "title", s.games[i].Title)
 		s.emitUpdated()
+		// Запись уже обновлена и сохранена — см. комментарий в RemoveGame.
+		if s.historyRecord != nil {
+			if err := s.historyRecord(history.Record{
+				Kind:       history.KindUninstalled,
+				GameID:     previous.ID,
+				Title:      previous.Title,
+				Bytes:      previous.SizeBytes,
+				BytesKnown: !previous.SizeUnknown,
+			}); err != nil {
+				slog.Error("record history", "kind", history.KindUninstalled, "id", id, "error", err)
+			}
+		}
 		return nil
 	}
 	return errNotFound

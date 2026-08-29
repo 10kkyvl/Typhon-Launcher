@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/history"
 	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/settings"
@@ -110,7 +111,8 @@ type Service struct {
 	jobs    map[string]*job
 	waiters map[string]chan install.Installation
 
-	usageRecorder func(usagestats.Event)
+	usageRecorder   func(usagestats.Event)
+	historyRecorder func(history.Record) error
 
 	ctx     context.Context
 	cancel  context.CancelFunc
