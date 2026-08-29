@@ -38,7 +38,9 @@
             <span class="release-edition">{release.edition}</span>
           {/if}
         </div>
-        <span class="release-size">{bytesSize(release.size)}</span>
+        <span class="release-size"
+          >{bytesSize(release.size)}{#if release.dlcCount} +{release.dlcCount} DLC{/if}</span
+        >
         {#if showLanguages}
           <span class="release-lang">{languageLabel(release.languages)}</span>
         {/if}
@@ -56,6 +58,9 @@
         </span>
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>
         <div class="release-badges">
+          {#if release.repacker}
+            <StatusBadge kind="neutral" label={release.repacker.toUpperCase()} plain />
+          {/if}
           {#if current}
             <StatusBadge kind="success" label="Установлено" plain />
           {:else if updateReleaseId && release.id === updateReleaseId}

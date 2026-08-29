@@ -103,6 +103,41 @@ func TestFetchBadContentType(t *testing.T) {
 	}
 }
 
+func TestFetchAcceptsOctetStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(validFeedJSON)); err != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+
+	res, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	if len(res.Feed.Entries) != 1 {
+		t.Fatalf("entries = %d", len(res.Feed.Entries))
+	}
+}
+
+func TestFetchRejectsHTML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("<html><body>error page</body></html>")); err != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
+	if !errors.Is(err, ErrBadContentType) {
+		t.Errorf("got %v, want ErrBadContentType", err)
+	}
+}
+
 func TestFetchContentLengthTooLarge(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -17,6 +17,7 @@ type Parsed struct {
 	Languages  []string
 	Year       int
 	Tags       []string
+	DLCCount   int
 }
 
 func Parse(raw string) Parsed {
@@ -30,6 +31,7 @@ func Parse(raw string) Parsed {
 	s = reWWW.ReplaceAllString(s, " ")
 
 	s, rawVersion, version := extractVersion(s)
+	s, dlcCount := extractDLCCount(s)
 	s, year, bracketLangs, bracketTags := extractBrackets(s)
 	s, dashLangs, dashTags := extractLangAndDashTags(s)
 
@@ -71,7 +73,21 @@ func Parse(raw string) Parsed {
 		Languages:  languages,
 		Year:       year,
 		Tags:       tags,
+		DLCCount:   dlcCount,
 	}
+}
+
+func extractDLCCount(s string) (string, int) {
+	loc := reDLCCount.FindStringSubmatchIndex(s)
+	if loc == nil {
+		return s, 0
+	}
+	n, err := strconv.Atoi(s[loc[2]:loc[3]])
+	if err != nil {
+		return s, 0
+	}
+	newS := s[:loc[0]] + " " + s[loc[1]:]
+	return newS, n
 }
 
 func extractVersion(s string) (string, string, string) {

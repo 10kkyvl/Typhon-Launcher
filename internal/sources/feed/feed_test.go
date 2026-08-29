@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -70,16 +71,35 @@ func TestParseURIVariants(t *testing.T) {
 
 func TestParseFileSizeVariants(t *testing.T) {
 	cases := []struct {
-		size string
-		want int64
-		warn bool
+		size    string
+		want    int64
+		warn    bool
+		unknown bool
 	}{
-		{`1024`, 1024, false},
-		{`"1024"`, 1024, false},
-		{`"42 GB"`, 42_000_000_000, false},
-		{`"1.5 GiB"`, int64(1.5 * 1024 * 1024 * 1024), false},
-		{`"700MB"`, 700_000_000, false},
-		{`"garbage"`, 0, true},
+		{`1024`, 1024, false, false},
+		{`"1024"`, 1024, false, false},
+		{`"42 GB"`, 42_000_000_000, false, false},
+		{`"1.5 GiB"`, int64(1.5 * 1024 * 1024 * 1024), false, false},
+		{`"700MB"`, 700_000_000, false, false},
+		{`"1.5GB"`, 1_500_000_000, false, false},
+		{`"garbage"`, 0, true, false},
+		{`"lolwut"`, 0, true, false},
+		{`"5.6/6.4 GB"`, 6_400_000_000, false, false},
+		{`"11,6 GB"`, 11_600_000_000, false, false},
+		{`"1,234 MB"`, 1_234_000_000, false, false},
+		{`"N/A"`, 0, false, true},
+		{`"n/a"`, 0, false, true},
+		{`"?"`, 0, false, true},
+		{`"unknown"`, 0, false, true},
+		{`"неизвестно"`, 0, false, true},
+		{`""`, 0, false, true},
+		{`null`, 0, false, true},
+		{`"~12 GB"`, 12_000_000_000, false, false},
+		{`"from 11.6 GB"`, 11_600_000_000, false, false},
+		{`"approx. 12 GB"`, 12_000_000_000, false, false},
+		{`">12 GB"`, 12_000_000_000, false, false},
+		{`"<12 GB"`, 12_000_000_000, false, false},
+		{`"5 гб"`, 5_000_000_000, false, false},
 	}
 	for _, c := range cases {
 		data := []byte(`{"downloads":[{"title":"Game A","uri":"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","fileSize":` + c.size + `}]}`)
@@ -93,8 +113,46 @@ func TestParseFileSizeVariants(t *testing.T) {
 		if f.Entries[0].Size != c.want {
 			t.Errorf("size %s: got %d want %d", c.size, f.Entries[0].Size, c.want)
 		}
+		if f.Entries[0].SizeUnknown != c.unknown {
+			t.Errorf("size %s: SizeUnknown = %v, want %v", c.size, f.Entries[0].SizeUnknown, c.unknown)
+		}
 		if c.warn && len(f.Warnings) == 0 {
 			t.Errorf("size %s: expected warning", c.size)
+		}
+		if c.unknown && len(f.Warnings) != 0 {
+			t.Errorf("size %s: expected no warning, got %v", c.size, f.Warnings)
+		}
+	}
+}
+
+func TestParseKeepsOldSizesWorking(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields string
+		want   int64
+	}{
+		{"plain integer", `,"fileSize":1234`, 1234},
+		{"quoted integer", `,"fileSize":"1234"`, 1234},
+		{"decimal GB", `,"fileSize":"1.5 GB"`, 1_500_000_000},
+		{"no-space unit", `,"fileSize":"1.5GB"`, 1_500_000_000},
+		{"float json number", `,"fileSize":12345.0`, 12345},
+		{"json null", `,"fileSize":null`, 0},
+		{"field absent", ``, 0},
+	}
+	for _, c := range cases {
+		data := []byte(`{"downloads":[{"title":"Game A","uri":"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"` + c.fields + `}]}`)
+		f, err := Parse(data)
+		if err != nil {
+			t.Fatalf("%s: Parse error: %v", c.name, err)
+		}
+		if len(f.Entries) != 1 {
+			t.Fatalf("%s: entries = %+v", c.name, f.Entries)
+		}
+		if f.Entries[0].Size != c.want {
+			t.Errorf("%s: size = %d, want %d", c.name, f.Entries[0].Size, c.want)
+		}
+		if len(f.Warnings) != 0 {
+			t.Errorf("%s: warnings = %v, want none", c.name, f.Warnings)
 		}
 	}
 }
@@ -299,6 +357,60 @@ func TestParseDuplicates(t *testing.T) {
 	}
 	if len(f.Warnings) == 0 {
 		t.Error("expected duplicate warning")
+	}
+}
+
+func TestParseHTTPOnlyEntryGetsDistinctWarning(t *testing.T) {
+	data := []byte(`{"downloads":[
+		{"title":"HTTP Only Game", "uris":["http://example.com/a.zip","https://example.com/b.zip"]},
+		{"title":"Valid Game", "uri":"magnet:?xt=urn:btih:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}
+	]}`)
+	f, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(f.Entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(f.Entries))
+	}
+	if f.Invalid != 1 {
+		t.Fatalf("Invalid = %d, want 1", f.Invalid)
+	}
+	found := false
+	for _, w := range f.Warnings {
+		if strings.Contains(w, "доступны только по прямой ссылке") {
+			found = true
+		}
+		if strings.Contains(w, "нет валидного URI") {
+			t.Errorf("http-only entry should not be reported as having no URI, got warning %q", w)
+		}
+	}
+	if !found {
+		t.Errorf("expected http-only warning, got %v", f.Warnings)
+	}
+}
+
+func TestParseMixedNonMagnetSchemesStayNoURI(t *testing.T) {
+	data := []byte(`{"downloads":[
+		{"title":"Weird Scheme Game", "uris":["ed2k://foo","ftp://example.com/a.zip"]}
+	]}`)
+	f, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(f.Entries) != 0 || f.Invalid != 1 {
+		t.Fatalf("entries=%d invalid=%d, want 0 entries and 1 invalid", len(f.Entries), f.Invalid)
+	}
+	found := false
+	for _, w := range f.Warnings {
+		if strings.Contains(w, "нет валидного URI") {
+			found = true
+		}
+		if strings.Contains(w, "доступны только по прямой ссылке") {
+			t.Errorf("non-http non-magnet entry should not be reported as http-only, got warning %q", w)
+		}
+	}
+	if !found {
+		t.Errorf("expected no-URI warning, got %v", f.Warnings)
 	}
 }
 

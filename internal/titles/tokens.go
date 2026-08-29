@@ -36,21 +36,24 @@ var archTokens = map[string]string{
 }
 
 var releaseSingleTags = map[string]string{
-	"dlc":      "dlc",
-	"dlcs":     "dlc",
-	"update":   "update",
-	"updates":  "update",
-	"patch":    "patch",
-	"hotfix":   "hotfix",
-	"repack":   "repack",
-	"codex":    "codex",
-	"fitgirl":  "fitgirl",
-	"dodi":     "dodi",
-	"elamigos": "elamigos",
-	"crack":    "crack",
-	"proper":   "proper",
-	"incl":     "incl",
-	"gog":      "gog",
+	"dlc":        "dlc",
+	"dlcs":       "dlc",
+	"update":     "update",
+	"updates":    "update",
+	"patch":      "patch",
+	"hotfix":     "hotfix",
+	"repack":     "repack",
+	"codex":      "codex",
+	"fitgirl":    "fitgirl",
+	"dodi":       "dodi",
+	"elamigos":   "elamigos",
+	"xatab":      "xatab",
+	"kaoskrew":   "kaoskrew",
+	"masquerade": "masquerade",
+	"crack":      "crack",
+	"proper":     "proper",
+	"incl":       "incl",
+	"gog":        "gog",
 }
 
 var editionPhrases = []string{
@@ -128,6 +131,7 @@ var (
 	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	reVVer      = regexp.MustCompile(`(?i)\bv(\d+(?:\.\d+){0,4})\b`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
+	reDLCCount  = regexp.MustCompile(`(?i)\+\s*(\d+)\s*(?:dlc(?:'s|s)?|дополнени\p{L}*)`)
 
 	reExt = regexp.MustCompile(`(?i)\.(rar|zip|iso|7z|exe|torrent)$`)
 	reURL = regexp.MustCompile(`(?i)https?://\S+`)

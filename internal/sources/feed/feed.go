@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +31,7 @@ type Entry struct {
 	URIs        []string
 	UploadedAt  *time.Time
 	Size        int64
+	SizeUnknown bool
 }
 
 type Feed struct {
@@ -74,6 +74,7 @@ type warningCounter struct {
 	invalidTitle     int
 	noURI            int
 	nonMagnetDropped int
+	httpOnlyDropped  int
 	tooLongURI       int
 	uriListTruncated int
 	negativeSize     int
@@ -97,6 +98,9 @@ func (w warningCounter) build() []string {
 	}
 	if w.nonMagnetDropped > 0 {
 		out = append(out, fmt.Sprintf("%d URI пропущено: поддерживается только magnet", w.nonMagnetDropped))
+	}
+	if w.httpOnlyDropped > 0 {
+		out = append(out, fmt.Sprintf("%d раздач доступны только по прямой ссылке — прямые ссылки пока не поддерживаются", w.httpOnlyDropped))
 	}
 	if w.tooLongURI > 0 {
 		out = append(out, fmt.Sprintf("%d URI пропущено: превышена максимальная длина", w.tooLongURI))
@@ -253,6 +257,8 @@ func Parse(data []byte) (Feed, error) {
 
 		candidates := rawURIs(re)
 		uris := make([]string, 0, len(candidates))
+		consideredURIs := 0
+		httpURIs := 0
 		for _, u := range candidates {
 			u = strings.TrimSpace(u)
 			if u == "" {
@@ -262,8 +268,13 @@ func Parse(data []byte) (Feed, error) {
 				wc.tooLongURI++
 				continue
 			}
-			if !strings.HasPrefix(strings.ToLower(u), "magnet:") {
+			consideredURIs++
+			lower := strings.ToLower(u)
+			if !strings.HasPrefix(lower, "magnet:") {
 				wc.nonMagnetDropped++
+				if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+					httpURIs++
+				}
 				continue
 			}
 			uris = append(uris, u)
@@ -274,17 +285,28 @@ func Parse(data []byte) (Feed, error) {
 		}
 		if len(uris) == 0 {
 			invalid++
-			wc.noURI++
+			if consideredURIs > 0 && httpURIs == consideredURIs {
+				wc.httpOnlyDropped++
+			} else {
+				wc.noURI++
+			}
 			continue
 		}
 
-		size, sizeOK := parseSize(re.FileSize)
-		if !sizeOK {
+		size, sState := parseSize(re.FileSize)
+		unknownSize := false
+		switch sState {
+		case sizeBad:
 			wc.badSize++
 			size = 0
-		} else if size < 0 {
-			wc.negativeSize++
+		case sizeUnknown:
+			unknownSize = true
 			size = 0
+		default:
+			if size < 0 {
+				wc.negativeSize++
+				size = 0
+			}
 		}
 
 		dateRaw := firstNonEmptyRaw(re.UploadDate, re.UploadedAt, re.Date)
@@ -323,6 +345,7 @@ func Parse(data []byte) (Feed, error) {
 			URIs:        uris,
 			UploadedAt:  uploadedAt,
 			Size:        size,
+			SizeUnknown: unknownSize,
 		})
 	}
 	if len(entries) == 0 {
@@ -363,6 +386,7 @@ func Fingerprint(f Feed) string {
 			strconv.Itoa(e.Sequence),
 			strings.Join(uris, "\x1e"),
 			strconv.FormatInt(e.Size, 10),
+			strconv.FormatBool(e.SizeUnknown),
 		}, "\x1f"))
 	}
 	sort.Strings(parts)
@@ -380,60 +404,241 @@ func Fingerprint(f Feed) string {
 	return hex.EncodeToString(sum)[:32]
 }
 
-var sizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)$`)
+type sizeState int
+
+const (
+	sizeOK sizeState = iota
+	sizeUnknown
+	sizeBad
+)
 
 var sizeUnits = map[string]float64{
 	"b": 1, "byte": 1, "bytes": 1,
 	"kb": 1000, "mb": 1e6, "gb": 1e9, "tb": 1e12,
 	"kib": 1024, "mib": 1024 * 1024, "gib": 1024 * 1024 * 1024, "tib": 1024 * 1024 * 1024 * 1024,
+	"б": 1, "кб": 1000, "мб": 1e6, "гб": 1e9, "тб": 1e12,
 }
 
-func parseSize(raw json.RawMessage) (int64, bool) {
+var sizeUnknownTokens = map[string]bool{
+	"":           true,
+	"-":          true,
+	"—":          true,
+	"?":          true,
+	"n/a":        true,
+	"na":         true,
+	"unknown":    true,
+	"неизвестно": true,
+	"null":       true,
+}
+
+var sizePrefixes = []string{"~", "≈", ">", "<", "approx.", "starting from", "from", "от"}
+
+func stripSizePrefix(s string) string {
+	s = strings.TrimSpace(s)
+	for {
+		stripped := false
+		lower := strings.ToLower(s)
+		for _, p := range sizePrefixes {
+			if strings.HasPrefix(lower, strings.ToLower(p)) {
+				s = strings.TrimSpace(s[len(p):])
+				stripped = true
+				break
+			}
+		}
+		if !stripped {
+			return s
+		}
+	}
+}
+
+func splitSizePair(s string) (string, string, bool) {
+	if strings.Count(s, "/") != 1 {
+		return "", "", false
+	}
+	idx := strings.IndexByte(s, '/')
+	left := strings.TrimSpace(s[:idx])
+	right := strings.TrimSpace(s[idx+1:])
+	if left == "" || right == "" {
+		return "", "", false
+	}
+	return left, right, true
+}
+
+func splitNumberUnit(s string) (string, string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", "", false
+	}
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		r := runes[i]
+		if (r >= '0' && r <= '9') || r == '.' || r == ',' || r == ' ' {
+			i++
+			continue
+		}
+		break
+	}
+	numPart := strings.TrimSpace(string(runes[:i]))
+	unitPart := strings.TrimSpace(strings.TrimSuffix(string(runes[i:]), "."))
+	if numPart == "" {
+		return "", "", false
+	}
+	return numPart, unitPart, true
+}
+
+func normalizeSizeNumber(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	hasDot := strings.Contains(raw, ".")
+	runes := []rune(raw)
+	var b strings.Builder
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.':
+			b.WriteRune(r)
+		case r == ',' || r == ' ':
+			j := i + 1
+			for j < len(runes) && runes[j] >= '0' && runes[j] <= '9' {
+				j++
+			}
+			digitsFollowing := j - (i + 1)
+			switch {
+			case digitsFollowing == 3 && !hasDot:
+			case r == ',' && digitsFollowing >= 1 && digitsFollowing <= 2:
+				b.WriteByte('.')
+			default:
+				return "", false
+			}
+		default:
+			return "", false
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "", false
+	}
+	return out, true
+}
+
+func parseSizeComponent(s string) (float64, string, bool) {
+	numPart, unitPart, ok := splitNumberUnit(s)
+	if !ok {
+		return 0, "", false
+	}
+	norm, ok := normalizeSizeNumber(numPart)
+	if !ok {
+		return 0, "", false
+	}
+	val, err := strconv.ParseFloat(norm, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	return val, strings.ToLower(unitPart), true
+}
+
+func parseSizeAtom(s string) (int64, sizeState) {
+	num, unit, ok := parseSizeComponent(s)
+	if !ok {
+		return 0, sizeBad
+	}
+	if unit == "" {
+		return int64(num), sizeOK
+	}
+	mult, ok := sizeUnits[unit]
+	if !ok {
+		return 0, sizeBad
+	}
+	return int64(num * mult), sizeOK
+}
+
+func parseSizePair(left, right string) (int64, sizeState) {
+	lnum, lunit, lok := parseSizeComponent(left)
+	rnum, runit, rok := parseSizeComponent(right)
+	if !lok && !rok {
+		return 0, sizeBad
+	}
+
+	var leftBytes, rightBytes int64
+	haveLeft, haveRight := false, false
+
+	if lok && lunit != "" {
+		mult, ok := sizeUnits[lunit]
+		if !ok {
+			return 0, sizeBad
+		}
+		leftBytes = int64(lnum * mult)
+		haveLeft = true
+	}
+	if rok && runit != "" {
+		mult, ok := sizeUnits[runit]
+		if !ok {
+			return 0, sizeBad
+		}
+		rightBytes = int64(rnum * mult)
+		haveRight = true
+	}
+	if !haveLeft && lok && runit != "" {
+		leftBytes = int64(lnum * sizeUnits[runit])
+		haveLeft = true
+	}
+	if !haveRight && rok && lunit != "" {
+		rightBytes = int64(rnum * sizeUnits[lunit])
+		haveRight = true
+	}
+
+	switch {
+	case haveLeft && haveRight:
+		if leftBytes > rightBytes {
+			return leftBytes, sizeOK
+		}
+		return rightBytes, sizeOK
+	case haveLeft:
+		return leftBytes, sizeOK
+	case haveRight:
+		return rightBytes, sizeOK
+	default:
+		return 0, sizeBad
+	}
+}
+
+func parseSizeString(s string) (int64, sizeState) {
+	s = strings.TrimSpace(s)
+	s = stripSizePrefix(s)
+	if sizeUnknownTokens[strings.ToLower(s)] {
+		return 0, sizeUnknown
+	}
+	if left, right, ok := splitSizePair(s); ok {
+		return parseSizePair(left, right)
+	}
+	return parseSizeAtom(s)
+}
+
+func parseSize(raw json.RawMessage) (int64, sizeState) {
 	if len(raw) == 0 {
-		return 0, true
+		return 0, sizeUnknown
 	}
 	trimmed := bytes.TrimSpace(raw)
 	if string(trimmed) == "null" {
-		return 0, true
+		return 0, sizeUnknown
 	}
 	if trimmed[0] == '"' {
 		var s string
 		if err := json.Unmarshal(trimmed, &s); err != nil {
-			return 0, false
+			return 0, sizeBad
 		}
 		return parseSizeString(s)
 	}
 	var f float64
 	if err := json.Unmarshal(trimmed, &f); err != nil {
-		return 0, false
+		return 0, sizeBad
 	}
-	return int64(f), true
-}
-
-func parseSizeString(s string) (int64, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, false
-	}
-	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return n, true
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return int64(f), true
-	}
-	m := sizePattern.FindStringSubmatch(s)
-	if m == nil {
-		return 0, false
-	}
-	num, err := strconv.ParseFloat(m[1], 64)
-	if err != nil {
-		return 0, false
-	}
-	unit, ok := sizeUnits[strings.ToLower(m[2])]
-	if !ok {
-		return 0, false
-	}
-	return int64(num * unit), true
+	return int64(f), sizeOK
 }
 
 var dateLayouts = []string{

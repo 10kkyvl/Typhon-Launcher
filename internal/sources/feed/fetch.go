@@ -68,7 +68,8 @@ func acceptableContentType(ct string) bool {
 	}
 	mt = strings.ToLower(mt)
 	switch mt {
-	case "application/json", "text/json", "text/plain":
+	case "application/json", "text/json", "text/plain",
+		"application/octet-stream", "application/binary", "application/x-json":
 		return true
 	}
 	if strings.HasPrefix(mt, "application/") && strings.HasSuffix(mt, "+json") {
