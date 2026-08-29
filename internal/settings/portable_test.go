@@ -31,6 +31,7 @@ var portableNames = []string{
 }
 
 var localNames = []string{
+	"lanSharing",
 	"libraryPath",
 	"downloadsPath",
 	"gamesPath",

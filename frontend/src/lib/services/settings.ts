@@ -32,6 +32,7 @@ export interface Settings {
   updateSaveBackup: boolean;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
+  lanSharing: boolean;
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
@@ -71,6 +72,7 @@ const fallbackDefaults: Settings = {
   updateSaveBackup: true,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
+  lanSharing: false,
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
   anonymousDiagnostics: true,
