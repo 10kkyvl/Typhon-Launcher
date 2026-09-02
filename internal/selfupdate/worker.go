@@ -45,7 +45,11 @@ type Outcome struct {
 }
 
 var (
-	parentExitTimeout  = 30 * time.Second
+	// The launcher flushes telemetry and waits for its services on the way
+	// out; on a blocked network every one of those hits its own timeout in
+	// turn, and an antivirus scanning the new binary adds more. Waiting
+	// longer costs a progress window, giving up costs the update.
+	parentExitTimeout  = 90 * time.Second
 	parentPollInterval = 250 * time.Millisecond
 	applyTimeout       = 5 * time.Minute
 )

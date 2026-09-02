@@ -4,6 +4,7 @@
   import ProgressBar from './ProgressBar.svelte';
   import {
     dismissOutcome,
+    requestCancelDownload,
     selfUpdateDownloading,
     selfUpdateOutcome,
     selfUpdateProgress,
@@ -42,6 +43,9 @@
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
       <span class="title">Загрузка обновления {version}</span>
+      <IconButton label="Отменить загрузку" size="sm" onclick={requestCancelDownload}>
+        <X size="1.6rem" strokeWidth={1.8} />
+      </IconButton>
     </div>
     <ProgressBar value={pct} />
     <span class="meta">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)} · {Math.round(pct)}%</span>

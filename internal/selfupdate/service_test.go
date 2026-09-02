@@ -467,8 +467,8 @@ func TestCheckForUpdateCancelledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("CheckForUpdate() error = %v, want context.Canceled", err)
 	}
-	if status.Error == "" {
-		t.Fatal("Error is empty for a cancelled check")
+	if status.Error != "" || status.ErrorCode != "" {
+		t.Fatalf("a cancelled check is nobody's failure, yet status = %+v", status)
 	}
 
 	cacheDir, err := CacheDir(dir)
@@ -477,47 +477,6 @@ func TestCheckForUpdateCancelledContext(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(cacheDir, "state.json")); !errors.Is(statErr, fs.ErrNotExist) {
 		t.Fatalf("state.json was created for a cancelled check: %v", statErr)
-	}
-}
-
-// TestCheckForUpdateBusyRejectsConcurrentDownload exercises the real race
-// between two goroutines sharing s.mu: CheckForUpdate is held inside its
-// network call by a server that blocks until released, and a concurrent
-// DownloadUpdate must observe busy=true and bounce off immediately. Run under
-// -race, this fails if the busy check and the busy flag write are ever split
-// across two lock acquisitions.
-func TestCheckForUpdateBusyRejectsConcurrentDownload(t *testing.T) {
-	started := make(chan struct{})
-	release := make(chan struct{})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(started)
-		<-release
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	client, err := NewClient(srv.URL)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	dir := t.TempDir()
-	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: mustStore(t, dir), client: client, currentVersion: "1.0.0"}
-
-	checkErr := make(chan error, 1)
-	go func() {
-		_, err := s.CheckForUpdate(context.Background())
-		checkErr <- err
-	}()
-
-	<-started
-
-	if _, err := s.DownloadUpdate(context.Background()); !errors.Is(err, ErrBusy) {
-		t.Fatalf("DownloadUpdate() error = %v, want ErrBusy while a check is in flight", err)
-	}
-
-	close(release)
-	if err := <-checkErr; err == nil {
-		t.Fatal("CheckForUpdate() error = nil, want the 500 response surfaced once released")
 	}
 }
 
@@ -638,8 +597,8 @@ func TestDownloadUpdatePersistFailureLeavesStoreUntouched(t *testing.T) {
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("DownloadUpdate() error = %v, want ErrReadOnly", err)
 	}
-	if status != (Status{}) {
-		t.Fatalf("status = %+v, want zero value when persist fails", status)
+	if status.State != StateAvailable || status.ErrorCode != "download" {
+		t.Fatalf("status = %+v, want available with a download error, not a status stuck on downloading", status)
 	}
 
 	after, err := os.ReadFile(statePath)
@@ -667,8 +626,8 @@ func TestDownloadUpdateCancelledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("DownloadUpdate() error = %v, want context.Canceled", err)
 	}
-	if status.ErrorCode != "download" {
-		t.Fatalf("ErrorCode = %q, want %q", status.ErrorCode, "download")
+	if status.Error != "" || status.ErrorCode != "" || status.State == StateDownloading {
+		t.Fatalf("a cancelled download is nobody's failure, yet status = %+v", status)
 	}
 
 	cacheDir, err := CacheDir(dir)

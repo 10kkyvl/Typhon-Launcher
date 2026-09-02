@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -82,6 +83,17 @@ func (c *Client) Download(ctx context.Context, art Artifact, destDir string, onP
 
 func worthRetrying(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	// A host that cannot be reached at all (no VPN, DNS poisoned, port
+	// closed) answers the same way every time: retrying only makes the user
+	// wait through the dial timeout three times.
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return false
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "dial" {
 		return false
 	}
 	if errors.Is(err, ErrStalled) || errors.Is(err, errArtifactRead) {

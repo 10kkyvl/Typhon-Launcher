@@ -21,6 +21,7 @@ vi.mock('../services/selfupdate', () => ({
   downloadUpdate: vi.fn(),
   applyUpdate: vi.fn(),
   dismissUpdate: vi.fn(),
+  cancelDownload: vi.fn(),
   getReleaseNotes: vi.fn(),
   acknowledgeReleaseNotes: vi.fn(),
   emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
@@ -90,19 +91,60 @@ describe('initSelfUpdate', () => {
 
     await store.initSelfUpdate();
     handlers['launcher:update_status']({
-      data: {
-        state: 'available',
-        currentVersion: '1.0.0',
-        availableVersion: '1.1.0',
-        error: 'network down',
-        errorCode: 'manifest',
-      },
+      data: { state: 'idle', currentVersion: '1.0.0', error: 'network down', errorCode: 'manifest' },
     });
 
     const status = get(store.selfUpdateStatus);
     expect(status.error).toBe('network down');
     expect(get(store.selfUpdateView)).toBe('failed');
-    expect(get(store.selfUpdateView)).not.toBe('idle');
+  });
+
+  it('keeps a downloaded update installable when a later check fails', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    handlers['launcher:update_status']({
+      data: { state: 'ready', currentVersion: '1.0.0', availableVersion: '1.1.0', error: 'network down', errorCode: 'manifest' },
+    });
+
+    expect(get(store.selfUpdateView)).toBe('ready');
+  });
+
+  it('keeps an available update downloadable when only the check failed', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    handlers['launcher:update_status']({
+      data: { state: 'available', currentVersion: '1.0.0', availableVersion: '1.1.0', error: 'network down', errorCode: 'manifest' },
+    });
+
+    expect(get(store.selfUpdateView)).toBe('available');
+  });
+
+  it('shows a failed download as failed so it can be retried', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    handlers['launcher:update_status']({
+      data: { state: 'available', currentVersion: '1.0.0', availableVersion: '1.1.0', error: 'dial tcp', errorCode: 'download' },
+    });
+
+    expect(get(store.selfUpdateView)).toBe('failed');
+  });
+
+  it('drops stale progress once the status leaves downloading', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    handlers['launcher:update_status']({ data: makeStatus({ state: 'downloading', availableVersion: '1.2.0' }) });
+    handlers['launcher:update_progress']({ data: { version: '1.2.0', totalBytes: 200, downloadedBytes: 50 } });
+    handlers['launcher:update_status']({ data: makeStatus({ state: 'available', availableVersion: '1.2.0', error: 'x', errorCode: 'download' }) });
+
+    expect(get(store.selfUpdateProgress)).toBeNull();
   });
 
   it('a failed status never quietly claims the latest version', async () => {
@@ -312,6 +354,20 @@ describe('requestCheck', () => {
     expect(get(store.selfUpdateStatus).availableVersion).toBe('2.0.0');
   });
 
+  it('stays quiet when the check was cancelled by another action', async () => {
+    const { service, store } = await load();
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    vi.mocked(service.checkForUpdate).mockRejectedValue(
+      Object.assign(new Error('fetch manifest: context canceled'), { code: 'canceled' }),
+    );
+
+    await store.requestCheck();
+
+    expect(get(toasts.toasts)).toHaveLength(0);
+    expect(get(store.selfUpdateChecking)).toBe(false);
+  });
+
   it('toasts the failure and clears the checking flag instead of pretending success', async () => {
     const { service, store } = await load();
     vi.mocked(service.checkForUpdate).mockRejectedValue(new Error('selfupdate: manifest exceeds the size limit'));
@@ -344,6 +400,36 @@ describe('requestDownload', () => {
     expect(get(store.selfUpdateStatus).state).toBe('ready');
   });
 
+  it('clears the progress of the previous attempt before a new download starts', async () => {
+    const { service, store } = await load();
+    store.selfUpdateProgress.set({ version: '1.2.0', totalBytes: 200, downloadedBytes: 150 });
+    let resolve!: (value: unknown) => void;
+    vi.mocked(service.downloadUpdate).mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }) as never,
+    );
+
+    const pending = store.requestDownload();
+    expect(get(store.selfUpdateProgress)).toBeNull();
+    resolve(makeStatus({ state: 'ready' }));
+    await pending;
+  });
+
+  it('stays quiet when the user cancelled the download', async () => {
+    const { service, store } = await load();
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    vi.mocked(service.downloadUpdate).mockRejectedValue(
+      Object.assign(new Error('download artifact: context canceled'), { code: 'canceled' }),
+    );
+
+    await store.requestDownload();
+
+    expect(get(toasts.toasts)).toHaveLength(0);
+    expect(get(store.selfUpdateDownloading)).toBe(false);
+  });
+
   it('toasts the failure instead of silently staying idle', async () => {
     const { service, store } = await load();
     vi.mocked(service.downloadUpdate).mockRejectedValue(new Error('selfupdate: downloaded hash differs from the manifest'));
@@ -366,6 +452,28 @@ describe('requestDownload', () => {
     await store.requestDownload();
 
     expect(get(toasts.toasts)[0].message).toContain('не ответил вовремя');
+  });
+});
+
+describe('requestCancelDownload', () => {
+  it('asks the backend to stop the download', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.cancelDownload).mockResolvedValue(undefined as never);
+
+    await store.requestCancelDownload();
+
+    expect(service.cancelDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('toasts when the backend refuses', async () => {
+    const { service, store } = await load();
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    vi.mocked(service.cancelDownload).mockRejectedValue(new Error('boom'));
+
+    await store.requestCancelDownload();
+
+    expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
   });
 });
 
@@ -402,6 +510,23 @@ describe('retryFailed', () => {
 
     expect(service.downloadUpdate).toHaveBeenCalledTimes(2);
     expect(service.checkForUpdate).not.toHaveBeenCalled();
+  });
+
+  it('retries the download when the status says the download failed, whatever came last', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.downloadUpdate).mockResolvedValue(makeStatus({ state: 'ready' }) as never);
+    vi.mocked(service.checkForUpdate).mockResolvedValue(makeStatus() as never);
+
+    await store.initSelfUpdate();
+    await store.requestCheck();
+    store.selfUpdateStatus.set(
+      makeStatus({ state: 'available', availableVersion: '1.1.0', error: 'dial tcp', errorCode: 'download' }) as never,
+    );
+    await store.retryFailed();
+
+    expect(service.downloadUpdate).toHaveBeenCalledTimes(1);
+    expect(service.checkForUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('retries the check when the last action was a check', async () => {
