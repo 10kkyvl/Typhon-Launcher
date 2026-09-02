@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrBadPublicKey        = errors.New("selfupdate: embedded public key is invalid")
+	ErrBadPrivateKey       = errors.New("selfupdate: private key is not an ed25519 private key")
 	ErrUnknownKey          = errors.New("selfupdate: manifest signed by an unknown key")
 	ErrBadSignature        = errors.New("selfupdate: manifest signature does not verify")
 	ErrManifestTooLarge    = errors.New("selfupdate: manifest exceeds the size limit")

@@ -110,6 +110,9 @@ type stored struct {
 }
 
 func PublicKey() (ed25519.PublicKey, error) {
+	if key, ok, err := overridePublicKey(); err != nil || ok {
+		return key, err
+	}
 	raw, err := base64.StdEncoding.DecodeString(publicKeyBase64)
 	if err != nil {
 		return nil, ErrBadPublicKey
