@@ -36,12 +36,12 @@ jobs:
           go-version-file: go.mod
 
       # Type-checking the main package pulls in the Wails Linux backend, which
-      # is cgo over GTK and WebKit: without the headers go vet and the linter
+      # is cgo over GTK 4 and WebKitGTK 6.0: without the headers go vet and the linter
       # cannot load the packages at all.
       - name: Install GTK and WebKit headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: gofmt
         run: |
@@ -178,7 +178,7 @@ jobs:
       - name: Install GTK and WebKit headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
 
       - uses: actions/setup-node@v4
         with:

@@ -167,7 +167,7 @@ func TestMoveGameRejectsBadTargets(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, oldDir := addTestGame(t, lib)
 
-	root := string(filepath.Separator)
+	root := filepath.VolumeName(oldDir) + string(filepath.Separator)
 	cases := []struct {
 		name   string
 		target string
