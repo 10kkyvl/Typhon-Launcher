@@ -249,7 +249,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	for _, rec := range stored {
 		item := rec
 		if transient(item.Status) {
-			if s.transientWorkerAlive(item.ID) {
+			alive, done := s.transientWorkerStatus(item.ID)
+			if alive || done {
 				resume = append(resume, item.ID)
 				slog.Info("installation worker still running, resuming", "id", item.ID, "name", item.Name)
 			} else {
@@ -280,29 +281,36 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	return nil
 }
 
-// transientWorkerAlive решает судьбу записи, пережившей перезапуск
-// лаунчера: os.FindProcess на Windows всегда "успешен" вне зависимости от
-// того, жив ли процесс, поэтому единственный источник правды — файл
-// состояния воркера (тот же, что пишет и читает runElevated) и
-// workerProcessAlive по записанному в нём PID. Ошибка чтения или проверки
-// не превращается в "жив" по умолчанию — только подтверждённая жизнь
-// оставляет запись в рабочем статусе.
-func (s *Service) transientWorkerAlive(id string) bool {
+// transientWorkerStatus решает судьбу записи, пережившей перезапуск лаунчера:
+// os.FindProcess на Windows всегда "успешен" вне зависимости от того, жив ли
+// процесс, поэтому единственный источник правды — файл состояния воркера
+// (тот же, что пишет и читает runElevated) и workerProcessAlive по
+// записанному в нём PID. Done=true значит, что воркер уже дописал итог
+// (успех/провал/отмену) в файл до того, как лаунчер успел его прочитать —
+// такую запись нельзя считать "мёртвой без результата" и подменять
+// StatusInterrupted: итог должен дойти до записи так же, как если бы лаунчер
+// был жив всё это время (finishResumed разбирает Done по существу). Ошибка
+// чтения или проверки не превращается в "жив" по умолчанию — только
+// подтверждённая жизнь или подтверждённый Done оставляют запись в работе.
+func (s *Service) transientWorkerStatus(id string) (alive, done bool) {
 	statePath := s.workerStatePath(id)
 	state, found, err := readWorkerState(statePath)
 	if err != nil {
 		slog.Error("read worker state on startup", "id", id, "error", err)
-		return false
+		return false, false
 	}
-	if !found || state.Done {
-		return false
+	if !found {
+		return false, false
 	}
-	alive, err := workerProcessAlive(state.PID)
+	if state.Done {
+		return false, true
+	}
+	alive, err = workerProcessAlive(state.PID)
 	if err != nil {
 		slog.Error("check worker process on startup", "id", id, "pid", state.PID, "error", err)
-		return false
+		return false, false
 	}
-	return alive
+	return alive, false
 }
 
 // var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
@@ -684,7 +692,7 @@ func (s *Service) Cancel(id string) error {
 	// s.jobs для неё никогда не заводился), либо воркер уже мёртв. Проверка и
 	// решение — под тем же захватом, что статус (инвариант 17): без этого UI
 	// сказал бы "отменено" над установщиком, который продолжает писать.
-	if s.transientWorkerAlive(id) {
+	if alive, _ := s.transientWorkerStatus(id); alive {
 		err := writeWorkerCancel(s.workerCancelPath(id))
 		s.mu.Unlock()
 		return err
@@ -755,7 +763,7 @@ func (s *Service) Retry(id string) error {
 	// ServiceStartup не успел узнать, ещё пишет по тем же детерминированным
 	// путям state/spec/cancel), и вызвать retry поверх него — поднять второго
 	// воркера на то же место.
-	if s.transientWorkerAlive(id) {
+	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
 		return errInstallerStillRunning
 	}
