@@ -246,14 +246,25 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		return err
 	}
 	resume := make([]string, 0, 2)
+	toFinalize := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
 		if transient(item.Status) {
 			alive, done := s.transientWorkerStatus(item.ID)
-			if alive || done {
+			switch {
+			case alive || done:
 				resume = append(resume, item.ID)
 				slog.Info("installation worker still running, resuming", "id", item.ID, "name", item.Name)
-			} else {
+			case crashFinalizable(item):
+				// .partial уже нет, Destination заполнен: commit() успел
+				// переименовать каталог до аварийного завершения, и запись
+				// осталась без регистрации в library, а не без файлов
+				// (finding 4) — StatusInterrupted здесь означал бы, что
+				// пользователь потерял уже установленную игру.
+				item.Status = StatusVerifying
+				toFinalize = append(toFinalize, item.ID)
+				slog.Info("installation committed before crash, finalizing", "id", item.ID, "name", item.Name)
+			default:
 				item.Status = StatusInterrupted
 				item.Error = interruptedMessage
 				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
@@ -274,11 +285,62 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		s.sweepRemovals()
 	}()
 
+	base := s.baseContext()
 	for _, id := range resume {
 		//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(), тот же приём, что spawnLocked уже использует для job-контекстов; contextcheck не видит связь через поле структуры
-		s.spawnResumeWatcher(s.baseContext(), id)
+		s.spawnResumeWatcher(base, id)
+	}
+	for _, id := range toFinalize {
+		//nolint:contextcheck // тот же приём, что и для spawnResumeWatcher выше
+		s.spawnFinalize(base, id, nil)
 	}
 	return nil
+}
+
+// crashFinalizable отличает "commit() успел переименовать .partial в
+// Destination до краха" от настоящего прерывания: только у первого
+// Destination существует, непуст и .partial уже нет — тогда установку не
+// нужно переделывать, а нужно только дорегистрировать (finding 4).
+func crashFinalizable(item Installation) bool {
+	if !controlled(item.Type) || item.Destination == "" {
+		return false
+	}
+	if pathExists(item.Destination + partialSuffix) {
+		return false
+	}
+	empty, err := dirEmpty(item.Destination)
+	if err != nil || empty {
+		return false
+	}
+	return true
+}
+
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// spawnFinalize учтён в s.wg и работает по ctx жизни сервиса (инвариант 19),
+// как spawnResumeWatcher: pre, если задан, готовит файловую систему
+// (например, докатывает частично перенесённые файлы) перед тем, как
+// finalize() определит исполняемый файл и зарегистрирует игру.
+func (s *Service) spawnFinalize(ctx context.Context, id string, pre func(context.Context) error) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if pre != nil {
+			if err := pre(ctx); err != nil {
+				s.fail(id, err)
+				return
+			}
+		}
+		if err := s.finalize(ctx, id); err != nil {
+			s.fail(id, err)
+		}
+	}()
 }
 
 // transientWorkerStatus решает судьбу записи, пережившей перезапуск лаунчера:
@@ -766,6 +828,21 @@ func (s *Service) Retry(id string) error {
 	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
 		return errInstallerStillRunning
+	}
+	if crashFinalizable(snapshotOf(item)) {
+		// Тот же случай, что и в ServiceStartup (finding 4): .partial уже
+		// нет, Destination заполнен — файлы на месте, не хватает только
+		// регистрации. Запускать распаковку заново означало бы упасть на
+		// errDestExists поверх уже установленной игры.
+		item.Status = StatusVerifying
+		item.Error = ""
+		s.persistLocked()
+		snap := snapshotOf(item)
+		s.mu.Unlock()
+		s.spawnFinalize(s.baseContext(), id, nil)
+		slog.Info("install retried, finalizing already-committed install", "id", id, "name", snap.Name)
+		emit(eventUpdated, snap)
+		return nil
 	}
 	downloadID := item.DownloadID
 	kind := item.Type
