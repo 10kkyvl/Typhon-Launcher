@@ -13,6 +13,7 @@ on:
   push:
     branches: [dev, main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -80,17 +81,25 @@ jobs:
             exit 1
           fi
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
-          args: --timeout=10m ./...
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
 
-      - name: golangci-lint (devmock tag)
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
-          args: --timeout=10m --build-tags devmock ./internal/...
+      # New or changed code must be clean; the whole module is measured
+      # against the per-OS baseline below, which may only go down.
+      - name: golangci-lint on changed code
+        env:
+          BASE_REF: ${{ github.base_ref || 'dev' }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          golangci-lint run --timeout=10m --new-from-rev="origin/$BASE_REF" --whole-files=false ./...
+          golangci-lint run --timeout=10m --new-from-rev="origin/$BASE_REF" --whole-files=false --build-tags devmock ./internal/...
+
+      - name: Lint baseline (linux)
+        run: go run ./tools/lintbaseline
+
+      - name: Lint baseline (linux, devmock tag)
+        run: go run ./tools/lintbaseline -tags devmock
 
   test-macos:
     name: Build and test on macOS (plain and devmock)
@@ -125,6 +134,15 @@ jobs:
           CGO_ENABLED: "1"
         run: go test -race -tags devmock ./internal/...
 
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Lint baseline (darwin)
+        run: go run ./tools/lintbaseline
+
+      - name: Lint baseline (darwin, devmock tag)
+        run: go run ./tools/lintbaseline -tags devmock
+
   test-windows:
     name: Test on Windows
     runs-on: windows-latest
@@ -140,6 +158,12 @@ jobs:
 
       - name: go test
         run: go test ./internal/...
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Lint baseline (windows)
+        run: go run ./tools/lintbaseline
 
   frontend:
     name: Frontend check and build

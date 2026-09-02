@@ -2,7 +2,7 @@
 
 ## Git
 
-- Базис линтера: `docs/lint-baseline-v0.3.0.txt` — **84 находки** в чистом клоне на теге v0.3.0 (конфиг с отключёнными G301/G306/G304). Предыдущие замеры: 122 на 5b22e81 (`docs/lint-baseline-5b22e81.txt`), 86 на d761f5d. Сравнивать только с прогоном в чистом клоне (`git clone` в /tmp, `golangci-lint run ./...`): локальное дерево с untracked-файлами даёт другую цифру. Число может только уменьшаться.
+- Базис линтера хранится в `.github/lint-baseline.txt` по ключу `GOOS` или `GOOS+теги` (набор компилируемых файлов на каждой ОС свой, поэтому и цифры свои) и проверяется командой `go run ./tools/lintbaseline` (`wails3 task lint:baseline`); CI гоняет её на Linux, macOS (плюс `-tags devmock`) и Windows и падает, если число выросло. Стало меньше — понизить базис (`wails3 task lint:baseline UPDATE=true` в чистом дереве) в том же коммите. История: 122 на 5b22e81, 86 на d761f5d, 84 на v0.3.0 (Windows). Мерить только в чистом дереве: untracked-файлы дают другую цифру. Число может только уменьшаться.
 - Ветки: `main` (стабильная), `dev` (рабочая). Фичи — в dev, в main через merge.
 - **Всё, что уходит в git и на GitHub, пишется по-английски**: сообщения коммитов (заголовок и тело), названия и описания веток, заголовки и тела PR, комментарии в PR и ревью, тексты issue, теги и release notes. Русский остаётся только в UI, в сообщениях об ошибках для пользователя и в переписке в этой сессии.
 - Формат коммита прежний: `type: subject` в нижнем регистре, повелительное наклонение, без точки в конце; тело — по 72 символа в строке, объясняет «почему», а не пересказывает diff.
@@ -218,6 +218,19 @@ wails3 task build
   закрывается либо по `StopGame`, либо по истечении времени через цикл детекта.
 - Окно в devmock-сборке называется «Typhon [devmock]», в «О программе» рядом с платформой
   показывается `devmock`, в логе при старте — `devmock build: Windows-only subsystems are mocked`.
+- Установщики exe/msi в devmock идут через тот же протокол повышенного воркера, что и на
+  Windows: лаунчер пишет spec, запускает сам себя как `--install-worker <spec>` без прав,
+  опрашивает state, отмена — через cancel-файл, живой воркер после перезапуска подхватывается в
+  `ServiceStartup`. `TYPHON_DEVMOCK_ELEVATE=0` выключает воркер (прямая фейковая установка),
+  `TYPHON_DEVMOCK_INSTALL_SECONDS` (по умолчанию 2) задаёт длительность фейковой установки, чтобы
+  прогресс и отмена были видны. Лог воркера — `worker-<id>.log` рядом с state-файлом.
+- Самообновление целиком: `wails3 task devrelease VERSION=0.3.1` собирает лаунчер с этой версией
+  как артефакт, подписывает манифест одноразовым ключом и поднимает сервер на 127.0.0.1:8099;
+  он печатает две переменные, `TYPHON_DEVMOCK_MANIFEST_URL` и `TYPHON_DEVMOCK_RELEASE_PUBKEY`,
+  с ними запускается devmock-лаунчер (остальной API по-прежнему `TYPHON_API_URL`). Воркер
+  обновления (`--selfupdate-worker`) ждёт выхода родителя, подменяет бинарь по rename и
+  перезапускает; стадии — в `selfupdate/worker/progress.json` и `worker.log`, результат на
+  следующем старте — в «О программе».
 
 Чеклист на macOS (в дополнение к общему; `-race` здесь не требует ничего, кроме Xcode CLT):
 
@@ -226,9 +239,14 @@ gofmt -l .
 go vet . ./internal/... && go vet -tags devmock . ./internal/...
 go build . ./internal/... && go build -tags devmock . ./internal/...
 GOOS=windows go build . ./internal/...
-go test ./internal/... && go test -race -tags devmock ./internal/...
-golangci-lint run ./... && golangci-lint run --build-tags devmock ./internal/...
+for p in install selfupdate; do GOOS=windows go test -c -o /dev/null ./internal/$p/; done   # компилирует Windows-тесты
+go test ./internal/... ./tools/... && go test -race -tags devmock ./internal/...
+golangci-lint run --new-from-rev=origin/dev ./... && golangci-lint run --new-from-rev=origin/dev --build-tags devmock ./internal/...
+go run ./tools/lintbaseline && go run ./tools/lintbaseline -tags devmock
 ```
+
+Проверка CI без мержа: ветка пушится, открывается draft PR в `dev`; `ci.yml` запускается на
+pull request и по `workflow_dispatch` из вкладки Actions на любой ветке.
 
 `GOOS=windows go build -tags devmock ./internal/devmock/` и `go build -tags production,devmock
 ./internal/devmock/` обязаны падать — это и есть гарантия, что мок не уедет в релиз. Тесты,

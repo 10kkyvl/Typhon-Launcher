@@ -75,6 +75,22 @@ tasks:
     cmds:
       - go test -tags devmock ./internal/...
 
+  devrelease:
+    summary: Serves a signed fake update manifest and artifact for the devmock launcher (VERSION=x.y.z, extra flags after --)
+    platforms: [darwin, linux]
+    requires:
+      vars: [VERSION]
+    cmds:
+      - go run ./tools/devrelease -version {{.VERSION}} {{.CLI_ARGS}}
+
+  lint:baseline:
+    summary: Compares the whole-module golangci-lint count with the per-OS baseline (add UPDATE=true to record)
+    deps: [lint:install]
+    cmds:
+      - go run ./tools/lintbaseline {{if eq .UPDATE "true"}}-update{{end}}
+      - cmd: go run ./tools/lintbaseline -tags devmock {{if eq .UPDATE "true"}}-update{{end}}
+        platforms: [darwin, linux]
+
   lint:install:
     summary: Installs the pinned golangci-lint into $(go env GOPATH)/bin
     status:
