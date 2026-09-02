@@ -128,7 +128,7 @@ func readOutcome(path string) (Outcome, error) {
 // the file the installer has to overwrite: Windows keeps a running image
 // locked, NSIS then skips the file and still exits 0, and the launcher
 // relaunches into the version it started from.
-func copyExecutable(src, dst string) error {
+func copyExecutable(src, dst string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return fmt.Errorf("create worker dir: %w", err)
 	}
@@ -145,24 +145,43 @@ func copyExecutable(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("stat launcher binary: %w", err)
 	}
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+
+	// The copy lands under a temp name and is renamed only after fsync: a
+	// crash mid-copy must never leave a truncated file at the path the
+	// worker is later launched from.
+	tmp := dst + ".tmp"
+	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove stale worker copy: %w", err)
+	}
+	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
 		return fmt.Errorf("create worker binary: %w", err)
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		if cerr := out.Close(); cerr != nil {
-			slog.Warn("close worker binary", "path", dst, "error", cerr)
+	closed := false
+	defer func() {
+		if !closed {
+			if cerr := out.Close(); cerr != nil {
+				slog.Warn("close worker binary", "path", tmp, "error", cerr)
+			}
 		}
+		if err != nil {
+			if rerr := os.Remove(tmp); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+				slog.Warn("remove partial worker binary", "path", tmp, "error", rerr)
+			}
+		}
+	}()
+	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copy worker binary: %w", err)
 	}
 	if err := out.Sync(); err != nil {
-		if cerr := out.Close(); cerr != nil {
-			slog.Warn("close worker binary", "path", dst, "error", cerr)
-		}
 		return fmt.Errorf("sync worker binary: %w", err)
 	}
 	if err := out.Close(); err != nil {
 		return fmt.Errorf("close worker binary: %w", err)
+	}
+	closed = true
+	if err := os.Rename(tmp, dst); err != nil {
+		return fmt.Errorf("rename worker binary: %w", err)
 	}
 	return nil
 }
