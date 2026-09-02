@@ -43,6 +43,10 @@ const (
 	persistInterval = 5 * time.Second
 )
 
+// stallAfter is a var so tests can shrink the grace period instead of
+// sleeping for it.
+var stallAfter = 2 * time.Minute
+
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
 var ErrNotFound = errors.New("загрузка не найдена")
@@ -927,6 +931,8 @@ func (m *Manager) startLocked(d *Download) bool {
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
+	d.Stalled = false
+	d.StalledSince = nil
 	m.rates[d.ID] = newRateState()
 	slog.Info("download started", "download_id", d.ID, "name", d.Name)
 	emit(eventUpdated, snapshot(d))
@@ -946,6 +952,8 @@ func (m *Manager) idleLocked(d *Download, status Status) {
 	d.DownloadSpeed = 0
 	d.UploadSpeed = 0
 	d.ETASeconds = -1
+	d.Stalled = false
+	d.StalledSince = nil
 	delete(m.rates, d.ID)
 }
 
@@ -1103,6 +1111,24 @@ func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
 	d.Peers = st.peers
 	d.Progress = ratio(done, d.Total)
 	d.ETASeconds = etaSeconds(d.Total-done, d.DownloadSpeed)
+
+	updateStallLocked(d, r, done, now)
+}
+
+func updateStallLocked(d *Download, r *rateState, done int64, now time.Time) {
+	if r.lastChange.IsZero() || done > r.lastDownloaded {
+		r.lastDownloaded = done
+		r.lastChange = now
+		d.Stalled = false
+		d.StalledSince = nil
+		return
+	}
+	if d.Status != StatusDownloading || d.Stalled || now.Sub(r.lastChange) < stallAfter {
+		return
+	}
+	since := r.lastChange
+	d.Stalled = true
+	d.StalledSince = &since
 }
 
 func (m *Manager) completeLocked(d *Download) {
@@ -1175,7 +1201,8 @@ func differs(a, b *Download) bool {
 		a.UploadSpeed != b.UploadSpeed ||
 		a.Seeders != b.Seeders ||
 		a.Peers != b.Peers ||
-		a.Progress != b.Progress
+		a.Progress != b.Progress ||
+		a.Stalled != b.Stalled
 }
 
 func (m *Manager) applySettings(next settings.Settings) {

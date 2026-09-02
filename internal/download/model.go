@@ -67,6 +67,8 @@ type Download struct {
 	AddedAt       time.Time   `json:"addedAt"`
 	CompletedAt   *time.Time  `json:"completedAt"`
 	Error         string      `json:"error"`
+	Stalled       bool        `json:"stalled"`
+	StalledSince  *time.Time  `json:"stalledSince,omitempty"`
 }
 
 type TorrentInfo struct {
@@ -90,6 +92,10 @@ func snapshot(d *Download) Download {
 	if d.CompletedAt != nil {
 		at := *d.CompletedAt
 		out.CompletedAt = &at
+	}
+	if d.StalledSince != nil {
+		at := *d.StalledSince
+		out.StalledSince = &at
 	}
 	return out
 }
