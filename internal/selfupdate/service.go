@@ -207,7 +207,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 	s.mu.Lock()
 	keepVersion := ""
-	if s.status.State == StateReady {
+	if s.status.State == StateReady || s.status.State == StateAvailable {
 		keepVersion = s.status.AvailableVersion
 	}
 	s.mu.Unlock()

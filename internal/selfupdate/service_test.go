@@ -212,6 +212,47 @@ func TestServiceStartupCleansStaleCacheEntries(t *testing.T) {
 	}
 }
 
+func TestServiceStartupKeepsPartialDownloadOfAvailableVersion(t *testing.T) {
+	dir := t.TempDir()
+	cacheDir, err := CacheDir(dir)
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+
+	staleDir := filepath.Join(cacheDir, "1.5.0")
+	writeTestFile(t, filepath.Join(staleDir, "old-setup.exe.partial"), []byte("stale"))
+	partial := filepath.Join(cacheDir, "2.0.0", "setup.exe.partial")
+	writeTestFile(t, partial, []byte("half of the installer"))
+	abandonedTemp := filepath.Join(cacheDir, "2.0.0", ".selfupdate-abandoned")
+	writeTestFile(t, abandonedTemp, []byte("temp"))
+
+	store := mustStore(t, dir)
+	if err := store.Save(stored{AvailableVersion: "2.0.0", CheckedAt: time.Now()}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	s := &Service{dir: dir, notes: mustNotesStore(t, dir), store: store, client: mustQuietClient(t), currentVersion: "1.0.0"}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("ServiceStartup: %v", err)
+	}
+	if err := s.ServiceShutdown(); err != nil {
+		t.Fatalf("ServiceShutdown: %v", err)
+	}
+
+	if got := s.GetStatus().State; got != StateAvailable {
+		t.Fatalf("state after startup = %q, want %q", got, StateAvailable)
+	}
+	if _, statErr := os.Stat(partial); statErr != nil {
+		t.Fatalf("partial download of the available version was removed: %v", statErr)
+	}
+	if _, statErr := os.Stat(staleDir); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("stale version dir survived cleanup: %v", statErr)
+	}
+	if _, statErr := os.Stat(abandonedTemp); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("abandoned temp file survived cleanup: %v", statErr)
+	}
+}
+
 func TestBuildCheckStatusBranches(t *testing.T) {
 	s := &Service{currentVersion: "1.0.0"}
 	m := validManifest()
