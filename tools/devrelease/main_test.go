@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -215,8 +217,8 @@ func TestHandleDownloadServesArtifactBytes(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if got := resp.Header.Get("Accept-Ranges"); got != "none" {
-		t.Fatalf("Accept-Ranges = %q, want none", got)
+	if got := resp.Header.Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("Accept-Ranges = %q, want bytes", got)
 	}
 	got := mustReadAll(t, resp)
 	if !bytes.Equal(got, content) {
@@ -259,6 +261,41 @@ func writeFakeArtifact(t *testing.T) string {
 		t.Fatalf("write fake artifact: %v", err)
 	}
 	return path
+}
+
+func TestHandleDownloadServesRange(t *testing.T) {
+	content := []byte("fake launcher binary bytes")
+	path := filepath.Join(t.TempDir(), "typhon")
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	srv := &releaseServer{version: "1.2.3", artifactName: "typhon-devmock", artifactPath: path}
+	ts := httptest.NewServer(newMux(srv))
+	defer ts.Close()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/launcher/download/1.2.3/typhon-devmock", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Range", "bytes=5-")
+	resp, err := testHTTPClient().Do(req)
+	if err != nil {
+		t.Fatalf("GET download range: %v", err)
+	}
+	defer closeBody(t, resp)
+
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206", resp.StatusCode)
+	}
+	wantRange := fmt.Sprintf("bytes 5-%d/%d", len(content)-1, len(content))
+	if got := resp.Header.Get("Content-Range"); got != wantRange {
+		t.Fatalf("Content-Range = %q, want %q", got, wantRange)
+	}
+	got := mustReadAll(t, resp)
+	if !bytes.Equal(got, content[5:]) {
+		t.Fatalf("body = %q, want %q", got, content[5:])
+	}
 }
 
 func mustReadAll(t *testing.T, resp *http.Response) []byte {
