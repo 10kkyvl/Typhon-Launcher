@@ -47,6 +47,8 @@ export interface Download {
   peers: number;
   files: FileState[];
   seeding: boolean;
+  stalled?: boolean;
+  stalledSince?: string | null;
   addedAt: string;
   completedAt: string | null;
   error: string;
