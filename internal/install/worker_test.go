@@ -65,7 +65,10 @@ func TestAwaitDiscoveryIniDetectsFile(t *testing.T) {
 	if reason != "" {
 		t.Fatalf("reason = %q, want empty", reason)
 	}
-	if elapsed := time.Since(start); elapsed > 10*time.Second {
+	// The stand-in sleeps 30s after creating the ini; returning well before
+	// that is the proof. A cold powershell start on a CI runner alone takes
+	// around 10s, so the bound leaves room for it.
+	if elapsed := time.Since(start); elapsed > 25*time.Second {
 		t.Fatalf("awaitDiscoveryIni took %v, want prompt termination once the ini appears", elapsed)
 	}
 	if !exists(infPath) {

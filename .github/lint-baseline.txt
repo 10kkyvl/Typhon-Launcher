@@ -1,5 +1,6 @@
 # golangci-lint findings per GOOS[+build tags], measured on a clean checkout.
 # Checked by `go run ./tools/lintbaseline`; the numbers may only go down.
 darwin 81
-darwin+devmock 80
+linux 84
+darwin+devmock 79
 windows 84
