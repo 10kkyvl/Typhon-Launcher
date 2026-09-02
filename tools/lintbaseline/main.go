@@ -54,7 +54,7 @@ func run() error {
 		key += "+" + opts.tags
 	}
 
-	count, err := countFindings(opts.tags)
+	count, findings, err := countFindings(opts.tags)
 	if err != nil {
 		return err
 	}
@@ -78,6 +78,9 @@ func run() error {
 	}
 	switch {
 	case count > want:
+		if _, err := os.Stderr.WriteString(findings); err != nil {
+			return fmt.Errorf("print findings: %w", err)
+		}
 		return fmt.Errorf("%s: %d findings, baseline is %d: new or changed code added findings", key, count, want)
 	case count < want:
 		slog.Info("lint findings below baseline, lower it", "key", key, "count", count, "baseline", want, "file", opts.baseline)
@@ -87,7 +90,7 @@ func run() error {
 	return nil
 }
 
-func countFindings(tags string) (int, error) {
+func countFindings(tags string) (int, string, error) {
 	args := []string{"run", "./..."}
 	if tags != "" {
 		args = append(args, "--build-tags", tags)
@@ -99,20 +102,24 @@ func countFindings(tags string) (int, error) {
 	err := cmd.Run()
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
-		return 0, fmt.Errorf("run golangci-lint: %w", err)
+		return 0, "", fmt.Errorf("run golangci-lint: %w", err)
 	}
 	m := issuesLine.FindSubmatch(out.Bytes())
 	if m == nil {
 		if err == nil {
-			return 0, nil
+			return 0, "", nil
 		}
 		tail := out.String()
 		if len(tail) > 4000 {
 			tail = tail[len(tail)-4000:]
 		}
-		return 0, fmt.Errorf("%w (exit: %w):\n%s", errNoSummary, err, tail)
+		return 0, "", fmt.Errorf("%w (exit: %w):\n%s", errNoSummary, err, tail)
 	}
-	return strconv.Atoi(string(m[1]))
+	count, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		return 0, "", fmt.Errorf("parse issue count: %w", err)
+	}
+	return count, out.String(), nil
 }
 
 func readBaseline(path string) (map[string]int, error) {

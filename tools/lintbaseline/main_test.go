@@ -110,7 +110,7 @@ func TestIssuesLine(t *testing.T) {
 
 func TestCountFindingsMissingBinary(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	_, err := countFindings("")
+	_, _, err := countFindings("")
 	if err == nil {
 		t.Fatal("countFindings without golangci-lint on PATH: want error")
 	}
