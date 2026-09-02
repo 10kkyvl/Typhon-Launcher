@@ -27,6 +27,7 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -68,10 +69,11 @@ type jobState struct {
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	settings *settings.Service
-	store    *store
-	metaDir  string
+	mu              sync.Mutex
+	settings        *settings.Service
+	store           *store
+	metaDir         string
+	pieceCompletion storage.PieceCompletion
 
 	items   []*Download
 	engines map[string]engineTorrent
@@ -114,6 +116,11 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		jobs:     map[string]*jobState{},
 	}
 	m.metaDir = filepath.Join(dir, "meta")
+	completion, err := openPieceCompletion(m.metaDir)
+	if err != nil {
+		return nil, err
+	}
+	m.pieceCompletion = completion
 	m.max = maxActive(m.config())
 	return m, nil
 }
@@ -147,7 +154,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return err
 	}
-	cl, err := newClient(cfg, m.metaDir)
+	cl, err := newClient(cfg, m.metaDir, m.pieceCompletion)
 	if err != nil {
 		slog.Error("start torrent client", "error", err)
 	} else {
@@ -188,10 +195,17 @@ func (m *Manager) ServiceShutdown() error {
 	m.persistLocked()
 	cl := m.client
 	m.client = nil
+	pc := m.pieceCompletion
+	m.pieceCompletion = nil
 	m.mu.Unlock()
 
 	if cl != nil {
 		cl.close()
+	}
+	if pc != nil {
+		if err := pc.Close(); err != nil {
+			slog.Error("close piece completion db", "error", err)
+		}
 	}
 	return nil
 }

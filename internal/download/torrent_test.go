@@ -13,6 +13,7 @@ import (
 	"typhon/internal/settings"
 
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/storage"
 	"golang.org/x/time/rate"
 )
 
@@ -89,7 +90,8 @@ func TestApplyLimit(t *testing.T) {
 func offlineClient(t *testing.T) *client {
 	t.Helper()
 	dir := t.TempDir()
-	tc := clientConfig(settings.Defaults(), dir, 0)
+	completion := storage.NewMapPieceCompletion()
+	tc := clientConfig(settings.Defaults(), dir, 0, completion)
 	tc.NoDHT = true
 	tc.DisableTrackers = true
 	tc.DisablePEX = true
@@ -99,7 +101,7 @@ func offlineClient(t *testing.T) *client {
 		closeDefaultStorage(tc)
 		t.Skipf("torrent client unavailable: %v", err)
 	}
-	c := &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: dir}
+	c := &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: dir, completion: completion}
 	t.Cleanup(c.close)
 	return c
 }

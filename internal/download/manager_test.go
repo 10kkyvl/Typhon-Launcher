@@ -235,6 +235,16 @@ func mustManagerAt(t testing.TB, dir string) *Manager {
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	t.Cleanup(func() {
+		// ServiceShutdown already closed it in tests that call it themselves
+		// and nils the field, so this only fires for tests that never start
+		// the manager.
+		if m.pieceCompletion != nil {
+			if err := m.pieceCompletion.Close(); err != nil {
+				t.Logf("close piece completion: %v", err)
+			}
+		}
+	})
 	withTestContext(t, m)
 	return m
 }
