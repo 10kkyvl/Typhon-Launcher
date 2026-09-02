@@ -1,10 +1,6 @@
-//go:build !windows
+//go:build !windows && !devmock
 
 package install
-
-import "errors"
-
-var errWindowsOnly = errors.New("установка доступна только в Windows")
 
 // workerProcessAlive: воркер существует только на Windows, поэтому здесь его
 // никогда нет — ложь без ошибки, а не отказ, потому что вызывающие относятся

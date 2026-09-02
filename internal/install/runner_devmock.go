@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"typhon/internal/storage"
 )
@@ -17,12 +19,18 @@ import (
 const (
 	devmockMarkerName = ".typhon-devmock"
 	devmockExeSize    = 64 << 10
+
+	devmockElevateEnv            = "TYPHON_DEVMOCK_ELEVATE"
+	devmockInstallSecondsEnv     = "TYPHON_DEVMOCK_INSTALL_SECONDS"
+	devmockDefaultInstallSeconds = 2
 )
 
 var (
-	errDevmockUnmarkedDir   = errors.New("devmock: отказ удалить каталог без метки установки")
-	errDevmockNoGamesPath   = errors.New("devmock: путь библиотеки игр не задан")
-	errDevmockNoInstallName = errors.New("devmock: не удалось определить имя игры")
+	errDevmockUnmarkedDir         = errors.New("devmock: отказ удалить каталог без метки установки")
+	errDevmockNoGamesPath         = errors.New("devmock: путь библиотеки игр не задан")
+	errDevmockNoInstallName       = errors.New("devmock: не удалось определить имя игры")
+	errDevmockInvalidElevateFlag  = errors.New("devmock: TYPHON_DEVMOCK_ELEVATE должен быть 0 или 1")
+	errDevmockInvalidInstallDelay = errors.New("devmock: TYPHON_DEVMOCK_INSTALL_SECONDS должен быть неотрицательным целым числом")
 )
 
 var devmockSetupSuffixes = []string{"-setup", "_setup", " setup", "setup"}
@@ -53,7 +61,47 @@ func (r mockRunner) run(ctx context.Context, spec runSpec) (int, error) {
 	if devmockLooksLikeUninstaller(spec.Path) {
 		return 0, fmt.Errorf("%w: %s", errDevmockUnmarkedDir, dir)
 	}
-	return r.install(spec)
+	if spec.StatePath != "" {
+		elevate, err := devmockElevationEnabled()
+		if err != nil {
+			return 0, err
+		}
+		if elevate {
+			return runElevated(ctx, spec)
+		}
+	}
+	return r.install(ctx, spec)
+}
+
+// devmockElevationEnabled — единственный переключатель настоящего цикла
+// повышенного воркера в devmock (TYPHON_DEVMOCK_ELEVATE): по умолчанию (пусто
+// или "1") тихие установки всегда идут через runElevated, как на Windows, а
+// "0" оставляет прямую фейковую установку для тестов, которым сам протокол
+// spec/state/cancel не нужен.
+func devmockElevationEnabled() (bool, error) {
+	switch raw := os.Getenv(devmockElevateEnv); raw {
+	case "", "1":
+		return true, nil
+	case "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%w: %q", errDevmockInvalidElevateFlag, raw)
+	}
+}
+
+// devmockInstallDelay делает фейковую установку наблюдаемой: без задержки
+// прогресс и отмена никогда не были бы видны — прямой путь писал файлы
+// мгновенно.
+func devmockInstallDelay() (time.Duration, error) {
+	raw := os.Getenv(devmockInstallSecondsEnv)
+	if raw == "" {
+		return devmockDefaultInstallSeconds * time.Second, nil
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		return 0, fmt.Errorf("%w: %q", errDevmockInvalidInstallDelay, raw)
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func devmockIsProductCodeUninstall(args []string) bool {
@@ -85,7 +133,7 @@ func devmockUninstallTarget(path string) (dir string, marked bool, err error) {
 	return dir, false, nil
 }
 
-func (r mockRunner) install(spec runSpec) (int, error) {
+func (r mockRunner) install(ctx context.Context, spec runSpec) (int, error) {
 	name, err := devmockGameName(spec)
 	if err != nil {
 		return 0, err
@@ -101,6 +149,21 @@ func (r mockRunner) install(spec runSpec) (int, error) {
 		}
 		dest = filepath.Join(gamesPath, name)
 	}
+
+	delay, err := devmockInstallDelay()
+	if err != nil {
+		return 0, err
+	}
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-timer.C:
+		}
+	}
+
 	// mock only: a real installer's package format decides directory
 	// permissions (invariant 8); the mock has no package to take them from.
 	if err := os.MkdirAll(dest, 0o755); err != nil {

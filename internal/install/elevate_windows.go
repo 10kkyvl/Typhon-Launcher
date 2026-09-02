@@ -93,6 +93,13 @@ func (p *elevatedProc) close() {
 	p.handle = 0
 }
 
+func (p *elevatedProc) wait() (int, error) {
+	p.mu.Lock()
+	handle := p.handle
+	p.mu.Unlock()
+	return awaitProcess(handle)
+}
+
 func awaitProcess(handle windows.Handle) (int, error) {
 	event, err := windows.WaitForSingleObject(handle, windows.INFINITE)
 	if err != nil {
@@ -108,6 +115,10 @@ func awaitProcess(handle windows.Handle) (int, error) {
 	return int(code), nil
 }
 
+func workerStartError(path string, err error) error {
+	return elevationError(path, err)
+}
+
 func elevationParams(spec runSpec) string {
 	if spec.Tail != "" {
 		return spec.Tail
@@ -119,7 +130,7 @@ func elevationParams(spec runSpec) string {
 	return strings.Join(parts, " ")
 }
 
-func startElevated(spec runSpec) (*elevatedProc, error) {
+func startElevated(spec runSpec) (workerHandle, error) {
 	verb, err := windows.UTF16PtrFromString("runas")
 	if err != nil {
 		return nil, fmt.Errorf("глагол runas: %w", err)
