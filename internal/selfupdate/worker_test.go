@@ -329,8 +329,6 @@ func TestRunWorkerRemovesSpecFileEvenOnFailure(t *testing.T) {
 	}
 }
 
-func quietReporter(string, string) stageReporter { return silentReporter{} }
-
 // TestEnsureReplacedDetectsUntouchedLauncher closes the bug that made the
 // whole feature look like a no-op: the worker used to run from the very
 // binary the NSIS installer has to overwrite, Windows kept that image locked,

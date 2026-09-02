@@ -56,6 +56,7 @@ func mkText(t *testing.T, path, content string) {
 }
 
 func exists(path string) bool {
+	//nolint:gosec // G703: path is built by the test from t.TempDir(), not user input; gosec's taint pass flags it only on some runs
 	_, err := os.Stat(path)
 	return err == nil
 }

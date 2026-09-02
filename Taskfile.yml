@@ -23,6 +23,9 @@ tasks:
     summary: Builds the application
     cmds:
       - task: "{{.GOOS}}:build"
+        vars:
+          DEV: "{{.DEV}}"
+          EXTRA_TAGS: "{{.EXTRA_TAGS}}"
 
   package:
     summary: Packages a production build of the application
@@ -38,6 +41,55 @@ tasks:
     summary: Runs the application in development mode
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  # devmock: a macOS/Linux development build where the Windows-only subsystems
+  # (installer runner, game processes, process detection, credential store,
+  # desktop shortcuts) are replaced by mocks behind the `devmock` build tag.
+  # The tag cannot be combined with GOOS=windows or the production tag:
+  # internal/devmock/forbid_devmock.go fails to compile in that case.
+  build:devmock:
+    summary: Builds a development binary with the Windows-only subsystems mocked (macOS/Linux only)
+    platforms: [darwin, linux]
+    cmds:
+      - task: build
+        vars:
+          DEV: "true"
+          EXTRA_TAGS: devmock
+
+  run:devmock:
+    summary: Builds and runs the devmock binary
+    platforms: [darwin, linux]
+    deps: [build:devmock]
+    cmds:
+      - task: "{{.GOOS}}:run"
+
+  dev:devmock:
+    summary: Runs the application in development mode with the devmock tag
+    platforms: [darwin, linux]
+    cmds:
+      - wails3 dev -config ./build/devmock.yml -port {{.VITE_PORT}}
+
+  test:devmock:
+    summary: Runs the Go tests with the devmock tag (the mocks and their seams)
+    platforms: [darwin, linux]
+    cmds:
+      - go test -tags devmock ./internal/...
+
+  devrelease:
+    summary: Serves a signed fake update manifest and artifact for the devmock launcher (VERSION=x.y.z, extra flags after --)
+    platforms: [darwin, linux]
+    requires:
+      vars: [VERSION]
+    cmds:
+      - go run ./tools/devrelease -version {{.VERSION}} {{.CLI_ARGS}}
+
+  lint:baseline:
+    summary: Compares the whole-module golangci-lint count with the per-OS baseline (add UPDATE=true to record)
+    deps: [lint:install]
+    cmds:
+      - go run ./tools/lintbaseline {{if eq .UPDATE "true"}}-update{{end}}
+      - cmd: go run ./tools/lintbaseline -tags devmock {{if eq .UPDATE "true"}}-update{{end}}
+        platforms: [darwin, linux]
 
   lint:install:
     summary: Installs the pinned golangci-lint into $(go env GOPATH)/bin

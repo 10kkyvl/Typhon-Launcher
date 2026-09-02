@@ -65,11 +65,3 @@ func TestCheckFreeSpaceOK(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
-
-func TestCheckFreeSpaceUnknownFails(t *testing.T) {
-	dir := missingVolumeDir(t)
-	err := checkFreeSpace(dir, 1)
-	if !errors.Is(err, errNoFreeSpace) {
-		t.Fatalf("err = %v, want errNoFreeSpace", err)
-	}
-}

@@ -126,6 +126,7 @@ type Service struct {
 	shortcuts     shortcutBackend
 	launcherPath  func() (string, error)
 	saveRoots     func() ([]platform.SaveRoot, error)
+	start         gameStarter
 }
 
 type SessionWatcher interface {
@@ -134,7 +135,7 @@ type SessionWatcher interface {
 }
 
 type session struct {
-	process   *os.Process // nil у сессии, обнаруженной в системе, а не запущенной нами
+	process   gameProcess // nil у сессии, обнаруженной в системе, а не запущенной нами
 	pid       uint32
 	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
 	startedAt time.Time // с этого момента считается наигранное время
@@ -172,6 +173,7 @@ func NewServiceAt(path string) (*Service, error) {
 		shortcuts:     systemShortcuts{},
 		launcherPath:  os.Executable,
 		saveRoots:     platform.SaveRoots,
+		start:         newGameStarter(),
 	}
 	games, err := s.load()
 	if err != nil {

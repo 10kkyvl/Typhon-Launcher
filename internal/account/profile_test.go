@@ -99,11 +99,7 @@ func TestForgetProfileNotExistIsNotError(t *testing.T) {
 }
 
 func TestSetProfileWriteFailureDropsCacheAndFile(t *testing.T) {
-	dir := t.TempDir()
-	blocker := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
-		t.Fatalf("write blocker file: %v", err)
-	}
+	blocker := unwritableStateDir(t)
 	profPath := filepath.Join(blocker, "profile.json")
 
 	s := &Service{profilePath: profPath, profile: cachedProfile{User: CurrentUser{ID: "stale"}}}

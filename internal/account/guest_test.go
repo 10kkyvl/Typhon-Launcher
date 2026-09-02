@@ -166,10 +166,7 @@ func TestLoginRefusesWhenGuestMarkerCannotBeCleared(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	blocker := filepath.Join(t.TempDir(), "blocker")
-	if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
-		t.Fatalf("write blocker file: %v", err)
-	}
+	blocker := unwritableStateDir(t)
 
 	s := serviceAt(t, &fakeStore{}, srv.URL, filepath.Join(blocker, "account.json"))
 	s.mu.Lock()

@@ -284,6 +284,13 @@ func mustServiceAt(t testing.TB, dir string) *Service {
 	return s
 }
 
+func TestNewServiceAtWiresRunner(t *testing.T) {
+	s := mustServiceAt(t, t.TempDir())
+	if s.runner == nil {
+		t.Fatal("runner = nil, want a wired runner")
+	}
+}
+
 func TestStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	completed := time.Now().Truncate(time.Second)

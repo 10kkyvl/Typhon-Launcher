@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/settings"
 
@@ -60,7 +59,11 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: resolve config dir: %w", err)
 	}
-	client, err := NewClient(account.BaseURL())
+	base, err := manifestBaseURL()
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: resolve manifest url: %w", err)
+	}
+	client, err := NewClient(base)
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: create client: %w", err)
 	}
