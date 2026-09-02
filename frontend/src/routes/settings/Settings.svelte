@@ -723,7 +723,7 @@
         <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
           <h3>Typhon Launcher</h3>
-          <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}</span>
+          <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
         </div>
       </div>
       <div class="rows">

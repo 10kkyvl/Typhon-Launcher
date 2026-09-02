@@ -365,12 +365,13 @@ func TestDetectKeepsLaunchedSessionAliveWhilePathUnverifiable(t *testing.T) {
 	s.now = func() time.Time { return clock }
 	s.watchInterval = time.Second
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Elevated")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Elevated")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	// Simulate an active detector without running the real loop: this is
 	// what makes the PlayGame goroutine defer closing to detectTick instead
 	// of closing the session itself the instant the child process exits.
@@ -485,12 +486,13 @@ func TestDetectRaceWithPlayGameAndGetRunningGames(t *testing.T) {
 	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
 	s.watchInterval = 10 * time.Millisecond
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Race")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Race")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	stop := make(chan struct{})

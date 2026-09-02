@@ -15,6 +15,7 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
@@ -146,6 +147,9 @@ func main() {
 	}
 
 	registerLocalIdentity()
+	if devmock.Enabled {
+		slog.Warn("devmock build: Windows-only subsystems are mocked", "marker", devmock.Banner())
+	}
 
 	// diagService is assigned once the identity/telemetry block below
 	// constructs it; the defer reads the variable itself at panic time, not
@@ -421,7 +425,7 @@ func main() {
 	})
 
 	window := wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Typhon",
+		Title:            windowTitle(),
 		Width:            1440,
 		Height:           900,
 		MinWidth:         1000,
@@ -576,4 +580,11 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 func fatal(stage string, err error) {
 	slog.Error("startup failed", "stage", stage, "err", err)
 	os.Exit(1)
+}
+
+func windowTitle() string {
+	if devmock.Enabled {
+		return "Typhon [devmock]"
+	}
+	return "Typhon"
 }

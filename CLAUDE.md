@@ -197,3 +197,40 @@ wails3 task build
 проверки.
 
 Перед commit/push: `git status` не тянет бинарники, `bindings/`, `dist/`
+
+## macOS: разработка и тесты через `devmock`
+
+Целевая платформа — Windows, но разрабатывать и прогонять лаунчер можно на macOS. Windows-only
+подсистемы (раннер установщиков, процессы игр, детект процессов, хранилище учётных данных, ярлыки)
+заменяются моками за build-тегом `devmock`.
+
+- Мок-файлы: `*_devmock.go` с `//go:build devmock && !windows`. Заглушки для не-Windows, у которых
+  есть мок-аналог, помечены `!windows && !devmock`. Общий пакет — `internal/devmock` (реестр
+  фейковых процессов `<ConfigDir>/devmock-processes.json`, флаг `devmock.Enabled`).
+- В exe для пользователя моки не попадают физически: тег `!windows` на файлах плюс
+  `internal/devmock/forbid_devmock.go`, который не компилируется при `GOOS=windows` или теге
+  `production`. Релизный workflow дополнительно проверяет, что `bin/typhon.exe` не содержит маркер
+  `TYPHON_DEVMOCK_ENABLED`.
+- Задачи: `wails3 task build:devmock`, `wails3 task run:devmock`, `wails3 task dev:devmock`
+  (hot reload, конфиг `build/devmock.yml`), `wails3 task test:devmock`. Бэкенд —
+  `TYPHON_API_URL=http://127.0.0.1:8080` на локальный `typhon-backend`, либо прод по умолчанию.
+- Время жизни фейкового процесса игры — `TYPHON_DEVMOCK_GAME_SECONDS` (по умолчанию 60). Сессия
+  закрывается либо по `StopGame`, либо по истечении времени через цикл детекта.
+- Окно в devmock-сборке называется «Typhon [devmock]», в «О программе» рядом с платформой
+  показывается `devmock`, в логе при старте — `devmock build: Windows-only subsystems are mocked`.
+
+Чеклист на macOS (в дополнение к общему; `-race` здесь не требует ничего, кроме Xcode CLT):
+
+```bash
+gofmt -l .
+go vet . ./internal/... && go vet -tags devmock . ./internal/...
+go build . ./internal/... && go build -tags devmock . ./internal/...
+GOOS=windows go build . ./internal/...
+go test ./internal/... && go test -race -tags devmock ./internal/...
+golangci-lint run ./... && golangci-lint run --build-tags devmock ./internal/...
+```
+
+`GOOS=windows go build -tags devmock ./internal/devmock/` и `go build -tags production,devmock
+./internal/devmock/` обязаны падать — это и есть гарантия, что мок не уедет в релиз. Тесты,
+которые по смыслу проверяют только Windows (буквы дисков, реестр, COM), живут в
+`*_windows_test.go`; всё остальное должно быть зелёным на macOS без `t.Skip`.

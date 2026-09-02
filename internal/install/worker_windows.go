@@ -298,5 +298,8 @@ func runMainInstall(ctx context.Context, spec workerSpec, components []string) (
 		Path: path, Args: plan.Args, Dir: spec.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail,
 		Background: spec.Background, Hidden: spec.Hidden,
 	}
-	return newRunner().run(ctx, rs)
+	// processRunner ignores gamesPath: the elevated worker only ever runs the
+	// main silent install with spec.Destination already resolved, never the
+	// devmock placement path.
+	return newRunner(func() string { return "" }).run(ctx, rs)
 }

@@ -209,6 +209,14 @@ func writeAsset(root, gameID, assetID string, img fetchedImage) (string, error) 
 	return gamesDirName + "/" + gameID + "/" + fileName, nil
 }
 
+func isWindowsDrivePath(rel string) bool {
+	return len(rel) >= 2 && rel[1] == ':' && isASCIILetter(rel[0])
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
 func assetPath(root, relPath string) (string, error) {
 	if root == "" {
 		return "", fmt.Errorf("%w: пустой корневой каталог", errAssetPath)
@@ -217,7 +225,7 @@ func assetPath(root, relPath string) (string, error) {
 		return "", fmt.Errorf("%w: пустой путь ассета", errAssetPath)
 	}
 	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || strings.HasPrefix(relPath, "\\") ||
-		filepath.VolumeName(relPath) != "" {
+		filepath.VolumeName(relPath) != "" || isWindowsDrivePath(relPath) {
 		return "", fmt.Errorf("%w: абсолютный путь ассета %q", errAssetPath, relPath)
 	}
 

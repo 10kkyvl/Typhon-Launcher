@@ -142,14 +142,15 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	if dir == "" {
 		return nil, errors.New("installations path unavailable")
 	}
-	return &Service{
+	s := &Service{
 		settings:  settingsService,
 		store:     newStore(dir),
 		removals:  newRemovalStore(dir),
-		runner:    newRunner(),
 		jobs:      map[string]*job{},
 		freeSpace: platform.GetStorageInfo,
-	}, nil
+	}
+	s.runner = newRunner(func() string { return s.config().GamesPath })
+	return s, nil
 }
 
 //wails:ignore

@@ -32,7 +32,7 @@ var (
 
 type processRunner struct{}
 
-func newRunner() runner { return processRunner{} }
+func newRunner(func() string) runner { return processRunner{} }
 
 // run сначала пытается разведать компоненты Inno (если движок и опции того
 // требуют) под своими текущими правами — так GOG-репаки, которым UAC не

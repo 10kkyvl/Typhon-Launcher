@@ -1,0 +1,181 @@
+# Verification pipeline for every push and pull request.
+#
+# The launcher ships for Windows only, but it is developed on macOS as well:
+# the `devmock` build tag swaps the Windows-only subsystems for mocks so the
+# whole flow (install, play, session detection, shortcuts, account) can be
+# exercised on a Mac. The mocks must never reach the Windows executable, so
+# this pipeline builds and tests both flavours and proves the tag cannot be
+# combined with GOOS=windows or the production tag.
+
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOLANGCI_LINT_VERSION: v2.13.1
+  WAILS_VERSION: v3.0.0-beta.10
+
+jobs:
+  lint:
+    name: Format, vet, lint, cross-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Type-checking the main package pulls in the Wails Linux backend, which
+      # is cgo over GTK and WebKit: without the headers go vet and the linter
+      # cannot load the packages at all.
+      - name: Install GTK and WebKit headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "gofmt needs to run on:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet . ./internal/...
+
+      - name: Cross-build for Windows
+        env:
+          GOOS: windows
+          CGO_ENABLED: "0"
+        run: go build . ./internal/...
+
+      - name: Cross-build for Windows must reject the devmock tag
+        env:
+          GOOS: windows
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          if go build -tags devmock ./internal/devmock/ 2>/dev/null; then
+            echo "devmock compiled for GOOS=windows; internal/devmock/forbid_devmock.go must fail the build" >&2
+            exit 1
+          fi
+
+      - name: Production tag must reject the devmock tag
+        run: |
+          set -euo pipefail
+          if go build -tags production,devmock ./internal/devmock/ 2>/dev/null; then
+            echo "devmock compiled with the production tag; internal/devmock/forbid_devmock.go must fail the build" >&2
+            exit 1
+          fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=10m ./...
+
+      - name: golangci-lint (devmock tag)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=10m --build-tags devmock ./internal/...
+
+  test-macos:
+    name: Build and test on macOS (plain and devmock)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build launcher
+        env:
+          CGO_ENABLED: "1"
+        run: go build -o /dev/null .
+
+      - name: Build launcher with devmock
+        env:
+          CGO_ENABLED: "1"
+        run: go build -tags devmock -o /dev/null .
+
+      - name: go test
+        run: go test ./internal/...
+
+      - name: go test -race
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./internal/...
+
+      - name: go test (devmock tag)
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -tags devmock ./internal/...
+
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet . ./internal/...
+
+      - name: go test
+        run: go test ./internal/...
+
+  frontend:
+    name: Frontend check and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install GTK and WebKit headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+
+      - name: Generate bindings
+        run: wails3 task common:generate:bindings
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: svelte-check
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

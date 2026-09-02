@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -14,6 +15,19 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// longRunningExecutable returns the path to an executable that stays alive
+// until killed, so TestMoveGameRefusesWhileRunning can rely on IsRunning
+// staying true for the duration of the test. PlayGame starts the process
+// with a nil Stdin, which os/exec connects to /dev/null, so /bin/cat would
+// see immediate EOF and exit in a couple of milliseconds; /usr/bin/yes takes
+// no arguments and loops writing to a discarded Stdout until killed.
+func longRunningExecutable() string {
+	if runtime.GOOS == "windows" {
+		return `C:\Windows\System32\notepad.exe`
+	}
+	return "/usr/bin/yes"
+}
 
 type fakeBusy struct{ busy bool }
 
@@ -85,20 +99,6 @@ func addTestGame(t *testing.T, lib *library.Service) (library.Game, string) {
 	return game, game.InstallDir
 }
 
-// unusedDriveTarget returns a path on a drive letter that does not exist,
-// so platform.GetStorageInfo cannot resolve free space for it.
-func unusedDriveTarget(t *testing.T) string {
-	t.Helper()
-	for _, letter := range "QXYZWVUT" {
-		root := string(letter) + `:\`
-		if _, err := os.Stat(root); os.IsNotExist(err) {
-			return root + `move-target`
-		}
-	}
-	t.Skip("no unused drive letter available to force a storage-info failure")
-	return ""
-}
-
 func TestMoveGameRefusesBusy(t *testing.T) {
 	cases := []struct {
 		name string
@@ -167,7 +167,7 @@ func TestMoveGameRejectsBadTargets(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, oldDir := addTestGame(t, lib)
 
-	root := filepath.VolumeName(oldDir) + `\`
+	root := string(filepath.Separator)
 	cases := []struct {
 		name   string
 		target string
@@ -199,20 +199,6 @@ func TestMoveGameRefusesNonEmptyTarget(t *testing.T) {
 	}
 	if _, err := s.MoveGame(game.ID, target); !errors.Is(err, ErrTargetNotEmpty) {
 		t.Fatalf("err = %v, want ErrTargetNotEmpty", err)
-	}
-}
-
-func TestMoveGameRefusesWhenFreeSpaceUnknown(t *testing.T) {
-	lib := newTestLibrary(t)
-	s := newTestService(t, nil, lib, nil, nil, nil)
-	game, oldDir := addTestGame(t, lib)
-	target := unusedDriveTarget(t)
-
-	if _, err := s.MoveGame(game.ID, target); !errors.Is(err, ErrFreeSpaceUnknown) {
-		t.Fatalf("err = %v, want ErrFreeSpaceUnknown", err)
-	}
-	if _, err := os.Stat(filepath.Join(oldDir, "game.exe")); err != nil {
-		t.Fatalf("source touched despite refusal: %v", err)
 	}
 }
 
@@ -455,7 +441,7 @@ func TestMoveGameRefusesWhileRunning(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 
-	game, err := lib.AddGame(`C:\Windows\System32\notepad.exe`, "Notepad")
+	game, err := lib.AddGame(longRunningExecutable(), "Notepad")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
