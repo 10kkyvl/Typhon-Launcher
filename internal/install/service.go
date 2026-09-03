@@ -236,7 +236,7 @@ func emit(name string, data any) {
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	stale := make([]string, 0, 4)
+	staleItems := make([]Installation, 0, 4)
 	stored, err := s.store.load()
 	if err != nil {
 		cancel := s.cancel
@@ -249,7 +249,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	toFinalize := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
-		if transient(item.Status) {
+		wasTransient := transient(item.Status)
+		if wasTransient {
 			alive, done := s.transientWorkerStatus(item.ID)
 			switch {
 			case alive || done:
@@ -270,8 +271,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
 			}
 		}
-		if item.Destination != "" {
-			stale = append(stale, item.Destination+partialSuffix)
+		if wasTransient && item.Destination != "" {
+			staleItems = append(staleItems, item)
 		}
 		s.items = append(s.items, &item)
 	}
@@ -281,7 +282,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		sweepPartial(stale)
+		s.sweepPartial(s.baseContext(), staleItems)
 		s.sweepRemovals()
 	}()
 
@@ -481,11 +482,10 @@ func (s *Service) cancelResumed(id string) {
 		s.mu.Unlock()
 		return
 	}
-	partial := partialPath(item)
 	s.markCancelledLocked(item)
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	go sweepPartial([]string{partial})
+	go s.sweepPartialItem(s.baseContext(), snap)
 	s.notifyFinished(snap)
 }
 
@@ -523,20 +523,76 @@ func (s *Service) ServiceShutdown() error {
 	return nil
 }
 
-func sweepPartial(paths []string) {
-	for _, path := range paths {
-		if !strings.HasSuffix(path, partialSuffix) {
-			continue
-		}
-		if _, err := os.Stat(path); err != nil {
-			continue
-		}
-		if err := os.RemoveAll(path); err != nil {
-			slog.Warn("remove partial install", "path", path, "error", err)
-		} else {
-			slog.Info("removed partial install", "path", path)
+func (s *Service) sweepPartial(ctx context.Context, items []Installation) {
+	for _, item := range items {
+		s.sweepPartialItem(ctx, item)
+	}
+}
+
+// sweepPartialItem решает, можно ли стереть .partial записи, или он —
+// единственная копия данных пользователя (инвариант 9). ModeMove консумирует
+// ContentRoot первым же MoveDir: если он уже пропал, а .partial ещё жив,
+// значит крах случился между этим MoveDir и вторым, внутри commit() (он же
+// делает MoveDir(.partial -> Destination) при кросс-девайсном переносе) —
+// стирать в этом случае можно только Destination (недописанный второй
+// перенос), а .partial обязан быть докатан, а не стёрт.
+func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
+	partial := partialPath(&item)
+	if partial == "" {
+		return
+	}
+	if _, err := os.Stat(partial); err != nil {
+		return
+	}
+	if item.Mode == ModeMove && !pathExists(item.ContentRoot) {
+		s.recoverMovePartial(ctx, item, partial)
+		return
+	}
+	if err := os.RemoveAll(partial); err != nil {
+		slog.Warn("remove partial install", "path", partial, "error", err)
+		return
+	}
+	slog.Info("removed partial install", "path", partial)
+}
+
+// recoverMovePartial докатывает Move-режим портативной установки, прерванной
+// между MoveDir(ContentRoot -> partial) и commit(partial -> Destination):
+// ContentRoot уже удалён первым MoveDir, поэтому partial — единственная копия
+// данных, а Destination может быть только наполовину переписанным вторым
+// (кросс-девайсным) шагом commit(). Сравнение числа файлов верхнего уровня —
+// не полноценная верификация (инвариант 10 требует хеш), поэтому Destination
+// стирается только когда счётчики явно разошлись; при любой неясности он
+// остаётся нетронутым, а commitExtracted сам откажется писать поверх занятого
+// каталога, оставив partial целым.
+func (s *Service) recoverMovePartial(ctx context.Context, item Installation, partial string) {
+	if item.Destination != "" && pathExists(item.Destination) {
+		full, err := sameTopLevelCount(partial, item.Destination)
+		switch {
+		case err != nil:
+			slog.Error("compare partial and destination before recovery", "id", item.ID, "error", err)
+		case !full:
+			if err := os.RemoveAll(item.Destination); err != nil {
+				slog.Error("remove half-written destination before recovery", "id", item.ID, "path", item.Destination, "error", err)
+				return
+			}
 		}
 	}
+	slog.Info("recovering move-mode install after crash", "id", item.ID, "partial", partial)
+	s.spawnFinalize(ctx, item.ID, func(ctx context.Context) error {
+		return s.commitExtracted(ctx, partial, item.Destination)
+	})
+}
+
+func sameTopLevelCount(a, b string) (bool, error) {
+	ea, err := os.ReadDir(a)
+	if err != nil {
+		return false, err
+	}
+	eb, err := os.ReadDir(b)
+	if err != nil {
+		return false, err
+	}
+	return len(ea) == len(eb), nil
 }
 
 func (s *Service) findLocked(id string) *Installation {
@@ -760,11 +816,10 @@ func (s *Service) Cancel(id string) error {
 		return err
 	}
 
-	partial := partialPath(item)
 	s.markCancelledLocked(item)
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	go sweepPartial([]string{partial})
+	go s.sweepPartialItem(s.baseContext(), snap)
 	s.notifyFinished(snap)
 	return nil
 }
@@ -891,7 +946,6 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errNotFound
 	}
-	partial := partialPath(item)
 	item.Status = StatusPending
 	item.Error = ""
 	item.Progress = 0
@@ -922,7 +976,7 @@ func (s *Service) Retry(id string) error {
 	snap := snapshotOf(item)
 	s.mu.Unlock()
 
-	sweepPartial([]string{partial})
+	s.sweepPartialItem(s.baseContext(), snap)
 
 	s.mu.Lock()
 	s.spawnLocked(id)
@@ -944,7 +998,7 @@ func (s *Service) Dismiss(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
-	partial := partialPath(item)
+	snap := snapshotOf(item)
 	for i, existing := range s.items {
 		if existing.ID == id {
 			s.items = append(s.items[:i], s.items[i+1:]...)
@@ -954,7 +1008,7 @@ func (s *Service) Dismiss(id string) error {
 	s.persistLocked()
 	s.mu.Unlock()
 
-	go sweepPartial([]string{partial})
+	go s.sweepPartialItem(s.baseContext(), snap)
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	return nil
