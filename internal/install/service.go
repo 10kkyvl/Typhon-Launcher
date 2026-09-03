@@ -587,27 +587,31 @@ func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 // recoverMovePartial докатывает Move-режим портативной установки, прерванной
 // между MoveDir(ContentRoot -> partial) и commit(partial -> Destination):
 // ContentRoot уже удалён первым MoveDir, поэтому partial — единственная копия
-// данных, а Destination может быть только наполовину переписанным вторым
-// (кросс-девайсным) шагом commit(). Сравнение числа файлов верхнего уровня —
-// не полноценная верификация (инвариант 10 требует хеш), поэтому Destination
-// стирается только когда счётчики явно разошлись; при любой неясности он
-// остаётся нетронутым, а commitExtracted сам откажется писать поверх занятого
-// каталога, оставив partial целым.
+// данных. Destination либо недописан кросс-девайсным commit() (меньше
+// записей верхнего уровня — стираем и переносим заново), либо уже полная
+// копия, после которой процесс умер до RemoveAll(partial) — это проверяется
+// по хешу (инвариант 10), и тогда partial удаляется как дубликат. Любая
+// неясность оставляет оба каталога на месте: commitExtracted откажется
+// писать поверх занятого Destination, и ошибка дойдёт до UI.
 func (s *Service) recoverMovePartial(ctx context.Context, item Installation, partial string) {
-	if item.Destination != "" && pathExists(item.Destination) {
-		full, err := sameTopLevelCount(partial, item.Destination)
-		switch {
-		case err != nil:
-			slog.Error("compare partial and destination before recovery", "id", item.ID, "error", err)
-		case !full:
-			if err := os.RemoveAll(item.Destination); err != nil {
-				slog.Error("remove half-written destination before recovery", "id", item.ID, "path", item.Destination, "error", err)
-				return
-			}
-		}
-	}
 	slog.Info("recovering move-mode install after crash", "id", item.ID, "partial", partial)
 	s.spawnFinalize(ctx, item.ID, func(ctx context.Context) error {
+		if item.Destination != "" && pathExists(item.Destination) {
+			full, err := sameTopLevelCount(partial, item.Destination)
+			if err != nil {
+				return err
+			}
+			if !full {
+				if err := os.RemoveAll(item.Destination); err != nil {
+					return fmt.Errorf("remove half-written destination: %w", err)
+				}
+			} else if verifyErr := verifyCopy(ctx, partial, item.Destination); verifyErr == nil {
+				if err := os.RemoveAll(partial); err != nil {
+					return fmt.Errorf("remove duplicate partial: %w", err)
+				}
+				return nil
+			}
+		}
 		return s.commitExtracted(ctx, partial, item.Destination)
 	})
 }

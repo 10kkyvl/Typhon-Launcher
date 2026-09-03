@@ -216,6 +216,54 @@ func TestServiceStartupRecoversMoveModeCrashWithoutSource(t *testing.T) {
 	}
 }
 
+func TestServiceStartupKeepsCompleteMoveModeDestination(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	s.settings = newTestSettings(t)
+	s.downloads = newFakeDownloads()
+	registrar := &fakeRegistrar{}
+	s.library = registrar
+
+	dest := filepath.Join(t.TempDir(), "Game")
+	partial := dest + partialSuffix
+	for _, root := range []string{partial, dest} {
+		mkFile(t, filepath.Join(root, "Game.exe"), 4096)
+		mkFile(t, filepath.Join(root, "data", "content.pak"), 2048)
+	}
+
+	const id = "move-crash-after-copy"
+	item := Installation{
+		ID: id, DownloadID: "d1", Name: "Game", Type: TypePortable, Mode: ModeMove,
+		Status: StatusInstalling, Destination: dest, ContentRoot: filepath.Join(t.TempDir(), "gone"), StartedAt: time.Now(),
+	}
+	if err := s.store.save([]Installation{item}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+
+	done := s.waitStatus(t, id, StatusCompleted)
+	if done.GameID == "" {
+		t.Fatal("GameID empty, want the install registered")
+	}
+	if exists(partial) {
+		t.Fatal(".partial survived, want the verified duplicate removed")
+	}
+	if got, err := os.ReadFile(filepath.Join(dest, "Game.exe")); err != nil || len(got) != 4096 {
+		t.Fatalf("destination Game.exe = %d bytes, err=%v, want the complete copy untouched", len(got), err)
+	}
+	if len(registrar.registered()) != 1 {
+		t.Fatalf("registered games = %d, want 1", len(registrar.registered()))
+	}
+}
+
 // TestServiceStartupSweepsPartialInCopyModeAsBefore проверяет, что фикс
 // finding 5 не расширяется на Copy-режим: там ContentRoot — это скачанные
 // данные, они не удаляются, и лишний .partial можно спокойно стереть и
