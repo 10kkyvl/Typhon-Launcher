@@ -36,9 +36,9 @@ var (
 
 	errUnavailablePrefetch = errors.New("предварительная загрузка недоступна для этой стратегии")
 
-	errNoFreeSpaceForBackup = errors.New("Недостаточно места для резервной копии перед обновлением")
+	errNoFreeSpaceForBackup = errors.New("недостаточно места для резервной копии перед обновлением")
 
-	errDownloadStalled = errors.New("Загрузка остановилась: нет сети или источников. Загрузка продолжится автоматически, повторите обновление позже")
+	errDownloadStalled = errors.New("загрузка остановилась: нет сети или источников, повторите обновление позже")
 )
 
 // updateStallTimeout bounds how long an update job waits on a download that

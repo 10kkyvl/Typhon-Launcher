@@ -76,10 +76,14 @@ func TestSetJournalRollsBackOnPersistFailure(t *testing.T) {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(configDir, 0o500); err != nil {
+	if err := os.Chmod(configDir, 0o500); err != nil { //nolint:gosec // G302: временно закрываем права каталога, чтобы смоделировать сбой persist (инвариант 5)
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(configDir, 0o755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(configDir, 0o755); err != nil { //nolint:gosec // G302: возврат прав, выставленных выше по той же причине (инвариант 5)
+			t.Errorf("restore config dir permissions: %v", err)
+		}
+	})
 
 	if err := svc.setJournal(SwapJournal{GameID: "g1", Kind: JournalSwap}); err == nil {
 		t.Fatal("expected persist error on read-only config dir")
@@ -102,10 +106,14 @@ func TestClearJournalRollsBackOnPersistFailure(t *testing.T) {
 	if err := svc.setJournal(SwapJournal{GameID: "g1", Kind: JournalSwap}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(configDir, 0o500); err != nil {
+	if err := os.Chmod(configDir, 0o500); err != nil { //nolint:gosec // G302: временно закрываем права каталога, чтобы смоделировать сбой persist (инвариант 5)
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(configDir, 0o755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(configDir, 0o755); err != nil { //nolint:gosec // G302: возврат прав, выставленных выше по той же причине (инвариант 5)
+			t.Errorf("restore config dir permissions: %v", err)
+		}
+	})
 
 	if err := svc.clearJournal("g1"); err == nil {
 		t.Fatal("expected persist error on read-only config dir")
@@ -315,10 +323,14 @@ func TestApplyFullReleaseJournalPersistFailureAbortsBeforeRename(t *testing.T) {
 	h := newHarness(t)
 	plan := h.plan(t)
 	_ = plan
-	if err := os.Chmod(filepath.Dir(h.service.store.path("x")), 0o500); err != nil {
+	if err := os.Chmod(filepath.Dir(h.service.store.path("x")), 0o500); err != nil { //nolint:gosec // G302: временно закрываем права каталога, чтобы смоделировать сбой persist (инвариант 5)
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(h.service.store.path("x")), 0o755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(filepath.Dir(h.service.store.path("x")), 0o755); err != nil { //nolint:gosec // G302: возврат прав, выставленных выше по той же причине (инвариант 5)
+			t.Errorf("restore config dir permissions: %v", err)
+		}
+	})
 
 	if err := h.service.StartUpdate("local-1"); err != nil {
 		t.Fatal(err)
@@ -345,9 +357,9 @@ func (f *patchDownloads) AddTask(ctx context.Context, req download.AddRequest) (
 	if req.Origin.ReleaseID == f.failReleaseID {
 		task.Status = download.StatusFailed
 		task.Error = "патч недоступен"
-		f.fakeDownloads.mu.Lock()
-		f.fakeDownloads.tasks[task.ID] = &task
-		f.fakeDownloads.mu.Unlock()
+		f.mu.Lock()
+		f.tasks[task.ID] = &task
+		f.mu.Unlock()
 	}
 	return task, nil
 }
@@ -643,10 +655,14 @@ func TestApplyTorrentReuseCopyFailureAbortsBeforeDownload(t *testing.T) {
 	}
 	svc, _, downloads, installDir := newInPlaceScenario(t)
 	gamesDir := filepath.Dir(installDir)
-	if err := os.Chmod(gamesDir, 0o500); err != nil {
+	if err := os.Chmod(gamesDir, 0o500); err != nil { //nolint:gosec // G302: временно закрываем права каталога, чтобы смоделировать сбой backup-копии (инвариант 5)
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(gamesDir, 0o755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(gamesDir, 0o755); err != nil { //nolint:gosec // G302: возврат прав, выставленных выше по той же причине (инвариант 5)
+			t.Errorf("restore games dir permissions: %v", err)
+		}
+	})
 
 	if err := svc.applyTorrentReuse(context.Background(), inPlacePlan("g1")); err == nil {
 		t.Fatal("expected the backup copy to fail on a read-only parent directory")
