@@ -14,6 +14,7 @@ type Game struct {
 	LastPlayed      *time.Time
 	Owned           bool
 	Favorite        bool
+	FavoriteAt      *time.Time
 	Status          string
 	StatusAt        *time.Time
 }

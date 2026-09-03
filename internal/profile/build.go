@@ -145,7 +145,7 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		snap.Activity = append(snap.Activity, ActivityDay{Date: day, Entries: entries})
 	}
 
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	monthStart := MonthStart(now)
 	monthGames := map[string]struct{}{}
 	for _, s := range sessions {
 		g, known := byID[s.GameID]
@@ -180,6 +180,10 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		snap.Showcase = append(snap.Showcase, ShowcaseBlock{Kind: kind, Games: showcaseGames(kind, games)})
 	}
 	return snap
+}
+
+func MonthStart(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 }
 
 func showcaseGames(kind string, games []library.Game) []GameRef {

@@ -11,6 +11,7 @@ type SyncGame struct {
 	LastPlayed      *time.Time
 	Owned           bool
 	Favorite        bool
+	FavoriteAt      *time.Time
 	Status          string
 	StatusAt        *time.Time
 }
@@ -38,6 +39,10 @@ func (s *Service) SyncSnapshot() []SyncGame {
 		if s.games[i].StatusAt != nil {
 			t := *s.games[i].StatusAt
 			item.StatusAt = &t
+		}
+		if s.games[i].FavoriteAt != nil {
+			t := *s.games[i].FavoriteAt
+			item.FavoriteAt = &t
 		}
 		out = append(out, item)
 	}
@@ -79,11 +84,16 @@ func (s *Service) ApplySync(items []SyncGame) error {
 				s.games[i].Owned = true
 				changed = true
 			}
-			if item.StatusAt != nil && (s.games[i].StatusAt == nil || item.StatusAt.After(*s.games[i].StatusAt)) {
+			if item.StatusAt != nil && ValidStatus(item.Status) && (s.games[i].StatusAt == nil || item.StatusAt.After(*s.games[i].StatusAt)) {
 				t := *item.StatusAt
-				s.games[i].Favorite = item.Favorite
 				s.games[i].Status = item.Status
 				s.games[i].StatusAt = &t
+				changed = true
+			}
+			if item.FavoriteAt != nil && (s.games[i].FavoriteAt == nil || item.FavoriteAt.After(*s.games[i].FavoriteAt)) {
+				t := *item.FavoriteAt
+				s.games[i].Favorite = item.Favorite
+				s.games[i].FavoriteAt = &t
 				changed = true
 			}
 			break

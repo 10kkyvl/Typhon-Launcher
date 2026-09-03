@@ -119,6 +119,18 @@ func TestBuildRunningAndShowcase(t *testing.T) {
 	}
 }
 
+func TestBuildRecentlyCompletedIgnoresFavoriteStamp(t *testing.T) {
+	list := []library.Game{
+		{ID: "older", Title: "Older", Status: library.StatusCompleted, StatusAt: ptr(at(-48 * time.Hour)), Favorite: true, FavoriteAt: ptr(at(-time.Hour))},
+		{ID: "newer", Title: "Newer", Status: library.StatusCompleted, StatusAt: ptr(at(-24 * time.Hour)), Favorite: true, FavoriteAt: ptr(at(-72 * time.Hour))},
+	}
+	snap := Build(list, nil, nil, []string{"recently_completed"}, now)
+	rc := snap.Showcase[0]
+	if len(rc.Games) != 2 || rc.Games[0].ID != "newer" || rc.Games[1].ID != "older" {
+		t.Fatalf("recently_completed = %+v, want ordering by StatusAt only", rc.Games)
+	}
+}
+
 func TestBuildEmptyIsNotNil(t *testing.T) {
 	snap := Build(nil, nil, nil, []string{"favorites"}, now)
 	if snap.Playing == nil || snap.Activity == nil || snap.Running == nil || snap.Showcase == nil {

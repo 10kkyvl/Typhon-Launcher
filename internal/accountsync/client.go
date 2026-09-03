@@ -57,6 +57,7 @@ type wireGame struct {
 	IGDBID          int64      `json:"igdbId"`
 	Owned           bool       `json:"owned"`
 	Favorite        bool       `json:"favorite"`
+	FavoriteAt      *time.Time `json:"favoriteAt"`
 	Status          string     `json:"status"`
 	StatusAt        *time.Time `json:"statusAt"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`

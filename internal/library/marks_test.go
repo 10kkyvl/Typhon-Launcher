@@ -146,16 +146,48 @@ func TestSetStatusStampsAndValidates(t *testing.T) {
 	}
 }
 
-func TestSetFavoriteStampsStatusAt(t *testing.T) {
+func TestSetFavoriteStampsFavoriteAt(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
 	id := addGames(t, s, 1)[0]
+	statusAt := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	s.mu.Lock()
+	s.findLocked(id).Status = StatusCompleted
+	s.findLocked(id).StatusAt = &statusAt
+	s.mu.Unlock()
+
 	g, err := s.SetFavorite(id, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if g.FavoriteAt == nil || !g.FavoriteAt.Equal(now) {
+		t.Fatalf("favorite must stamp FavoriteAt, got %+v", g)
+	}
+	if g.StatusAt == nil || !g.StatusAt.Equal(statusAt) {
+		t.Fatalf("favorite must not move StatusAt, got %+v", g)
+	}
+}
+
+func TestSetStatusLeavesFavoriteAt(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	id := addGames(t, s, 1)[0]
+	favoriteAt := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	s.mu.Lock()
+	s.findLocked(id).Favorite = true
+	s.findLocked(id).FavoriteAt = &favoriteAt
+	s.mu.Unlock()
+
+	g, err := s.SetStatus(id, StatusCompleted)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if g.StatusAt == nil || !g.StatusAt.Equal(now) {
-		t.Fatalf("favorite must stamp StatusAt, got %+v", g)
+		t.Fatalf("status must stamp StatusAt, got %+v", g)
+	}
+	if g.FavoriteAt == nil || !g.FavoriteAt.Equal(favoriteAt) {
+		t.Fatalf("status must not move FavoriteAt, got %+v", g)
 	}
 }

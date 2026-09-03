@@ -30,7 +30,7 @@ func NewService(lib Library, log Log, showcase func() []string) *Service {
 
 func (s *Service) Snapshot() Snapshot {
 	now := s.now()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	monthStart := MonthStart(now)
 	since := minTime(monthStart, now.Add(-recentWindow))
 	return Build(s.library.GetGames(), s.log.Since(since), s.library.GetRunningGames(), s.showcase(), now)
 }

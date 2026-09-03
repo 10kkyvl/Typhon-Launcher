@@ -29,6 +29,7 @@ func (a syncLibrary) Snapshot() ([]accountsync.Game, error) {
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
 			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
 			Status:          item.Status,
 			StatusAt:        item.StatusAt,
 		})
@@ -45,6 +46,7 @@ func (a syncLibrary) Apply(items []accountsync.Game) error {
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
 			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
 			Status:          item.Status,
 			StatusAt:        item.StatusAt,
 		})

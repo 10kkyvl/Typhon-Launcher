@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -275,10 +276,12 @@ func TestApplySyncMergesStatusByStamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t1 := time.Now().Add(-3 * time.Hour)
-	t0 := time.Now().Add(-4 * time.Hour)
-	t2 := time.Now().Add(-2 * time.Hour)
-	t3 := time.Now().Add(-time.Hour)
+	t0 := time.Now().Add(-6 * time.Hour)
+	t1 := time.Now().Add(-5 * time.Hour)
+	t2 := time.Now().Add(-4 * time.Hour)
+	t3 := time.Now().Add(-3 * time.Hour)
+	t4 := time.Now().Add(-2 * time.Hour)
+	t5 := time.Now().Add(-time.Hour)
 
 	s.mu.Lock()
 	s.findLocked(game.ID).Status = StatusPlaying
@@ -311,15 +314,48 @@ func TestApplySyncMergesStatusByStamp(t *testing.T) {
 
 	if err := s.ApplySync([]SyncGame{{
 		CanonicalGameID: "canon-1",
-		Favorite:        true,
-		Status:          StatusCompleted,
-		StatusAt:        &t3,
+		Status:          StatusDropped,
+		StatusAt:        &t2,
 	}}); err != nil {
 		t.Fatalf("ApplySync: %v", err)
 	}
 	got = s.GetGames()[0]
-	if !got.Favorite || got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t3) {
-		t.Fatalf("after favorite@t3: got favorite=%v status=%q statusAt=%v", got.Favorite, got.Status, got.StatusAt)
+	if got.Status != StatusCompleted {
+		t.Fatalf("equal stamp should keep local: got status=%q", got.Status)
+	}
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Favorite:        true,
+		FavoriteAt:      &t3,
+		Status:          StatusDropped,
+		StatusAt:        &t0,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(t3) {
+		t.Fatalf("newer FavoriteAt must set the favorite: got favorite=%v favoriteAt=%v", got.Favorite, got.FavoriteAt)
+	}
+	if got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t2) {
+		t.Fatalf("older StatusAt must not move the status: got status=%q statusAt=%v", got.Status, got.StatusAt)
+	}
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Favorite:        false,
+		FavoriteAt:      &t0,
+		Status:          StatusBacklog,
+		StatusAt:        &t4,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if got.Status != StatusBacklog || got.StatusAt == nil || !got.StatusAt.Equal(t4) {
+		t.Fatalf("newer StatusAt must move the status: got status=%q statusAt=%v", got.Status, got.StatusAt)
+	}
+	if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(t3) {
+		t.Fatalf("older FavoriteAt must not clear the favorite: got favorite=%v favoriteAt=%v", got.Favorite, got.FavoriteAt)
 	}
 
 	if err := s.persist(); err != nil {
@@ -335,13 +371,12 @@ func TestApplySyncMergesStatusByStamp(t *testing.T) {
 		CanonicalGameID: "canon-1",
 		Favorite:        false,
 		Status:          StatusDropped,
-		StatusAt:        nil,
 	}}); err != nil {
 		t.Fatalf("ApplySync: %v", err)
 	}
 	got = s.GetGames()[0]
-	if !got.Favorite || got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t3) {
-		t.Fatalf("nil incoming StatusAt must never change anything: got favorite=%v status=%q statusAt=%v", got.Favorite, got.Status, got.StatusAt)
+	if !got.Favorite || got.Status != StatusBacklog || got.StatusAt == nil || !got.StatusAt.Equal(t4) {
+		t.Fatalf("nil incoming stamps must never change anything: got favorite=%v status=%q statusAt=%v", got.Favorite, got.Status, got.StatusAt)
 	}
 	infoAfter, err := os.Stat(path)
 	if err != nil {
@@ -349,6 +384,91 @@ func TestApplySyncMergesStatusByStamp(t *testing.T) {
 	}
 	if !infoAfter.ModTime().Equal(mtimeBefore) {
 		t.Fatal("library.json was rewritten though no field changed")
+	}
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Status:          "",
+		StatusAt:        &t5,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if got.Status != "" || got.StatusAt == nil || !got.StatusAt.Equal(t5) {
+		t.Fatalf("remote clear must clear the status: got status=%q statusAt=%v", got.Status, got.StatusAt)
+	}
+}
+
+func TestApplySyncIgnoresInvalidRemoteStatus(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+	}{
+		{"unknown word", "won"},
+		{"overlong string", strings.Repeat("a", 200)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "library.json")
+			s := mustServiceAt(t, path)
+			game, err := s.AddCatalogGame("canon-1", "Some Game", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			local := time.Now().Add(-2 * time.Hour)
+			newer := time.Now().Add(-time.Hour)
+			s.mu.Lock()
+			s.findLocked(game.ID).Status = StatusPlaying
+			s.findLocked(game.ID).StatusAt = &local
+			s.mu.Unlock()
+
+			if err := s.ApplySync([]SyncGame{{
+				CanonicalGameID: "canon-1",
+				Status:          tc.status,
+				StatusAt:        &newer,
+				Favorite:        true,
+				FavoriteAt:      &newer,
+			}}); err != nil {
+				t.Fatalf("ApplySync: %v", err)
+			}
+			got := s.GetGames()[0]
+			if got.Status != StatusPlaying || got.StatusAt == nil || !got.StatusAt.Equal(local) {
+				t.Fatalf("invalid remote status must be ignored: got status=%q statusAt=%v", got.Status, got.StatusAt)
+			}
+			if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(newer) {
+				t.Fatalf("favorite must still apply: got favorite=%v favoriteAt=%v", got.Favorite, got.FavoriteAt)
+			}
+		})
+	}
+}
+
+func TestSyncSnapshotCopiesStamps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	game, err := s.AddCatalogGame("canon-1", "Some Game", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusAt := time.Now().Add(-2 * time.Hour)
+	favoriteAt := time.Now().Add(-time.Hour)
+	s.mu.Lock()
+	stored := s.findLocked(game.ID)
+	stored.Status = StatusCompleted
+	stored.StatusAt = &statusAt
+	stored.Favorite = true
+	stored.FavoriteAt = &favoriteAt
+	statusPtr, favoritePtr := stored.StatusAt, stored.FavoriteAt
+	s.mu.Unlock()
+
+	snapshot := s.SyncSnapshot()
+	if len(snapshot) != 1 {
+		t.Fatalf("snapshot = %+v", snapshot)
+	}
+	if snapshot[0].FavoriteAt == nil || !snapshot[0].FavoriteAt.Equal(favoriteAt) {
+		t.Fatalf("FavoriteAt = %v, want %v", snapshot[0].FavoriteAt, favoriteAt)
+	}
+	if snapshot[0].StatusAt == favoritePtr || snapshot[0].StatusAt == statusPtr || snapshot[0].FavoriteAt == favoritePtr {
+		t.Fatal("SyncSnapshot leaked a pointer to internal state")
 	}
 }
 

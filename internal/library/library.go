@@ -53,6 +53,7 @@ type Game struct {
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 	SavesDir          string     `json:"savesDir,omitempty"`
 	Favorite          bool       `json:"favorite,omitempty"`
+	FavoriteAt        *time.Time `json:"favoriteAt,omitempty"`
 	Status            string     `json:"status,omitempty"`
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
 }
@@ -221,6 +222,8 @@ type legacyGame struct {
 	CompletedAt *time.Time `json:"completedAt"`
 }
 
+func legacyStamp() time.Time { return time.Unix(0, 0).UTC() }
+
 func (s *Service) load() ([]Game, error) {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -239,6 +242,14 @@ func (s *Service) load() ([]Game, error) {
 		if entry.Completed && g.Status == "" {
 			g.Status = StatusCompleted
 			g.StatusAt = entry.CompletedAt
+		}
+		if g.Status != "" && g.StatusAt == nil {
+			stamp := legacyStamp()
+			g.StatusAt = &stamp
+		}
+		if g.Favorite && g.FavoriteAt == nil {
+			stamp := legacyStamp()
+			g.FavoriteAt = &stamp
 		}
 		games = append(games, g)
 	}
@@ -661,7 +672,7 @@ func (s *Service) SetFavorite(id string, on bool) (Game, error) {
 	previous := *game
 	game.Favorite = on
 	now := s.now()
-	game.StatusAt = &now
+	game.FavoriteAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous
 		return Game{}, fmt.Errorf("save library: %w", err)

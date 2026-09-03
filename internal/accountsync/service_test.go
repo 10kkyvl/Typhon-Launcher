@@ -205,12 +205,72 @@ func TestSyncStatusAndFavoriteMerge(t *testing.T) {
 		}
 	})
 
+	t.Run("newer favorite stamp moves the favorite alone", func(t *testing.T) {
+		h := newHarness(t)
+		h.catalog.link("game-1", "1")
+		old := time.Now().Add(-3 * time.Hour)
+		local := time.Now().Add(-2 * time.Hour)
+		fresh := time.Now().Add(-time.Hour)
+		h.library.setLocalGame(Game{CanonicalGameID: "game-1", Status: "completed", StatusAt: &local, Favorite: false, FavoriteAt: &old})
+		h.server.get = func(w http.ResponseWriter) {
+			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
+				{IGDBID: 1, Status: "dropped", StatusAt: &old, Favorite: true, FavoriteAt: &fresh},
+			}})
+		}
+		var lastPut putRequest
+		h.server.put = func(w http.ResponseWriter, req putRequest) {
+			lastPut = req
+			echoPut(http.StatusOK)(w, req)
+		}
+
+		if err := h.service.Sync(context.Background()); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		got := h.library.gameOf("game-1")
+		if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(fresh) {
+			t.Fatalf("expected favorite@fresh, got favorite=%v favoriteAt=%v", got.Favorite, got.FavoriteAt)
+		}
+		if got.Status != "completed" || got.StatusAt == nil || !got.StatusAt.Equal(local) {
+			t.Fatalf("expected status untouched, got status=%q statusAt=%v", got.Status, got.StatusAt)
+		}
+		pushed, ok := pushedFor(lastPut, 1)
+		if !ok || !pushed.Favorite || pushed.FavoriteAt == nil || !pushed.FavoriteAt.Equal(fresh) || pushed.Status != "completed" {
+			t.Fatalf("expected push to carry favorite@fresh and completed, got %+v (ok=%v)", pushed, ok)
+		}
+	})
+
+	t.Run("newer status stamp moves the status alone", func(t *testing.T) {
+		h := newHarness(t)
+		h.catalog.link("game-1", "1")
+		old := time.Now().Add(-3 * time.Hour)
+		local := time.Now().Add(-2 * time.Hour)
+		fresh := time.Now().Add(-time.Hour)
+		h.library.setLocalGame(Game{CanonicalGameID: "game-1", Status: "playing", StatusAt: &old, Favorite: true, FavoriteAt: &local})
+		h.server.get = func(w http.ResponseWriter) {
+			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
+				{IGDBID: 1, Status: "completed", StatusAt: &fresh, Favorite: false, FavoriteAt: &old},
+			}})
+		}
+		h.server.put = echoPut(http.StatusOK)
+
+		if err := h.service.Sync(context.Background()); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		got := h.library.gameOf("game-1")
+		if got.Status != "completed" || got.StatusAt == nil || !got.StatusAt.Equal(fresh) {
+			t.Fatalf("expected completed@fresh, got status=%q statusAt=%v", got.Status, got.StatusAt)
+		}
+		if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(local) {
+			t.Fatalf("expected favorite untouched, got favorite=%v favoriteAt=%v", got.Favorite, got.FavoriteAt)
+		}
+	})
+
 	t.Run("hydrated remote-only game receives status and favorite in the same cycle", func(t *testing.T) {
 		h := newHarness(t)
 		t1 := time.Now().Add(-time.Hour)
 		h.server.get = func(w http.ResponseWriter) {
 			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
-				{IGDBID: 77, Favorite: true, Status: "backlog", StatusAt: &t1},
+				{IGDBID: 77, Favorite: true, FavoriteAt: &t1, Status: "backlog", StatusAt: &t1},
 			}})
 		}
 		h.server.put = echoPut(http.StatusOK)
@@ -219,8 +279,11 @@ func TestSyncStatusAndFavoriteMerge(t *testing.T) {
 			t.Fatalf("Sync: %v", err)
 		}
 		got := h.library.gameOf("game-77")
-		if !got.Favorite || got.Status != "backlog" || got.StatusAt == nil || !got.StatusAt.Equal(t1) {
-			t.Fatalf("expected hydrated game to carry favorite/backlog@t1 in the same cycle, got %+v", got)
+		if !got.Favorite || got.FavoriteAt == nil || !got.FavoriteAt.Equal(t1) {
+			t.Fatalf("expected hydrated game to carry favorite@t1, got %+v", got)
+		}
+		if got.Status != "backlog" || got.StatusAt == nil || !got.StatusAt.Equal(t1) {
+			t.Fatalf("expected hydrated game to carry backlog@t1, got %+v", got)
 		}
 	})
 }
