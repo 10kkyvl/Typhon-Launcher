@@ -94,6 +94,7 @@ const KNOWN_CODES = new Set([
   'request_blocked',
   'user_not_found',
   'already_friends',
+  'friend_blocked',
   'friend_limit',
   'request_limit',
   'block_limit',
