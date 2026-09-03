@@ -19,7 +19,7 @@
     {:else}
       <div class="grid">
         {#each block.games as game (game.id)}
-          <button class="tile" aria-label={game.title} onclick={() => navigate('game', { id: game.id })}>
+          <button class="tile" onclick={() => navigate('game', { id: game.id })}>
             <Artwork src={game.cover} alt="" ratio="3 / 4" radius="var(--radius-md)" />
             <span class="caption">{game.title}</span>
           </button>
