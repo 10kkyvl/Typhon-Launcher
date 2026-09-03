@@ -24,17 +24,22 @@ type Snapshot struct {
 }
 
 type Stats struct {
-	Games     int `json:"games"`
-	Hours     int `json:"hours"`
-	Completed int `json:"completed"`
-	Playing   int `json:"playing"`
+	Games          int   `json:"games"`
+	Hours          int   `json:"hours"`
+	Completed      int   `json:"completed"`
+	Playing        int   `json:"playing"`
+	MonthSeconds   int64 `json:"monthSeconds"`
+	MonthGames     int   `json:"monthGames"`
+	MonthCompleted int   `json:"monthCompleted"`
 }
 
 type GameRef struct {
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Cover           string `json:"cover"`
-	PlaytimeSeconds int64  `json:"playtimeSeconds"`
+	ID              string     `json:"id"`
+	Title           string     `json:"title"`
+	Cover           string     `json:"cover"`
+	PlaytimeSeconds int64      `json:"playtimeSeconds"`
+	Status          string     `json:"status"`
+	StatusAt        *time.Time `json:"statusAt,omitempty"`
 }
 
 type PlayingEntry struct {
@@ -73,7 +78,7 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 	var totalSeconds int64
 	for _, g := range games {
 		totalSeconds += g.PlaytimeSeconds
-		if g.Completed {
+		if g.Status == library.StatusCompleted {
 			snap.Stats.Completed++
 		}
 	}
@@ -140,6 +145,31 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		snap.Activity = append(snap.Activity, ActivityDay{Date: day, Entries: entries})
 	}
 
+	monthStart := MonthStart(now)
+	monthGames := map[string]struct{}{}
+	for _, s := range sessions {
+		g, known := byID[s.GameID]
+		if !known || s.EndedAt.Before(monthStart) {
+			continue
+		}
+		start := s.StartedAt
+		if start.Before(monthStart) {
+			start = monthStart
+		}
+		seconds := int64(s.EndedAt.Sub(start).Seconds())
+		if seconds <= 0 {
+			continue
+		}
+		snap.Stats.MonthSeconds += seconds
+		monthGames[g.ID] = struct{}{}
+	}
+	snap.Stats.MonthGames = len(monthGames)
+	for _, g := range games {
+		if g.Status == library.StatusCompleted && g.StatusAt != nil && !g.StatusAt.Before(monthStart) {
+			snap.Stats.MonthCompleted++
+		}
+	}
+
 	for _, id := range running {
 		if g, ok := byID[id]; ok {
 			snap.Running = append(snap.Running, ref(g))
@@ -150,6 +180,10 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		snap.Showcase = append(snap.Showcase, ShowcaseBlock{Kind: kind, Games: showcaseGames(kind, games)})
 	}
 	return snap
+}
+
+func MonthStart(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 }
 
 func showcaseGames(kind string, games []library.Game) []GameRef {
@@ -165,11 +199,11 @@ func showcaseGames(kind string, games []library.Game) []GameRef {
 		less = func(a, b library.Game) bool { return timeOf(a.LastPlayed).After(timeOf(b.LastPlayed)) }
 	case "recently_completed":
 		for _, g := range games {
-			if g.Completed {
+			if g.Status == library.StatusCompleted {
 				picked = append(picked, g)
 			}
 		}
-		less = func(a, b library.Game) bool { return timeOf(a.CompletedAt).After(timeOf(b.CompletedAt)) }
+		less = func(a, b library.Game) bool { return timeOf(a.StatusAt).After(timeOf(b.StatusAt)) }
 	case "most_played":
 		for _, g := range games {
 			if g.PlaytimeSeconds > 0 {
@@ -199,5 +233,5 @@ func timeOf(t *time.Time) time.Time {
 }
 
 func ref(g library.Game) GameRef {
-	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, PlaytimeSeconds: g.PlaytimeSeconds}
+	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
 }

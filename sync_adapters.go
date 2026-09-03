@@ -28,6 +28,10 @@ func (a syncLibrary) Snapshot() ([]accountsync.Game, error) {
 			PlaytimeSeconds: item.PlaytimeSeconds,
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
+			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
+			Status:          item.Status,
+			StatusAt:        item.StatusAt,
 		})
 	}
 	return out, nil
@@ -41,6 +45,10 @@ func (a syncLibrary) Apply(items []accountsync.Game) error {
 			PlaytimeSeconds: item.PlaytimeSeconds,
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
+			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
+			Status:          item.Status,
+			StatusAt:        item.StatusAt,
 		})
 	}
 	return a.svc.ApplySync(merged)

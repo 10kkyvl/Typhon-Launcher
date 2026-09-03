@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import GameStatusModal from './GameStatusModal.svelte';
   import Modal from './Modal.svelte';
   import RemoveGameModal from './RemoveGameModal.svelte';
   import { quickActions, type QuickAction } from '../game/quickActions';
@@ -10,7 +11,6 @@
     markError,
     playGame,
     removeShortcut,
-    setCompleted,
     setFavorite,
     setSavesDir,
     stopGame,
@@ -41,7 +41,7 @@
           lanEnabled: Boolean($settings?.lanSharing),
           lanShared: $shares.some((s) => s.gameId === game.id),
           favorite: Boolean(game.favorite),
-          completed: Boolean(game.completed),
+          status: game.status ?? '',
         })
       : [],
   );
@@ -53,6 +53,10 @@
   let savesOpen = $state(false);
   let savesCandidates = $state<string[]>([]);
 
+  let statusOpen = $state(false);
+  let statusID = $state<string | null>(null);
+  const statusGame = $derived(statusID ? ($libraryGames.find((g) => g.id === statusID) ?? null) : null);
+
   function run(current: LibraryGame, action: QuickAction) {
     switch (action) {
       case 'play':
@@ -62,9 +66,10 @@
       case 'favorite-add':
       case 'favorite-remove':
         return mark(() => setFavorite(current.id, action === 'favorite-add'), 'Не удалось изменить любимые');
-      case 'completed-set':
-      case 'completed-unset':
-        return mark(() => setCompleted(current.id, action === 'completed-set'), 'Не удалось изменить отметку');
+      case 'status':
+        statusID = current.id;
+        statusOpen = true;
+        return;
       case 'folder':
         return guard(() => openFolder(current.installDir));
       case 'saves':
@@ -169,6 +174,10 @@
     onselect={onSelect}
     onclose={closeGameMenu}
   />
+{/if}
+
+{#if statusGame && statusOpen}
+  <GameStatusModal bind:open={statusOpen} game={statusGame} />
 {/if}
 
 {#if target}

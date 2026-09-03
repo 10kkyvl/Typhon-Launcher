@@ -25,8 +25,9 @@ export interface LibraryGame {
   shortcutPath?: string;
   savesDir?: string;
   favorite?: boolean;
-  completed?: boolean;
-  completedAt?: string | null;
+  favoriteAt?: string | null;
+  status?: string;
+  statusAt?: string | null;
 }
 
 export interface SavesResult {
@@ -87,9 +88,9 @@ export async function setFavorite(id: string, on: boolean): Promise<LibraryGame>
   return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;
 }
 
-export async function setCompleted(id: string, on: boolean): Promise<LibraryGame> {
+export async function setStatus(id: string, status: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
-  return (await LibraryService.SetCompleted(id, on)) as unknown as LibraryGame;
+  return (await LibraryService.SetStatus(id, status)) as unknown as LibraryGame;
 }
 
 export async function locateSaves(id: string): Promise<SavesResult> {

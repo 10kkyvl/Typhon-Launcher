@@ -10,6 +10,10 @@ type SyncGame struct {
 	PlaytimeSeconds int64
 	LastPlayed      *time.Time
 	Owned           bool
+	Favorite        bool
+	FavoriteAt      *time.Time
+	Status          string
+	StatusAt        *time.Time
 }
 
 //wails:ignore
@@ -25,10 +29,20 @@ func (s *Service) SyncSnapshot() []SyncGame {
 			CanonicalGameID: s.games[i].CanonicalGameID,
 			PlaytimeSeconds: s.games[i].PlaytimeSeconds,
 			Owned:           s.games[i].Owned,
+			Favorite:        s.games[i].Favorite,
+			Status:          s.games[i].Status,
 		}
 		if s.games[i].LastPlayed != nil {
 			t := *s.games[i].LastPlayed
 			item.LastPlayed = &t
+		}
+		if s.games[i].StatusAt != nil {
+			t := *s.games[i].StatusAt
+			item.StatusAt = &t
+		}
+		if s.games[i].FavoriteAt != nil {
+			t := *s.games[i].FavoriteAt
+			item.FavoriteAt = &t
 		}
 		out = append(out, item)
 	}
@@ -68,6 +82,18 @@ func (s *Service) ApplySync(items []SyncGame) error {
 			}
 			if item.Owned && !s.games[i].Owned {
 				s.games[i].Owned = true
+				changed = true
+			}
+			if item.StatusAt != nil && ValidStatus(item.Status) && (s.games[i].StatusAt == nil || item.StatusAt.After(*s.games[i].StatusAt)) {
+				t := *item.StatusAt
+				s.games[i].Status = item.Status
+				s.games[i].StatusAt = &t
+				changed = true
+			}
+			if item.FavoriteAt != nil && (s.games[i].FavoriteAt == nil || item.FavoriteAt.After(*s.games[i].FavoriteAt)) {
+				t := *item.FavoriteAt
+				s.games[i].Favorite = item.Favorite
+				s.games[i].FavoriteAt = &t
 				changed = true
 			}
 			break

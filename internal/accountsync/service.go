@@ -269,6 +269,15 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			delta = 0
 		}
 
+		status, statusAt := local.Status, local.StatusAt
+		if hasRemote && remote.StatusAt != nil && (statusAt == nil || remote.StatusAt.After(*statusAt)) {
+			status, statusAt = remote.Status, remote.StatusAt
+		}
+		favorite, favoriteAt := local.Favorite, local.FavoriteAt
+		if hasRemote && remote.FavoriteAt != nil && (favoriteAt == nil || remote.FavoriteAt.After(*favoriteAt)) {
+			favorite, favoriteAt = remote.Favorite, remote.FavoriteAt
+		}
+
 		results[igdbID] = gameCompute{
 			combined: Game{
 				IGDBID:          igdbID,
@@ -276,6 +285,10 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 				PlaytimeSeconds: combinedSeconds,
 				Owned:           local.Owned || remoteOwned,
 				LastPlayed:      laterOf(local.LastPlayed, remoteLastPlayed),
+				Favorite:        favorite,
+				FavoriteAt:      favoriteAt,
+				Status:          status,
+				StatusAt:        statusAt,
 			},
 			device: prev.DeviceSeconds + delta,
 		}
@@ -295,6 +308,10 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		pushGames = append(pushGames, wireGame{
 			IGDBID:          id,
 			Owned:           r.combined.Owned,
+			Favorite:        r.combined.Favorite,
+			FavoriteAt:      r.combined.FavoriteAt,
+			Status:          r.combined.Status,
+			StatusAt:        r.combined.StatusAt,
 			LastPlayedAt:    r.combined.LastPlayed,
 			PlaytimeSeconds: r.device,
 		})

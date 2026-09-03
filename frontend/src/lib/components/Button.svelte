@@ -5,18 +5,20 @@
     variant = 'secondary',
     size = 'md',
     disabled = false,
+    pressed,
     onclick,
     children,
   }: {
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
+    pressed?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button class="btn {variant} {size}" {disabled} {onclick}>
+<button class="btn {variant} {size}" {disabled} aria-pressed={pressed} {onclick}>
   {@render children?.()}
 </button>
 

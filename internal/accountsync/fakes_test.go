@@ -76,6 +76,10 @@ func (f *fakeLibrary) Apply(items []Game) error {
 			PlaytimeSeconds: it.PlaytimeSeconds,
 			Owned:           it.Owned,
 			LastPlayed:      it.LastPlayed,
+			Favorite:        it.Favorite,
+			FavoriteAt:      it.FavoriteAt,
+			Status:          it.Status,
+			StatusAt:        it.StatusAt,
 		}
 	}
 	return nil
@@ -96,6 +100,18 @@ func (f *fakeLibrary) setLocal(canonicalID string, seconds int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.games[canonicalID] = Game{CanonicalGameID: canonicalID, PlaytimeSeconds: seconds}
+}
+
+func (f *fakeLibrary) setLocalGame(g Game) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.games[g.CanonicalGameID] = g
+}
+
+func (f *fakeLibrary) gameOf(canonicalID string) Game {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.games[canonicalID]
 }
 
 func (f *fakeLibrary) playtimeOf(canonicalID string) int64 {

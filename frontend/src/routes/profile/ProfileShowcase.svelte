@@ -2,7 +2,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import type { ShowcaseKind } from '../../lib/services/account';
   import type { ShowcaseBlock } from '../../lib/services/profile';
-  import { SHOWCASE_HINTS, SHOWCASE_TITLES } from '../../lib/profile/view';
+  import { SHOWCASE_HINTS, SHOWCASE_TITLES, shortDate } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
 
   let { blocks }: { blocks: ShowcaseBlock[] } = $props();
@@ -22,6 +22,9 @@
           <button class="tile" onclick={() => navigate('game', { id: game.id })}>
             <Artwork src={game.cover} alt="" ratio="3 / 4" radius="var(--radius-md)" />
             <span class="caption">{game.title}</span>
+            {#if block.kind === 'recently_completed' && game.statusAt}
+              <span class="completed">Пройдена {shortDate(game.statusAt)}</span>
+            {/if}
           </button>
         {/each}
       </div>
@@ -77,6 +80,11 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .completed {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   @media (max-width: 1200px) {

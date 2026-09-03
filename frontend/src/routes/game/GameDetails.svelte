@@ -16,6 +16,7 @@
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -27,6 +28,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
     clean,
@@ -60,7 +62,6 @@
     markError,
     playGame,
     removeShortcut,
-    setCompleted,
     setFavorite,
     stopGame,
   } from '../../lib/services/library';
@@ -100,6 +101,7 @@
 
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
+  let statusOpen = $state(false);
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -359,13 +361,6 @@
   const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
 
   const menuItems = $derived([
-    ...(localGame
-      ? [
-          localGame.completed
-            ? { id: 'completed-unset', label: 'Снять отметку «Пройдена»' }
-            : { id: 'completed-set', label: 'Отметить пройденной' },
-        ]
-      : []),
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
@@ -419,10 +414,6 @@
       createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
       removeDesktopShortcut();
-    } else if (actionId === 'completed-set' || actionId === 'completed-unset') {
-      const current = localGame;
-      if (!current) return;
-      void mark(() => setCompleted(current.id, actionId === 'completed-set'), 'Не удалось изменить отметку');
     }
   }
 
@@ -696,6 +687,9 @@
           {#if updateAvailable && !busy}
             <StatusBadge kind="accent" label="Доступно обновление" />
           {/if}
+          {#if localGame?.status}
+            <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
+          {/if}
         </div>
 
         {#if title}
@@ -755,6 +749,10 @@
             >
               <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
             </IconButton>
+
+            <Button size="lg" onclick={() => (statusOpen = true)}>
+              Статус: {statusLabel(localGame.status)}
+            </Button>
           {/if}
 
           {#if menuItems.length > 0}
@@ -916,6 +914,8 @@
   </div>
 
   {#if localGame}
+    <GameStatusModal bind:open={statusOpen} game={localGame} />
+
     <RemoveGameModal
       bind:open={removeOpen}
       bind:mode={removeMode}
