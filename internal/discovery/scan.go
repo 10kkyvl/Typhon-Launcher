@@ -236,7 +236,10 @@ func (s *Service) adopt(ctx context.Context, c candidate, marker library.Marker)
 	canonical := marker.CanonicalGameID
 	provisioned := ""
 	if canonical == "" {
-		canonical, provisioned = s.canonical(title, titles.Parse(c.name).Year)
+		canonical, provisioned, err = s.canonical(title, titles.Parse(c.name).Year)
+		if err != nil {
+			return step{}, err
+		}
 	}
 	return s.store(library.Discovered{
 		Title:           title,
@@ -273,7 +276,10 @@ func (s *Service) discover(ctx context.Context, c candidate) (step, error) {
 	if err != nil {
 		return step{}, err
 	}
-	canonical, provisioned := s.canonical(title, parsed.Year)
+	canonical, provisioned, err := s.canonical(title, parsed.Year)
+	if err != nil {
+		return step{}, err
+	}
 	return s.store(library.Discovered{
 		Title:           title,
 		Executable:      executable,
@@ -328,22 +334,25 @@ func (s *Service) detect(ctx context.Context, dir, title string) (string, error)
 	return candidates[0].Path, nil
 }
 
-func (s *Service) canonical(title string, year int) (string, string) {
+func (s *Service) canonical(title string, year int) (string, string, error) {
 	normalized := titles.Normalize(title)
 	if normalized == "" {
-		return "", ""
+		return "", "", nil
 	}
 	query := catalog.Query{Title: title, Normalized: normalized, Year: year}
 	match := s.catalog.Resolve(query)
 	if match.Status == catalog.StatusMatched && match.GameID != "" {
-		return match.GameID, ""
+		return match.GameID, "", nil
 	}
-	games := s.catalog.Provision([]catalog.Query{query})
+	games, err := s.catalog.Provision([]catalog.Query{query})
+	if err != nil {
+		return "", "", fmt.Errorf("provision catalog entry for %q: %w", title, err)
+	}
 	game, ok := games[normalized]
 	if !ok {
-		return "", ""
+		return "", "", nil
 	}
-	return game.ID, game.ID
+	return game.ID, game.ID, nil
 }
 
 func fileExists(path string) (bool, error) {
