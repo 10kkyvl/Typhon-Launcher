@@ -17,8 +17,8 @@ func ptr(t time.Time) *time.Time { return &t }
 func games() []library.Game {
 	return []library.Game{
 		{ID: "wow", Title: "World of Warcraft", Cover: "wow.jpg", PlaytimeSeconds: 400 * 3600, Favorite: true, LastPlayed: ptr(at(-time.Hour))},
-		{ID: "cp", Title: "Cyberpunk 2077", Cover: "cp.jpg", PlaytimeSeconds: 120 * 3600, Completed: true, CompletedAt: ptr(at(-48 * time.Hour)), Favorite: true, LastPlayed: ptr(at(-30 * time.Hour))},
-		{ID: "terraria", Title: "Terraria", PlaytimeSeconds: 3*3600 + 41*60, Completed: true, CompletedAt: ptr(at(-100 * 24 * time.Hour)), Uninstalled: true},
+		{ID: "cp", Title: "Cyberpunk 2077", Cover: "cp.jpg", PlaytimeSeconds: 120 * 3600, Status: library.StatusCompleted, StatusAt: ptr(at(-48 * time.Hour)), Favorite: true, LastPlayed: ptr(at(-30 * time.Hour))},
+		{ID: "terraria", Title: "Terraria", PlaytimeSeconds: 3*3600 + 41*60, Status: library.StatusCompleted, StatusAt: ptr(at(-100 * 24 * time.Hour)), Uninstalled: true},
 		{ID: "idle", Title: "Never Played", PlaytimeSeconds: 0},
 	}
 }

@@ -53,8 +53,8 @@ type Game struct {
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 	SavesDir          string     `json:"savesDir,omitempty"`
 	Favorite          bool       `json:"favorite,omitempty"`
-	Completed         bool       `json:"completed,omitempty"`
-	CompletedAt       *time.Time `json:"completedAt,omitempty"`
+	Status            string     `json:"status,omitempty"`
+	StatusAt          *time.Time `json:"statusAt,omitempty"`
 }
 
 type Uninstall struct {
@@ -108,7 +108,26 @@ var (
 
 const MaxFavorites = 6
 
+const (
+	StatusPlaying   = "playing"
+	StatusCompleted = "completed"
+	StatusDropped   = "dropped"
+	StatusBacklog   = "backlog"
+	StatusPaused    = "paused"
+)
+
+func ValidStatus(s string) bool {
+	switch s {
+	case "", StatusPlaying, StatusCompleted, StatusDropped, StatusBacklog, StatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
 var ErrTooManyFavorites = errors.New("favorites limit reached")
+
+var ErrInvalidStatus = errors.New("invalid game status")
 
 type Service struct {
 	mu            sync.Mutex
@@ -196,6 +215,12 @@ func NewServiceAt(path string) (*Service, error) {
 	return s, nil
 }
 
+type legacyGame struct {
+	Game
+	Completed   bool       `json:"completed"`
+	CompletedAt *time.Time `json:"completedAt"`
+}
+
 func (s *Service) load() ([]Game, error) {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -204,9 +229,18 @@ func (s *Service) load() ([]Game, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read library %s: %w", s.path, err)
 	}
-	var games []Game
-	if err := json.Unmarshal(data, &games); err != nil {
+	var stored []legacyGame
+	if err := json.Unmarshal(data, &stored); err != nil {
 		return nil, fmt.Errorf("parse library %s: %w", s.path, err)
+	}
+	games := make([]Game, 0, len(stored))
+	for _, entry := range stored {
+		g := entry.Game
+		if entry.Completed && g.Status == "" {
+			g.Status = StatusCompleted
+			g.StatusAt = entry.CompletedAt
+		}
+		games = append(games, g)
 	}
 	return games, nil
 }
@@ -626,6 +660,8 @@ func (s *Service) SetFavorite(id string, on bool) (Game, error) {
 	}
 	previous := *game
 	game.Favorite = on
+	now := s.now()
+	game.StatusAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous
 		return Game{}, fmt.Errorf("save library: %w", err)
@@ -634,20 +670,26 @@ func (s *Service) SetFavorite(id string, on bool) (Game, error) {
 	return *game, nil
 }
 
-func (s *Service) SetCompleted(id string, on bool) (Game, error) {
+func (s *Service) SetStatus(id, status string) (Game, error) {
+	if !ValidStatus(status) {
+		return Game{}, ErrInvalidStatus
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	game := s.findLocked(id)
 	if game == nil {
 		return Game{}, errNotFound
 	}
+	if game.Status == status {
+		return *game, nil
+	}
 	previous := *game
-	game.Completed = on
-	if on {
+	game.Status = status
+	if status != "" {
 		now := s.now()
-		game.CompletedAt = &now
+		game.StatusAt = &now
 	} else {
-		game.CompletedAt = nil
+		game.StatusAt = nil
 	}
 	if err := s.persist(); err != nil {
 		*game = previous
