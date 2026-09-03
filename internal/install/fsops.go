@@ -265,6 +265,7 @@ func RestoreMergeBackup(dst, backup string) error {
 // removeExisting clears the way for a fresh write in MergeDir; the caller
 // writes the replacement right after, so a missing target is not an error.
 func removeExisting(target string) error {
+	//nolint:gosec // G703: target is built from a relative path produced by the caller's own WalkDir over the source tree and joined under dst, which MergeDirWithBackup has already checked against nesting (invariant 12)
 	if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

@@ -286,6 +286,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Unlock()
 
 	s.wg.Add(1)
+	//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(); contextcheck не видит связь через поле структуры
 	go func() {
 		defer s.wg.Done()
 		s.sweepPartial(s.baseContext(), staleItems)
@@ -473,7 +474,7 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		// Cancel записал маркер и оставил статус рабочим именно ради этого
 		// момента: воркер подтвердил отмену через Cancelled, а не через
 		// текст ошибки, и запись должна дойти до "отменено", а не до "провал".
-		s.cancelResumed(id)
+		s.cancelResumed(ctx, id)
 		return
 	}
 	if state.Error != "" {
@@ -491,7 +492,7 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 	}
 }
 
-func (s *Service) cancelResumed(id string) {
+func (s *Service) cancelResumed(ctx context.Context, id string) {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
@@ -506,7 +507,7 @@ func (s *Service) cancelResumed(id string) {
 		s.notifyFinished(snap)
 		return
 	}
-	go s.sweepPartialItem(s.baseContext(), snap)
+	go s.sweepPartialItem(ctx, snap)
 	s.notifyFinished(snap)
 }
 
