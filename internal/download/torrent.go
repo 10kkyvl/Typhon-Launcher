@@ -3,16 +3,12 @@ package download
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"math"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"typhon/internal/settings"
 
@@ -27,8 +23,6 @@ const (
 	listenPort      = 42815
 	minLimiterBurst = 256 * 1024
 	maxTorrentConns = 60
-
-	pieceCompletionFile = ".torrent.bolt.db"
 )
 
 var errBadPaths = errors.New("недопустимые пути файлов в торренте")
@@ -68,38 +62,6 @@ type client struct {
 	up         *rate.Limiter
 	metaDir    string
 	completion storage.PieceCompletion
-}
-
-// nonClosingCompletion wraps the manager's single piece completion db so
-// that closing a per-torrent storage (every Cancel/Remove/DeleteData, plus a
-// discarded ClientConfig on port retry) never closes the shared db out from
-// under every other torrent still using it. Only Manager.ServiceShutdown
-// closes the real completion, after the client is gone.
-type nonClosingCompletion struct {
-	storage.PieceCompletion
-}
-
-func (nonClosingCompletion) Close() error { return nil }
-
-// openPieceCompletion recovers once from a bolt db that anacrolix/torrent's
-// NewBoltPieceCompletion refuses to open (left corrupt by a crash): the file
-// is moved aside so a fresh one can be created, instead of losing the
-// ability to skip re-hashing pieces on every future restart.
-func openPieceCompletion(dir string) (storage.PieceCompletion, error) {
-	pc, err := storage.NewBoltPieceCompletion(dir)
-	if err == nil {
-		return pc, nil
-	}
-	broken := filepath.Join(dir, fmt.Sprintf("%s.broken-%d", pieceCompletionFile, time.Now().Unix()))
-	renameErr := os.Rename(filepath.Join(dir, pieceCompletionFile), broken)
-	if renameErr != nil && !errors.Is(renameErr, fs.ErrNotExist) {
-		return nil, fmt.Errorf("move corrupt piece completion db aside: %w", err)
-	}
-	pc, err = storage.NewBoltPieceCompletion(dir)
-	if err != nil {
-		return nil, fmt.Errorf("open piece completion db: %w", err)
-	}
-	return pc, nil
 }
 
 func newClient(cfg settings.Settings, metaDir string, completion storage.PieceCompletion) (*client, error) {

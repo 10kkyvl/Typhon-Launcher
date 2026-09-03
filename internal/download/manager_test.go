@@ -782,6 +782,14 @@ func TestPersistedStateReloads(t *testing.T) {
 	m.addTestDownload("a")
 	m.addTestDownload("b")
 
+	// Close m's piece completion before opening a second manager on the same
+	// dir: two live instances writing the same file concurrently is not a
+	// supported access pattern, on top of racing the test's own assertions.
+	if err := m.pieceCompletion.Close(); err != nil {
+		t.Fatalf("close piece completion: %v", err)
+	}
+	m.pieceCompletion = nil
+
 	reloaded := mustManagerAt(t, m.store.dir)
 	reloaded.mu.Lock()
 	if err := reloaded.loadLocked(); err != nil {

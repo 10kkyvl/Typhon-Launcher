@@ -114,6 +114,11 @@ func TestStalledStateIsNotPersisted(t *testing.T) {
 		t.Fatal("precondition: download should be stalled")
 	}
 
+	if err := m.pieceCompletion.Close(); err != nil {
+		t.Fatalf("close piece completion: %v", err)
+	}
+	m.pieceCompletion = nil
+
 	reloaded := mustManagerAt(t, dir)
 	reloaded.mu.Lock()
 	if err := reloaded.loadLocked(); err != nil {
