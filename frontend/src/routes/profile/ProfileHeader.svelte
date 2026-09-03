@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { EllipsisVertical, LogIn } from '@lucide/svelte';
+  import { Copy, EllipsisVertical, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -10,6 +10,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import type { GameRef } from '../../lib/services/profile';
+  import { friendCode } from '../../lib/services/social';
   import { statusLine } from '../../lib/profile/view';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -28,10 +29,13 @@
     onsettings: () => void;
   } = $props();
 
+  const BIO_LIMIT = 150;
+
   let editing = $state(false);
-  let draft = $state({ displayName: '', username: '' });
-  let fieldErrors = $state<{ displayName?: string; username?: string; general?: string }>({});
+  let draft = $state({ displayName: '', username: '', bio: '' });
+  let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
+  let code = $state('');
 
   const isGuest = $derived($authState === 'guest');
   const online = $derived($authState === 'authenticated');
@@ -50,8 +54,40 @@
   );
 
   const dirty = $derived(
-    !!$currentUser && (draft.displayName !== $currentUser.displayName || draft.username !== $currentUser.username),
+    !!$currentUser &&
+      (draft.displayName !== $currentUser.displayName ||
+        draft.username !== $currentUser.username ||
+        draft.bio !== $currentUser.bio),
   );
+
+  const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
+
+  $effect(() => {
+    if (isGuest || $authState !== 'authenticated') {
+      code = '';
+      return;
+    }
+    let cancelled = false;
+    friendCode()
+      .then((value) => {
+        if (!cancelled) code = value;
+      })
+      .catch(() => {
+        if (!cancelled) code = '';
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast('Скопировано', 'info');
+    } catch {
+      toast('Не удалось скопировать', 'danger');
+    }
+  }
 
   const menuItems = $derived<MenuItem[]>([
     { id: 'edit', label: 'Редактировать' },
@@ -61,7 +97,7 @@
 
   function startEditing() {
     if (!$currentUser || $isOffline) return;
-    draft = { displayName: $currentUser.displayName, username: $currentUser.username };
+    draft = { displayName: $currentUser.displayName, username: $currentUser.username, bio: $currentUser.bio };
     fieldErrors = {};
     editing = true;
   }
@@ -74,9 +110,10 @@
   async function save() {
     if (!$currentUser || !dirty || $savingProfile || $isOffline) return;
     fieldErrors = {};
-    const patch: { displayName?: string; username?: string } = {};
+    const patch: { displayName?: string; username?: string; bio?: string } = {};
     if (draft.displayName !== $currentUser.displayName) patch.displayName = draft.displayName;
     if (draft.username !== $currentUser.username) patch.username = draft.username;
+    if (draft.bio !== $currentUser.bio) patch.bio = draft.bio;
     try {
       await saveProfile(patch);
       editing = false;
@@ -86,6 +123,7 @@
       const field = accountErrorField(err);
       if (field === 'username') fieldErrors = { username: message };
       else if (field === 'displayName') fieldErrors = { displayName: message };
+      else if (field === 'bio') fieldErrors = { bio: message };
       else fieldErrors = { general: message };
     }
   }
@@ -126,6 +164,17 @@
         {:else if $currentUser}
           <h2 class="display-name">{$currentUser.displayName}</h2>
           <span class="username">@{$currentUser.username}</span>
+          {#if bio}
+            <p class="bio">{bio}</p>
+          {/if}
+          {#if code}
+            <div class="code">
+              <span class="code-value">Код друга: {code}</span>
+              <IconButton label="Скопировать код друга" size="sm" onclick={copyCode}>
+                <Copy size="1.5rem" strokeWidth={1.8} />
+              </IconButton>
+            </div>
+          {/if}
         {/if}
         <div class="status">
           <StatusBadge plain kind={statusKind} label={status.text} />
@@ -175,6 +224,20 @@
             <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
           </div>
           {#if fieldErrors.username}<span class="error">{fieldErrors.username}</span>{/if}
+        </label>
+        <label class="field">
+          <span class="field-label">
+            О себе
+            <span class="counter">{draft.bio.length}/{BIO_LIMIT}</span>
+          </span>
+          <textarea
+            class="input area"
+            rows="3"
+            maxlength={BIO_LIMIT}
+            disabled={$isOffline}
+            bind:value={draft.bio}
+          ></textarea>
+          {#if fieldErrors.bio}<span class="error">{fieldErrors.bio}</span>{/if}
         </label>
         <div class="field">
           <span class="field-label">Email</span>
@@ -230,6 +293,25 @@
     color: var(--text-3);
   }
 
+  .bio {
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    max-width: 56rem;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .code {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .code-value {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
   .status {
     display: inline-flex;
     align-items: center;
@@ -272,8 +354,16 @@
   }
 
   .field-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.8rem;
     font-size: var(--font-xs);
     color: var(--text-2);
+  }
+
+  .counter {
+    color: var(--text-3);
   }
 
   .input {
@@ -295,6 +385,13 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+
+  .area {
+    height: auto;
+    padding: 0.9rem 1.2rem;
+    resize: vertical;
+    line-height: 1.5;
   }
 
   .username-field {

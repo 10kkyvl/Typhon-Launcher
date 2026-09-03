@@ -3,10 +3,17 @@
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import { SHOWCASE_KINDS, type ProfileSettings, type ShowcaseKind } from '../../lib/services/account';
+  import {
+    SHOWCASE_KINDS,
+    VISIBILITIES,
+    type ProfileSettings,
+    type ShowcaseKind,
+    type Visibility,
+  } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { SHOWCASE_TITLES } from '../../lib/profile/view';
+  import { SHOWCASE_TITLES, visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
 
@@ -18,16 +25,31 @@
     settings: ProfileSettings;
   } = $props();
 
+  function toVisibility(value: string): Visibility {
+    return VISIBILITIES.includes(value as Visibility) ? (value as Visibility) : 'friends';
+  }
+
   function initialDraft(): ProfileSettings {
-    return { ...settings, showcase: [...(settings.showcase ?? [])] };
+    return {
+      ...settings,
+      visibility: toVisibility(settings.visibility),
+      showLibrary: settings.showLibrary,
+      showPlaytime: settings.showPlaytime,
+      showcase: [...(settings.showcase ?? [])],
+    };
   }
 
   let draft = $state<ProfileSettings>(initialDraft());
+  let visibility = $state<string>(initialDraft().visibility);
   let error = $state('');
+
+  const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
   const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: 'Статус «В сети»', sub: 'Другие видят, что вы в лаунчере' },
     { key: 'showPlaying', label: 'Во что играю', sub: 'Текущая игра и список «Сейчас играю»' },
+    { key: 'showLibrary', label: 'Библиотека', sub: 'Список игр, общие игры и «друзья играли» на странице игры' },
+    { key: 'showPlaytime', label: 'Наигранное время', sub: 'Часы в профиле и рядом с играми' },
     { key: 'showActivity', label: 'Недавняя активность', sub: 'Сыгранные игры по дням, без времени запуска' },
     { key: 'showStats', label: 'Статистика', sub: 'Игры, часы, пройдено, играю сейчас' },
   ];
@@ -56,7 +78,7 @@
     if ($savingProfile || $isOffline) return;
     error = '';
     try {
-      await saveProfile({ profile: $state.snapshot(draft) });
+      await saveProfile({ profile: { ...$state.snapshot(draft), visibility: toVisibility(visibility) } });
       open = false;
       toast('Настройки профиля сохранены', 'success');
     } catch (err) {
@@ -72,8 +94,15 @@
 
   <div class="group">
     <h4>Что видят другие</h4>
-    <p class="hint">Пока профиль видите только вы. Галочки заработают, когда появятся друзья.</p>
+    <p class="hint">Уровень доступа задаёт, кто вообще видит профиль, переключатели — что именно.</p>
     <div class="rows">
+      <div class="row">
+        <div class="row-text">
+          <span class="row-label">Кто видит профиль</span>
+          <span class="row-sub">Друзьям всегда видно больше, чем остальным</span>
+        </div>
+        <SegmentedControl options={visibilityOptions} bind:value={visibility} />
+      </div>
       {#each flags as flag (flag.key)}
         <div class="row">
           <div class="row-text">

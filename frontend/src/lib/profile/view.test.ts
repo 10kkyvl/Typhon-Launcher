@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, monthLine, recentLabel, shortDate, statusLine } from './view';
+import { dayLabel, monthLine, recentLabel, shortDate, statusLine, visibilityLabel } from './view';
 
 const now = new Date(2026, 8, 3, 15, 0, 0);
 
@@ -75,5 +75,17 @@ describe('monthLine', () => {
 describe('shortDate', () => {
   it('prints a day and short month', () => {
     expect(shortDate('2026-08-22T10:00:00Z')).toBe('22 авг.');
+  });
+});
+
+describe('visibilityLabel', () => {
+  it('names each level', () => {
+    expect(visibilityLabel('public')).toBe('Все');
+    expect(visibilityLabel('friends')).toBe('Друзья');
+    expect(visibilityLabel('private')).toBe('Никто');
+  });
+  it('falls back to friends for anything unknown', () => {
+    expect(visibilityLabel('')).toBe('Друзья');
+    expect(visibilityLabel('everyone')).toBe('Друзья');
   });
 });

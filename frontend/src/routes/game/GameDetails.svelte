@@ -28,6 +28,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import GameFriendsPanel from './GameFriendsPanel.svelte';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
@@ -910,6 +911,8 @@
           </dl>
         </section>
       {/if}
+
+      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
     </aside>
   </div>
 
