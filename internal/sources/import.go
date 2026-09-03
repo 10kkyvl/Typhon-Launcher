@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 type matcher interface {
 	ResolveAll(queries []catalog.Query) []catalog.Match
-	Provision(queries []catalog.Query) map[string]catalog.Game
+	Provision(queries []catalog.Query) (map[string]catalog.Game, error)
 }
 
 func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Release {
@@ -182,9 +183,9 @@ func sameTime(a, b *time.Time) bool {
 	}
 }
 
-func applyMatches(m matcher, list []*Release) {
+func applyMatches(m matcher, list []*Release) error {
 	if m == nil {
-		return
+		return nil
 	}
 	targets := make([]*Release, 0, len(list))
 	for _, r := range list {
@@ -197,7 +198,7 @@ func applyMatches(m matcher, list []*Release) {
 		targets = append(targets, r)
 	}
 	if len(targets) == 0 {
-		return
+		return nil
 	}
 
 	keys := make([]string, len(targets))
@@ -232,9 +233,12 @@ func applyMatches(m matcher, list []*Release) {
 		pending = append(pending, catalog.Query{Title: r.Title, Normalized: r.NormalizedTitle, Year: r.Year})
 	}
 	if len(pending) == 0 {
-		return
+		return nil
 	}
-	provisioned := m.Provision(pending)
+	provisioned, err := m.Provision(pending)
+	if err != nil {
+		return fmt.Errorf("provision matched games: %w", err)
+	}
 	for _, r := range targets {
 		if r.MatchStatus != catalog.StatusUnmatched {
 			continue
@@ -249,6 +253,7 @@ func applyMatches(m matcher, list []*Release) {
 		r.MatchConfidence = 1
 		r.MatchMethod = string(catalog.MethodProvisional)
 	}
+	return nil
 }
 
 // Матч по псевдониму или похожести держится на данных каталога, а они

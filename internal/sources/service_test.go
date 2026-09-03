@@ -473,6 +473,50 @@ func TestRefreshFailureKeepsReleases(t *testing.T) {
 	}
 }
 
+func TestRefreshKeepsReleasesWhenSaveFails(t *testing.T) {
+	dir := t.TempDir()
+	cat := mustCatalog(t, dir)
+	s := mustServiceAt(t, dir, cat)
+	server := newFeedServer(t, feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+	))
+	src := addSource(t, s, server.url())
+
+	releasesPath := s.store.releasesPath(src.ID)
+	if err := os.Remove(releasesPath); err != nil {
+		t.Fatalf("remove releases file: %v", err)
+	}
+	if err := os.Mkdir(releasesPath, 0o755); err != nil {
+		t.Fatalf("block releases path: %v", err)
+	}
+
+	server.set(feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+		feedEntry{Title: "Game Two v1.0", URIs: []string{magnetOf("bb")}},
+	), `"v2"`)
+
+	summary, err := s.RefreshSource(src.ID)
+	if err == nil {
+		t.Fatal("RefreshSource() error = nil, want the save failure")
+	}
+	if summary.Error == "" {
+		t.Fatalf("summary = %+v, want it to carry the error", summary)
+	}
+
+	items := releasesOf(t, s, src.ID, "all")
+	if len(items) != 1 {
+		t.Fatalf("releases = %d, want the previous single release kept", len(items))
+	}
+
+	stored, statErr := s.GetSource(src.ID)
+	if statErr != nil {
+		t.Fatal(statErr)
+	}
+	if stored.Health != HealthError || stored.LastError == "" {
+		t.Fatalf("source = %+v, want error health after the failed save", stored)
+	}
+}
+
 func TestInvalidEntriesAreSkipped(t *testing.T) {
 	s, _, _ := testService(t)
 	body := `{"name":"Example","version":1,"downloads":[

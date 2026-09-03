@@ -164,7 +164,7 @@ func (s *Service) ResolveAll(queries []Query) []Match {
 }
 
 //wails:ignore
-func (s *Service) Provision(queries []Query) map[string]Game {
+func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -190,11 +190,13 @@ func (s *Service) Provision(queries []Query) map[string]Game {
 	}
 	if created > 0 {
 		if err := s.persistGamesLocked(); err != nil {
-			slog.Error("save catalog", "error", err)
+			s.games = s.games[:len(s.games)-created]
+			s.rebuildLocked()
+			return nil, fmt.Errorf("save catalog: %w", err)
 		}
 		slog.Info("catalog games provisioned", "created", created, "total", len(s.games))
 	}
-	return out
+	return out, nil
 }
 
 func (s *Service) AddGame(game Game) (Game, error) {
@@ -227,7 +229,10 @@ func (s *Service) AddGame(game Game) (Game, error) {
 
 //wails:ignore
 func (s *Service) EnsureGame(title string, year int) (Game, error) {
-	games := s.Provision([]Query{{Title: title, Year: year}})
+	games, err := s.Provision([]Query{{Title: title, Year: year}})
+	if err != nil {
+		return Game{}, err
+	}
 	normalized := titles.Normalize(title)
 	game, ok := games[normalized]
 	if !ok {
@@ -251,6 +256,8 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 	}
 	game := s.idx.entries[pos].game
 
+	previousOverrides := append([]MatchOverride(nil), s.overrides...)
+
 	replaced := false
 	for i := range s.overrides {
 		if s.overrides[i].Pattern == normalized {
@@ -264,6 +271,7 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 		s.overrides = append(s.overrides, MatchOverride{Pattern: normalized, GameID: gameID, CreatedAt: time.Now()})
 	}
 	if err := s.persistOverridesLocked(); err != nil {
+		s.overrides = previousOverrides
 		return fmt.Errorf("save overrides: %w", err)
 	}
 
@@ -272,9 +280,14 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 			if s.games[i].ID != gameID {
 				continue
 			}
+			previousAliases := s.games[i].Aliases
 			s.games[i].Aliases = append(s.games[i].Aliases, normalized)
 			if err := s.persistGamesLocked(); err != nil {
-				slog.Error("save catalog", "error", err)
+				s.games[i].Aliases = previousAliases
+				s.overrides = previousOverrides
+				revertErr := s.persistOverridesLocked()
+				s.rebuildLocked()
+				return errors.Join(fmt.Errorf("save catalog: %w", err), revertErr)
 			}
 			break
 		}

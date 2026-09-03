@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,41 @@ import (
 
 func entry(title, magnet string, size int64) feed.Entry {
 	return feed.Entry{Title: title, URIs: []string{magnet}, Size: size}
+}
+
+type stubMatcher struct {
+	resolve   func([]catalog.Query) []catalog.Match
+	provision func([]catalog.Query) (map[string]catalog.Game, error)
+}
+
+func (m *stubMatcher) ResolveAll(queries []catalog.Query) []catalog.Match {
+	return m.resolve(queries)
+}
+
+func (m *stubMatcher) Provision(queries []catalog.Query) (map[string]catalog.Game, error) {
+	return m.provision(queries)
+}
+
+func TestApplyMatchesPropagatesProvisionError(t *testing.T) {
+	now := time.Now()
+	list := parseEntries("src", []feed.Entry{entry("Some Unmatched Game v1.0", magnetOf("11"), 10)}, now)
+	list, _ = merge(nil, list, now, true)
+
+	boom := errors.New("boom")
+	m := &stubMatcher{
+		resolve: func(qs []catalog.Query) []catalog.Match {
+			out := make([]catalog.Match, len(qs))
+			for i := range out {
+				out[i] = catalog.Match{Status: catalog.StatusUnmatched}
+			}
+			return out
+		},
+		provision: func([]catalog.Query) (map[string]catalog.Game, error) { return nil, boom },
+	}
+
+	if err := applyMatches(m, list); !errors.Is(err, boom) {
+		t.Fatalf("applyMatches() error = %v, want it to wrap %v", err, boom)
+	}
 }
 
 func TestParseEntriesExtractsMetadata(t *testing.T) {
@@ -127,7 +163,9 @@ func TestApplyMatchesProvisionsUnmatched(t *testing.T) {
 	}, now)
 	list, _ = merge(nil, list, now, true)
 
-	applyMatches(cat, list)
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatalf("applyMatches: %v", err)
+	}
 
 	if list[0].CanonicalGameID == nil || list[1].CanonicalGameID == nil {
 		t.Fatal("both releases should be attached to a canonical game")
@@ -157,7 +195,9 @@ func TestApplyMatchesKeepsAmbiguousForReview(t *testing.T) {
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{entry("Prey.MULTi9.v1.0", magnetOf("11"), 10)}, now)
 	list, _ = merge(nil, list, now, true)
-	applyMatches(cat, list)
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatalf("applyMatches: %v", err)
+	}
 
 	if list[0].MatchStatus != catalog.StatusReview {
 		t.Fatalf("status = %q, want review", list[0].MatchStatus)
@@ -186,7 +226,9 @@ func TestApplyMatchesRecomputesAliasMatch(t *testing.T) {
 	list[0].MatchMethod = string(catalog.MethodAlias)
 	list[0].MatchConfidence = 0.97
 
-	applyMatches(cat, list)
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatalf("applyMatches: %v", err)
+	}
 
 	if list[0].CanonicalGameID == nil {
 		t.Fatal("release lost its game instead of getting a fresh one")
@@ -215,7 +257,9 @@ func TestApplyMatchesKeepsExactMatch(t *testing.T) {
 	list[0].MatchMethod = string(catalog.MethodExactTitle)
 	list[0].MatchConfidence = 0.98
 
-	applyMatches(cat, list)
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatalf("applyMatches: %v", err)
+	}
 
 	if list[0].MatchConfidence != 0.98 || list[0].CanonicalGameID == nil || *list[0].CanonicalGameID != game.ID {
 		t.Fatalf("exact match was recomputed: %+v", list[0])
@@ -232,7 +276,9 @@ func TestApplyMatchesSkipsLocked(t *testing.T) {
 	list[0].CanonicalGameID = &manual
 	list[0].MatchStatus = catalog.StatusMatched
 
-	applyMatches(cat, list)
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatalf("applyMatches: %v", err)
+	}
 
 	if list[0].CanonicalGameID == nil || *list[0].CanonicalGameID != manual {
 		t.Fatal("locked release must keep its manual match")
