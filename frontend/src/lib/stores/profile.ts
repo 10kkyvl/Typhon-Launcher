@@ -21,9 +21,9 @@ export async function refreshProfile() {
 }
 
 export function initProfile() {
+  void refreshProfile();
   if (started) return;
   started = true;
-  void refreshProfile();
   if (!inWails) return;
   for (const name of ['library:updated', 'game:started', 'game:stopped', 'playlog:recorded']) {
     Events.On(name, () => void refreshProfile());

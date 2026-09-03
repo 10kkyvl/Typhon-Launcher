@@ -14,11 +14,14 @@
   .hidden-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.2rem 0.7rem;
-    border-radius: var(--radius-xs);
+    gap: 0.6rem;
+    height: 2.4rem;
+    padding: 0 0.9rem;
+    border-radius: var(--radius-sm);
     background: var(--surface-3);
     color: var(--text-3);
-    font-size: var(--font-xs);
+    font-size: 1.2rem;
+    font-weight: 500;
+    white-space: nowrap;
   }
 </style>

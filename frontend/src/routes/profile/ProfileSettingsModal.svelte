@@ -18,19 +18,12 @@
     settings: ProfileSettings;
   } = $props();
 
-  let draft = $state<ProfileSettings>(copy(settings));
-  let error = $state('');
-
-  function copy(value: ProfileSettings): ProfileSettings {
-    return { ...value, showcase: [...value.showcase] };
+  function initialDraft(): ProfileSettings {
+    return { ...settings, showcase: [...settings.showcase] };
   }
 
-  $effect(() => {
-    if (open) {
-      draft = copy(settings);
-      error = '';
-    }
-  });
+  let draft = $state<ProfileSettings>(initialDraft());
+  let error = $state('');
 
   const flags: { key: keyof Omit<ProfileSettings, 'showcase'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: 'Статус «В сети»', sub: 'Другие видят, что вы в лаунчере' },
@@ -135,10 +128,12 @@
   }
 
   h4 {
-    font-size: var(--font-lg);
+    font-size: 1.2rem;
     font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    margin-bottom: var(--space-2);
   }
 
   .hint {
@@ -159,8 +154,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-4);
-    padding: 1rem 0;
+    gap: var(--space-6);
+    padding: 1.3rem 0;
   }
 
   .row + .row,

@@ -1,6 +1,5 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import type { PlayingEntry } from '../../lib/services/profile';
   import { recentLabel } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
@@ -10,17 +9,17 @@
 </script>
 
 {#if entries.length > 0}
-  <Card>
-    <div class="block-head">
+  <section class="group">
+    <div class="group-head">
       <h3>Сейчас играю</h3>
       {#if hidden}<HiddenBadge />{/if}
     </div>
     <ul class="rows">
       {#each entries as entry (entry.game.id)}
         <li>
-          <button class="row" onclick={() => navigate('game', { id: entry.game.id })}>
+          <button class="row" aria-label={entry.game.title} onclick={() => navigate('game', { id: entry.game.id })}>
             <span class="cover">
-              <Artwork src={entry.game.cover} alt={entry.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+              <Artwork src={entry.game.cover} alt="" ratio="3 / 4" radius="var(--radius-sm)" />
             </span>
             <span class="title">{entry.game.title}</span>
             <span class="time">{recentLabel(entry.recentSeconds)}</span>
@@ -28,14 +27,18 @@
         </li>
       {/each}
     </ul>
-  </Card>
+  </section>
 {/if}
 
 <style>
-  .block-head {
+  .group {
+    margin-bottom: var(--space-10);
+  }
+
+  .group-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--space-3);
     margin-bottom: var(--space-3);
   }
 
@@ -58,20 +61,21 @@
   .row {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-4);
     width: 100%;
-    padding: 1rem 0;
+    padding: 0.8rem;
     background: none;
     border: 0;
+    border-radius: var(--radius-md);
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    transition: background var(--dur) var(--ease);
   }
 
-  .row:hover .title {
-    color: var(--accent-text);
+  .row:hover {
+    background: var(--hover);
   }
 
   .cover {
@@ -87,12 +91,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: color var(--dur) var(--ease);
   }
 
   .time {
     font-size: var(--font-sm);
-    color: var(--text-2);
+    color: var(--text-3);
     white-space: nowrap;
   }
 </style>

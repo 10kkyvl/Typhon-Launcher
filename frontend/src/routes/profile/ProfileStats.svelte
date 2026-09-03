@@ -1,7 +1,5 @@
 <script lang="ts">
-  import Card from '../../lib/components/Card.svelte';
   import type { ProfileStats } from '../../lib/services/profile';
-  import { hoursLabel } from '../../lib/profile/view';
   import { formatCount } from '../../lib/utils/format';
   import HiddenBadge from './HiddenBadge.svelte';
 
@@ -9,14 +7,14 @@
 
   const tiles = $derived([
     { label: 'Игры', value: formatCount(stats.games) },
-    { label: 'Часов', value: hoursLabel(stats.hours * 3600) },
+    { label: 'Часов', value: formatCount(stats.hours) },
     { label: 'Пройдено', value: formatCount(stats.completed) },
     { label: 'Играю сейчас', value: formatCount(stats.playing) },
   ]);
 </script>
 
-<Card>
-  <div class="stats-head">
+<section class="group">
+  <div class="group-head">
     <h3>Статистика</h3>
     {#if hidden}<HiddenBadge />{/if}
   </div>
@@ -28,14 +26,18 @@
       </div>
     {/each}
   </div>
-</Card>
+</section>
 
 <style>
-  .stats-head {
+  .group {
+    margin-bottom: var(--space-10);
+  }
+
+  .group-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
   }
 
   h3 {
@@ -55,7 +57,7 @@
     flex-direction: column;
     gap: 0.2rem;
     padding: var(--space-3) var(--space-4);
-    background: var(--surface-2);
+    background: var(--surface);
     border-radius: var(--radius-md);
   }
 
@@ -71,7 +73,7 @@
     color: var(--text-3);
   }
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1200px) {
     .tiles {
       grid-template-columns: repeat(2, 1fr);
     }

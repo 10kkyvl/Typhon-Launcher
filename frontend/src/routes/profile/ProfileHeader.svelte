@@ -6,6 +6,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import type { GameRef } from '../../lib/services/profile';
   import { statusLine } from '../../lib/profile/view';
@@ -17,10 +18,12 @@
   let {
     running,
     showOnline,
+    showPlaying,
     onsettings,
   }: {
     running: GameRef[];
     showOnline: boolean;
+    showPlaying: boolean;
     onsettings: () => void;
   } = $props();
 
@@ -33,6 +36,8 @@
   const isGuest = $derived($authState === 'guest');
   const online = $derived($authState === 'authenticated');
   const status = $derived(statusLine(running, online));
+  const statusKind = $derived(status.kind === 'offline' ? 'neutral' : 'success');
+  const statusHidden = $derived(!isGuest && (status.kind === 'playing' ? !showPlaying : !showOnline));
 
   $effect(() => {
     $currentUser?.avatarUrl;
@@ -53,11 +58,18 @@
     !!$currentUser && (draft.displayName !== $currentUser.displayName || draft.username !== $currentUser.username),
   );
 
-  const menuItems = $derived<MenuItem[]>([
+  const menuItems: MenuItem[] = [
     { id: 'edit', label: 'Редактировать' },
     { id: 'settings', label: 'Настройки профиля' },
-    { id: 'signout', label: 'Выйти', danger: true, separator: true },
-  ]);
+    {
+      id: 'signout',
+      get label() {
+        return busy ? 'Выход…' : 'Выйти';
+      },
+      danger: true,
+      separator: true,
+    },
+  ];
 
   function startEditing() {
     if (!$currentUser || $isOffline) return;
@@ -114,95 +126,101 @@
   }
 </script>
 
-<Card padding="var(--space-6)">
-  <div class="head">
-    <div class="avatar">
-      {#if isGuest || avatarFailed || !$currentUser?.avatarUrl}
-        <span class="avatar-fallback">{avatarInitial}</span>
-      {:else}
-        <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-      {/if}
-    </div>
-
-    <div class="identity">
-      {#if isGuest}
-        <h2 class="display-name">Гость</h2>
-        <span class="username">Войдите, чтобы профиль сохранялся в аккаунте</span>
-      {:else if $currentUser}
-        <h2 class="display-name">{$currentUser.displayName}</h2>
-        <span class="username">@{$currentUser.username}</span>
-      {/if}
-      <div class="status" data-kind={status.kind}>
-        <span class="dot"></span>
-        {status.text}
-        {#if !isGuest && !showOnline}
-          <span class="muted">· скрыто от других</span>
+<section class="profile-header">
+  <Card>
+    <div class="head">
+      <div class="avatar">
+        {#if isGuest || avatarFailed || !$currentUser?.avatarUrl}
+          <span class="avatar-fallback">{avatarInitial}</span>
+        {:else}
+          <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
         {/if}
       </div>
-      {#if !isGuest}
-        <div class="avatar-actions">
-          <AvatarEditor size="sm" disabled={$isOffline} />
-        </div>
-      {/if}
-    </div>
 
-    <div class="head-actions">
-      {#if isGuest}
-        <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), 'Не удалось открыть вход')}>
-          <LogIn size="1.5rem" strokeWidth={1.8} />
-          Войти
-        </Button>
-        <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), 'Не удалось открыть вход')}>
-          Создать аккаунт
-        </Button>
-      {:else}
-        <DropdownMenu items={menuItems} onselect={onMenu}>
-          {#snippet trigger({ toggle })}
-            <IconButton label="Ещё" onclick={toggle}>
-              <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
-            </IconButton>
-          {/snippet}
-        </DropdownMenu>
-      {/if}
-    </div>
-  </div>
-
-  {#if editing && $currentUser}
-    <div class="fields">
-      <label class="field">
-        <span class="field-label">Отображаемое имя</span>
-        <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
-        {#if fieldErrors.displayName}<span class="error">{fieldErrors.displayName}</span>{/if}
-      </label>
-      <label class="field">
-        <span class="field-label">Имя пользователя</span>
-        <div class="username-field">
-          <span class="username-prefix">@</span>
-          <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
+      <div class="identity">
+        {#if isGuest}
+          <h2 class="display-name">Гость</h2>
+          <span class="username">Войдите, чтобы профиль сохранялся в аккаунте</span>
+        {:else if $currentUser}
+          <h2 class="display-name">{$currentUser.displayName}</h2>
+          <span class="username">@{$currentUser.username}</span>
+        {/if}
+        <div class="status">
+          <StatusBadge plain kind={statusKind} label={status.text} />
+          {#if statusHidden}
+            <span class="muted">· скрыто от других</span>
+          {/if}
         </div>
-        {#if fieldErrors.username}<span class="error">{fieldErrors.username}</span>{/if}
-      </label>
-      <div class="field">
-        <span class="field-label">Email</span>
-        <MaskedEmail email={$currentUser.email} />
-        <span class="hint">Email пока нельзя изменить и его не видит никто, кроме вас</span>
+        {#if !isGuest}
+          <div class="avatar-actions">
+            <AvatarEditor size="sm" disabled={$isOffline} />
+          </div>
+        {/if}
       </div>
-      <div class="field">
-        <span class="field-label">Участник с</span>
-        <span class="hint">{memberSince}</span>
+
+      <div class="head-actions">
+        {#if isGuest}
+          <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), 'Не удалось открыть вход')}>
+            <LogIn size="1.5rem" strokeWidth={1.8} />
+            Войти
+          </Button>
+          <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), 'Не удалось открыть вход')}>
+            Создать аккаунт
+          </Button>
+        {:else}
+          <DropdownMenu items={menuItems} onselect={onMenu}>
+            {#snippet trigger({ toggle })}
+              <IconButton label="Ещё" onclick={toggle}>
+                <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+              </IconButton>
+            {/snippet}
+          </DropdownMenu>
+        {/if}
       </div>
     </div>
-    <div class="foot">
-      {#if fieldErrors.general}<span class="error">{fieldErrors.general}</span>{/if}
-      <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>Отмена</Button>
-      <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
-        {$savingProfile ? 'Сохранение…' : 'Сохранить'}
-      </Button>
-    </div>
-  {/if}
-</Card>
+
+    {#if editing && $currentUser}
+      <div class="fields">
+        <label class="field">
+          <span class="field-label">Отображаемое имя</span>
+          <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
+          {#if fieldErrors.displayName}<span class="error">{fieldErrors.displayName}</span>{/if}
+        </label>
+        <label class="field">
+          <span class="field-label">Имя пользователя</span>
+          <div class="username-field">
+            <span class="username-prefix">@</span>
+            <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
+          </div>
+          {#if fieldErrors.username}<span class="error">{fieldErrors.username}</span>{/if}
+        </label>
+        <div class="field">
+          <span class="field-label">Email</span>
+          <MaskedEmail email={$currentUser.email} />
+          <span class="hint">Email пока нельзя изменить и его не видит никто, кроме вас</span>
+        </div>
+        <div class="field">
+          <span class="field-label">Участник с</span>
+          <span class="hint">{memberSince}</span>
+        </div>
+      </div>
+      <div class="foot">
+        {#if fieldErrors.general}<span class="error">{fieldErrors.general}</span>{/if}
+        <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>Отмена</Button>
+        <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
+          {$savingProfile ? 'Сохранение…' : 'Сохранить'}
+        </Button>
+      </div>
+    {/if}
+  </Card>
+</section>
 
 <style>
+  .profile-header {
+    display: block;
+    margin-bottom: var(--space-10);
+  }
+
   .head {
     display: flex;
     align-items: flex-start;
@@ -259,29 +277,12 @@
   .status {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.4rem;
     margin-top: 0.4rem;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
-  .dot {
-    width: 0.8rem;
-    height: 0.8rem;
-    border-radius: 50%;
-    background: var(--text-3);
-  }
-
-  .status[data-kind='online'] .dot,
-  .status[data-kind='playing'] .dot {
-    background: var(--success);
-  }
-
-  .status[data-kind='playing'] {
-    color: var(--text);
   }
 
   .muted {
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 
@@ -382,7 +383,7 @@
     margin-right: auto;
   }
 
-  @media (max-width: 1240px) {
+  @media (max-width: 1200px) {
     .head {
       flex-wrap: wrap;
     }

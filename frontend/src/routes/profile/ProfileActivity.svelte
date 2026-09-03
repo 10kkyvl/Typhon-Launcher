@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Card from '../../lib/components/Card.svelte';
   import type { ActivityDay } from '../../lib/services/profile';
   import { dayLabel } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
@@ -10,8 +9,8 @@
 </script>
 
 {#if days.length > 0}
-  <Card>
-    <div class="block-head">
+  <section class="group">
+    <div class="group-head">
       <h3>Недавняя активность</h3>
       {#if hidden}<HiddenBadge />{/if}
     </div>
@@ -22,7 +21,7 @@
           <ul>
             {#each day.entries as entry (entry.game.id)}
               <li>
-                <button class="entry" onclick={() => navigate('game', { id: entry.game.id })}>
+                <button class="entry" aria-label={entry.game.title} onclick={() => navigate('game', { id: entry.game.id })}>
                   <span class="title">{entry.game.title}</span>
                   <span class="played">Сыграно {playtime(entry.seconds)}</span>
                 </button>
@@ -32,14 +31,18 @@
         </section>
       {/each}
     </div>
-  </Card>
+  </section>
 {/if}
 
 <style>
-  .block-head {
+  .group {
+    margin-bottom: var(--space-10);
+  }
+
+  .group-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--space-3);
     margin-bottom: var(--space-3);
   }
 
@@ -56,12 +59,12 @@
   }
 
   h4 {
-    font-size: var(--font-xs);
-    font-weight: 500;
+    font-size: 1.2rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     color: var(--text-3);
-    margin-bottom: 0.4rem;
+    margin-bottom: var(--space-2);
   }
 
   ul {
@@ -70,20 +73,23 @@
 
   .entry {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
+    gap: var(--space-4);
     width: 100%;
-    padding: 0.6rem 0;
+    padding: 0.8rem;
     background: none;
     border: 0;
+    border-radius: var(--radius-md);
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition: background var(--dur) var(--ease);
   }
 
-  .entry:hover .title {
-    color: var(--accent-text);
+  .entry:hover {
+    background: var(--hover);
   }
 
   .title {
@@ -93,12 +99,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: color var(--dur) var(--ease);
   }
 
   .played {
     font-size: var(--font-sm);
-    color: var(--text-2);
+    color: var(--text-3);
     white-space: nowrap;
   }
 </style>
