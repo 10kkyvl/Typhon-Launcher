@@ -96,6 +96,42 @@ func TestLoadProfileAppliesDefaultsToLegacyCache(t *testing.T) {
 	}
 }
 
+func TestLoadProfileAppliesDefaultsToOldStyleProfileCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user": map[string]any{
+			"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com",
+			"createdAt": "2024-01-02T03:04:05Z",
+			"profile": map[string]any{
+				"showStats":    false,
+				"showPlaying":  true,
+				"showActivity": true,
+				"showOnline":   true,
+				"showcase":     []string{"favorites"},
+			},
+		},
+		"avatar":    map[string]any{"data": "", "mime": ""},
+		"avatarUrl": "",
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.User.Profile
+	if got.Visibility != VisibilityFriends {
+		t.Errorf("visibility = %q, want %q", got.Visibility, VisibilityFriends)
+	}
+	if !got.ShowPlaytime || !got.ShowLibrary {
+		t.Errorf("profile = %+v, want the two new toggles defaulted to true", got)
+	}
+	if got.ShowStats {
+		t.Errorf("profile = %+v, want showStats to keep its cached value (false)", got)
+	}
+}
+
 func TestNewServiceFailsOnCorruptProfileCache(t *testing.T) {
 	path := statePathFor(t)
 	profPath := profilePathFrom(path)

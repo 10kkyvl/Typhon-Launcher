@@ -25,7 +25,7 @@
   let draft = $state<ProfileSettings>(initialDraft());
   let error = $state('');
 
-  const flags: { key: keyof Omit<ProfileSettings, 'showcase'>; label: string; sub: string }[] = [
+  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: 'Статус «В сети»', sub: 'Другие видят, что вы в лаунчере' },
     { key: 'showPlaying', label: 'Во что играю', sub: 'Текущая игра и список «Сейчас играю»' },
     { key: 'showActivity', label: 'Недавняя активность', sub: 'Сыгранные игры по дням, без времени запуска' },
