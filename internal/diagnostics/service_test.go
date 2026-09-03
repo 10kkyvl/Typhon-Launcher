@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,9 +69,9 @@ func newTestService(t *testing.T, srv *httptest.Server, enabled func() bool) *Se
 	if enabled == nil {
 		enabled = func() bool { return true }
 	}
-	svc, err := NewService(testIdentity(), enabled)
+	svc, err := newServiceAt(t.TempDir(), testIdentity(), enabled)
 	if err != nil {
-		t.Fatalf("NewService: %v", err)
+		t.Fatalf("newServiceAt: %v", err)
 	}
 	cl, err := newClient(srv.URL)
 	if err != nil {
@@ -96,6 +99,12 @@ func TestNewServiceRejectsInvalidInputs(t *testing.T) {
 	}
 	if _, err := NewService(clientid.Identity{}, func() bool { return true }); err == nil {
 		t.Fatal("expected error for empty identity")
+	}
+}
+
+func TestNewServiceAtRejectsEmptyConfigDir(t *testing.T) {
+	if _, err := newServiceAt("", testIdentity(), func() bool { return true }); err == nil {
+		t.Fatal("expected error for an empty config dir")
 	}
 }
 
@@ -648,6 +657,121 @@ func TestConcurrentCaptureAndSetEnabled(t *testing.T) {
 		t.Fatalf("ServiceShutdown: %v", err)
 	}
 	drain(reqs)
+}
+
+func TestFlushSpillsFailedBatchToDisk(t *testing.T) {
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer badSrv.Close()
+
+	svc := newTestService(t, badSrv, nil)
+	svc.Capture("download", "start", errors.New("boom"), false)
+	svc.flush(context.Background())
+
+	entries, err := os.ReadDir(svc.pendingDir)
+	if err != nil {
+		t.Fatalf("read pending dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("pending files = %d, want 1", len(entries))
+	}
+
+	svc.mu.Lock()
+	qlen := len(svc.queue)
+	svc.mu.Unlock()
+	if qlen != 0 {
+		t.Fatalf("expected the failed batch to leave the live queue empty, got %d", qlen)
+	}
+}
+
+func TestFlushDrainsPendingBeforeLiveQueue(t *testing.T) {
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer badSrv.Close()
+
+	svc := newTestService(t, badSrv, nil)
+	svc.dedupWindow = 0
+	svc.Capture("download", "start", errors.New("first failure"), false)
+	svc.flush(context.Background())
+
+	entries, err := os.ReadDir(svc.pendingDir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected 1 pending file after the failed flush, got %d (err=%v)", len(entries), err)
+	}
+
+	goodSrv, reqs := newCapturingServer(t, http.StatusNoContent)
+	cl, err := newClient(goodSrv.URL)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	svc.client = cl
+
+	svc.Capture("download", "second", errors.New("second"), false)
+	svc.flush(context.Background())
+
+	first := decodeSingleReport(t, waitFor(t, reqs, "/diagnostics/errors"))
+	if first.Message != "first failure" {
+		t.Fatalf("first drained report = %q, want the pending batch sent first", first.Message)
+	}
+	second := decodeSingleReport(t, waitFor(t, reqs, "/diagnostics/errors"))
+	if second.Message != "second" {
+		t.Fatalf("second report = %q, want the live batch sent after pending", second.Message)
+	}
+
+	entries, err = os.ReadDir(svc.pendingDir)
+	if err != nil {
+		t.Fatalf("read pending dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("pending files = %d after a successful drain, want 0", len(entries))
+	}
+}
+
+func TestFlushRemovesCorruptPendingFileWithoutSending(t *testing.T) {
+	srv, reqs := newCapturingServer(t, http.StatusNoContent)
+	svc := newTestService(t, srv, nil)
+
+	if err := os.MkdirAll(svc.pendingDir, 0o755); err != nil {
+		t.Fatalf("mkdir pending dir: %v", err)
+	}
+	corrupt := filepath.Join(svc.pendingDir, "1.json")
+	if err := os.WriteFile(corrupt, []byte("{ not json"), 0o600); err != nil {
+		t.Fatalf("write corrupt pending file: %v", err)
+	}
+
+	svc.flush(context.Background())
+
+	if _, err := os.Stat(corrupt); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("corrupt pending file should have been removed")
+	}
+	select {
+	case req := <-reqs:
+		t.Fatalf("expected no send attempt for a corrupt pending file, got %s", req.body)
+	default:
+	}
+}
+
+func TestSetEnabledFalseRemovesPendingDir(t *testing.T) {
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer badSrv.Close()
+
+	svc := newTestService(t, badSrv, nil)
+	svc.Capture("download", "start", errors.New("boom"), false)
+	svc.flush(context.Background())
+
+	if _, err := os.Stat(svc.pendingDir); err != nil {
+		t.Fatalf("expected a pending file before opt-out: %v", err)
+	}
+
+	svc.SetEnabled(false)
+
+	if _, err := os.Stat(svc.pendingDir); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("pending dir should be removed on opt-out")
+	}
 }
 
 func drain(ch chan capturedRequest) {
