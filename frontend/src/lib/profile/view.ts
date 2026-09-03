@@ -1,6 +1,6 @@
 import type { ShowcaseKind } from '../services/account';
 import type { GameRef } from '../services/profile';
-import { formatCount, playtime } from '../utils/format';
+import { playtime } from '../utils/format';
 
 export const SHOWCASE_TITLES: Record<ShowcaseKind, string> = {
   favorites: 'Любимые',
@@ -13,10 +13,6 @@ export const SHOWCASE_HINTS: Record<ShowcaseKind, string> = {
   recently_completed: 'Отметьте пройденные игры в меню игры',
   most_played: 'Появится после первой сыгранной сессии',
 };
-
-export function hoursLabel(seconds: number): string {
-  return formatCount(Math.floor(seconds / 3600));
-}
 
 export function recentLabel(seconds: number): string {
   return `${playtime(seconds)} за 2 недели`;

@@ -21,7 +21,7 @@
           <ul>
             {#each day.entries as entry (entry.game.id)}
               <li>
-                <button class="entry" aria-label={entry.game.title} onclick={() => navigate('game', { id: entry.game.id })}>
+                <button class="entry" onclick={() => navigate('game', { id: entry.game.id })}>
                   <span class="title">{entry.game.title}</span>
                   <span class="played">Сыграно {playtime(entry.seconds)}</span>
                 </button>

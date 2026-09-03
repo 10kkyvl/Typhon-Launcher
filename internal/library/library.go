@@ -618,7 +618,10 @@ func (s *Service) SetFavorite(id string, on bool) (Game, error) {
 	if game == nil {
 		return Game{}, errNotFound
 	}
-	if on && !game.Favorite && s.favoriteCountLocked() >= MaxFavorites {
+	if game.Favorite == on {
+		return *game, nil
+	}
+	if on && s.favoriteCountLocked() >= MaxFavorites {
 		return Game{}, ErrTooManyFavorites
 	}
 	previous := *game

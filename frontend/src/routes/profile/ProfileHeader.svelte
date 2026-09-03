@@ -58,18 +58,11 @@
     !!$currentUser && (draft.displayName !== $currentUser.displayName || draft.username !== $currentUser.username),
   );
 
-  const menuItems: MenuItem[] = [
+  const menuItems = $derived<MenuItem[]>([
     { id: 'edit', label: 'Редактировать' },
     { id: 'settings', label: 'Настройки профиля' },
-    {
-      id: 'signout',
-      get label() {
-        return busy ? 'Выход…' : 'Выйти';
-      },
-      danger: true,
-      separator: true,
-    },
-  ];
+    { id: 'signout', label: busy ? 'Выход…' : 'Выйти', danger: true, separator: true },
+  ]);
 
   function startEditing() {
     if (!$currentUser || $isOffline) return;

@@ -738,6 +738,22 @@ func TestCurrentProfileSettingsFallsBackToDefaults(t *testing.T) {
 	}
 }
 
+func TestCurrentProfileSettingsReturnsACopyOfShowcase(t *testing.T) {
+	store := &fakeStore{}
+	s := startedService(t, store, "http://127.0.0.1:0")
+	s.mu.Lock()
+	s.profile = cachedProfile{User: CurrentUser{ID: "u1", Profile: ProfileSettings{Showcase: []string{"favorites"}}}}
+	s.mu.Unlock()
+
+	got := s.CurrentProfileSettings()
+	got.Showcase[0] = "mutated"
+
+	again := s.CurrentProfileSettings()
+	if again.Showcase[0] != "favorites" {
+		t.Fatalf("CurrentProfileSettings() leaked its internal slice: %+v", again)
+	}
+}
+
 func TestUpdateProfileSendsProfileSettings(t *testing.T) {
 	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

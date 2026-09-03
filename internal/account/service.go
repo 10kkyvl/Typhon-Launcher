@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -319,7 +320,9 @@ func (s *Service) CurrentProfileSettings() ProfileSettings {
 	if profile.User.ID == "" {
 		return DefaultProfileSettings()
 	}
-	return withProfileDefaults(profile.User).Profile
+	settings := profile.User.Profile
+	settings.Showcase = slices.Clone(settings.Showcase)
+	return settings
 }
 
 func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {

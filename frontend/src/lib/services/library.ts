@@ -1,6 +1,9 @@
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
+import { markError } from '../game/markMessages';
+
+export { markError };
 
 export interface LibraryGame {
   id: string;
@@ -87,12 +90,6 @@ export async function setFavorite(id: string, on: boolean): Promise<LibraryGame>
 export async function setCompleted(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetCompleted(id, on)) as unknown as LibraryGame;
-}
-
-export function markError(err: unknown, fallback: string): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '');
-  if (raw.includes('favorites limit reached')) return 'Не больше 6 любимых игр';
-  return fallback;
 }
 
 export async function locateSaves(id: string): Promise<SavesResult> {

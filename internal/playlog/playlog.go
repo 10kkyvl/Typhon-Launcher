@@ -47,10 +47,14 @@ func NewService() (*Service, error) {
 }
 
 func NewServiceAt(path string) (*Service, error) {
+	return newServiceAt(path, time.Now)
+}
+
+func newServiceAt(path string, now func() time.Time) (*Service, error) {
 	if path == "" {
 		return nil, errors.New("playlog path unavailable")
 	}
-	s := &Service{path: path, now: time.Now}
+	s := &Service{path: path, now: now}
 	sessions, err := s.load()
 	if err != nil {
 		return nil, err
@@ -78,11 +82,12 @@ func (s *Service) Record(gameID string, startedAt, endedAt time.Time) {
 	session := Session{GameID: gameID, StartedAt: startedAt, EndedAt: endedAt}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sessions = prune(append(s.sessions, session), s.now())
 	if err := storage.Save(s.path, playlogVersion, s.sessions); err != nil {
 		slog.Error("persist playlog", "path", s.path, "error", err)
 	}
+	s.mu.Unlock()
+
 	emit(eventRecorded, session)
 }
 
@@ -103,7 +108,7 @@ func prune(sessions []Session, now time.Time) []Session {
 	cutoff := now.Add(-Retention)
 	kept := sessions[:0]
 	for _, session := range sessions {
-		if session.EndedAt.After(cutoff) {
+		if !session.EndedAt.Before(cutoff) {
 			kept = append(kept, session)
 		}
 	}

@@ -1,8 +1,10 @@
 package library
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -38,6 +40,9 @@ func TestSetFavoritePersistsAndCaps(t *testing.T) {
 	if _, err := s.SetFavorite(ids[MaxFavorites], true); !errors.Is(err, ErrTooManyFavorites) {
 		t.Fatalf("err = %v, want ErrTooManyFavorites", err)
 	}
+	if got, want := ErrTooManyFavorites.Error(), "favorites limit reached"; got != want {
+		t.Fatalf("ErrTooManyFavorites.Error() = %q, want %q (matched by substring in frontend/src/lib/game/markMessages.ts)", got, want)
+	}
 	if _, err := s.SetFavorite(ids[0], true); err != nil {
 		t.Fatalf("re-favoriting an existing favorite must not count: %v", err)
 	}
@@ -57,6 +62,44 @@ func TestSetFavoritePersistsAndCaps(t *testing.T) {
 	}
 	if count != MaxFavorites {
 		t.Fatalf("favorites after reload = %d, want %d", count, MaxFavorites)
+	}
+}
+
+func TestSetFavoriteNoopDoesNotRewriteFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	ids := addGames(t, s, 1)
+	id := ids[0]
+
+	if _, err := s.SetFavorite(id, true); err != nil {
+		t.Fatalf("favorite: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.SetFavorite(id, true); err != nil {
+		t.Fatalf("re-favorite: %v", err)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("file bytes changed on a no-op re-favorite")
+	}
+	if !beforeInfo.ModTime().Equal(afterInfo.ModTime()) {
+		t.Fatalf("mtime changed on a no-op re-favorite: before=%v after=%v", beforeInfo.ModTime(), afterInfo.ModTime())
 	}
 }
 

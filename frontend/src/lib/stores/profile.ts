@@ -1,23 +1,29 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { EMPTY_SNAPSHOT, getProfileSnapshot, type ProfileSnapshot } from '../services/profile';
 import { currentUser } from './user';
+import type { CurrentUser } from '../services/account';
 
 export const profileSnapshot = writable<ProfileSnapshot>(EMPTY_SNAPSHOT);
-export const profileLoading = writable(false);
 
 let started = false;
+let seq = 0;
 
 export async function refreshProfile() {
-  profileLoading.set(true);
+  const id = ++seq;
   try {
-    profileSnapshot.set(await getProfileSnapshot());
+    const snap = await getProfileSnapshot();
+    if (id !== seq) return;
+    profileSnapshot.set(snap);
   } catch (err) {
+    if (id !== seq) return;
     console.error('profile snapshot failed', err);
-  } finally {
-    profileLoading.set(false);
   }
+}
+
+function showcaseKey(user: CurrentUser | null): string | null {
+  return user ? JSON.stringify(user.profile?.showcase ?? []) : null;
 }
 
 export function initProfile() {
@@ -28,9 +34,9 @@ export function initProfile() {
   for (const name of ['library:updated', 'game:started', 'game:stopped', 'playlog:recorded']) {
     Events.On(name, () => void refreshProfile());
   }
-  let seen: string | null = null;
+  let seen = showcaseKey(get(currentUser));
   currentUser.subscribe((user) => {
-    const key = user ? JSON.stringify(user.profile?.showcase ?? []) : null;
+    const key = showcaseKey(user);
     if (key === seen) return;
     seen = key;
     void refreshProfile();

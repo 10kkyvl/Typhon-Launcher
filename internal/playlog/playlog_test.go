@@ -68,6 +68,25 @@ func TestSinceFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestNewServiceAtPrunesStaleSessionsOnLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "playlog.json")
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	stale := now.Add(-100 * 24 * time.Hour)
+	if err := storage.Save(path, playlogVersion, []Session{
+		{GameID: "old", StartedAt: stale.Add(-time.Hour), EndedAt: stale},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := newServiceAt(path, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Since(time.Time{}); len(got) != 0 {
+		t.Fatalf("sessions = %+v, want the stale session pruned on load", got)
+	}
+}
+
 func TestMissingFileIsEmpty(t *testing.T) {
 	s, err := NewServiceAt(filepath.Join(t.TempDir(), "none", "playlog.json"))
 	if err != nil {

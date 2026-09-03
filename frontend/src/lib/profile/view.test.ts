@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, hoursLabel, recentLabel, statusLine } from './view';
+import { dayLabel, recentLabel, statusLine } from './view';
 
 const now = new Date(2026, 8, 3, 15, 0, 0);
 
@@ -13,13 +13,6 @@ describe('dayLabel', () => {
   });
   it('handles year boundaries', () => {
     expect(dayLabel('2025-12-31', new Date(2026, 0, 1, 0, 30))).toBe('Вчера');
-  });
-});
-
-describe('hoursLabel', () => {
-  it('floors to hours with a ru separator', () => {
-    expect(hoursLabel(1284 * 3600 + 1799)).toBe((1284).toLocaleString('ru-RU'));
-    expect(hoursLabel(0)).toBe('0');
   });
 });
 

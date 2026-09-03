@@ -17,7 +17,7 @@
     <ul class="rows">
       {#each entries as entry (entry.game.id)}
         <li>
-          <button class="row" aria-label={entry.game.title} onclick={() => navigate('game', { id: entry.game.id })}>
+          <button class="row" onclick={() => navigate('game', { id: entry.game.id })}>
             <span class="cover">
               <Artwork src={entry.game.cover} alt="" ratio="3 / 4" radius="var(--radius-sm)" />
             </span>
