@@ -57,6 +57,7 @@ type Service struct {
 	loaded       bool
 	incoming     int
 	paused       bool
+	kicks        uint64
 	healthy      bool
 	healthyKnown bool
 	ctx          context.Context
@@ -141,11 +142,16 @@ func (s *Service) poll(ctx context.Context) {
 }
 
 func (s *Service) refresh(ctx context.Context) error {
+	s.mu.Lock()
+	started := s.kicks
+	s.mu.Unlock()
 	page, err := s.client.friendsPage(ctx)
 	if err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			s.mu.Lock()
-			s.paused = true
+			if s.kicks == started {
+				s.paused = true
+			}
 			s.mu.Unlock()
 		}
 		return err
@@ -214,6 +220,7 @@ func (s *Service) runContext() (context.Context, error) {
 func (s *Service) Kick() {
 	s.mu.Lock()
 	s.paused = false
+	s.kicks++
 	s.mu.Unlock()
 	s.poke()
 }

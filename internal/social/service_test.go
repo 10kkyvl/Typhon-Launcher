@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -552,5 +553,39 @@ func TestNewService_Validates(t *testing.T) {
 	}
 	if svc.interval != defaultPollInterval {
 		t.Fatalf("interval = %v, want %v", svc.interval, defaultPollInterval)
+	}
+}
+
+func TestService_KickDuringInFlightUnauthorizedDoesNotPause(t *testing.T) {
+	release := make(chan struct{})
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		if h.reqs.Load() == 1 {
+			<-release
+			w.WriteHeader(http.StatusUnauthorized)
+			writeJSON(h.t, w, `{"error":{"code":"unauthenticated"}}`)
+			return
+		}
+		writeJSON(h.t, w, pageWithIncoming(0))
+	})
+
+	h.start()
+	for h.reqs.Load() < 1 {
+		runtime.Gosched()
+	}
+	h.svc.Kick()
+	close(release)
+	h.awaitPoll()
+	h.awaitPoll()
+	if got := h.reqs.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2: the queued kick must poll after the stale 401", got)
+	}
+	if h.svc.isPaused() {
+		t.Fatal("a 401 from a request that predates Kick must not pause the loop")
+	}
+
+	h.sendTick()
+	h.awaitPoll()
+	if got := h.reqs.Load(); got != 3 {
+		t.Fatalf("requests after a tick = %d, want 3", got)
 	}
 }
