@@ -36,6 +36,7 @@ import (
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
+	"typhon/internal/social"
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
@@ -118,6 +119,8 @@ func init() {
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[social.FriendsPage](social.EventFriends)
+	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -323,6 +326,12 @@ func main() {
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
+	resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
+	socialService, err := social.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID)
+	if err != nil {
+		fatal("start social service", err)
+	}
+
 	var extraServices []application.Service
 
 	// Битый или недоступный installation.json — не повод не пускать пользователя
@@ -332,7 +341,6 @@ func main() {
 	if err != nil {
 		slog.Error("load client identity", "error", err)
 	} else {
-		resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
 		heartbeatService, err := heartbeat.NewService(identity, resolveGameID)
 		if err != nil {
 			fatal("start presence", err)
@@ -379,6 +387,7 @@ func main() {
 		application.NewService(appService),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
+		application.NewService(socialService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
