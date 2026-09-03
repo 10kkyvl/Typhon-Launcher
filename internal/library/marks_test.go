@@ -117,11 +117,17 @@ func TestSetStatusStampsAndValidates(t *testing.T) {
 	if g.Status != StatusCompleted || g.StatusAt == nil || !g.StatusAt.Equal(now) {
 		t.Fatalf("game = %+v, want completed at %s", g, now)
 	}
-	before, _ := os.ReadFile(path)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.SetStatus(id, StatusCompleted); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := os.ReadFile(path)
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(before) != string(after) {
 		t.Fatal("no-op status change rewrote the file")
 	}
@@ -129,8 +135,8 @@ func TestSetStatusStampsAndValidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Status != "" || g.StatusAt != nil {
-		t.Fatalf("game = %+v, want cleared", g)
+	if g.Status != "" || g.StatusAt == nil || !g.StatusAt.Equal(now) {
+		t.Fatalf("game = %+v, want cleared with stamp at %s", g, now)
 	}
 	if _, err := s.SetStatus(id, "won"); !errors.Is(err, ErrInvalidStatus) {
 		t.Fatalf("err = %v, want ErrInvalidStatus", err)

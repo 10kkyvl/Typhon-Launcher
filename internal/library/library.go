@@ -685,12 +685,8 @@ func (s *Service) SetStatus(id, status string) (Game, error) {
 	}
 	previous := *game
 	game.Status = status
-	if status != "" {
-		now := s.now()
-		game.StatusAt = &now
-	} else {
-		game.StatusAt = nil
-	}
+	now := s.now()
+	game.StatusAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous
 		return Game{}, fmt.Errorf("save library: %w", err)
