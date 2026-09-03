@@ -24,16 +24,30 @@
 <PageHeader title="Профиль" />
 
 <div class="profile">
-  <ProfileHeader
-    running={$profileSnapshot.running}
-    showOnline={settings.showOnline}
-    showPlaying={settings.showPlaying}
-    onsettings={() => (settingsOpen = true)}
-  />
-  <ProfileStats stats={$profileSnapshot.stats} hidden={!settings.showStats} />
-  <ProfilePlaying entries={$profileSnapshot.playing} hidden={!settings.showPlaying} />
-  <ProfileActivity days={$profileSnapshot.activity} hidden={!settings.showActivity} />
-  <ProfileShowcase blocks={$profileSnapshot.showcase} />
+  <div class="main">
+    <div class="area area-header">
+      <ProfileHeader
+        running={$profileSnapshot.running}
+        showOnline={settings.showOnline}
+        showPlaying={settings.showPlaying}
+        onsettings={() => (settingsOpen = true)}
+      />
+    </div>
+    <div class="area area-activity">
+      <ProfileActivity days={$profileSnapshot.activity} hidden={!settings.showActivity} />
+    </div>
+    <div class="area area-showcase">
+      <ProfileShowcase blocks={$profileSnapshot.showcase} />
+    </div>
+  </div>
+  <div class="side">
+    <div class="area area-stats">
+      <ProfileStats stats={$profileSnapshot.stats} hidden={!settings.showStats} />
+    </div>
+    <div class="area area-playing">
+      <ProfilePlaying entries={$profileSnapshot.playing} hidden={!settings.showPlaying} />
+    </div>
+  </div>
 </div>
 
 {#if !isGuest && settingsOpen}
@@ -42,6 +56,52 @@
 
 <style>
   .profile {
-    max-width: 96rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main,
+  .side {
+    display: contents;
+  }
+
+  .area {
+    min-width: 0;
+  }
+
+  .area-header {
+    order: 1;
+  }
+
+  .area-stats {
+    order: 2;
+  }
+
+  .area-playing {
+    order: 3;
+  }
+
+  .area-activity {
+    order: 4;
+  }
+
+  .area-showcase {
+    order: 5;
+  }
+
+  @media (min-width: 1600px) {
+    .profile {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 40rem;
+      gap: 0 var(--space-12);
+      align-items: start;
+    }
+
+    .main,
+    .side {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
   }
 </style>

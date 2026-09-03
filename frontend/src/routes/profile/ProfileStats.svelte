@@ -48,7 +48,7 @@
 
   .tiles {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: var(--space-4);
   }
 
@@ -71,11 +71,5 @@
   .label {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  @media (max-width: 1200px) {
-    .tiles {
-      grid-template-columns: repeat(2, 1fr);
-    }
   }
 </style>
