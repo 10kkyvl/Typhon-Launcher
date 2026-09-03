@@ -24,17 +24,22 @@ type Snapshot struct {
 }
 
 type Stats struct {
-	Games     int `json:"games"`
-	Hours     int `json:"hours"`
-	Completed int `json:"completed"`
-	Playing   int `json:"playing"`
+	Games          int   `json:"games"`
+	Hours          int   `json:"hours"`
+	Completed      int   `json:"completed"`
+	Playing        int   `json:"playing"`
+	MonthSeconds   int64 `json:"monthSeconds"`
+	MonthGames     int   `json:"monthGames"`
+	MonthCompleted int   `json:"monthCompleted"`
 }
 
 type GameRef struct {
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Cover           string `json:"cover"`
-	PlaytimeSeconds int64  `json:"playtimeSeconds"`
+	ID              string     `json:"id"`
+	Title           string     `json:"title"`
+	Cover           string     `json:"cover"`
+	PlaytimeSeconds int64      `json:"playtimeSeconds"`
+	Status          string     `json:"status"`
+	StatusAt        *time.Time `json:"statusAt,omitempty"`
 }
 
 type PlayingEntry struct {
@@ -140,6 +145,31 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		snap.Activity = append(snap.Activity, ActivityDay{Date: day, Entries: entries})
 	}
 
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	monthGames := map[string]struct{}{}
+	for _, s := range sessions {
+		g, known := byID[s.GameID]
+		if !known || s.EndedAt.Before(monthStart) {
+			continue
+		}
+		start := s.StartedAt
+		if start.Before(monthStart) {
+			start = monthStart
+		}
+		seconds := int64(s.EndedAt.Sub(start).Seconds())
+		if seconds <= 0 {
+			continue
+		}
+		snap.Stats.MonthSeconds += seconds
+		monthGames[g.ID] = struct{}{}
+	}
+	snap.Stats.MonthGames = len(monthGames)
+	for _, g := range games {
+		if g.Status == library.StatusCompleted && g.StatusAt != nil && !g.StatusAt.Before(monthStart) {
+			snap.Stats.MonthCompleted++
+		}
+	}
+
 	for _, id := range running {
 		if g, ok := byID[id]; ok {
 			snap.Running = append(snap.Running, ref(g))
@@ -199,5 +229,5 @@ func timeOf(t *time.Time) time.Time {
 }
 
 func ref(g library.Game) GameRef {
-	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, PlaytimeSeconds: g.PlaytimeSeconds}
+	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
 }
