@@ -161,17 +161,18 @@ func TestLeavingGuestModeClearsTheMarker(t *testing.T) {
 }
 
 func TestLoginRefusesWhenGuestMarkerCannotBeCleared(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		t.Errorf("login must not reach the backend, got %s %s", r.Method, r.URL.Path)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != APIPrefix+"/auth/login" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		writeSession(t, w, http.StatusOK, "fresh-token")
 	}))
 	defer srv.Close()
 
-	blocker := filepath.Join(t.TempDir(), "blocker")
-	if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
-		t.Fatalf("write blocker file: %v", err)
-	}
+	blocker := unwritableStateDir(t)
 
-	s := serviceAt(t, &fakeStore{}, srv.URL, filepath.Join(blocker, "account.json"))
+	store := &fakeStore{}
+	s := serviceAt(t, store, srv.URL, filepath.Join(blocker, "account.json"))
 	s.mu.Lock()
 	s.guest = true
 	s.mu.Unlock()
@@ -181,6 +182,60 @@ func TestLoginRefusesWhenGuestMarkerCannotBeCleared(t *testing.T) {
 	}
 	if !s.isGuest() {
 		t.Error("guest marker was cleared in memory despite the failed write")
+	}
+	if _, present := store.snapshot(); present {
+		t.Error("credential was stored despite the guest marker write failure")
+	}
+}
+
+func TestLoginKeepsGuestMarkerWhenTheServerRejectsIt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusUnauthorized, map[string]any{
+			"error": map[string]string{"code": "invalid_credentials"},
+		})
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "account.json")
+	s := serviceAt(t, &fakeStore{}, srv.URL, path)
+	if _, err := s.ContinueAsGuest(); err != nil {
+		t.Fatalf("ContinueAsGuest() error = %v", err)
+	}
+
+	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "wrong"}); err == nil {
+		t.Fatal("Login() error = nil, want the server rejection")
+	}
+	if !s.isGuest() {
+		t.Error("guest marker was cleared before the server accepted the login")
+	}
+
+	restarted := serviceAt(t, &fakeStore{}, srv.URL, path)
+	if !restarted.isGuest() {
+		t.Error("guest marker was persisted as cleared before the server accepted the login")
+	}
+}
+
+func TestLoginKeepsGuestMarkerOnNetworkFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	unreachable := srv.URL
+	srv.Close()
+
+	path := filepath.Join(t.TempDir(), "account.json")
+	s := serviceAt(t, &fakeStore{}, unreachable, path)
+	if _, err := s.ContinueAsGuest(); err != nil {
+		t.Fatalf("ContinueAsGuest() error = %v", err)
+	}
+
+	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "password"}); err == nil {
+		t.Fatal("Login() error = nil, want the network failure")
+	}
+	if !s.isGuest() {
+		t.Error("guest marker was cleared despite the login never reaching the server")
+	}
+
+	restarted := serviceAt(t, &fakeStore{}, unreachable, path)
+	if !restarted.isGuest() {
+		t.Error("guest marker was persisted as cleared despite the network failure")
 	}
 }
 

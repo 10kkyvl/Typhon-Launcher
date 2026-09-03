@@ -4,18 +4,20 @@ import (
 	"log/slog"
 	"runtime"
 
+	"typhon/internal/devmock"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var Version = "0.3.0"
+var Version = "0.3.1"
 
 type AppInfo struct {
 	Version  string `json:"version"`
 	Platform string `json:"platform"`
 	Arch     string `json:"arch"`
+	DevMock  bool   `json:"devMock"`
 }
 
 type Service struct {
@@ -31,6 +33,7 @@ func (s *Service) GetAppInfo() AppInfo {
 		Version:  Version,
 		Platform: runtime.GOOS,
 		Arch:     runtime.GOARCH,
+		DevMock:  devmock.Enabled,
 	}
 }
 

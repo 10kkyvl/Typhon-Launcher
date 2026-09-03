@@ -189,6 +189,7 @@ type Summary struct {
 	New         int    `json:"new"`
 	NotModified bool   `json:"notModified"`
 	DurationMs  int64  `json:"durationMs"`
+	Error       string `json:"error,omitempty"`
 }
 
 type Details struct {

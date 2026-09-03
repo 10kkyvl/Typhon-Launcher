@@ -415,6 +415,13 @@ func (s *Service) RepairGame(gameID string) error {
 	return nil
 }
 
+// repair writes corrected torrent pieces directly into the live install, the
+// same as applyTorrentReuse, so it takes the same journaled full backup
+// first (invariant 15). Unlike an update, a successful repair does not
+// change the installed version, so the backup is only a crash safety net:
+// on success it is discarded rather than remembered as a rollback target,
+// which would otherwise silently replace a real prior-version rollback the
+// user could still want.
 func (s *Service) repair(ctx context.Context, game library.Game, release sources.Release, flat bool) {
 	started := time.Now()
 	s.emitVerify(game.ID, eventRepairStarted, func(v *VerifyState) {
@@ -427,6 +434,14 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		Timestamp:  time.Now(),
 		Properties: usagestats.Properties{GameID: game.CanonicalGameID},
 	})
+
+	previous, err := s.backupInPlace(ctx, game.ID, game.InstallDir, game.Version)
+	if err != nil {
+		s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
+		s.failRepair(ctx, game.ID, err)
+		return
+	}
+
 	source := ""
 	if len(release.URIs) > 0 {
 		source = release.URIs[0]
@@ -449,6 +464,7 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		},
 	})
 	if err != nil {
+		s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 		s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
 		s.failRepair(ctx, game.ID, err)
 		return
@@ -459,6 +475,7 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 	for {
 		select {
 		case <-ctx.Done():
+			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			s.recordRepairFailure(game.CanonicalGameID, started, ctx.Err())
 			s.failRepair(ctx, game.ID, ctx.Err())
 			return
@@ -466,6 +483,7 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		}
 		current, err := s.downloads.Get(task.ID)
 		if err != nil {
+			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, errDownloadFailed))
 			s.failRepair(ctx, game.ID, errDownloadFailed)
 			return
@@ -476,6 +494,10 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		})
 		switch current.Status {
 		case download.StatusCompleted:
+			removeTree(previous)
+			if err := s.clearJournal(game.ID); err != nil {
+				slog.Error("clear repair journal", "game", game.ID, "error", err)
+			}
 			now := time.Now()
 			s.emitVerify(game.ID, eventRepairCompleted, func(v *VerifyState) {
 				v.Repairing = false
@@ -499,6 +521,7 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 			slog.Info("game repaired", "game", game.ID, "release", release.ID)
 			return
 		case download.StatusFailed:
+			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			cause := errors.New(current.Error)
 			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, cause))
 			s.failRepair(ctx, game.ID, cause)

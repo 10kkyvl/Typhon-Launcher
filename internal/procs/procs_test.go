@@ -4,10 +4,12 @@ import (
 	"context"
 	"runtime"
 	"testing"
+
+	"typhon/internal/devmock"
 )
 
 func TestSupportedMatchesGOOS(t *testing.T) {
-	want := runtime.GOOS == "windows"
+	want := runtime.GOOS == "windows" || devmock.Enabled
 	if got := Supported(); got != want {
 		t.Fatalf("Supported() = %v, want %v for GOOS=%s", got, want, runtime.GOOS)
 	}
@@ -16,6 +18,9 @@ func TestSupportedMatchesGOOS(t *testing.T) {
 func TestListOnUnsupportedPlatform(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("this case is exercised on non-Windows platforms only")
+	}
+	if devmock.Enabled {
+		t.Skip("devmock provides a supported List on this platform")
 	}
 	got, err := List(context.Background())
 	if err == nil {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +76,34 @@ func (f *fakeStore) snapshot() (Credential, bool) {
 func statePathFor(t *testing.T) string {
 	t.Helper()
 	return filepath.Join(t.TempDir(), "account.json")
+}
+
+// unwritableStateDir returns a directory-shaped path under which a state
+// file's absence still reads as fs.ErrNotExist but a write into it fails.
+// On Windows, opening "<blocker file>/name" reports ERROR_PATH_NOT_FOUND,
+// which os maps to fs.ErrNotExist, and a write into it fails too, so the
+// classic blocker-file trick works end to end. On POSIX the same trick
+// makes a read return ENOTDIR instead — a real error load must not treat as
+// "start empty" — so a real directory with read+search but no write
+// permission (0500) is used instead: a lookup of an absent child still
+// returns ENOENT, while os.CreateTemp inside it fails with EACCES.
+func unwritableStateDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
+			t.Fatalf("write blocker file: %v", err)
+		}
+		return blocker
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, permission checks are not enforced")
+	}
+	dir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatalf("create unwritable dir: %v", err)
+	}
+	return dir
 }
 
 func startedService(t *testing.T, store CredentialStore, baseURL string) *Service {

@@ -23,6 +23,12 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	if err != nil {
 		t.Fatalf("new library service at %s: %v", path, err)
 	}
+	// Existing tests assert on real child processes (pid, exit code, working
+	// directory): forcing the exec-based starter keeps that true under
+	// -tags devmock too, where newGameStarter would otherwise hand back a
+	// fake process. Only process_devmock_test.go exercises the devmock
+	// starter, and it sets s.start itself.
+	s.start = execStarter
 	// Registered after the t.TempDir() that produced path, so it runs before
 	// that directory is removed: a session goroutine still persisting into it
 	// would otherwise race the cleanup.

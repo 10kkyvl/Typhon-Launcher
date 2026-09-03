@@ -1,6 +1,7 @@
 package download
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -15,4 +16,12 @@ func missingVolumeDir(t *testing.T) string {
 	}
 	t.Skip("нет свободной буквы диска для проверки ошибки GetStorageInfo")
 	return ""
+}
+
+func TestCheckFreeSpaceUnknownFails(t *testing.T) {
+	dir := missingVolumeDir(t)
+	err := checkFreeSpace(dir, 1)
+	if !errors.Is(err, errNoFreeSpace) {
+		t.Fatalf("err = %v, want errNoFreeSpace", err)
+	}
 }

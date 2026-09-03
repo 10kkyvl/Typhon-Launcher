@@ -127,7 +127,7 @@ func TestApplyRejectsPathOutsideCache(t *testing.T) {
 	outside := filepath.Join(dir, "not-cached-setup.exe")
 	writeTestFile(t, outside, []byte("x"))
 
-	if err := Apply(context.Background(), outside, dir); err == nil {
+	if err := Apply(context.Background(), outside, dir, filepath.Join(dir, "typhon.exe")); err == nil {
 		t.Fatal("Apply() error = nil, want an error for a path outside the selfupdate cache")
 	}
 }
@@ -147,7 +147,7 @@ func TestApplyNotReadyWhenNothingStored(t *testing.T) {
 	installerPath := filepath.Join(cacheDir, "1.2.3", "setup.exe")
 	writeTestFile(t, installerPath, []byte("installer"))
 
-	if err := Apply(context.Background(), installerPath, dir); !errors.Is(err, ErrNotReady) {
+	if err := Apply(context.Background(), installerPath, dir, filepath.Join(dir, "typhon.exe")); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("Apply() error = %v, want ErrNotReady when nothing was ever downloaded", err)
 	}
 }
@@ -189,7 +189,7 @@ func TestApplyHashMismatchAfterTampering(t *testing.T) {
 	tampered[0] ^= 0xff
 	writeTestFile(t, installerPath, tampered)
 
-	if err := Apply(context.Background(), installerPath, dir); !errors.Is(err, ErrHashMismatch) {
+	if err := Apply(context.Background(), installerPath, dir, filepath.Join(dir, "typhon.exe")); !errors.Is(err, ErrHashMismatch) {
 		t.Fatalf("Apply() error = %v, want ErrHashMismatch", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestApplyNotReadyWhenReadyPathDiffers(t *testing.T) {
 		t.Fatalf("seed store: %v", err)
 	}
 
-	if err := Apply(context.Background(), otherPath, dir); !errors.Is(err, ErrNotReady) {
+	if err := Apply(context.Background(), otherPath, dir, filepath.Join(dir, "typhon.exe")); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("Apply() error = %v, want ErrNotReady when the path does not match the recorded ReadyPath", err)
 	}
 }

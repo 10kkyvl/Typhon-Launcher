@@ -127,6 +127,14 @@
       </span>
       {#if download.status === 'failed' && download.error}
         <span class="error">{download.error}</span>
+      {:else if downloading && download.stalled}
+        <span class="stats">
+          <span class="stalled">Ожидание источников</span>
+          {#if !compact}
+            <span class="sep">·</span>
+            <span class="dim">{download.seeders} сид / {download.peers} пир</span>
+          {/if}
+        </span>
       {:else if downloading && !compact}
         <span class="stats">
           <span>{speedBytes(download.downloadSpeed)}</span>
@@ -281,6 +289,10 @@
 
   .dim {
     color: var(--text-3);
+  }
+
+  .stalled {
+    color: var(--warning, var(--text-2));
   }
 
   .error {

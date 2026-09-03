@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { AlertTriangle, Download, RefreshCw, RotateCcw } from '@lucide/svelte';
+  import { AlertTriangle, Download, RefreshCw, RotateCcw, X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import {
     requestApply,
+    requestCancelDownload,
     requestDismiss,
     requestDownload,
     retryFailed,
@@ -52,6 +53,10 @@
     <div class="progress">
       <ProgressBar value={pct} />
       <span class="muted">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)} · {Math.round(pct)}%</span>
+      <Button size="sm" onclick={requestCancelDownload}>
+        <X size="1.5rem" strokeWidth={1.8} />
+        Отменить
+      </Button>
     </div>
   </div>
 {:else if view === 'applying'}

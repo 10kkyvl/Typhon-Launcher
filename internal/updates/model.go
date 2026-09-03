@@ -184,3 +184,23 @@ const (
 type FileManifestEntry = hashdir.Entry
 
 type FileManifest = hashdir.Manifest
+
+const (
+	JournalSwap    = "swap"
+	JournalPatch   = "patch"
+	JournalInplace = "inplace"
+)
+
+// SwapJournal records a multi-rename filesystem operation before its first
+// destructive step, so ServiceStartup can finish or roll it back after a
+// crash instead of leaving the only copy of the install in an ambiguous state.
+type SwapJournal struct {
+	GameID     string    `json:"gameId"`
+	Kind       string    `json:"kind"`
+	InstallDir string    `json:"installDir"`
+	Staging    string    `json:"staging,omitempty"`
+	Previous   string    `json:"previous"`
+	Version    string    `json:"version"`
+	Patch      string    `json:"patch,omitempty"`
+	StartedAt  time.Time `json:"startedAt"`
+}

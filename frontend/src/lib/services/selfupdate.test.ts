@@ -6,6 +6,7 @@ const bindings = {
   DownloadUpdate: vi.fn(),
   ApplyUpdate: vi.fn(),
   DismissUpdate: vi.fn(),
+  CancelDownload: vi.fn(),
   GetOutcome: vi.fn(),
   GetReleaseNotes: vi.fn(),
   AcknowledgeReleaseNotes: vi.fn(),
@@ -105,6 +106,25 @@ describe('selfupdate service errors', () => {
     const err = await applyUpdate().catch((e) => e);
     expect(err).toBeInstanceOf(SelfUpdateError);
     expect(err.code).toBe('not_ready');
+  });
+
+  it('maps a call cancelled by another action to code canceled', async () => {
+    const { SelfUpdateError, checkForUpdate } = await import('./selfupdate');
+    bindings.CheckForUpdate.mockRejectedValueOnce(
+      new Error('fetch manifest: Get "https://x/launcher/manifest": context canceled'),
+    );
+
+    const err = await checkForUpdate().catch((e) => e);
+    expect(err).toBeInstanceOf(SelfUpdateError);
+    expect(err.code).toBe('canceled');
+  });
+
+  it('calls CancelDownload through the backend', async () => {
+    const { cancelDownload } = await import('./selfupdate');
+    bindings.CancelDownload.mockResolvedValueOnce(undefined);
+
+    await expect(cancelDownload()).resolves.toBeUndefined();
+    expect(bindings.CancelDownload).toHaveBeenCalledTimes(1);
   });
 
   it('does not swallow a DismissUpdate failure', async () => {

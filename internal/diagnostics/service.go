@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -13,6 +16,7 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/clientid"
+	"typhon/internal/settings"
 	"typhon/internal/usagestats"
 
 	"github.com/google/uuid"
@@ -30,9 +34,10 @@ const (
 )
 
 type Service struct {
-	identity clientid.Identity
-	client   *client
-	enabled  func() bool
+	identity   clientid.Identity
+	client     *client
+	enabled    func() bool
+	pendingDir string
 
 	maxQueue       int
 	ratePerMinute  int
@@ -56,6 +61,17 @@ type Service struct {
 }
 
 func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
+	dir, err := settings.ConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config dir: %w", err)
+	}
+	return newServiceAt(dir, id, enabled)
+}
+
+func newServiceAt(configDir string, id clientid.Identity, enabled func() bool) (*Service, error) {
+	if configDir == "" {
+		return nil, errors.New("diagnostics config dir is empty")
+	}
 	if enabled == nil {
 		return nil, errors.New("enabled callback is nil")
 	}
@@ -70,6 +86,7 @@ func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
 		identity:       id,
 		client:         cl,
 		enabled:        enabled,
+		pendingDir:     pendingDirFrom(configDir),
 		maxQueue:       defaultMaxQueue,
 		ratePerMinute:  defaultRatePerMinute,
 		rateWindow:     defaultRateWindow,
@@ -116,12 +133,19 @@ func (s *Service) ServiceShutdown() error {
 func (s *Service) SetEnabled(on bool) {
 	s.mu.Lock()
 	s.disabled = !on
+	dir := s.pendingDir
 	if !on {
 		s.queue = nil
 		s.seen = map[string]time.Time{}
 		s.rateCount = 0
 	}
 	s.mu.Unlock()
+
+	if !on {
+		if err := removePendingDir(dir); err != nil {
+			slog.Warn("diagnostics: remove pending dir on opt-out", "error", err)
+		}
+	}
 }
 
 // Capture builds a Report from an error and enqueues it for send. The
@@ -263,17 +287,54 @@ func (s *Service) loop(ctx context.Context) {
 
 func (s *Service) flush(ctx context.Context) {
 	s.mu.Lock()
-	if s.disabled || len(s.queue) == 0 {
+	if s.disabled {
 		s.mu.Unlock()
 		return
 	}
 	batch := s.queue
 	s.queue = nil
+	dir := s.pendingDir
 	s.mu.Unlock()
 
+	s.drainPending(ctx, dir)
+
+	if len(batch) == 0 {
+		return
+	}
 	if err := s.client.send(ctx, s.identity, batch); err != nil {
-		// Батч не возвращается в очередь: иначе при недоступном бэкенде
-		// очередь росла бы вечно и пережила бы последующий opt-out.
+		// Батч не возвращается в живую очередь: иначе при недоступном
+		// бэкенде очередь росла бы вечно и пережила бы последующий
+		// opt-out. Он спиливается на диск и подхватывается следующим
+		// flush через drainPending.
 		slog.Debug("diagnostics flush failed", "count", len(batch), "error", err)
+		if spillErr := savePending(dir, s.clock(), batch); spillErr != nil {
+			slog.Warn("diagnostics: spill failed batch to disk", "error", spillErr)
+		}
+	}
+}
+
+func (s *Service) drainPending(ctx context.Context, dir string) {
+	names, err := listPendingFiles(dir)
+	if err != nil {
+		slog.Warn("diagnostics: list pending files", "error", err)
+		return
+	}
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		batch, err := loadPending(path)
+		if err != nil {
+			slog.Warn("diagnostics: drop corrupt pending file", "path", name, "error", err)
+			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+				slog.Warn("diagnostics: remove corrupt pending file", "path", name, "error", rmErr)
+			}
+			continue
+		}
+		if err := s.client.send(ctx, s.identity, batch); err != nil {
+			slog.Debug("diagnostics: pending drain failed", "path", name, "error", err)
+			return
+		}
+		if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			slog.Warn("diagnostics: remove sent pending file", "path", name, "error", rmErr)
+		}
 	}
 }

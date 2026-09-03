@@ -28,7 +28,3 @@ func GetStorageInfo(path string) (StorageInfo, error) {
 		UsedBytes:  total - free,
 	}, nil
 }
-
-func GetSystemInfo() (SystemInfo, error) {
-	return baseSystemInfo(), nil
-}

@@ -138,6 +138,23 @@ jobs:
         shell: bash
         run: wails3 task build
 
+      - name: Verify the Windows binary carries no devmock code
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="bin/typhon.exe"
+          if [ ! -s "$exe" ]; then
+            echo "$exe is missing or empty" >&2
+            exit 1
+          fi
+          # The marker string exists only in files compiled with the devmock
+          # tag (internal/devmock/enabled_devmock.go); a release binary must
+          # not contain it.
+          if grep -c "TYPHON_DEVMOCK_ENABLED" "$exe" >/dev/null; then
+            echo "$exe contains the devmock marker; the release was built with the devmock tag" >&2
+            exit 1
+          fi
+
       - name: Package installer
         shell: bash
         run: wails3 task package

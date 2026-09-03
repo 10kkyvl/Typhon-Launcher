@@ -57,19 +57,21 @@ type engineTorrent interface {
 }
 
 type client struct {
-	cl      *torrent.Client
-	down    *rate.Limiter
-	up      *rate.Limiter
-	metaDir string
+	cl         *torrent.Client
+	down       *rate.Limiter
+	up         *rate.Limiter
+	metaDir    string
+	completion storage.PieceCompletion
 }
 
-func newClient(cfg settings.Settings, metaDir string) (*client, error) {
-	tc := clientConfig(cfg, metaDir, listenPort)
+func newClient(cfg settings.Settings, metaDir string, completion storage.PieceCompletion) (*client, error) {
+	wrapped := nonClosingCompletion{completion}
+	tc := clientConfig(cfg, metaDir, listenPort, wrapped)
 	cl, err := torrent.NewClient(tc)
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, metaDir, 0)
+		tc = clientConfig(cfg, metaDir, 0, wrapped)
 		cl, err = torrent.NewClient(tc)
 	}
 	if err != nil {
@@ -77,10 +79,10 @@ func newClient(cfg settings.Settings, metaDir string) (*client, error) {
 		return nil, err
 	}
 	slog.Info("torrent client started", "port", cl.LocalPort())
-	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
+	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir, completion: wrapped}, nil
 }
 
-func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.ClientConfig {
+func clientConfig(cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion) *torrent.ClientConfig {
 	tc := torrent.NewDefaultClientConfig()
 	tc.DataDir = dataDir
 	tc.ListenPort = port
@@ -88,7 +90,7 @@ func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.Clie
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)
-	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, storage.NewMapPieceCompletion())
+	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, completion)
 	return tc
 }
 
@@ -138,13 +140,13 @@ func (c *client) addMagnet(uri, destination string, opts storageOpts) (*liveTorr
 	return c.add(spec, destination, opts)
 }
 
-func newStorage(destination string, opts storageOpts) storage.ClientImplCloser {
+func newStorage(destination string, opts storageOpts, completion storage.PieceCompletion) storage.ClientImplCloser {
 	if !opts.flat && !opts.inPlace {
-		return storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+		return storage.NewFileWithCompletion(destination, completion)
 	}
 	clientOpts := storage.NewFileClientOpts{
 		ClientBaseDir:   destination,
-		PieceCompletion: storage.NewMapPieceCompletion(),
+		PieceCompletion: completion,
 	}
 	if opts.flat {
 		clientOpts.FilePathMaker = func(o storage.FilePathMakerOpts) string {
@@ -161,7 +163,7 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
-	st := newStorage(destination, opts)
+	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
 
 	t, _, err := c.cl.AddTorrentSpec(spec)

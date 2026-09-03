@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -50,18 +49,17 @@ func (s *Service) PlayGame(id string) error {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
 
-	cmd := exec.Command(game.Executable, game.LaunchArgs...)
-	cmd.Dir = workDir
-	if err := cmd.Start(); err != nil {
+	proc, err := s.start(game.Executable, game.LaunchArgs, workDir)
+	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		return fmt.Errorf("не удалось запустить игру: %w", err)
 	}
 
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
-	pid := uint32(cmd.Process.Pid)
+	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: cmd.Process, pid: pid, startedAt: startedAt, lastSeen: startedAt}
-	slog.Info("game started", "id", id, "title", game.Title, "pid", cmd.Process.Pid)
+	s.running[id] = &session{process: proc, pid: pid, startedAt: startedAt, lastSeen: startedAt}
+	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid())
 	for _, w := range s.watchers {
 		w.SessionStarted(*game)
 	}
@@ -77,7 +75,7 @@ func (s *Service) PlayGame(id string) error {
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
-		if waitErr := cmd.Wait(); waitErr != nil {
+		if waitErr := proc.wait(); waitErr != nil {
 			slog.Debug("game process exited", "id", id, "error", waitErr)
 		}
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
@@ -122,7 +120,7 @@ func (s *Service) StopGame(id string) error {
 		return errSessionNotRunning
 	}
 	if current.process != nil {
-		if err := current.process.Kill(); err != nil {
+		if err := current.process.kill(); err != nil {
 			return fmt.Errorf("остановить игру: %w", err)
 		}
 		return nil

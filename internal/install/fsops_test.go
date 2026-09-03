@@ -334,20 +334,21 @@ func TestCopyDirRecreatesSymlink(t *testing.T) {
 	}
 }
 
-func TestMergeDirRecreatesSymlinkOverExisting(t *testing.T) {
+func TestMergeDirWithBackupRecreatesSymlinkOverExisting(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "real.txt"), "alpha")
 	mkSymlink(t, filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt"))
 	dst := filepath.Join(tmp, "dst")
 	mkText(t, filepath.Join(dst, "link.txt"), "stale regular file")
+	backup := filepath.Join(tmp, "backup")
 
-	err := MergeDir(context.Background(), src, dst, nil)
+	err := MergeDirWithBackup(context.Background(), src, dst, backup, nil)
 	if errors.Is(err, errSymlinkPrivilege) {
 		t.Skipf("symlink creation requires a privilege this account lacks: %v", err)
 	}
 	if err != nil {
-		t.Fatalf("MergeDir: %v", err)
+		t.Fatalf("MergeDirWithBackup: %v", err)
 	}
 	info, lerr := os.Lstat(filepath.Join(dst, "link.txt"))
 	if lerr != nil {
@@ -355,6 +356,9 @@ func TestMergeDirRecreatesSymlinkOverExisting(t *testing.T) {
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("link.txt was not replaced by a symlink, mode = %v", info.Mode())
+	}
+	if data, err := os.ReadFile(filepath.Join(backup, "link.txt")); err != nil || string(data) != "stale regular file" {
+		t.Fatalf("backup of replaced link.txt = %q, err = %v", data, err)
 	}
 }
 
@@ -389,14 +393,15 @@ func TestCopyDirRejectsNonRegularNonSymlink(t *testing.T) {
 	}
 }
 
-func TestMergeDirRejectsNonRegularNonSymlink(t *testing.T) {
+func TestMergeDirWithBackupRejectsNonRegularNonSymlink(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	mkUnixSocket(t, filepath.Join(src, "weird.sock"))
 	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
 
-	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNonRegular) {
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); !errors.Is(err, errNonRegular) {
 		t.Fatalf("err = %v, want errNonRegular", err)
 	}
 }
@@ -426,13 +431,14 @@ func TestCopyDirRejectsSourceInsideDestination(t *testing.T) {
 	}
 }
 
-func TestMergeDirRejectsNestedPaths(t *testing.T) {
+func TestMergeDirWithBackupRejectsNestedPaths(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	dst := filepath.Join(src, "nested", "dst")
+	backup := filepath.Join(tmp, "backup")
 
-	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); !errors.Is(err, errNestedPaths) {
 		t.Fatalf("err = %v, want errNestedPaths", err)
 	}
 }
@@ -507,6 +513,125 @@ func TestCopyFileProducesReadableFileAfterSync(t *testing.T) {
 	}
 	if len(got) != 512*1024 {
 		t.Fatalf("copied size = %d, want %d", len(got), 512*1024)
+	}
+}
+
+func TestMergeDirWithBackupBacksUpReplacedAndRecordsAdded(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(src, "added.txt"), "brand new")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+	mkText(t, filepath.Join(dst, "untouched.txt"), "keep me")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "replaced.txt")); err != nil || string(data) != "new content" {
+		t.Fatalf("replaced.txt = %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "added.txt")); err != nil || string(data) != "brand new" {
+		t.Fatalf("added.txt = %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "untouched.txt")); err != nil || string(data) != "keep me" {
+		t.Fatalf("untouched.txt damaged: %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(backup, "replaced.txt")); err != nil || string(data) != "old content" {
+		t.Fatalf("backup of replaced.txt = %q, err = %v", data, err)
+	}
+	list, err := os.ReadFile(filepath.Join(backup, "added.list"))
+	if err != nil {
+		t.Fatalf("read added.list: %v", err)
+	}
+	if string(list) != "added.txt\n" {
+		t.Fatalf("added.list = %q", list)
+	}
+}
+
+func TestMergeDirWithBackupNeverRemovesWithoutBackup(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "a.txt"), "new")
+	mkText(t, filepath.Join(dst, "a.txt"), "old")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	// The only acceptable states at any point are: original file present,
+	// backup present, or the merged file present — never neither.
+	if _, err := os.Stat(filepath.Join(dst, "a.txt")); err != nil {
+		t.Fatal("a.txt missing from dst after merge")
+	}
+	if _, err := os.Stat(filepath.Join(backup, "a.txt")); err != nil {
+		t.Fatal("a.txt missing from backup after merge")
+	}
+}
+
+func TestRestoreMergeBackupUndoesCrashedMerge(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(src, "added.txt"), "brand new")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+	mkText(t, filepath.Join(dst, "untouched.txt"), "keep me")
+
+	original := map[string]string{
+		"replaced.txt":  "old content",
+		"untouched.txt": "keep me",
+	}
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	// Simulate a crash mid-merge: an unfinished .typhon-tmp left behind.
+	if err := os.WriteFile(filepath.Join(dst, "added.txt.typhon-tmp"), []byte("half written"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("RestoreMergeBackup: %v", err)
+	}
+	for name, want := range original {
+		if data, err := os.ReadFile(filepath.Join(dst, name)); err != nil || string(data) != want {
+			t.Fatalf("%s = %q, err = %v, want %q", name, data, err, want)
+		}
+	}
+	if exists(filepath.Join(dst, "added.txt")) {
+		t.Fatal("added.txt was not removed on restore")
+	}
+	if exists(filepath.Join(dst, "added.txt.typhon-tmp")) {
+		t.Fatal("leftover tmp file was not removed on restore")
+	}
+	if exists(backup) {
+		t.Fatal("backup directory must be gone after a full restore")
+	}
+}
+
+func TestRestoreMergeBackupIsIdempotent(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("first RestoreMergeBackup: %v", err)
+	}
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("second RestoreMergeBackup on an already-restored tree: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "replaced.txt")); err != nil || string(data) != "old content" {
+		t.Fatalf("replaced.txt = %q, err = %v", data, err)
 	}
 }
 

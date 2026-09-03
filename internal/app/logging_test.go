@@ -178,25 +178,6 @@ func TestRotatingWriter_FailingRenameReported(t *testing.T) {
 	if err := os.WriteFile(backup1, []byte("previous backup"), 0o644); err != nil {
 		t.Fatalf("seed backup: %v", err)
 	}
-	// Go opens files without FILE_SHARE_DELETE on Windows, so a held-open
-	// handle blocks any rename/remove targeting this exact path from
-	// elsewhere in the process, standing in for a locked file (AV scan,
-	// another process) without needing OS-specific syscalls.
-	locked, err := os.Open(backup1)
-	if err != nil {
-		t.Fatalf("lock backup: %v", err)
-	}
-	closeLock := func() {
-		if locked == nil {
-			return
-		}
-		if err := locked.Close(); err != nil {
-			t.Fatalf("close lock: %v", err)
-		}
-		locked = nil
-	}
-	defer closeLock()
-
 	w, err := newRotatingWriter(path, 5, 2)
 	if err != nil {
 		t.Fatalf("newRotatingWriter: %v", err)
@@ -210,11 +191,11 @@ func TestRotatingWriter_FailingRenameReported(t *testing.T) {
 	if _, err := w.Write([]byte("12")); err != nil {
 		t.Fatalf("write 1: %v", err)
 	}
-	_, err = w.Write([]byte("123456"))
-	if err == nil {
+	closeLock := blockRename(t, dir, backup1)
+	defer closeLock()
+	if _, err := w.Write([]byte("123456")); err == nil {
 		t.Fatal("expected rotation to fail while typhon.log.1 is locked")
-	}
-	if !strings.Contains(err.Error(), backup1) {
+	} else if !strings.Contains(err.Error(), backup1) {
 		t.Fatalf("expected error to mention %s, got: %v", backup1, err)
 	}
 
@@ -271,7 +252,7 @@ func TestInitLogging_OpenErrorSurfaced(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("not a directory"), 0o644); err != nil {
 		t.Fatalf("seed blocker file: %v", err)
 	}
-	t.Setenv("AppData", blocker)
+	t.Setenv(configDirEnv(), blocker)
 
 	origHandler := slog.Default()
 	defer slog.SetDefault(origHandler)

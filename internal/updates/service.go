@@ -46,6 +46,7 @@ const (
 	stagingDirName        = ".staging"
 	previousSuffix        = ".previous"
 	replacedSuffix        = ".replaced"
+	patchBackupSuffix     = ".patch-backup"
 	interruptedUpdateText = "обновление было прервано"
 )
 
@@ -106,6 +107,7 @@ type Service struct {
 	updates       map[string]*Update
 	verifications map[string]*VerifyState
 	rollbacks     map[string]*Rollback
+	journals      map[string]*SwapJournal
 	history       []UpdateHistory
 
 	jobs    map[string]*job
@@ -160,6 +162,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		updates:       map[string]*Update{},
 		verifications: map[string]*VerifyState{},
 		rollbacks:     map[string]*Rollback{},
+		journals:      map[string]*SwapJournal{},
 		jobs:          map[string]*job{},
 		waiters:       map[string]chan install.Installation{},
 	}, nil
@@ -213,6 +216,14 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return err
 	}
+	storedJournals, err := s.store.loadJournals()
+	if err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
 	for _, u := range storedUpdates {
 		item := u
 		if item.State == StateUpdating || item.State == StateDownloading {
@@ -235,6 +246,10 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		entry := r
 		s.rollbacks[entry.GameID] = &entry
 	}
+	for _, j := range storedJournals {
+		entry := j
+		s.journals[entry.GameID] = &entry
+	}
 	s.history = storedHistory
 	interrupted := make([]string, 0, len(s.updates))
 	for _, u := range s.updates {
@@ -243,6 +258,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 	}
 	s.mu.Unlock()
+
+	s.recoverJournals()
 
 	for _, gameID := range interrupted {
 		if game, ok := s.installedGame(gameID); ok {
@@ -326,6 +343,49 @@ func (s *Service) persistRollbacksLocked() {
 	if err := s.store.saveRollbacks(list); err != nil {
 		slog.Error("persist rollbacks", "error", err)
 	}
+}
+
+func (s *Service) persistJournalsLocked() error {
+	list := make([]SwapJournal, 0, len(s.journals))
+	for _, j := range s.journals {
+		list = append(list, *j)
+	}
+	return s.store.saveJournals(list)
+}
+
+// setJournal persists a swap journal before the caller's first destructive
+// filesystem step. A persist failure must not leave a journal in memory that
+// disk recovery cannot see, so it is rolled back on error (invariant I.4).
+func (s *Service) setJournal(j SwapJournal) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous, had := s.journals[j.GameID]
+	entry := j
+	s.journals[j.GameID] = &entry
+	if err := s.persistJournalsLocked(); err != nil {
+		if had {
+			s.journals[j.GameID] = previous
+		} else {
+			delete(s.journals, j.GameID)
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *Service) clearJournal(gameID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous, ok := s.journals[gameID]
+	if !ok {
+		return nil
+	}
+	delete(s.journals, gameID)
+	if err := s.persistJournalsLocked(); err != nil {
+		s.journals[gameID] = previous
+		return err
+	}
+	return nil
 }
 
 func sortUpdates(list []Update) {

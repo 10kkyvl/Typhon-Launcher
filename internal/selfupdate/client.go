@@ -16,7 +16,9 @@ import (
 
 var ErrManifestStatus = errors.New("selfupdate: manifest endpoint returned an error status")
 
-var httpTimeout = 30 * time.Second
+// The manifest is a few kilobytes: on a blocked network the user should
+// learn within seconds that the check failed, not after half a minute.
+var httpTimeout = 15 * time.Second
 
 type Client struct {
 	baseURL        string

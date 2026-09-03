@@ -114,7 +114,10 @@ func TestStartElevatedMissingFile(t *testing.T) {
 	go func() {
 		proc, err := startElevated(runSpec{Path: missing, Hidden: true})
 		if proc != nil {
-			if termErr := proc.terminate(); termErr != nil {
+			ep, ok := proc.(*elevatedProc)
+			if !ok {
+				t.Errorf("startElevated returned %T, want *elevatedProc", proc)
+			} else if termErr := ep.terminate(); termErr != nil {
 				t.Errorf("terminate error = %v", termErr)
 			}
 			proc.close()

@@ -17,12 +17,13 @@ func TestPlayGameTracksSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Session Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Session Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -51,14 +52,7 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	if err := os.MkdirAll(gameDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(gameDir, "game.exe")
-	data, err := os.ReadFile(`C:\Windows\System32\cmd.exe`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(exe, data, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	exe := testPlaceExecutable(t, filepath.Join(gameDir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
 	game, err := s.AddGame(exe, "Nested Game")
@@ -68,7 +62,7 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	s.mu.Lock()
 	stored := s.findLocked(game.ID)
 	stored.InstallDir = root
-	stored.LaunchArgs = []string{"/C", "cd > cwd.txt"}
+	stored.LaunchArgs = testPrintCwdArgs()
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -102,12 +96,13 @@ func TestSessionWatcherSeesStartAndStop(t *testing.T) {
 	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
 	s.AddSessionWatcher(watcher)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Watcher Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Watcher Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -160,12 +155,13 @@ func TestAddSessionWatcherMultipleWatchersNotified(t *testing.T) {
 	s.AddSessionWatcher(first)
 	s.AddSessionWatcher(second)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Multi Watcher")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Multi Watcher")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -326,12 +322,13 @@ func TestAddSessionWatcherRaceWithSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Race Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Race Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	tracker := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
@@ -397,13 +394,14 @@ func TestServiceShutdownWaitsForSessionCallbacks(t *testing.T) {
 func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Long Runner")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Long Runner")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
 	// ~3s child process that survives well past the assertion window below.
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 4 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(3)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -431,12 +429,13 @@ func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
 func TestPlayGameGoroutineSkipsPersistAfterShutdown(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Shutdown Race")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Shutdown Race")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 2 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(2)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -611,12 +610,13 @@ func TestFinishSessionPersistFailureRollsBackMemory(t *testing.T) {
 func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Killable")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Killable")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 20 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(20)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
