@@ -19,7 +19,7 @@
   } = $props();
 
   function initialDraft(): ProfileSettings {
-    return { ...settings, showcase: [...settings.showcase] };
+    return { ...settings, showcase: [...(settings.showcase ?? [])] };
   }
 
   let draft = $state<ProfileSettings>(initialDraft());
@@ -94,10 +94,20 @@
         <li class="showcase-row">
           <span class="row-label">{SHOWCASE_TITLES[kind]}</span>
           <span class="showcase-actions">
-            <IconButton label="Выше" size="sm" disabled={index === 0 || $isOffline} onclick={() => move(index, -1)}>
+            <IconButton
+              label={`Выше: ${SHOWCASE_TITLES[kind]}`}
+              size="sm"
+              disabled={index === 0 || $isOffline}
+              onclick={() => move(index, -1)}
+            >
               <ArrowUp size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton label="Ниже" size="sm" disabled={index === selected.length - 1 || $isOffline} onclick={() => move(index, 1)}>
+            <IconButton
+              label={`Ниже: ${SHOWCASE_TITLES[kind]}`}
+              size="sm"
+              disabled={index === selected.length - 1 || $isOffline}
+              onclick={() => move(index, 1)}
+            >
               <ArrowDown size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <Button size="sm" variant="ghost" disabled={$isOffline} onclick={() => remove(kind)}>Убрать</Button>

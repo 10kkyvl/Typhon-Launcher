@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -566,6 +567,38 @@ func TestRegisterAndLoginStoreTheSession(t *testing.T) {
 				t.Errorf("stored username = %q, want playerone", cred.Username)
 			}
 		})
+	}
+}
+
+func TestLoginWithoutProfileInReplyDefaultsSettings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != APIPrefix+"/auth/login" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, http.StatusOK, map[string]any{
+			"user": map[string]any{
+				"id":       "u1",
+				"username": "playerone",
+			},
+			"token":     "fresh-token",
+			"expiresAt": time.Now().Add(time.Hour),
+		})
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{}
+	s := startedService(t, store, srv.URL)
+	user, err := s.Login(LoginInput{Identifier: "playerone", Password: "password"})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	want := DefaultProfileSettings()
+	if !reflect.DeepEqual(user.Profile, want) {
+		t.Errorf("user profile = %+v, want defaults %+v", user.Profile, want)
+	}
+	if got := s.CurrentProfileSettings(); !reflect.DeepEqual(got, want) {
+		t.Errorf("CurrentProfileSettings() = %+v, want defaults %+v", got, want)
 	}
 }
 
