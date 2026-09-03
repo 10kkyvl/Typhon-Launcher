@@ -226,11 +226,15 @@ func (s *releaseServer) handleDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Accept-Ranges", "none")
-	if _, err := io.Copy(w, f); err != nil {
-		slog.Warn("devrelease: write download response", "error", err)
+	info, err := f.Stat()
+	if err != nil {
+		slog.Error("devrelease: stat artifact for download", "error", err)
+		http.Error(w, "artifact unavailable", http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
 func newMux(s *releaseServer) *http.ServeMux {

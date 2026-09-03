@@ -105,7 +105,7 @@ func replaceBinary(ctx context.Context, installerPath, installDir, target string
 		}
 	}()
 
-	written, sum, err := copyWithHash(ctx, out, in, art.Size, nil)
+	written, sum, err := copyWithHash(ctx, out, in, art.Size, 0, nil, nil)
 	if err != nil {
 		closeQuietly(out, tmp)
 		return err

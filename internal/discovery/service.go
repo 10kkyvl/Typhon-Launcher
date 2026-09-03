@@ -35,7 +35,7 @@ type gameLibrary interface {
 
 type gameCatalog interface {
 	Resolve(q catalog.Query) catalog.Match
-	Provision(queries []catalog.Query) map[string]catalog.Game
+	Provision(queries []catalog.Query) (map[string]catalog.Game, error)
 }
 
 type metadataResolver interface {

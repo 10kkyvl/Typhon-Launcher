@@ -17,6 +17,7 @@ const (
 	rollbackVersion  = 1
 	verifyVersion    = 1
 	manifestsVersion = 1
+	journalVersion   = 1
 
 	maxHistory = 200
 )
@@ -83,6 +84,14 @@ func (s *store) loadRollbacks() ([]Rollback, error) {
 
 func (s *store) saveRollbacks(list []Rollback) error {
 	return storage.Save(s.path("rollbacks.json"), rollbackVersion, list)
+}
+
+func (s *store) loadJournals() ([]SwapJournal, error) {
+	return load[SwapJournal](s.path("journal.json"), journalVersion, "journal")
+}
+
+func (s *store) saveJournals(list []SwapJournal) error {
+	return storage.Save(s.path("journal.json"), journalVersion, list)
 }
 
 func (s *store) loadVerifications() ([]VerifyState, error) {

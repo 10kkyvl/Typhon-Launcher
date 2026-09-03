@@ -487,9 +487,9 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		return Summary{}, err
 	}
 	if result.NotModified {
-		return s.settle(id, nil, result, started, initial, true), nil
+		return s.settle(id, nil, result, started, initial, true)
 	}
-	return s.settle(id, parseEntries(id, result.Feed.Entries, time.Now()), result, started, initial, false), nil
+	return s.settle(id, parseEntries(id, result.Feed.Entries, time.Now()), result, started, initial, false)
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
@@ -538,24 +538,32 @@ func retryDelay(failures int, interval time.Duration) time.Duration {
 	return delay
 }
 
-func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool) Summary {
+func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool) (Summary, error) {
 	now := time.Now()
 
 	s.mu.Lock()
 	src := s.findLocked(id)
 	if src == nil {
 		s.mu.Unlock()
-		return Summary{}
+		return Summary{}, errSourceNotFound
 	}
 	summary := Summary{SourceID: id, NotModified: notModified}
 	if !notModified {
-		list, mergeSummary := merge(s.releases[id], incoming, now, initial)
+		previous := s.releases[id]
+		list, mergeSummary := merge(previous, incoming, now, initial)
 		mergeSummary.SourceID = id
 		summary = mergeSummary
-		applyMatches(s.catalog, list)
+		if err := applyMatches(s.catalog, list); err != nil {
+			s.mu.Unlock()
+			s.fail(id, err, false)
+			return Summary{SourceID: id, Error: err.Error()}, err
+		}
 		s.releases[id] = list
 		if err := s.store.saveReleases(id, list); err != nil {
-			slog.Error("save releases", "source_id", id, "error", err)
+			s.releases[id] = previous
+			s.mu.Unlock()
+			s.fail(id, err, false)
+			return Summary{SourceID: id, Error: err.Error()}, err
 		}
 		if result.Feed.Name != "" {
 			src.Name = result.Feed.Name
@@ -633,7 +641,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	if summary.Added > 0 || summary.Updated > 0 || summary.Restored > 0 {
 		s.notifyChanged()
 	}
-	return summary
+	return summary, nil
 }
 
 //wails:ignore

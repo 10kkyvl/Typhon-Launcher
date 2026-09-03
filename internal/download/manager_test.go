@@ -235,6 +235,16 @@ func mustManagerAt(t testing.TB, dir string) *Manager {
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	t.Cleanup(func() {
+		// ServiceShutdown already closed it in tests that call it themselves
+		// and nils the field, so this only fires for tests that never start
+		// the manager.
+		if m.pieceCompletion != nil {
+			if err := m.pieceCompletion.Close(); err != nil {
+				t.Logf("close piece completion: %v", err)
+			}
+		}
+	})
 	withTestContext(t, m)
 	return m
 }
@@ -771,6 +781,14 @@ func TestPersistedStateReloads(t *testing.T) {
 	m := newTestManager(t, 2)
 	m.addTestDownload("a")
 	m.addTestDownload("b")
+
+	// Close m's piece completion before opening a second manager on the same
+	// dir: two live instances writing the same file concurrently is not a
+	// supported access pattern, on top of racing the test's own assertions.
+	if err := m.pieceCompletion.Close(); err != nil {
+		t.Fatalf("close piece completion: %v", err)
+	}
+	m.pieceCompletion = nil
 
 	reloaded := mustManagerAt(t, m.store.dir)
 	reloaded.mu.Lock()

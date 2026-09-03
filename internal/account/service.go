@@ -212,10 +212,6 @@ func (s *Service) signedOutState() State {
 }
 
 func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
-	if err := s.setGuest(false); err != nil {
-		return CurrentUser{}, err
-	}
-
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -226,14 +222,13 @@ func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	if err != nil {
 		return CurrentUser{}, err
 	}
+	if err := s.setGuest(false); err != nil {
+		return CurrentUser{}, err
+	}
 	return s.adopt(ctx, session)
 }
 
 func (s *Service) Login(input LoginInput) (CurrentUser, error) {
-	if err := s.setGuest(false); err != nil {
-		return CurrentUser{}, err
-	}
-
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -242,6 +237,9 @@ func (s *Service) Login(input LoginInput) (CurrentUser, error) {
 
 	session, err := s.client.Login(ctx, input)
 	if err != nil {
+		return CurrentUser{}, err
+	}
+	if err := s.setGuest(false); err != nil {
 		return CurrentUser{}, err
 	}
 	return s.adopt(ctx, session)

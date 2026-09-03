@@ -27,6 +27,7 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -41,6 +42,10 @@ const (
 	tickInterval    = 250 * time.Millisecond
 	persistInterval = 5 * time.Second
 )
+
+// stallAfter is a var so tests can shrink the grace period instead of
+// sleeping for it.
+var stallAfter = 2 * time.Minute
 
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
@@ -68,10 +73,11 @@ type jobState struct {
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	settings *settings.Service
-	store    *store
-	metaDir  string
+	mu              sync.Mutex
+	settings        *settings.Service
+	store           *store
+	metaDir         string
+	pieceCompletion storage.PieceCompletion
 
 	items   []*Download
 	engines map[string]engineTorrent
@@ -114,6 +120,11 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		jobs:     map[string]*jobState{},
 	}
 	m.metaDir = filepath.Join(dir, "meta")
+	completion, err := openPieceCompletion(m.metaDir)
+	if err != nil {
+		return nil, err
+	}
+	m.pieceCompletion = completion
 	m.max = maxActive(m.config())
 	return m, nil
 }
@@ -147,7 +158,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return err
 	}
-	cl, err := newClient(cfg, m.metaDir)
+	cl, err := newClient(cfg, m.metaDir, m.pieceCompletion)
 	if err != nil {
 		slog.Error("start torrent client", "error", err)
 	} else {
@@ -188,10 +199,17 @@ func (m *Manager) ServiceShutdown() error {
 	m.persistLocked()
 	cl := m.client
 	m.client = nil
+	pc := m.pieceCompletion
+	m.pieceCompletion = nil
 	m.mu.Unlock()
 
 	if cl != nil {
 		cl.close()
+	}
+	if pc != nil {
+		if err := pc.Close(); err != nil {
+			slog.Error("close piece completion db", "error", err)
+		}
 	}
 	return nil
 }
@@ -913,6 +931,8 @@ func (m *Manager) startLocked(d *Download) bool {
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
+	d.Stalled = false
+	d.StalledSince = nil
 	m.rates[d.ID] = newRateState()
 	slog.Info("download started", "download_id", d.ID, "name", d.Name)
 	emit(eventUpdated, snapshot(d))
@@ -932,6 +952,8 @@ func (m *Manager) idleLocked(d *Download, status Status) {
 	d.DownloadSpeed = 0
 	d.UploadSpeed = 0
 	d.ETASeconds = -1
+	d.Stalled = false
+	d.StalledSince = nil
 	delete(m.rates, d.ID)
 }
 
@@ -1089,6 +1111,24 @@ func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
 	d.Peers = st.peers
 	d.Progress = ratio(done, d.Total)
 	d.ETASeconds = etaSeconds(d.Total-done, d.DownloadSpeed)
+
+	updateStallLocked(d, r, done, now)
+}
+
+func updateStallLocked(d *Download, r *rateState, done int64, now time.Time) {
+	if r.lastChange.IsZero() || done > r.lastDownloaded {
+		r.lastDownloaded = done
+		r.lastChange = now
+		d.Stalled = false
+		d.StalledSince = nil
+		return
+	}
+	if d.Status != StatusDownloading || d.Stalled || now.Sub(r.lastChange) < stallAfter {
+		return
+	}
+	since := r.lastChange
+	d.Stalled = true
+	d.StalledSince = &since
 }
 
 func (m *Manager) completeLocked(d *Download) {
@@ -1161,7 +1201,8 @@ func differs(a, b *Download) bool {
 		a.UploadSpeed != b.UploadSpeed ||
 		a.Seeders != b.Seeders ||
 		a.Peers != b.Peers ||
-		a.Progress != b.Progress
+		a.Progress != b.Progress ||
+		a.Stalled != b.Stalled
 }
 
 func (m *Manager) applySettings(next settings.Settings) {

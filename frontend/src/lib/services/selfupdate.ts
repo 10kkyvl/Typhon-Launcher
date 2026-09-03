@@ -68,6 +68,7 @@ export class SelfUpdateError extends Error {
 function toSelfUpdateError(err: unknown): SelfUpdateError {
   if (err instanceof SelfUpdateError) return err;
   const raw = err instanceof Error ? err.message : String(err);
+  if (raw.includes('context canceled')) return new SelfUpdateError(raw, 'canceled');
   return new SelfUpdateError(raw);
 }
 
@@ -118,6 +119,15 @@ export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
     await SelfUpdateService.ApplyUpdate();
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function cancelDownload(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.CancelDownload();
   } catch (err) {
     throw toSelfUpdateError(err);
   }
