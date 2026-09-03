@@ -27,3 +27,20 @@ export function friendRequestNotification(count: number): Notification | null {
     terminal: false,
   };
 }
+
+const FRIEND_CODE = /^(ty-?)?[a-z0-9]{4}-?[a-z0-9]{4}$/i;
+
+export function isFriendCode(input: string): boolean {
+  return FRIEND_CODE.test(input.trim());
+}
+
+function count(n: number, adjective: [string, string, string], noun: [string, string, string]): string {
+  return `${n} ${plural(n, ...adjective)} ${plural(n, ...noun)}`;
+}
+
+export function commonLine(mutual: number, games: number): string {
+  const parts: string[] = [];
+  if (mutual > 0) parts.push(count(mutual, ['общий', 'общих', 'общих'], ['друг', 'друга', 'друзей']));
+  if (games > 0) parts.push(count(games, ['общая', 'общие', 'общих'], ['игра', 'игры', 'игр']));
+  return parts.join(' · ');
+}
