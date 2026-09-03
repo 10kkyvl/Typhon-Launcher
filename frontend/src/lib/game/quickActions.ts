@@ -1,10 +1,11 @@
+import { statusLabel } from './status';
+
 export type QuickAction =
   | 'play'
   | 'stop'
   | 'favorite-add'
   | 'favorite-remove'
-  | 'completed-set'
-  | 'completed-unset'
+  | 'status'
   | 'folder'
   | 'saves'
   | 'verify'
@@ -31,7 +32,7 @@ export interface QuickActionState {
   lanEnabled: boolean;
   lanShared: boolean;
   favorite: boolean;
-  completed: boolean;
+  status: string;
 }
 
 function markItems(state: QuickActionState): QuickActionItem[] {
@@ -39,9 +40,7 @@ function markItems(state: QuickActionState): QuickActionItem[] {
     state.favorite
       ? { id: 'favorite-remove', label: 'Убрать из любимых' }
       : { id: 'favorite-add', label: 'В любимые' },
-    state.completed
-      ? { id: 'completed-unset', label: 'Снять отметку «Пройдена»' }
-      : { id: 'completed-set', label: 'Отметить пройденной' },
+    { id: 'status', label: `Статус: ${statusLabel(state.status)}` },
   ];
 }
 
