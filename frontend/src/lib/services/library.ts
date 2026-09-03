@@ -21,6 +21,9 @@ export interface LibraryGame {
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;
+  favorite?: boolean;
+  completed?: boolean;
+  completedAt?: string | null;
 }
 
 export interface SavesResult {
@@ -74,6 +77,22 @@ export async function createShortcut(id: string): Promise<void> {
 export async function removeShortcut(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await LibraryService.RemoveShortcut(id);
+}
+
+export async function setFavorite(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;
+}
+
+export async function setCompleted(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetCompleted(id, on)) as unknown as LibraryGame;
+}
+
+export function markError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  if (raw.includes('favorites limit reached')) return 'Не больше 6 любимых игр';
+  return fallback;
 }
 
 export async function locateSaves(id: string): Promise<SavesResult> {
