@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { BookmarkPlus, ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
+  import {
+    BookmarkPlus,
+    ChevronRight,
+    Download,
+    EllipsisVertical,
+    FolderOpen,
+    Heart,
+    Play,
+    Square,
+  } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -45,7 +54,16 @@
     type DownloadOrigin,
     type DownloadStatus,
   } from '../../lib/services/downloads';
-  import { addCatalogGame, createShortcut, playGame, removeShortcut, stopGame } from '../../lib/services/library';
+  import {
+    addCatalogGame,
+    createShortcut,
+    markError,
+    playGame,
+    removeShortcut,
+    setCompleted,
+    setFavorite,
+    stopGame,
+  } from '../../lib/services/library';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -341,6 +359,13 @@
   const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
 
   const menuItems = $derived([
+    ...(localGame
+      ? [
+          localGame.completed
+            ? { id: 'completed-unset', label: 'Снять отметку «Пройдена»' }
+            : { id: 'completed-set', label: 'Отметить пройденной' },
+        ]
+      : []),
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
@@ -394,7 +419,25 @@
       createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
       removeDesktopShortcut();
+    } else if (actionId === 'completed-set' || actionId === 'completed-unset') {
+      const current = localGame;
+      if (!current) return;
+      void mark(() => setCompleted(current.id, actionId === 'completed-set'), 'Не удалось изменить отметку');
     }
+  }
+
+  async function mark(fn: () => Promise<unknown>, fallback: string) {
+    try {
+      await fn();
+    } catch (err) {
+      toast(markError(err, fallback), 'danger');
+    }
+  }
+
+  function toggleFavorite() {
+    const current = localGame;
+    if (!current) return;
+    void mark(() => setFavorite(current.id, !current.favorite), 'Не удалось изменить любимые');
   }
 
   async function createDesktopShortcut() {
@@ -702,6 +745,16 @@
               <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
               Добавить в библиотеку
             </Button>
+          {/if}
+
+          {#if localGame}
+            <IconButton
+              label={localGame.favorite ? 'Убрать из любимых' : 'В любимые'}
+              active={Boolean(localGame.favorite)}
+              onclick={toggleFavorite}
+            >
+              <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+            </IconButton>
           {/if}
 
           {#if menuItems.length > 0}

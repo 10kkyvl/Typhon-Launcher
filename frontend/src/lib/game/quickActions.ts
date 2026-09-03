@@ -1,6 +1,10 @@
 export type QuickAction =
   | 'play'
   | 'stop'
+  | 'favorite-add'
+  | 'favorite-remove'
+  | 'completed-set'
+  | 'completed-unset'
   | 'folder'
   | 'saves'
   | 'verify'
@@ -26,18 +30,32 @@ export interface QuickActionState {
   hasShortcut: boolean;
   lanEnabled: boolean;
   lanShared: boolean;
+  favorite: boolean;
+  completed: boolean;
+}
+
+function markItems(state: QuickActionState): QuickActionItem[] {
+  return [
+    state.favorite
+      ? { id: 'favorite-remove', label: 'Убрать из любимых' }
+      : { id: 'favorite-add', label: 'В любимые' },
+    state.completed
+      ? { id: 'completed-unset', label: 'Снять отметку «Пройдена»' }
+      : { id: 'completed-set', label: 'Отметить пройденной' },
+  ];
 }
 
 export function quickActions(state: QuickActionState): QuickActionItem[] {
   const items: QuickActionItem[] = [];
   if (!state.installed) {
-    return [{ id: 'remove', label: 'Удалить из библиотеки', danger: true }];
+    return [...markItems(state), { id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: true }];
   }
   if (state.running) {
     items.push({ id: 'stop', label: 'Остановить' });
   } else if (state.hasExecutable) {
     items.push({ id: 'play', label: 'Играть' });
   }
+  items.push(...markItems(state));
   items.push({ id: 'folder', label: 'Открыть папку' });
   items.push({ id: 'saves', label: 'Открыть сохранения' });
   items.push({ id: 'verify', label: 'Проверить файлы' });

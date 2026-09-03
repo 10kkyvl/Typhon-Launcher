@@ -8,6 +8,8 @@ const state = (over: Partial<QuickActionState> = {}): QuickActionState => ({
   hasShortcut: false,
   lanEnabled: false,
   lanShared: false,
+  favorite: false,
+  completed: false,
   ...over,
 });
 
@@ -18,6 +20,8 @@ describe('quickActions', () => {
   it('offers the full set for an installed game', () => {
     expect(ids()).toEqual([
       'play',
+      'favorite-add',
+      'completed-set',
       'folder',
       'saves',
       'verify',
@@ -43,8 +47,14 @@ describe('quickActions', () => {
     expect(ids({ hasShortcut: true })).not.toContain('shortcut-create');
   });
 
-  it('leaves only library removal for a game that is not installed', () => {
-    expect(ids({ installed: false })).toEqual(['remove']);
+  it('keeps marks and library removal for a game that is not installed', () => {
+    expect(ids({ installed: false })).toEqual(['favorite-add', 'completed-set', 'remove']);
+  });
+
+  it('flips the mark items once set', () => {
+    expect(ids({ favorite: true, completed: true })).toContain('favorite-remove');
+    expect(ids({ favorite: true, completed: true })).toContain('completed-unset');
+    expect(ids({ favorite: true })).not.toContain('favorite-add');
   });
 
   it('marks both removals as dangerous', () => {
@@ -69,7 +79,7 @@ describe('quickActions', () => {
     expect(shown).not.toContain('lan-share');
   });
 
-  it('offers nothing but removal for a game that is not installed', () => {
-    expect(ids({ installed: false, lanEnabled: true })).toEqual(['remove']);
+  it('ignores lan sharing for a game that is not installed', () => {
+    expect(ids({ installed: false, lanEnabled: true })).toEqual(['favorite-add', 'completed-set', 'remove']);
   });
 });

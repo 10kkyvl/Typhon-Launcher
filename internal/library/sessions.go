@@ -178,13 +178,22 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 	for _, w := range s.watchers {
 		w.SessionStopped(id)
 	}
-	seconds := int64(s.now().Sub(startedAt).Seconds())
+	endedAt := s.now()
+	seconds := int64(endedAt.Sub(startedAt).Seconds())
 	if s.onSession != nil {
 		notify := s.onSession
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			notify(id, seconds)
+		}()
+	}
+	if s.playRecord != nil {
+		record := s.playRecord
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			record(id, startedAt, endedAt)
 		}()
 	}
 	game := s.findLocked(id)

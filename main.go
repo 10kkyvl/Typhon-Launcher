@@ -28,7 +28,9 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/playlog"
 	"typhon/internal/presence"
+	"typhon/internal/profile"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
 	"typhon/internal/search"
@@ -115,6 +117,7 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
+	application.RegisterEvent[playlog.Session]("playlog:recorded")
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -219,6 +222,10 @@ func main() {
 	if err != nil {
 		fatal("start library service", err)
 	}
+	playlogService, err := playlog.NewService()
+	if err != nil {
+		fatal("start playlog service", err)
+	}
 	downloadManager, err := download.NewManager(settingsService)
 	if err != nil {
 		fatal("start download manager", err)
@@ -308,6 +315,10 @@ func main() {
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
+	libraryService.SetPlayRecorder(playlogService.Record)
+	profileService := profile.NewService(libraryService, playlogService, func() []string {
+		return accountService.CurrentProfileSettings().Showcase
+	})
 	libraryService.AddSessionWatcher(presenceWatcher)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
@@ -370,6 +381,7 @@ func main() {
 		application.NewService(accountSyncService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
+		application.NewService(profileService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
 		application.NewService(catalogService),

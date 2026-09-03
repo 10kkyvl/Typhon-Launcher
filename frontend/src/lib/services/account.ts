@@ -1,12 +1,32 @@
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
 import { inWails } from './backend';
 
+export const SHOWCASE_KINDS = ['favorites', 'recently_completed', 'most_played'] as const;
+export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
+
+export interface ProfileSettings {
+  showStats: boolean;
+  showPlaying: boolean;
+  showActivity: boolean;
+  showOnline: boolean;
+  showcase: ShowcaseKind[];
+}
+
+export const DEFAULT_PROFILE: ProfileSettings = {
+  showStats: true,
+  showPlaying: true,
+  showActivity: true,
+  showOnline: true,
+  showcase: ['favorites'],
+};
+
 export interface CurrentUser {
   id: string;
   username: string;
   displayName: string;
   email: string;
   avatarUrl: string;
+  profile: ProfileSettings;
   createdAt: string;
 }
 
@@ -18,6 +38,7 @@ export interface AvatarImage {
 export interface ProfilePatch {
   username?: string;
   displayName?: string;
+  profile?: ProfileSettings;
 }
 
 export interface RegisterInput {
@@ -55,6 +76,7 @@ const KNOWN_CODES = new Set([
   'avatar_too_large',
   'unsupported_avatar',
   'invalid_avatar',
+  'invalid_profile',
   'rate_limited',
   'bad_request',
   'request_blocked',
@@ -74,6 +96,7 @@ const CODE_FIELDS: Record<string, string> = {
   avatar_too_large: 'avatar',
   unsupported_avatar: 'avatar',
   invalid_avatar: 'avatar',
+  invalid_profile: 'profile',
 };
 
 export class AccountError extends Error {
@@ -112,7 +135,7 @@ export async function bootstrapSession(): Promise<BootstrapState> {
 }
 
 function emptyUser(): CurrentUser {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', profile: DEFAULT_PROFILE, createdAt: '' };
 }
 
 export async function continueAsGuest(): Promise<void> {

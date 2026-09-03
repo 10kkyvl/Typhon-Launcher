@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -208,7 +209,7 @@ func TestClientUndecodableSuccessBody(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for undecodable body, got user %+v", user)
 	}
-	if user != (CurrentUser{}) {
+	if !reflect.DeepEqual(user, CurrentUser{}) {
 		t.Fatalf("expected zero user on error, got %+v", user)
 	}
 }

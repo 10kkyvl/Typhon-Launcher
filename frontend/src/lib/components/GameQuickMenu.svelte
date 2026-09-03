@@ -7,8 +7,11 @@
   import {
     createShortcut,
     locateSaves,
+    markError,
     playGame,
     removeShortcut,
+    setCompleted,
+    setFavorite,
     setSavesDir,
     stopGame,
     type LibraryGame,
@@ -37,6 +40,8 @@
           hasShortcut: Boolean(game.shortcutPath),
           lanEnabled: Boolean($settings?.lanSharing),
           lanShared: $shares.some((s) => s.gameId === game.id),
+          favorite: Boolean(game.favorite),
+          completed: Boolean(game.completed),
         })
       : [],
   );
@@ -54,6 +59,12 @@
         return guard(() => playGame(current.id));
       case 'stop':
         return guard(() => stopGame(current.id));
+      case 'favorite-add':
+      case 'favorite-remove':
+        return mark(() => setFavorite(current.id, action === 'favorite-add'), 'Не удалось изменить любимые');
+      case 'completed-set':
+      case 'completed-unset':
+        return mark(() => setCompleted(current.id, action === 'completed-set'), 'Не удалось изменить отметку');
       case 'folder':
         return guard(() => openFolder(current.installDir));
       case 'saves':
@@ -87,6 +98,14 @@
       await action();
     } catch (err) {
       toast(errorMessage(err), 'danger');
+    }
+  }
+
+  async function mark(fn: () => Promise<unknown>, fallback: string) {
+    try {
+      await fn();
+    } catch (err) {
+      toast(markError(err, fallback), 'danger');
     }
   }
 

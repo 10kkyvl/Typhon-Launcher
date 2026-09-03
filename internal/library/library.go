@@ -52,6 +52,9 @@ type Game struct {
 	Uninstalled       bool       `json:"uninstalled,omitempty"`
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 	SavesDir          string     `json:"savesDir,omitempty"`
+	Favorite          bool       `json:"favorite,omitempty"`
+	Completed         bool       `json:"completed,omitempty"`
+	CompletedAt       *time.Time `json:"completedAt,omitempty"`
 }
 
 type Uninstall struct {
@@ -103,6 +106,10 @@ var (
 	errEmptyCatalogTitle    = errors.New("не указано название игры")
 )
 
+const MaxFavorites = 6
+
+var ErrTooManyFavorites = errors.New("favorites limit reached")
+
 type Service struct {
 	mu            sync.Mutex
 	path          string
@@ -111,6 +118,7 @@ type Service struct {
 	excluded      []string
 	running       map[string]*session
 	onSession     func(gameID string, seconds int64)
+	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
@@ -439,6 +447,13 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 }
 
 //wails:ignore
+func (s *Service) SetPlayRecorder(fn func(gameID string, startedAt, endedAt time.Time)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playRecord = fn
+}
+
+//wails:ignore
 func (s *Service) AddSessionWatcher(w SessionWatcher) {
 	if w == nil {
 		return
@@ -594,6 +609,62 @@ func (s *Service) MarkUninstalled(id string) error {
 		return nil
 	}
 	return errNotFound
+}
+
+func (s *Service) SetFavorite(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if game.Favorite == on {
+		return *game, nil
+	}
+	if on && s.favoriteCountLocked() >= MaxFavorites {
+		return Game{}, ErrTooManyFavorites
+	}
+	previous := *game
+	game.Favorite = on
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) SetCompleted(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	previous := *game
+	game.Completed = on
+	if on {
+		now := s.now()
+		game.CompletedAt = &now
+	} else {
+		game.CompletedAt = nil
+	}
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) favoriteCountLocked() int {
+	count := 0
+	for i := range s.games {
+		if s.games[i].Favorite {
+			count++
+		}
+	}
+	return count
 }
 
 //wails:ignore

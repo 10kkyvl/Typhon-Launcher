@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
+import type { ProfileSettings } from '../services/account';
 
 vi.mock('../services/account', () => {
   class AccountError extends Error {
@@ -27,6 +28,14 @@ vi.mock('../services/account', () => {
   };
 });
 
+const DEFAULT_PROFILE: ProfileSettings = {
+  showStats: true,
+  showPlaying: true,
+  showActivity: true,
+  showOnline: true,
+  showcase: ['favorites'],
+};
+
 function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'u1',
@@ -34,13 +43,14 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
     displayName: 'Egor',
     email: 'egor@example.com',
     avatarUrl: '',
+    profile: DEFAULT_PROFILE,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
   };
 }
 
 function emptyUser() {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', profile: DEFAULT_PROFILE, createdAt: '' };
 }
 
 async function loadModules() {
