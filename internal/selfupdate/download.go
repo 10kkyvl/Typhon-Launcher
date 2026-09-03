@@ -291,12 +291,23 @@ func (c *Client) download(ctx context.Context, art Artifact, destDir string, onP
 		}
 		return "", resumed, err
 	}
-	if written != art.Size {
+	// Windows refuses to delete an open file, so the partial is closed
+	// before it is discarded.
+	discard := func() {
+		if !closed {
+			closed = true
+			if cerr := f.Close(); cerr != nil {
+				slog.Warn("close partial artifact", "path", partialPath, "error", cerr)
+			}
+		}
 		removePartial(partialPath)
+	}
+	if written != art.Size {
+		discard()
 		return "", resumed, ErrSizeMismatch
 	}
 	if sum != art.SHA256 {
-		removePartial(partialPath)
+		discard()
 		return "", resumed, ErrHashMismatch
 	}
 
