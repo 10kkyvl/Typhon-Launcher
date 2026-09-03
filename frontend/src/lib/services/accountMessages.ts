@@ -14,6 +14,7 @@ const MESSAGES: Record<string, string> = {
   avatar_too_large: 'Файл больше 10 МБ',
   unsupported_avatar: 'Поддерживаются PNG, JPEG и WebP',
   invalid_avatar: 'Не удалось прочитать изображение',
+  invalid_profile: 'Некорректные настройки профиля',
   unauthenticated: 'Сессия истекла, войдите заново',
   network_error: 'Нет связи с сервером',
   rate_limited: 'Слишком много попыток, подождите немного и повторите',
