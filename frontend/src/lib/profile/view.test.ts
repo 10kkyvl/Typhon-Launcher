@@ -52,6 +52,11 @@ describe('monthLine', () => {
       monthLine({ games: 0, hours: 0, completed: 0, playing: 0, monthSeconds: 0, monthGames: 1, monthCompleted: 1 })
     ).toBe('1 игра · 1 пройдена');
   });
+  it('omits the games part when no game was played this month', () => {
+    expect(
+      monthLine({ games: 0, hours: 0, completed: 0, playing: 0, monthSeconds: 0, monthGames: 0, monthCompleted: 2 })
+    ).toBe('2 пройдено');
+  });
   it('keeps a zero completion count', () => {
     expect(
       monthLine({

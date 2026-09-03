@@ -25,6 +25,7 @@ export interface LibraryGame {
   shortcutPath?: string;
   savesDir?: string;
   favorite?: boolean;
+  favoriteAt?: string | null;
   status?: string;
   statusAt?: string | null;
 }
