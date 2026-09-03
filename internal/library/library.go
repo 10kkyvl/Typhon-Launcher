@@ -52,6 +52,9 @@ type Game struct {
 	Uninstalled       bool       `json:"uninstalled,omitempty"`
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 	SavesDir          string     `json:"savesDir,omitempty"`
+	Favorite          bool       `json:"favorite,omitempty"`
+	Completed         bool       `json:"completed,omitempty"`
+	CompletedAt       *time.Time `json:"completedAt,omitempty"`
 }
 
 type Uninstall struct {
@@ -102,6 +105,10 @@ var (
 	errEmptyCanonicalGameID = errors.New("не указан идентификатор игры каталога")
 	errEmptyCatalogTitle    = errors.New("не указано название игры")
 )
+
+const MaxFavorites = 6
+
+var ErrTooManyFavorites = errors.New("favorites limit reached")
 
 type Service struct {
 	mu            sync.Mutex
@@ -594,6 +601,59 @@ func (s *Service) MarkUninstalled(id string) error {
 		return nil
 	}
 	return errNotFound
+}
+
+func (s *Service) SetFavorite(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if on && !game.Favorite && s.favoriteCountLocked() >= MaxFavorites {
+		return Game{}, ErrTooManyFavorites
+	}
+	previous := *game
+	game.Favorite = on
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) SetCompleted(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	previous := *game
+	game.Completed = on
+	if on {
+		now := s.now()
+		game.CompletedAt = &now
+	} else {
+		game.CompletedAt = nil
+	}
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) favoriteCountLocked() int {
+	count := 0
+	for i := range s.games {
+		if s.games[i].Favorite {
+			count++
+		}
+	}
+	return count
 }
 
 //wails:ignore
