@@ -9,6 +9,8 @@ export type RouteName =
   | 'installed'
   | 'history'
   | 'lan'
+  | 'friends'
+  | 'user'
   | 'profile'
   | 'settings';
 

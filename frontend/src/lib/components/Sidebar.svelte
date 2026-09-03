@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Wifi } from '@lucide/svelte';
+  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
+  import { incomingCount } from '../stores/social';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
+  import Avatar from './Avatar.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
@@ -18,6 +20,7 @@
     [
       { name: 'downloads', label: 'Загрузки', icon: Download },
       { name: 'sources', label: 'Источники', icon: Database },
+      { name: 'friends', label: 'Друзья', icon: Users },
       { name: 'history', label: 'История', icon: History },
     ],
   ];
@@ -26,21 +29,14 @@
 
   const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
 
-  let avatarFailed = $state(false);
-
   const isActive = (name: RouteName) =>
-    $route.name === name || (name === 'library' && $route.name === 'game');
+    $route.name === name ||
+    (name === 'library' && $route.name === 'game') ||
+    (name === 'friends' && $route.name === 'user');
 
   const isGuest = $derived($authState === 'guest');
 
-  const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : isGuest ? 'Г' : '?',
-  );
-
-  $effect(() => {
-    $currentUser?.avatarUrl;
-    avatarFailed = false;
-  });
+  const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? 'Гость' : '');
 
   const profileMenu = $derived(
     isGuest
@@ -78,6 +74,9 @@
     <span class="indicator"></span>
     <item.icon size="2rem" strokeWidth={1.8} />
     <span class="nav-label">{item.label}</span>
+    {#if item.name === 'friends' && $incomingCount > 0}
+      <span class="count">{$incomingCount}</span>
+    {/if}
   </button>
 {/snippet}
 
@@ -113,14 +112,12 @@
           onclick={toggle}
         >
           <span class="avatar">
-            {#if avatarFailed || !$currentUser?.avatarUrl}
-              <span class="avatar-fallback">{avatarInitial}</span>
-            {:else}
-              <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-            {/if}
-            {#if $currentUser}
-              <span class="status-dot"></span>
-            {/if}
+            <Avatar
+              size="sm"
+              name={avatarName}
+              src={$currentUser?.avatarUrl}
+              status={$currentUser ? 'online' : undefined}
+            />
           </span>
           <span class="profile-text">
             {#if $currentUser}
@@ -245,6 +242,19 @@
     white-space: nowrap;
   }
 
+  .count {
+    margin-left: auto;
+    min-width: 1.8rem;
+    padding: 0 0.5rem;
+    border-radius: 0.9rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    line-height: 1.8rem;
+    text-align: center;
+  }
+
   .bottom {
     margin-top: auto;
     display: flex;
@@ -275,41 +285,9 @@
   }
 
   .avatar {
-    position: relative;
-    width: 3.2rem;
-    height: 3.2rem;
+    display: block;
     flex-shrink: 0;
-  }
-
-  .avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .avatar-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    font-weight: 600;
-  }
-
-  .status-dot {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 0.9rem;
-    height: 0.9rem;
-    border-radius: 50%;
-    background: var(--success);
-    border: 2px solid var(--bg-sidebar);
+    --avatar-ring: var(--bg-sidebar);
   }
 
   .profile-text {
@@ -366,6 +344,18 @@
       justify-content: center;
       padding: 0;
       width: 100%;
+    }
+
+    .count {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.4rem;
+      margin-left: 0;
+      min-width: 1.6rem;
+      padding: 0 0.4rem;
+      border-radius: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.6rem;
     }
 
     .profile {

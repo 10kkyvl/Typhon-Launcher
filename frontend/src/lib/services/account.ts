@@ -99,6 +99,8 @@ const KNOWN_CODES = new Set([
   'request_limit',
   'block_limit',
   'friend_self',
+  'no_request',
+  'not_friends',
   'internal',
   'network_error',
   'server_error',
@@ -132,7 +134,7 @@ export class AccountError extends Error {
   }
 }
 
-function toAccountError(err: unknown): AccountError {
+export function toAccountError(err: unknown): AccountError {
   if (err instanceof AccountError) return err;
   const raw = err instanceof Error ? err.message : String(err);
   if (KNOWN_CODES.has(raw)) return new AccountError(raw);

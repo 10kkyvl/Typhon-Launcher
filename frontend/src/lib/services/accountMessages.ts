@@ -28,6 +28,8 @@ const MESSAGES: Record<string, string> = {
   request_limit: 'Достигнут лимит',
   block_limit: 'Достигнут лимит',
   friend_self: 'Нельзя добавить самого себя',
+  no_request: 'Заявка не найдена',
+  not_friends: 'Вы не друзья',
   internal: 'Ошибка на стороне сервера, попробуйте позже',
   server_error: 'Сервер ответил непонятным образом, попробуйте позже',
 };

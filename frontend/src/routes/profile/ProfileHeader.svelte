@@ -1,5 +1,6 @@
 <script lang="ts">
   import { EllipsisVertical, LogIn } from '@lucide/svelte';
+  import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -30,7 +31,6 @@
   let editing = $state(false);
   let draft = $state({ displayName: '', username: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; general?: string }>({});
-  let avatarFailed = $state(false);
   let busy = $state(false);
 
   const isGuest = $derived($authState === 'guest');
@@ -39,13 +39,8 @@
   const statusKind = $derived(status.kind === 'offline' ? 'neutral' : 'success');
   const statusHidden = $derived(!isGuest && (status.kind === 'playing' ? !showPlaying : !showOnline));
 
-  $effect(() => {
-    $currentUser?.avatarUrl;
-    avatarFailed = false;
-  });
-
-  const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : 'Г',
+  const avatarName = $derived(
+    !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : 'Гость',
   );
 
   const memberSince = $derived(
@@ -122,13 +117,7 @@
 <section class="profile-header">
   <Card>
     <div class="head">
-      <div class="avatar">
-        {#if isGuest || avatarFailed || !$currentUser?.avatarUrl}
-          <span class="avatar-fallback">{avatarInitial}</span>
-        {:else}
-          <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-        {/if}
-      </div>
+      <Avatar size="lg" name={avatarName} src={isGuest ? undefined : $currentUser?.avatarUrl} />
 
       <div class="identity">
         {#if isGuest}
@@ -218,32 +207,6 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-5);
-  }
-
-  .avatar {
-    width: 9.6rem;
-    height: 9.6rem;
-    flex-shrink: 0;
-  }
-
-  .avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .avatar-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: 3.6rem;
-    font-weight: 600;
   }
 
   .identity {
