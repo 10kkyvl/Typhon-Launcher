@@ -13,6 +13,9 @@ type Game struct {
 	PlaytimeSeconds int64
 	LastPlayed      *time.Time
 	Owned           bool
+	Favorite        bool
+	Status          string
+	StatusAt        *time.Time
 }
 
 type LibraryPort interface {

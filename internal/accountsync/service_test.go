@@ -144,6 +144,87 @@ func TestSyncPlaytimeAccounting(t *testing.T) {
 	})
 }
 
+func TestSyncStatusAndFavoriteMerge(t *testing.T) {
+	t.Run("remote later stamp wins over local", func(t *testing.T) {
+		h := newHarness(t)
+		h.catalog.link("game-1", "1")
+		t1 := time.Now().Add(-2 * time.Hour)
+		t2 := time.Now().Add(-time.Hour)
+		h.library.setLocalGame(Game{CanonicalGameID: "game-1", Status: "playing", StatusAt: &t1})
+		h.server.get = func(w http.ResponseWriter) {
+			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
+				{IGDBID: 1, Status: "completed", StatusAt: &t2},
+			}})
+		}
+		var lastPut putRequest
+		h.server.put = func(w http.ResponseWriter, req putRequest) {
+			lastPut = req
+			echoPut(http.StatusOK)(w, req)
+		}
+
+		if err := h.service.Sync(context.Background()); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		got := h.library.gameOf("game-1")
+		if got.Status != "completed" || got.StatusAt == nil || !got.StatusAt.Equal(t2) {
+			t.Fatalf("expected local to become completed@t2, got status=%q statusAt=%v", got.Status, got.StatusAt)
+		}
+		pushed, ok := pushedFor(lastPut, 1)
+		if !ok || pushed.Status != "completed" || pushed.StatusAt == nil || !pushed.StatusAt.Equal(t2) {
+			t.Fatalf("expected push to carry completed@t2, got %+v (ok=%v)", pushed, ok)
+		}
+	})
+
+	t.Run("local later stamp wins over remote", func(t *testing.T) {
+		h := newHarness(t)
+		h.catalog.link("game-1", "1")
+		t1 := time.Now().Add(-2 * time.Hour)
+		t2 := time.Now().Add(-time.Hour)
+		h.library.setLocalGame(Game{CanonicalGameID: "game-1", Status: "completed", StatusAt: &t2})
+		h.server.get = func(w http.ResponseWriter) {
+			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
+				{IGDBID: 1, Status: "playing", StatusAt: &t1},
+			}})
+		}
+		var lastPut putRequest
+		h.server.put = func(w http.ResponseWriter, req putRequest) {
+			lastPut = req
+			echoPut(http.StatusOK)(w, req)
+		}
+
+		if err := h.service.Sync(context.Background()); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		got := h.library.gameOf("game-1")
+		if got.Status != "completed" || got.StatusAt == nil || !got.StatusAt.Equal(t2) {
+			t.Fatalf("expected local to stay completed@t2, got status=%q statusAt=%v", got.Status, got.StatusAt)
+		}
+		pushed, ok := pushedFor(lastPut, 1)
+		if !ok || pushed.Status != "completed" || pushed.StatusAt == nil || !pushed.StatusAt.Equal(t2) {
+			t.Fatalf("expected push to carry completed@t2, got %+v (ok=%v)", pushed, ok)
+		}
+	})
+
+	t.Run("hydrated remote-only game receives status and favorite in the same cycle", func(t *testing.T) {
+		h := newHarness(t)
+		t1 := time.Now().Add(-time.Hour)
+		h.server.get = func(w http.ResponseWriter) {
+			writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{
+				{IGDBID: 77, Favorite: true, Status: "backlog", StatusAt: &t1},
+			}})
+		}
+		h.server.put = echoPut(http.StatusOK)
+
+		if err := h.service.Sync(context.Background()); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		got := h.library.gameOf("game-77")
+		if !got.Favorite || got.Status != "backlog" || got.StatusAt == nil || !got.StatusAt.Equal(t1) {
+			t.Fatalf("expected hydrated game to carry favorite/backlog@t1 in the same cycle, got %+v", got)
+		}
+	})
+}
+
 func TestSyncSettingsRevision(t *testing.T) {
 	t.Run("unchanged revision: local settings win and are pushed", func(t *testing.T) {
 		h := newHarness(t)

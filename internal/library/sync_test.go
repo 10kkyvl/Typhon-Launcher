@@ -267,6 +267,91 @@ func TestApplySyncNoChangeSkipsPersist(t *testing.T) {
 	}
 }
 
+func TestApplySyncMergesStatusByStamp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	game, err := s.AddCatalogGame("canon-1", "Some Game", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t1 := time.Now().Add(-3 * time.Hour)
+	t0 := time.Now().Add(-4 * time.Hour)
+	t2 := time.Now().Add(-2 * time.Hour)
+	t3 := time.Now().Add(-time.Hour)
+
+	s.mu.Lock()
+	s.findLocked(game.ID).Status = StatusPlaying
+	s.findLocked(game.ID).StatusAt = &t1
+	s.mu.Unlock()
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Status:          StatusCompleted,
+		StatusAt:        &t2,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got := s.GetGames()[0]
+	if got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t2) {
+		t.Fatalf("after completed@t2: got status=%q statusAt=%v", got.Status, got.StatusAt)
+	}
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Status:          StatusDropped,
+		StatusAt:        &t0,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t2) {
+		t.Fatalf("older stamp should not override: got status=%q statusAt=%v", got.Status, got.StatusAt)
+	}
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Favorite:        true,
+		Status:          StatusCompleted,
+		StatusAt:        &t3,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if !got.Favorite || got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t3) {
+		t.Fatalf("after favorite@t3: got favorite=%v status=%q statusAt=%v", got.Favorite, got.Status, got.StatusAt)
+	}
+
+	if err := s.persist(); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mtimeBefore := info.ModTime()
+
+	if err := s.ApplySync([]SyncGame{{
+		CanonicalGameID: "canon-1",
+		Favorite:        false,
+		Status:          StatusDropped,
+		StatusAt:        nil,
+	}}); err != nil {
+		t.Fatalf("ApplySync: %v", err)
+	}
+	got = s.GetGames()[0]
+	if !got.Favorite || got.Status != StatusCompleted || got.StatusAt == nil || !got.StatusAt.Equal(t3) {
+		t.Fatalf("nil incoming StatusAt must never change anything: got favorite=%v status=%q statusAt=%v", got.Favorite, got.Status, got.StatusAt)
+	}
+	infoAfter, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !infoAfter.ModTime().Equal(mtimeBefore) {
+		t.Fatal("library.json was rewritten though no field changed")
+	}
+}
+
 func TestApplySyncPersistFailureRollsBackMemory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)

@@ -56,6 +56,9 @@ func (e *ServerError) Error() string {
 type wireGame struct {
 	IGDBID          int64      `json:"igdbId"`
 	Owned           bool       `json:"owned"`
+	Favorite        bool       `json:"favorite"`
+	Status          string     `json:"status"`
+	StatusAt        *time.Time `json:"statusAt"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`
 	PlaytimeSeconds int64      `json:"playtimeSeconds"`
 }
