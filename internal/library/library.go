@@ -118,6 +118,7 @@ type Service struct {
 	excluded      []string
 	running       map[string]*session
 	onSession     func(gameID string, seconds int64)
+	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
@@ -443,6 +444,13 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetPlayRecorder(fn func(gameID string, startedAt, endedAt time.Time)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playRecord = fn
 }
 
 //wails:ignore
