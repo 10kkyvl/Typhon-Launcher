@@ -696,6 +696,57 @@ func TestLogout(t *testing.T) {
 	})
 }
 
+func TestCurrentProfileSettingsFallsBackToDefaults(t *testing.T) {
+	store := &fakeStore{}
+	s := startedService(t, store, "http://127.0.0.1:0")
+	got := s.CurrentProfileSettings()
+	if !got.ShowStats || len(got.Showcase) != 1 || got.Showcase[0] != "favorites" {
+		t.Fatalf("settings = %+v, want defaults", got)
+	}
+}
+
+func TestUpdateProfileSendsProfileSettings(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/me":
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode: %v", err)
+			}
+			user := sampleUser()
+			user.Profile = ProfileSettings{ShowStats: false, ShowPlaying: true, ShowActivity: true, ShowOnline: true, Showcase: []string{"most_played"}}
+			writeJSON(t, w, http.StatusOK, user)
+		case r.URL.Path == "/v1/me":
+			writeJSON(t, w, http.StatusOK, sampleUser())
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "tok", Username: "playerone"}, present: true}
+	s := startedService(t, store, srv.URL)
+	if _, err := s.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	settings := ProfileSettings{ShowStats: false, ShowPlaying: true, ShowActivity: true, ShowOnline: true, Showcase: []string{"most_played"}}
+	got, err := s.UpdateProfile(Patch{Profile: &settings})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	profile, ok := body["profile"].(map[string]any)
+	if !ok || profile["showStats"] != false {
+		t.Fatalf("sent body = %v, want profile.showStats=false", body)
+	}
+	if _, present := body["username"]; present {
+		t.Fatalf("username must be omitted when unchanged: %v", body)
+	}
+	if got.Profile.ShowStats || s.CurrentProfileSettings().Showcase[0] != "most_played" {
+		t.Fatalf("cached settings = %+v, want the server reply", s.CurrentProfileSettings())
+	}
+}
+
 func TestServiceRejectsCallsBeforeStartup(t *testing.T) {
 	s, err := newService(&fakeStore{}, "http://127.0.0.1:1", statePathFor(t))
 	if err != nil {

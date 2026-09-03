@@ -33,6 +33,7 @@ func loadProfile(path string) (cachedProfile, error) {
 	if err != nil {
 		return cachedProfile{}, err
 	}
+	loaded.User = withProfileDefaults(loaded.User)
 	return loaded, nil
 }
 

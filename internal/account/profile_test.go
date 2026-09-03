@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestLoadProfile(t *testing.T) {
 				}
 			},
 			want: cachedProfile{
-				User:      sampleUser(),
+				User:      withProfileDefaults(sampleUser()),
 				Avatar:    AvatarImage{Data: "YWJj", MIME: "image/png"},
 				AvatarURL: "https://cdn.example/a.png",
 			},
@@ -69,10 +70,29 @@ func TestLoadProfile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("loadProfile() error = %v", err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("loadProfile() = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadProfileAppliesDefaultsToLegacyCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user":      map[string]any{"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com", "createdAt": "2024-01-02T03:04:05Z"},
+		"avatar":    map[string]any{"data": "", "mime": ""},
+		"avatarUrl": "",
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.User.Profile.ShowStats || len(loaded.User.Profile.Showcase) != 1 {
+		t.Fatalf("profile = %+v, want defaults", loaded.User.Profile)
 	}
 }
 

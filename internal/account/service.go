@@ -313,6 +313,15 @@ func (s *Service) GetCurrentUser() (CurrentUser, error) {
 	return s.client.Me(ctx)
 }
 
+//wails:ignore
+func (s *Service) CurrentProfileSettings() ProfileSettings {
+	profile := s.currentProfile()
+	if profile.User.ID == "" {
+		return DefaultProfileSettings()
+	}
+	return withProfileDefaults(profile.User).Profile
+}
+
 func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
