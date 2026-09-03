@@ -253,6 +253,7 @@ func RestoreMergeBackup(dst, backup string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
+		//nolint:gosec // G122: backup is written only by MergeDirWithBackup and read back only here, both on the same install; nothing else can retarget path between the walk's stat and this rename (invariant 13)
 		return os.Rename(path, target)
 	})
 	if walkErr != nil {
