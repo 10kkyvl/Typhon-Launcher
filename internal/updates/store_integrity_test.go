@@ -22,6 +22,7 @@ func TestCorruptStateFailsLoadAndKeepsFile(t *testing.T) {
 		{"history", "update_history.json", func(s *store) error { _, err := s.loadHistory(); return err }},
 		{"rollbacks", "rollbacks.json", func(s *store) error { _, err := s.loadRollbacks(); return err }},
 		{"verifications", "verify.json", func(s *store) error { _, err := s.loadVerifications(); return err }},
+		{"journal", "journal.json", func(s *store) error { _, err := s.loadJournals(); return err }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,6 +61,29 @@ func TestMissingStateLoadsEmptyAndSaves(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "updates.json")); err != nil {
 		t.Fatalf("updates not saved: %v", err)
+	}
+}
+
+func TestJournalRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	s := newStore(dir)
+	list, err := s.loadJournals()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if list != nil {
+		t.Fatalf("journals = %+v, want nil", list)
+	}
+	want := []SwapJournal{{GameID: "g1", Kind: JournalSwap, InstallDir: "/games/g1", Previous: "/games/g1.previous"}}
+	if err := s.saveJournals(want); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := s.loadJournals()
+	if err != nil {
+		t.Fatalf("load after save: %v", err)
+	}
+	if len(got) != 1 || got[0].GameID != "g1" || got[0].Kind != JournalSwap {
+		t.Fatalf("got %+v", got)
 	}
 }
 

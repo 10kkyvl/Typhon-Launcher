@@ -406,7 +406,11 @@ func TestSwapAndRestoreDirectories(t *testing.T) {
 	writeFile(t, current, "marker", "old")
 	writeFile(t, staging, "marker", "new")
 
-	if err := swapDirectories(current, staging, previous); err != nil {
+	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.swapDirectories("g1", current, staging, previous, "2.0"); err != nil {
 		t.Fatal(err)
 	}
 	if data, _ := os.ReadFile(filepath.Join(current, "marker")); string(data) != "new" {
