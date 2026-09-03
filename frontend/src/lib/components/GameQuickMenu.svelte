@@ -54,7 +54,8 @@
   let savesCandidates = $state<string[]>([]);
 
   let statusOpen = $state(false);
-  let statusTarget = $state<LibraryGame | null>(null);
+  let statusID = $state<string | null>(null);
+  const statusGame = $derived(statusID ? ($libraryGames.find((g) => g.id === statusID) ?? null) : null);
 
   function run(current: LibraryGame, action: QuickAction) {
     switch (action) {
@@ -66,7 +67,7 @@
       case 'favorite-remove':
         return mark(() => setFavorite(current.id, action === 'favorite-add'), 'Не удалось изменить любимые');
       case 'status':
-        statusTarget = current;
+        statusID = current.id;
         statusOpen = true;
         return;
       case 'folder':
@@ -175,8 +176,8 @@
   />
 {/if}
 
-{#if statusTarget}
-  <GameStatusModal bind:open={statusOpen} game={statusTarget} />
+{#if statusGame && statusOpen}
+  <GameStatusModal bind:open={statusOpen} game={statusGame} />
 {/if}
 
 {#if target}
