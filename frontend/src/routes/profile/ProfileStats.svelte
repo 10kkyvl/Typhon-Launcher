@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { monthLine } from '../../lib/profile/view';
   import type { ProfileStats } from '../../lib/services/profile';
   import { formatCount } from '../../lib/utils/format';
   import HiddenBadge from './HiddenBadge.svelte';
 
   let { stats, hidden }: { stats: ProfileStats; hidden: boolean } = $props();
+
+  const month = $derived(monthLine(stats));
 
   const tiles = $derived([
     { label: 'Игры', value: formatCount(stats.games) },
@@ -18,6 +21,7 @@
     <h3>Статистика</h3>
     {#if hidden}<HiddenBadge />{/if}
   </div>
+  {#if month}<p class="month">За этот месяц: {month}</p>{/if}
   <div class="tiles">
     {#each tiles as tile (tile.label)}
       <div class="tile">
@@ -44,6 +48,12 @@
     font-size: var(--font-xl);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
+  }
+
+  .month {
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    margin-bottom: var(--space-3);
   }
 
   .tiles {

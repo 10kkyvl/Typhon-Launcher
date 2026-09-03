@@ -6,6 +6,8 @@ export interface GameRef {
   title: string;
   cover: string;
   playtimeSeconds: number;
+  status: string;
+  statusAt?: string | null;
 }
 
 export interface ProfileStats {
@@ -13,6 +15,9 @@ export interface ProfileStats {
   hours: number;
   completed: number;
   playing: number;
+  monthSeconds: number;
+  monthGames: number;
+  monthCompleted: number;
 }
 
 export interface PlayingEntry {
@@ -44,7 +49,7 @@ export interface ProfileSnapshot {
 }
 
 export const EMPTY_SNAPSHOT: ProfileSnapshot = {
-  stats: { games: 0, hours: 0, completed: 0, playing: 0 },
+  stats: { games: 0, hours: 0, completed: 0, playing: 0, monthSeconds: 0, monthGames: 0, monthCompleted: 0 },
   playing: [],
   activity: [],
   running: [],

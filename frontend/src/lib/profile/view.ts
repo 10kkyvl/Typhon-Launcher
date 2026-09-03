@@ -1,6 +1,6 @@
 import type { ShowcaseKind } from '../services/account';
-import type { GameRef } from '../services/profile';
-import { playtime } from '../utils/format';
+import type { GameRef, ProfileStats } from '../services/profile';
+import { playtime, plural } from '../utils/format';
 
 export const SHOWCASE_TITLES: Record<ShowcaseKind, string> = {
   favorites: 'Любимые',
@@ -26,6 +26,20 @@ export function dayLabel(isoDate: string, now = new Date()): string {
   if (days <= 0) return 'Сегодня';
   if (days === 1) return 'Вчера';
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+export function monthLine(stats: ProfileStats): string {
+  const { monthSeconds, monthGames, monthCompleted } = stats;
+  if (monthSeconds === 0 && monthGames === 0 && monthCompleted === 0) return '';
+  const parts: string[] = [];
+  if (monthSeconds > 0) parts.push(playtime(monthSeconds));
+  parts.push(`${monthGames} ${plural(monthGames, 'игра', 'игры', 'игр')}`);
+  parts.push(`${monthCompleted} ${plural(monthCompleted, 'пройдена', 'пройдено', 'пройдено')}`);
+  return parts.join(' · ');
+}
+
+export function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
 export type StatusKind = 'playing' | 'online' | 'offline';
