@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Calendar, Copy, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
+  import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -9,11 +9,9 @@
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import type { GameRef, ProfileStats as ProfileStatsData } from '../../lib/services/profile';
-  import { friendCode } from '../../lib/services/social';
   import { joinDate } from '../../lib/social/view';
   import { statusDot } from '../../lib/social/presence';
   import { presenceStatus } from '../../lib/stores/presence';
-  import { settings } from '../../lib/stores/settings';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
@@ -44,8 +42,6 @@
   let draft = $state({ displayName: '', username: '', bio: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
-  let code = $state('');
-  let warnedCode = false;
 
   const isGuest = $derived($authState === 'guest');
 
@@ -65,37 +61,6 @@
   );
 
   const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
-
-  $effect(() => {
-    if (isGuest || $authState !== 'authenticated' || !$settings?.accountSync) {
-      code = '';
-      return;
-    }
-    let cancelled = false;
-    friendCode()
-      .then((value) => {
-        if (!cancelled) code = value;
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        code = '';
-        if (warnedCode) return;
-        warnedCode = true;
-        console.warn('friend code request failed', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  });
-
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(code);
-      toast(msg('social.copied'), 'info');
-    } catch {
-      toast(msg('social.copyFailed'), 'danger');
-    }
-  }
 
   const menuItems = $derived<MenuItem[]>([
     { id: 'edit', label: msg('social.editProfileLabel') },
@@ -179,14 +144,6 @@
           <span class="username">@{$currentUser.username}</span>
           {#if bio}
             <p class="bio">{bio}</p>
-          {/if}
-          {#if code}
-            <div class="code">
-              <span class="code-value">{msg('social.friendCodeInline', { code })}</span>
-              <IconButton label={msg('social.copyFriendCodeLabel')} size="sm" onclick={copyCode}>
-                <Copy size="1.5rem" strokeWidth={1.8} />
-              </IconButton>
-            </div>
           {/if}
           <div class="meta">
             {#if playing}
@@ -332,17 +289,6 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-  }
-
-  .code {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .code-value {
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 
   .meta {

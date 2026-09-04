@@ -223,6 +223,7 @@ export const social = {
   'social.friendsSearchPlaceholder': '@имя или код TY-XXXX-XXXX',
   'social.friendsSearchHint': 'Найдите по имени пользователя или по коду, которым с вами поделились.',
   'social.friendsSendRequest': 'Отправить заявку',
+  'social.friendsOpenProfile': 'Открыть профиль',
 
   // routes/friends/FriendCodeCard.svelte
   'social.friendsCodeFetchFailed': 'Не удалось получить код',

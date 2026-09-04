@@ -226,6 +226,7 @@ export const social: Record<SocialKey, Message> = {
   'social.friendsSearchPlaceholder': '@username or code TY-XXXX-XXXX',
   'social.friendsSearchHint': 'Search by username or by a code someone shared with you.',
   'social.friendsSendRequest': 'Send request',
+  'social.friendsOpenProfile': 'Open profile',
 
   // routes/friends/FriendCodeCard.svelte
   'social.friendsCodeFetchFailed': 'Could not get the code',

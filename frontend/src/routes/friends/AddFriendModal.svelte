@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { ChevronRight } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -7,6 +8,7 @@
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { profile, profileByCode, sendRequest, type PublicProfile } from '../../lib/services/social';
   import { commonLine, isFriendCode, relationHint } from '../../lib/social/view';
+  import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
 
@@ -74,6 +76,14 @@
 
   onDestroy(() => clearTimeout(timer));
 
+  function openProfile() {
+    if (!found) return;
+    const username = found.username;
+    open = false;
+    reset();
+    navigate('user', { username });
+  }
+
   async function send() {
     if (!found || !canSend || sending) return;
     sending = true;
@@ -102,7 +112,7 @@
     />
 
     {#if found}
-      <div class="preview">
+      <button class="preview" type="button" onclick={openProfile}>
         <Avatar size="md" name={found.displayName || found.username} src={found.avatarUrl} />
         <div class="info">
           <span class="name">{found.displayName || found.username}</span>
@@ -114,7 +124,8 @@
             <span class="mutual">{mutual}</span>
           {/if}
         </div>
-      </div>
+        <ChevronRight class="chevron" size="1.8rem" strokeWidth={1.8} />
+      </button>
       {#if hint}
         <p class="hint">{hint}</p>
       {/if}
@@ -135,6 +146,9 @@
     >
       {msg('common.cancel')}
     </Button>
+    {#if found}
+      <Button disabled={sending} onclick={openProfile}>{msg('social.friendsOpenProfile')}</Button>
+    {/if}
     {#if canSend}
       <Button variant="primary" disabled={sending} onclick={send}>{msg('social.friendsSendRequest')}</Button>
     {/if}
@@ -152,9 +166,28 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-4);
+    width: 100%;
     padding: var(--space-4);
+    border: 0;
     border-radius: var(--radius-md);
     background: var(--surface-2);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--dur) var(--ease);
+  }
+
+  .preview:hover,
+  .preview:focus-visible {
+    background: var(--surface-3);
+  }
+
+  .preview :global(.chevron) {
+    flex-shrink: 0;
+    margin-left: auto;
+    align-self: center;
+    color: var(--text-3);
   }
 
   .info {
