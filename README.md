@@ -13,6 +13,13 @@ It is a portable application: the downloaded file runs directly, no installer, a
 keeps its own state in `%AppData%\Typhon`. Verify the SHA-256 printed next to the
 download link before running it.
 
+![The Typhon library: game covers with version, size and playtime](.github/screenshots/library.webp)
+
+| | |
+|---|---|
+| ![A game page: description, tags, available downloads](.github/screenshots/game.webp) | ![A friend's profile: playtime, what they are playing, games in common](.github/screenshots/profile.webp) |
+| ![Friends with live status and what they are playing](.github/screenshots/friends.webp) | |
+
 ## What Typhon is not
 
 Typhon ships with no games, carries no preinstalled sources and offers no list of them.
