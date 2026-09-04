@@ -48,21 +48,39 @@ describe('friendRequestNotification', () => {
 
 describe('isFriendCode', () => {
   it('узнаёт код в любом регистре и с любым набором дефисов', () => {
-    expect(isFriendCode('TY-A2B3-C4D5')).toBe(true);
-    expect(isFriendCode('ty-a2b3-c4d5')).toBe(true);
-    expect(isFriendCode('TYA2B3C4D5')).toBe(true);
-    expect(isFriendCode('A2B3-C4D5')).toBe(true);
-    expect(isFriendCode('A2B3C4D5')).toBe(true);
-    expect(isFriendCode('  TY-A2B3-C4D5  ')).toBe(true);
+    expect(isFriendCode('TY-84K2-9WFC')).toBe(true);
+    expect(isFriendCode('ty-84k2-9wfc')).toBe(true);
+    expect(isFriendCode('TY84K29WFC')).toBe(true);
+    expect(isFriendCode('ty84k29wfc')).toBe(true);
+    expect(isFriendCode('84K2-9WFC')).toBe(true);
+    expect(isFriendCode('84k2-9wfc')).toBe(true);
+    expect(isFriendCode('  TY-84K2-9WFC  ')).toBe(true);
   });
 
-  it('имя пользователя кодом не считается', () => {
+  it('собачка всегда означает имя пользователя', () => {
+    expect(isFriendCode('@maxpayne')).toBe(false);
+    expect(isFriendCode('@84k2-9wfc')).toBe(false);
+    expect(isFriendCode('@TY-84K2-9WFC')).toBe(false);
+  });
+
+  it('имя пользователя из восьми букв кодом не считается', () => {
+    expect(isFriendCode('maxpayne')).toBe(false);
+    expect(isFriendCode('egorripa')).toBe(false);
     expect(isFriendCode('egor')).toBe(false);
-    expect(isFriendCode('@egor')).toBe(false);
     expect(isFriendCode('')).toBe(false);
-    expect(isFriendCode('A2B3-C4D')).toBe(false);
-    expect(isFriendCode('A2B3-C4D5E')).toBe(false);
-    expect(isFriendCode('A2B3_C4D5')).toBe(false);
+  });
+
+  it('символы вне алфавита кода отбраковываются', () => {
+    expect(isFriendCode('TY-84K2-91FC')).toBe(false);
+    expect(isFriendCode('TY-84K2-9OFC')).toBe(false);
+    expect(isFriendCode('TY-84I2-9WFC')).toBe(false);
+    expect(isFriendCode('84K2_9WFC')).toBe(false);
+  });
+
+  it('длина должна совпадать с форматом', () => {
+    expect(isFriendCode('84K2-9WF')).toBe(false);
+    expect(isFriendCode('84K2-9WFCD')).toBe(false);
+    expect(isFriendCode('TY84K29WF')).toBe(false);
   });
 });
 

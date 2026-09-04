@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -32,10 +33,10 @@
   }
 
   async function lookup(input: string) {
-    const term = input.trim().replace(/^@/, '');
+    const term = input.trim();
     attempt += 1;
     const current = attempt;
-    if (!term) {
+    if (!term || term === '@') {
       found = null;
       error = '';
       searching = false;
@@ -43,7 +44,9 @@
     }
     searching = true;
     try {
-      const result = isFriendCode(term) ? await profileByCode(term) : await profile(term);
+      const result = isFriendCode(term)
+        ? await profileByCode(term)
+        : await profile(term.replace(/^@/, ''));
       if (current !== attempt) return;
       found = result;
       error = '';
@@ -66,6 +69,8 @@
     clearTimeout(timer);
     lookup(query);
   }
+
+  onDestroy(() => clearTimeout(timer));
 
   async function send() {
     if (!found || !canSend || sending) return;

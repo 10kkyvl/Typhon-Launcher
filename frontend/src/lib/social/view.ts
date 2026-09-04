@@ -28,10 +28,12 @@ export function friendRequestNotification(count: number): Notification | null {
   };
 }
 
-const FRIEND_CODE = /^(ty-?)?[a-z0-9]{4}-?[a-z0-9]{4}$/i;
+const FRIEND_CODE = /^(?:ty-?[2-9a-hj-np-tv-z]{8}|(?:ty-?)?[2-9a-hj-np-tv-z]{4}-[2-9a-hj-np-tv-z]{4})$/i;
 
 export function isFriendCode(input: string): boolean {
-  return FRIEND_CODE.test(input.trim());
+  const value = input.trim();
+  if (value.startsWith('@')) return false;
+  return FRIEND_CODE.test(value);
 }
 
 function count(n: number, adjective: [string, string, string], noun: [string, string, string]): string {
