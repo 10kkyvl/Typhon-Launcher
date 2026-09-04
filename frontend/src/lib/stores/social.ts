@@ -84,5 +84,12 @@ export async function initSocial(): Promise<void> {
     kick().catch((err) => report(err, 'Не удалось обновить список друзей'));
   });
 
+  let consentWithheld: boolean | undefined;
+  needsSocialConsent.subscribe((needs) => {
+    const changed = consentWithheld !== needs;
+    consentWithheld = needs;
+    if (changed && needs) resetFeed();
+  });
+
   await loadFriends();
 }

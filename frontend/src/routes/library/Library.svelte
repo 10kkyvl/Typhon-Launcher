@@ -31,7 +31,7 @@
   import { needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
-  import { authState } from '../../lib/stores/user';
+  import { authState, currentUser } from '../../lib/stores/user';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
 
   type Filter = 'all' | 'installed' | 'recent';
@@ -206,7 +206,10 @@
   const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
 
   const socialReady = $derived($authState === 'authenticated' && !$needsSocialConsent);
-  const latestEvents = $derived(socialReady ? $feedEvents.slice(0, 3) : []);
+  const myId = $derived($currentUser?.id ?? '');
+  const latestEvents = $derived(
+    socialReady ? $feedEvents.filter((event) => event.user.id !== myId).slice(0, 3) : [],
+  );
 
   $effect(() => {
     if (socialReady) void loadFeed();

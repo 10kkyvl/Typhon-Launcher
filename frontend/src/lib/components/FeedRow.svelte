@@ -2,6 +2,7 @@
   import type { FeedEvent } from '../services/social';
   import { eventLine } from '../social/feed';
   import { openGameByIGDB } from '../social/openGame';
+  import { feedPending } from '../stores/feed';
   import { navigate } from '../stores/router';
   import { relativeDate } from '../utils/format';
   import Artwork from './Artwork.svelte';
@@ -32,7 +33,7 @@
 </script>
 
 <div class="row" class:compact>
-  <button class="who" type="button" onclick={openUser}>
+  <button class="who" type="button" aria-label={name} title={name} onclick={openUser}>
     <Avatar src={event.user.avatarUrl} {name} size="sm" />
     {#if compact}
       <span class="name">{name}</span>
@@ -55,7 +56,7 @@
     </button>
 
     {#if !compact && onreact}
-      <ReactionBar {event} ontoggle={onreact} />
+      <ReactionBar {event} disabled={$feedPending.has(event.id)} ontoggle={onreact} />
     {/if}
   </div>
 
