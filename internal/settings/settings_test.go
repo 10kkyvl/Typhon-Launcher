@@ -685,3 +685,49 @@ func TestDesktopShortcutsMissingInOldConfig(t *testing.T) {
 		t.Fatal("legacy config must keep desktop shortcuts on")
 	}
 }
+
+func TestPresenceStatusDefaultsToOnline(t *testing.T) {
+	if got := Defaults().PresenceStatus; got != PresenceOnline {
+		t.Fatalf("default presence status = %q, want %q", got, PresenceOnline)
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	if got := s.GetSettings().PresenceStatus; got != PresenceOnline {
+		t.Fatalf("presence status = %q, want %q", got, PresenceOnline)
+	}
+}
+
+func TestPresenceStatusIsSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+
+	next := s.GetSettings()
+	next.PresenceStatus = "offline"
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GetSettings().PresenceStatus; got != PresenceOnline {
+		t.Fatalf("presence status = %q, want %q", got, PresenceOnline)
+	}
+
+	for _, status := range []string{PresenceOnline, PresenceAway, PresenceBusy, PresenceInvisible} {
+		next.PresenceStatus = status
+		if err := s.SaveSettings(next); err != nil {
+			t.Fatal(err)
+		}
+		if got := s.GetSettings().PresenceStatus; got != status {
+			t.Fatalf("presence status = %q, want %q", got, status)
+		}
+	}
+}
+
+func TestPresenceStatusMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := mustServiceAt(t, path)
+	if got := s.GetSettings().PresenceStatus; got != PresenceOnline {
+		t.Fatalf("presence status = %q, want %q", got, PresenceOnline)
+	}
+}

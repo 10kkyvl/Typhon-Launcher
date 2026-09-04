@@ -27,6 +27,11 @@ const (
 	RefreshHalfDay  = "12h"
 	RefreshDaily    = "24h"
 
+	PresenceOnline    = "online"
+	PresenceAway      = "away"
+	PresenceBusy      = "busy"
+	PresenceInvisible = "invisible"
+
 	KeepPreviousOff         = "off"
 	KeepPreviousFirstLaunch = "first_launch"
 	KeepPreviousDay         = "24h"
@@ -85,6 +90,8 @@ type Settings struct {
 
 	LANSharing bool `json:"lanSharing"`
 
+	PresenceStatus string `json:"presenceStatus"`
+
 	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
@@ -140,6 +147,8 @@ func Defaults() Settings {
 		AllowTorrentReuse:        true,
 
 		LANSharing: false,
+
+		PresenceStatus: PresenceOnline,
 
 		AccountSync:           false,
 		SourcesNoticeAccepted: false,
@@ -199,6 +208,15 @@ func applyStoredConsent(s Settings, p consentProbe) Settings {
 		s.TelemetryConsentVersion = 0
 	}
 	return s
+}
+
+func ValidPresenceStatus(status string) bool {
+	switch status {
+	case PresenceOnline, PresenceAway, PresenceBusy, PresenceInvisible:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeLibraryPath(path string) (string, error) {
@@ -278,6 +296,9 @@ func sanitize(s Settings) (Settings, error) {
 	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
 	default:
 		s.SourceRefreshInterval = RefreshSixHours
+	}
+	if !ValidPresenceStatus(s.PresenceStatus) {
+		s.PresenceStatus = PresenceOnline
 	}
 	switch s.KeepPreviousVersion {
 	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
