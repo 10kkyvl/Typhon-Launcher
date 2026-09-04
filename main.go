@@ -28,6 +28,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/online"
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
 	"typhon/internal/profile"
@@ -331,6 +332,11 @@ func main() {
 	if err != nil {
 		fatal("start social service", err)
 	}
+	onlineService, err := online.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID, settingsService)
+	if err != nil {
+		fatal("start online service", err)
+	}
+	libraryService.AddSessionWatcher(onlineService)
 
 	var extraServices []application.Service
 
@@ -388,6 +394,7 @@ func main() {
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
+		application.NewService(onlineService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
