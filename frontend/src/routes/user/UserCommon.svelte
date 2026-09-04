@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Artwork from '../../lib/components/Artwork.svelte';
   import type { CommonGames } from '../../lib/services/social';
   import { commonGameLabel, commonGamesTitle } from '../../lib/social/view';
+  import GameRow from './GameRow.svelte';
 
   let { common, name }: { common: CommonGames; name: string } = $props();
 
@@ -13,13 +13,7 @@
   <p class="count">{commonGamesTitle(common.count)}</p>
   <div class="list">
     {#each rows as game (game.igdbId)}
-      <div class="row">
-        <div class="thumb">
-          <Artwork src={game.coverUrl} alt={game.title} ratio="3 / 4" />
-        </div>
-        <span class="title">{game.title}</span>
-        <span class="label">{commonGameLabel(game.viewerOwned, game.targetOwned, name)}</span>
-      </div>
+      <GameRow {game} meta={commonGameLabel(game.viewerOwned, game.targetOwned, name)} />
     {/each}
   </div>
 </section>
@@ -47,39 +41,7 @@
     flex-direction: column;
   }
 
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: 0.8rem;
-    border-radius: var(--radius-md);
-  }
-
-  .row + .row {
+  .list :global(.row + .row) {
     border-top: 1px solid var(--border);
-  }
-
-  .thumb {
-    width: 3.2rem;
-    height: 4.2rem;
-    flex-shrink: 0;
-    border-radius: var(--radius-xs);
-    overflow: hidden;
-  }
-
-  .title {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-md);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .label {
-    flex-shrink: 0;
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 </style>

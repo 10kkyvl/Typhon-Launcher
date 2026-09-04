@@ -138,7 +138,7 @@
           {/if}
           <div class="area area-showcase">
             {#each showcase as fblock (fblock.kind)}
-              <UserCovers title={showcaseTitle(fblock.kind)} games={fblock.games} />
+              <UserCovers title={showcaseTitle(fblock.kind)} games={fblock.games} columns="main" />
             {/each}
           </div>
         {/if}

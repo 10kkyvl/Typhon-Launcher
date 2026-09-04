@@ -1,8 +1,13 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
   import type { GameCard } from '../../lib/services/social';
+  import { openGameByIGDB } from '../../lib/social/openGame';
 
-  let { title, games }: { title: string; games: GameCard[] } = $props();
+  let {
+    title,
+    games,
+    columns = 'side',
+  }: { title: string; games: GameCard[]; columns?: 'side' | 'main' } = $props();
 
   const shown = $derived(games.slice(0, 6));
 </script>
@@ -10,12 +15,12 @@
 {#if shown.length > 0}
   <section class="group">
     <h3>{title}</h3>
-    <div class="grid">
+    <div class="grid" class:main={columns === 'main'}>
       {#each shown as game (game.igdbId)}
-        <div class="tile">
+        <button class="tile" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
           <Artwork src={game.coverUrl} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
           <span class="caption">{game.title}</span>
-        </div>
+        </button>
       {/each}
     </div>
   </section>
@@ -39,11 +44,22 @@
     gap: var(--space-3);
   }
 
+  .grid.main {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
   .tile {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
     min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .caption {
@@ -57,5 +73,11 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  @media (max-width: 1200px) {
+    .grid.main {
+      grid-template-columns: repeat(3, 1fr);
+    }
   }
 </style>
