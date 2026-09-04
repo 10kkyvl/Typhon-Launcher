@@ -14,6 +14,7 @@ export interface LibraryGame {
   cover: string;
   version: string;
   sizeBytes: number;
+  sizeUnknown?: boolean;
   lastPlayed: string | null;
   playtimeSeconds: number;
   installedAt: string;

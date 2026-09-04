@@ -169,6 +169,7 @@ export interface CatalogGame {
 
 export interface CatalogQuery {
   search?: string;
+  genre?: string;
   sort?: string;
   page?: number;
   pageSize?: number;
@@ -179,6 +180,11 @@ export interface CatalogPage {
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface GenreFacet {
+  label: string;
+  count: number;
 }
 
 export interface ReleaseDownloadRequest {
@@ -333,9 +339,14 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
-  const payload = { search: query.search ?? '', sort: query.sort ?? '', page, pageSize };
+  const payload = { search: query.search ?? '', genre: query.genre ?? '', sort: query.sort ?? '', page, pageSize };
   const result = (await CatalogService.QueryGames(payload as never)) as unknown as CatalogPage;
   return { ...result, items: result.items ?? [] };
+}
+
+export async function getGenreFacets(): Promise<GenreFacet[]> {
+  if (!inWails) return [];
+  return ((await CatalogService.GenreFacets()) ?? []) as unknown as GenreFacet[];
 }
 
 export async function openByIGDB(igdbId: number, title: string): Promise<CatalogGame> {
