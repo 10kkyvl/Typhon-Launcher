@@ -521,12 +521,13 @@ func TestService_RejectsEmptyIdentifiers(t *testing.T) {
 			_, err := h.svc.ProfileByCode("")
 			return err
 		},
-		"user games":      func() error { _, err := h.svc.UserGames("", ""); return err },
-		"game friends":    func() error { _, err := h.svc.GameFriends(""); return err },
-		"feed bad cursor": func() error { _, err := h.svc.Feed("not-a-number"); return err },
-		"react bad emoji": func() error { return h.svc.React("1", "banana") },
-		"react bad id":    func() error { return h.svc.React("not-a-number", "fire") },
-		"unreact bad id":  func() error { return h.svc.Unreact("not-a-number", "fire") },
+		"user games":           func() error { _, err := h.svc.UserGames("", ""); return err },
+		"game friends":         func() error { _, err := h.svc.GameFriends(""); return err },
+		"feed bad cursor":      func() error { _, err := h.svc.Feed("not-a-number"); return err },
+		"feed negative cursor": func() error { _, err := h.svc.Feed("-1"); return err },
+		"react bad emoji":      func() error { return h.svc.React("1", "banana") },
+		"react bad id":         func() error { return h.svc.React("not-a-number", "fire") },
+		"unreact bad id":       func() error { return h.svc.Unreact("not-a-number", "fire") },
 	}
 	for name, call := range calls {
 		if err := call(); err == nil {
@@ -860,8 +861,10 @@ func TestService_FeedRejectsBadCursor(t *testing.T) {
 	h.awaitPoll()
 	before := h.reqs.Load()
 
-	if _, err := h.svc.Feed("not-a-number"); !errors.Is(err, errBadCursor) {
-		t.Fatalf("Feed with a bad cursor = %v, want errBadCursor", err)
+	for _, cursor := range []string{"not-a-number", "-1", "-9223372036854775808"} {
+		if _, err := h.svc.Feed(cursor); !errors.Is(err, errBadCursor) {
+			t.Fatalf("Feed(%q) = %v, want errBadCursor", cursor, err)
+		}
 	}
 	if got := h.reqs.Load(); got != before {
 		t.Fatalf("requests = %d, want %d: a bad cursor must not reach the API", got, before)

@@ -445,7 +445,7 @@ func (s *Service) Feed(cursor string) (FeedPage, error) {
 	var cur int64
 	if trimmed != "" {
 		parsed, err := strconv.ParseInt(trimmed, 10, 64)
-		if err != nil {
+		if err != nil || parsed < 0 {
 			return FeedPage{}, errBadCursor
 		}
 		cur = parsed
