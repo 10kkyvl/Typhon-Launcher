@@ -8,6 +8,10 @@ vi.mock('@wailsio/runtime', () => ({
 }));
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
+vi.mock('./settings', async () => {
+  const { writable } = await import('svelte/store');
+  return { settings: writable(null), initSettings: vi.fn(), updateSettings: vi.fn() };
+});
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
@@ -45,6 +49,9 @@ vi.mock('../services/social', () => ({
   friends: vi.fn(async () => ({ friends: [], incoming: [], outgoing: [] })),
   kick: vi.fn(async () => {}),
   toFriendsPage: (data: unknown) => data,
+  feed: vi.fn(async () => ({ events: [], next: 0 })),
+  react: vi.fn(async () => {}),
+  unreact: vi.fn(async () => {}),
 }));
 
 function request(id: string) {
@@ -104,6 +111,34 @@ describe('сброс состояния при смене аккаунта', () 
     authState.set('authenticated');
 
     expect(kick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('отключение синхронизации аккаунта', () => {
+  it('снятое согласие очищает ленту', async () => {
+    await load();
+    const { settings } = await import('./settings');
+    const { feedEvents, feedReady } = await import('./feed');
+    settings.set({ accountSync: true } as never);
+    feedEvents.set([{ id: 1 } as never]);
+    feedReady.set(true);
+
+    settings.set({ accountSync: false } as never);
+
+    expect(get(feedEvents)).toEqual([]);
+    expect(get(feedReady)).toBe(false);
+  });
+
+  it('включённая синхронизация ленту не трогает', async () => {
+    await load();
+    const { settings } = await import('./settings');
+    const { feedEvents } = await import('./feed');
+    settings.set({ accountSync: false } as never);
+    feedEvents.set([{ id: 1 } as never]);
+
+    settings.set({ accountSync: true } as never);
+
+    expect(get(feedEvents)).toEqual([{ id: 1 }]);
   });
 });
 

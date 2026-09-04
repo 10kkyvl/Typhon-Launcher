@@ -14,6 +14,7 @@
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import FeedRow from '../../lib/components/FeedRow.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
   import GameHero from '../../lib/components/GameHero.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -22,12 +23,15 @@
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import type { Download } from '../../lib/services/downloads';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
+  import { feedEvents, loadFeed } from '../../lib/stores/feed';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
+  import { needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
+  import { authState, currentUser } from '../../lib/stores/user';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
 
   type Filter = 'all' | 'installed' | 'recent';
@@ -201,6 +205,16 @@
 
   const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
 
+  const socialReady = $derived($authState === 'authenticated' && !$needsSocialConsent);
+  const myId = $derived($currentUser?.id ?? '');
+  const latestEvents = $derived(
+    socialReady ? $feedEvents.filter((event) => event.user.id !== myId).slice(0, 3) : [],
+  );
+
+  $effect(() => {
+    if (socialReady) void loadFeed();
+  });
+
   onMount(() => {
     const timer = setInterval(() => {
       if (featured.length === 0) return;
@@ -281,6 +295,20 @@
       </div>
     {/if}
   </div>
+{/if}
+
+{#if latestEvents.length > 0}
+  <section class="section">
+    <div class="section-head">
+      <h2>Друзья</h2>
+      <button class="link" onclick={() => navigate('friends', { tab: 'feed' })}>Все</button>
+    </div>
+    <div class="feed">
+      {#each latestEvents as event (event.id)}
+        <FeedRow {event} compact />
+      {/each}
+    </div>
+  </section>
 {/if}
 
 <div class="toolbar">
@@ -491,6 +519,21 @@
 
   .section-head h2 {
     font-size: var(--font-xl);
+  }
+
+  .link {
+    font-size: var(--font-sm);
+    color: var(--text-3);
+    transition: color var(--dur) var(--ease);
+  }
+
+  .link:hover {
+    color: var(--text);
+  }
+
+  .feed {
+    display: flex;
+    flex-direction: column;
   }
 
   .grid {

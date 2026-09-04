@@ -30,6 +30,8 @@ const MESSAGES: Record<string, string> = {
   friend_self: 'Нельзя добавить самого себя',
   no_request: 'Заявка не найдена',
   not_friends: 'Вы не друзья',
+  activity_not_found: 'Событие уже недоступно',
+  reaction_invalid: 'Неизвестная реакция',
   internal: 'Ошибка на стороне сервера, попробуйте позже',
   server_error: 'Сервер ответил непонятным образом, попробуйте позже',
 };

@@ -182,6 +182,44 @@ func TestClient_RequestShape(t *testing.T) {
 			wantPath:   "/v1/games/1942/friends",
 			response:   `{"played":[],"playingNow":[]}`,
 		},
+		{
+			name: "feed",
+			call: func(ctx context.Context, c *client) error {
+				_, err := c.feed(ctx, 0, 30)
+				return err
+			},
+			wantMethod: http.MethodGet,
+			wantPath:   "/v1/me/feed",
+			wantQuery:  "cursor=0&limit=30",
+			response:   `{"events":[],"next":0}`,
+		},
+		{
+			name: "feed with cursor",
+			call: func(ctx context.Context, c *client) error {
+				_, err := c.feed(ctx, 1942, 30)
+				return err
+			},
+			wantMethod: http.MethodGet,
+			wantPath:   "/v1/me/feed",
+			wantQuery:  "cursor=1942&limit=30",
+			response:   `{"events":[],"next":0}`,
+		},
+		{
+			name: "react",
+			call: func(ctx context.Context, c *client) error {
+				return c.react(ctx, 1942, "fire")
+			},
+			wantMethod: http.MethodPut,
+			wantPath:   "/v1/activity/1942/reactions/fire",
+		},
+		{
+			name: "unreact",
+			call: func(ctx context.Context, c *client) error {
+				return c.unreact(ctx, 1942, "fire")
+			},
+			wantMethod: http.MethodDelete,
+			wantPath:   "/v1/activity/1942/reactions/fire",
+		},
 	}
 
 	for _, tc := range tests {
@@ -353,6 +391,101 @@ func TestClient_DecodesResponses(t *testing.T) {
 			t.Fatalf("played = %+v", res.Played)
 		}
 	})
+
+	t.Run("feed", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			body := `{"events":[{"id":1,"user":{"id":"u1","username":"alex"},"kind":"completed",` +
+				`"game":{"igdbId":1942,"title":"The Witcher 3"},"createdAt":"2026-01-02T03:04:05Z",` +
+				`"reactions":[{"emoji":"fire","count":2}]}],"next":7}`
+			if _, err := io.WriteString(w, body); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		page, err := c.feed(t.Context(), 0, 30)
+		if err != nil {
+			t.Fatalf("feed: %v", err)
+		}
+		if page.Next != 7 || len(page.Events) != 1 {
+			t.Fatalf("page = %+v", page)
+		}
+		ev := page.Events[0]
+		if ev.ID != 1 || ev.User.Username != "alex" || ev.Kind != "completed" || ev.Game.IGDBID != 1942 {
+			t.Fatalf("event = %+v", ev)
+		}
+		if ev.Mine == nil || len(ev.Mine) != 0 {
+			t.Fatalf("mine = %+v, want a non-nil empty slice when the field is absent", ev.Mine)
+		}
+		if len(ev.Reactions) != 1 || ev.Reactions[0].Emoji != "fire" || ev.Reactions[0].Count != 2 {
+			t.Fatalf("reactions = %+v", ev.Reactions)
+		}
+	})
+
+	t.Run("feed reactions absent", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			body := `{"events":[{"id":1,"user":{"id":"u1","username":"alex"},"kind":"started",` +
+				`"game":{"igdbId":1942,"title":"The Witcher 3"},"createdAt":"2026-01-02T03:04:05Z","mine":["fire"]}],"next":0}`
+			if _, err := io.WriteString(w, body); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		page, err := c.feed(t.Context(), 0, 30)
+		if err != nil {
+			t.Fatalf("feed: %v", err)
+		}
+		if len(page.Events) != 1 {
+			t.Fatalf("page = %+v", page)
+		}
+		if ev := page.Events[0]; ev.Reactions == nil || len(ev.Reactions) != 0 {
+			t.Fatalf("reactions = %+v, want a non-nil empty slice when the field is absent", ev.Reactions)
+		}
+	})
+
+	t.Run("feed events absent", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			if _, err := io.WriteString(w, `{"next":0}`); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		page, err := c.feed(t.Context(), 0, 30)
+		if err != nil {
+			t.Fatalf("feed: %v", err)
+		}
+		if page.Events == nil || len(page.Events) != 0 {
+			t.Fatalf("events = %+v, want a non-nil empty slice", page.Events)
+		}
+	})
+
+	t.Run("profile recent activity absent", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			if _, err := io.WriteString(w, `{"id":"u1","username":"alex"}`); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		profile, err := c.profile(t.Context(), "alex")
+		if err != nil {
+			t.Fatalf("profile: %v", err)
+		}
+		if profile.RecentActivity == nil || len(profile.RecentActivity) != 0 {
+			t.Fatalf("recentActivity = %+v, want a non-nil empty slice", profile.RecentActivity)
+		}
+	})
+
+	t.Run("profile recent activity present", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			body := `{"id":"u1","recentActivity":[{"id":1,"kind":"started",` +
+				`"game":{"igdbId":1942,"title":"The Witcher 3"},"createdAt":"2026-01-02T03:04:05Z"}]}`
+			if _, err := io.WriteString(w, body); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		profile, err := c.profileByCode(t.Context(), "TY-84K2-91FC")
+		if err != nil {
+			t.Fatalf("profileByCode: %v", err)
+		}
+		if len(profile.RecentActivity) != 1 || profile.RecentActivity[0].Kind != "started" {
+			t.Fatalf("recentActivity = %+v", profile.RecentActivity)
+		}
+	})
 }
 
 func TestClient_DecodesErrorEnvelope(t *testing.T) {
@@ -368,6 +501,8 @@ func TestClient_DecodesErrorEnvelope(t *testing.T) {
 		{name: "self with field", status: http.StatusUnprocessableEntity, body: `{"error":{"code":"friend_self","field":"query"}}`, code: "friend_self", field: "query"},
 		{name: "not found", status: http.StatusNotFound, body: `{"error":{"code":"user_not_found"}}`, code: "user_not_found"},
 		{name: "limit", status: http.StatusRequestEntityTooLarge, body: `{"error":{"code":"friend_limit"}}`, code: "friend_limit"},
+		{name: "activity not found", status: http.StatusNotFound, body: `{"error":{"code":"activity_not_found"}}`, code: "activity_not_found"},
+		{name: "reaction invalid", status: http.StatusUnprocessableEntity, body: `{"error":{"code":"reaction_invalid","field":"emoji"}}`, code: "reaction_invalid", field: "emoji"},
 	}
 
 	for _, tc := range tests {

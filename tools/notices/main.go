@@ -1,7 +1,8 @@
 // Command notices generates THIRD_PARTY_NOTICES.md from a curated manifest of
 // third-party components. License identification is done by hand in
 // manifest.json; this tool only locates and concatenates the verbatim
-// license texts already present on disk (Go module cache, npm node_modules).
+// license texts already present on disk (Go module cache, npm node_modules,
+// licenses vendored into the repository).
 package main
 
 import (
@@ -33,6 +34,12 @@ type Component struct {
 
 type Manifest struct {
 	Components []Component `json:"components"`
+}
+
+type Roots struct {
+	GoModCache string
+	NpmRoot    string
+	RepoRoot   string
 }
 
 type Group struct {
@@ -74,11 +81,15 @@ func validateComponent(c Component) error {
 	}
 	switch c.Source {
 	case "go", "npm":
+		if c.Version == "" {
+			return fmt.Errorf("component %s: empty version", c.Name)
+		}
+	case "file":
+		if c.LicenseFrom != "" {
+			return fmt.Errorf("component %s: source file does not use licenseFrom", c.Name)
+		}
 	default:
 		return fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
-	}
-	if c.Version == "" {
-		return fmt.Errorf("component %s: empty version", c.Name)
 	}
 	if c.LicenseFile == "" {
 		return fmt.Errorf("component %s: empty licenseFile", c.Name)
@@ -86,20 +97,37 @@ func validateComponent(c Component) error {
 	return nil
 }
 
-func licensePath(c Component, goModCache, npmRoot string) (string, error) {
+func repoRelativePath(name, rel string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("component %s: empty repository path", name)
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("component %s: repository path %q escapes the repository", name, rel)
+	}
+	return clean, nil
+}
+
+func licensePath(c Component, roots Roots) (string, error) {
 	switch c.Source {
 	case "go":
 		dir := c.LicenseFrom
 		if dir == "" {
 			dir = c.Name + "@" + c.Version
 		}
-		return filepath.Join(goModCache, dir, c.LicenseFile), nil
+		return filepath.Join(roots.GoModCache, dir, c.LicenseFile), nil
 	case "npm":
 		dir := c.LicenseFrom
 		if dir == "" {
 			dir = c.Name
 		}
-		return filepath.Join(npmRoot, dir, c.LicenseFile), nil
+		return filepath.Join(roots.NpmRoot, dir, c.LicenseFile), nil
+	case "file":
+		rel, err := repoRelativePath(c.Name, c.LicenseFile)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(roots.RepoRoot, rel), nil
 	default:
 		return "", fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
 	}
@@ -117,8 +145,8 @@ func readLicenseText(path string) (string, error) {
 	return text, nil
 }
 
-func resolveLicenseText(c Component, goModCache, npmRoot string) (string, error) {
-	path, err := licensePath(c, goModCache, npmRoot)
+func resolveLicenseText(c Component, roots Roots) (string, error) {
+	path, err := licensePath(c, roots)
 	if err != nil {
 		return "", fmt.Errorf("component %s %s: %w", c.Name, c.Version, err)
 	}
@@ -138,7 +166,7 @@ func sortComponents(cs []Component) {
 	})
 }
 
-func buildGroups(components []Component, goModCache, npmRoot string) ([]Group, []Component, error) {
+func buildGroups(components []Component, roots Roots) ([]Group, []Component, error) {
 	ordered := make([]Component, len(components))
 	copy(ordered, components)
 	sortComponents(ordered)
@@ -152,7 +180,7 @@ func buildGroups(components []Component, goModCache, npmRoot string) ([]Group, [
 			manual = append(manual, c)
 			continue
 		}
-		text, err := resolveLicenseText(c, goModCache, npmRoot)
+		text, err := resolveLicenseText(c, roots)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -258,12 +286,12 @@ func render(m Manifest, groups []Group, manual []Component) string {
 	return b.String()
 }
 
-func generate(manifestPath, goModCache, npmRoot string) ([]byte, error) {
+func generate(manifestPath string, roots Roots) ([]byte, error) {
 	m, err := loadManifest(manifestPath)
 	if err != nil {
 		return nil, err
 	}
-	groups, manual, err := buildGroups(m.Components, goModCache, npmRoot)
+	groups, manual, err := buildGroups(m.Components, roots)
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +313,7 @@ func goModCacheDir() (string, error) {
 func run() error {
 	manifestPath := flag.String("manifest", filepath.Join("tools", "notices", "manifest.json"), "path to manifest.json")
 	npmRoot := flag.String("npm-root", filepath.Join("frontend", "node_modules"), "path to frontend node_modules")
+	repoRoot := flag.String("repo-root", ".", "path to the repository root for licenses vendored in the repository")
 	goModCacheFlag := flag.String("gomodcache", "", "override GOMODCACHE (default: go env GOMODCACHE)")
 	out := flag.String("o", "THIRD_PARTY_NOTICES.md", "output file path")
 	check := flag.Bool("check", false, "check that the output file matches the manifest instead of writing it")
@@ -299,7 +328,7 @@ func run() error {
 		goModCache = dir
 	}
 
-	content, err := generate(*manifestPath, goModCache, *npmRoot)
+	content, err := generate(*manifestPath, Roots{GoModCache: goModCache, NpmRoot: *npmRoot, RepoRoot: *repoRoot})
 	if err != nil {
 		return err
 	}

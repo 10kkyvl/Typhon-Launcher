@@ -62,11 +62,39 @@ type PublicProfile struct {
 	Favorites      []GameCard      `json:"favorites"`
 	Showcase       []ShowcaseBlock `json:"showcase"`
 	RecentlyPlayed []PlayedGame    `json:"recentlyPlayed"`
+	RecentActivity []ActivityView  `json:"recentActivity"`
 	Common         *CommonGames    `json:"common"`
 	MutualFriends  []UserCard      `json:"mutualFriends"`
 	MutualCount    int             `json:"mutualCount"`
 	CreatedAt      time.Time       `json:"createdAt"`
 	Presence       *PresenceView   `json:"presence,omitempty"`
+}
+
+type ActivityView struct {
+	ID        int64     `json:"id"`
+	Kind      string    `json:"kind"`
+	Game      GameCard  `json:"game"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type Event struct {
+	ID        int64           `json:"id"`
+	User      UserCard        `json:"user"`
+	Kind      string          `json:"kind"`
+	Game      GameCard        `json:"game"`
+	CreatedAt time.Time       `json:"createdAt"`
+	Reactions []ReactionCount `json:"reactions"`
+	Mine      []string        `json:"mine"`
+}
+
+type ReactionCount struct {
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+}
+
+type FeedPage struct {
+	Events []Event `json:"events"`
+	Next   int64   `json:"next"`
 }
 
 type FriendView struct {

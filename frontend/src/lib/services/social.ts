@@ -68,6 +68,33 @@ export interface CommonGames {
   games: CommonGame[];
 }
 
+export interface ReactionCount {
+  emoji: string;
+  count: number;
+}
+
+export interface ActivityView {
+  id: number;
+  kind: string;
+  game: GameCard;
+  createdAt: string;
+}
+
+export interface FeedEvent {
+  id: number;
+  user: UserCard;
+  kind: string;
+  game: GameCard;
+  createdAt: string;
+  reactions: ReactionCount[];
+  mine: string[];
+}
+
+export interface FeedPage {
+  events: FeedEvent[];
+  next: number;
+}
+
 export interface StatsView {
   games: number;
   completed: number;
@@ -87,6 +114,7 @@ export interface PublicProfile extends UserCard {
   favorites: GameCard[];
   showcase: ShowcaseBlock[];
   recentlyPlayed: PlayedGame[];
+  recentActivity: ActivityView[];
   common: CommonGames | null;
   mutualFriends: UserCard[];
   mutualCount: number;
@@ -113,6 +141,10 @@ const unauthenticated = () => new AccountError('unauthenticated');
 
 export function emptyFriendsPage(): FriendsPage {
   return { friends: [], incoming: [], outgoing: [] };
+}
+
+export function emptyFeedPage(): FeedPage {
+  return { events: [], next: 0 };
 }
 
 export function emptyGameFriends(): GameFriends {
@@ -258,6 +290,7 @@ function toProfile(value: unknown): PublicProfile {
     favorites: list(profile.favorites),
     showcase: list(profile.showcase),
     recentlyPlayed: list(profile.recentlyPlayed),
+    recentActivity: list(profile.recentActivity),
     common: profile.common ?? null,
     mutualFriends: list(profile.mutualFriends),
     mutualCount: profile.mutualCount ?? 0,
@@ -299,6 +332,41 @@ export async function gameFriends(canonicalGameId: string): Promise<GameFriends>
   try {
     const page = (await SocialService.GameFriends(canonicalGameId)) as unknown as Partial<GameFriends> | null;
     return { played: list(page?.played), playingNow: list(page?.playingNow) };
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function feed(cursor = ''): Promise<FeedPage> {
+  if (!inWails) return emptyFeedPage();
+  try {
+    const page = (await SocialService.Feed(cursor)) as unknown as Partial<FeedPage> | null;
+    return {
+      events: list(page?.events).map((event) => ({
+        ...event,
+        reactions: list(event.reactions),
+        mine: list(event.mine),
+      })),
+      next: page?.next ?? 0,
+    };
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function react(id: string, emoji: string): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await SocialService.React(id, emoji);
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function unreact(id: string, emoji: string): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await SocialService.Unreact(id, emoji);
   } catch (err) {
     throw toAccountError(err);
   }

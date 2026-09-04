@@ -11,6 +11,7 @@ import {
   type FriendsPage,
   type RequestsSignal,
 } from '../services/social';
+import { resetFeed } from './feed';
 import { settings } from './settings';
 import { toast } from './toasts';
 import { authState } from './user';
@@ -75,11 +76,19 @@ export async function initSocial(): Promise<void> {
     const changed = previous !== state;
     previous = state;
     if (!changed) return;
+    resetFeed();
     if (state !== 'authenticated') {
       setPage(emptyFriendsPage());
       return;
     }
     kick().catch((err) => report(err, 'Не удалось обновить список друзей'));
+  });
+
+  let consentWithheld: boolean | undefined;
+  needsSocialConsent.subscribe((needs) => {
+    const changed = consentWithheld !== needs;
+    consentWithheld = needs;
+    if (changed && needs) resetFeed();
   });
 
   await loadFriends();
