@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,20 +18,40 @@ const (
 	EventRequests = "social:requests"
 
 	defaultPollInterval = 60 * time.Second
+	feedPageSize        = 30
 )
 
 var (
 	ErrNotRunning   = errors.New("social: service is not running")
 	ErrSyncDisabled = errors.New("sync_disabled")
+	ErrBadEmoji     = errors.New("reaction_invalid")
 
 	errEmptyUserID   = errors.New("social: user id is empty")
 	errEmptyQuery    = errors.New("social: query is empty")
 	errEmptyUsername = errors.New("social: username is empty")
 	errEmptyCode     = errors.New("social: friend code is empty")
 	errUnknownGame   = errors.New("unknown_game")
+	errBadCursor     = errors.New("social: cursor is invalid")
+	errBadEventID    = errors.New("social: event id is invalid")
 )
 
 var igdbIDPattern = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+
+var reactionPack = map[string]struct{}{
+	"fire":   {},
+	"salute": {},
+	"heart":  {},
+	"clap":   {},
+	"skull":  {},
+	"party":  {},
+	"eyes":   {},
+	"joy":    {},
+}
+
+func validEmoji(emoji string) bool {
+	_, ok := reactionPack[emoji]
+	return ok
+}
 
 func emit(name string, data any) {
 	if a := application.Get(); a != nil {
@@ -417,6 +438,46 @@ func (s *Service) UserGames(username, cursor string) (GamesPage, error) {
 		return GamesPage{}, err
 	}
 	return s.client.userGames(ctx, trimmed, strings.TrimSpace(cursor))
+}
+
+func (s *Service) Feed(cursor string) (FeedPage, error) {
+	trimmed := strings.TrimSpace(cursor)
+	var cur int64
+	if trimmed != "" {
+		parsed, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			return FeedPage{}, errBadCursor
+		}
+		cur = parsed
+	}
+	ctx, err := s.runContext()
+	if err != nil {
+		return FeedPage{}, err
+	}
+	return s.client.feed(ctx, cur, feedPageSize)
+}
+
+func (s *Service) React(id, emoji string) error {
+	return s.reaction(id, emoji, s.client.react)
+}
+
+func (s *Service) Unreact(id, emoji string) error {
+	return s.reaction(id, emoji, s.client.unreact)
+}
+
+func (s *Service) reaction(id, emoji string, call func(context.Context, int64, string) error) error {
+	eventID, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
+	if err != nil {
+		return errBadEventID
+	}
+	if !validEmoji(emoji) {
+		return ErrBadEmoji
+	}
+	ctx, err := s.runContext()
+	if err != nil {
+		return err
+	}
+	return call(ctx, eventID, emoji)
 }
 
 func (s *Service) GameFriends(canonicalGameID string) (GameFriends, error) {

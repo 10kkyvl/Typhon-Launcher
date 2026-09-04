@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"typhon/internal/account"
@@ -170,7 +171,7 @@ func (c *client) profile(ctx context.Context, username string) (PublicProfile, e
 	if err := c.do(ctx, http.MethodGet, path, nil, &profile); err != nil {
 		return PublicProfile{}, err
 	}
-	return profile, nil
+	return normalizeProfile(profile), nil
 }
 
 func (c *client) profileByCode(ctx context.Context, code string) (PublicProfile, error) {
@@ -179,7 +180,14 @@ func (c *client) profileByCode(ctx context.Context, code string) (PublicProfile,
 	if err := c.do(ctx, http.MethodGet, path, nil, &profile); err != nil {
 		return PublicProfile{}, err
 	}
-	return profile, nil
+	return normalizeProfile(profile), nil
+}
+
+func normalizeProfile(profile PublicProfile) PublicProfile {
+	if profile.RecentActivity == nil {
+		profile.RecentActivity = []ActivityView{}
+	}
+	return profile
 }
 
 func (c *client) userGames(ctx context.Context, username, cursor string) (GamesPage, error) {
@@ -201,6 +209,43 @@ func (c *client) gameFriends(ctx context.Context, igdbID string) (GameFriends, e
 		return GameFriends{}, err
 	}
 	return friends, nil
+}
+
+func (c *client) feed(ctx context.Context, cursor int64, limit int) (FeedPage, error) {
+	query := url.Values{
+		"cursor": {strconv.FormatInt(cursor, 10)},
+		"limit":  {strconv.Itoa(limit)},
+	}
+	path := account.APIPrefix + "/me/feed?" + query.Encode()
+	var page FeedPage
+	if err := c.do(ctx, http.MethodGet, path, nil, &page); err != nil {
+		return FeedPage{}, err
+	}
+	return normalizeFeedPage(page), nil
+}
+
+func (c *client) react(ctx context.Context, id int64, emoji string) error {
+	return c.do(ctx, http.MethodPut, reactionPath(id, emoji), nil, nil)
+}
+
+func (c *client) unreact(ctx context.Context, id int64, emoji string) error {
+	return c.do(ctx, http.MethodDelete, reactionPath(id, emoji), nil, nil)
+}
+
+func reactionPath(id int64, emoji string) string {
+	return account.APIPrefix + "/activity/" + strconv.FormatInt(id, 10) + "/reactions/" + url.PathEscape(emoji)
+}
+
+func normalizeFeedPage(page FeedPage) FeedPage {
+	if page.Events == nil {
+		page.Events = []Event{}
+	}
+	for i := range page.Events {
+		if page.Events[i].Mine == nil {
+			page.Events[i].Mine = []string{}
+		}
+	}
+	return page
 }
 
 func (c *client) do(ctx context.Context, method, path string, reqBody, out any) error {

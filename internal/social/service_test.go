@@ -521,8 +521,12 @@ func TestService_RejectsEmptyIdentifiers(t *testing.T) {
 			_, err := h.svc.ProfileByCode("")
 			return err
 		},
-		"user games":   func() error { _, err := h.svc.UserGames("", ""); return err },
-		"game friends": func() error { _, err := h.svc.GameFriends(""); return err },
+		"user games":      func() error { _, err := h.svc.UserGames("", ""); return err },
+		"game friends":    func() error { _, err := h.svc.GameFriends(""); return err },
+		"feed bad cursor": func() error { _, err := h.svc.Feed("not-a-number"); return err },
+		"react bad emoji": func() error { return h.svc.React("1", "banana") },
+		"react bad id":    func() error { return h.svc.React("not-a-number", "fire") },
+		"unreact bad id":  func() error { return h.svc.Unreact("not-a-number", "fire") },
 	}
 	for name, call := range calls {
 		if err := call(); err == nil {
@@ -547,6 +551,15 @@ func TestService_MethodsFailBeforeStartup(t *testing.T) {
 	}
 	if _, err := h.svc.Blocks(); err == nil {
 		t.Error("Blocks before startup returned no error")
+	}
+	if _, err := h.svc.Feed(""); err == nil {
+		t.Error("Feed before startup returned no error")
+	}
+	if err := h.svc.React("1", "fire"); err == nil {
+		t.Error("React before startup returned no error")
+	}
+	if err := h.svc.Unreact("1", "fire"); err == nil {
+		t.Error("Unreact before startup returned no error")
 	}
 	if got := h.reqs.Load(); got != 0 {
 		t.Fatalf("requests = %d, want 0 before startup", got)
@@ -691,6 +704,9 @@ func TestService_SyncOffFailsEveryOtherCall(t *testing.T) {
 		"profile by code":    func() error { _, err := h.svc.ProfileByCode("TY-ABCD-EFGH"); return err },
 		"user games":         func() error { _, err := h.svc.UserGames("alex", ""); return err },
 		"game friends":       func() error { _, err := h.svc.GameFriends("igdb:1942"); return err },
+		"feed":               func() error { _, err := h.svc.Feed(""); return err },
+		"react":              func() error { return h.svc.React("1", "fire") },
+		"unreact":            func() error { return h.svc.Unreact("1", "fire") },
 	}
 	for name, call := range calls {
 		if err := call(); !errors.Is(err, ErrSyncDisabled) {
@@ -796,5 +812,147 @@ func TestService_KickDiscardsAStaleSuccessfulPoll(t *testing.T) {
 				t.Fatal("the stale page must not be emitted")
 			}
 		}
+	}
+}
+
+func TestService_FeedRequestShape(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() == "/v1/me/friends" {
+			writeJSON(h.t, w, pageWithIncoming(0))
+			return
+		}
+		writeJSON(h.t, w, `{"events":[],"next":0}`)
+	})
+	h.start()
+	h.awaitPoll()
+	<-h.paths
+
+	if _, err := h.svc.Feed(""); err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	select {
+	case path := <-h.paths:
+		if path != "GET /v1/me/feed" {
+			t.Fatalf("path = %q, want GET /v1/me/feed", path)
+		}
+	default:
+		t.Fatal("no request recorded")
+	}
+
+	if _, err := h.svc.Feed("42"); err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	select {
+	case path := <-h.paths:
+		if path != "GET /v1/me/feed" {
+			t.Fatalf("path = %q, want GET /v1/me/feed", path)
+		}
+	default:
+		t.Fatal("no request recorded")
+	}
+}
+
+func TestService_FeedRejectsBadCursor(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(0))
+	})
+	h.start()
+	h.awaitPoll()
+	before := h.reqs.Load()
+
+	if _, err := h.svc.Feed("not-a-number"); !errors.Is(err, errBadCursor) {
+		t.Fatalf("Feed with a bad cursor = %v, want errBadCursor", err)
+	}
+	if got := h.reqs.Load(); got != before {
+		t.Fatalf("requests = %d, want %d: a bad cursor must not reach the API", got, before)
+	}
+}
+
+func TestService_ReactAndUnreact(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*Service) error
+		path string
+	}{
+		{name: "react", call: func(s *Service) error { return s.React("7", "fire") }, path: "PUT /v1/activity/7/reactions/fire"},
+		{name: "unreact", call: func(s *Service) error { return s.Unreact("7", "fire") }, path: "DELETE /v1/activity/7/reactions/fire"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+				if r.URL.EscapedPath() == "/v1/me/friends" {
+					writeJSON(h.t, w, pageWithIncoming(0))
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			h.start()
+			h.awaitPoll()
+			<-h.paths
+
+			if err := tc.call(h.svc); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			select {
+			case path := <-h.paths:
+				if path != tc.path {
+					t.Fatalf("path = %q, want %q", path, tc.path)
+				}
+			default:
+				t.Fatal("no request recorded")
+			}
+		})
+	}
+}
+
+func TestService_ReactRejectsBadEmojiAndID(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(0))
+	})
+	h.start()
+	h.awaitPoll()
+	before := h.reqs.Load()
+
+	if err := h.svc.React("7", "banana"); !errors.Is(err, ErrBadEmoji) {
+		t.Fatalf("React with a bad emoji = %v, want ErrBadEmoji", err)
+	}
+	if err := h.svc.Unreact("7", "banana"); !errors.Is(err, ErrBadEmoji) {
+		t.Fatalf("Unreact with a bad emoji = %v, want ErrBadEmoji", err)
+	}
+	if err := h.svc.React("not-a-number", "fire"); !errors.Is(err, errBadEventID) {
+		t.Fatalf("React with a bad id = %v, want errBadEventID", err)
+	}
+	if ErrBadEmoji.Error() != "reaction_invalid" {
+		t.Fatalf("ErrBadEmoji = %q, want the reaction_invalid error code", ErrBadEmoji)
+	}
+	if got := h.reqs.Load(); got != before {
+		t.Fatalf("requests = %d, want %d: an invalid emoji or id must not reach the API", got, before)
+	}
+}
+
+func TestService_FeedAndReactSurfaceAPIErrors(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() == "/v1/me/friends" {
+			writeJSON(h.t, w, pageWithIncoming(0))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		if _, err := io.WriteString(w, `{"error":{"code":"activity_not_found"}}`); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+	h.start()
+	h.awaitPoll()
+
+	if _, err := h.svc.Feed(""); err == nil {
+		t.Fatal("Feed against a failing API returned no error")
+	}
+	if err := h.svc.React("7", "fire"); err == nil {
+		t.Fatal("React against a failing API returned no error")
+	}
+	var apiErr *APIError
+	if err := h.svc.React("7", "fire"); !errors.As(err, &apiErr) || apiErr.Code != "activity_not_found" {
+		t.Fatalf("React error = %v, want an APIError with code activity_not_found", err)
 	}
 }
