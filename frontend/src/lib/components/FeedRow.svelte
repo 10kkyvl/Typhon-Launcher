@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FeedEvent } from '../services/social';
-  import { eventLine } from '../social/feed';
+  import { eventLine, kindLabel } from '../social/feed';
   import { openGameByIGDB } from '../social/openGame';
   import { feedPending } from '../stores/feed';
   import { navigate } from '../stores/router';
@@ -21,6 +21,7 @@
 
   const name = $derived(event.user.displayName || event.user.username);
   const when = $derived(relativeDate(event.createdAt));
+  const kind = $derived(kindLabel(event.kind));
   const line = $derived(eventLine(event));
 
   function openUser() {
@@ -46,13 +47,22 @@
         <button class="name" type="button" onclick={openUser}>{name}</button>
         <span class="when">{when}</span>
       </div>
+      <span class="kind">{kind}</span>
     {/if}
 
     <button class="game" type="button" onclick={openGame}>
-      <span class="thumb">
-        <Artwork src={event.game.coverUrl} alt={event.game.title} ratio="3 / 4" />
-      </span>
-      <span class="line">{line}</span>
+      {#if compact}
+        <span class="thumb">
+          <Artwork src={event.game.coverUrl} alt={event.game.title} ratio="3 / 4" />
+        </span>
+        <span class="line">{line}</span>
+      {:else}
+        <span class="cover">
+          <Artwork src={event.game.coverUrl} alt={event.game.title} ratio="16 / 9" radius="var(--radius-md)" />
+          <span class="fade"></span>
+        </span>
+        <span class="caption">{event.game.title}</span>
+      {/if}
     </button>
 
     {#if !compact && onreact}
@@ -70,7 +80,6 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-3);
-    padding: var(--space-3) 0.8rem;
   }
 
   .row.compact {
@@ -95,7 +104,7 @@
   .body {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-3);
     flex: 1;
     min-width: 0;
   }
@@ -128,13 +137,19 @@
     color: var(--text-3);
   }
 
+  .kind {
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
   .game {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-width: 0;
-    padding: 0.4rem;
-    margin: -0.4rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.6rem;
+    margin: -0.6rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -144,16 +159,43 @@
     background: var(--hover);
   }
 
+  .compact .game {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cover {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 40rem;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface-3);
+  }
+
+  .fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 55%, rgba(5, 8, 12, 0.55));
+    pointer-events: none;
+  }
+
+  .caption {
+    font-size: var(--font-md);
+    font-weight: 600;
+    color: var(--text);
+  }
+
   .thumb {
     display: block;
-    width: 3.2rem;
+    width: 2.6rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;
-  }
-
-  .compact .thumb {
-    width: 2.6rem;
   }
 
   .line {
@@ -163,9 +205,5 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .compact .game {
-    flex: 1;
   }
 </style>

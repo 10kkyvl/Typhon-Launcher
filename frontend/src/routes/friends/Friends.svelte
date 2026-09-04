@@ -1,11 +1,24 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { EllipsisVertical, LogIn, UserPlus, Users } from '@lucide/svelte';
+  import {
+    ArrowDownUp,
+    ChevronDown,
+    EllipsisVertical,
+    LayoutGrid,
+    List,
+    LogIn,
+    ShieldCheck,
+    UserPlus,
+    Users,
+  } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import SearchInput from '../../lib/components/SearchInput.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import { AccountError } from '../../lib/services/account';
@@ -18,36 +31,118 @@
     refresh,
     unblock,
     unfriend,
+    type FriendView,
+    type RequestView,
     type UserCard,
   } from '../../lib/services/social';
   import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
+  import { friendsView } from '../../lib/stores/ui';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
+  import { relativeDate } from '../../lib/utils/format';
   import AddFriendModal from './AddFriendModal.svelte';
   import FriendCodeCard from './FriendCodeCard.svelte';
   import FriendRow from './FriendRow.svelte';
 
   let { tab: initialTab }: { tab?: string } = $props();
 
-  let tab = $state('friends');
+  let tab = $state('all');
   let addOpen = $state(false);
   let codeOpen = $state(false);
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
   let busy = $state('');
   let myCode = $state('');
+  let search = $state('');
+  let sortBy = $state<'name' | 'status'>('name');
 
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
-  const friends = $derived(sortFriends(page.friends));
+
+  const onlineFriends = $derived(
+    page.friends.filter((f) => {
+      const dot = presenceDot(f.presence);
+      return dot === 'online' || dot === 'busy';
+    }),
+  );
+  const awayFriends = $derived(page.friends.filter((f) => presenceDot(f.presence) === 'away'));
+  const offlineFriends = $derived(
+    page.friends.filter((f) => {
+      const dot = presenceDot(f.presence);
+      return dot !== 'online' && dot !== 'busy' && dot !== 'away';
+    }),
+  );
+
+  const presenceTabs = new Set(['all', 'online', 'away', 'offline']);
+
+  const sortLabels: Record<'name' | 'status', string> = {
+    name: 'Имя (А-Я)',
+    status: 'По статусу',
+  };
+
+  const groupEmptyCopy: Record<string, { title: string; description: string }> = {
+    online: { title: 'Никто не в сети', description: 'Сейчас никто из друзей не в сети.' },
+    away: { title: 'Никто не отошёл', description: 'Сейчас никто из друзей не отходил.' },
+    offline: { title: 'Все на связи', description: 'Все друзья сейчас в сети или отошли.' },
+  };
+
+  const groupFor = $derived.by(() => {
+    if (tab === 'online') return onlineFriends;
+    if (tab === 'away') return awayFriends;
+    if (tab === 'offline') return offlineFriends;
+    return page.friends;
+  });
+
+  function sortByName(list: FriendView[]): FriendView[] {
+    return [...list].sort((a, b) => (a.displayName || a.username).localeCompare(b.displayName || b.username, 'ru'));
+  }
+
+  function matchesSearch(user: UserCard, query: string): boolean {
+    return (user.displayName || '').toLowerCase().includes(query) || user.username.toLowerCase().includes(query);
+  }
+
+  const visibleFriends = $derived.by(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = query ? groupFor.filter((f) => matchesSearch(f, query)) : groupFor;
+    return sortBy === 'status' ? sortFriends(filtered) : sortByName(filtered);
+  });
+
+  function playingGame(friend: FriendView): { igdbId: number; title: string } | null {
+    const presence = friend.presence;
+    if (!presence || presenceDot(presence) === 'offline' || presence.gameId == null) return null;
+    return { igdbId: presence.gameId, title: presence.gameTitle ?? '' };
+  }
+
+  function receivedAt(iso: string | null): string {
+    const when = relativeDate(iso);
+    return when === '—' ? when : `Получена ${when.toLowerCase()}`;
+  }
+
+  function incomingStats(request: RequestView): string[] {
+    const stats: string[] = [];
+    if (request.mutualCount > 0) stats.push(commonLine(request.mutualCount, 0));
+    if (request.commonCount > 0) stats.push(commonLine(0, request.commonCount));
+    stats.push(receivedAt(request.createdAt));
+    return stats;
+  }
+
+  function outgoingStats(request: RequestView): string[] {
+    const stats: string[] = [];
+    if (request.commonCount > 0) stats.push(commonLine(0, request.commonCount));
+    stats.push(`Ожидает ответа · ${sentAt(request.createdAt)}`);
+    return stats;
+  }
 
   const tabs = $derived([
-    { id: 'friends', label: `Друзья (${page.friends.length})` },
-    { id: 'requests', label: `Заявки (${$incomingCount + page.outgoing.length})` },
-    { id: 'blocked', label: 'Заблокированные' },
+    { id: 'all', label: 'Все друзья', count: page.friends.length },
+    { id: 'online', label: 'В сети', count: onlineFriends.length },
+    { id: 'away', label: 'Отошли', count: awayFriends.length },
+    { id: 'offline', label: 'Не в сети', count: offlineFriends.length },
+    { id: 'requests', label: 'Заявки', count: $incomingCount + page.outgoing.length },
+    { id: 'blocked', label: 'Заблокированные', count: blocked.length },
   ]);
 
   const menuItems = [
@@ -80,7 +175,7 @@
       await action();
       if (done) toast(done, 'success');
       await refresh();
-      if (tab === 'blocked' || id.startsWith('block:')) await loadBlocks();
+      if (id.startsWith('block:') || id.startsWith('unblock:')) await loadBlocks();
     } catch (err) {
       report(err, fallback);
     } finally {
@@ -116,7 +211,7 @@
   });
 
   $effect(() => {
-    if (tab === 'blocked' && !isGuest && !$needsSocialConsent) loadBlocks();
+    if (!isGuest && !$needsSocialConsent) loadBlocks();
   });
 
   onMount(() => {
@@ -124,19 +219,19 @@
   });
 </script>
 
-<PageHeader title="Друзья" subtitle="Заявки, список друзей и заблокированные">
-  {#snippet actions()}
-    {#if !isGuest && !$needsSocialConsent}
-      <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>Мой код</Button>
-      <Button variant="primary" onclick={() => (addOpen = true)}>
-        <UserPlus size="1.5rem" strokeWidth={1.8} />
-        Добавить друга
-      </Button>
-    {/if}
-  {/snippet}
-</PageHeader>
+<Card surface="panel">
+  <PageHeader title="Друзья" subtitle="Заявки, список друзей и заблокированные">
+    {#snippet actions()}
+      {#if !isGuest && !$needsSocialConsent}
+        <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>Мой код</Button>
+        <Button variant="primary" onclick={() => (addOpen = true)}>
+          <UserPlus size="1.5rem" strokeWidth={1.8} />
+          Добавить друга
+        </Button>
+      {/if}
+    {/snippet}
+  </PageHeader>
 
-<div class="page">
   {#if isGuest}
     <EmptyState
       title="Друзья доступны с аккаунтом"
@@ -172,18 +267,66 @@
       </div>
     {/if}
 
-    <Tabs {tabs} bind:value={tab} />
+    <Tabs {tabs} bind:value={tab} variant="pill" />
 
-    <div class="list">
-      {#if tab === 'friends'}
+    {#if presenceTabs.has(tab)}
+      <div class="toolbar">
+        <div class="search-wrap">
+          <SearchInput bind:value={search} placeholder="Поиск друзей" />
+        </div>
+        <div class="toolbar-right">
+          <DropdownMenu
+            items={[
+              { id: 'name', label: sortLabels.name },
+              { id: 'status', label: sortLabels.status },
+            ]}
+            onselect={(id) => (sortBy = id as 'name' | 'status')}
+          >
+            {#snippet trigger({ open, toggle })}
+              <button class="sort" class:open onclick={toggle}>
+                <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+                Сортировка: {sortLabels[sortBy]}
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
+              </button>
+            {/snippet}
+          </DropdownMenu>
+          <SegmentedControl
+            bind:value={$friendsView}
+            options={[
+              { id: 'list', label: 'Список' },
+              { id: 'grid', label: 'Сетка' },
+            ]}
+          >
+            {#snippet item(option)}
+              {#if option.id === 'list'}
+                <List size="1.6rem" strokeWidth={1.8} />
+              {:else}
+                <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+              {/if}
+            {/snippet}
+          </SegmentedControl>
+        </div>
+      </div>
+
+      {#if visibleFriends.length === 0}
         {#if page.friends.length === 0}
           <EmptyState title="Пока никого" description="Добавьте друга по имени пользователя или по коду." />
+        {:else if search.trim()}
+          <EmptyState title="Ничего не найдено" description="Попробуйте изменить запрос поиска." />
+        {:else if groupEmptyCopy[tab]}
+          <EmptyState title={groupEmptyCopy[tab].title} description={groupEmptyCopy[tab].description} />
         {:else}
-          {#each friends as friend (friend.id)}
+          <EmptyState title="Пока никого" description="Добавьте друга по имени пользователя или по коду." />
+        {/if}
+      {:else if $friendsView === 'grid'}
+        <div class="grid">
+          {#each visibleFriends as friend (friend.id)}
             <FriendRow
               user={friend}
               status={presenceDot(friend.presence)}
               meta={presenceLine(friend.presence)}
+              game={playingGame(friend)}
+              variant="grid"
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
@@ -197,18 +340,40 @@
               {/snippet}
             </FriendRow>
           {/each}
-        {/if}
-      {:else if tab === 'requests'}
-        {#if page.incoming.length === 0 && page.outgoing.length === 0}
-          <EmptyState title="Заявок нет" description="Новые заявки появятся здесь." />
-        {:else}
-          {#if page.incoming.length > 0}
+        </div>
+      {:else}
+        <div class="list">
+          {#each visibleFriends as friend (friend.id)}
+            <FriendRow
+              user={friend}
+              status={presenceDot(friend.presence)}
+              meta={presenceLine(friend.presence)}
+              game={playingGame(friend)}
+              variant="list"
+              onopen={() => openProfile(friend)}
+            >
+              {#snippet actions()}
+                <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
+                  {#snippet trigger({ toggle })}
+                    <IconButton label="Ещё" size="sm" onclick={toggle}>
+                      <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
+                    </IconButton>
+                  {/snippet}
+                </DropdownMenu>
+              {/snippet}
+            </FriendRow>
+          {/each}
+        </div>
+      {/if}
+    {:else if tab === 'requests'}
+      {#if page.incoming.length === 0 && page.outgoing.length === 0}
+        <EmptyState title="Заявок нет" description="Новые заявки появятся здесь." />
+      {:else}
+        {#if page.incoming.length > 0}
+          <h4 class="eyebrow">Входящие заявки</h4>
+          <div class="cards">
             {#each page.incoming as request (request.id)}
-              <FriendRow
-                user={request}
-                meta={commonLine(request.mutualCount, request.commonCount)}
-                onopen={() => openProfile(request)}
-              >
+              <FriendRow user={request} variant="card" stats={incomingStats(request)} onopen={() => openProfile(request)}>
                 {#snippet actions()}
                   <Button
                     variant="primary"
@@ -230,16 +395,14 @@
                 {/snippet}
               </FriendRow>
             {/each}
-          {/if}
+          </div>
+        {/if}
 
-          {#if page.outgoing.length > 0}
-            <h4 class="eyebrow">Отправленные</h4>
+        {#if page.outgoing.length > 0}
+          <h4 class="eyebrow">Отправленные</h4>
+          <div class="cards">
             {#each page.outgoing as request (request.id)}
-              <FriendRow
-                user={request}
-                meta={sentAt(request.createdAt)}
-                onopen={() => openProfile(request)}
-              >
+              <FriendRow user={request} variant="card" stats={outgoingStats(request)} onopen={() => openProfile(request)}>
                 {#snippet actions()}
                   <Button
                     variant="ghost"
@@ -252,16 +415,26 @@
                 {/snippet}
               </FriendRow>
             {/each}
-          {/if}
+          </div>
         {/if}
-      {:else if blocked.length === 0}
-        <EmptyState
-          title="Никого не заблокировано"
-          description="Заблокированные не видят ваш профиль и не могут отправить заявку."
-        />
-      {:else}
+      {/if}
+
+      <div class="safety">
+        <ShieldCheck size="2rem" strokeWidth={1.6} />
+        <div class="safety-text">
+          <h4>Ваша безопасность — наш приоритет</h4>
+          <p>Не принимайте заявки от незнакомых пользователей и не делитесь личными данными.</p>
+        </div>
+      </div>
+    {:else if blocked.length === 0}
+      <EmptyState
+        title="Никого не заблокировано"
+        description="Заблокированные не видят ваш профиль и не могут отправить заявку."
+      />
+    {:else}
+      <div class="cards">
         {#each blocked as user (user.id)}
-          <FriendRow {user}>
+          <FriendRow {user} variant="card">
             {#snippet actions()}
               <Button
                 size="sm"
@@ -274,10 +447,10 @@
             {/snippet}
           </FriendRow>
         {/each}
-      {/if}
-    </div>
+      </div>
+    {/if}
   {/if}
-</div>
+</Card>
 
 {#if !isGuest && !$needsSocialConsent}
   <AddFriendModal bind:open={addOpen} onsent={reload} />
@@ -285,31 +458,107 @@
 <SocialConsentScreen bind:open={consentOpen} />
 
 <style>
-  .page {
-    max-width: 96rem;
-  }
-
   .code {
     margin-bottom: var(--space-5);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin: var(--space-5) 0;
+    flex-wrap: wrap;
+  }
+
+  .search-wrap {
+    flex: 1;
+    min-width: 20rem;
+    max-width: 40rem;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: var(--control-sm);
+    padding: 0 1.1rem;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--text-3);
+    white-space: nowrap;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .sort:hover,
+  .sort.open {
+    background: var(--hover);
+    color: var(--text);
   }
 
   .list {
     display: flex;
     flex-direction: column;
-    margin-top: var(--space-4);
   }
 
   .list :global(.row + .row) {
     border-top: 1px solid var(--border);
   }
 
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
   .eyebrow {
-    margin: var(--space-5) 0 var(--space-2);
-    padding: 0 0.8rem;
+    margin: var(--space-6) 0 var(--space-3);
+    padding: 0 0.2rem;
     font-size: 1.2rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .safety {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-3);
+  }
+
+  .safety-text h4 {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .safety-text p {
+    margin-top: 0.3rem;
+    font-size: var(--font-xs);
+    line-height: 1.5;
     color: var(--text-3);
   }
 </style>

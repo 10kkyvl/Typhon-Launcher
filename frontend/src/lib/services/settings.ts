@@ -82,6 +82,14 @@ const fallbackDefaults: Settings = {
   presenceStatus: 'online',
 };
 
+export const maxActiveDownloadOptions = [
+  { id: '1', label: '1' },
+  { id: '2', label: '2' },
+  { id: '3', label: '3' },
+  { id: '5', label: '5' },
+];
+
+
 export async function getSettings(): Promise<Settings> {
   if (inWails) {
     return (await SettingsService.GetSettings()) as Settings;

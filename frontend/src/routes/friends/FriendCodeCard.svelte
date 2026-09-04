@@ -9,7 +9,10 @@
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
   import { toast } from '../../lib/stores/toasts';
 
-  let { code = $bindable('') }: { code?: string } = $props();
+  let {
+    code = $bindable(''),
+    variant = 'full',
+  }: { code?: string; variant?: 'full' | 'share' } = $props();
 
   let loading = $state(!code);
   let rotating = $state(false);
@@ -55,22 +58,37 @@
   });
 </script>
 
-<Card padding="var(--space-4) var(--space-5)">
-  <div class="card">
-    <div class="text">
-      <span class="label">Ваш код</span>
-      <span class="code" class:pending={loading}>{loading ? 'Загрузка…' : code || '—'}</span>
-    </div>
-    <div class="actions">
-      <IconButton label="Скопировать код" size="sm" disabled={!code} onclick={copy}>
-        <Copy size="1.6rem" strokeWidth={1.8} />
-      </IconButton>
-      <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
-        Сгенерировать новый
+{#if variant === 'share'}
+  <Card title="Мой код друга">
+    <div class="share">
+      <p class="hint">Поделитесь кодом с друзьями, чтобы они добавили вас в Typhon.</p>
+      <div class="field">
+        <span class="code" class:pending={loading}>{loading ? 'Загрузка…' : code || '—'}</span>
+      </div>
+      <Button variant="primary" disabled={!code} onclick={copy}>
+        <Copy size="1.5rem" strokeWidth={1.8} />
+        Скопировать код
       </Button>
     </div>
-  </div>
-</Card>
+  </Card>
+{:else}
+  <Card padding="var(--space-4) var(--space-5)">
+    <div class="card">
+      <div class="text">
+        <span class="label">Ваш код</span>
+        <span class="code" class:pending={loading}>{loading ? 'Загрузка…' : code || '—'}</span>
+      </div>
+      <div class="actions">
+        <IconButton label="Скопировать код" size="sm" disabled={!code} onclick={copy}>
+          <Copy size="1.6rem" strokeWidth={1.8} />
+        </IconButton>
+        <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
+          Сгенерировать новый
+        </Button>
+      </div>
+    </div>
+  </Card>
+{/if}
 
 <Modal bind:open={confirmOpen} title="Сменить код" width="42rem">
   <p class="warn">
@@ -130,5 +148,33 @@
     font-size: var(--font-md);
     line-height: 1.6;
     color: var(--text-2);
+  }
+
+  .share {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .hint {
+    font-size: var(--font-sm);
+    line-height: 1.5;
+    color: var(--text-3);
+  }
+
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    height: var(--control-lg);
+    padding: 0 var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .field .code {
+    font-size: var(--font-md);
   }
 </style>

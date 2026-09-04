@@ -1,22 +1,48 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { LogIn, Users } from '@lucide/svelte';
+  import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import FeedRow from '../../lib/components/FeedRow.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
+  import StatTile from '../../lib/components/StatTile.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
+  import type { FriendView } from '../../lib/services/social';
   import { feedDayGroups } from '../../lib/social/feed';
+  import { presenceDot, presenceLine, sortFriends, statusDot } from '../../lib/social/presence';
   import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, reactToEvent } from '../../lib/stores/feed';
-  import { needsSocialConsent } from '../../lib/stores/social';
+  import { presenceStatus } from '../../lib/stores/presence';
+  import { initProfile, profileSnapshot } from '../../lib/stores/profile';
+  import { navigate } from '../../lib/stores/router';
+  import { friendsPage, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
-  import { authState, leaveGuest } from '../../lib/stores/user';
+  import { authState, currentUser, leaveGuest } from '../../lib/stores/user';
+  import { formatCount } from '../../lib/utils/format';
+  import FriendCodeCard from '../friends/FriendCodeCard.svelte';
+  import FriendRow from '../friends/FriendRow.svelte';
+
+  const ONLINE_LIMIT = 8;
+  const PLAYING_LIMIT = 6;
 
   let consentOpen = $state(false);
+  let myCode = $state('');
 
   const isGuest = $derived($authState === 'guest');
   const feedGroups = $derived(feedDayGroups($feedEvents));
+
+  const user = $derived($currentUser);
+  const displayName = $derived(user?.displayName || user?.username || '');
+  const stats = $derived($profileSnapshot.stats);
+  const ownDot = $derived(statusDot($presenceStatus));
+
+  const onlineFriends = $derived(
+    sortFriends($friendsPage.friends).filter((friend) => presenceDot(friend.presence) !== 'offline'),
+  );
+  const playingFriends = $derived(onlineFriends.filter((friend) => friend.presence?.gameId != null));
 
   function report(err: unknown, fallback: string) {
     if (err instanceof AccountError && err.code === 'unauthenticated') return;
@@ -27,8 +53,22 @@
     leaveGuest(view).catch((err) => report(err, 'Не удалось открыть вход'));
   }
 
+  function openUser(friend: FriendView) {
+    navigate('user', { username: friend.username });
+  }
+
+  function playingGame(friend: FriendView): { igdbId: number; title: string } | null {
+    const gameId = friend.presence?.gameId;
+    if (!gameId) return null;
+    return { igdbId: gameId, title: friend.presence?.gameTitle ?? '' };
+  }
+
   $effect(() => {
     if (!isGuest && !$needsSocialConsent) void loadFeed(true);
+  });
+
+  onMount(() => {
+    initProfile();
   });
 </script>
 
@@ -64,29 +104,85 @@
       {/snippet}
     </EmptyState>
   {:else}
-    <div class="list">
-      {#if $feedEvents.length === 0}
-        {#if $feedLoading}
-          <p class="muted">Загрузка…</p>
-        {:else}
-          <EmptyState
-            title="Пока тихо"
-            description="Здесь появятся события друзей: пройденные игры, новинки и попавшее в любимые."
-          />
-        {/if}
-      {:else}
-        {#each feedGroups as group (group.key)}
-          <h4 class="eyebrow">{group.label}</h4>
-          {#each group.events as event (event.id)}
-            <FeedRow {event} onreact={(emoji) => reactToEvent(event.id, emoji)} />
-          {/each}
-        {/each}
-        {#if $feedCursor > 0}
-          <div class="more">
-            <Button disabled={$feedLoading} onclick={() => moreFeed()}>Показать ещё</Button>
+    <div class="layout">
+      <div class="left">
+        <Card>
+          <div class="profile">
+            <Avatar size="lg" name={displayName} src={user?.avatarUrl} status={ownDot} />
+            <h3 class="name">{displayName}</h3>
+            {#if user}<span class="handle">@{user.username}</span>{/if}
+            {#if user?.bio}<p class="bio">{user.bio}</p>{/if}
           </div>
+          <div class="stats">
+            <StatTile value={formatCount(stats.games)} label="Игр" />
+            <StatTile value={formatCount(stats.hours)} label="Часов" />
+            <StatTile value={formatCount(stats.completed)} label="Пройдено" />
+          </div>
+        </Card>
+
+        <FriendCodeCard variant="share" bind:code={myCode} />
+
+        <Card title={`Онлайн друзья (${onlineFriends.length})`}>
+          {#if onlineFriends.length === 0}
+            <p class="muted">Сейчас никого нет в сети</p>
+          {:else}
+            <div class="friends">
+              {#each onlineFriends.slice(0, ONLINE_LIMIT) as friend (friend.id)}
+                <FriendRow
+                  user={friend}
+                  status={presenceDot(friend.presence)}
+                  meta={presenceLine(friend.presence)}
+                  onopen={() => openUser(friend)}
+                />
+              {/each}
+            </div>
+          {/if}
+          <div class="show-all">
+            <Button onclick={() => navigate('friends')}>Показать всех друзей</Button>
+          </div>
+        </Card>
+      </div>
+
+      <div class="center">
+        {#if $feedEvents.length === 0}
+          {#if $feedLoading}
+            <p class="muted">Загрузка…</p>
+          {:else}
+            <EmptyState
+              title="Пока тихо"
+              description="Здесь появятся события друзей: пройденные игры, новинки и попавшее в любимые."
+            />
+          {/if}
+        {:else}
+          {#each feedGroups as group (group.key)}
+            <h4 class="eyebrow">{group.label}</h4>
+            {#each group.events as event (event.id)}
+              <Card>
+                <FeedRow {event} onreact={(emoji) => reactToEvent(event.id, emoji)} />
+              </Card>
+            {/each}
+          {/each}
+          {#if $feedCursor > 0}
+            <div class="more">
+              <Button disabled={$feedLoading} onclick={() => moreFeed()}>Показать ещё</Button>
+            </div>
+          {/if}
         {/if}
-      {/if}
+      </div>
+
+      <div class="right">
+        <Card title="Друзья в игре">
+          {#if playingFriends.length === 0}
+            <p class="muted">Сейчас никто из друзей не играет</p>
+          {:else}
+            <div class="friends">
+              {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
+                <FriendRow user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
+              {/each}
+            </div>
+          {/if}
+        </Card>
+      </div>
     </div>
   {/if}
 </div>
@@ -95,23 +191,92 @@
 
 <style>
   .page {
-    max-width: 96rem;
+    max-width: 148rem;
   }
 
-  .list {
+  .layout {
+    display: grid;
+    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .left,
+  .right {
     display: flex;
     flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
+  }
+
+  .center {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
+  .profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    text-align: center;
+  }
+
+  .name {
+    margin-top: var(--space-2);
+    font-size: var(--font-lg);
+    font-weight: 600;
+  }
+
+  .handle {
+    font-size: var(--font-sm);
+    color: var(--text-3);
+  }
+
+  .bio {
+    margin-top: 0.4rem;
+    font-size: var(--font-sm);
+    line-height: 1.5;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+    margin-top: var(--space-5);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .stats :global(.tile) {
+    align-items: center;
+  }
+
+  .friends {
+    display: flex;
+    flex-direction: column;
+    margin: 0 calc(var(--space-6) * -1);
+  }
+
+  .show-all {
     margin-top: var(--space-4);
   }
 
-  .list :global(.row + .row) {
-    border-top: 1px solid var(--border);
+  .show-all :global(.btn) {
+    width: 100%;
   }
+
+
+
 
   .muted {
     font-size: var(--font-sm);
     color: var(--text-3);
-    padding: var(--space-5) 0.8rem;
   }
 
   .more {
@@ -121,12 +286,30 @@
   }
 
   .eyebrow {
-    margin: var(--space-5) 0 var(--space-2);
-    padding: 0 0.8rem;
     font-size: 1.2rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-3);
+  }
+
+  @media (max-width: 1400px) {
+    .layout {
+      grid-template-columns: 30rem minmax(0, 1fr);
+    }
+
+    .right {
+      display: none;
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .left {
+      display: none;
+    }
   }
 </style>

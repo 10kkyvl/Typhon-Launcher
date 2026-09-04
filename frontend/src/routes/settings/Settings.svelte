@@ -23,7 +23,7 @@
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
-  import { getSettings, openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
     getAppInfo,
@@ -179,16 +179,9 @@
   const downloadLimitPresets = [10, 25, 50];
   const uploadLimitPresets = [1, 5, 10];
 
-  const maxActiveOptions = [
-    { id: '1', label: '1' },
-    { id: '2', label: '2' },
-    { id: '3', label: '3' },
-    { id: '5', label: '5' },
-  ];
-
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
-    return maxActiveOptions.some((o) => o.id === id) ? id : '2';
+    return maxActiveDownloadOptions.some((o) => o.id === id) ? id : '2';
   });
 
   const cleanupPolicyOptions = [
@@ -532,7 +525,7 @@
           <Select
             value={maxActiveValue}
             width="20rem"
-            options={maxActiveOptions}
+            options={maxActiveDownloadOptions}
             onchange={(id) => set({ maxActiveDownloads: Number(id) })}
           />
         </div>
