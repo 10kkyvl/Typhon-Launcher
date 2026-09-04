@@ -7,8 +7,7 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { PublicProfile } from '../../lib/services/social';
-  import { memberSince } from '../../lib/social/profileView';
-  import { relationLabel } from '../../lib/social/view';
+  import { memberSince, relationLabel } from '../../lib/social/view';
 
   let {
     profile,

@@ -3,7 +3,6 @@
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import { SHOWCASE_TITLES } from '../../lib/profile/view';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { PublicProfile } from '../../lib/services/social';
@@ -16,7 +15,7 @@
     sendRequest,
     unfriend,
   } from '../../lib/services/social';
-  import type { ShowcaseKind } from '../../lib/services/account';
+  import { showcaseTitle } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import UserCommon from './UserCommon.svelte';
@@ -41,8 +40,6 @@
   const recent = $derived(data && !closed ? data.recentlyPlayed : []);
   const favorites = $derived(data && !closed ? data.favorites : []);
   const mutual = $derived(data && !closed && data.mutualCount > 0 ? data.mutualFriends : []);
-
-  const showcaseTitle = (kind: string) => SHOWCASE_TITLES[kind as ShowcaseKind] ?? kind;
 
   async function load(target: string) {
     loading = true;

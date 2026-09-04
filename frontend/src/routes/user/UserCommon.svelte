@@ -1,7 +1,7 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
   import type { CommonGames } from '../../lib/services/social';
-  import { commonGameLabel, commonGamesTitle } from '../../lib/social/profileView';
+  import { commonGameLabel, commonGamesTitle } from '../../lib/social/view';
 
   let { common, name }: { common: CommonGames; name: string } = $props();
 

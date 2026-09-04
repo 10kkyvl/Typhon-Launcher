@@ -12,6 +12,7 @@
   import type { GameRef } from '../../lib/services/profile';
   import { friendCode } from '../../lib/services/social';
   import { statusLine } from '../../lib/profile/view';
+  import { joinDate } from '../../lib/social/view';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
 
@@ -47,11 +48,7 @@
     !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : 'Гость',
   );
 
-  const memberSince = $derived(
-    $currentUser
-      ? new Date($currentUser.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '',
-  );
+  const memberSince = $derived($currentUser ? joinDate($currentUser.createdAt) : '');
 
   const dirty = $derived(
     !!$currentUser &&

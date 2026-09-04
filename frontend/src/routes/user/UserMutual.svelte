@@ -1,7 +1,7 @@
 <script lang="ts">
   import Avatar from '../../lib/components/Avatar.svelte';
   import type { UserCard } from '../../lib/services/social';
-  import { mutualMore } from '../../lib/social/profileView';
+  import { mutualMore } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
 
   let { friends, count }: { friends: UserCard[]; count: number } = $props();

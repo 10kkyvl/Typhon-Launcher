@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { commonLine, friendRequestNotification, isFriendCode, relationLabel } from './view';
+import {
+  commonGameLabel,
+  commonGamesTitle,
+  commonLine,
+  friendRequestNotification,
+  isFriendCode,
+  joinDate,
+  memberSince,
+  mutualMore,
+  relationLabel,
+  showcaseTitle,
+} from './view';
 
 describe('relationLabel', () => {
   it('даёт подпись действия для каждого отношения', () => {
@@ -104,5 +115,78 @@ describe('commonLine', () => {
     expect(commonLine(2, 2)).toBe('2 общих друга · 2 общие игры');
     expect(commonLine(5, 5)).toBe('5 общих друзей · 5 общих игр');
     expect(commonLine(21, 21)).toBe('21 общий друг · 21 общая игра');
+  });
+});
+
+describe('commonGamesTitle', () => {
+  it('склоняет число игр', () => {
+    expect(commonGamesTitle(1)).toBe('1 общая игра');
+    expect(commonGamesTitle(3)).toBe('3 общие игры');
+    expect(commonGamesTitle(17)).toBe('17 общих игр');
+    expect(commonGamesTitle(21)).toBe('21 общая игра');
+  });
+});
+
+describe('commonGameLabel', () => {
+  it('игра есть у обоих', () => {
+    expect(commonGameLabel(true, true, 'Егор')).toBe('установлена у обоих');
+  });
+
+  it('нет у смотрящего', () => {
+    expect(commonGameLabel(false, true, 'Егор')).toBe('нужно установить вам');
+  });
+
+  it('нет у владельца профиля — имя отделено двоеточием', () => {
+    expect(commonGameLabel(true, false, 'Егор')).toBe('нужно установить: Егор');
+  });
+
+  it('без имени подпись всё равно осмысленная', () => {
+    expect(commonGameLabel(true, false, '   ')).toBe('нужно установить ему');
+  });
+
+  it('нет ни у кого — не выдаём это за «установлена»', () => {
+    expect(commonGameLabel(false, false, 'Егор')).toBe('нужно установить обоим');
+  });
+});
+
+describe('joinDate', () => {
+  it('форматирует дату регистрации', () => {
+    expect(joinDate('2026-09-03T10:00:00Z')).toBe('3 сентября 2026 г.');
+  });
+
+  it('пустая и битая дата не превращаются в мусор на экране', () => {
+    expect(joinDate('')).toBe('');
+    expect(joinDate('не дата')).toBe('');
+  });
+});
+
+describe('memberSince', () => {
+  it('дописывает подпись к дате', () => {
+    expect(memberSince('2026-09-03T10:00:00Z')).toBe('Участник с 3 сентября 2026 г.');
+  });
+
+  it('без даты подписи тоже нет', () => {
+    expect(memberSince('')).toBe('');
+    expect(memberSince('не дата')).toBe('');
+  });
+});
+
+describe('mutualMore', () => {
+  it('показывает остаток только когда он есть', () => {
+    expect(mutualMore(6, 9)).toBe('+3');
+    expect(mutualMore(6, 6)).toBe('');
+    expect(mutualMore(6, 2)).toBe('');
+  });
+});
+
+describe('showcaseTitle', () => {
+  it('берёт заголовки из таблицы витрины своего профиля', () => {
+    expect(showcaseTitle('favorites')).toBe('Любимые');
+    expect(showcaseTitle('recently_completed')).toBe('Недавно пройденные');
+    expect(showcaseTitle('most_played')).toBe('Больше всего сыграно');
+  });
+
+  it('неизвестный вид показывает как есть, а не пустотой', () => {
+    expect(showcaseTitle('whatever')).toBe('whatever');
   });
 });
