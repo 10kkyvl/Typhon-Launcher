@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { PresenceDot } from '../social/presence';
+
   let {
     src,
     name,
@@ -8,7 +10,7 @@
     src?: string;
     name: string;
     size?: 'sm' | 'md' | 'lg';
-    status?: 'online' | 'away' | 'busy' | 'offline';
+    status?: PresenceDot;
   } = $props();
 
   let failed = $state(false);

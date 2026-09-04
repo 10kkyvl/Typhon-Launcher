@@ -20,3 +20,8 @@ export async function setStatus(next: PresenceStatus): Promise<void> {
   if (!inWails) return;
   await OnlineService.SetStatus(next);
 }
+
+export async function kick(): Promise<void> {
+  if (!inWails) return;
+  await OnlineService.Kick();
+}

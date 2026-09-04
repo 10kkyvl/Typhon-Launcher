@@ -25,6 +25,7 @@
   const name = $derived(profile.displayName || profile.username);
   const since = $derived(memberSince(profile.createdAt));
   const presence = $derived(presenceDot(profile.presence));
+  const presenceText = $derived(presenceLine(profile.presence, new Date(), profile.relation === 'self'));
   const pending = $derived(profile.relation === 'none' || profile.relation === 'outgoing' || profile.relation === 'incoming');
 
   const friendMenu: MenuItem[] = [
@@ -38,14 +39,14 @@
 <section class="user-header">
   <Card>
     <div class="head">
-      <Avatar size="lg" name={name} src={profile.avatarUrl} />
+      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} />
 
       <div class="identity">
         <h2 class="display-name">{name}</h2>
         <span class="username">@{profile.username}</span>
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="status">
-          <StatusBadge plain kind={dotKind(presence)} label={presenceLine(profile.presence)} />
+          <StatusBadge plain kind={dotKind(presence)} label={presenceText} />
         </div>
         {#if since}<span class="since">{since}</span>{/if}
       </div>

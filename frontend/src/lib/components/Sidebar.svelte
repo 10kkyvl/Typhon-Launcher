@@ -3,7 +3,7 @@
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
-  import { statusDot } from '../social/presence';
+  import { STATUS_LABELS, statusDot } from '../social/presence';
   import { presenceStatus, updatePresenceStatus } from '../stores/presence';
   import { incomingCount } from '../stores/social';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
@@ -41,13 +41,6 @@
   const isGuest = $derived($authState === 'guest');
 
   const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? 'Гость' : '');
-
-  const STATUS_LABELS: Record<PresenceStatus, string> = {
-    online: 'В сети',
-    away: 'Отошёл',
-    busy: 'Не беспокоить',
-    invisible: 'Невидимка',
-  };
 
   const statusItems = $derived<MenuItem[]>(
     PRESENCE_STATUSES.map((status, index) => ({

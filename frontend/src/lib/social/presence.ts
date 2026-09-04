@@ -1,4 +1,5 @@
 import { shortDate } from '../profile/view';
+import type { PresenceStatus } from '../services/online';
 import type { FriendView, PresenceView } from '../services/social';
 
 export type PresenceDot = 'online' | 'away' | 'busy' | 'offline';
@@ -18,17 +19,18 @@ const KINDS: Record<PresenceDot, PresenceKind> = {
   offline: 'neutral',
 };
 
-const LINES: Record<PresenceDot, string> = {
+export const STATUS_LABELS: Record<PresenceStatus, string> = {
   online: 'В сети',
   away: 'Отошёл',
   busy: 'Не беспокоить',
-  offline: 'Не в сети',
+  invisible: 'Невидимка',
 };
 
-const OWN_LINES: Record<string, string> = {
-  away: 'Отошёл',
-  busy: 'Не беспокоить',
-  invisible: 'Невидимка',
+const LINES: Record<PresenceDot, string> = {
+  online: STATUS_LABELS.online,
+  away: STATUS_LABELS.away,
+  busy: STATUS_LABELS.busy,
+  offline: 'Не в сети',
 };
 
 const MINUTE = 60000;
@@ -61,7 +63,8 @@ export function sinceLabel(iso: string | null | undefined, now = new Date()): st
   return shortDate(iso);
 }
 
-export function presenceLine(presence?: PresenceView | null, now = new Date()): string {
+export function presenceLine(presence?: PresenceView | null, now = new Date(), own = false): string {
+  if (presence?.status === 'invisible') return own ? STATUS_LABELS.invisible : LINES.offline;
   const dot = presenceDot(presence);
   if (playing(presence)) return presence?.gameTitle ? `Играет: ${presence.gameTitle}` : 'Играет';
   if (dot !== 'offline') return LINES[dot];
@@ -70,8 +73,10 @@ export function presenceLine(presence?: PresenceView | null, now = new Date()): 
 }
 
 export function ownStatusLine(status: string, running: boolean): string {
+  const label = STATUS_LABELS[status as PresenceStatus];
+  if (status === 'invisible') return label;
   if (running) return '';
-  return OWN_LINES[status] ?? LINES.online;
+  return label ?? STATUS_LABELS.online;
 }
 
 const RANKS: Record<PresenceDot, number> = {

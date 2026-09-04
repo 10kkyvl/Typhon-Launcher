@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { Check } from '@lucide/svelte';
   import { clickOutside } from '../utils/clickOutside';
+  import type { PresenceDot } from '../social/presence';
 
   export interface MenuItem {
     id: string;
@@ -9,7 +10,7 @@
     danger?: boolean;
     separator?: boolean;
     checked?: boolean;
-    dot?: 'online' | 'away' | 'busy' | 'offline';
+    dot?: PresenceDot;
   }
 
   let {

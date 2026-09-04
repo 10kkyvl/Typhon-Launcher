@@ -77,8 +77,20 @@ describe('presenceLine', () => {
     expect(presenceLine(null, now)).toBe('Не в сети');
   });
 
-  it('считает невидимку офлайном', () => {
+  it('показывает невидимку другим как офлайн, без последнего визита', () => {
     expect(presenceLine(presence({ status: 'invisible', gameTitle: 'The Witcher 3' }), now)).toBe('Не в сети');
+    expect(
+      presenceLine(presence({ status: 'invisible', lastSeenAt: '2025-03-10T10:00:00Z' }), now),
+    ).toBe('Не в сети');
+  });
+
+  it('называет невидимку по имени в своём профиле', () => {
+    expect(
+      presenceLine(presence({ status: 'invisible', lastSeenAt: '2025-03-10T10:00:00Z' }), now, true),
+    ).toBe('Невидимка');
+    expect(presenceLine(presence({ status: 'invisible', gameTitle: 'The Witcher 3' }), now, true)).toBe(
+      'Невидимка',
+    );
   });
 });
 
@@ -172,6 +184,11 @@ describe('ownStatusLine', () => {
 
   it('молчит, когда игра запущена', () => {
     expect(ownStatusLine('away', true)).toBe('');
+    expect(ownStatusLine('online', true)).toBe('');
+  });
+
+  it('оставляет невидимку поверх запущенной игры', () => {
+    expect(ownStatusLine('invisible', true)).toBe('Невидимка');
   });
 });
 

@@ -46,11 +46,14 @@
   const online = $derived($authState === 'authenticated');
   const status = $derived(statusLine(running, online));
   const own = $derived(!isGuest && online ? ownStatusLine($presenceStatus, status.kind === 'playing') : '');
+  const invisible = $derived(!isGuest && online && $presenceStatus === 'invisible');
   const statusText = $derived(own || status.text);
   const statusKind = $derived(
     own ? dotKind(statusDot($presenceStatus)) : status.kind === 'offline' ? 'neutral' : 'success',
   );
-  const statusHidden = $derived(!isGuest && (status.kind === 'playing' ? !showPlaying : !showOnline));
+  const statusHidden = $derived(
+    !isGuest && (invisible || (status.kind === 'playing' ? !showPlaying : !showOnline)),
+  );
 
   const avatarName = $derived(
     !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : 'Гость',
