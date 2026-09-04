@@ -26,7 +26,7 @@
 </script>
 
 <div class="section">
-<Card padding="var(--space-5) var(--space-6)">
+<Card>
   <div class="head">
     <h3 class="card-title">Целостность файлов</h3>
     {#if unavailable}

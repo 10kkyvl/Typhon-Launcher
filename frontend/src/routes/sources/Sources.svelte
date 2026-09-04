@@ -5,12 +5,16 @@
     CircleCheck,
     Database,
     EllipsisVertical,
+    FileText,
+    Globe,
+    Info,
     Plus,
     RefreshCw,
     TriangleAlert,
   } from '@lucide/svelte';
   import AddSourceModal from '../../lib/components/AddSourceModal.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -18,6 +22,7 @@
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
@@ -30,6 +35,7 @@
   let detailsOpen = $state(false);
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
+  let statusFilter = $state('all');
 
   function startAddSource() {
     if (needsSourcesNotice()) {
@@ -56,11 +62,33 @@
     updating: { kind: 'neutral', label: 'Обновление' },
   };
 
+  const statusTabLabels: Record<SourceStatus, string> = {
+    active: 'Активные',
+    disabled: 'Отключены',
+    error: 'С ошибками',
+    updating: 'Обновляются',
+  };
+
+  const statusOrder: SourceStatus[] = ['active', 'disabled', 'error', 'updating'];
+
   const healthMeta: Record<SourceHealth, { icon: typeof CircleCheck; color: string; label: string }> = {
     healthy: { icon: CircleCheck, color: 'var(--success)', label: 'Всё в порядке' },
     warning: { icon: TriangleAlert, color: 'var(--warning)', label: 'Есть предупреждения' },
     error: { icon: CircleAlert, color: 'var(--danger)', label: 'Ошибка источника' },
   };
+
+  const statusTabs = $derived([
+    { id: 'all', label: 'Все', count: $sources.length },
+    ...statusOrder.map((status) => ({
+      id: status,
+      label: statusTabLabels[status],
+      count: $sources.filter((source) => source.status === status).length,
+    })),
+  ]);
+
+  const filteredSources = $derived(
+    statusFilter === 'all' ? $sources : $sources.filter((source) => source.status === statusFilter),
+  );
 
   function openDetails(id: string) {
     detailsId = id;
@@ -92,117 +120,156 @@
   }
 </script>
 
-<PageHeader title="Источники" subtitle="Пользовательские источники релизов">
-  {#snippet actions()}
-    <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
-      <span class="spin" class:on={$refreshingAll}>
-        <RefreshCw size="1.5rem" strokeWidth={1.8} />
-      </span>
-      {$refreshingAll ? 'Обновление…' : 'Обновить все'}
-    </Button>
-    <Button variant="primary" onclick={startAddSource}>
-      <Plus size="1.5rem" strokeWidth={2} />
-      Добавить источник
-    </Button>
-  {/snippet}
-</PageHeader>
-
-<p class="device-hint">Добавленные источники обрабатываются на вашем устройстве.</p>
-
-{#if $sources.length === 0}
-  <EmptyState
-    title="Источники ещё не добавлены"
-    description="Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления."
-  >
-    {#snippet icon()}
-      <Database size="2rem" strokeWidth={1.8} />
-    {/snippet}
+<Card surface="panel">
+  <PageHeader title="Источники" subtitle="Пользовательские источники релизов">
     {#snippet actions()}
+      <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
+        <span class="spin" class:on={$refreshingAll}>
+          <RefreshCw size="1.5rem" strokeWidth={1.8} />
+        </span>
+        {$refreshingAll ? 'Обновление…' : 'Обновить все'}
+      </Button>
       <Button variant="primary" onclick={startAddSource}>
         <Plus size="1.5rem" strokeWidth={2} />
         Добавить источник
       </Button>
     {/snippet}
-  </EmptyState>
-{:else}
-  <div class="table">
-    <div class="thead">
-      <span class="th">Источник</span>
-      <span class="th">Статус</span>
-      <span class="th">Обновлён</span>
-      <span class="th nums">Записей</span>
-      <span class="th nums">Сопоставлено</span>
-      <span class="th"></span>
-    </div>
-    {#each $sources as source (source.id)}
-      {@const badge = statusBadge[source.status]}
-      {@const health = healthMeta[source.health]}
-      <div class="row" class:disabled={!source.enabled}>
-        <button class="source" onclick={() => openDetails(source.id)}>
-          <span class="source-name">{source.name}</span>
-          <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
-        </button>
-        <span class="cell status">
-          <StatusBadge kind={badge.kind} label={badge.label} plain />
-          {#if source.lastError}
-            <Tooltip text={truncateMiddle(source.lastError, 90)}>
-              <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
-            </Tooltip>
-          {:else if source.health !== 'healthy'}
-            <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.join('; ')}` : health.label}>
-              <span class="health" style:color={health.color}>
-                <health.icon size="1.5rem" strokeWidth={1.8} />
+  </PageHeader>
+
+  <div class="notice">
+    <span class="notice-icon"><Info size="1.8rem" strokeWidth={1.8} /></span>
+    <p class="notice-text">Добавленные источники обрабатываются на вашем устройстве.</p>
+  </div>
+
+  {#if $sources.length === 0}
+    <EmptyState
+      title="Источники ещё не добавлены"
+      description="Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления."
+    >
+      {#snippet icon()}
+        <Database size="2rem" strokeWidth={1.8} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={startAddSource}>
+          <Plus size="1.5rem" strokeWidth={2} />
+          Добавить источник
+        </Button>
+      {/snippet}
+    </EmptyState>
+  {:else}
+    <Tabs tabs={statusTabs} bind:value={statusFilter} variant="pill" />
+
+    {#if filteredSources.length === 0}
+      <EmptyState title="Источников с таким статусом нет" description="Попробуйте выбрать другой фильтр." />
+    {:else}
+      <div class="table">
+        <div class="thead">
+          <span class="th">Источник</span>
+          <span class="th">Статус</span>
+          <span class="th">Обновлён</span>
+          <span class="th nums">Записей</span>
+          <span class="th nums">Сопоставлено</span>
+          <span class="th"></span>
+        </div>
+        {#each filteredSources as source (source.id)}
+          {@const badge = statusBadge[source.status]}
+          {@const health = healthMeta[source.health]}
+          <div class="row" class:disabled={!source.enabled}>
+            <button class="source" onclick={() => openDetails(source.id)}>
+              <span class="type-icon">
+                {#if source.type === 'file'}
+                  <FileText size="1.7rem" strokeWidth={1.8} />
+                {:else}
+                  <Globe size="1.7rem" strokeWidth={1.8} />
+                {/if}
               </span>
-            </Tooltip>
-          {/if}
-        </span>
-        <span class="cell">{relativeDate(source.lastUpdatedAt)}</span>
-        <span class="cell nums">{formatCount(source.entries)}</span>
-        <span class="cell nums counts">
-          <Tooltip text={`Сопоставлено ${formatCount(source.matched)} · на проверку ${formatCount(source.review)} · без совпадения ${formatCount(source.unmatched)}`}>
-            <span class="count-wrap">
-              <span class="count">{formatCount(source.matched)}</span>
-              {#if source.review > 0}
-                <span class="count review">+{formatCount(source.review)}</span>
+              <span class="source-text">
+                <span class="source-name">{source.name}</span>
+                <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
+              </span>
+            </button>
+            <span class="cell status">
+              <StatusBadge kind={badge.kind} label={badge.label} plain />
+              {#if source.lastError}
+                <Tooltip text={truncateMiddle(source.lastError, 90)}>
+                  <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
+                </Tooltip>
+              {:else if source.health !== 'healthy'}
+                <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.join('; ')}` : health.label}>
+                  <span class="health" style:color={health.color}>
+                    <health.icon size="1.5rem" strokeWidth={1.8} />
+                  </span>
+                </Tooltip>
               {/if}
             </span>
-          </Tooltip>
-        </span>
-        <span class="cell menu-cell">
-          <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
-            {#snippet trigger({ toggle: toggleMenu })}
-              <IconButton label="Меню источника" size="sm" onclick={toggleMenu}>
-                <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
-        </span>
+            <span class="cell">{relativeDate(source.lastUpdatedAt)}</span>
+            <span class="cell nums">{formatCount(source.entries)}</span>
+            <span class="cell nums counts">
+              <Tooltip text={`Сопоставлено ${formatCount(source.matched)} · на проверку ${formatCount(source.review)} · без совпадения ${formatCount(source.unmatched)}`}>
+                <span class="count-wrap">
+                  <span class="count">{formatCount(source.matched)}</span>
+                  {#if source.review > 0}
+                    <span class="count review">+{formatCount(source.review)}</span>
+                  {/if}
+                </span>
+              </Tooltip>
+            </span>
+            <span class="cell menu-cell">
+              <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
+                {#snippet trigger({ toggle: toggleMenu })}
+                  <IconButton label="Меню источника" size="sm" onclick={toggleMenu}>
+                    <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
+                  </IconButton>
+                {/snippet}
+              </DropdownMenu>
+            </span>
+          </div>
+        {/each}
       </div>
-    {/each}
-  </div>
-{/if}
+    {/if}
+  {/if}
+</Card>
 
 <AddSourceModal bind:open={addOpen} />
 <SourcesNoticeModal bind:open={noticeOpen} onaccepted={() => (addOpen = true)} />
 <SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
 
 <style>
-  .device-hint {
-    margin: calc(var(--space-6) * -1) 0 var(--space-6);
-    font-size: var(--font-xs);
+  .notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
     color: var(--text-3);
+  }
+
+  .notice-icon {
+    display: flex;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--text-3);
+  }
+
+  .notice-text {
+    font-size: var(--font-xs);
+    line-height: 1.5;
   }
 
   .table {
     display: flex;
     flex-direction: column;
     max-width: 140rem;
+    margin-top: var(--space-5);
   }
 
   .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(24rem, 1.6fr) 16rem 11rem 9rem 11rem 4rem;
+    grid-template-columns: minmax(24rem, 1.6fr) 16rem 11rem 9.5rem 12rem 4rem;
     align-items: center;
     gap: var(--space-5);
   }
@@ -243,10 +310,29 @@
 
   .source {
     display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    text-align: left;
+  }
+
+  .type-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.6rem;
+    height: 3.6rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    background: var(--surface-3);
+    color: var(--text-2);
+  }
+
+  .source-text {
+    display: flex;
     flex-direction: column;
     gap: 0.2rem;
     min-width: 0;
-    text-align: left;
   }
 
   .source-name {
@@ -306,6 +392,7 @@
     display: inline-flex;
     align-items: baseline;
     gap: 0.5rem;
+    white-space: nowrap;
   }
 
   .count {
@@ -338,7 +425,7 @@
   @media (max-width: 1300px) {
     .thead,
     .row {
-      grid-template-columns: minmax(20rem, 1.6fr) 15rem 10rem 11rem 4rem;
+      grid-template-columns: minmax(20rem, 1.6fr) 15rem 10rem 12rem 4rem;
     }
 
     .th:nth-child(4),

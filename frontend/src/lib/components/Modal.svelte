@@ -80,7 +80,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.8rem 1.8rem 0 2.4rem;
+    padding: 1.8rem 1.8rem 1.6rem 2.4rem;
+    border-bottom: 1px solid var(--border);
   }
 
   h3 {
