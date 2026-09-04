@@ -125,7 +125,7 @@
   });
 
   $effect(() => {
-    if (tab === 'feed' && !isGuest && !$needsSocialConsent) void loadFeed();
+    if (tab === 'feed' && !isGuest && !$needsSocialConsent) void loadFeed(true);
   });
 
   onMount(() => {

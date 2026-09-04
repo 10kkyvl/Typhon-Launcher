@@ -420,6 +420,26 @@ func TestClient_DecodesResponses(t *testing.T) {
 		}
 	})
 
+	t.Run("feed reactions absent", func(t *testing.T) {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			body := `{"events":[{"id":1,"user":{"id":"u1","username":"alex"},"kind":"started",` +
+				`"game":{"igdbId":1942,"title":"The Witcher 3"},"createdAt":"2026-01-02T03:04:05Z","mine":["fire"]}],"next":0}`
+			if _, err := io.WriteString(w, body); err != nil {
+				t.Errorf("write response: %v", err)
+			}
+		})
+		page, err := c.feed(t.Context(), 0, 30)
+		if err != nil {
+			t.Fatalf("feed: %v", err)
+		}
+		if len(page.Events) != 1 {
+			t.Fatalf("page = %+v", page)
+		}
+		if ev := page.Events[0]; ev.Reactions == nil || len(ev.Reactions) != 0 {
+			t.Fatalf("reactions = %+v, want a non-nil empty slice when the field is absent", ev.Reactions)
+		}
+	})
+
 	t.Run("feed events absent", func(t *testing.T) {
 		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 			if _, err := io.WriteString(w, `{"next":0}`); err != nil {

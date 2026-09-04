@@ -244,6 +244,9 @@ func normalizeFeedPage(page FeedPage) FeedPage {
 		if page.Events[i].Mine == nil {
 			page.Events[i].Mine = []string{}
 		}
+		if page.Events[i].Reactions == nil {
+			page.Events[i].Reactions = []ReactionCount{}
+		}
 	}
 	return page
 }
