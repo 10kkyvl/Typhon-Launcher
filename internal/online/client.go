@@ -24,6 +24,7 @@ const (
 var (
 	ErrSignedOut    = errors.New("online: not signed in")
 	ErrUnauthorized = errors.New("online: not authenticated")
+	ErrUnsupported  = errors.New("online: presence not supported by this server")
 )
 
 type APIError struct {
@@ -158,6 +159,9 @@ func (c *client) resolveToken() (string, error) {
 }
 
 func decodeError(status int, body io.Reader) error {
+	if status == http.StatusNotFound {
+		return ErrUnsupported
+	}
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return &ServerError{Status: status}

@@ -377,6 +377,148 @@ func TestShutdownClearsPresence(t *testing.T) {
 	}
 }
 
+func TestUnsupportedIsLoggedOnceAndStopsSending(t *testing.T) {
+	var sink logSink
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	h := newHarness(t, staticToken("tok"), http.StatusNotFound, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	if got := sink.count("presence not supported by this server"); got != 1 {
+		t.Fatalf("logged %d times, want exactly once", got)
+	}
+}
+
+func TestKickReenablesAfterUnsupported(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNotFound, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.svc.Kick()
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want PUT after Kick", req.method)
+	}
+}
+
+func TestSetStatusDoesNotRetryAfterUnsupported(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNotFound, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	if err := h.svc.SetStatus(settings.PresenceBusy); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	h.awaitSend()
+	h.noRequest()
+}
+
+func TestRestartReenablesAfterUnsupported(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNotFound, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.shutdown()
+	h.nextRequest()
+
+	if err := h.svc.ServiceStartup(h.t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("ServiceStartup: %v", err)
+	}
+	h.stop = sync.Once{}
+	h.t.Cleanup(h.shutdown)
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want PUT after restart", req.method)
+	}
+}
+
+func newRateLimitedHarness(t *testing.T) *harness {
+	t.Helper()
+	h := &harness{
+		t:    t,
+		tick: make(chan time.Time),
+		sent: make(chan struct{}),
+		reqs: make(chan request, 64),
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		select {
+		case h.reqs <- request{method: r.Method, path: r.URL.EscapedPath(), body: body, headers: r.Header.Clone()}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		if _, err := w.Write([]byte(`{"error":{"code":"rate_limited"}}`)); err != nil {
+			t.Errorf("write body: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	set, err := settings.NewServiceAt(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("settings service: %v", err)
+	}
+	h.settings = set
+
+	svc, err := NewService(srv.URL, staticToken("tok"), func(string) string { return "" }, set)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.newTicker = func(time.Duration) (<-chan time.Time, func()) { return h.tick, func() {} }
+	svc.sent = h.sent
+	h.svc = svc
+	return h
+}
+
+func TestRateLimitedSkipsTwoTicks(t *testing.T) {
+	h := newRateLimitedHarness(t)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.nextRequest()
+}
+
 type logSink struct {
 	mu    sync.Mutex
 	lines []string

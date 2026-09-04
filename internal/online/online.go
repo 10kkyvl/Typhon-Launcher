@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"sync"
 	"time"
@@ -50,6 +51,8 @@ type Service struct {
 	seq          int64
 	healthy      bool
 	healthyKnown bool
+	unsupported  bool
+	backoff      int
 	unsubscribe  func()
 	cancel       context.CancelFunc
 
@@ -186,27 +189,34 @@ func (s *Service) poke() {
 	}
 }
 
+func (s *Service) Kick() {
+	s.mu.Lock()
+	s.unsupported = false
+	s.mu.Unlock()
+	s.poke()
+}
+
 func (s *Service) loop(ctx context.Context) {
 	defer s.wg.Done()
 
 	ticks, stop := s.newTicker(s.interval)
 	defer stop()
 
-	s.report(ctx)
+	s.report(ctx, true)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticks:
-			s.report(ctx)
+			s.report(ctx, false)
 		case <-s.kick:
-			s.report(ctx)
+			s.report(ctx, false)
 		}
 	}
 }
 
-func (s *Service) report(ctx context.Context) {
-	s.send(ctx)
+func (s *Service) report(ctx context.Context, forced bool) {
+	s.send(ctx, forced)
 	if s.sent == nil {
 		return
 	}
@@ -228,13 +238,45 @@ func (s *Service) snapshot() payload {
 	return payload{Status: s.status, GameID: latest.gameID, AppVersion: app.Version}
 }
 
-func (s *Service) send(ctx context.Context) {
+func (s *Service) send(ctx context.Context, forced bool) {
+	s.mu.Lock()
+	if !forced {
+		if s.unsupported {
+			s.mu.Unlock()
+			return
+		}
+		if s.backoff > 0 {
+			s.backoff--
+			s.mu.Unlock()
+			return
+		}
+	}
+	s.mu.Unlock()
+
 	err := s.client.report(ctx, s.snapshot())
 	if errors.Is(err, ErrSignedOut) {
 		return
 	}
 
+	if errors.Is(err, ErrUnsupported) {
+		s.mu.Lock()
+		alreadyUnsupported := s.unsupported
+		s.unsupported = true
+		s.mu.Unlock()
+		if !alreadyUnsupported {
+			slog.Warn("presence not supported by this server")
+		}
+		return
+	}
+
+	var apiErr *APIError
+	rateLimited := errors.As(err, &apiErr) && apiErr.Status == http.StatusTooManyRequests
+
 	s.mu.Lock()
+	s.unsupported = false
+	if rateLimited {
+		s.backoff = 2
+	}
 	wasHealthy := s.healthy
 	known := s.healthyKnown
 	nowHealthy := err == nil
