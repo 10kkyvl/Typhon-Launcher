@@ -1,6 +1,7 @@
 import type { ShowcaseKind, Visibility } from '../services/account';
 import type { GameRef, ProfileStats } from '../services/profile';
-import { playtime, plural } from '../utils/format';
+import { playtime } from '../utils/format';
+import { msg } from '../i18n';
 
 export const SHOWCASE_TITLES: Record<ShowcaseKind, string> = {
   favorites: 'Любимые',
@@ -43,8 +44,8 @@ export function monthLine(stats: ProfileStats): string {
   if (monthSeconds === 0 && monthGames === 0 && monthCompleted === 0) return '';
   const parts: string[] = [];
   if (monthSeconds > 0) parts.push(playtime(monthSeconds));
-  if (monthGames > 0) parts.push(`${monthGames} ${plural(monthGames, 'игра', 'игры', 'игр')}`);
-  parts.push(`${monthCompleted} ${plural(monthCompleted, 'пройдена', 'пройдено', 'пройдено')}`);
+  if (monthGames > 0) parts.push(msg('profile.monthGames', { count: monthGames }));
+  parts.push(msg('profile.monthCompleted', { count: monthCompleted }));
   return parts.join(' · ');
 }
 

@@ -2,7 +2,8 @@
   import { Download } from '@lucide/svelte';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
-  import { bytesSize, plural, relativeDate } from '../utils/format';
+  import { bytesSize, relativeDate } from '../utils/format';
+  import { msg } from '../i18n';
   import Button from './Button.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
@@ -52,7 +53,7 @@
               title={group.duplicates.map((d) => d.sourceName).join(', ')}
             >
               +{group.duplicates.length}
-              {plural(group.duplicates.length, 'источник', 'источника', 'источников')}
+              {msg('release.duplicateSources', { count: group.duplicates.length })}
             </span>
           {/if}
         </span>

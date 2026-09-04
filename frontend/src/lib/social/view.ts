@@ -2,7 +2,8 @@ import { SHOWCASE_TITLES } from '../profile/view';
 import type { ShowcaseKind } from '../services/account';
 import type { Relation } from '../services/social';
 import type { Notification } from '../stores/notifications';
-import { plural, relativeDate } from '../utils/format';
+import { relativeDate } from '../utils/format';
+import { msg } from '../i18n';
 
 const RELATION_LABELS: Record<Relation, string> = {
   none: 'Добавить в друзья',
@@ -32,8 +33,7 @@ export function relationHint(relation: string): string {
 
 export function friendRequestNotification(count: number, peak: number): Notification | null {
   if (count <= 0) return null;
-  const text =
-    count === 1 ? 'Заявка в друзья' : `${count} ${plural(count, 'заявка', 'заявки', 'заявок')} в друзья`;
+  const text = count === 1 ? msg('friends.requestOne') : msg('friends.requests', { count });
   return {
     id: `friends:incoming:${Math.max(peak, count)}`,
     title: 'Друзья',
@@ -51,22 +51,18 @@ export function isFriendCode(input: string): boolean {
   return FRIEND_CODE.test(value);
 }
 
-function count(n: number, adjective: [string, string, string], noun: [string, string, string]): string {
-  return `${n} ${plural(n, ...adjective)} ${plural(n, ...noun)}`;
-}
-
 export function sentAt(iso: string | null): string {
   const when = relativeDate(iso);
   return when === '—' ? when : `Отправлена ${when.toLocaleLowerCase('ru-RU')}`;
 }
 
 export function commonGamesTitle(games: number): string {
-  return count(games, ['общая', 'общие', 'общих'], ['игра', 'игры', 'игр']);
+  return msg('friends.commonGames', { count: games });
 }
 
 export function commonLine(mutual: number, games: number): string {
   const parts: string[] = [];
-  if (mutual > 0) parts.push(count(mutual, ['общий', 'общих', 'общих'], ['друг', 'друга', 'друзей']));
+  if (mutual > 0) parts.push(msg('friends.commonFriends', { count: mutual }));
   if (games > 0) parts.push(commonGamesTitle(games));
   return parts.join(' · ');
 }

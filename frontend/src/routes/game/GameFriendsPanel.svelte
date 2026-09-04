@@ -9,7 +9,8 @@
   import { friendsPage } from '../../lib/stores/social';
   import { navigate } from '../../lib/stores/router';
   import { authState } from '../../lib/stores/user';
-  import { playtime, plural } from '../../lib/utils/format';
+  import { playtime } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
@@ -47,7 +48,7 @@
   const played = $derived(page?.played ?? []);
   const playingNow = $derived(page?.playingNow ?? []);
   const playedLine = $derived(
-    `${played.length} ${plural(played.length, 'друг', 'друга', 'друзей')} ${plural(played.length, 'играл', 'играли', 'играли')}`,
+    msg('friends.played', { count: played.length }),
   );
 </script>
 

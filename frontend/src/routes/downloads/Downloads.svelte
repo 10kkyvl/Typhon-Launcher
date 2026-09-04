@@ -31,7 +31,8 @@
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
-  import { bytesSize, plural, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
 
@@ -49,7 +50,7 @@
     [
       `↓ ${speedBytes($stats.downSpeed)}`,
       `↑ ${speedBytes($stats.upSpeed)}`,
-      `${$stats.activeCount} ${plural($stats.activeCount, 'активная', 'активные', 'активных')}`,
+      msg('downloads.active', { count: $stats.activeCount }),
       `${$queue.length} в очереди`,
     ].join(' · '),
   );

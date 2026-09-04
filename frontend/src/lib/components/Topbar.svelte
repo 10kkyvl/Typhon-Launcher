@@ -18,7 +18,8 @@
   import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { clickOutside } from '../utils/clickOutside';
-  import { bytesSize, plural } from '../utils/format';
+  import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
   import IconButton from './IconButton.svelte';
   import SearchInput from './SearchInput.svelte';
@@ -98,10 +99,10 @@
     const version = hit.latestVersion || hit.version;
     if (version) parts.push(version);
     if (hit.releases > 0) {
-      parts.push(`${hit.releases} ${plural(hit.releases, 'релиз', 'релиза', 'релизов')}`);
+      parts.push(msg('search.releases', { count: hit.releases }));
     }
     if (hit.sources > 1) {
-      parts.push(`${hit.sources} ${plural(hit.sources, 'источник', 'источника', 'источников')}`);
+      parts.push(msg('search.sources', { count: hit.sources }));
     }
     return parts.join(' · ');
   }

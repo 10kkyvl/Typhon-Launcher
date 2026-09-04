@@ -6,7 +6,8 @@
   import StatusBadge from './StatusBadge.svelte';
   import type { VerifyState } from '../services/updates';
   import { createManifest, repair, verify } from '../stores/updates';
-  import { bytesSize, plural, relativeDate, truncateMiddle } from '../utils/format';
+  import { bytesSize, relativeDate, truncateMiddle } from '../utils/format';
+  import { msg } from '../i18n';
 
   let { gameId, state, running }: { gameId: string; state: VerifyState | undefined; running: boolean } =
     $props();
@@ -77,19 +78,19 @@
       {#if missing > 0}
         <div>
           <dt>Отсутствуют</dt>
-          <dd>{missing} {plural(missing, 'файл', 'файла', 'файлов')}</dd>
+          <dd>{msg('verify.missingFiles', { count: missing })}</dd>
         </div>
       {/if}
       {#if corrupted > 0}
         <div>
           <dt>Повреждены</dt>
-          <dd>{corrupted} {plural(corrupted, 'блок', 'блока', 'блоков')}</dd>
+          <dd>{msg('verify.corruptedBlocks', { count: corrupted })}</dd>
         </div>
       {/if}
       {#if unreadable > 0}
         <div>
           <dt>Не прочитаны</dt>
-          <dd>{unreadable} {plural(unreadable, 'файл', 'файла', 'файлов')}</dd>
+          <dd>{msg('verify.unreadableFiles', { count: unreadable })}</dd>
         </div>
       {/if}
     </dl>

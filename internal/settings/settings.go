@@ -27,6 +27,10 @@ const (
 	RefreshHalfDay  = "12h"
 	RefreshDaily    = "24h"
 
+	LanguageSystem = "system"
+	LanguageRU     = "ru"
+	LanguageEN     = "en"
+
 	PresenceOnline    = "online"
 	PresenceAway      = "away"
 	PresenceBusy      = "busy"
@@ -59,6 +63,7 @@ var (
 type Settings struct {
 	Theme                  string  `json:"theme"`
 	UIScale                float64 `json:"uiScale"`
+	Language               string  `json:"language"`
 	LibraryPath            string  `json:"libraryPath"`
 	DownloadsPath          string  `json:"downloadsPath"`
 	GamesPath              string  `json:"gamesPath"`
@@ -121,6 +126,7 @@ func Defaults() Settings {
 	return Settings{
 		Theme:                  "dark",
 		UIScale:                1,
+		Language:               LanguageSystem,
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
@@ -210,6 +216,15 @@ func applyStoredConsent(s Settings, p consentProbe) Settings {
 	return s
 }
 
+func ValidLanguage(lang string) bool {
+	switch lang {
+	case LanguageSystem, LanguageRU, LanguageEN:
+		return true
+	default:
+		return false
+	}
+}
+
 func ValidPresenceStatus(status string) bool {
 	switch status {
 	case PresenceOnline, PresenceAway, PresenceBusy, PresenceInvisible:
@@ -296,6 +311,9 @@ func sanitize(s Settings) (Settings, error) {
 	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
 	default:
 		s.SourceRefreshInterval = RefreshSixHours
+	}
+	if !ValidLanguage(s.Language) {
+		s.Language = LanguageSystem
 	}
 	if !ValidPresenceStatus(s.PresenceStatus) {
 		s.PresenceStatus = PresenceOnline

@@ -9,6 +9,7 @@
   import { initHistory } from './lib/stores/history';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
+  import { locale } from './lib/i18n';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
@@ -63,48 +64,50 @@
   });
 </script>
 
-{#if $authState === 'bootstrapping'}
-  <div class="boot">
-    <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
-  </div>
-{:else if $showTelemetryConsent}
-  <TelemetryConsentScreen />
-{:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
-  <AppShell>
-    {#if $route.name === 'library'}
-      <Library />
-    {:else if $route.name === 'catalog'}
-      <Catalog />
-    {:else if $route.name === 'game'}
-      <GameDetails id={$route.params.id} />
-    {:else if $route.name === 'downloads'}
-      <Downloads />
-    {:else if $route.name === 'sources'}
-      <Sources />
-    {:else if $route.name === 'installed'}
-      <Installed />
-    {:else if $route.name === 'history'}
-      <History />
-    {:else if $route.name === 'lan'}
-      <Lan />
-    {:else if $route.name === 'friends'}
-      <Friends tab={$route.params.tab} />
-    {:else if $route.name === 'activity'}
-      <Activity />
-    {:else if $route.name === 'user'}
-      <UserProfile username={$route.params.username} />
-    {:else if $route.name === 'profile'}
-      <Profile />
-    {:else if $route.name === 'settings'}
-      <Settings tab={$route.params.tab} />
-    {/if}
-  </AppShell>
-  <UpdateOverlay />
-  <ReleaseNotesModal />
-  <MoveGameModal />
-{:else}
-  <AuthScreen />
-{/if}
+{#key $locale}
+  {#if $authState === 'bootstrapping'}
+    <div class="boot">
+      <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
+    </div>
+  {:else if $showTelemetryConsent}
+    <TelemetryConsentScreen />
+  {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
+    <AppShell>
+      {#if $route.name === 'library'}
+        <Library />
+      {:else if $route.name === 'catalog'}
+        <Catalog />
+      {:else if $route.name === 'game'}
+        <GameDetails id={$route.params.id} />
+      {:else if $route.name === 'downloads'}
+        <Downloads />
+      {:else if $route.name === 'sources'}
+        <Sources />
+      {:else if $route.name === 'installed'}
+        <Installed />
+      {:else if $route.name === 'history'}
+        <History />
+      {:else if $route.name === 'lan'}
+        <Lan />
+      {:else if $route.name === 'friends'}
+        <Friends tab={$route.params.tab} />
+      {:else if $route.name === 'activity'}
+        <Activity />
+      {:else if $route.name === 'user'}
+        <UserProfile username={$route.params.username} />
+      {:else if $route.name === 'profile'}
+        <Profile />
+      {:else if $route.name === 'settings'}
+        <Settings tab={$route.params.tab} />
+  {/if}
+    </AppShell>
+    <UpdateOverlay />
+    <ReleaseNotesModal />
+    <MoveGameModal />
+  {:else}
+    <AuthScreen />
+  {/if}
+{/key}
 
 <style>
   .boot {

@@ -14,7 +14,8 @@
   import { errorMessage } from '../stores/downloads';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
-  import { bytesSize, plural } from '../utils/format';
+  import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
   import Button from './Button.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
@@ -189,8 +190,7 @@
       <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>Продолжить</Button>
     {:else if step === 'files'}
       <span class="summary">
-        Выбрано: {selectedCount}
-        {plural(selectedCount, 'файл', 'файла', 'файлов')}, {bytesSize(selectedSize)}
+        {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
       <Button onclick={() => (open = false)}>Отмена</Button>
       <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>Начать загрузку</Button>

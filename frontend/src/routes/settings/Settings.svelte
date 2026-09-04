@@ -9,6 +9,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import { msg } from '../../lib/i18n';
   import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
@@ -325,6 +326,22 @@
     <div class="column">
       <Card title="Интерфейс">
         <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.language')}</span>
+              <span class="row-sub">{msg('settings.languageSub')}</span>
+            </div>
+            <Select
+              value={$settings?.language ?? 'system'}
+              width="22rem"
+              options={[
+                { id: 'system', label: msg('settings.languageSystem') },
+                { id: 'ru', label: 'Русский' },
+                { id: 'en', label: 'English' },
+              ]}
+              onchange={(id) => set({ language: id })}
+            />
+          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">Размер интерфейса</span>

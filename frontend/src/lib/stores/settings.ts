@@ -3,11 +3,13 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { getSettings, saveSettings, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
+import { applyLanguage } from '../i18n';
 
 export const settings = writable<Settings | null>(null);
 
 settings.subscribe((value) => {
   if (!value) return;
+  applyLanguage(value.language);
   document.documentElement.style.setProperty('--ui-scale', String(value.uiScale));
   document.documentElement.classList.toggle('no-anim', !value.animationsEnabled);
 });

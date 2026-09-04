@@ -47,7 +47,8 @@
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
-  import { bytesSize, plural, relativeDate } from '../../lib/utils/format';
+  import { bytesSize, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   type Sort = 'recent' | 'alpha' | 'size';
 
@@ -254,7 +255,7 @@
 <PageHeader
   title="Установлено"
   subtitle={$installedGames.length > 0
-    ? `У вас установлено ${$installedGames.length} ${plural($installedGames.length, 'игра', 'игры', 'игр')}`
+    ? msg('installed.youHave', { count: $installedGames.length })
     : 'Локальная библиотека пуста'}
 >
   {#snippet actions()}
@@ -469,8 +470,7 @@
 
 {#if $installedGames.length > 0}
   <p class="count">
-    Показано {filteredGames.length} из {$installedGames.length}
-    {plural($installedGames.length, 'игра', 'игры', 'игр')}
+    {msg('installed.shownOf', { shown: filteredGames.length, count: $installedGames.length })}
   </p>
 {/if}
 
