@@ -19,6 +19,7 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
+  import UserActivity from './UserActivity.svelte';
   import UserCommon from './UserCommon.svelte';
   import UserCovers from './UserCovers.svelte';
   import UserHeader from './UserHeader.svelte';
@@ -43,6 +44,7 @@
   const showcase = $derived(data && !closed ? data.showcase : []);
   const common = $derived(data && !closed && data.common && data.common.count > 0 ? data.common : null);
   const recent = $derived(data && !closed ? data.recentlyPlayed : []);
+  const activity = $derived(data && !closed ? data.recentActivity : []);
   const favorites = $derived(data && !closed ? data.favorites : []);
   const mutual = $derived(data && !closed && data.mutualCount > 0 ? data.mutualFriends : []);
 
@@ -202,6 +204,11 @@
             <UserRecent games={recent} />
           </div>
         {/if}
+        {#if activity.length > 0}
+          <div class="area area-activity">
+            <UserActivity items={activity} />
+          </div>
+        {/if}
         <div class="area area-showcase">
           {#each showcase as fblock (fblock.kind)}
             <UserCovers title={showcaseTitle(fblock.kind)} games={fblock.games} columns="main" />
@@ -280,8 +287,12 @@
     order: 6;
   }
 
-  .area-showcase {
+  .area-activity {
     order: 7;
+  }
+
+  .area-showcase {
+    order: 8;
   }
 
   @media (min-width: 1600px) {
