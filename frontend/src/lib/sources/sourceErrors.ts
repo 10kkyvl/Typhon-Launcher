@@ -25,6 +25,7 @@ export const REASONS: Record<string, MessageKey> = {
   'sources.feed_no_host': 'errSources.srcFeedNoHost',
   'sources.feed_invalid_url': 'errSources.srcFeedInvalidUrl',
   'sources.feed_bad_status': 'errSources.srcFeedBadStatus',
+  'sources.feed_challenge': 'errSources.srcFeedChallenge',
 
   'discovery.busy': 'errSources.discoveryBusy',
   'discovery.not_started': 'errSources.discoveryNotStarted',

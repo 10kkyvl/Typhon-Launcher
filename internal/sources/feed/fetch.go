@@ -19,6 +19,7 @@ var (
 	ErrTooLarge       = uierr.New("sources.feed_too_large", "размер ответа превышает допустимый лимит")
 	ErrBadContentType = uierr.New("sources.feed_bad_content_type", "недопустимый Content-Type ответа")
 	ErrNoHost         = uierr.New("sources.feed_no_host", "URL не содержит хост")
+	ErrChallenge      = uierr.New("sources.feed_challenge", "источник закрыт защитой Cloudflare: скачайте файл фида в браузере и добавьте его кнопкой «Выбрать файл фида»")
 )
 
 type StatusError struct {
@@ -57,6 +58,10 @@ func ValidateURL(raw string) (string, error) {
 	u.Scheme = scheme
 	u.Host = strings.ToLower(u.Host)
 	return u.String(), nil
+}
+
+func challenged(h http.Header) bool {
+	return strings.EqualFold(strings.TrimSpace(h.Get("cf-mitigated")), "challenge")
 }
 
 func acceptableContentType(ct string) bool {
@@ -122,6 +127,10 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if challenged(resp.Header) {
+			slog.Warn("feed blocked by challenge", "host", redact.URL(normalized), "status", resp.StatusCode)
+			return Result{}, ErrChallenge
+		}
 		return Result{}, uierr.Wrap("sources.feed_bad_status", &StatusError{StatusCode: resp.StatusCode})
 	}
 

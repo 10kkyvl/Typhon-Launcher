@@ -27,6 +27,7 @@ export const errSources: Record<ErrSourcesKey, Message> = {
   'errSources.srcFeedNoHost': 'The URL has no host',
   'errSources.srcFeedInvalidUrl': 'Invalid URL',
   'errSources.srcFeedBadStatus': 'The server returned an error status',
+  'errSources.srcFeedChallenge': 'The source is behind a Cloudflare challenge: download the feed file in a browser and add it with "Choose a feed file"',
 
   'errSources.discoveryBusy': 'A game scan is already running',
   'errSources.discoveryNotStarted': 'The game scan service has not started',
