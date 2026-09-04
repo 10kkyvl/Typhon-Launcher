@@ -465,6 +465,10 @@ func (s *Service) EnsureByIGDB(igdbID, title string) (Game, error) {
 	return game, nil
 }
 
+func (s *Service) OpenByIGDB(igdbID, title string) (Game, error) {
+	return s.EnsureByIGDB(igdbID, title)
+}
+
 //wails:ignore
 func (s *Service) LookupByTitle(title string) (Game, bool) {
 	normalized := titles.Normalize(title)

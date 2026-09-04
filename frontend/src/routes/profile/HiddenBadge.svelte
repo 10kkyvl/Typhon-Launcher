@@ -1,9 +1,11 @@
 <script lang="ts">
   import { EyeOff } from '@lucide/svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
+
+  let { text = 'Скрыто от других. Вы видите этот блок, остальные — нет.' }: { text?: string } = $props();
 </script>
 
-<Tooltip text="Скрыто от других. Вы видите этот блок, остальные — нет.">
+<Tooltip {text}>
   <span class="hidden-badge">
     <EyeOff size="1.3rem" strokeWidth={1.8} />
     Скрыто

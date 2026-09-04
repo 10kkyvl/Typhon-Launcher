@@ -338,6 +338,11 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   return { ...result, items: result.items ?? [] };
 }
 
+export async function openByIGDB(igdbId: number, title: string): Promise<CatalogGame> {
+  if (!inWails) throw unavailable();
+  return (await CatalogService.OpenByIGDB(String(igdbId), title)) as unknown as CatalogGame;
+}
+
 export async function getCatalogGames(ids: string[]): Promise<CatalogGame[]> {
   if (!inWails || ids.length === 0) return [];
   return ((await CatalogService.GetGames(ids)) ?? []) as unknown as CatalogGame[];

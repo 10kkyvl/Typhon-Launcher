@@ -4,19 +4,28 @@ import { inWails } from './backend';
 export const SHOWCASE_KINDS = ['favorites', 'recently_completed', 'most_played'] as const;
 export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
 
+export const VISIBILITIES = ['public', 'friends', 'private'] as const;
+export type Visibility = (typeof VISIBILITIES)[number];
+
 export interface ProfileSettings {
-  showStats: boolean;
-  showPlaying: boolean;
-  showActivity: boolean;
+  visibility: Visibility;
   showOnline: boolean;
+  showPlaying: boolean;
+  showPlaytime: boolean;
+  showLibrary: boolean;
+  showActivity: boolean;
+  showStats: boolean;
   showcase: ShowcaseKind[];
 }
 
 export const DEFAULT_PROFILE: ProfileSettings = {
-  showStats: true,
-  showPlaying: true,
-  showActivity: true,
+  visibility: 'friends',
   showOnline: true,
+  showPlaying: true,
+  showPlaytime: true,
+  showLibrary: true,
+  showActivity: true,
+  showStats: true,
   showcase: ['favorites'],
 };
 
@@ -26,6 +35,7 @@ export interface CurrentUser {
   displayName: string;
   email: string;
   avatarUrl: string;
+  bio: string;
   profile: ProfileSettings;
   createdAt: string;
 }
@@ -38,6 +48,7 @@ export interface AvatarImage {
 export interface ProfilePatch {
   username?: string;
   displayName?: string;
+  bio?: string;
   profile?: ProfileSettings;
 }
 
@@ -63,6 +74,7 @@ export interface BootstrapState {
 
 const KNOWN_CODES = new Set([
   'unauthenticated',
+  'sync_disabled',
   'invalid_credentials',
   'username_taken',
   'email_taken',
@@ -77,9 +89,19 @@ const KNOWN_CODES = new Set([
   'unsupported_avatar',
   'invalid_avatar',
   'invalid_profile',
+  'invalid_bio',
   'rate_limited',
   'bad_request',
   'request_blocked',
+  'user_not_found',
+  'unknown_game',
+  'already_friends',
+  'friend_limit',
+  'request_limit',
+  'block_limit',
+  'friend_self',
+  'no_request',
+  'not_friends',
   'internal',
   'network_error',
   'server_error',
@@ -97,6 +119,8 @@ const CODE_FIELDS: Record<string, string> = {
   unsupported_avatar: 'avatar',
   invalid_avatar: 'avatar',
   invalid_profile: 'profile',
+  invalid_bio: 'bio',
+  friend_self: 'query',
 };
 
 export class AccountError extends Error {
@@ -111,7 +135,7 @@ export class AccountError extends Error {
   }
 }
 
-function toAccountError(err: unknown): AccountError {
+export function toAccountError(err: unknown): AccountError {
   if (err instanceof AccountError) return err;
   const raw = err instanceof Error ? err.message : String(err);
   if (KNOWN_CODES.has(raw)) return new AccountError(raw);
@@ -135,7 +159,16 @@ export async function bootstrapSession(): Promise<BootstrapState> {
 }
 
 function emptyUser(): CurrentUser {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', profile: DEFAULT_PROFILE, createdAt: '' };
+  return {
+    id: '',
+    username: '',
+    displayName: '',
+    email: '',
+    avatarUrl: '',
+    bio: '',
+    profile: DEFAULT_PROFILE,
+    createdAt: '',
+  };
 }
 
 export async function continueAsGuest(): Promise<void> {

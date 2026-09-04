@@ -29,10 +29,13 @@ vi.mock('../services/account', () => {
 });
 
 const DEFAULT_PROFILE: ProfileSettings = {
-  showStats: true,
-  showPlaying: true,
-  showActivity: true,
+  visibility: 'friends',
   showOnline: true,
+  showPlaying: true,
+  showPlaytime: true,
+  showLibrary: true,
+  showActivity: true,
+  showStats: true,
   showcase: ['favorites'],
 };
 
@@ -43,6 +46,7 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
     displayName: 'Egor',
     email: 'egor@example.com',
     avatarUrl: '',
+    bio: '',
     profile: DEFAULT_PROFILE,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
@@ -50,7 +54,16 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function emptyUser() {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', profile: DEFAULT_PROFILE, createdAt: '' };
+  return {
+    id: '',
+    username: '',
+    displayName: '',
+    email: '',
+    avatarUrl: '',
+    bio: '',
+    profile: DEFAULT_PROFILE,
+    createdAt: '',
+  };
 }
 
 async function loadModules() {

@@ -15,6 +15,7 @@
   import { initMoves } from './lib/stores/relocate';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { initSettings, settings } from './lib/stores/settings';
+  import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
@@ -24,6 +25,7 @@
   import Catalog from './routes/catalog/Catalog.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
+  import Friends from './routes/friends/Friends.svelte';
   import History from './routes/history/History.svelte';
   import Installed from './routes/installed/Installed.svelte';
   import Lan from './routes/lan/Lan.svelte';
@@ -31,6 +33,7 @@
   import Profile from './routes/profile/Profile.svelte';
   import Settings from './routes/settings/Settings.svelte';
   import Sources from './routes/sources/Sources.svelte';
+  import UserProfile from './routes/user/UserProfile.svelte';
 
   initDownloads();
   initInstalls();
@@ -45,6 +48,7 @@
   initAuth();
   initHistory();
   initLan();
+  initSocial();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -80,6 +84,10 @@
       <History />
     {:else if $route.name === 'lan'}
       <Lan />
+    {:else if $route.name === 'friends'}
+      <Friends tab={$route.params.tab} />
+    {:else if $route.name === 'user'}
+      <UserProfile username={$route.params.username} />
     {:else if $route.name === 'profile'}
       <Profile />
     {:else if $route.name === 'settings'}

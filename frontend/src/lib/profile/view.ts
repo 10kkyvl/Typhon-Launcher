@@ -1,4 +1,4 @@
-import type { ShowcaseKind } from '../services/account';
+import type { ShowcaseKind, Visibility } from '../services/account';
 import type { GameRef, ProfileStats } from '../services/profile';
 import { playtime, plural } from '../utils/format';
 
@@ -13,6 +13,16 @@ export const SHOWCASE_HINTS: Record<ShowcaseKind, string> = {
   recently_completed: 'Выберите статус «Пройдена» на странице игры',
   most_played: 'Появится после первой сыгранной сессии',
 };
+
+export const VISIBILITY_LABELS: Record<Visibility, string> = {
+  public: 'Все',
+  friends: 'Друзья',
+  private: 'Никто',
+};
+
+export function visibilityLabel(visibility: string): string {
+  return VISIBILITY_LABELS[visibility as Visibility] ?? VISIBILITY_LABELS.friends;
+}
 
 export function recentLabel(seconds: number): string {
   return `${playtime(seconds)} за 2 недели`;
