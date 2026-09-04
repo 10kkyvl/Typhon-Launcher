@@ -760,3 +760,41 @@ func TestService_KickDropsTheCachedPage(t *testing.T) {
 	close(release)
 	h.awaitPoll()
 }
+
+func TestService_KickDiscardsAStaleSuccessfulPoll(t *testing.T) {
+	release := make(chan struct{})
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		if h.reqs.Load() == 1 {
+			<-release
+			writeJSON(h.t, w, pageWithIncoming(7))
+			return
+		}
+		writeJSON(h.t, w, pageWithIncoming(0))
+	})
+
+	h.start()
+	for h.reqs.Load() < 1 {
+		runtime.Gosched()
+	}
+	h.svc.Kick()
+	close(release)
+	h.awaitPoll()
+	h.awaitPoll()
+
+	page, err := h.svc.Friends()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Incoming) != 0 {
+		t.Fatalf("incoming = %d, want 0: a reply from before Kick must not repopulate the cache", len(page.Incoming))
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, e := range h.emits {
+		if e.name == EventFriends {
+			if fp, ok := e.data.(FriendsPage); ok && len(fp.Incoming) == 7 {
+				t.Fatal("the stale page must not be emitted")
+			}
+		}
+	}
+}

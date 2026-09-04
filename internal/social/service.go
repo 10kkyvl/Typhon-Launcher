@@ -195,6 +195,10 @@ func (s *Service) refresh(ctx context.Context) error {
 	}
 
 	s.mu.Lock()
+	if s.kicks != started {
+		s.mu.Unlock()
+		return nil
+	}
 	s.page = page
 	s.loaded = true
 	s.paused = false
