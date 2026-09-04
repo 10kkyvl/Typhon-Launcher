@@ -199,6 +199,14 @@
       "source": "manual",
       "manualReview": true,
       "note": "Bootstrapper скачивается на этапе сборки и устанавливается инсталлятором Typhon. Это не Go- и не npm-модуль: собственного файла лицензии у него нет, распространение регулируется отдельными условиями Microsoft для WebView2 Runtime."
+    },
+    {
+      "name": "Fluent Emoji (Microsoft)",
+      "version": "",
+      "license": "MIT",
+      "source": "file",
+      "licenseFile": "tools/notices/licenses/fluentui-emoji-LICENSE",
+      "note": "Не npm- и не Go-модуль: иконки реакций в `frontend/src/lib/components/reactions/` — это SVG в плоском стиле (flat) из репозитория https://github.com/microsoft/fluentui-emoji, вставленные в код инлайном. Дословный текст лицензии взят из файла `LICENSE` этого репозитория и хранится в `tools/notices/licenses/fluentui-emoji-LICENSE`."
     }
   ]
 }

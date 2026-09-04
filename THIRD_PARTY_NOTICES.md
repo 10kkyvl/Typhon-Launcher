@@ -9,7 +9,7 @@
 | @fontsource-variable/inter-tight | 5.3.0 | OFL-1.1 |
 | @lucide/svelte | 1.33.0 | ISC |
 | @wailsio/runtime | 3.0.0-beta.10 | MIT |
-| Fluent Emoji (Microsoft) | 2023 | MIT |
+| Fluent Emoji (Microsoft) | - | MIT |
 | Microsoft Edge WebView2 Runtime | - | Условия распространения Microsoft (не Go/npm-модуль) |
 | github.com/anacrolix/btree | v0.0.0-20251201064447-d86c3fa41bd8 | Apache-2.0 |
 | github.com/anacrolix/chansync | v0.7.0 | MIT |
@@ -38,9 +38,9 @@
 
 Примечание (@wailsio/runtime): Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля.
 
-Примечание (svelte): Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon.
+Примечание (Fluent Emoji (Microsoft)): Не npm- и не Go-модуль: иконки реакций в `frontend/src/lib/components/reactions/` — это SVG в плоском стиле (flat) из репозитория https://github.com/microsoft/fluentui-emoji, вставленные в код инлайном. Дословный текст лицензии взят из файла `LICENSE` этого репозитория и хранится в `tools/notices/licenses/fluentui-emoji-LICENSE`.
 
-Примечание (Fluent Emoji): Не npm- и не Go-модуль — восемь иконок реакций (`frontend/src/lib/components/reactions/*.svelte`) представляют собой SVG в плоском стиле (flat) из репозитория `github.com/microsoft/fluentui-emoji`, вставленные в код инлайном. Дословный текст лицензии взят из файла `LICENSE` этого репозитория.
+Примечание (svelte): Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon.
 
 ## MPL-2.0
 
@@ -238,10 +238,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### MIT — Fluent Emoji (Microsoft) 2023
+### MIT — Fluent Emoji (Microsoft)
 
 ```
-    MIT License
+MIT License
 
     Copyright (c) Microsoft Corporation.
 
