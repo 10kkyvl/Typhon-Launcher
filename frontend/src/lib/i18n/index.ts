@@ -9,6 +9,7 @@ const catalogs = { ru, en };
 
 export type { Locale, MessageKey, Params };
 export { locale, applyLanguage, resolveLocale, LANGUAGE_SYSTEM } from './locale';
+export { errorCode, hasMessage } from './errors';
 
 export function msg(key: MessageKey, params?: Params) {
   return translate(catalogs, get(locale), key, params);

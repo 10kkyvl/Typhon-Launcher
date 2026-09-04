@@ -1,34 +1,32 @@
-import { msg } from '../i18n';
+import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
 
-const REASONS: [string, MessageKey][] = [
-  ['игра сейчас запущена', 'transfers.moveErrGameRunning'],
-  ['для игры выполняется обновление', 'transfers.moveErrUpdating'],
-  ['для игры выполняется установка', 'transfers.moveErrInstalling'],
-  ['для игры идёт загрузка', 'transfers.moveErrDownloading'],
-  ['перенос уже выполняется', 'transfers.moveErrAlreadyRunning'],
-  ['целевой каталог не пуст', 'transfers.moveErrTargetNotEmpty'],
-  ['целевой каталог не может быть внутри исходного', 'transfers.moveErrTargetInsideSource'],
-  ['исходный каталог не может быть внутри целевого', 'transfers.moveErrSourceInsideTarget'],
-  ['целевой каталог не может быть корнем диска', 'transfers.moveErrTargetIsDriveRoot'],
-  ['целевой каталог должен быть абсолютным путём', 'transfers.moveErrInvalidPath'],
-  ['не указан целевой каталог', 'transfers.moveErrNoTarget'],
-  ['не указан исходный каталог', 'transfers.moveErrNoSource'],
-  ['не удалось определить свободное место', 'transfers.moveErrFreeSpaceUnknown'],
-  ['недостаточно свободного места', 'transfers.moveErrNotEnoughSpace'],
-  ['проверка перенесённых файлов не прошла', 'transfers.moveErrVerifyFailed'],
-  ['у игры не задан каталог установки', 'transfers.moveErrNoInstallDir'],
-  ['операция переноса не найдена', 'transfers.moveErrJobNotFound'],
-  ['игра не найдена', 'transfers.moveErrGameNotFound'],
-  ['восстановление переноса неоднозначно', 'transfers.moveErrAmbiguousRecovery'],
-  ['диалог недоступен', 'transfers.moveErrDialogUnavailable'],
-  ['сервис завершает работу', 'transfers.moveErrShuttingDown'],
-  ['сервис ещё не запущен', 'transfers.moveErrNotReady'],
-];
+export const REASONS: Record<string, MessageKey> = {
+  'relocate.game_running': 'transfers.moveErrGameRunning',
+  'relocate.updating': 'transfers.moveErrUpdating',
+  'relocate.installing': 'transfers.moveErrInstalling',
+  'relocate.downloading': 'transfers.moveErrDownloading',
+  'relocate.already_running': 'transfers.moveErrAlreadyRunning',
+  'relocate.target_not_empty': 'transfers.moveErrTargetNotEmpty',
+  'relocate.target_inside_source': 'transfers.moveErrTargetInsideSource',
+  'relocate.source_inside_target': 'transfers.moveErrSourceInsideTarget',
+  'relocate.target_is_drive_root': 'transfers.moveErrTargetIsDriveRoot',
+  'relocate.invalid_path': 'transfers.moveErrInvalidPath',
+  'relocate.no_target': 'transfers.moveErrNoTarget',
+  'relocate.no_source': 'transfers.moveErrNoSource',
+  'relocate.free_space_unknown': 'transfers.moveErrFreeSpaceUnknown',
+  'relocate.not_enough_space': 'transfers.moveErrNotEnoughSpace',
+  'relocate.verify_failed': 'transfers.moveErrVerifyFailed',
+  'relocate.no_install_dir': 'transfers.moveErrNoInstallDir',
+  'relocate.job_not_found': 'transfers.moveErrJobNotFound',
+  'relocate.game_not_found': 'transfers.moveErrGameNotFound',
+  'relocate.ambiguous_recovery': 'transfers.moveErrAmbiguousRecovery',
+  'relocate.dialog_unavailable': 'transfers.moveErrDialogUnavailable',
+  'relocate.shutting_down': 'transfers.moveErrShuttingDown',
+  'relocate.not_ready': 'transfers.moveErrNotReady',
+};
 
 export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '');
-  if (!raw) return fallback;
-  const known = REASONS.find(([marker]) => raw.includes(marker));
-  return known ? msg(known[1]) : fallback;
+  const key = REASONS[errorCode(err)];
+  return key ? msg(key) : fallback;
 }
