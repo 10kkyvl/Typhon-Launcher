@@ -1,31 +1,32 @@
-const REASONS: [string, string][] = [
-  ['игра сейчас запущена', 'Игра запущена. Закройте её и повторите'],
-  ['для игры выполняется обновление', 'Для игры сейчас выполняется обновление. Дождитесь его завершения'],
-  ['для игры выполняется установка', 'Для игры сейчас идёт установка. Дождитесь её завершения'],
-  ['для игры идёт загрузка', 'Для игры сейчас идёт загрузка. Дождитесь её завершения'],
-  ['перенос уже выполняется', 'Перенос уже выполняется'],
-  ['целевой каталог не пуст', 'Целевая папка не пуста. Выберите пустую папку'],
-  ['целевой каталог не может быть внутри исходного', 'Целевая папка не может находиться внутри исходной'],
-  ['исходный каталог не может быть внутри целевого', 'Исходная папка не может находиться внутри целевой'],
-  ['целевой каталог не может быть корнем диска', 'Нельзя выбрать корень диска — укажите папку внутри него'],
-  ['целевой каталог должен быть абсолютным путём', 'Некорректный путь к папке'],
-  ['не указан целевой каталог', 'Выберите папку назначения'],
-  ['не указан исходный каталог', 'Не удалось определить исходную папку игры'],
-  ['не удалось определить свободное место', 'Не удалось определить свободное место на диске'],
-  ['недостаточно свободного места', 'Недостаточно места на диске'],
-  ['проверка перенесённых файлов не прошла', 'Проверка перенесённых файлов не прошла. Файлы остались на прежнем месте'],
-  ['у игры не задан каталог установки', 'У игры не задан каталог установки'],
-  ['операция переноса не найдена', 'Операция переноса не найдена — возможно, она уже завершилась'],
-  ['игра не найдена', 'Игра не найдена в библиотеке'],
-  ['восстановление переноса неоднозначно', 'Перенос прервался и требует ручной проверки. Обратитесь в поддержку'],
-  ['диалог недоступен', 'Диалог выбора папки недоступен'],
-  ['сервис завершает работу', 'Лаунчер завершает работу, повторите позже'],
-  ['сервис ещё не запущен', 'Служба переноса ещё не готова, повторите через момент'],
-];
+import { errorCode, msg } from '../i18n';
+import type { MessageKey } from '../i18n';
 
-export function moveErrorText(err: unknown, fallback = 'Не удалось выполнить перенос'): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '');
-  if (!raw) return fallback;
-  const known = REASONS.find(([marker]) => raw.includes(marker));
-  return known ? known[1] : fallback;
+export const REASONS: Record<string, MessageKey> = {
+  'relocate.game_running': 'transfers.moveErrGameRunning',
+  'relocate.updating': 'transfers.moveErrUpdating',
+  'relocate.installing': 'transfers.moveErrInstalling',
+  'relocate.downloading': 'transfers.moveErrDownloading',
+  'relocate.already_running': 'transfers.moveErrAlreadyRunning',
+  'relocate.target_not_empty': 'transfers.moveErrTargetNotEmpty',
+  'relocate.target_inside_source': 'transfers.moveErrTargetInsideSource',
+  'relocate.source_inside_target': 'transfers.moveErrSourceInsideTarget',
+  'relocate.target_is_drive_root': 'transfers.moveErrTargetIsDriveRoot',
+  'relocate.invalid_path': 'transfers.moveErrInvalidPath',
+  'relocate.no_target': 'transfers.moveErrNoTarget',
+  'relocate.no_source': 'transfers.moveErrNoSource',
+  'relocate.free_space_unknown': 'transfers.moveErrFreeSpaceUnknown',
+  'relocate.not_enough_space': 'transfers.moveErrNotEnoughSpace',
+  'relocate.verify_failed': 'transfers.moveErrVerifyFailed',
+  'relocate.no_install_dir': 'transfers.moveErrNoInstallDir',
+  'relocate.job_not_found': 'transfers.moveErrJobNotFound',
+  'relocate.game_not_found': 'transfers.moveErrGameNotFound',
+  'relocate.ambiguous_recovery': 'transfers.moveErrAmbiguousRecovery',
+  'relocate.dialog_unavailable': 'transfers.moveErrDialogUnavailable',
+  'relocate.shutting_down': 'transfers.moveErrShuttingDown',
+  'relocate.not_ready': 'transfers.moveErrNotReady',
+};
+
+export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {
+  const key = REASONS[errorCode(err)];
+  return key ? msg(key) : fallback;
 }

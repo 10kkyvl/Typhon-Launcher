@@ -1,17 +1,18 @@
 package selfupdate
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	errInstallDirEmpty       = errors.New("selfupdate: install dir is empty")
-	errInstallDirNotAbsolute = errors.New("selfupdate: install dir is not absolute")
-	errInstallDirNotClean    = errors.New("selfupdate: install dir is not clean")
-	errInstallDirUnsafe      = errors.New("selfupdate: install dir cannot be passed on a command line")
-	errInstallDirNotDir      = errors.New("selfupdate: install dir is not a directory")
+	errInstallDirEmpty       = uierr.New("selfupdate.install_dir_empty", "selfupdate: install dir is empty")
+	errInstallDirNotAbsolute = uierr.New("selfupdate.install_dir_not_absolute", "selfupdate: install dir is not absolute")
+	errInstallDirNotClean    = uierr.New("selfupdate.install_dir_not_clean", "selfupdate: install dir is not clean")
+	errInstallDirUnsafe      = uierr.New("selfupdate.install_dir_unsafe", "selfupdate: install dir cannot be passed on a command line")
+	errInstallDirNotDir      = uierr.New("selfupdate.install_dir_not_dir", "selfupdate: install dir is not a directory")
 )
 
 // validateInstallDir guards the directory handed to the installer as /D=. NSIS

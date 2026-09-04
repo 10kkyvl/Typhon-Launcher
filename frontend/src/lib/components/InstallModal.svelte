@@ -15,8 +15,9 @@
     startInstall,
     type PlanInfo,
   } from '../services/install';
+  import { installErrorText } from '../install/installErrors';
   import { openFolder, selectFolder } from '../services/settings';
-  import { downloadsById, errorMessage } from '../stores/downloads';
+  import { downloadsById } from '../stores/downloads';
   import {
     installActive,
     installStatusLabels,
@@ -32,13 +33,14 @@
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
+  import { msg } from '../i18n';
 
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
 
-  const modeOptions = [
-    { id: 'move', label: 'Переместить' },
-    { id: 'copy', label: 'Копировать' },
-  ];
+  const modeOptions = $derived([
+    { id: 'move', label: msg('modals.installModeMove') },
+    { id: 'copy', label: msg('modals.installModeCopy') },
+  ]);
 
   let installId = $state<string | null>(null);
   let info = $state<PlanInfo | null>(null);
@@ -91,14 +93,14 @@
   const primaryLabel = $derived.by(() => {
     switch (plan?.type) {
       case 'portable':
-        return mode === 'move' ? 'Переместить и установить' : 'Копировать и установить';
+        return mode === 'move' ? msg('modals.installMoveAndInstall') : msg('modals.installCopyAndInstall');
       case 'archive_zip':
       case 'archive_7z':
       case 'archive_rar':
-        return 'Распаковать и установить';
+        return msg('modals.installExtractAndInstall');
       case 'exe_installer':
       case 'msi_installer':
-        return silent ? 'Установить' : 'Запустить установщик';
+        return silent ? msg('modals.installInstallLabel') : msg('modals.installRunInstaller');
       default:
         return '';
     }
@@ -132,7 +134,7 @@
       mode = 'copy';
     } catch (err) {
       if (!open || current !== token) return;
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
       open = false;
     } finally {
       if (current === token) loading = false;
@@ -164,10 +166,10 @@
 
   async function browseDestination() {
     try {
-      const path = await selectFolder('Выберите папку установки');
+      const path = await selectFolder(msg('modals.installChooseFolder'));
       if (path) destination = path;
     } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
+      toast(msg('modals.installFolderDialogFailed'), 'danger');
     }
   }
 
@@ -176,7 +178,7 @@
     try {
       await action();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
     busy = false;
   }
@@ -208,7 +210,7 @@
     const current = info;
     if (!current) return;
     return run(async () => {
-      const path = await selectExecutable('Выберите установщик');
+      const path = await selectExecutable(msg('modals.installChooseInstaller'));
       if (!path) return;
       const item = await startInstall(current.downloadId, {
         type: 'exe_installer',
@@ -223,17 +225,17 @@
     const current = info;
     if (!current) return;
     return run(async () => {
-      const path = await selectExecutable('Выберите исполняемый файл игры');
+      const path = await selectExecutable(msg('modals.installChooseGameExecutable'));
       if (!path) return;
       await addGame(path, current.name);
-      toast('Игра добавлена в библиотеку', 'success');
+      toast(msg('modals.installGameAdded'), 'success');
       open = false;
     });
   }
 
   function pickManual() {
     return run(async () => {
-      const path = await selectExecutable('Выберите исполняемый файл игры');
+      const path = await selectExecutable(msg('modals.installChooseGameExecutable'));
       if (path) chosen = path;
     });
   }
@@ -272,63 +274,63 @@
     return run(async () => {
       await deleteDownloadData(item.downloadId);
       cleanupResolved = true;
-      toast('Загруженные файлы удалены', 'success');
+      toast(msg('modals.installDownloadDataDeleted'), 'success');
     });
   }
 </script>
 
-<Modal bind:open title="Установка" width="54rem">
+<Modal bind:open title={msg('modals.installTitle')} width="54rem">
   {#if phase === 'loading'}
     <div class="loading">
       <span class="spinner"></span>
-      <span class="loading-text">Анализ пакета…</span>
+      <span class="loading-text">{msg('modals.installAnalyzing')}</span>
     </div>
   {:else if phase === 'plan' && info && plan}
     <div class="block">
       <div class="pkg">
         <span class="pkg-name">{info.name}</span>
-        <span class="pkg-type">{installTypeLabels[plan.type]}</span>
+        <span class="pkg-type">{installTypeLabels(plan.type)}</span>
       </div>
 
       <div class="rows">
         <div class="row">
-          <span class="key">Источник</span>
+          <span class="key">{msg('modals.installSource')}</span>
           <span class="value">{truncateMiddle(plan.sourcePath, 48)}</span>
         </div>
         {#if info.requiredBytes > 0}
           <div class="row">
-            <span class="key">Требуется места</span>
+            <span class="key">{msg('modals.installRequiredSpace')}</span>
             <span class="value" class:danger={notEnoughSpace}>{bytesSize(info.requiredBytes)}</span>
           </div>
         {/if}
         {#if info.freeBytes > 0}
           <div class="row">
-            <span class="key">Свободно на диске</span>
+            <span class="key">{msg('modals.installFreeSpace')}</span>
             <span class="value" class:danger={notEnoughSpace}>{bytesSize(info.freeBytes)}</span>
           </div>
         {/if}
       </div>
 
       {#if notEnoughSpace}
-        <p class="note danger">Недостаточно места на диске для установки.</p>
+        <p class="note danger">{msg('modals.installNotEnoughSpace')}</p>
       {/if}
 
       {#if controlled || silent}
         <div class="field">
-          <span class="field-label">Папка установки</span>
+          <span class="field-label">{msg('modals.installDestinationFolder')}</span>
           <div class="field-controls">
             <input class="input sm" type="text" bind:value={destination} />
-            <Button size="sm" onclick={browseDestination}>Обзор</Button>
+            <Button size="sm" onclick={browseDestination}>{msg('modals.installBrowse')}</Button>
           </div>
         </div>
       {/if}
 
       {#if portable}
         {#if info.seeding}
-          <p class="note">Файлы раздаются — будет использовано копирование</p>
+          <p class="note">{msg('modals.installSeedingCopyNote')}</p>
         {:else}
           <div class="field">
-            <span class="field-label">Режим установки</span>
+            <span class="field-label">{msg('modals.installModeLabel')}</span>
             <SegmentedControl options={modeOptions} bind:value={mode} />
           </div>
         {/if}
@@ -336,26 +338,26 @@
 
       {#if external}
         {#if silent}
-          <p class="note">Игра установится сама в выбранную папку, окно установщика не появится</p>
+          <p class="note">{msg('modals.installSilentNote')}</p>
         {:else}
-          <p class="note">Установщик откроется в отдельном окне</p>
+          <p class="note">{msg('modals.installExternalWindowNote')}</p>
         {/if}
       {/if}
 
       {#if plan.type === 'unknown'}
         <div class="choices">
-          <p class="note">Тип пакета не распознан. Выберите действие вручную.</p>
+          <p class="note">{msg('modals.installUnknownTypeNote')}</p>
           <Button onclick={openSource}>
             <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            Открыть папку загрузки
+            {msg('modals.installOpenDownloadFolder')}
           </Button>
           <Button onclick={pickInstaller}>
             <FileSearch size="1.6rem" strokeWidth={1.8} />
-            Выбрать установщик…
+            {msg('modals.installPickInstallerButton')}
           </Button>
           <Button onclick={pickGameExecutable}>
             <Gamepad2 size="1.6rem" strokeWidth={1.8} />
-            Выбрать исполняемый файл…
+            {msg('modals.installPickExecutableButton')}
           </Button>
         </div>
       {/if}
@@ -364,10 +366,10 @@
     <div class="block">
       <div class="pkg">
         <span class="pkg-name">{installation.name}</span>
-        <span class="pkg-type">{installStatusLabels[installation.status]}</span>
+        <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
       {#if externalWait}
-        <p class="note">Ожидание завершения установщика...</p>
+        <p class="note">{msg('modals.installWaitingExternal')}</p>
       {:else}
         <ProgressBar value={installation.progress * 100} />
         <div class="progress-foot">
@@ -381,8 +383,8 @@
     </div>
   {:else if phase === 'choose' && installation}
     <div class="block">
-      <span class="lead">Выберите исполняемый файл игры</span>
-      <div class="cand-list" role="radiogroup" aria-label="Исполняемые файлы">
+      <span class="lead">{msg('modals.installChooseGameExecutable')}</span>
+      <div class="cand-list" role="radiogroup" aria-label={msg('modals.installExecutablesAriaLabel')}>
         {#each candidatePaths as path (path)}
           <button class="cand" role="radio" aria-checked={chosen === path} onclick={() => (chosen = path)}>
             <span class="radio" class:on={chosen === path}></span>
@@ -393,33 +395,33 @@
           </button>
         {/each}
       </div>
-      <Button size="sm" onclick={pickManual}>Выбрать вручную…</Button>
+      <Button size="sm" onclick={pickManual}>{msg('modals.installPickManually')}</Button>
     </div>
   {:else if phase === 'done' && installation}
     <div class="block">
       <div class="rows">
         <div class="row">
-          <span class="key">Игра</span>
+          <span class="key">{msg('modals.installGameLabel')}</span>
           <span class="value">{installation.name}</span>
         </div>
         <div class="row">
-          <span class="key">Папка</span>
+          <span class="key">{msg('modals.installFolderLabel')}</span>
           <span class="value">{truncateMiddle(installation.destination, 44)}</span>
         </div>
         <div class="row">
-          <span class="key">Версия</span>
-          <span class="value">{installation.detectedVersion || 'Неизвестно'}</span>
+          <span class="key">{msg('modals.installVersionLabel')}</span>
+          <span class="value">{installation.detectedVersion || msg('modals.installUnknownVersion')}</span>
         </div>
       </div>
       {#if askCleanup && !cleanupResolved}
         <div class="field">
-          <span class="field-label">Загруженные файлы</span>
+          <span class="field-label">{msg('modals.installDownloadedFilesLabel')}</span>
           {#if seedingNow}
-            <p class="note danger">Файлы сейчас раздаются. Удаление остановит раздачу.</p>
+            <p class="note danger">{msg('modals.installSeedingDeleteWarning')}</p>
           {/if}
           <div class="cleanup-actions">
-            <Button size="sm" variant="danger" disabled={busy} onclick={deleteData}>Удалить загруженные файлы</Button>
-            <Button size="sm" onclick={() => (cleanupResolved = true)}>Оставить</Button>
+            <Button size="sm" variant="danger" disabled={busy} onclick={deleteData}>{msg('modals.installDeleteDownloadedFiles')}</Button>
+            <Button size="sm" onclick={() => (cleanupResolved = true)}>{msg('modals.installKeep')}</Button>
           </div>
         </div>
       {/if}
@@ -428,15 +430,15 @@
     <div class="block">
       <div class="pkg">
         <span class="pkg-name">{installation.name}</span>
-        <span class="pkg-type">{installStatusLabels[installation.status]}</span>
+        <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
-      <p class="note danger">{installation.error || 'Установка не была завершена.'}</p>
+      <p class="note danger">{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</p>
     </div>
   {/if}
 
   {#snippet footer()}
     {#if phase === 'plan' && plan}
-      <Button onclick={() => (open = false)}>Отмена</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
@@ -447,16 +449,16 @@
         </Button>
       {/if}
     {:else if phase === 'progress'}
-      <Button onclick={() => (open = false)}>Свернуть</Button>
-      <Button variant="danger" disabled={busy || externalWait} onclick={cancelCurrent}>Отменить установку</Button>
+      <Button onclick={() => (open = false)}>{msg('modals.installMinimize')}</Button>
+      <Button variant="danger" disabled={busy || externalWait} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
     {:else if phase === 'choose'}
-      <Button onclick={() => (open = false)}>Закрыть</Button>
-      <Button variant="primary" disabled={busy || !chosen} onclick={confirmChoice}>Подтвердить</Button>
+      <Button onclick={() => (open = false)}>{msg('common.close')}</Button>
+      <Button variant="primary" disabled={busy || !chosen} onclick={confirmChoice}>{msg('modals.installConfirm')}</Button>
     {:else if phase === 'done'}
-      <Button variant="primary" onclick={() => (open = false)}>Готово</Button>
+      <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
     {:else if phase === 'problem'}
-      <Button onclick={dismissCurrent} disabled={busy}>Убрать</Button>
-      <Button variant="primary" onclick={retryCurrent} disabled={busy}>Повторить</Button>
+      <Button onclick={dismissCurrent} disabled={busy}>{msg('modals.installDismiss')}</Button>
+      <Button variant="primary" onclick={retryCurrent} disabled={busy}>{msg('common.retry')}</Button>
     {/if}
   {/snippet}
 </Modal>

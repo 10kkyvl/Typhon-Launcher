@@ -4,6 +4,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { GameRef } from '../../lib/services/profile';
   import { navigate } from '../../lib/stores/router';
+  import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
 
   let { running, hidden }: { running: GameRef[]; hidden: boolean } = $props();
@@ -12,16 +13,16 @@
 </script>
 
 {#if game}
-  <Card title="Сейчас играет">
+  <Card title={msg('social.nowPlayingTitle')}>
     {#snippet action()}
-      {#if hidden}<HiddenBadge text="Скрыто от других. Вы видите это, остальные — нет." />{/if}
+      {#if hidden}<HiddenBadge text={msg('social.hiddenGenericHint')} />{/if}
     {/snippet}
     <button class="playing" type="button" onclick={() => navigate('game', { id: game.id })}>
       <span class="cover">
         <Artwork src={game.cover} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
       </span>
       <span class="title">{game.title}</span>
-      <StatusBadge kind="success" label="Играет" plain />
+      <StatusBadge kind="success" label={msg('social.playing')} plain />
     </button>
   </Card>
 {/if}

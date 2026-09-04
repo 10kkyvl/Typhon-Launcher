@@ -17,7 +17,7 @@ import {
   type Stats,
   type Transfer,
 } from '../services/lan';
-import { errorMessage } from '../utils/errors';
+import { sourceErrorText } from '../sources/sourceErrors';
 import { toast } from './toasts';
 
 export const peers = writable<Peer[]>([]);
@@ -81,7 +81,7 @@ export async function initLan() {
     shares.set(sharesList);
     lanStats.set(statsResult);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 
   Events.On('lan:peers', (event) => {
@@ -114,7 +114,7 @@ export async function initLan() {
       const offersList = await getOffers();
       offers.set(offersList);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(sourceErrorText(err), 'danger');
     }
   }, 10000);
 }
@@ -123,7 +123,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 
@@ -139,7 +139,7 @@ export function share(gameId: string) {
       clearHashing(gameId);
     })
     .catch((err) => {
-      toast(errorMessage(err), 'danger');
+      toast(sourceErrorText(err), 'danger');
       clearHashing(gameId);
     });
 }

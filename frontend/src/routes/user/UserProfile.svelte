@@ -22,6 +22,7 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
+  import { msg } from '../../lib/i18n';
   import UserActivity from './UserActivity.svelte';
   import UserCommon from './UserCommon.svelte';
   import UserCovers from './UserCovers.svelte';
@@ -82,12 +83,12 @@
     } catch (err) {
       if (target !== username) return;
       if (quiet) {
-        toast(accountErrorText(err, 'Не удалось обновить профиль'), 'danger');
+        toast(accountErrorText(err, msg('social.userRefreshFailed')), 'danger');
         return;
       }
       data = null;
       missing = err instanceof AccountError && err.code === 'user_not_found';
-      failure = accountErrorText(err, 'Не удалось загрузить профиль');
+      failure = accountErrorText(err, msg('social.userLoadFailed'));
     } finally {
       if (target === username) {
         loading = false;
@@ -104,23 +105,23 @@
       let done = '';
       if (id === 'add') {
         const result = await sendRequest(current.username);
-        done = result.accepted ? 'Вы теперь друзья' : 'Заявка отправлена';
+        done = result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing');
       } else if (id === 'cancel') {
         await decline(current.id);
-        done = 'Заявка отменена';
+        done = msg('social.requestCancelled');
       } else if (id === 'decline') {
         await decline(current.id);
-        done = 'Заявка отклонена';
+        done = msg('social.requestDeclined');
       } else if (id === 'accept') {
         await accept(current.id);
-        done = 'Вы теперь друзья';
+        done = msg('social.friendsNowFriends');
       } else if (id === 'unfriend') {
         await unfriend(current.id);
-        done = 'Удалён из друзей';
+        done = msg('social.friendsUnfriended');
       } else if (id === 'block') {
         await block(current.id);
         await refresh();
-        toast('Пользователь заблокирован', 'success');
+        toast(msg('social.userBlocked'), 'success');
         navigate('friends', { tab: 'blocked' });
         return;
       } else {
@@ -130,14 +131,14 @@
       await refresh();
       await load(current.username, true);
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось выполнить действие'), 'danger');
+      toast(accountErrorText(err, msg('social.actionFailed')), 'danger');
     } finally {
       busy = false;
     }
   }
 
   function signIn(view: 'login' | 'register') {
-    leaveGuest(view).catch((err) => toast(accountErrorText(err, 'Не удалось открыть вход'), 'danger'));
+    leaveGuest(view).catch((err) => toast(accountErrorText(err, msg('social.signInFailed')), 'danger'));
   }
 
   $effect(() => {
@@ -160,12 +161,12 @@
   });
 </script>
 
-<PageHeader title={username ? `@${username}` : 'Профиль'} />
+<PageHeader title={username ? `@${username}` : msg('social.profileLabel')} />
 
 {#if isGuest}
   <EmptyState
-    title="Профили доступны с аккаунтом"
-    description="Войдите, чтобы смотреть профили других игроков, их общие с вами игры и друзей."
+    title={msg('social.userGuestTitle')}
+    description={msg('social.userGuestDesc')}
   >
     {#snippet icon()}
       <UserRound size="2.2rem" strokeWidth={1.6} />
@@ -173,35 +174,35 @@
     {#snippet actions()}
       <Button variant="primary" onclick={() => signIn('login')}>
         <LogIn size="1.5rem" strokeWidth={1.8} />
-        Войти
+        {msg('social.signInButton')}
       </Button>
-      <Button onclick={() => signIn('register')}>Создать аккаунт</Button>
+      <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
     {/snippet}
   </EmptyState>
 {:else if loading}
-  <p class="muted">Загрузка…</p>
+  <p class="muted">{msg('social.loadingEllipsis')}</p>
 {:else if missing}
-  <EmptyState title="Пользователь не найден" description="Проверьте имя пользователя или код друга">
+  <EmptyState title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
     {#snippet icon()}
       <UserRound size="2.2rem" strokeWidth={1.6} />
     {/snippet}
   </EmptyState>
 {:else if failure}
-  <EmptyState title="Не удалось загрузить профиль" description={failure}>
+  <EmptyState title={msg('social.userLoadFailed')} description={failure}>
     {#snippet icon()}
       <UserRound size="2.2rem" strokeWidth={1.6} />
     {/snippet}
     {#snippet actions()}
-      <Button variant="primary" onclick={() => load(username ?? '')}>Повторить</Button>
+      <Button variant="primary" onclick={() => load(username ?? '')}>{msg('common.retry')}</Button>
     {/snippet}
   </EmptyState>
 {:else if data}
   <div class="profile" class:refreshing>
     <UserHeader profile={data} {busy} onaction={act} />
     {#if closed}
-      <p class="muted note">Профиль закрыт</p>
+      <p class="muted note">{msg('social.userProfileClosed')}</p>
     {:else if restricted}
-      <p class="muted note">Остальное видно друзьям</p>
+      <p class="muted note">{msg('social.userRestToFriends')}</p>
     {:else}
       <div class="columns">
         <div class="main">
@@ -218,24 +219,24 @@
               {/if}
             </div>
             <div class="pair-right">
-              <UserCovers title="Любимые игры" games={favorites} hearts />
+              <UserCovers title={msg('social.favoriteGamesTitle')} games={favorites} hearts />
             </div>
           </div>
         </div>
         <div class="side">
           {#if presenceGame}
-            <Card title="Сейчас играет">
+            <Card title={msg('social.nowPlayingTitle')}>
               <button class="playing" type="button" onclick={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}>
                 <span class="cover">
                   <Artwork src={presenceGame.coverUrl} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
                 </span>
                 <span class="title">{presenceGame.title}</span>
-                <StatusBadge kind="success" label="Играет" plain />
+                <StatusBadge kind="success" label={msg('social.playing')} plain />
               </button>
             </Card>
           {/if}
           {#if data.bio}
-            <Card title="О себе">
+            <Card title={msg('social.aboutTitle')}>
               <p class="bio">{data.bio}</p>
             </Card>
           {/if}

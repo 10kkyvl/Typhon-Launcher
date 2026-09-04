@@ -2,6 +2,7 @@
   import Card from '../../lib/components/Card.svelte';
   import type { CommonGames } from '../../lib/services/social';
   import { commonGameLabel, commonGamesTitle } from '../../lib/social/view';
+  import { msg } from '../../lib/i18n';
   import GameRow from './GameRow.svelte';
 
   let { common, name }: { common: CommonGames; name: string } = $props();
@@ -9,7 +10,7 @@
   const rows = $derived(common.games.slice(0, 6));
 </script>
 
-<Card title="Играете оба">
+<Card title={msg('social.userCommonTitle')}>
   <p class="count">{commonGamesTitle(common.count)}</p>
   <div class="list">
     {#each rows as game (game.igdbId)}

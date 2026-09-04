@@ -3,10 +3,11 @@
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
   import { toast } from '../stores/toasts';
-  import { bytesSize, speedBytes } from '../utils/format';
+  import { bytesSize, dateTime, speedBytes } from '../utils/format';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
+  import { msg } from '../i18n';
 
   let { open = $bindable(false), id }: { open?: boolean; id: string | null } = $props();
 
@@ -14,52 +15,52 @@
 
   function addedLabel(iso: string) {
     const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('ru-RU');
+    return Number.isNaN(date.getTime()) ? '—' : dateTime(date);
   }
 
   async function openDestination(path: string) {
     try {
       await openFolder(path);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('modals.downloadDetailsFolderUnavailable'), 'danger');
     }
   }
 </script>
 
-<Modal bind:open title={download?.name ?? 'Загрузка'} width="62rem">
+<Modal bind:open title={download?.name ?? msg('modals.downloadDetailsTitle')} width="62rem">
   {#if download}
     <div class="sections">
       <section class="block">
-        <h4>Общее</h4>
+        <h4>{msg('modals.downloadDetailsGeneral')}</h4>
         <div class="rows">
           <div class="row">
-            <span class="key">Состояние</span>
-            <span class="value">{statusLabels[download.status]}</span>
+            <span class="key">{msg('modals.downloadDetailsStatus')}</span>
+            <span class="value">{statusLabels(download.status)}</span>
           </div>
           <div class="row">
-            <span class="key">Папка</span>
+            <span class="key">{msg('modals.downloadDetailsFolder')}</span>
             <span class="value path">
               {download.destination}
-              <IconButton label="Открыть папку" size="sm" onclick={() => openDestination(download.destination)}>
+              <IconButton label={msg('modals.downloadDetailsOpenFolder')} size="sm" onclick={() => openDestination(download.destination)}>
                 <FolderOpen size="1.6rem" strokeWidth={1.8} />
               </IconButton>
             </span>
           </div>
           <div class="row">
-            <span class="key">Размер</span>
+            <span class="key">{msg('modals.downloadDetailsSize')}</span>
             <span class="value">{bytesSize(download.total)}</span>
           </div>
           <div class="row">
-            <span class="key">Прогресс</span>
+            <span class="key">{msg('modals.downloadDetailsProgress')}</span>
             <span class="value">{Math.floor(download.progress * 100)}%</span>
           </div>
           <div class="row">
-            <span class="key">Добавлено</span>
+            <span class="key">{msg('modals.downloadDetailsAdded')}</span>
             <span class="value">{addedLabel(download.addedAt)}</span>
           </div>
           {#if download.error}
             <div class="row">
-              <span class="key">Ошибка</span>
+              <span class="key">{msg('common.error')}</span>
               <span class="value danger">{download.error}</span>
             </div>
           {/if}
@@ -67,29 +68,29 @@
       </section>
 
       <section class="block">
-        <h4>Сеть</h4>
+        <h4>{msg('modals.downloadDetailsNetwork')}</h4>
         <div class="rows">
           <div class="row">
-            <span class="key">Сиды</span>
+            <span class="key">{msg('modals.downloadDetailsSeeds')}</span>
             <span class="value">{download.seeders}</span>
           </div>
           <div class="row">
-            <span class="key">Пиры</span>
+            <span class="key">{msg('modals.downloadDetailsPeers')}</span>
             <span class="value">{download.peers}</span>
           </div>
           <div class="row">
-            <span class="key">Скорость загрузки</span>
+            <span class="key">{msg('modals.downloadDetailsDownloadSpeed')}</span>
             <span class="value">{speedBytes(download.downloadSpeed)}</span>
           </div>
           <div class="row">
-            <span class="key">Скорость отдачи</span>
+            <span class="key">{msg('modals.downloadDetailsUploadSpeed')}</span>
             <span class="value">{speedBytes(download.uploadSpeed)}</span>
           </div>
         </div>
       </section>
 
       <section class="block">
-        <h4>Файлы</h4>
+        <h4>{msg('modals.downloadDetailsFiles')}</h4>
         <div class="file-list">
           {#each download.files as file, i (i)}
             <div class="file" class:skipped={!file.selected}>
@@ -98,7 +99,7 @@
                 {#if file.selected}
                   <span class="file-size">{bytesSize(file.bytesDone)} / {bytesSize(file.size)}</span>
                 {:else}
-                  <span class="file-size">Пропущен</span>
+                  <span class="file-size">{msg('modals.downloadDetailsSkipped')}</span>
                 {/if}
               </div>
               <ProgressBar

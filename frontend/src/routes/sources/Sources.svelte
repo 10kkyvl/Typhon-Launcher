@@ -29,6 +29,7 @@
   import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let addOpen = $state(false);
   let noticeOpen = $state(false);
@@ -55,33 +56,50 @@
     });
   });
 
-  const statusBadge: Record<SourceStatus, { kind: 'success' | 'neutral' | 'danger'; label: string }> = {
-    active: { kind: 'success', label: 'Активен' },
-    disabled: { kind: 'neutral', label: 'Отключен' },
-    error: { kind: 'danger', label: 'Ошибка' },
-    updating: { kind: 'neutral', label: 'Обновление' },
-  };
+  function statusBadgeFor(status: SourceStatus): { kind: 'success' | 'neutral' | 'danger'; label: string } {
+    switch (status) {
+      case 'active':
+        return { kind: 'success', label: msg('transfers.sourcesStatusActive') };
+      case 'disabled':
+        return { kind: 'neutral', label: msg('transfers.sourcesStatusDisabled') };
+      case 'error':
+        return { kind: 'danger', label: msg('common.error') };
+      case 'updating':
+        return { kind: 'neutral', label: msg('transfers.sourcesStatusUpdating') };
+    }
+  }
 
-  const statusTabLabels: Record<SourceStatus, string> = {
-    active: 'Активные',
-    disabled: 'Отключены',
-    error: 'С ошибками',
-    updating: 'Обновляются',
-  };
+  function statusTabLabel(status: SourceStatus): string {
+    switch (status) {
+      case 'active':
+        return msg('transfers.sourcesTabActive');
+      case 'disabled':
+        return msg('transfers.sourcesTabDisabled');
+      case 'error':
+        return msg('transfers.sourcesTabError');
+      case 'updating':
+        return msg('transfers.sourcesTabUpdating');
+    }
+  }
 
   const statusOrder: SourceStatus[] = ['active', 'disabled', 'error', 'updating'];
 
-  const healthMeta: Record<SourceHealth, { icon: typeof CircleCheck; color: string; label: string }> = {
-    healthy: { icon: CircleCheck, color: 'var(--success)', label: 'Всё в порядке' },
-    warning: { icon: TriangleAlert, color: 'var(--warning)', label: 'Есть предупреждения' },
-    error: { icon: CircleAlert, color: 'var(--danger)', label: 'Ошибка источника' },
-  };
+  function healthMetaFor(health: SourceHealth): { icon: typeof CircleCheck; color: string; label: string } {
+    switch (health) {
+      case 'healthy':
+        return { icon: CircleCheck, color: 'var(--success)', label: msg('transfers.sourcesHealthOk') };
+      case 'warning':
+        return { icon: TriangleAlert, color: 'var(--warning)', label: msg('transfers.sourcesHealthWarning') };
+      case 'error':
+        return { icon: CircleAlert, color: 'var(--danger)', label: msg('transfers.sourcesHealthError') };
+    }
+  }
 
   const statusTabs = $derived([
-    { id: 'all', label: 'Все', count: $sources.length },
+    { id: 'all', label: msg('transfers.sourcesTabAll'), count: $sources.length },
     ...statusOrder.map((status) => ({
       id: status,
-      label: statusTabLabels[status],
+      label: statusTabLabel(status),
       count: $sources.filter((source) => source.status === status).length,
     })),
   ]);
@@ -98,10 +116,10 @@
 
   function sourceMenu(source: Source) {
     return [
-      { id: 'refresh', label: source.status === 'updating' ? 'Обновление…' : 'Обновить сейчас' },
-      { id: 'toggle', label: source.enabled ? 'Отключить' : 'Включить' },
-      { id: 'details', label: 'Подробнее' },
-      { id: 'remove', label: 'Удалить источник', danger: true, separator: true },
+      { id: 'refresh', label: source.status === 'updating' ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshNow') },
+      { id: 'toggle', label: source.enabled ? msg('transfers.sourcesDisableAction') : msg('transfers.sourcesEnableAction') },
+      { id: 'details', label: msg('transfers.sourcesDetailsAction') },
+      { id: 'remove', label: msg('transfers.sourcesRemoveAction'), danger: true, separator: true },
     ];
   }
 
@@ -114,37 +132,37 @@
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
-      if (!window.confirm(`Удалить источник «${source.name}»?`)) return;
+      if (!window.confirm(msg('transfers.sourcesConfirmRemove', { name: source.name }))) return;
       await remove(source.id);
     }
   }
 </script>
 
 <Card surface="panel">
-  <PageHeader title="Источники" subtitle="Пользовательские источники релизов">
+  <PageHeader title={msg('transfers.sourcesTitle')} subtitle={msg('transfers.sourcesSubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
         <span class="spin" class:on={$refreshingAll}>
           <RefreshCw size="1.5rem" strokeWidth={1.8} />
         </span>
-        {$refreshingAll ? 'Обновление…' : 'Обновить все'}
+        {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}
       </Button>
       <Button variant="primary" onclick={startAddSource}>
         <Plus size="1.5rem" strokeWidth={2} />
-        Добавить источник
+        {msg('transfers.sourcesAddAction')}
       </Button>
     {/snippet}
   </PageHeader>
 
   <div class="notice">
     <span class="notice-icon"><Info size="1.8rem" strokeWidth={1.8} /></span>
-    <p class="notice-text">Добавленные источники обрабатываются на вашем устройстве.</p>
+    <p class="notice-text">{msg('transfers.sourcesNotice')}</p>
   </div>
 
   {#if $sources.length === 0}
     <EmptyState
-      title="Источники ещё не добавлены"
-      description="Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления."
+      title={msg('transfers.sourcesEmptyTitle')}
+      description={msg('transfers.sourcesEmptyDescription')}
     >
       {#snippet icon()}
         <Database size="2rem" strokeWidth={1.8} />
@@ -152,7 +170,7 @@
       {#snippet actions()}
         <Button variant="primary" onclick={startAddSource}>
           <Plus size="1.5rem" strokeWidth={2} />
-          Добавить источник
+          {msg('transfers.sourcesAddAction')}
         </Button>
       {/snippet}
     </EmptyState>
@@ -160,20 +178,20 @@
     <Tabs tabs={statusTabs} bind:value={statusFilter} variant="pill" />
 
     {#if filteredSources.length === 0}
-      <EmptyState title="Источников с таким статусом нет" description="Попробуйте выбрать другой фильтр." />
+      <EmptyState title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
     {:else}
       <div class="table">
         <div class="thead">
-          <span class="th">Источник</span>
-          <span class="th">Статус</span>
-          <span class="th">Обновлён</span>
-          <span class="th nums">Записей</span>
-          <span class="th nums">Сопоставлено</span>
+          <span class="th">{msg('transfers.sourcesColName')}</span>
+          <span class="th">{msg('transfers.sourcesColStatus')}</span>
+          <span class="th">{msg('transfers.sourcesColUpdated')}</span>
+          <span class="th nums">{msg('transfers.sourcesColEntries')}</span>
+          <span class="th nums">{msg('transfers.sourcesColMatched')}</span>
           <span class="th"></span>
         </div>
         {#each filteredSources as source (source.id)}
-          {@const badge = statusBadge[source.status]}
-          {@const health = healthMeta[source.health]}
+          {@const badge = statusBadgeFor(source.status)}
+          {@const health = healthMetaFor(source.health)}
           <div class="row" class:disabled={!source.enabled}>
             <button class="source" onclick={() => openDetails(source.id)}>
               <span class="type-icon">
@@ -205,7 +223,13 @@
             <span class="cell">{relativeDate(source.lastUpdatedAt)}</span>
             <span class="cell nums">{formatCount(source.entries)}</span>
             <span class="cell nums counts">
-              <Tooltip text={`Сопоставлено ${formatCount(source.matched)} · на проверку ${formatCount(source.review)} · без совпадения ${formatCount(source.unmatched)}`}>
+              <Tooltip
+                text={msg('transfers.sourcesMatchTooltip', {
+                  matched: formatCount(source.matched),
+                  review: formatCount(source.review),
+                  unmatched: formatCount(source.unmatched),
+                })}
+              >
                 <span class="count-wrap">
                   <span class="count">{formatCount(source.matched)}</span>
                   {#if source.review > 0}
@@ -217,7 +241,7 @@
             <span class="cell menu-cell">
               <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
                 {#snippet trigger({ toggle: toggleMenu })}
-                  <IconButton label="Меню источника" size="sm" onclick={toggleMenu}>
+                  <IconButton label={msg('transfers.sourcesMenuLabel')} size="sm" onclick={toggleMenu}>
                     <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/snippet}

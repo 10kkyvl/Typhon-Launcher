@@ -8,6 +8,7 @@ import {
   type FeedEvent,
 } from '../services/social';
 import { hasReacted, toggleReaction } from '../social/feed';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const feedEvents = writable<FeedEvent[]>([]);
@@ -55,7 +56,7 @@ async function page(cursor: number, append: boolean): Promise<void> {
     feedLoadedAt.set(Date.now());
     feedReady.set(true);
   } catch (err) {
-    report(err, 'Не удалось загрузить ленту');
+    report(err, msg('state.feedLoadFailed'));
   } finally {
     feedLoading.set(false);
   }
@@ -113,7 +114,7 @@ export async function reactToEvent(id: number, emoji: string): Promise<void> {
     await (remove ? sendUnreact : sendReact)(String(id), emoji);
   } catch (err) {
     replace(id, (event) => (hasReacted(event, emoji) === remove ? event : toggleReaction(event, emoji)));
-    report(err, 'Не удалось отправить реакцию');
+    report(err, msg('state.feedReactFailed'));
   } finally {
     pending.delete(key);
     publishPending();

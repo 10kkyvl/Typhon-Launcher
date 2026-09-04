@@ -5,6 +5,7 @@
   import { dayLabel } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
   import { playtime } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
 
   let { days, hidden }: { days: ActivityDay[]; hidden: boolean } = $props();
@@ -15,7 +16,7 @@
 </script>
 
 {#if rows.length > 0}
-  <Card title="Недавняя активность">
+  <Card title={msg('social.recentActivityTitle')}>
     {#snippet action()}
       {#if hidden}<HiddenBadge />{/if}
     {/snippet}
@@ -26,14 +27,14 @@
             <span class="icon"><Gamepad2 size="1.7rem" strokeWidth={1.8} /></span>
             <span class="text">
               <span class="title">{row.entry.game.title}</span>
-              <span class="sub">Сыграно {playtime(row.entry.seconds)}</span>
+              <span class="sub">{msg('social.playedFor', { value: playtime(row.entry.seconds) })}</span>
             </span>
             <span class="when">{dayLabel(row.date)}</span>
           </button>
         </li>
       {/each}
     </ul>
-    <button class="all" type="button" onclick={() => navigate('history')}>Смотреть всю активность</button>
+    <button class="all" type="button" onclick={() => navigate('history')}>{msg('social.viewAllActivity')}</button>
   </Card>
 {/if}
 

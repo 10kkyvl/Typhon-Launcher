@@ -3,6 +3,7 @@
   import { Play, Square } from '@lucide/svelte';
   import { openGameMenu } from '../stores/gameMenu';
   import { navigate } from '../stores/router';
+  import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
 
   let {
@@ -37,7 +38,7 @@
       <span class="fade"></span>
     </button>
     {#if installed && onplay}
-      <button class="play" class:running aria-label={running ? 'Остановить' : 'Играть'} onclick={onplay}>
+      <button class="play" class:running aria-label={running ? msg('ui.stop') : msg('ui.play')} onclick={onplay}>
         {#if running}
           <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
         {:else}

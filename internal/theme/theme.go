@@ -1,12 +1,13 @@
 package theme
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"typhon/internal/uierr"
 )
 
 const (
@@ -37,19 +38,19 @@ type file struct {
 }
 
 var (
-	ErrThemeSize       = errors.New("файл темы превышает допустимый размер")
-	ErrThemeVersion    = errors.New("неподдерживаемая версия файла темы")
-	ErrThemeID         = errors.New("недопустимый идентификатор темы")
-	ErrThemeName       = errors.New("недопустимое имя темы")
-	ErrThemeBase       = errors.New("недопустимая базовая палитра темы")
-	ErrThemeTokenName  = errors.New("неизвестное имя токена темы")
-	ErrThemeTokenValue = errors.New("недопустимое значение токена темы")
-	ErrThemeCSSSize    = errors.New("пользовательский CSS превышает допустимый размер")
-	ErrThemeCSSContent = errors.New("пользовательский CSS содержит запрещённую конструкцию")
-	ErrThemeCSSBraces  = errors.New("непарные или слишком глубоко вложенные фигурные скобки в CSS")
-	ErrThemeBuiltIn    = errors.New("встроенную тему нельзя изменить или удалить")
-	ErrThemeNotFound   = errors.New("тема не найдена")
-	ErrThemePath       = errors.New("недопустимый путь к файлу темы")
+	ErrThemeSize       = uierr.New("theme.file_too_large", "файл темы превышает допустимый размер")
+	ErrThemeVersion    = uierr.New("theme.unsupported_version", "неподдерживаемая версия файла темы")
+	ErrThemeID         = uierr.New("theme.invalid_id", "недопустимый идентификатор темы")
+	ErrThemeName       = uierr.New("theme.invalid_name", "недопустимое имя темы")
+	ErrThemeBase       = uierr.New("theme.invalid_base", "недопустимая базовая палитра темы")
+	ErrThemeTokenName  = uierr.New("theme.unknown_token", "неизвестное имя токена темы")
+	ErrThemeTokenValue = uierr.New("theme.invalid_token_value", "недопустимое значение токена темы")
+	ErrThemeCSSSize    = uierr.New("theme.css_too_large", "пользовательский CSS превышает допустимый размер")
+	ErrThemeCSSContent = uierr.New("theme.css_forbidden", "пользовательский CSS содержит запрещённую конструкцию")
+	ErrThemeCSSBraces  = uierr.New("theme.css_unbalanced_braces", "непарные или слишком глубоко вложенные фигурные скобки в CSS")
+	ErrThemeBuiltIn    = uierr.New("theme.built_in", "встроенную тему нельзя изменить или удалить")
+	ErrThemeNotFound   = uierr.New("theme.not_found", "тема не найдена")
+	ErrThemePath       = uierr.New("theme.invalid_path", "недопустимый путь к файлу темы")
 )
 
 var (

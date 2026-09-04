@@ -16,6 +16,7 @@
   import { settings } from '../../lib/stores/settings';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
   import ProfileStats from './ProfileStats.svelte';
 
@@ -49,7 +50,7 @@
   const isGuest = $derived($authState === 'guest');
 
   const avatarName = $derived(
-    !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : 'Гость',
+    !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : msg('social.guestName'),
   );
 
   const memberSince = $derived($currentUser ? joinDate($currentUser.createdAt) : '');
@@ -90,16 +91,16 @@
   async function copyCode() {
     try {
       await navigator.clipboard.writeText(code);
-      toast('Скопировано', 'info');
+      toast(msg('social.copied'), 'info');
     } catch {
-      toast('Не удалось скопировать', 'danger');
+      toast(msg('social.copyFailed'), 'danger');
     }
   }
 
   const menuItems = $derived<MenuItem[]>([
-    { id: 'edit', label: 'Редактировать' },
-    { id: 'settings', label: 'Настройки профиля' },
-    { id: 'signout', label: busy ? 'Выход…' : 'Выйти', danger: true, separator: true },
+    { id: 'edit', label: msg('social.editProfileLabel') },
+    { id: 'settings', label: msg('social.profileSettingsTitle') },
+    { id: 'signout', label: busy ? msg('social.signingOut') : msg('social.signOutLabel'), danger: true, separator: true },
   ]);
 
   function startEditing() {
@@ -124,9 +125,9 @@
     try {
       await saveProfile(patch);
       editing = false;
-      toast('Профиль обновлён', 'success');
+      toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
-      const message = accountErrorText(err, 'Не удалось сохранить');
+      const message = accountErrorText(err, msg('social.saveFailed'));
       const field = accountErrorField(err);
       if (field === 'username') fieldErrors = { username: message };
       else if (field === 'displayName') fieldErrors = { displayName: message };
@@ -137,12 +138,12 @@
 
   async function onMenu(id: string) {
     if (id === 'edit') {
-      if ($isOffline) toast('Изменить профиль можно только при связи с сервером');
+      if ($isOffline) toast(msg('social.editRequiresConnection'));
       else startEditing();
     } else if (id === 'settings') {
       onsettings();
     } else if (id === 'signout') {
-      await run(signOut, 'Не удалось выйти');
+      await run(signOut, msg('social.signOutFailed'));
     }
   }
 
@@ -171,8 +172,8 @@
 
       <div class="identity">
         {#if isGuest}
-          <h2 class="display-name">Гость</h2>
-          <span class="username">Войдите, чтобы профиль сохранялся в аккаунте</span>
+          <h2 class="display-name">{msg('social.guestName')}</h2>
+          <span class="username">{msg('social.guestProfileHint')}</span>
         {:else if $currentUser}
           <h2 class="display-name">{$currentUser.displayName}</h2>
           <span class="username">@{$currentUser.username}</span>
@@ -181,8 +182,8 @@
           {/if}
           {#if code}
             <div class="code">
-              <span class="code-value">Код друга: {code}</span>
-              <IconButton label="Скопировать код друга" size="sm" onclick={copyCode}>
+              <span class="code-value">{msg('social.friendCodeInline', { code })}</span>
+              <IconButton label={msg('social.copyFriendCodeLabel')} size="sm" onclick={copyCode}>
                 <Copy size="1.5rem" strokeWidth={1.8} />
               </IconButton>
             </div>
@@ -191,18 +192,18 @@
             {#if playing}
               <span class="meta-item">
                 <Gamepad2 size="1.5rem" strokeWidth={1.8} />
-                Играет в {playing.title}
-                {#if playingHidden}<HiddenBadge text="Скрыто от других. Вы видите статус, остальные — нет." />{/if}
+                {msg('social.playingIn', { name: playing.title })}
+                {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
               </span>
             {/if}
             {#if memberSince}
               <span class="meta-item">
                 <Calendar size="1.5rem" strokeWidth={1.8} />
-                Участник с {memberSince}
+                {msg('social.memberSince', { date: memberSince })}
               </span>
             {/if}
             {#if !showOnline}
-              <HiddenBadge text="Статус «В сети» скрыт от других. Вы его видите." />
+              <HiddenBadge text={msg('social.onlineStatusHiddenHint')} />
             {/if}
           </div>
         {/if}
@@ -211,18 +212,18 @@
       <div class="right">
         <div class="head-actions">
           {#if isGuest}
-            <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), 'Не удалось открыть вход')}>
+            <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), msg('social.signInFailed'))}>
               <LogIn size="1.5rem" strokeWidth={1.8} />
-              Войти
+              {msg('social.signInButton')}
             </Button>
-            <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), 'Не удалось открыть вход')}>
-              Создать аккаунт
+            <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), msg('social.signInFailed'))}>
+              {msg('social.createAccountButton')}
             </Button>
           {:else}
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
-                <IconButton label="Ещё" onclick={toggle}>
+                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -240,12 +241,12 @@
     {#if editing && $currentUser}
       <div class="fields">
         <label class="field">
-          <span class="field-label">Отображаемое имя</span>
+          <span class="field-label">{msg('social.displayNameLabel')}</span>
           <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
           {#if fieldErrors.displayName}<span class="error">{fieldErrors.displayName}</span>{/if}
         </label>
         <label class="field">
-          <span class="field-label">Имя пользователя</span>
+          <span class="field-label">{msg('social.usernameLabel')}</span>
           <div class="username-field">
             <span class="username-prefix">@</span>
             <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
@@ -254,7 +255,7 @@
         </label>
         <label class="field">
           <span class="field-label">
-            О себе
+            {msg('social.aboutTitle')}
             <span class="counter">{draft.bio.length}/{BIO_LIMIT}</span>
           </span>
           <textarea
@@ -269,18 +270,18 @@
         <div class="field">
           <span class="field-label">Email</span>
           <MaskedEmail email={$currentUser.email} />
-          <span class="hint">Email пока нельзя изменить и его не видит никто, кроме вас</span>
+          <span class="hint">{msg('social.emailHint')}</span>
         </div>
         <div class="field">
-          <span class="field-label">Участник с</span>
+          <span class="field-label">{msg('social.memberSinceLabel')}</span>
           <span class="hint">{memberSince}</span>
         </div>
       </div>
       <div class="foot">
         {#if fieldErrors.general}<span class="error">{fieldErrors.general}</span>{/if}
-        <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>Отмена</Button>
+        <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>{msg('common.cancel')}</Button>
         <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
-          {$savingProfile ? 'Сохранение…' : 'Сохранить'}
+          {$savingProfile ? msg('social.saving') : msg('common.save')}
         </Button>
       </div>
     {/if}

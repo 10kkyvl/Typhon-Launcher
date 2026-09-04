@@ -13,9 +13,10 @@
     type Visibility,
   } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { SHOWCASE_TITLES, visibilityLabel } from '../../lib/profile/view';
+  import { showcaseLabel, visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import { msg } from '../../lib/i18n';
 
   let {
     open = $bindable(false),
@@ -46,12 +47,12 @@
   const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
   const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility'>; label: string; sub: string }[] = [
-    { key: 'showOnline', label: 'Статус «В сети»', sub: 'Другие видят, что вы в лаунчере' },
-    { key: 'showPlaying', label: 'Во что играю', sub: 'Текущая игра и список «Сейчас играю»' },
-    { key: 'showLibrary', label: 'Библиотека', sub: 'Список игр, общие игры и «друзья играли» на странице игры' },
-    { key: 'showPlaytime', label: 'Наигранное время', sub: 'Часы в профиле и рядом с играми' },
-    { key: 'showActivity', label: 'Недавняя активность', sub: 'Сыгранные игры по дням, без времени запуска' },
-    { key: 'showStats', label: 'Статистика', sub: 'Игры, часы, пройдено, играю сейчас' },
+    { key: 'showOnline', label: msg('social.flagOnlineLabel'), sub: msg('social.flagOnlineSub') },
+    { key: 'showPlaying', label: msg('social.flagPlayingLabel'), sub: msg('social.flagPlayingSub') },
+    { key: 'showLibrary', label: msg('social.flagLibraryLabel'), sub: msg('social.flagLibrarySub') },
+    { key: 'showPlaytime', label: msg('social.flagPlaytimeLabel'), sub: msg('social.flagPlaytimeSub') },
+    { key: 'showActivity', label: msg('social.recentActivityTitle'), sub: msg('social.flagActivitySub') },
+    { key: 'showStats', label: msg('social.flagStatsLabel'), sub: msg('social.flagStatsSub') },
   ];
 
   const selected = $derived(draft.showcase);
@@ -80,26 +81,26 @@
     try {
       await saveProfile({ profile: { ...$state.snapshot(draft), visibility: toVisibility(visibility) } });
       open = false;
-      toast('Настройки профиля сохранены', 'success');
+      toast(msg('social.settingsSaved'), 'success');
     } catch (err) {
-      error = accountErrorText(err, 'Не удалось сохранить');
+      error = accountErrorText(err, msg('social.saveFailed'));
     }
   }
 </script>
 
-<Modal bind:open title="Настройки профиля" width="52rem">
+<Modal bind:open title={msg('social.profileSettingsTitle')} width="52rem">
   {#if $isOffline}
-    <p class="hint">Настройки профиля меняются только при связи с сервером.</p>
+    <p class="hint">{msg('social.settingsRequireConnection')}</p>
   {/if}
 
   <div class="group">
-    <h4>Что видят другие</h4>
-    <p class="hint">Уровень доступа задаёт, кто вообще видит профиль, переключатели — что именно.</p>
+    <h4>{msg('social.whatOthersSee')}</h4>
+    <p class="hint">{msg('social.visibilityExplain')}</p>
     <div class="rows">
       <div class="row">
         <div class="row-text">
-          <span class="row-label">Кто видит профиль</span>
-          <span class="row-sub">Друзьям всегда видно больше, чем остальным</span>
+          <span class="row-label">{msg('social.whoSeesProfile')}</span>
+          <span class="row-sub">{msg('social.friendsSeeMore')}</span>
         </div>
         <SegmentedControl options={visibilityOptions} bind:value={visibility} disabled={$isOffline} />
       </div>
@@ -116,15 +117,15 @@
   </div>
 
   <div class="group">
-    <h4>Витрина</h4>
-    <p class="hint">До трёх блоков, в выбранном порядке.</p>
+    <h4>{msg('social.showcaseHeading')}</h4>
+    <p class="hint">{msg('social.showcaseExplain')}</p>
     <ul class="showcase">
       {#each selected as kind, index (kind)}
         <li class="showcase-row">
-          <span class="row-label">{SHOWCASE_TITLES[kind]}</span>
+          <span class="row-label">{showcaseLabel(kind)}</span>
           <span class="showcase-actions">
             <IconButton
-              label={`Выше: ${SHOWCASE_TITLES[kind]}`}
+              label={msg('social.moveUp', { title: showcaseLabel(kind) })}
               size="sm"
               disabled={index === 0 || $isOffline}
               onclick={() => move(index, -1)}
@@ -132,21 +133,21 @@
               <ArrowUp size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton
-              label={`Ниже: ${SHOWCASE_TITLES[kind]}`}
+              label={msg('social.moveDown', { title: showcaseLabel(kind) })}
               size="sm"
               disabled={index === selected.length - 1 || $isOffline}
               onclick={() => move(index, 1)}
             >
               <ArrowDown size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <Button size="sm" variant="ghost" disabled={$isOffline} onclick={() => remove(kind)}>Убрать</Button>
+            <Button size="sm" variant="ghost" disabled={$isOffline} onclick={() => remove(kind)}>{msg('social.removeButton')}</Button>
           </span>
         </li>
       {/each}
       {#each unselected as kind (kind)}
         <li class="showcase-row muted">
-          <span class="row-label">{SHOWCASE_TITLES[kind]}</span>
-          <Button size="sm" disabled={selected.length >= 3 || $isOffline} onclick={() => add(kind)}>Добавить</Button>
+          <span class="row-label">{showcaseLabel(kind)}</span>
+          <Button size="sm" disabled={selected.length >= 3 || $isOffline} onclick={() => add(kind)}>{msg('common.add')}</Button>
         </li>
       {/each}
     </ul>
@@ -154,9 +155,9 @@
 
   {#snippet footer()}
     {#if error}<span class="error">{error}</span>{/if}
-    <Button variant="ghost" disabled={$savingProfile} onclick={() => (open = false)}>Отмена</Button>
+    <Button variant="ghost" disabled={$savingProfile} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={$savingProfile || $isOffline} onclick={save}>
-      {$savingProfile ? 'Сохранение…' : 'Сохранить'}
+      {$savingProfile ? msg('social.saving') : msg('common.save')}
     </Button>
   {/snippet}
 </Modal>

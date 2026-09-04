@@ -6,6 +6,7 @@
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   let { open = $bindable(false), onclose }: { open?: boolean; onclose?: () => void } = $props();
 
@@ -25,36 +26,34 @@
       await loadFriends();
       close();
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось включить синхронизацию'), 'danger');
+      toast(accountErrorText(err, msg('modals.socialConsentEnableFailed')), 'danger');
     } finally {
       saving = false;
     }
   }
 </script>
 
-<Modal bind:open title="Друзья и синхронизация" width="50rem" onclose={() => onclose?.()}>
+<Modal bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
   <div class="body">
     <p class="text">
-      Друзья работают поверх синхронизации с аккаунтом: без неё серверу нечего показать вашим друзьям, а вам —
-      их профили.
+      {msg('modals.socialConsentIntro')}
     </p>
-    <p class="text">С устройства уходит только то, что вы видите в профиле:</p>
+    <p class="text">{msg('modals.socialConsentListIntro')}</p>
     <ul class="list">
-      <li>список игр в библиотеке;</li>
-      <li>наигранное время;</li>
-      <li>отметки «любимая» и статусы прохождения;</li>
-      <li>даты, когда эти отметки и статусы поставлены.</li>
+      <li>{msg('modals.socialConsentListGames')}</li>
+      <li>{msg('modals.socialConsentListPlaytime')}</li>
+      <li>{msg('modals.socialConsentListFavoritesStatus')}</li>
+      <li>{msg('modals.socialConsentListDates')}</li>
     </ul>
     <p class="text">
-      Файлы игр, источники, загрузки и что-либо ещё с диска не отправляются. Кто увидит эти данные, задаётся в
-      настройках профиля, а синхронизацию можно выключить в любой момент.
+      {msg('modals.socialConsentOutro')}
     </p>
   </div>
 
   {#snippet footer()}
-    <Button disabled={saving} onclick={close}>Не сейчас</Button>
+    <Button disabled={saving} onclick={close}>{msg('modals.socialConsentNotNow')}</Button>
     <Button variant="primary" disabled={saving} onclick={enable}>
-      {saving ? 'Включение…' : 'Включить синхронизацию'}
+      {saving ? msg('modals.socialConsentEnabling') : msg('modals.socialConsentEnable')}
     </Button>
   {/snippet}
 </Modal>

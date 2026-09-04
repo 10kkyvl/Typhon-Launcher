@@ -4,6 +4,7 @@
   import { errorMessage } from '../utils/errors';
   import Button from './Button.svelte';
   import Toggle from './Toggle.svelte';
+  import { msg } from '../i18n';
 
   let usageStats = $state(false);
   let saving = $state(false);
@@ -67,35 +68,33 @@
 <div class="screen" role="dialog" aria-modal="true" aria-labelledby="consent-title">
   <div class="card">
     <div class="head">
-      <h3 id="consent-title">Отправлять анонимные отчёты об ошибках?</h3>
+      <h3 id="consent-title">{msg('modals.telemetryConsentTitle')}</h3>
     </div>
 
     <div class="body">
       <p class="text">
-        Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и
-        сетевые адреса удаляются перед отправкой.
+        {msg('modals.telemetryConsentIntro')}
       </p>
 
       <div class="row">
         <div class="row-text">
-          <span class="row-title">Ещё и статистика использования</span>
+          <span class="row-title">{msg('modals.telemetryConsentUsageTitle')}</span>
           <span class="row-note">
-            События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность,
-            объём и код ошибки. Экраны, нажатия и поведение в интерфейсе не отслеживаются.
+            {msg('modals.telemetryConsentUsageNote')}
           </span>
         </div>
-        <Toggle checked={usageStats} label="Анонимная статистика использования" onchange={(v) => (usageStats = v)} />
+        <Toggle checked={usageStats} label={msg('modals.telemetryConsentUsageToggleLabel')} onchange={(v) => (usageStats = v)} />
       </div>
 
       <details class="disclosure">
-        <summary>Что именно отправляется</summary>
+        <summary>{msg('modals.telemetryConsentDisclosureSummary')}</summary>
         <div class="examples">
           <div class="example">
-            <span class="example-label">Отчёт об ошибке</span>
+            <span class="example-label">{msg('modals.telemetryConsentErrorReportLabel')}</span>
             <pre class="example-pre">{errorReport}</pre>
           </div>
           <div class="example">
-            <span class="example-label">Событие статистики использования</span>
+            <span class="example-label">{msg('modals.telemetryConsentUsageEventLabel')}</span>
             <pre class="example-pre">{usageEvent}</pre>
           </div>
         </div>
@@ -111,10 +110,10 @@
 
     <div class="foot">
       <Button size="lg" disabled={saving} onclick={() => respond(false)}>
-        {saving ? 'Сохранение…' : 'Не отправлять'}
+        {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentDecline')}
       </Button>
       <Button size="lg" disabled={saving} onclick={() => respond(true)}>
-        {saving ? 'Сохранение…' : 'Да, отправлять'}
+        {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentAccept')}
       </Button>
     </div>
   </div>

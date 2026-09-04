@@ -14,6 +14,7 @@ import (
 
 	"typhon/internal/hashdir"
 	"typhon/internal/platform"
+	"typhon/internal/uierr"
 )
 
 // errnoPrivilegeNotHeld is Windows ERROR_PRIVILEGE_NOT_HELD, the error
@@ -22,12 +23,12 @@ import (
 const errnoPrivilegeNotHeld = syscall.Errno(1314)
 
 var (
-	errDestExists       = errors.New("путь назначения уже существует")
-	errNotDir           = errors.New("источник не является папкой")
-	errCopyVerify       = errors.New("копирование завершилось с ошибкой проверки")
-	errNonRegular       = errors.New("неподдерживаемый тип файла в источнике")
-	errSymlinkPrivilege = errors.New("нет прав на создание символических ссылок")
-	errNestedPaths      = errors.New("источник и назначение не должны быть вложены друг в друга")
+	errDestExists       = uierr.New("install.dest_exists", "путь назначения уже существует")
+	errNotDir           = uierr.New("install.not_dir", "источник не является папкой")
+	errCopyVerify       = uierr.New("install.copy_verify_failed", "копирование завершилось с ошибкой проверки")
+	errNonRegular       = uierr.New("install.non_regular_file", "неподдерживаемый тип файла в источнике")
+	errSymlinkPrivilege = uierr.New("install.symlink_privilege", "нет прав на создание символических ссылок")
+	errNestedPaths      = uierr.New("install.nested_paths", "источник и назначение не должны быть вложены друг в друга")
 )
 
 func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {

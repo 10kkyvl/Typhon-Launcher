@@ -27,6 +27,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    vertical-align: middle;
     gap: 0.7rem;
     font-size: var(--font-sm);
     font-weight: 500;

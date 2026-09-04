@@ -5,6 +5,7 @@
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
 
   type Mode = 'disk' | 'library';
 
@@ -58,7 +59,7 @@
       deleteFiles = loaded.owned && !loaded.dirMissing;
       deleteDownload = false;
     } catch (err) {
-      failure = message(err, 'Не удалось собрать сведения об установке');
+      failure = message(err, msg('modals.removeGameInspectFailed'));
     } finally {
       loading = false;
     }
@@ -80,10 +81,14 @@
         keepInLibrary,
       });
       open = false;
-      toast(keepInLibrary ? `«${title}» удалена с компьютера` : `«${title}» удалена из библиотеки`);
+      toast(
+        keepInLibrary
+          ? msg('modals.removeGameRemovedFromDisk', { title })
+          : msg('modals.removeGameRemovedFromLibrary', { title }),
+      );
       onremoved?.(mode);
     } catch (err) {
-      failure = message(err, 'Не удалось удалить игру');
+      failure = message(err, msg('modals.removeGameDeleteFailed'));
     } finally {
       working = false;
     }
@@ -92,34 +97,34 @@
   const methodText = $derived.by(() => {
     if (!info) return '';
     if (info.method === 'installer' && info.quietUninstall) {
-      return 'Игра поставлена установщиком — Typhon удалит её через деинсталлятор в тихом режиме. Некоторые игры всё равно задают свой вопрос, например про сохранения: тогда ответьте в его окне.';
+      return msg('modals.removeGameMethodInstallerQuiet');
     }
     if (info.method === 'installer') {
-      return 'Игра поставлена установщиком — Typhon запустит её деинсталлятор. Тихий режим он не поддерживает, поэтому откроется окном и может задать вопросы.';
+      return msg('modals.removeGameMethodInstaller');
     }
     if (info.method === 'files') {
-      return 'Игру устанавливал Typhon, поэтому её папку можно удалить целиком.';
+      return msg('modals.removeGameMethodFiles');
     }
     if (info.uninstallUnknown) {
-      return 'Деинсталлятор определить не удалось. Запись уберём из библиотеки, а саму игру удалите через «Установка и удаление программ».';
+      return msg('modals.removeGameMethodUnknown');
     }
     if (info.dirMissing) {
-      return 'Игра не установлена — в библиотеке осталась только её карточка.';
+      return msg('modals.removeGameMethodDirMissing');
     }
-    return 'Эту установку делал не Typhon: запись уберём из библиотеки, файлы останутся на диске.';
+    return msg('modals.removeGameMethodNotOwned');
   });
 
   const freedText = $derived.by(() => {
     if (!info) return '';
-    if (info.sizeUnknown) return 'Размер папки определить не удалось';
-    if (info.sizeBytes > 0) return `Освободится ${bytesSize(info.sizeBytes)}`;
-    return 'Место на диске освободит деинсталлятор';
+    if (info.sizeUnknown) return msg('modals.removeGameSizeUnknown');
+    if (info.sizeBytes > 0) return msg('modals.removeGameFreedSize', { size: bytesSize(info.sizeBytes) });
+    return msg('modals.removeGameFreedByUninstaller');
   });
 </script>
 
-<Modal bind:open title="Удаление игры">
+<Modal bind:open title={msg('modals.removeGameTitle')}>
   {#if loading}
-    <p class="text">Смотрим, как установлена «{title}»...</p>
+    <p class="text">{msg('modals.removeGameLoading', { title })}</p>
   {:else if info}
     <div class="modes">
       <button
@@ -128,20 +133,20 @@
         disabled={!canUninstall}
         onclick={() => (mode = 'disk')}
       >
-        <span class="mode-label">Удалить с компьютера</span>
+        <span class="mode-label">{msg('modals.removeGameModeDiskLabel')}</span>
         <span class="mode-sub">
           {#if canUninstall}
-            Файлы уйдут с диска, карточка останется в библиотеке
+            {msg('modals.removeGameDiskSubCanUninstall')}
           {:else if info.dirMissing}
-            Файлов игры на диске уже нет
+            {msg('modals.removeGameDiskSubDirMissing')}
           {:else}
-            Эту установку Typhon не делал и удалить её не может
+            {msg('modals.removeGameDiskSubNotOwned')}
           {/if}
         </span>
       </button>
       <button class="mode" class:selected={mode === 'library'} onclick={() => (mode = 'library')}>
-        <span class="mode-label">Удалить из библиотеки</span>
-        <span class="mode-sub">Карточка исчезнет вместе с наигранным временем</span>
+        <span class="mode-label">{msg('modals.removeGameModeLibraryLabel')}</span>
+        <span class="mode-sub">{msg('modals.removeGameLibrarySub')}</span>
       </button>
     </div>
 
@@ -151,16 +156,16 @@
     {/if}
 
     {#if info.running}
-      <p class="warn">Игра сейчас запущена — закройте её.</p>
+      <p class="warn">{msg('modals.removeGameRunningWarning')}</p>
     {:else if info.busy}
-      <p class="warn">По этой игре идёт установка или обновление.</p>
+      <p class="warn">{msg('modals.removeGameBusyWarning')}</p>
     {/if}
 
     <div class="options">
       {#if mode === 'disk'}
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Игра останется в библиотеке</span>
+            <span class="row-label">{msg('modals.removeGameStaysInLibrary')}</span>
             <span class="row-sub">{freedText}</span>
           </div>
         </div>
@@ -168,43 +173,43 @@
         <div class="row" class:off={!canDeleteFiles}>
           <div class="row-text">
             <span class="row-label">
-              {info.method === 'installer' ? 'Удалить остатки папки' : 'Удалить файлы игры'}
+              {info.method === 'installer' ? msg('modals.removeGameDeleteLeftoverFolder') : msg('modals.removeGameDeleteGameFiles')}
             </span>
             <span class="row-sub">
               {#if info.dirMissing}
-                Папки установки уже нет на диске
+                {msg('modals.removeGameDirAlreadyGone')}
               {:else if !info.owned && info.method === 'installer'}
-                Папку удалит сам деинсталлятор
+                {msg('modals.removeGameFolderRemovedByUninstaller')}
               {:else if !info.owned}
-                Эти файлы Typhon не создавал, удалять их он не будет
+                {msg('modals.removeGameFilesNotOwned')}
               {:else if info.sizeUnknown}
-                Размер папки определить не удалось
+                {msg('modals.removeGameSizeUnknown')}
               {:else if info.method === 'installer'}
-                Если деинсталлятор что-то оставит — {bytesSize(info.sizeBytes)}
+                {msg('modals.removeGameUninstallerLeftover', { size: bytesSize(info.sizeBytes) })}
               {:else}
-                Освободится {bytesSize(info.sizeBytes)}
+                {msg('modals.removeGameFreedSize', { size: bytesSize(info.sizeBytes) })}
               {/if}
             </span>
           </div>
-          <Toggle bind:checked={deleteFiles} label="Удалить файлы игры" disabled={!canDeleteFiles} />
+          <Toggle bind:checked={deleteFiles} label={msg('modals.removeGameDeleteGameFiles')} disabled={!canDeleteFiles} />
         </div>
       {/if}
 
       {#if info.downloadPresent}
         <div class="row" class:off={info.downloadSeeding}>
           <div class="row-text">
-            <span class="row-label">Удалить скачанные файлы, из которых ставили</span>
+            <span class="row-label">{msg('modals.removeGameDeleteDownloadLabel')}</span>
             <span class="row-sub">
               {#if info.downloadSeeding}
-                Раздача активна — сначала остановите её в загрузках
+                {msg('modals.removeGameSeedingActive')}
               {:else}
-                {bytesSize(info.downloadBytes)} в папке загрузок{info.downloadPath ? `: ${info.downloadPath}` : ''}
+                {msg('modals.removeGameDownloadInFolder', { size: bytesSize(info.downloadBytes) })}{info.downloadPath ? `: ${info.downloadPath}` : ''}
               {/if}
             </span>
           </div>
           <Toggle
             bind:checked={deleteDownload}
-            label="Удалить скачанные файлы"
+            label={msg('modals.removeGameDeleteDownloadedFiles')}
             disabled={info.downloadSeeding}
           />
         </div>
@@ -217,14 +222,14 @@
   {/if}
 
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>Отмена</Button>
+    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="danger" onclick={confirm} disabled={!info || blocked || working}>
       {#if working}
-        Удаляем...
+        {msg('modals.removeGameWorking')}
       {:else if mode === 'disk'}
-        Удалить с компьютера
+        {msg('modals.removeGameModeDiskLabel')}
       {:else}
-        Удалить из библиотеки
+        {msg('modals.removeGameModeLibraryLabel')}
       {/if}
     </Button>
   {/snippet}

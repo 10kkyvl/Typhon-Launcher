@@ -9,6 +9,7 @@
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
+  import { msg } from '../i18n';
   import Avatar from './Avatar.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuItem } from './DropdownMenu.svelte';
@@ -17,22 +18,22 @@
 
   const groups: NavItem[][] = [
     [
-      { name: 'library', label: 'Библиотека', icon: LayoutGrid },
-      { name: 'catalog', label: 'Все игры', icon: Gamepad2 },
-      { name: 'installed', label: 'Установлено', icon: MonitorDown },
+      { name: 'library', label: msg('ui.library'), icon: LayoutGrid },
+      { name: 'catalog', label: msg('ui.allGames'), icon: Gamepad2 },
+      { name: 'installed', label: msg('ui.installed'), icon: MonitorDown },
     ],
     [
-      { name: 'downloads', label: 'Загрузки', icon: Download },
-      { name: 'sources', label: 'Источники', icon: Database },
-      { name: 'friends', label: 'Друзья', icon: Users },
-      { name: 'activity', label: 'Активность', icon: Activity },
-      { name: 'history', label: 'История', icon: History },
+      { name: 'downloads', label: msg('ui.downloadsNav'), icon: Download },
+      { name: 'sources', label: msg('ui.sourcesNav'), icon: Database },
+      { name: 'friends', label: msg('ui.friends'), icon: Users },
+      { name: 'activity', label: msg('ui.activity'), icon: Activity },
+      { name: 'history', label: msg('ui.history'), icon: History },
     ],
   ];
 
-  const lanItem: NavItem = { name: 'lan', label: 'Локальная сеть', icon: Wifi };
+  const lanItem: NavItem = { name: 'lan', label: msg('ui.localNetwork'), icon: Wifi };
 
-  const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
+  const settingsItem: NavItem = { name: 'settings', label: msg('ui.settingsNav'), icon: Settings };
 
   const isActive = (name: RouteName) =>
     $route.name === name ||
@@ -41,7 +42,7 @@
 
   const isGuest = $derived($authState === 'guest');
 
-  const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? 'Гость' : '');
+  const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? msg('ui.guest') : '');
 
   const statusItems = $derived<MenuItem[]>(
     PRESENCE_STATUSES.map((status, index) => ({
@@ -56,13 +57,13 @@
   const profileMenu = $derived<MenuItem[]>(
     isGuest
       ? [
-          { id: 'profile', label: 'Профиль' },
-          { id: 'login', label: 'Войти в аккаунт', separator: true },
+          { id: 'profile', label: msg('ui.profile') },
+          { id: 'login', label: msg('ui.signIn'), separator: true },
         ]
       : [
-          { id: 'profile', label: 'Профиль' },
+          { id: 'profile', label: msg('ui.profile') },
           ...statusItems,
-          { id: 'logout', label: 'Выйти', danger: true, separator: true },
+          { id: 'logout', label: msg('ui.signOut'), danger: true, separator: true },
         ],
   );
 
@@ -75,7 +76,7 @@
       try {
         await updatePresenceStatus(id.slice('status:'.length) as PresenceStatus);
       } catch (err) {
-        toast(accountErrorText(err, 'Не удалось сменить статус'), 'danger');
+        toast(accountErrorText(err, msg('ui.statusChangeFailed')), 'danger');
       }
       return;
     }
@@ -83,7 +84,7 @@
       if (id === 'login') await leaveGuest();
       else await signOut();
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
+      toast(accountErrorText(err, msg('ui.signOutFailed')), 'danger');
     }
   }
 </script>
@@ -146,12 +147,12 @@
           <span class="profile-text">
             {#if $currentUser}
               <span class="profile-name">{$currentUser.displayName}</span>
-              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title="Нет связи с сервером аккаунтов, показан кэш профиля"> · офлайн</span>{/if}</span>
+              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
             {:else if isGuest}
-              <span class="profile-name">Гость</span>
-              <span class="profile-status">Без аккаунта</span>
+              <span class="profile-name">{msg('ui.guest')}</span>
+              <span class="profile-status">{msg('ui.noAccount')}</span>
             {:else}
-              <span class="profile-name">Не авторизован</span>
+              <span class="profile-name">{msg('ui.notAuthorized')}</span>
             {/if}
           </span>
         </button>

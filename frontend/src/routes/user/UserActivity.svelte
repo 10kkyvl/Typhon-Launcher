@@ -5,11 +5,12 @@
   import { eventLine } from '../../lib/social/feed';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let { items }: { items: ActivityView[] } = $props();
 </script>
 
-<Card title="Недавняя активность">
+<Card title={msg('social.recentActivityTitle')}>
   <ul class="list">
     {#each items as item (item.id)}
       <li>

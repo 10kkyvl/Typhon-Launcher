@@ -8,6 +8,7 @@
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
   import { toast } from '../../lib/stores/toasts';
+  import { msg } from '../../lib/i18n';
 
   let {
     code = $bindable(''),
@@ -23,7 +24,7 @@
     try {
       code = await friendCode();
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось получить код'), 'danger');
+      toast(accountErrorText(err, msg('social.friendsCodeFetchFailed')), 'danger');
     } finally {
       loading = false;
     }
@@ -33,9 +34,9 @@
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
-      toast('Скопировано', 'info');
+      toast(msg('social.copied'), 'info');
     } catch {
-      toast('Не удалось скопировать', 'danger');
+      toast(msg('social.copyFailed'), 'danger');
     }
   }
 
@@ -45,9 +46,9 @@
     try {
       code = await rotateFriendCode();
       confirmOpen = false;
-      toast('Новый код готов', 'success');
+      toast(msg('social.friendsCodeRotated'), 'success');
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось сменить код'), 'danger');
+      toast(accountErrorText(err, msg('social.friendsCodeRotateFailed')), 'danger');
     } finally {
       rotating = false;
     }
@@ -59,15 +60,15 @@
 </script>
 
 {#if variant === 'share'}
-  <Card title="Мой код друга">
+  <Card title={msg('social.friendsMyCodeTitle')}>
     <div class="share">
-      <p class="hint">Поделитесь кодом с друзьями, чтобы они добавили вас в Typhon.</p>
+      <p class="hint">{msg('social.friendsShareHint')}</p>
       <div class="field">
-        <span class="code" class:pending={loading}>{loading ? 'Загрузка…' : code || '—'}</span>
+        <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
       </div>
       <Button variant="primary" disabled={!code} onclick={copy}>
         <Copy size="1.5rem" strokeWidth={1.8} />
-        Скопировать код
+        {msg('social.friendsCopyCode')}
       </Button>
     </div>
   </Card>
@@ -75,30 +76,29 @@
   <Card padding="var(--space-4) var(--space-5)">
     <div class="card">
       <div class="text">
-        <span class="label">Ваш код</span>
-        <span class="code" class:pending={loading}>{loading ? 'Загрузка…' : code || '—'}</span>
+        <span class="label">{msg('social.friendsYourCode')}</span>
+        <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
       </div>
       <div class="actions">
-        <IconButton label="Скопировать код" size="sm" disabled={!code} onclick={copy}>
+        <IconButton label={msg('social.friendsCopyCode')} size="sm" disabled={!code} onclick={copy}>
           <Copy size="1.6rem" strokeWidth={1.8} />
         </IconButton>
         <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
-          Сгенерировать новый
+          {msg('social.friendsGenerateNew')}
         </Button>
       </div>
     </div>
   </Card>
 {/if}
 
-<Modal bind:open={confirmOpen} title="Сменить код" width="42rem">
+<Modal bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
   <p class="warn">
-    Старый код перестанет работать: по нему вас больше никто не найдёт. Уже отправленные заявки и список
-    друзей это не затронет.
+    {msg('social.friendsChangeCodeWarning')}
   </p>
   {#snippet footer()}
-    <Button disabled={rotating} onclick={() => (confirmOpen = false)}>Отмена</Button>
+    <Button disabled={rotating} onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="danger" disabled={rotating} onclick={rotate}>
-      {rotating ? 'Смена…' : 'Сгенерировать новый'}
+      {rotating ? msg('social.friendsRotating') : msg('social.friendsGenerateNew')}
     </Button>
   {/snippet}
 </Modal>

@@ -13,6 +13,7 @@ import (
 
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -154,7 +155,7 @@ func (s *Service) Clear() error {
 		s.records = previous
 		s.status = Status{Degraded: true, Message: err.Error()}
 		emit(eventDegraded, s.status)
-		return fmt.Errorf("clear history: %w", err)
+		return uierr.Wrap("history.clear_failed", fmt.Errorf("clear history: %w", err))
 	}
 	s.status = Status{}
 	emit(eventUpdated, []Record{})

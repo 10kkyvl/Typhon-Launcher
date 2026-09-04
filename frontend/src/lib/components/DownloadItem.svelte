@@ -5,6 +5,7 @@
   import { gameArt, requestArt } from '../stores/metadata';
   import { sources } from '../stores/sources';
   import { bytesSize, etaLabel, speedBytes } from '../utils/format';
+  import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
@@ -25,9 +26,9 @@
   const barColor = $derived(download.status === 'paused' ? 'var(--text-3)' : 'var(--accent)');
 
   const typeTag = $derived.by(() => {
-    if (download.origin.purpose === 'update') return 'Обновление';
-    if (download.origin.purpose === 'repair') return 'Восстановление';
-    if (download.origin.gameId || download.origin.releaseId) return 'Игра';
+    if (download.origin.purpose === 'update') return msg('ui.update');
+    if (download.origin.purpose === 'repair') return msg('ui.repair');
+    if (download.origin.gameId || download.origin.releaseId) return msg('ui.game');
     return '';
   });
 
@@ -76,17 +77,17 @@
     </div>
     <div class="meta">
       {#if downloading && download.stalled}
-        <span class="stalled">Ожидание источников</span>
+        <span class="stalled">{msg('ui.awaitingSources')}</span>
         <span class="sep">·</span>
-        <span class="dim">{download.seeders} сид / {download.peers} пир</span>
+        <span class="dim">{msg('ui.seedersPeers', { seeders: download.seeders, peers: download.peers })}</span>
       {:else if downloading}
-        <span>{bytesSize(download.downloaded)} из {bytesSize(download.total)}</span>
+        <span>{msg('ui.bytesOfBytes', { done: bytesSize(download.downloaded), total: bytesSize(download.total) })}</span>
         {#if download.etaSeconds >= 0}
           <span class="sep">·</span>
-          <span>Осталось {etaLabel(download.etaSeconds)}</span>
+          <span>{msg('ui.timeLeft', { eta: etaLabel(download.etaSeconds) })}</span>
         {/if}
       {:else}
-        <span>{statusLabels[download.status]}</span>
+        <span>{statusLabels(download.status)}</span>
       {/if}
     </div>
   </div>
@@ -106,7 +107,7 @@
         }}
       >
         <Pause size="1.5rem" strokeWidth={1.8} />
-        Пауза
+        {msg('ui.pause')}
       </Button>
     {:else if download.status === 'paused'}
       <Button
@@ -117,7 +118,7 @@
         }}
       >
         <Play size="1.5rem" strokeWidth={1.8} />
-        Продолжить
+        {msg('common.continue')}
       </Button>
     {/if}
     <Button
@@ -128,11 +129,11 @@
       }}
     >
       <X size="1.5rem" strokeWidth={1.8} />
-      Отменить
+      {msg('ui.cancelVerb')}
     </Button>
   </div>
   <IconButton
-    label="Подробнее о загрузке"
+    label={msg('ui.moreAboutDownload')}
     onclick={(e) => {
       stop(e);
       onopen?.(download);
@@ -142,12 +143,12 @@
   </IconButton>
 </div>
 
-<Modal bind:open={confirmOpen} title="Отменить загрузку?">
+<Modal bind:open={confirmOpen} title={msg('ui.cancelDownloadTitle')}>
   <p class="modal-text">
-    Загрузка «{download.name}» будет остановлена, а уже скачанные файлы удалены с диска. Это действие нельзя отменить.
+    {msg('ui.cancelDownloadWarning', { name: download.name })}
   </p>
   {#snippet footer()}
-    <Button onclick={() => (confirmOpen = false)}>Не отменять</Button>
+    <Button onclick={() => (confirmOpen = false)}>{msg('ui.dontCancel')}</Button>
     <Button
       variant="danger"
       onclick={() => {
@@ -155,7 +156,7 @@
         cancel(download.id);
       }}
     >
-      Отменить загрузку
+      {msg('ui.cancelDownload')}
     </Button>
   {/snippet}
 </Modal>

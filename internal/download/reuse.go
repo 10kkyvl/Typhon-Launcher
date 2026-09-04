@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/uierr"
+
 	"github.com/anacrolix/torrent/metainfo"
 )
 
@@ -23,7 +25,7 @@ const (
 	LayoutUnknown          Layout = "unknown"
 )
 
-var errHashBusy = errors.New("этот торрент уже используется другой загрузкой")
+var errHashBusy = uierr.New("download.hash_busy", "этот торрент уже используется другой загрузкой")
 
 type ReuseRequest struct {
 	Source   string `json:"source"`

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg } from '../../lib/i18n';
   import { themeVars } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
   import Button from '../../lib/components/Button.svelte';
@@ -14,7 +15,7 @@
   } from '../../lib/services/theme';
   import { activeTheme, refreshThemes, resetAppearance, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
   import { toast } from '../../lib/stores/toasts';
-  import { errorMessage } from '../../lib/utils/errors';
+  import { themeErrorText } from '../../lib/theme/themeErrors';
 
   const list = $derived($themeList);
   const active = $derived($activeTheme);
@@ -61,7 +62,7 @@
       const nameError = validateTokenName(name, allowedTokenNames);
       if (nameError) found.push(nameError);
       const valueError = validateTokenValue(value);
-      if (valueError) found.push(`«${name}»: ${valueError}`);
+      if (valueError) found.push(msg('settings.appearanceTokenValueErrorWrap', { name, error: valueError }));
     }
     const cssError = validateCss(cssDraft);
     if (cssError) found.push(cssError);
@@ -85,10 +86,10 @@
     try {
       const saved = await saveTheme({ ...draft, name: draftName, css: cssDraft });
       startEditing(saved);
-      toast(`Тема «${saved.name}» сохранена`, 'success');
+      toast(msg('settings.appearanceSavedToast', { name: saved.name }), 'success');
       await refreshThemes();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       saving = false;
     }
@@ -96,15 +97,15 @@
 
   async function removeDraft() {
     if (!draft || draft.builtIn) return;
-    if (!window.confirm(`Удалить тему «${draft.name}»?`)) return;
+    if (!window.confirm(msg('settings.appearanceDeleteConfirm', { name: draft.name }))) return;
     deleting = true;
     try {
       await deleteTheme(draft.id);
-      toast(`Тема «${draft.name}» удалена`, 'success');
+      toast(msg('settings.appearanceDeletedToast', { name: draft.name }), 'success');
       draft = null;
       await refreshThemes();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       deleting = false;
     }
@@ -116,11 +117,11 @@
       const path = await selectThemeFile();
       if (!path) return;
       const theme = await importTheme(path);
-      toast(`Тема «${theme.name}» импортирована`, 'success');
+      toast(msg('settings.appearanceImportedToast', { name: theme.name }), 'success');
       await refreshThemes();
       startEditing(theme);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       importing = false;
     }
@@ -133,9 +134,9 @@
       const path = await selectExportPath();
       if (!path) return;
       await exportTheme(draft.id, path);
-      toast(`Тема «${draft.name}» экспортирована`, 'success');
+      toast(msg('settings.appearanceExportedToast', { name: draft.name }), 'success');
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       exporting = false;
     }
@@ -143,11 +144,11 @@
 </script>
 
 <div class="single-column">
-  <Card title="Оформление">
+  <Card title={msg('settings.appearanceTab')}>
     <div class="preset-grid">
       <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
         <span class="preset-swatch system"></span>
-        <span class="preset-name">Системная</span>
+        <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
       </button>
       {#each list as theme (theme.id)}
         <button
@@ -162,31 +163,31 @@
           ></span>
           <span class="preset-name">{theme.name}</span>
           {#if !theme.builtIn}
-            <span class="preset-tag">своя</span>
+            <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
           {/if}
         </button>
       {/each}
     </div>
     <div class="row">
       <div class="row-text">
-        <span class="row-label">Импорт темы</span>
-        <span class="row-sub">Загрузить файл темы с диска</span>
+        <span class="row-label">{msg('settings.appearanceImportLabel')}</span>
+        <span class="row-sub">{msg('settings.appearanceImportSub')}</span>
       </div>
       <Button size="sm" disabled={importing} onclick={runImport}>
-        {importing ? 'Импорт…' : 'Импорт'}
+        {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
       </Button>
     </div>
   </Card>
 
   {#if draft}
-    <Card title={`Редактирование: ${draft.name}`}>
+    <Card title={msg('settings.appearanceEditingCardTitle', { name: draft.name })}>
       {#if draft.builtIn}
-        <p class="hint">Это встроенная тема — изменения сохранятся как новая тема.</p>
+        <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
       {/if}
       <div class="editor-layout">
         <div class="editor-fields">
           <label class="field">
-            <span class="row-label">Название</span>
+            <span class="row-label">{msg('settings.appearanceNameFieldLabel')}</span>
             <input class="input" type="text" bind:value={draftName} />
           </label>
 
@@ -213,11 +214,11 @@
           </div>
 
           <button type="button" class="advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
-            {advancedOpen ? 'Скрыть дополнительно' : 'Дополнительно'}
+            {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
           </button>
           {#if advancedOpen}
             <label class="field">
-              <span class="row-label">Пользовательский CSS</span>
+              <span class="row-label">{msg('settings.appearanceCustomCssLabel')}</span>
               <textarea class="textarea" rows="8" bind:value={cssDraft}></textarea>
             </label>
           {/if}
@@ -232,14 +233,14 @@
 
           <div class="editor-actions">
             <Button size="sm" disabled={saving} onclick={saveDraft}>
-              {saving ? 'Сохранение…' : 'Сохранить'}
+              {saving ? msg('settings.appearanceSavingEllipsis') : msg('common.save')}
             </Button>
             <Button size="sm" variant="secondary" disabled={exporting} onclick={runExport}>
-              {exporting ? 'Экспорт…' : 'Экспорт'}
+              {exporting ? msg('settings.appearanceExportingEllipsis') : msg('settings.appearanceExportButton')}
             </Button>
             {#if !draft.builtIn}
               <Button size="sm" variant="danger" disabled={deleting} onclick={removeDraft}>
-                {deleting ? 'Удаление…' : 'Удалить'}
+                {deleting ? msg('settings.appearanceDeletingEllipsis') : msg('common.delete')}
               </Button>
             {/if}
           </div>
@@ -249,8 +250,8 @@
           <Card surface="panel">
             <div class="preview" style={previewStyle}>
               <span class="preview-title">Typhon</span>
-              <span class="preview-sub">Живое превью темы</span>
-              <button type="button" class="preview-btn">Кнопка</button>
+              <span class="preview-sub">{msg('settings.appearancePreviewSub')}</span>
+              <button type="button" class="preview-btn">{msg('settings.appearancePreviewButtonLabel')}</button>
             </div>
           </Card>
         </div>
@@ -258,13 +259,13 @@
     </Card>
   {/if}
 
-  <Card title="Сброс">
+  <Card title={msg('settings.appearanceResetCardTitle')}>
     <div class="row">
       <div class="row-text">
-        <span class="row-label">Вернуть оформление по умолчанию</span>
-        <span class="row-sub">Отменяет пользовательские темы и возвращает встроенную тёмную тему. Также доступно по Ctrl+Shift+Alt+T</span>
+        <span class="row-label">{msg('settings.appearanceResetLabel')}</span>
+        <span class="row-sub">{msg('settings.appearanceResetSub')}</span>
       </div>
-      <Button size="sm" variant="danger" onclick={resetAppearance}>Сбросить</Button>
+      <Button size="sm" variant="danger" onclick={resetAppearance}>{msg('settings.appearanceResetButton')}</Button>
     </div>
   </Card>
 </div>

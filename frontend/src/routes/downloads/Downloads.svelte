@@ -31,7 +31,8 @@
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
-  import { bytesSize, plural, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
 
@@ -49,8 +50,8 @@
     [
       `↓ ${speedBytes($stats.downSpeed)}`,
       `↑ ${speedBytes($stats.upSpeed)}`,
-      `${$stats.activeCount} ${plural($stats.activeCount, 'активная', 'активные', 'активных')}`,
-      `${$queue.length} в очереди`,
+      msg('downloads.active', { count: $stats.activeCount }),
+      msg('transfers.downloadsQueuedCount', { count: $queue.length }),
     ].join(' · '),
   );
 
@@ -65,9 +66,9 @@
   }
 
   function typeTag(d: DownloadRecord) {
-    if (d.origin.purpose === 'update') return 'Обновление';
-    if (d.origin.purpose === 'repair') return 'Восстановление';
-    if (d.origin.gameId || d.origin.releaseId) return 'Игра';
+    if (d.origin.purpose === 'update') return msg('transfers.downloadsTypeUpdate');
+    if (d.origin.purpose === 'repair') return msg('transfers.downloadsTypeRepair');
+    if (d.origin.gameId || d.origin.releaseId) return msg('transfers.downloadsTypeGame');
     return '';
   }
 
@@ -90,21 +91,21 @@
     if (!iso) return '—';
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return '—';
-    const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const time = clockTime(date);
     const rel = relativeDate(iso);
-    return `${rel.charAt(0).toLowerCase()}${rel.slice(1)} в ${time}`;
+    return msg('transfers.downloadsCompletedAt', { rel: `${rel.charAt(0).toLowerCase()}${rel.slice(1)}`, time });
   }
 
   async function openDestination(path: string) {
     try {
       await openFolder(path);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('transfers.downloadsFolderUnavailable'), 'danger');
     }
   }
 </script>
 
-<PageHeader title="Загрузки" subtitle={summary}>
+<PageHeader title={msg('transfers.downloadsTitle')} subtitle={summary}>
   {#snippet actions()}
     <DropdownMenu
       items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}
@@ -112,30 +113,33 @@
     >
       {#snippet trigger({ toggle })}
         <Button onclick={toggle}>
-          Одновременно: {concurrencyValue}
+          {msg('transfers.downloadsConcurrency', { value: concurrencyValue })}
           <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </Button>
       {/snippet}
     </DropdownMenu>
-    <IconButton label="Настройки загрузок" onclick={() => navigate('settings', { tab: 'downloads' })}>
+    <IconButton label={msg('transfers.downloadsSettingsLabel')} onclick={() => navigate('settings', { tab: 'downloads' })}>
       <Settings size="1.7rem" strokeWidth={1.8} />
     </IconButton>
     <Button variant="primary" onclick={() => (addOpen = true)}>
       <Plus size="1.5rem" strokeWidth={2} />
-      Добавить загрузку
+      {msg('transfers.downloadsAddAction')}
     </Button>
   {/snippet}
 </PageHeader>
 
 <section class="section">
-  <h2>Активные <span class="count">{$active.length}</span></h2>
+  <h2>{msg('transfers.downloadsActiveHeading')} <span class="count">{$active.length}</span></h2>
   {#if $active.length === 0}
-    <EmptyState title="Нет активных загрузок" description="Добавьте торрент или выберите релиз на странице игры.">
+    <EmptyState
+      title={msg('transfers.downloadsEmptyActiveTitle')}
+      description={msg('transfers.downloadsEmptyActiveDescription')}
+    >
       {#snippet icon()}
         <Download size="2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
-        <Button variant="primary" onclick={() => (addOpen = true)}>Добавить загрузку</Button>
+        <Button variant="primary" onclick={() => (addOpen = true)}>{msg('transfers.downloadsAddAction')}</Button>
       {/snippet}
     </EmptyState>
   {:else}
@@ -148,9 +152,9 @@
 </section>
 
 <section class="section">
-  <h2>В очереди <span class="count">{$queue.length}</span></h2>
+  <h2>{msg('transfers.downloadsQueueHeading')} <span class="count">{$queue.length}</span></h2>
   {#if $queue.length === 0}
-    <p class="muted">Очередь пуста.</p>
+    <p class="muted">{msg('transfers.downloadsQueueEmpty')}</p>
   {:else}
     <div class="rows">
       {#each $queue as q, i (q.id)}
@@ -168,15 +172,15 @@
             {/if}
           </div>
           <div class="status">
-            <span class="status-main">В очереди</span>
-            <span class="status-sub">Ожидание…</span>
+            <span class="status-main">{msg('transfers.downloadsStatusQueued')}</span>
+            <span class="status-sub">{msg('transfers.downloadsStatusWaiting')}</span>
           </div>
           <div class="row-actions">
             <DropdownMenu
               items={[
-                ...(i > 0 ? [{ id: 'up', label: 'Переместить выше' }] : []),
-                ...(i < $queue.length - 1 ? [{ id: 'down', label: 'Переместить ниже' }] : []),
-                { id: 'start', label: 'Начать сейчас', separator: i > 0 || i < $queue.length - 1 },
+                ...(i > 0 ? [{ id: 'up', label: msg('transfers.downloadsMoveUp') }] : []),
+                ...(i < $queue.length - 1 ? [{ id: 'down', label: msg('transfers.downloadsMoveDown') }] : []),
+                { id: 'start', label: msg('transfers.downloadsStartNow'), separator: i > 0 || i < $queue.length - 1 },
               ]}
               onselect={(id) => {
                 if (id === 'up') moveUp(q.id);
@@ -185,12 +189,12 @@
               }}
             >
               {#snippet trigger({ toggle })}
-                <IconButton label="Действия с очередью" size="sm" onclick={toggle}>
+                <IconButton label={msg('transfers.downloadsQueueActionsLabel')} size="sm" onclick={toggle}>
                   <Menu size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
-            <IconButton label="Отменить" size="sm" onclick={() => remove(q.id)}>
+            <IconButton label={msg('transfers.downloadsCancelLabel')} size="sm" onclick={() => remove(q.id)}>
               <X size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
@@ -202,7 +206,7 @@
 
 {#if $completed.length > 0}
   <section class="section">
-    <h2>Завершённые <span class="count">{$completed.length}</span></h2>
+    <h2>{msg('transfers.downloadsCompletedHeading')} <span class="count">{$completed.length}</span></h2>
     <div class="rows">
       {#each $completed as item (item.id)}
         {@const install = $installationsByDownload.get(item.id)}
@@ -220,37 +224,37 @@
             {/if}
           </div>
           <div class="status">
-            <span class="status-main">Завершено · {bytesSize(item.total)}</span>
-            <span class="status-sub">Завершено {completedWhen(item.completedAt)}</span>
+            <span class="status-main">{msg('transfers.downloadsDoneSize', { size: bytesSize(item.total) })}</span>
+            <span class="status-sub">{msg('transfers.downloadsDoneWhen', { when: completedWhen(item.completedAt) })}</span>
           </div>
           <span class="done-check" aria-hidden="true">
             <CircleCheck size="1.8rem" strokeWidth={1.8} />
           </span>
           <div class="install-cell">
             {#if !install}
-              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Установить</Button>
+              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsInstallAction')}</Button>
             {:else if installActive(install.status)}
               <div class="install-progress">
-                <span class="install-status">{installStatusLabels[install.status]}</span>
+                <span class="install-status">{installStatusLabels(install.status)}</span>
                 <ProgressBar value={install.progress * 100} height={4} />
               </div>
             {:else if install.status === 'waiting_for_user'}
-              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>Продолжить установку</Button>
+              <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
             {:else if install.status === 'completed'}
-              <StatusBadge kind="success" label="Установлено" plain />
+              <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
             {:else if install.status === 'failed'}
-              <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>Установка: ошибка</Button>
+              <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsInstallErrorAction')}</Button>
             {:else}
               <Button size="sm" onclick={() => openInstall(item.id)}>
-                {install.status === 'cancelled' ? 'Отменено' : 'Прервано'}
+                {install.status === 'cancelled' ? msg('transfers.downloadsCancelledStatus') : msg('transfers.downloadsInterruptedStatus')}
               </Button>
             {/if}
           </div>
           <div class="row-actions">
-            <IconButton label="Показать в папке" size="sm" onclick={() => openDestination(item.destination)}>
+            <IconButton label={msg('transfers.downloadsShowInFolderLabel')} size="sm" onclick={() => openDestination(item.destination)}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton label="Убрать из списка" size="sm" onclick={() => remove(item.id)}>
+            <IconButton label={msg('transfers.downloadsRemoveFromListLabel')} size="sm" onclick={() => remove(item.id)}>
               <X size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </div>
@@ -261,8 +265,8 @@
 {/if}
 
 <p class="footer-hint">
-  Проблемы с загрузкой?
-  <button class="link" onclick={() => navigate('history')}>Открыть журнал загрузок</button>
+  {msg('transfers.downloadsFooterHintQuestion')}
+  <button class="link" onclick={() => navigate('history')}>{msg('transfers.downloadsOpenHistoryLog')}</button>
 </p>
 
 <AddDownloadModal bind:open={addOpen} />

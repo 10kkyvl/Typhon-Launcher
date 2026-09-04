@@ -1,42 +1,44 @@
-import { SHOWCASE_TITLES } from '../profile/view';
-import type { ShowcaseKind } from '../services/account';
+import { get } from 'svelte/store';
+import { showcaseLabel } from '../profile/view';
 import type { Relation } from '../services/social';
 import type { Notification } from '../stores/notifications';
-import { plural, relativeDate } from '../utils/format';
+import { longDate, relativeDate } from '../utils/format';
+import { locale, msg } from '../i18n';
+import type { SocialKey } from '../i18n/catalog/ru/social';
 
-const RELATION_LABELS: Record<Relation, string> = {
-  none: 'Добавить в друзья',
-  outgoing: 'Заявка отправлена',
-  incoming: 'Принять',
-  friend: 'В друзьях',
-  self: 'Это вы',
-  blocked: 'Недоступен',
+const RELATION_KEYS: Record<Relation, SocialKey> = {
+  none: 'social.relationNone',
+  outgoing: 'social.relationOutgoing',
+  incoming: 'social.relationIncoming',
+  friend: 'social.relationFriend',
+  self: 'social.relationSelf',
+  blocked: 'social.relationBlocked',
 };
 
 export function relationLabel(relation: string): string {
-  return RELATION_LABELS[relation as Relation] ?? RELATION_LABELS.blocked;
+  return msg(RELATION_KEYS[relation as Relation] ?? RELATION_KEYS.blocked);
 }
 
-const RELATION_HINTS: Record<Relation, string> = {
+const RELATION_HINT_KEYS: Record<Relation, SocialKey | ''> = {
   none: '',
-  outgoing: 'Заявка уже отправлена',
-  incoming: 'Этот пользователь уже отправил вам заявку — примите её во вкладке «Заявки»',
-  friend: 'Вы уже друзья',
-  self: 'Это вы',
-  blocked: 'Пользователь недоступен',
+  outgoing: 'social.relationHintOutgoing',
+  incoming: 'social.relationHintIncoming',
+  friend: 'social.relationHintFriend',
+  self: 'social.relationSelf',
+  blocked: 'social.relationHintBlocked',
 };
 
 export function relationHint(relation: string): string {
-  return RELATION_HINTS[relation as Relation] ?? RELATION_HINTS.blocked;
+  const key = RELATION_HINT_KEYS[relation as Relation] ?? RELATION_HINT_KEYS.blocked;
+  return key ? msg(key) : '';
 }
 
 export function friendRequestNotification(count: number, peak: number): Notification | null {
   if (count <= 0) return null;
-  const text =
-    count === 1 ? 'Заявка в друзья' : `${count} ${plural(count, 'заявка', 'заявки', 'заявок')} в друзья`;
+  const text = count === 1 ? msg('friends.requestOne') : msg('friends.requests', { count });
   return {
     id: `friends:incoming:${Math.max(peak, count)}`,
-    title: 'Друзья',
+    title: msg('social.friendsTitle'),
     text,
     route: 'friends',
     terminal: false,
@@ -51,44 +53,41 @@ export function isFriendCode(input: string): boolean {
   return FRIEND_CODE.test(value);
 }
 
-function count(n: number, adjective: [string, string, string], noun: [string, string, string]): string {
-  return `${n} ${plural(n, ...adjective)} ${plural(n, ...noun)}`;
-}
-
 export function sentAt(iso: string | null): string {
   const when = relativeDate(iso);
-  return when === '—' ? when : `Отправлена ${when.toLocaleLowerCase('ru-RU')}`;
+  if (when === '—') return when;
+  return msg('friends.sentAt', { when: when.toLocaleLowerCase(get(locale)) });
 }
 
 export function commonGamesTitle(games: number): string {
-  return count(games, ['общая', 'общие', 'общих'], ['игра', 'игры', 'игр']);
+  return msg('friends.commonGames', { count: games });
 }
 
 export function commonLine(mutual: number, games: number): string {
   const parts: string[] = [];
-  if (mutual > 0) parts.push(count(mutual, ['общий', 'общих', 'общих'], ['друг', 'друга', 'друзей']));
+  if (mutual > 0) parts.push(msg('friends.commonFriends', { count: mutual }));
   if (games > 0) parts.push(commonGamesTitle(games));
   return parts.join(' · ');
 }
 
 export function commonGameLabel(viewerOwned: boolean, targetOwned: boolean, name: string): string {
-  if (viewerOwned && targetOwned) return 'установлена у обоих';
-  if (!viewerOwned && !targetOwned) return 'нужно установить обоим';
-  if (!viewerOwned) return 'нужно установить вам';
+  if (viewerOwned && targetOwned) return msg('social.userGameInstalledBoth');
+  if (!viewerOwned && !targetOwned) return msg('social.userGameInstallBoth');
+  if (!viewerOwned) return msg('social.userGameInstallYou');
   const owner = name.trim();
-  return owner ? `нужно установить: ${owner}` : 'нужно установить ему';
+  return owner ? msg('social.userGameInstallNamed', { name: owner }) : msg('social.userGameInstallOther');
 }
 
 export function joinDate(iso: string): string {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return longDate(date);
 }
 
 export function memberSince(iso: string): string {
   const date = joinDate(iso);
-  return date ? `Участник с ${date}` : '';
+  return date ? msg('social.memberSince', { date }) : '';
 }
 
 export function mutualMore(shown: number, total: number): string {
@@ -97,5 +96,5 @@ export function mutualMore(shown: number, total: number): string {
 }
 
 export function showcaseTitle(kind: string): string {
-  return SHOWCASE_TITLES[kind as ShowcaseKind] ?? kind;
+  return showcaseLabel(kind);
 }

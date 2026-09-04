@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -13,12 +12,14 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrInvalidJSON        = errors.New("некорректный JSON фида")
-	ErrUnsupportedVersion = errors.New("неподдерживаемая версия фида")
-	ErrEmptyFeed          = errors.New("фид не содержит записей")
+	ErrInvalidJSON        = uierr.New("sources.feed_invalid_json", "некорректный JSON фида")
+	ErrUnsupportedVersion = uierr.New("sources.feed_unsupported_version", "неподдерживаемая версия фида")
+	ErrEmptyFeed          = uierr.New("sources.feed_empty", "фид не содержит записей")
 )
 
 type Entry struct {

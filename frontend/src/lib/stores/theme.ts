@@ -12,7 +12,7 @@ import {
   type Theme,
 } from '../services/theme';
 import { applyTheme as applyThemeDom, clearTheme as clearThemeDom } from '../theme/apply';
-import { errorMessage } from '../utils/errors';
+import { themeErrorText } from '../theme/themeErrors';
 import { toast } from './toasts';
 
 export type ThemeMode = 'system' | 'theme';
@@ -38,7 +38,7 @@ function scheduleConfirm(id: string) {
   confirmTimer = setTimeout(() => {
     confirmTimer = null;
     if (get(activeTheme)?.id !== id) return;
-    confirmThemeRequest(id).catch((err) => toast(errorMessage(err), 'danger'));
+    confirmThemeRequest(id).catch((err) => toast(themeErrorText(err), 'danger'));
   }, CONFIRM_DELAY_MS);
 }
 
@@ -55,7 +55,7 @@ export async function refreshThemes() {
   try {
     themeList.set(await listThemes());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -71,7 +71,7 @@ export async function selectTheme(id: string) {
     setActive(applied);
     scheduleConfirm(applied.id);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -87,14 +87,14 @@ export async function resetAppearance() {
   try {
     await resetThemeRequest();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
     return;
   }
   try {
     const applied = await fetchActiveTheme();
     setActive(applied);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -106,7 +106,7 @@ export async function initTheme() {
   try {
     setActive(await fetchActiveTheme());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 
   if (!inWails) return;

@@ -17,6 +17,7 @@ import (
 	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/sources/feed"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -37,11 +38,11 @@ const (
 )
 
 var (
-	errSourceNotFound = errors.New("источник не найден")
-	errSourceBusy     = errors.New("источник уже обновляется")
-	errSourceDisabled = errors.New("источник отключён")
-	errSourceExists   = errors.New("этот источник уже добавлен")
-	errNoDialog       = errors.New("диалог выбора файла недоступен")
+	errSourceNotFound = uierr.New("sources.source_not_found", "источник не найден")
+	errSourceBusy     = uierr.New("sources.source_busy", "источник уже обновляется")
+	errSourceDisabled = uierr.New("sources.source_disabled", "источник отключён")
+	errSourceExists   = uierr.New("sources.source_exists", "этот источник уже добавлен")
+	errNoDialog       = uierr.New("sources.dialog_unavailable", "диалог выбора файла недоступен")
 )
 
 type Service struct {

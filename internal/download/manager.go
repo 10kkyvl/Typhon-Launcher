@@ -23,6 +23,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/redact"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/anacrolix/torrent"
@@ -49,17 +50,29 @@ var stallAfter = 2 * time.Minute
 
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
-var ErrNotFound = errors.New("загрузка не найдена")
+var ErrNotFound = uierr.New("download.not_found", "загрузка не найдена")
 
 var (
-	errNotFound    = ErrNotFound
-	errUnavailable = errors.New("недоступно для этой загрузки")
-	errNoClient    = errors.New("торрент-клиент недоступен")
-	errNoMetadata  = errors.New("не удалось получить метаданные торрента")
-	errNoRestore   = errors.New(restoreFailedMessage)
-	errSeeding     = errors.New("файлы сейчас раздаются — сначала остановите раздачу")
-	errBadSizes    = errors.New("недопустимые размеры файлов в торренте")
-	errNoFreeSpace = errors.New("не удалось определить свободное место на диске")
+	errNotFound          = ErrNotFound
+	errUnavailable       = uierr.New("download.unavailable", "недоступно для этой загрузки")
+	errNoClient          = uierr.New("download.no_client", "торрент-клиент недоступен")
+	errNoMetadata        = uierr.New("download.no_metadata", "не удалось получить метаданные торрента")
+	errNoRestore         = uierr.New("download.restore_failed", restoreFailedMessage)
+	errSeeding           = uierr.New("download.seeding", "файлы сейчас раздаются — сначала остановите раздачу")
+	errBadSizes          = uierr.New("download.bad_sizes", "недопустимые размеры файлов в торренте")
+	errNoFreeSpace       = uierr.New("download.no_free_space", "не удалось определить свободное место на диске")
+	errNotEnoughSpace    = uierr.New("download.not_enough_space", "недостаточно места на диске")
+	errDiskWriteFailed   = uierr.New("download.disk_write_failed", "ошибка записи на диск")
+	errEmptySource       = uierr.New("download.empty_source", "укажите magnet-ссылку или torrent-файл")
+	errDuplicateDownload = uierr.New("download.duplicate_download", "эта загрузка уже добавлена")
+	errInvalidMagnet     = uierr.New("download.invalid_magnet", "некорректная magnet-ссылка")
+	errTorrentReadFailed = uierr.New("download.torrent_read_failed", "не удалось прочитать torrent-файл")
+	errMetadataRequired  = uierr.New("download.metadata_required", "сначала получите метаданные торрента")
+	errEmptyDestination  = uierr.New("download.empty_destination", "укажите папку назначения")
+	errDestPermission    = uierr.New("download.destination_permission", "нет доступа к папке назначения")
+	errDestUnavailable   = uierr.New("download.destination_unavailable", "папка назначения недоступна")
+	errNoFilesSelected   = uierr.New("download.no_files_selected", "не выбрано ни одного файла")
+	errAddTorrentFailed  = uierr.New("download.add_torrent_failed", "не удалось добавить торрент")
 )
 
 type pending struct {
@@ -346,7 +359,7 @@ func (m *Manager) AddTorrentSelectFile() (string, error) {
 func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
-		return TorrentInfo{}, errors.New("укажите magnet-ссылку или torrent-файл")
+		return TorrentInfo{}, errEmptySource
 	}
 
 	m.mu.Lock()
@@ -370,7 +383,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	m.mu.Lock()
 	if m.findByHashLocked(infoHash) != nil {
 		m.mu.Unlock()
-		return TorrentInfo{}, errors.New("эта загрузка уже добавлена")
+		return TorrentInfo{}, errDuplicateDownload
 	}
 	if existing, ok := m.pending[infoHash]; ok {
 		m.mu.Unlock()
@@ -385,7 +398,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	lt, err := cl.add(spec, cl.metaDir, storageOpts{})
 	if err != nil {
 		slog.Error("add torrent for metadata", "operation", "fetch_metadata", "source", redact.Source(source), "error", err)
-		return TorrentInfo{}, errors.New("не удалось добавить торрент")
+		return TorrentInfo{}, errAddTorrentFailed
 	}
 
 	select {
@@ -422,17 +435,17 @@ func buildSpec(source string) (*torrent.TorrentSpec, error) {
 	if strings.HasPrefix(source, "magnet:") {
 		spec, err := magnetSpec(source)
 		if err != nil {
-			return nil, errors.New("некорректная magnet-ссылка")
+			return nil, errInvalidMagnet
 		}
 		return spec, nil
 	}
 	mi, err := metainfo.LoadFromFile(source)
 	if err != nil {
-		return nil, errors.New("не удалось прочитать torrent-файл")
+		return nil, errTorrentReadFailed
 	}
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
 	if err != nil || spec.InfoHash.IsZero() {
-		return nil, errors.New("не удалось прочитать torrent-файл")
+		return nil, errTorrentReadFailed
 	}
 	return spec, nil
 }
@@ -508,7 +521,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	cl := m.client
 	m.mu.Unlock()
 	if p == nil {
-		return Download{}, errors.New("сначала получите метаданные торрента")
+		return Download{}, errMetadataRequired
 	}
 	if cl == nil {
 		m.returnPending(infoHash, p)
@@ -518,15 +531,15 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	destination = strings.TrimSpace(destination)
 	if destination == "" {
 		m.returnPending(infoHash, p)
-		return Download{}, errors.New("укажите папку назначения")
+		return Download{}, errEmptyDestination
 	}
 	if err := os.MkdirAll(destination, 0o755); err != nil {
 		m.returnPending(infoHash, p)
 		slog.Error("create destination", "path", destination, "error", err)
 		if errors.Is(err, fs.ErrPermission) {
-			return Download{}, errors.New("нет доступа к папке назначения")
+			return Download{}, errDestPermission
 		}
-		return Download{}, errors.New("папка назначения недоступна")
+		return Download{}, errDestUnavailable
 	}
 
 	info := p.torrent.t.Info()
@@ -538,7 +551,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	}
 	if needed == 0 {
 		m.returnPending(infoHash, p)
-		return Download{}, errors.New("не выбрано ни одного файла")
+		return Download{}, errNoFilesSelected
 	}
 	if err := checkFreeSpace(destination, needed); err != nil {
 		m.returnPending(infoHash, p)
@@ -551,7 +564,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	lt, err := cl.addMetainfo(&mi, destination, storageOpts{})
 	if err != nil {
 		slog.Error("add torrent", "operation", "start_download", "error", err)
-		return Download{}, errors.New("не удалось добавить торрент")
+		return Download{}, errAddTorrentFailed
 	}
 
 	d := &Download{
@@ -595,7 +608,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 func (m *Manager) watchWriteErrors(id string, lt *liveTorrent) {
 	lt.t.SetOnWriteChunkError(func(err error) {
 		slog.Error("torrent write error", "download_id", id, "error", err)
-		go m.markFailed(id, "ошибка записи на диск", err)
+		go m.markFailed(id, errDiskWriteFailed.Error(), err)
 	})
 }
 
@@ -1382,7 +1395,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 			m.setSeeding(j.id, false)
 			return
 		}
-		m.markFailed(j.id, restoreFailedMessage, err)
+		m.markFailed(j.id, errNoRestore.Error(), err)
 		return
 	}
 	m.watchWriteErrors(j.id, lt)
@@ -1554,8 +1567,8 @@ func checkFreeSpace(destination string, needed int64) error {
 		return nil
 	}
 	//nolint:gosec // G115: в этой ветке FreeBytes < needed <= MaxInt64
-	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s",
-		humanSize(needed), humanSize(int64(st.FreeBytes)))
+	return fmt.Errorf("%w: нужно %s, свободно %s",
+		errNotEnoughSpace, humanSize(needed), humanSize(int64(st.FreeBytes)))
 }
 
 func humanSize(bytes int64) string {

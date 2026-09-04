@@ -3,6 +3,7 @@ package settings
 type Portable struct {
 	Theme                    *string  `json:"theme,omitempty"`
 	UIScale                  *float64 `json:"uiScale,omitempty"`
+	Language                 *string  `json:"language,omitempty"`
 	AnimationsEnabled        *bool    `json:"animationsEnabled,omitempty"`
 	MinimizeToTray           *bool    `json:"minimizeToTray,omitempty"`
 	DiscordRichPresence      *bool    `json:"discordRichPresence,omitempty"`
@@ -27,6 +28,7 @@ func PortableOf(s Settings) Portable {
 	return Portable{
 		Theme:                    &s.Theme,
 		UIScale:                  &s.UIScale,
+		Language:                 &s.Language,
 		AnimationsEnabled:        &s.AnimationsEnabled,
 		MinimizeToTray:           &s.MinimizeToTray,
 		DiscordRichPresence:      &s.DiscordRichPresence,
@@ -51,6 +53,7 @@ func PortableOf(s Settings) Portable {
 func ApplyPortable(s Settings, p Portable) Settings {
 	applyString(&s.Theme, p.Theme)
 	applyFloat(&s.UIScale, p.UIScale)
+	applyString(&s.Language, p.Language)
 	applyBool(&s.AnimationsEnabled, p.AnimationsEnabled)
 	applyBool(&s.MinimizeToTray, p.MinimizeToTray)
 	applyBool(&s.DiscordRichPresence, p.DiscordRichPresence)

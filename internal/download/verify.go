@@ -6,15 +6,16 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	errFileMissing    = errors.New("файл отсутствует на диске")
-	errFileIncomplete = errors.New("загрузка не завершена: на диске остался только незавершённый файл (.part)")
-	errFileTruncated  = errors.New("файл на диске меньше ожидаемого размера")
-	errFileOversized  = errors.New("файл на диске больше ожидаемого размера")
-	errFileStatFailed = errors.New("не удалось проверить файл на диске")
-	errBlockedByAV    = errors.New("файл заблокирован или удалён антивирусом Windows")
+	errFileMissing    = uierr.New("download.file_missing", "файл отсутствует на диске")
+	errFileIncomplete = uierr.New("download.file_incomplete", "загрузка не завершена: на диске остался только незавершённый файл (.part)")
+	errFileTruncated  = uierr.New("download.file_truncated", "файл на диске меньше ожидаемого размера")
+	errFileOversized  = uierr.New("download.file_oversized", "файл на диске больше ожидаемого размера")
+	errFileStatFailed = uierr.New("download.file_stat_failed", "не удалось проверить файл на диске")
 )
 
 func verifyFilesOnDisk(ctx context.Context, files []FileState, paths []string) error {

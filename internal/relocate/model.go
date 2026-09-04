@@ -1,8 +1,8 @@
 package relocate
 
 import (
-	"errors"
 	"time"
+	"typhon/internal/uierr"
 )
 
 type Scope string
@@ -67,25 +67,25 @@ func (j Job) clone() Job {
 }
 
 var (
-	ErrEmptyInstallDir    = errors.New("у игры не задан каталог установки")
-	ErrGameRunning        = errors.New("игра сейчас запущена")
-	ErrUpdateBusy         = errors.New("для игры выполняется обновление")
-	ErrInstallBusy        = errors.New("для игры выполняется установка")
-	ErrDownloadBusy       = errors.New("для игры идёт загрузка")
-	ErrEmptySource        = errors.New("не указан исходный каталог")
-	ErrEmptyTarget        = errors.New("не указан целевой каталог")
-	ErrRelativeTarget     = errors.New("целевой каталог должен быть абсолютным путём")
-	ErrTargetIsRoot       = errors.New("целевой каталог не может быть корнем диска")
-	ErrTargetInsideSource = errors.New("целевой каталог не может быть внутри исходного")
-	ErrSourceInsideTarget = errors.New("исходный каталог не может быть внутри целевого")
-	ErrTargetNotEmpty     = errors.New("целевой каталог не пуст или недоступен")
-	ErrFreeSpaceUnknown   = errors.New("не удалось определить свободное место на диске")
-	ErrNotEnoughSpace     = errors.New("недостаточно свободного места на диске")
-	ErrVerifyFailed       = errors.New("проверка перенесённых файлов не прошла")
-	ErrJobNotFound        = errors.New("операция переноса не найдена")
-	ErrGameNotFound       = errors.New("игра не найдена")
-	ErrAmbiguousRecovery  = errors.New("восстановление переноса неоднозначно, требуется вмешательство пользователя")
-	ErrMoveInProgress     = errors.New("перенос уже выполняется")
+	ErrEmptyInstallDir    = uierr.New("relocate.no_install_dir", "у игры не задан каталог установки")
+	ErrGameRunning        = uierr.New("relocate.game_running", "игра сейчас запущена")
+	ErrUpdateBusy         = uierr.New("relocate.updating", "для игры выполняется обновление")
+	ErrInstallBusy        = uierr.New("relocate.installing", "для игры выполняется установка")
+	ErrDownloadBusy       = uierr.New("relocate.downloading", "для игры идёт загрузка")
+	ErrEmptySource        = uierr.New("relocate.no_source", "не указан исходный каталог")
+	ErrEmptyTarget        = uierr.New("relocate.no_target", "не указан целевой каталог")
+	ErrRelativeTarget     = uierr.New("relocate.invalid_path", "целевой каталог должен быть абсолютным путём")
+	ErrTargetIsRoot       = uierr.New("relocate.target_is_drive_root", "целевой каталог не может быть корнем диска")
+	ErrTargetInsideSource = uierr.New("relocate.target_inside_source", "целевой каталог не может быть внутри исходного")
+	ErrSourceInsideTarget = uierr.New("relocate.source_inside_target", "исходный каталог не может быть внутри целевого")
+	ErrTargetNotEmpty     = uierr.New("relocate.target_not_empty", "целевой каталог не пуст или недоступен")
+	ErrFreeSpaceUnknown   = uierr.New("relocate.free_space_unknown", "не удалось определить свободное место на диске")
+	ErrNotEnoughSpace     = uierr.New("relocate.not_enough_space", "недостаточно свободного места на диске")
+	ErrVerifyFailed       = uierr.New("relocate.verify_failed", "проверка перенесённых файлов не прошла")
+	ErrJobNotFound        = uierr.New("relocate.job_not_found", "операция переноса не найдена")
+	ErrGameNotFound       = uierr.New("relocate.game_not_found", "игра не найдена")
+	ErrAmbiguousRecovery  = uierr.New("relocate.ambiguous_recovery", "восстановление переноса неоднозначно, требуется вмешательство пользователя")
+	ErrMoveInProgress     = uierr.New("relocate.already_running", "перенос уже выполняется")
 )
 
 // spaceMarginPercent is the headroom required on top of the measured

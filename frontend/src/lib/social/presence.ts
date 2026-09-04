@@ -1,6 +1,7 @@
 import { shortDate } from '../profile/view';
 import type { PresenceStatus } from '../services/online';
 import type { FriendView, PresenceView } from '../services/social';
+import { msg } from '../i18n';
 
 export type PresenceDot = 'online' | 'away' | 'busy' | 'offline';
 
@@ -20,17 +21,33 @@ const KINDS: Record<PresenceDot, PresenceKind> = {
 };
 
 export const STATUS_LABELS: Record<PresenceStatus, string> = {
-  online: 'В сети',
-  away: 'Отошёл',
-  busy: 'Не беспокоить',
-  invisible: 'Невидимка',
+  get online() {
+    return msg('social.presenceOnline');
+  },
+  get away() {
+    return msg('social.presenceAway');
+  },
+  get busy() {
+    return msg('social.presenceBusy');
+  },
+  get invisible() {
+    return msg('social.presenceInvisible');
+  },
 };
 
-const LINES: Record<PresenceDot, string> = {
-  online: STATUS_LABELS.online,
-  away: STATUS_LABELS.away,
-  busy: STATUS_LABELS.busy,
-  offline: 'Не в сети',
+const DOT_LABELS: Record<PresenceDot, string> = {
+  get online() {
+    return STATUS_LABELS.online;
+  },
+  get away() {
+    return STATUS_LABELS.away;
+  },
+  get busy() {
+    return STATUS_LABELS.busy;
+  },
+  get offline() {
+    return msg('social.presenceOffline');
+  },
 };
 
 const MINUTE = 60000;
@@ -54,22 +71,24 @@ export function sinceLabel(iso: string | null | undefined, now = new Date()): st
   const seen = new Date(iso);
   if (Number.isNaN(seen.getTime())) return '';
   const elapsed = now.getTime() - seen.getTime();
-  if (elapsed < MINUTE) return 'только что';
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} мин назад`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} ч назад`;
+  if (elapsed < MINUTE) return msg('social.presenceJustNow');
+  if (elapsed < HOUR) return msg('social.presenceMinutesAgo', { count: Math.floor(elapsed / MINUTE) });
+  if (elapsed < DAY) return msg('social.presenceHoursAgo', { count: Math.floor(elapsed / HOUR) });
   const days = Math.floor(elapsed / DAY);
-  if (days === 1) return 'вчера';
-  if (days < 7) return `${days} дн. назад`;
+  if (days === 1) return msg('social.presenceYesterdayLower');
+  if (days < 7) return msg('social.presenceDaysAgo', { count: days });
   return shortDate(iso);
 }
 
 export function presenceLine(presence?: PresenceView | null, now = new Date(), own = false): string {
-  if (presence?.status === 'invisible') return own ? STATUS_LABELS.invisible : LINES.offline;
+  if (presence?.status === 'invisible') return own ? STATUS_LABELS.invisible : DOT_LABELS.offline;
   const dot = presenceDot(presence);
-  if (playing(presence)) return presence?.gameTitle ? `Играет: ${presence.gameTitle}` : 'Играет';
-  if (dot !== 'offline') return LINES[dot];
+  if (playing(presence)) {
+    return presence?.gameTitle ? msg('social.playingNamed', { name: presence.gameTitle }) : msg('social.playing');
+  }
+  if (dot !== 'offline') return DOT_LABELS[dot];
   const seen = sinceLabel(presence?.lastSeenAt, now);
-  return seen ? `${LINES.offline} · ${seen}` : LINES.offline;
+  return seen ? `${DOT_LABELS.offline} · ${seen}` : DOT_LABELS.offline;
 }
 
 export function ownStatusLine(status: string, running: boolean): string {

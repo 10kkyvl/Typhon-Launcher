@@ -1,16 +1,17 @@
 package catalog
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"typhon/internal/uierr"
 )
 
 var (
 	ErrNoGame      = errNotFound
-	errNoProvider  = errors.New("не указан идентификатор провайдера")
-	errNoTimestamp = errors.New("не указано время обновления метаданных")
+	errNoProvider  = uierr.New("catalog.no_provider_id", "не указан идентификатор провайдера")
+	errNoTimestamp = uierr.New("catalog.no_timestamp", "не указано время обновления метаданных")
 )
 
 type MetadataPatch struct {

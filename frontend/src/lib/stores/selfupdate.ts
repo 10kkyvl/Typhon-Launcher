@@ -18,6 +18,7 @@ import {
   type SelfUpdateStatus,
 } from '../services/selfupdate';
 import { updateReason } from '../services/selfupdateMessages';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const selfUpdateStatus = writable<SelfUpdateStatus>({ state: 'idle', currentVersion: '' });
@@ -71,7 +72,7 @@ function applyStatus(status: SelfUpdateStatus) {
   }
   if (!status.error && status.state === 'available' && status.availableVersion && status.availableVersion !== announcedVersion) {
     announcedVersion = status.availableVersion;
-    toast(`Доступна новая версия лаунчера: ${status.availableVersion}`);
+    toast(msg('state.selfupdateNewVersionToast', { version: status.availableVersion }));
   }
 }
 
@@ -96,8 +97,8 @@ export async function initSelfUpdate() {
       if (!announced) {
         toast(
           outcome.ok
-            ? `Лаунчер обновлён до версии ${outcome.version}`
-            : `Не удалось установить обновление ${outcome.version}`,
+            ? msg('state.selfupdateAppliedToast', { version: outcome.version })
+            : msg('state.selfupdateApplyFailedToast', { version: outcome.version }),
           outcome.ok ? 'success' : 'danger',
         );
       }

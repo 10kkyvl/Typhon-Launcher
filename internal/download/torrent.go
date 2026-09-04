@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
@@ -25,7 +26,7 @@ const (
 	maxTorrentConns = 60
 )
 
-var errBadPaths = errors.New("недопустимые пути файлов в торренте")
+var errBadPaths = uierr.New("download.bad_paths", "недопустимые пути файлов в торренте")
 
 type engineStats struct {
 	downloaded int64

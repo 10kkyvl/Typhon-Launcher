@@ -20,6 +20,7 @@ import (
 	"typhon/internal/procs"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -101,10 +102,10 @@ type InstalledUpdate struct {
 }
 
 var (
-	errEmptyInstallDir      = errors.New("каталог установки не задан")
-	errNotFound             = errors.New("игра не найдена")
-	errEmptyCanonicalGameID = errors.New("не указан идентификатор игры каталога")
-	errEmptyCatalogTitle    = errors.New("не указано название игры")
+	errEmptyInstallDir      = uierr.New("library.no_install_dir", "каталог установки не задан")
+	errNotFound             = uierr.New("library.game_not_found", "игра не найдена")
+	errEmptyCanonicalGameID = uierr.New("library.no_canonical_id", "не указан идентификатор игры каталога")
+	errEmptyCatalogTitle    = uierr.New("library.no_catalog_title", "не указано название игры")
 )
 
 const MaxFavorites = 6
@@ -126,9 +127,9 @@ func ValidStatus(s string) bool {
 	}
 }
 
-var ErrTooManyFavorites = errors.New("favorites limit reached")
+var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites limit reached")
 
-var ErrInvalidStatus = errors.New("invalid game status")
+var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
 	mu            sync.Mutex
@@ -317,7 +318,7 @@ func (s *Service) GetRunningGames() []string {
 func (s *Service) AddGame(executable, title string) (Game, error) {
 	info, err := os.Stat(executable)
 	if err != nil || info.IsDir() {
-		return Game{}, errors.New("исполняемый файл не найден")
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
 	}
 	provided := strings.TrimSpace(title)
 	title = provided
@@ -348,7 +349,7 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 			continue
 		}
 		if !s.games[i].Uninstalled {
-			return Game{}, errors.New("эта игра уже добавлена")
+			return Game{}, uierr.New("library.already_added", "эта игра уже добавлена")
 		}
 		return s.reviveLocked(i, provided, installDir, size, unknown)
 	}
@@ -400,7 +401,7 @@ func (s *Service) reviveLocked(pos int, title, installDir string, size int64, un
 func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	info, err := os.Stat(g.Executable)
 	if err != nil || info.IsDir() {
-		return Game{}, errors.New("исполняемый файл не найден")
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
 	}
 	installDir := strings.TrimSpace(g.InstallDir)
 	if installDir == "" {

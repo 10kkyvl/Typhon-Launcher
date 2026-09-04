@@ -731,3 +731,30 @@ func TestPresenceStatusMissingInOldConfig(t *testing.T) {
 		t.Fatalf("presence status = %q, want %q", got, PresenceOnline)
 	}
 }
+
+func TestLanguageDefaultsToSystem(t *testing.T) {
+	if got := Defaults().Language; got != LanguageSystem {
+		t.Fatalf("язык по умолчанию %q, ожидался %q", got, LanguageSystem)
+	}
+}
+
+func TestLanguageIsSanitized(t *testing.T) {
+	for _, lang := range []string{LanguageSystem, LanguageRU, LanguageEN} {
+		if !ValidLanguage(lang) {
+			t.Errorf("%q должен быть допустимым языком", lang)
+		}
+	}
+	for _, lang := range []string{"", "klingon", "RU", "ru-RU"} {
+		if ValidLanguage(lang) {
+			t.Errorf("%q не должен быть допустимым языком", lang)
+		}
+	}
+}
+
+func TestLanguageIsPortable(t *testing.T) {
+	s := Defaults()
+	s.Language = LanguageEN
+	if got := ApplyPortable(Defaults(), PortableOf(s)).Language; got != LanguageEN {
+		t.Fatalf("язык не переносится через аккаунт: получено %q", got)
+	}
+}

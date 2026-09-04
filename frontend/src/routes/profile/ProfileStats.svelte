@@ -3,6 +3,7 @@
   import StatTile from '../../lib/components/StatTile.svelte';
   import type { ProfileStats } from '../../lib/services/profile';
   import { formatCount } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
 
   let { stats, hidden }: { stats: ProfileStats; hidden: boolean } = $props();
@@ -10,23 +11,23 @@
 
 <div class="stats-row">
   <div class="stat">
-    <StatTile value={formatCount(stats.games)} label="Игр">
+    <StatTile value={formatCount(stats.games)} label={msg('social.statGames')}>
       {#snippet icon()}<Gamepad2 size="1.8rem" strokeWidth={1.8} />{/snippet}
     </StatTile>
   </div>
   <div class="stat">
-    <StatTile value={formatCount(stats.hours)} label="Часов">
+    <StatTile value={formatCount(stats.hours)} label={msg('social.statHours')}>
       {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
     </StatTile>
   </div>
   <div class="stat">
-    <StatTile value={formatCount(stats.completed)} label="Пройдено">
+    <StatTile value={formatCount(stats.completed)} label={msg('social.statCompleted')}>
       {#snippet icon()}<CheckCircle2 size="1.8rem" strokeWidth={1.8} />{/snippet}
     </StatTile>
   </div>
   {#if hidden}
     <div class="hidden-flag">
-      <HiddenBadge text="Статистика скрыта от других. Вы её видите." />
+      <HiddenBadge text={msg('social.statsHiddenFromOthers')} />
     </div>
   {/if}
 </div>

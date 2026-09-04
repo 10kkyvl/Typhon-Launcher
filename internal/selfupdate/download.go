@@ -16,9 +16,11 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"time"
+
+	"typhon/internal/uierr"
 )
 
-var ErrArtifactStatus = errors.New("selfupdate: artifact endpoint returned an error status")
+var ErrArtifactStatus = uierr.New("selfupdate.artifact_status", "selfupdate: artifact endpoint returned an error status")
 
 // errArtifactRead separates a body that never arrived from a disk that refused
 // to take it: only the first is worth another attempt.

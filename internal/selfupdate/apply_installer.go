@@ -3,17 +3,18 @@
 package selfupdate
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	errInstallerPathNotAbsolute = errors.New("selfupdate: installer path is not absolute")
-	errInstallerPathNotClean    = errors.New("selfupdate: installer path is not clean")
-	errInstallerOutsideCache    = errors.New("selfupdate: installer path is outside the selfupdate cache")
-	errInstallerNotRegularFile  = errors.New("selfupdate: installer path is not a regular file")
+	errInstallerPathNotAbsolute = uierr.New("selfupdate.installer_path_not_absolute", "selfupdate: installer path is not absolute")
+	errInstallerPathNotClean    = uierr.New("selfupdate.installer_path_not_clean", "selfupdate: installer path is not clean")
+	errInstallerOutsideCache    = uierr.New("selfupdate.installer_outside_cache", "selfupdate: installer path is outside the selfupdate cache")
+	errInstallerNotRegularFile  = uierr.New("selfupdate.installer_not_regular_file", "selfupdate: installer path is not a regular file")
 )
 
 func validateInstallerPath(configDir, installerPath string) error {

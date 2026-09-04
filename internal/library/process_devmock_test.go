@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"typhon/internal/devmock"
+	"typhon/internal/uierr"
 )
 
 func TestDevmockPlayGameRegistersFakeProcess(t *testing.T) {
@@ -117,7 +118,7 @@ func TestDevmockPlayGameFailsWhenExecutableGone(t *testing.T) {
 	}
 
 	err = s.PlayGame(game.ID)
-	if err == nil || err.Error() != "исполняемый файл больше не существует" {
-		t.Fatalf("PlayGame error = %v, want исполняемый файл больше не существует", err)
+	if err == nil || uierr.Code(err) != "library.executable_missing" {
+		t.Fatalf("PlayGame error = %v, want code library.executable_missing", err)
 	}
 }

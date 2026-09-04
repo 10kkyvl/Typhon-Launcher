@@ -2,12 +2,6 @@ package install
 
 import (
 	"context"
-	"errors"
-)
-
-var (
-	errElevationDeclined = errors.New("нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос")
-	errNoElevatedProcess = errors.New("процесс установщика с правами администратора не запустился")
 )
 
 type runSpec struct {

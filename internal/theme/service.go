@@ -15,6 +15,7 @@ import (
 
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -409,7 +410,7 @@ func (s *Service) Export(id, path string) error {
 	return nil
 }
 
-var errNoDialog = errors.New("диалог выбора файла недоступен")
+var errNoDialog = uierr.New("theme.dialog_unavailable", "диалог выбора файла недоступен")
 
 func (s *Service) SelectThemeFile() (string, error) {
 	app := application.Get()

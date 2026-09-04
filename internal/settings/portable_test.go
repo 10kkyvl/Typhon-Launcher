@@ -10,6 +10,7 @@ import (
 var portableNames = []string{
 	"theme",
 	"uiScale",
+	"language",
 	"animationsEnabled",
 	"minimizeToTray",
 	"discordRichPresence",

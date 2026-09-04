@@ -8,6 +8,7 @@
   import { libraryGames } from '../../lib/stores/library';
   import { authState, currentUser } from '../../lib/stores/user';
   import { playtime, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import ProfileActivity from './ProfileActivity.svelte';
   import ProfileHeader from './ProfileHeader.svelte';
   import ProfilePlaying from './ProfilePlaying.svelte';
@@ -33,7 +34,7 @@
   });
 </script>
 
-<PageHeader title="Профиль" />
+<PageHeader title={msg('social.profileLabel')} />
 
 <div class="profile">
   <ProfileHeader
@@ -49,7 +50,7 @@
     <div class="columns">
       <div class="main">
         {#if $profileSnapshot.playing.length > 0}
-          <Card title="Недавно играл">
+          <Card title={msg('social.recentlyPlayedTitle')}>
             <div class="recent-row">
               {#each $profileSnapshot.playing as entry (entry.game.id)}
                 <div class="recent-item">
@@ -79,7 +80,7 @@
       <div class="side">
         <ProfilePlaying running={$profileSnapshot.running} hidden={!settings.showPlaying} />
         {#if bio}
-          <Card title="О себе">
+          <Card title={msg('social.aboutTitle')}>
             <p class="bio">{bio}</p>
           </Card>
         {/if}

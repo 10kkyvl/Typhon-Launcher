@@ -2,7 +2,6 @@ package selfupdate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,9 +11,10 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/uierr"
 )
 
-var ErrManifestStatus = errors.New("selfupdate: manifest endpoint returned an error status")
+var ErrManifestStatus = uierr.New("selfupdate.manifest_status", "selfupdate: manifest endpoint returned an error status")
 
 // The manifest is a few kilobytes: on a blocked network the user should
 // learn within seconds that the check failed, not after half a minute.

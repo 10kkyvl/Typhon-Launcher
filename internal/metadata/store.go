@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -123,7 +124,7 @@ func (s *assetStore) replace(gameID string, next []MediaAsset) ([]MediaAsset, er
 	s.assets = kept
 	if err := storage.Save(s.path, assetsVersion, s.assets); err != nil {
 		s.assets = before
-		return nil, fmt.Errorf("save media assets: %w", err)
+		return nil, uierr.Wrap("metadata.save_failed", fmt.Errorf("save media assets: %w", err))
 	}
 	return previous, nil
 }

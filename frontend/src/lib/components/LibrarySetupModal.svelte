@@ -8,10 +8,11 @@
   import { bytesLabel } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
-    title = 'Куда устанавливать игры',
+    title = msg('modals.librarySetupDefaultTitle'),
     note = '',
     onready = undefined,
   }: { open?: boolean; title?: string; note?: string; onready?: (next: Settings) => void } = $props();
@@ -42,9 +43,9 @@
   async function pickFolder() {
     let picked = '';
     try {
-      picked = await selectFolder('Выберите папку для библиотеки');
+      picked = await selectFolder(msg('modals.librarySetupChooseFolder'));
     } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
+      toast(msg('modals.librarySetupFolderDialogFailed'), 'danger');
       return;
     }
     if (!picked) return;
@@ -57,14 +58,14 @@
       proposed = '';
       parent = '';
       info = null;
-      failure = message(err, 'Эта папка не подходит для библиотеки');
+      failure = message(err, msg('modals.librarySetupFolderUnsuitable'));
       return;
     }
     try {
       info = await getStorageInfoFor(picked);
     } catch (err) {
       info = null;
-      failure = message(err, 'Не удалось определить свободное место');
+      failure = message(err, msg('modals.librarySetupFreeSpaceUnknown'));
     }
   }
 
@@ -77,7 +78,7 @@
       open = false;
       onready?.(next);
     } catch (err) {
-      failure = message(err, 'Не удалось создать библиотеку');
+      failure = message(err, msg('modals.librarySetupCreateFailed'));
     }
     busy = false;
   }
@@ -86,8 +87,7 @@
 <Modal bind:open {title} width="52rem">
   <div class="setup">
     <p class="intro">
-      Игры, загрузки и скриншоты Typhon хранятся в одной папке библиотеки. Выберите диск, где хватит места —
-      позже библиотеку можно сменить в настройках.
+      {msg('modals.librarySetupIntro')}
     </p>
 
     {#if note}
@@ -95,10 +95,10 @@
     {/if}
 
     <div class="pick">
-      <span class="field-label">Папка библиотеки</span>
+      <span class="field-label">{msg('modals.librarySetupFolderLabel')}</span>
       <div class="pick-controls">
-        <input class="input sm" type="text" readonly placeholder="Папка не выбрана" value={proposed} />
-        <Button size="sm" onclick={pickFolder}>Обзор</Button>
+        <input class="input sm" type="text" readonly placeholder={msg('modals.librarySetupFolderPlaceholder')} value={proposed} />
+        <Button size="sm" onclick={pickFolder}>{msg('modals.librarySetupBrowse')}</Button>
       </div>
     </div>
 
@@ -106,9 +106,9 @@
       <div class="disk">
         <HardDrive size="1.7rem" strokeWidth={1.8} />
         <div class="disk-text">
-          <span class="disk-name">Диск {info.volume || '—'}{info.filesystem ? ` · ${info.filesystem}` : ''}</span>
+          <span class="disk-name">{msg('modals.librarySetupDiskName', { volume: info.volume || '—' })}{info.filesystem ? ` · ${info.filesystem}` : ''}</span>
           <span class="disk-meta">
-            Свободно {bytesLabel(info.freeBytes)} из {bytesLabel(info.totalBytes)}
+            {msg('modals.librarySetupDiskFree', { free: bytesLabel(info.freeBytes), total: bytesLabel(info.totalBytes) })}
           </span>
         </div>
       </div>
@@ -120,10 +120,10 @@
   </div>
 
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>Отмена</Button>
+    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!proposed || busy} onclick={confirm}>
       <FolderPlus size="1.5rem" strokeWidth={1.8} />
-      Создать библиотеку
+      {msg('modals.librarySetupCreate')}
     </Button>
   {/snippet}
 </Modal>

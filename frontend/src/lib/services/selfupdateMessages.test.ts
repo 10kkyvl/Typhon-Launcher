@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 describe('outcomeReason', () => {
   it.each([
-    ['selfupdate: installer finished but left the launcher binary unchanged', 'Установщик не заменил файлы'],
-    ['selfupdate: launcher did not exit before the timeout', 'Лаунчер не закрылся вовремя'],
-    ['selfupdate: downloaded hash differs from the manifest', 'повреждён'],
+    [
+      'typhon:selfupdate.not_replaced: selfupdate: installer finished but left the launcher binary unchanged',
+      'Установщик не заменил файлы',
+    ],
+    [
+      'typhon:selfupdate.parent_still_running: selfupdate: launcher did not exit before the timeout',
+      'Лаунчер не закрылся вовремя',
+    ],
+    ['typhon:selfupdate.hash_mismatch: downloaded hash differs from the manifest', 'повреждён'],
   ])('translates %s', async (raw, expected) => {
     const { outcomeReason } = await import('./selfupdateMessages');
 
@@ -32,8 +38,8 @@ describe('statusReason', () => {
       'download artifact: context deadline exceeded (Client.Timeout or context cancellation while reading body)',
       'не ответил вовремя',
     ],
-    ['selfupdate: artifact download stalled: 1m0s', 'перестал отдавать данные'],
-    ['selfupdate: manifest signature does not verify', 'Подпись обновления не совпала'],
+    ['typhon:selfupdate.stalled: selfupdate: artifact download stalled: 1m0s', 'перестал отдавать данные'],
+    ['typhon:selfupdate.bad_signature: manifest signature does not verify', 'Подпись обновления не совпала'],
     ['Get "https://api.example.com": dial tcp: lookup api.example.com: no such host', 'Проверьте интернет'],
   ])('translates %s', async (raw, expected) => {
     const { statusReason } = await import('./selfupdateMessages');
@@ -68,7 +74,9 @@ describe('updateReason', () => {
   it('translates a known failure', async () => {
     const { updateReason } = await import('./selfupdateMessages');
 
-    expect(updateReason(new Error('selfupdate: another update operation is in progress'))).toBe(
+    expect(
+      updateReason(new Error('typhon:selfupdate.busy: another update operation is in progress')),
+    ).toBe(
       'Другая операция обновления уже идёт.',
     );
   });
@@ -77,5 +85,12 @@ describe('updateReason', () => {
     const { updateReason } = await import('./selfupdateMessages');
 
     expect(updateReason(new Error('boom'))).toBe('boom');
+  });
+
+  it('no longer recognises the bare backend text without a code', async () => {
+    const { updateReason } = await import('./selfupdateMessages');
+
+    const bare = 'selfupdate: another update operation is in progress';
+    expect(updateReason(new Error(bare))).toBe(bare);
   });
 });

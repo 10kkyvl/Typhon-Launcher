@@ -4,6 +4,7 @@
   import Card from '../../lib/components/Card.svelte';
   import type { UserCard } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
+  import { msg } from '../../lib/i18n';
 
   let {
     user,
@@ -55,7 +56,7 @@
 
 {#snippet metaLine()}
   {#if game}
-    <span class="playing">Играет: <button type="button" class="game-link" onclick={openGame}>{game.title}</button></span>
+    <span class="playing">{msg('social.playingLabel')} <button type="button" class="game-link" onclick={openGame}>{game.title}</button></span>
   {:else}
     <span class="meta">{meta || '—'}</span>
   {/if}

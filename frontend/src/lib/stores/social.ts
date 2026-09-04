@@ -11,6 +11,7 @@ import {
   type FriendsPage,
   type RequestsSignal,
 } from '../services/social';
+import { msg } from '../i18n';
 import { resetFeed } from './feed';
 import { settings } from './settings';
 import { toast } from './toasts';
@@ -52,7 +53,7 @@ export async function loadFriends(): Promise<void> {
   try {
     setPage(await fetchFriends());
   } catch (err) {
-    report(err, 'Не удалось загрузить список друзей');
+    report(err, msg('state.socialLoadFriendsFailed'));
   }
 }
 
@@ -81,7 +82,7 @@ export async function initSocial(): Promise<void> {
       setPage(emptyFriendsPage());
       return;
     }
-    kick().catch((err) => report(err, 'Не удалось обновить список друзей'));
+    kick().catch((err) => report(err, msg('state.socialRefreshFriendsFailed')));
   });
 
   let consentWithheld: boolean | undefined;

@@ -1,4 +1,5 @@
 import type { GameHit, ReleaseHit, SearchResult } from '../services/search';
+import { msg } from '../i18n';
 
 export const debounceMs = 220;
 
@@ -57,7 +58,7 @@ export class SearchOverlay {
     this.search = options.search;
     this.emit = options.onState;
     this.delay = options.delay ?? debounceMs;
-    this.errorText = options.errorText ?? 'Поиск недоступен';
+    this.errorText = options.errorText ?? msg('search.unavailable');
   }
 
   get snapshot(): OverlayState {

@@ -13,10 +13,9 @@ import {
   type Download,
   type DownloadStatus,
 } from '../services/downloads';
-import { errorMessage } from '../utils/errors';
+import { installErrorText } from '../install/installErrors';
+import { msg } from '../i18n';
 import { toast } from './toasts';
-
-export { errorMessage };
 
 export const downloads = writable<Download[]>([]);
 
@@ -48,15 +47,18 @@ export const stats = derived(downloads, ($downloads) => ({
   queuedCount: $downloads.filter((d) => d.status === 'queued').length,
 }));
 
-export const statusLabels: Record<DownloadStatus, string> = {
-  queued: 'В очереди',
-  metadata: 'Получение метаданных',
-  downloading: 'Загрузка',
-  paused: 'Пауза',
-  verifying: 'Проверка файлов',
-  completed: 'Завершено',
-  failed: 'Ошибка',
-};
+export function statusLabels(status: DownloadStatus): string {
+  const labels: Record<DownloadStatus, string> = {
+    queued: msg('state.downloadsStatusQueued'),
+    metadata: msg('state.downloadsStatusMetadata'),
+    downloading: msg('common.loading'),
+    paused: msg('state.downloadsStatusPaused'),
+    verifying: msg('state.downloadsStatusVerifying'),
+    completed: msg('state.downloadsStatusCompleted'),
+    failed: msg('common.error'),
+  };
+  return labels[status];
+}
 
 function upsert(item: Download) {
   downloads.update((list) => {
@@ -79,7 +81,7 @@ export async function initDownloads() {
   Events.On('download:added', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`Загрузка «${item.name}» добавлена`);
+    toast(msg('state.downloadsAddedToast', { name: item.name }));
   });
   Events.On('download:updated', (event) => {
     upsert(event.data as Download);
@@ -87,12 +89,12 @@ export async function initDownloads() {
   Events.On('download:completed', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`«${item.name}» загружена`, 'success');
+    toast(msg('state.downloadsCompletedToast', { name: item.name }), 'success');
   });
   Events.On('download:failed', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`Ошибка загрузки «${item.name}»: ${item.error}`, 'danger');
+    toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });
   Events.On('download:removed', (event) => {
     const { id } = event.data as { id: string };
@@ -104,7 +106,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(installErrorText(err), 'danger');
   }
 }
 

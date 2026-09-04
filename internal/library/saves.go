@@ -12,11 +12,12 @@ import (
 	"unicode"
 
 	"typhon/internal/platform"
+	"typhon/internal/uierr"
 )
 
 var (
-	errSavesEmptyPath = errors.New("не указана папка сохранений")
-	errSavesNotDir    = errors.New("это не папка")
+	errSavesEmptyPath = uierr.New("library.no_saves_path", "не указана папка сохранений")
+	errSavesNotDir    = uierr.New("library.saves_not_a_directory", "это не папка")
 )
 
 // SavesResult описывает, чем закончился поиск сохранений: Path — папка, которую
@@ -62,7 +63,7 @@ func (s *Service) LocateSaves(ctx context.Context, id string) (SavesResult, erro
 		case err == nil:
 			return SavesResult{}, fmt.Errorf("%w: %s", errSavesNotDir, stored)
 		case !errors.Is(err, fs.ErrNotExist):
-			return SavesResult{}, fmt.Errorf("папка сохранений %s: %w", stored, err)
+			return SavesResult{}, uierr.Wrap("library.saves_path_unavailable", fmt.Errorf("папка сохранений %s: %w", stored, err))
 		}
 	}
 
@@ -80,7 +81,7 @@ func (s *Service) SetSavesDir(id, dir string) (Game, error) {
 	}
 	info, err := os.Stat(normalized)
 	if err != nil {
-		return Game{}, fmt.Errorf("папка сохранений %s: %w", normalized, err)
+		return Game{}, uierr.Wrap("library.saves_path_unavailable", fmt.Errorf("папка сохранений %s: %w", normalized, err))
 	}
 	if !info.IsDir() {
 		return Game{}, fmt.Errorf("%w: %s", errSavesNotDir, normalized)

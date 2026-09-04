@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrNotConfigured = errors.New("провайдер метаданных не настроен")
-	ErrAmbiguous     = errors.New("однозначное совпадение не найдено")
-	ErrNoMatch       = errors.New("игра не найдена у провайдера метаданных")
-	ErrRateLimited   = errors.New("сервер метаданных ограничил частоту запросов")
+	ErrNotConfigured = uierr.New("metadata.not_configured", "провайдер метаданных не настроен")
+	ErrAmbiguous     = uierr.New("metadata.ambiguous_match", "однозначное совпадение не найдено")
+	ErrNoMatch       = uierr.New("metadata.no_match", "игра не найдена у провайдера метаданных")
+	ErrRateLimited   = uierr.New("metadata.rate_limited", "сервер метаданных ограничил частоту запросов")
 )
 
 type RateLimitError struct {

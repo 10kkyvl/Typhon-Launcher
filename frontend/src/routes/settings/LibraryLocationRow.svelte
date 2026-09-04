@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FolderInput } from '@lucide/svelte';
+  import { msg } from '../../lib/i18n';
   import Button from '../../lib/components/Button.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import { moveErrorText } from '../../lib/relocate/moveMessages';
@@ -20,14 +21,14 @@
   async function start() {
     if (starting || job) return;
     if (!inWails) {
-      toast('Перенос доступен только в desktop-сборке');
+      toast(msg('settings.generalLibraryMoveDesktopOnlyToast'));
       return;
     }
     let parent = '';
     try {
       parent = await selectMoveTargetFolder();
     } catch (err) {
-      toast(moveErrorText(err, 'Не удалось открыть диалог выбора папки'), 'danger');
+      toast(moveErrorText(err, msg('settings.generalLibraryMoveDialogFailed')), 'danger');
       return;
     }
     if (!parent) return;
@@ -36,7 +37,7 @@
     try {
       await moveLibrary(parent);
     } catch (err) {
-      failure = moveErrorText(err, 'Не удалось начать перенос библиотеки');
+      failure = moveErrorText(err, msg('settings.generalLibraryMoveStartFailed'));
     } finally {
       starting = false;
     }
@@ -48,7 +49,7 @@
     try {
       await cancelMove(job.id);
     } catch (err) {
-      toast(moveErrorText(err, 'Не удалось отменить перенос'), 'danger');
+      toast(moveErrorText(err, msg('settings.generalLibraryMoveCancelFailed')), 'danger');
     } finally {
       cancelling = false;
     }
@@ -57,18 +58,18 @@
 
 <div class="row">
   <div class="row-text">
-    <span class="row-label">Перенос библиотеки</span>
+    <span class="row-label">{msg('settings.generalLibraryMoveLabel')}</span>
     <span class="row-sub">
       {#if $settings?.libraryPath}
-        Сейчас: {$settings.libraryPath}. Переносит все установленные игры, загрузки и скриншоты на другой диск.
+        {msg('settings.generalLibraryMoveCurrentSub', { path: $settings.libraryPath })}
       {:else}
-        Библиотека ещё не настроена — переносить нечего.
+        {msg('settings.generalLibraryMoveEmptySub')}
       {/if}
     </span>
   </div>
   <Button size="sm" disabled={starting || !!job || !$settings?.libraryPath} onclick={start}>
     <FolderInput size="1.5rem" strokeWidth={1.8} />
-    {starting ? 'Начинаем…' : 'Переместить библиотеку'}
+    {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
   </Button>
 </div>
 
@@ -79,14 +80,14 @@
       <span class="row-sub">
         {stageLabel(job.stage)}{job.title ? ` · ${job.title}` : ''}
         {#if queueLeft > 0}
-          · осталось игр: {queueLeft}
+          {msg('settings.generalLibraryMoveQueueLeft', { count: queueLeft })}
         {/if}
         — {moveSummary(job)}
       </span>
-      <span class="row-sub">Отмена сработает между играми: текущая игра докопируется до конца.</span>
+      <span class="row-sub">{msg('settings.generalLibraryMoveCancelHint')}</span>
     </div>
     <Button size="sm" variant="danger" disabled={cancelling} onclick={cancel}>
-      {cancelling ? 'Отменяем…' : 'Отменить'}
+      {cancelling ? msg('settings.generalLibraryMoveCancellingEllipsis') : msg('settings.generalLibraryMoveCancelButton')}
     </Button>
   </div>
 {/if}

@@ -9,7 +9,8 @@
   import { friendsPage } from '../../lib/stores/social';
   import { navigate } from '../../lib/stores/router';
   import { authState } from '../../lib/stores/user';
-  import { playtime, plural } from '../../lib/utils/format';
+  import { playtime } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
@@ -47,12 +48,12 @@
   const played = $derived(page?.played ?? []);
   const playingNow = $derived(page?.playingNow ?? []);
   const playedLine = $derived(
-    `${played.length} ${plural(played.length, 'друг', 'друга', 'друзей')} ${plural(played.length, 'играл', 'играли', 'играли')}`,
+    msg('friends.played', { count: played.length }),
   );
 </script>
 
 {#if played.length > 0 || playingNow.length > 0}
-  <Card title="Друзья">
+  <Card title={msg('games.friendsPanelTitle')}>
     {#if played.length > 0}
       <p class="line">{playedLine}</p>
       <ul class="people">
@@ -78,7 +79,7 @@
     {/if}
 
     {#if playingNow.length > 0}
-      <p class="line sub">Играют сейчас</p>
+      <p class="line sub">{msg('games.friendsPanelPlayingNow')}</p>
       <ul class="people">
         {#each playingNow as friend (friend.id)}
           <li class="person">
@@ -94,7 +95,7 @@
     {/if}
 
     <button class="show-all" type="button" onclick={() => navigate('friends')}>
-      Смотреть всех друзей
+      {msg('games.friendsPanelSeeAll')}
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
     </button>
   </Card>
