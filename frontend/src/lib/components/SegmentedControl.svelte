@@ -72,7 +72,7 @@
     opacity: 0.5;
   }
 
-  .segment:disabled:hover {
+  .segment:disabled:not(.selected):hover {
     color: var(--text-3);
   }
 </style>

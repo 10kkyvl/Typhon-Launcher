@@ -465,9 +465,6 @@ func (s *Service) EnsureByIGDB(igdbID, title string) (Game, error) {
 	return game, nil
 }
 
-// OpenByIGDB resolves an IGDB id coming from a friend's profile, where the
-// launcher only knows the remote game by its IGDB id and title, into a local
-// catalog game the game page can be opened with.
 func (s *Service) OpenByIGDB(igdbID, title string) (Game, error) {
 	return s.EnsureByIGDB(igdbID, title)
 }

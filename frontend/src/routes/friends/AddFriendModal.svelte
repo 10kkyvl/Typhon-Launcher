@@ -6,7 +6,7 @@
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { profile, profileByCode, sendRequest, type PublicProfile } from '../../lib/services/social';
-  import { commonLine, isFriendCode, relationLabel } from '../../lib/social/view';
+  import { commonLine, isFriendCode, relationHint } from '../../lib/social/view';
   import { toast } from '../../lib/stores/toasts';
 
   let { open = $bindable(false), onsent }: { open?: boolean; onsent?: () => void } = $props();
@@ -22,6 +22,7 @@
 
   const canSend = $derived(!!found && found.relation === 'none');
   const mutual = $derived(found ? commonLine(found.mutualCount, found.common?.count ?? 0) : '');
+  const hint = $derived(found && !canSend ? relationHint(found.relation) : '');
 
   function reset() {
     query = '';
@@ -113,6 +114,9 @@
           {/if}
         </div>
       </div>
+      {#if hint}
+        <p class="hint">{hint}</p>
+      {/if}
     {:else if error}
       <p class="hint danger">{error}</p>
     {:else if !query.trim()}
@@ -130,9 +134,9 @@
     >
       Отмена
     </Button>
-    <Button variant="primary" disabled={!canSend || sending} onclick={send}>
-      {found && !canSend ? relationLabel(found.relation) : 'Отправить заявку'}
-    </Button>
+    {#if canSend}
+      <Button variant="primary" disabled={sending} onclick={send}>Отправить заявку</Button>
+    {/if}
   {/snippet}
 </Modal>
 

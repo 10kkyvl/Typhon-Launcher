@@ -169,6 +169,17 @@ describe('заявки в друзья', () => {
     expect(items[0].id).toBe('friends:incoming:2');
   });
 
+  it('прочитанное уведомление не возвращается, когда заявок стало меньше', async () => {
+    const { notifications } = await load(makeStorage());
+    const { friendsPage } = await import('./social');
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b'), request('c')], outgoing: [] });
+    notifications.markAllRead();
+
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b')], outgoing: [] });
+
+    expect(get(notifications.notifications).some((n) => n.id.startsWith('friends:'))).toBe(false);
+  });
+
   it('без входящих заявок уведомления нет', async () => {
     const { notifications } = await load(makeStorage());
     expect(get(notifications.notifications).some((n) => n.id.startsWith('friends:'))).toBe(false);

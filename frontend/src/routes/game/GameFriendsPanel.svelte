@@ -1,6 +1,7 @@
 <script lang="ts">
   import Avatar from '../../lib/components/Avatar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import { AccountError } from '../../lib/services/account';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import { gameFriends, type GameFriends } from '../../lib/services/social';
   import { friendsPage } from '../../lib/stores/social';
@@ -11,6 +12,7 @@
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
   let page = $state<GameFriends | null>(null);
+  let warned = false;
 
   const enabled = $derived(
     !!canonicalGameId && $authState === 'authenticated' && $friendsPage.friends.length > 0,
@@ -27,8 +29,13 @@
       .then((result) => {
         if (!cancelled) page = result;
       })
-      .catch(() => {
-        if (!cancelled) page = null;
+      .catch((err) => {
+        if (cancelled) return;
+        page = null;
+        if (err instanceof AccountError && err.code === 'unknown_game') return;
+        if (warned) return;
+        warned = true;
+        console.warn('game friends request failed', err);
       });
     return () => {
       cancelled = true;

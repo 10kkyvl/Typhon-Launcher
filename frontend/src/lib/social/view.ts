@@ -17,12 +17,25 @@ export function relationLabel(relation: string): string {
   return RELATION_LABELS[relation as Relation] ?? RELATION_LABELS.blocked;
 }
 
-export function friendRequestNotification(count: number): Notification | null {
+const RELATION_HINTS: Record<Relation, string> = {
+  none: '',
+  outgoing: 'Заявка уже отправлена',
+  incoming: 'Этот пользователь уже отправил вам заявку — примите её во вкладке «Заявки»',
+  friend: 'Вы уже друзья',
+  self: 'Это вы',
+  blocked: 'Пользователь недоступен',
+};
+
+export function relationHint(relation: string): string {
+  return RELATION_HINTS[relation as Relation] ?? RELATION_HINTS.blocked;
+}
+
+export function friendRequestNotification(count: number, peak: number): Notification | null {
   if (count <= 0) return null;
   const text =
     count === 1 ? 'Заявка в друзья' : `${count} ${plural(count, 'заявка', 'заявки', 'заявок')} в друзья`;
   return {
-    id: `friends:incoming:${count}`,
+    id: `friends:incoming:${Math.max(peak, count)}`,
     title: 'Друзья',
     text,
     route: 'friends',

@@ -57,6 +57,7 @@
   }
 
   button.who {
+    padding: 0;
     border: 0;
     background: none;
     color: inherit;

@@ -2,7 +2,7 @@ import { derived, get, writable } from 'svelte/store';
 import { active } from './downloads';
 import { friendRequestNotification } from '../social/view';
 import { historyRecent } from './history';
-import { incomingCount } from './social';
+import { incomingCount, incomingPeak } from './social';
 import { installActive, installations } from './install';
 import { mergeNotifications } from '../notifications/merge';
 import { navigate, type RouteName } from './router';
@@ -89,7 +89,7 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
 }
 
 const allNotifications = derived(
-  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount],
+  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount, incomingPeak],
   ([
     $active,
     $installations,
@@ -98,13 +98,14 @@ const allNotifications = derived(
     $selfUpdateStatus,
     $historyRecent,
     $incomingCount,
+    $incomingPeak,
   ]): Notification[] => {
     const items: Notification[] = [];
 
     const launcherUpdate = launcherUpdateNotification($selfUpdateStatus);
     if (launcherUpdate) items.push(launcherUpdate);
 
-    const friendRequests = friendRequestNotification($incomingCount);
+    const friendRequests = friendRequestNotification($incomingCount, $incomingPeak);
     if (friendRequests) items.push(friendRequests);
 
     for (const source of $sources) {

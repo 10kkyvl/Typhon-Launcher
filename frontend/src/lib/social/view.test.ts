@@ -8,6 +8,7 @@ import {
   joinDate,
   memberSince,
   mutualMore,
+  relationHint,
   relationLabel,
   sentAt,
   showcaseTitle,
@@ -29,14 +30,35 @@ describe('relationLabel', () => {
   });
 });
 
+describe('relationHint', () => {
+  it('объясняет, почему заявку нельзя отправить', () => {
+    expect(relationHint('incoming')).toBe(
+      'Этот пользователь уже отправил вам заявку — примите её во вкладке «Заявки»',
+    );
+    expect(relationHint('outgoing')).toBe('Заявка уже отправлена');
+    expect(relationHint('friend')).toBe('Вы уже друзья');
+    expect(relationHint('self')).toBe('Это вы');
+  });
+
+  it('для none подсказки нет: заявку можно отправить', () => {
+    expect(relationHint('none')).toBe('');
+  });
+
+  it('неизвестное отношение не выдаёт себя за «можно добавить»', () => {
+    expect(relationHint('')).toBe('Пользователь недоступен');
+    expect(relationHint('whatever')).toBe('Пользователь недоступен');
+    expect(relationHint('blocked')).toBe('Пользователь недоступен');
+  });
+});
+
 describe('friendRequestNotification', () => {
   it('без заявок уведомления нет', () => {
-    expect(friendRequestNotification(0)).toBeNull();
-    expect(friendRequestNotification(-1)).toBeNull();
+    expect(friendRequestNotification(0, 0)).toBeNull();
+    expect(friendRequestNotification(-1, 0)).toBeNull();
   });
 
   it('одна заявка — текст без числа', () => {
-    const item = friendRequestNotification(1);
+    const item = friendRequestNotification(1, 1);
     expect(item).toMatchObject({
       id: 'friends:incoming:1',
       title: 'Друзья',
@@ -48,13 +70,18 @@ describe('friendRequestNotification', () => {
   });
 
   it('несколько заявок — число и склонение', () => {
-    expect(friendRequestNotification(3)?.text).toBe('3 заявки в друзья');
-    expect(friendRequestNotification(5)?.text).toBe('5 заявок в друзья');
-    expect(friendRequestNotification(21)?.text).toBe('21 заявка в друзья');
+    expect(friendRequestNotification(3, 3)?.text).toBe('3 заявки в друзья');
+    expect(friendRequestNotification(5, 5)?.text).toBe('5 заявок в друзья');
+    expect(friendRequestNotification(21, 21)?.text).toBe('21 заявка в друзья');
   });
 
-  it('id меняется вместе с числом, чтобы новая заявка не считалась прочитанной', () => {
-    expect(friendRequestNotification(1)?.id).not.toBe(friendRequestNotification(2)?.id);
+  it('id растёт вместе с отметкой, чтобы новая заявка не считалась прочитанной', () => {
+    expect(friendRequestNotification(1, 1)?.id).not.toBe(friendRequestNotification(2, 2)?.id);
+  });
+
+  it('убыль заявок не меняет id: колокольчик не звонит заново', () => {
+    expect(friendRequestNotification(2, 3)?.id).toBe(friendRequestNotification(3, 3)?.id);
+    expect(friendRequestNotification(2, 3)?.text).toBe('2 заявки в друзья');
   });
 });
 
