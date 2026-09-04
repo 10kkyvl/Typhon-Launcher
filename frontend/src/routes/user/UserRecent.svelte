@@ -4,6 +4,7 @@
   import type { PlayedGame } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { playtime, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let { games }: { games: PlayedGame[] } = $props();
 
@@ -14,7 +15,7 @@
   }
 </script>
 
-<Card title="Недавно играл">
+<Card title={msg('social.recentlyPlayedTitle')}>
   <div class="row">
     {#each games as game (game.igdbId)}
       <button class="capsule" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>

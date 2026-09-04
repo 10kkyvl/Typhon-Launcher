@@ -14,6 +14,7 @@
   import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
   import SearchInput from './SearchInput.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -102,7 +103,7 @@
     applying = true;
     try {
       const view = await applyMetadataMatch(gameId, candidate.providerId);
-      toast(`«${view.game.title}» сопоставлена с IGDB`, 'success');
+      toast(msg('modals.metadataMatchApplied', { title: view.game.title }), 'success');
       open = false;
       onapplied?.(view);
     } catch (err) {
@@ -114,30 +115,33 @@
   }
 
   function confidenceLabel(confidence: number) {
-    if (confidence >= 0.85) return 'точное совпадение';
-    if (confidence >= 0.6) return 'вероятное совпадение';
-    return 'возможное совпадение';
+    if (confidence >= 0.85) return msg('modals.metadataMatchConfidenceExact');
+    if (confidence >= 0.6) return msg('modals.metadataMatchConfidenceLikely');
+    return msg('modals.metadataMatchConfidencePossible');
   }
 </script>
 
-<Modal bind:open title={mode === 'change' ? 'Сменить сопоставление' : 'Найти метаданные'} width="56rem">
+<Modal bind:open title={mode === 'change' ? msg('modals.metadataMatchChangeTitle') : msg('modals.metadataMatchFindTitle')} width="56rem">
   {#if pending}
     <div class="confirm">
       <p class="confirm-text">
-        Игра «{gameTitle}» уже сопоставлена с записью в IGDB. Заменить сопоставление на «{pending.title}»
-        {#if pending.releaseYear}<span>({pending.releaseYear})</span>{/if}? Текущие метаданные будут обновлены.
+        {msg('modals.metadataMatchReplaceConfirm', {
+          gameTitle,
+          title: pending.title,
+          year: pending.releaseYear ? ` (${pending.releaseYear})` : '',
+        })}
       </p>
     </div>
   {:else}
     <div class="sections">
       <section class="block">
-        <h4>Кандидаты</h4>
+        <h4>{msg('modals.metadataMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <EmptyState title="Поиск кандидатов…" description="Сопоставляем «{gameTitle}» с базой IGDB." />
+          <EmptyState title={msg('modals.metadataMatchSearchingCandidates')} description={msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle })} />
         {:else if candidates.length === 0}
           <EmptyState
-            title="Автоматических кандидатов не найдено"
-            description="Найдите игру вручную по названию ниже."
+            title={msg('modals.metadataMatchNoCandidatesTitle')}
+            description={msg('modals.metadataMatchNoCandidatesDesc')}
           />
         {:else}
           <div class="candidates">
@@ -163,8 +167,8 @@
       </section>
 
       <section class="block">
-        <h4>Поиск вручную</h4>
-        <SearchInput bind:value={query} placeholder="Название игры" loading={searching} oninput={onQueryInput} />
+        <h4>{msg('modals.metadataMatchManualSearch')}</h4>
+        <SearchInput bind:value={query} placeholder={msg('modals.metadataMatchNamePlaceholder')} loading={searching} oninput={onQueryInput} />
         {#if searchResults.length > 0}
           <div class="candidates">
             {#each searchResults as candidate (candidate.providerId)}
@@ -192,12 +196,12 @@
 
   {#snippet footer()}
     {#if pending}
-      <Button disabled={applying} onclick={() => (pending = null)}>Отмена</Button>
+      <Button disabled={applying} onclick={() => (pending = null)}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={applying} onclick={() => pending && apply(pending)}>
-        {applying ? 'Применение…' : 'Заменить сопоставление'}
+        {applying ? msg('modals.metadataMatchApplying') : msg('modals.metadataMatchReplace')}
       </Button>
     {:else}
-      <Button onclick={() => (open = false)}>Отмена</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     {/if}
   {/snippet}
 </Modal>

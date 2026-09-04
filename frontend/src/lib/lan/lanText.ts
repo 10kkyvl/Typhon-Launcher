@@ -1,40 +1,47 @@
+import { msg } from '../i18n';
 import { bytesSize } from '../utils/format';
 import type { Offer, Stats, Transfer } from '../services/lan';
+import type { MessageKey } from '../i18n';
 
-const rejectedLabels: Record<string, string> = {
-  too_large: 'слишком большой пакет',
-  bad_source_addr: 'адрес отправителя не локальный',
-  bad_json: 'повреждённые данные',
-  bad_version: 'неподдерживаемая версия протокола',
-  bad_id: 'некорректный идентификатор',
-  own_id: 'от самого себя',
-  bad_host: 'некорректное имя хоста',
-  bad_port: 'некорректный порт',
-  bad_infohash: 'некорректный infohash',
-  bad_title: 'некорректное название',
-  bad_version_field: 'некорректная версия игры',
-  bad_gameid: 'некорректный id игры',
-  bad_size: 'некорректный размер',
-  bad_exe: 'некорректный путь к исполняемому файлу',
-  bad_ts: 'метка времени вне диапазона',
-  capacity: 'превышена ёмкость таблицы',
-  rate_limited: 'слишком частые сообщения',
-  unknown: 'неизвестная причина',
+const REJECT_KEYS: Record<string, MessageKey> = {
+  too_large: 'transfers.lanRejectTooLarge',
+  bad_source_addr: 'transfers.lanRejectBadSourceAddr',
+  bad_json: 'transfers.lanRejectBadJson',
+  bad_version: 'transfers.lanRejectBadVersion',
+  bad_id: 'transfers.lanRejectBadId',
+  own_id: 'transfers.lanRejectOwnId',
+  bad_host: 'transfers.lanRejectBadHost',
+  bad_port: 'transfers.lanRejectBadPort',
+  bad_infohash: 'transfers.lanRejectBadInfohash',
+  bad_title: 'transfers.lanRejectBadTitle',
+  bad_version_field: 'transfers.lanRejectBadVersionField',
+  bad_gameid: 'transfers.lanRejectBadGameId',
+  bad_size: 'transfers.lanRejectBadSize',
+  bad_exe: 'transfers.lanRejectBadExe',
+  bad_ts: 'transfers.lanRejectBadTs',
+  capacity: 'transfers.lanRejectCapacity',
+  rate_limited: 'transfers.lanRejectRateLimited',
+  unknown: 'transfers.lanRejectUnknown',
 };
+
+function rejectedLabel(key: string): string | undefined {
+  const messageKey = REJECT_KEYS[key];
+  return messageKey ? msg(messageKey) : undefined;
+}
 
 export function transferLabel(transfer: Transfer): string {
   switch (transfer.status) {
     case 'receiving': {
-      if (transfer.total <= 0) return 'Получение…';
+      if (transfer.total <= 0) return msg('transfers.lanReceiving');
       const pct = Math.round((transfer.downloaded / transfer.total) * 100);
-      return `Получение… ${pct}%`;
+      return msg('transfers.lanReceivingPercent', { percent: pct });
     }
     case 'completed':
-      return 'Получено';
+      return msg('transfers.lanReceived');
     case 'failed':
-      return `Не удалось: ${transfer.error || 'неизвестная ошибка'}`;
+      return msg('transfers.lanTransferFailed', { error: transfer.error || msg('transfers.lanUnknownError') });
     case 'cancelled':
-      return 'Отменено';
+      return msg('transfers.lanCancelled');
     default:
       return '';
   }
@@ -44,7 +51,7 @@ export function offerLabel(offer: Offer): string {
   const parts = [offer.title];
   if (offer.version) parts.push(offer.version);
   parts.push(bytesSize(offer.sizeBytes));
-  parts.push(`с ПК ${offer.host}`);
+  parts.push(msg('transfers.lanFromHost', { host: offer.host }));
   return parts.join(' · ');
 }
 
@@ -53,5 +60,5 @@ export function rejectedSummary(stats: Stats): string {
   const entries = Object.entries(stats.rejected).filter(([, count]) => (count ?? 0) > 0);
   if (entries.length === 0) return '';
   entries.sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
-  return entries.map(([key, count]) => `${rejectedLabels[key] ?? key}: ${count}`).join(' · ');
+  return entries.map(([key, count]) => `${rejectedLabel(key) ?? key}: ${count}`).join(' · ');
 }

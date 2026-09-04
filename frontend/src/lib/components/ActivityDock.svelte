@@ -8,6 +8,7 @@
   import { navigate } from '../stores/router';
   import { bytesSize, truncateMiddle } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
+  import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
@@ -30,7 +31,7 @@
       key: `move:${job.id}`,
       kind: 'install',
       downloadId: job.id,
-      name: job.title || 'Библиотека',
+      name: job.title || msg('ui.library'),
       status: stageLabel(job.stage),
       detail: moveDetail(job),
       progress: movePercent(job) / 100,
@@ -130,8 +131,8 @@
     {#if expanded}
       <div class="panel">
         <div class="panel-head">
-          <span class="panel-title">Активность</span>
-          <button class="panel-link" onclick={openDownloads}>Все загрузки</button>
+          <span class="panel-title">{msg('ui.activity')}</span>
+          <button class="panel-link" onclick={openDownloads}>{msg('ui.allDownloads')}</button>
         </div>
         <div class="rows">
           {#each items as item (item.key)}
@@ -170,7 +171,7 @@
               <span class="row-controls">
                 {#if item.pausable}
                   <IconButton
-                    label="Пауза"
+                    label={msg('ui.pause')}
                     size="sm"
                     onclick={(e) => {
                       e.stopPropagation();
@@ -181,7 +182,7 @@
                   </IconButton>
                 {:else if item.resumable}
                   <IconButton
-                    label="Продолжить"
+                    label={msg('common.continue')}
                     size="sm"
                     onclick={(e) => {
                       e.stopPropagation();

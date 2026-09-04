@@ -43,6 +43,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import AddFriendModal from './AddFriendModal.svelte';
   import FriendCodeCard from './FriendCodeCard.svelte';
   import FriendRow from './FriendRow.svelte';
@@ -79,14 +80,14 @@
   const presenceTabs = new Set(['all', 'online', 'away', 'offline']);
 
   const sortLabels: Record<'name' | 'status', string> = {
-    name: 'Имя (А-Я)',
-    status: 'По статусу',
+    name: msg('social.friendsSortName'),
+    status: msg('social.friendsSortStatus'),
   };
 
   const groupEmptyCopy: Record<string, { title: string; description: string }> = {
-    online: { title: 'Никто не в сети', description: 'Сейчас никто из друзей не в сети.' },
-    away: { title: 'Никто не отошёл', description: 'Сейчас никто из друзей не отходил.' },
-    offline: { title: 'Все на связи', description: 'Все друзья сейчас в сети или отошли.' },
+    online: { title: msg('social.friendsEmptyOnlineTitle'), description: msg('social.friendsEmptyOnlineDesc') },
+    away: { title: msg('social.friendsEmptyAwayTitle'), description: msg('social.friendsEmptyAwayDesc') },
+    offline: { title: msg('social.friendsEmptyOfflineTitle'), description: msg('social.friendsEmptyOfflineDesc') },
   };
 
   const groupFor = $derived.by(() => {
@@ -118,7 +119,7 @@
 
   function receivedAt(iso: string | null): string {
     const when = relativeDate(iso);
-    return when === '—' ? when : `Получена ${when.toLowerCase()}`;
+    return when === '—' ? when : msg('friends.receivedAt', { when: when.toLowerCase() });
   }
 
   function incomingStats(request: RequestView): string[] {
@@ -132,23 +133,23 @@
   function outgoingStats(request: RequestView): string[] {
     const stats: string[] = [];
     if (request.commonCount > 0) stats.push(commonLine(0, request.commonCount));
-    stats.push(`Ожидает ответа · ${sentAt(request.createdAt)}`);
+    stats.push(`${msg('friends.pendingReply')} · ${sentAt(request.createdAt)}`);
     return stats;
   }
 
   const tabs = $derived([
-    { id: 'all', label: 'Все друзья', count: page.friends.length },
-    { id: 'online', label: 'В сети', count: onlineFriends.length },
-    { id: 'away', label: 'Отошли', count: awayFriends.length },
-    { id: 'offline', label: 'Не в сети', count: offlineFriends.length },
-    { id: 'requests', label: 'Заявки', count: $incomingCount + page.outgoing.length },
-    { id: 'blocked', label: 'Заблокированные', count: blocked.length },
+    { id: 'all', label: msg('social.friendsTabAll'), count: page.friends.length },
+    { id: 'online', label: msg('social.presenceOnline'), count: onlineFriends.length },
+    { id: 'away', label: msg('social.friendsTabAway'), count: awayFriends.length },
+    { id: 'offline', label: msg('social.presenceOffline'), count: offlineFriends.length },
+    { id: 'requests', label: msg('social.friendsTabRequests'), count: $incomingCount + page.outgoing.length },
+    { id: 'blocked', label: msg('social.friendsTabBlocked'), count: blocked.length },
   ]);
 
   const menuItems = [
-    { id: 'profile', label: 'Профиль' },
-    { id: 'unfriend', label: 'Удалить из друзей', danger: true, separator: true },
-    { id: 'block', label: 'Заблокировать', danger: true },
+    { id: 'profile', label: msg('social.profileLabel') },
+    { id: 'unfriend', label: msg('social.unfriendLabel'), danger: true, separator: true },
+    { id: 'block', label: msg('social.blockLabel'), danger: true },
   ];
 
   function report(err: unknown, fallback: string) {
@@ -157,14 +158,14 @@
   }
 
   function reload() {
-    refresh().catch((err) => report(err, 'Не удалось обновить список друзей'));
+    refresh().catch((err) => report(err, msg('social.friendsRefreshFailed')));
   }
 
   async function loadBlocks() {
     try {
       blocked = await fetchBlocks();
     } catch (err) {
-      report(err, 'Не удалось загрузить список заблокированных');
+      report(err, msg('social.friendsBlockedLoadFailed'));
     }
   }
 
@@ -189,14 +190,14 @@
       return;
     }
     if (item === 'unfriend') {
-      run(`unfriend:${user.id}`, () => unfriend(user.id), 'Не удалось удалить из друзей', 'Удалён из друзей');
+      run(`unfriend:${user.id}`, () => unfriend(user.id), msg('social.friendsUnfriendFailed'), msg('social.friendsUnfriended'));
       return;
     }
-    run(`block:${user.id}`, () => block(user.id), 'Не удалось заблокировать', 'Пользователь заблокирован');
+    run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked'));
   }
 
   function signIn(view: 'login' | 'register') {
-    leaveGuest(view).catch((err) => report(err, 'Не удалось открыть вход'));
+    leaveGuest(view).catch((err) => report(err, msg('social.signInFailed')));
   }
 
   function openProfile(user: UserCard) {
@@ -220,13 +221,13 @@
 </script>
 
 <Card surface="panel">
-  <PageHeader title="Друзья" subtitle="Заявки, список друзей и заблокированные">
+  <PageHeader title={msg('social.friendsTitle')} subtitle={msg('social.friendsSubtitle')}>
     {#snippet actions()}
       {#if !isGuest && !$needsSocialConsent}
-        <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>Мой код</Button>
+        <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>{msg('social.friendsMyCodeButton')}</Button>
         <Button variant="primary" onclick={() => (addOpen = true)}>
           <UserPlus size="1.5rem" strokeWidth={1.8} />
-          Добавить друга
+          {msg('social.friendsAddFriend')}
         </Button>
       {/if}
     {/snippet}
@@ -234,8 +235,8 @@
 
   {#if isGuest}
     <EmptyState
-      title="Друзья доступны с аккаунтом"
-      description="Войдите, чтобы добавлять друзей, видеть их профили и общие игры."
+      title={msg('social.friendsGuestTitle')}
+      description={msg('social.friendsGuestDesc')}
     >
       {#snippet icon()}
         <Users size="2.2rem" strokeWidth={1.6} />
@@ -243,21 +244,21 @@
       {#snippet actions()}
         <Button variant="primary" onclick={() => signIn('login')}>
           <LogIn size="1.5rem" strokeWidth={1.8} />
-          Войти
+          {msg('social.signInButton')}
         </Button>
-        <Button onclick={() => signIn('register')}>Создать аккаунт</Button>
+        <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
       {/snippet}
     </EmptyState>
   {:else if $needsSocialConsent}
     <EmptyState
-      title="Нужна синхронизация с аккаунтом"
-      description="Друзья работают поверх синхронизации: без неё серверу нечего показать вашим друзьям, а вам — их профили."
+      title={msg('social.friendsConsentTitle')}
+      description={msg('social.friendsConsentDesc')}
     >
       {#snippet icon()}
         <Users size="2.2rem" strokeWidth={1.6} />
       {/snippet}
       {#snippet actions()}
-        <Button variant="primary" onclick={() => (consentOpen = true)}>Включить синхронизацию</Button>
+        <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('social.friendsEnableSync')}</Button>
       {/snippet}
     </EmptyState>
   {:else}
@@ -272,7 +273,7 @@
     {#if presenceTabs.has(tab)}
       <div class="toolbar">
         <div class="search-wrap">
-          <SearchInput bind:value={search} placeholder="Поиск друзей" />
+          <SearchInput bind:value={search} placeholder={msg('social.friendsSearchFriendsPlaceholder')} />
         </div>
         <div class="toolbar-right">
           <DropdownMenu
@@ -285,7 +286,7 @@
             {#snippet trigger({ open, toggle })}
               <button class="sort" class:open onclick={toggle}>
                 <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-                Сортировка: {sortLabels[sortBy]}
+                {msg('social.friendsSortLabel', { value: sortLabels[sortBy] })}
                 <ChevronDown size="1.4rem" strokeWidth={1.8} />
               </button>
             {/snippet}
@@ -293,8 +294,8 @@
           <SegmentedControl
             bind:value={$friendsView}
             options={[
-              { id: 'list', label: 'Список' },
-              { id: 'grid', label: 'Сетка' },
+              { id: 'list', label: msg('social.friendsViewList') },
+              { id: 'grid', label: msg('social.friendsViewGrid') },
             ]}
           >
             {#snippet item(option)}
@@ -310,13 +311,13 @@
 
       {#if visibleFriends.length === 0}
         {#if page.friends.length === 0}
-          <EmptyState title="Пока никого" description="Добавьте друга по имени пользователя или по коду." />
+          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
         {:else if search.trim()}
-          <EmptyState title="Ничего не найдено" description="Попробуйте изменить запрос поиска." />
+          <EmptyState title={msg('social.friendsEmptySearchTitle')} description={msg('social.friendsEmptySearchDesc')} />
         {:else if groupEmptyCopy[tab]}
           <EmptyState title={groupEmptyCopy[tab].title} description={groupEmptyCopy[tab].description} />
         {:else}
-          <EmptyState title="Пока никого" description="Добавьте друга по имени пользователя или по коду." />
+          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
         {/if}
       {:else if $friendsView === 'grid'}
         <div class="grid">
@@ -332,7 +333,7 @@
               {#snippet actions()}
                 <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
                   {#snippet trigger({ toggle })}
-                    <IconButton label="Ещё" size="sm" onclick={toggle}>
+                    <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
                       <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
                     </IconButton>
                   {/snippet}
@@ -355,7 +356,7 @@
               {#snippet actions()}
                 <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
                   {#snippet trigger({ toggle })}
-                    <IconButton label="Ещё" size="sm" onclick={toggle}>
+                    <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
                       <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
                     </IconButton>
                   {/snippet}
@@ -367,10 +368,10 @@
       {/if}
     {:else if tab === 'requests'}
       {#if page.incoming.length === 0 && page.outgoing.length === 0}
-        <EmptyState title="Заявок нет" description="Новые заявки появятся здесь." />
+        <EmptyState title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
       {:else}
         {#if page.incoming.length > 0}
-          <h4 class="eyebrow">Входящие заявки</h4>
+          <h4 class="eyebrow">{msg('social.friendsIncomingHeading')}</h4>
           <div class="cards">
             {#each page.incoming as request (request.id)}
               <FriendRow user={request} variant="card" stats={incomingStats(request)} onopen={() => openProfile(request)}>
@@ -380,17 +381,17 @@
                     size="sm"
                     disabled={!!busy}
                     onclick={() =>
-                      run(`accept:${request.id}`, () => accept(request.id), 'Не удалось принять заявку', 'Вы теперь друзья')}
+                      run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
                   >
-                    Принять
+                    {msg('social.relationIncoming')}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={!!busy}
-                    onclick={() => run(`decline:${request.id}`, () => decline(request.id), 'Не удалось отклонить заявку')}
+                    onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
                   >
-                    Отклонить
+                    {msg('social.declineButton')}
                   </Button>
                 {/snippet}
               </FriendRow>
@@ -399,7 +400,7 @@
         {/if}
 
         {#if page.outgoing.length > 0}
-          <h4 class="eyebrow">Отправленные</h4>
+          <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
           <div class="cards">
             {#each page.outgoing as request (request.id)}
               <FriendRow user={request} variant="card" stats={outgoingStats(request)} onopen={() => openProfile(request)}>
@@ -408,9 +409,9 @@
                     variant="ghost"
                     size="sm"
                     disabled={!!busy}
-                    onclick={() => run(`cancel:${request.id}`, () => decline(request.id), 'Не удалось отменить заявку')}
+                    onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
                   >
-                    Отменить
+                    {msg('social.cancelRequestButton')}
                   </Button>
                 {/snippet}
               </FriendRow>
@@ -422,14 +423,14 @@
       <div class="safety">
         <ShieldCheck size="2rem" strokeWidth={1.6} />
         <div class="safety-text">
-          <h4>Ваша безопасность — наш приоритет</h4>
-          <p>Не принимайте заявки от незнакомых пользователей и не делитесь личными данными.</p>
+          <h4>{msg('social.friendsSafetyTitle')}</h4>
+          <p>{msg('social.friendsSafetyDesc')}</p>
         </div>
       </div>
     {:else if blocked.length === 0}
       <EmptyState
-        title="Никого не заблокировано"
-        description="Заблокированные не видят ваш профиль и не могут отправить заявку."
+        title={msg('social.friendsEmptyBlockedTitle')}
+        description={msg('social.friendsEmptyBlockedDesc')}
       />
     {:else}
       <div class="cards">
@@ -440,9 +441,9 @@
                 size="sm"
                 disabled={!!busy}
                 onclick={() =>
-                  run(`unblock:${user.id}`, () => unblock(user.id), 'Не удалось разблокировать', 'Пользователь разблокирован')}
+                  run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
               >
-                Разблокировать
+                {msg('social.unblockButton')}
               </Button>
             {/snippet}
           </FriendRow>

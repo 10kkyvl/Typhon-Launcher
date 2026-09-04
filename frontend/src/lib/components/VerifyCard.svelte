@@ -22,40 +22,39 @@
   const damaged = $derived(missing > 0 || corrupted > 0);
   const percent = $derived(Math.round((state?.ratio ?? 0) * 1000) / 10);
   const methodLabel = $derived(
-    state?.method === 'torrent' ? 'по торренту релиза' : 'по сохранённому манифесту',
+    state?.method === 'torrent' ? msg('verify.byTorrent') : msg('verify.byManifest'),
   );
 </script>
 
 <div class="section">
 <Card>
   <div class="head">
-    <h3 class="card-title">Целостность файлов</h3>
+    <h3 class="card-title">{msg('verify.fileIntegrity')}</h3>
     {#if unavailable}
-      <StatusBadge kind="neutral" label="Проверка недоступна" dot={false} />
+      <StatusBadge kind="neutral" label={msg('verify.unavailable')} dot={false} />
     {:else if pending}
-      <StatusBadge kind="neutral" label="Не проверялось" dot={false} />
+      <StatusBadge kind="neutral" label={msg('verify.neverChecked')} dot={false} />
     {:else if damaged}
-      <StatusBadge kind="warning" label="Найдены повреждения" />
+      <StatusBadge kind="warning" label={msg('verify.damageFound')} />
     {:else if unreadable > 0}
-      <StatusBadge kind="neutral" label="Проверено не всё" dot={false} />
+      <StatusBadge kind="neutral" label={msg('verify.notFullyChecked')} dot={false} />
     {:else if checked}
-      <StatusBadge kind="success" label="Файлы в порядке" dot={false} />
+      <StatusBadge kind="success" label={msg('verify.filesOk')} dot={false} />
     {/if}
   </div>
 
   {#if unavailable}
     <p class="muted">
-      Сверять не с чем: релиз не даёт пригодного для проверки состава файлов, а манифест ещё не записан.
-      Запишите манифест текущих файлов — последующие проверки покажут, что изменилось.
+      {msg('verify.unavailableExplain')}
     </p>
     <div class="actions">
       <Button disabled={busy || running} onclick={() => createManifest(gameId)}>
         <FileCheck size="1.5rem" strokeWidth={1.8} />
-        Создать манифест
+        {msg('verify.createManifest')}
       </Button>
     </div>
     {#if running}
-      <p class="muted">Игра запущена. Закройте её, чтобы записать манифест.</p>
+      <p class="muted">{msg('verify.gameRunningManifest')}</p>
     {/if}
   {:else if busy}
     <div class="progress">
@@ -68,42 +67,41 @@
   {:else if checked}
     <dl class="summary">
       <div>
-        <dt>Совпало</dt>
+        <dt>{msg('verify.matched')}</dt>
         <dd>{percent}%</dd>
       </div>
       <div>
-        <dt>Проверено</dt>
-        <dd>{bytesSize(state?.okBytes ?? 0)} из {bytesSize(state?.totalBytes ?? 0)}</dd>
+        <dt>{msg('verify.checked')}</dt>
+        <dd>{msg('ui.bytesOfBytes', { done: bytesSize(state?.okBytes ?? 0), total: bytesSize(state?.totalBytes ?? 0) })}</dd>
       </div>
       {#if missing > 0}
         <div>
-          <dt>Отсутствуют</dt>
+          <dt>{msg('verify.missing')}</dt>
           <dd>{msg('verify.missingFiles', { count: missing })}</dd>
         </div>
       {/if}
       {#if corrupted > 0}
         <div>
-          <dt>Повреждены</dt>
+          <dt>{msg('verify.corrupted')}</dt>
           <dd>{msg('verify.corruptedBlocks', { count: corrupted })}</dd>
         </div>
       {/if}
       {#if unreadable > 0}
         <div>
-          <dt>Не прочитаны</dt>
+          <dt>{msg('verify.unreadable')}</dt>
           <dd>{msg('verify.unreadableFiles', { count: unreadable })}</dd>
         </div>
       {/if}
     </dl>
     <p class="muted">
-      Сверка {methodLabel}, {relativeDate(state?.checkedAt ?? null).toLowerCase()}.
+      {msg('verify.summary', { method: methodLabel, date: relativeDate(state?.checkedAt ?? null).toLowerCase() })}
       {#if unreadable > 0}
-        Часть файлов была занята другой программой — это не повреждение, повторите проверку позже.
+        {msg('verify.someFilesLocked')}
       {/if}
     </p>
   {:else}
     <p class="muted">
-      Проверка сверяет файлы на диске с торрентом релиза или с сохранённым манифестом. Результат
-      относится к текущей версии и каталогу установки.
+      {msg('verify.explain')}
     </p>
   {/if}
 
@@ -115,17 +113,17 @@
     <div class="actions">
       <Button disabled={busy || running} onclick={() => verify(gameId)}>
         <FileCheck size="1.5rem" strokeWidth={1.8} />
-        Проверить файлы
+        {msg('verify.verifyFiles')}
       </Button>
       {#if damaged && state?.repairable}
         <Button variant="primary" disabled={busy || running} onclick={() => repair(gameId)}>
           <Wrench size="1.5rem" strokeWidth={1.8} />
-          Восстановить
+          {msg('verify.repair')}
         </Button>
       {/if}
     </div>
     {#if running}
-      <p class="muted">Игра запущена. Закройте её перед проверкой файлов.</p>
+      <p class="muted">{msg('verify.gameRunningVerify')}</p>
     {/if}
   {/if}
 </Card>

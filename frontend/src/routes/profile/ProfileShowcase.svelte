@@ -2,18 +2,18 @@
   import { Heart } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import type { ShowcaseKind } from '../../lib/services/account';
   import type { ShowcaseBlock } from '../../lib/services/profile';
-  import { SHOWCASE_TITLES, shortDate } from '../../lib/profile/view';
+  import { showcaseLabel, shortDate } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
+  import { msg } from '../../lib/i18n';
 
   let { blocks, onmanage }: { blocks: ShowcaseBlock[]; onmanage: () => void } = $props();
 
   const visible = $derived(blocks.filter((block) => block.games.length > 0));
 
   function title(kind: string): string {
-    if (kind === 'favorites') return 'Любимые игры';
-    return SHOWCASE_TITLES[kind as ShowcaseKind] ?? kind;
+    if (kind === 'favorites') return msg('social.favoriteGamesTitle');
+    return showcaseLabel(kind);
   }
 </script>
 
@@ -29,7 +29,7 @@
         </span>
         <span class="caption">{game.title}</span>
         {#if block.kind === 'recently_completed' && game.statusAt}
-          <span class="completed">Пройдена {shortDate(game.statusAt)}</span>
+          <span class="completed">{msg('social.completedOn', { date: shortDate(game.statusAt) })}</span>
         {/if}
       </button>
     {/each}
@@ -40,7 +40,7 @@
   {#if block.kind === 'favorites'}
     <Card title={title(block.kind)}>
       {#snippet action()}
-        <button class="manage" type="button" onclick={onmanage}>Управлять избранным</button>
+        <button class="manage" type="button" onclick={onmanage}>{msg('social.manageFavorites')}</button>
       {/snippet}
       {@render grid(block)}
     </Card>

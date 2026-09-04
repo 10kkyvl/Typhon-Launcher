@@ -12,6 +12,7 @@
     uploadingAvatar,
   } from '../stores/user';
   import { toast } from '../stores/toasts';
+  import { msg } from '../i18n';
 
   let { size = 'md', disabled = false }: { size?: 'md' | 'sm'; disabled?: boolean } = $props();
 
@@ -29,7 +30,7 @@
       cropSrc = src;
       cropOpen = true;
     } catch (err) {
-      failure = accountErrorText(err, 'Не удалось открыть изображение');
+      failure = accountErrorText(err, msg('ui.avatarOpenFailed'));
     }
   }
 
@@ -39,9 +40,9 @@
       await saveAvatar(encoded);
       cropOpen = false;
       cropSrc = '';
-      toast('Аватар обновлён', 'success');
+      toast(msg('ui.avatarUpdated'), 'success');
     } catch (err) {
-      failure = accountErrorText(err, 'Не удалось обновить аватар');
+      failure = accountErrorText(err, msg('ui.avatarUpdateFailed'));
     }
   }
 
@@ -49,9 +50,9 @@
     failure = '';
     try {
       await deleteAvatar();
-      toast('Аватар удалён', 'success');
+      toast(msg('ui.avatarDeleted'), 'success');
     } catch (err) {
-      failure = accountErrorText(err, 'Не удалось удалить аватар');
+      failure = accountErrorText(err, msg('ui.avatarDeleteFailed'));
     }
   }
 </script>
@@ -59,10 +60,10 @@
 <div class="avatar-editor">
   <div class="buttons">
     <Button {size} disabled={busy || disabled} onclick={pick}>
-      {$pickingAvatar ? 'Выбор файла…' : 'Сменить аватар'}
+      {$pickingAvatar ? msg('ui.avatarPicking') : msg('ui.avatarChange')}
     </Button>
     <Button {size} variant="danger" disabled={busy || disabled || !$currentUser?.avatarUrl} onclick={remove}>
-      {$removingAvatar ? 'Удаление…' : 'Удалить аватар'}
+      {$removingAvatar ? msg('ui.avatarRemoving') : msg('ui.avatarRemove')}
     </Button>
   </div>
   {#if failure && !cropOpen}<span class="error">{failure}</span>{/if}

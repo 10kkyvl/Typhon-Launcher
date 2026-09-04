@@ -2,6 +2,7 @@ import { derived } from 'svelte/store';
 import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation } from '../services/install';
 import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format';
+import { msg } from '../i18n';
 import { downloads, statusLabels } from './downloads';
 import { installActive, installStatusLabels, installations } from './install';
 
@@ -26,14 +27,17 @@ const dockStatuses: DownloadStatus[] = ['queued', 'metadata', 'downloading', 've
 
 function downloadDetail(item: Download) {
   if (item.status === 'downloading') {
-    return `${speedBytes(item.downloadSpeed)} · осталось ${etaLabel(item.etaSeconds)}`;
+    return msg('state.activityDownloadDetail', {
+      speed: speedBytes(item.downloadSpeed),
+      eta: etaLabel(item.etaSeconds),
+    });
   }
   if (item.total > 0) return `${bytesSize(item.downloaded)} / ${bytesSize(item.total)}`;
   return '';
 }
 
 function installDetail(item: Installation) {
-  if (item.status === 'waiting_for_user') return 'Нажмите, чтобы продолжить';
+  if (item.status === 'waiting_for_user') return msg('state.activityWaitingForUser');
   if (item.currentFile) return truncateMiddle(item.currentFile, 44);
   if (item.bytesTotal > 0) return `${bytesSize(item.bytesDone)} / ${bytesSize(item.bytesTotal)}`;
   return '';
@@ -45,7 +49,7 @@ function fromDownload(item: Download): ActivityItem {
     kind: 'download',
     downloadId: item.id,
     name: item.name,
-    status: statusLabels[item.status],
+    status: statusLabels(item.status),
     detail: downloadDetail(item),
     progress: item.progress,
     tone: item.status === 'paused' || item.status === 'queued' ? 'muted' : 'accent',
@@ -62,7 +66,7 @@ function fromInstall(item: Installation): ActivityItem {
     kind: 'install',
     downloadId: item.downloadId,
     name: item.name,
-    status: installStatusLabels[item.status],
+    status: installStatusLabels(item.status),
     detail: installDetail(item),
     progress: item.progress,
     tone: waiting ? 'warning' : 'accent',

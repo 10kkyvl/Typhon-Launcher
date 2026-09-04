@@ -21,15 +21,16 @@
   import { toast } from '../../lib/stores/toasts';
   import { catalogView } from '../../lib/stores/ui';
   import { inview } from '../../lib/utils/inview';
+  import { msg } from '../../lib/i18n';
 
   type Sort = 'title' | 'year' | 'added';
 
   const pageSize = 60;
-  const allGenres = 'Все';
+  const allGenres = msg('games.filterAll');
   const sortLabels: Record<Sort, string> = {
-    title: 'По алфавиту',
-    year: 'По году выхода',
-    added: 'По дате добавления',
+    title: msg('games.sortAlpha'),
+    year: msg('games.catalogSortYear'),
+    added: msg('games.catalogSortAdded'),
   };
 
   interface Snapshot {
@@ -187,7 +188,7 @@
       if ($runningGames.has(libraryId)) await stopGame(libraryId);
       else await playGame(libraryId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
     }
   }
 
@@ -195,16 +196,16 @@
     try {
       await setFavorite(libraryId, !current);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось изменить любимые', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorFavoriteFailed'), 'danger');
     }
   }
 </script>
 
 <Card surface="panel">
-  <PageHeader title="Все игры" />
+  <PageHeader title={msg('games.allGamesTitle')} />
 
   <div class="search-row">
-    <SearchInput bind:value={search} placeholder="Поиск по каталогу" loading={loading && !appending} oninput={onSearch} />
+    <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
   </div>
 
   <div class="filter-row">
@@ -235,8 +236,8 @@
       <SegmentedControl
         bind:value={$catalogView}
         options={[
-          { id: 'grid', label: 'Сетка' },
-          { id: 'list', label: 'Список' },
+          { id: 'grid', label: msg('games.viewGrid') },
+          { id: 'list', label: msg('games.viewList') },
         ]}
       >
         {#snippet item(option)}
@@ -252,18 +253,18 @@
 
   {#if items.length === 0}
     {#if loading}
-      <p class="muted">Загрузка каталога…</p>
+      <p class="muted">{msg('games.catalogLoadingLabel')}</p>
     {:else if failed}
       <EmptyState
-        title="Каталог недоступен"
-        description="Не удалось получить список игр. Попробуйте обновить источники."
+        title={msg('games.catalogUnavailableTitle')}
+        description={msg('games.catalogUnavailableDescription')}
       />
     {:else if search.trim() || genre}
-      <EmptyState title="Ничего не найдено" description="Измените запрос или фильтр по жанру." />
+      <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
     {:else}
       <EmptyState
-        title="Каталог пуст"
-        description="Добавьте источник — игры из его фида появятся здесь."
+        title={msg('games.catalogEmptyTitle')}
+        description={msg('games.catalogEmptyDescription')}
       />
     {/if}
   {:else if $catalogView === 'grid'}
@@ -286,15 +287,15 @@
             {#snippet footer()}
               <span class="status" class:on={isInstalled}>
                 {#if isInstalled}
-                  <span class="dot"></span>Установлена
+                  <span class="dot"></span>{msg('games.gameInstalledWord')}
                 {:else}
-                  <Download size="1.3rem" strokeWidth={1.8} />Не установлена
+                  <Download size="1.3rem" strokeWidth={1.8} />{msg('games.gameNotInstalledWord')}
                 {/if}
               </span>
               {#if libId}
                 <div class="actions">
                   <IconButton
-                    label={isFav ? 'Убрать из любимых' : 'В любимые'}
+                    label={isFav ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
                     size="sm"
                     active={isFav}
                     onclick={(event) => {
@@ -305,7 +306,7 @@
                     <Heart size="1.5rem" strokeWidth={1.8} fill={isFav ? 'currentColor' : 'none'} />
                   </IconButton>
                   <IconButton
-                    label="Ещё"
+                    label={msg('games.moreLabel')}
                     size="sm"
                     onclick={(event) => openGameMenu(event, libId)}
                   >
@@ -332,7 +333,9 @@
           </div>
           <span class="list-title">{shown.title}</span>
           <span class="list-meta">{listMeta(shown)}</span>
-          <span class="list-meta right">{installedByGame.has(game.id) ? 'Установлена' : 'Не установлена'}</span>
+          <span class="list-meta right">
+            {installedByGame.has(game.id) ? msg('games.gameInstalledWord') : msg('games.gameNotInstalledWord')}
+          </span>
         </button>
       {/each}
     </div>
@@ -341,9 +344,9 @@
   {#if items.length > 0 && items.length < total}
     <div class="more">
       <Button onclick={() => fetchPage(page + 1)} disabled={loading}>
-        {appending ? 'Загрузка…' : 'Показать ещё'}
+        {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
       </Button>
-      <span class="muted">Показано {items.length} из {total}</span>
+      <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
   {/if}
 </Card>

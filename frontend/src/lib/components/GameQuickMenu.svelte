@@ -28,6 +28,7 @@
   import { verify } from '../stores/updates';
   import { errorMessage } from '../utils/errors';
   import { truncateMiddle } from '../utils/format';
+  import { msg } from '../i18n';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
 
@@ -65,7 +66,7 @@
         return guard(() => stopGame(current.id));
       case 'favorite-add':
       case 'favorite-remove':
-        return mark(() => setFavorite(current.id, action === 'favorite-add'), 'Не удалось изменить любимые');
+        return mark(() => setFavorite(current.id, action === 'favorite-add'), msg('ui.favoriteChangeFailed'));
       case 'status':
         statusID = current.id;
         statusOpen = true;
@@ -135,15 +136,15 @@
     }
     toast(
       unreadable > 0
-        ? 'Часть папок прочитать не удалось. Укажите папку сохранений вручную'
-        : 'Папка сохранений не найдена. Укажите её вручную',
+        ? msg('ui.savesPartialUnreadable')
+        : msg('ui.savesNotFound'),
     );
     await pickSaves(current);
   }
 
   async function pickSaves(current: LibraryGame) {
     await guard(async () => {
-      const dir = await selectFolder(`Папка сохранений — ${current.title}`);
+      const dir = await selectFolder(msg('ui.savesDirDialogTitle', { title: current.title }));
       if (!dir) return;
       await setSavesDir(current.id, dir);
       await openFolder(dir);
@@ -183,8 +184,8 @@
 {#if target}
   <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} />
 
-  <Modal bind:open={savesOpen} title="Папка сохранений" width="52rem">
-    <p class="hint">Подходящих папок нашлось несколько. Выберите ту, что относится к «{target.title}».</p>
+  <Modal bind:open={savesOpen} title={msg('ui.savesDirTitle')} width="52rem">
+    <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
     <div class="candidates">
       {#each savesCandidates as candidate (candidate)}
         <button class="candidate" onclick={() => useCandidate(candidate)} title={candidate}>
@@ -193,7 +194,7 @@
       {/each}
     </div>
     {#snippet footer()}
-      <Button onclick={() => (savesOpen = false)}>Отмена</Button>
+      <Button onclick={() => (savesOpen = false)}>{msg('common.cancel')}</Button>
       <Button
         variant="primary"
         onclick={() => {
@@ -202,7 +203,7 @@
           if (current) void pickSaves(current);
         }}
       >
-        Указать другую
+        {msg('ui.pickAnotherFolder')}
       </Button>
     {/snippet}
   </Modal>

@@ -2,6 +2,7 @@
   import { acceptSourcesNotice } from '../stores/sourcesNotice';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -34,21 +35,19 @@
 
 <Modal
   bind:open
-  title={mode === 'review' ? 'Уведомление об источниках' : 'Прежде чем добавить источник'}
+  title={mode === 'review' ? msg('modals.sourcesNoticeReviewTitle') : msg('modals.sourcesNoticeGateTitle')}
   width="48rem"
 >
   <p class="notice-text">
-    Typhon не предоставляет и не проверяет содержимое сторонних источников. Добавляйте только источники и материалы,
-    которыми вы имеете право пользоваться. Адрес источника и его содержимое обрабатываются на этом устройстве —
-    Typhon не передаёт их своим серверам.
+    {msg('modals.sourcesNoticeBody')}
   </p>
   {#snippet footer()}
     {#if mode === 'review'}
-      <Button onclick={cancel}>Закрыть</Button>
+      <Button onclick={cancel}>{msg('common.close')}</Button>
     {:else}
-      <Button onclick={cancel}>Отмена</Button>
+      <Button onclick={cancel}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={saving} onclick={confirm}>
-        {saving ? 'Сохранение…' : 'Понятно, продолжить'}
+        {saving ? msg('modals.sourcesNoticeSaving') : msg('modals.sourcesNoticeContinue')}
       </Button>
     {/if}
   {/snippet}

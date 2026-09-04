@@ -20,6 +20,9 @@ export const friends = {
     few: '{count} друга играли',
     many: '{count} друзей играли',
   },
+  'friends.sentAt': 'Отправлена {when}',
+  'friends.receivedAt': 'Получена {when}',
+  'friends.pendingReply': 'Ожидает ответа',
 } as const;
 
 export type FriendsKey = keyof typeof friends;

@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -36,7 +37,7 @@
     <div class="modal" style:width role="dialog" aria-modal="true" aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
-        <IconButton label="Закрыть" size="sm" onclick={close}>
+        <IconButton label={msg('common.close')} size="sm" onclick={close}>
           <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>

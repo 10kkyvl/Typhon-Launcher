@@ -25,16 +25,17 @@
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
   import { relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   const segments: { id: string; label: string; kinds?: Kind[] }[] = [
-    { id: 'all', label: 'Все' },
-    { id: 'installs', label: 'Установки', kinds: [Kind.KindInstalled, Kind.KindInstallFailed] },
+    { id: 'all', label: msg('transfers.historySegmentAll') },
+    { id: 'installs', label: msg('transfers.historySegmentInstalls'), kinds: [Kind.KindInstalled, Kind.KindInstallFailed] },
     {
       id: 'updates',
-      label: 'Обновления',
+      label: msg('transfers.historySegmentUpdates'),
       kinds: [Kind.KindUpdated, Kind.KindUpdateFailed, Kind.KindRolledBack],
     },
-    { id: 'removals', label: 'Удаления', kinds: [Kind.KindRemoved, Kind.KindUninstalled] },
+    { id: 'removals', label: msg('transfers.historySegmentRemovals'), kinds: [Kind.KindRemoved, Kind.KindUninstalled] },
   ];
 
 
@@ -80,7 +81,7 @@
     clearing = true;
     try {
       await clearHistory();
-      toast('История очищена', 'success');
+      toast(msg('transfers.historyCleared'), 'success');
       clearOpen = false;
     } catch (err) {
       toast(errorMessage(err), 'danger');
@@ -91,11 +92,11 @@
 </script>
 
 <Card surface="panel">
-  <PageHeader title="История" subtitle="Установки, обновления и удаления игр на этом устройстве">
+  <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$history.length === 0} onclick={() => (clearOpen = true)}>
         <Trash2 size="1.5rem" strokeWidth={1.8} />
-        Очистить историю
+        {msg('transfers.historyClearAction')}
       </Button>
     {/snippet}
   </PageHeader>
@@ -103,7 +104,7 @@
   {#if $historyStatus.degraded}
     <div class="banner">
       <span class="icon"><CircleAlert size="1.6rem" strokeWidth={1.8} /></span>
-      <span class="text">История не сохраняется: {$historyStatus.message}</span>
+      <span class="text">{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</span>
     </div>
   {/if}
 
@@ -111,18 +112,18 @@
 
   <div class="toolbar">
     <div class="search-slot">
-      <SearchInput bind:value={query} placeholder="Поиск по названию" />
+      <SearchInput bind:value={query} placeholder={msg('transfers.historySearchPlaceholder')} />
     </div>
   </div>
 
   {#if $history.length === 0}
-    <EmptyState title="История пока пуста" description="Здесь появятся установки, обновления и удаления игр.">
+    <EmptyState title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
       {#snippet icon()}
         <HistoryIcon size="2rem" strokeWidth={1.8} />
       {/snippet}
     </EmptyState>
   {:else if filtered.length === 0}
-    <EmptyState title="Ничего не найдено" description="Измените фильтр или поисковый запрос." />
+    <EmptyState title={msg('transfers.historyNoResultsTitle')} description={msg('transfers.historyNoResultsDescription')} />
   {:else}
     <div class="table">
       {#each filtered as record (record.id)}
@@ -143,15 +144,14 @@
   {/if}
 </Card>
 
-<Modal bind:open={clearOpen} title="Очистить историю">
+<Modal bind:open={clearOpen} title={msg('transfers.historyClearAction')}>
   <p class="confirm-text">
-    Записи об установках, обновлениях и удалениях игр будут удалены безвозвратно. Сами игры и их файлы это не
-    затронет.
+    {msg('transfers.historyConfirmClearText')}
   </p>
   {#snippet footer()}
-    <Button onclick={() => (clearOpen = false)}>Отмена</Button>
+    <Button onclick={() => (clearOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="danger" disabled={clearing} onclick={confirmClear}>
-      {clearing ? 'Очищаем...' : 'Очистить историю'}
+      {clearing ? msg('transfers.historyClearing') : msg('transfers.historyClearAction')}
     </Button>
   {/snippet}
 </Modal>

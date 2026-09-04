@@ -6,6 +6,7 @@
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -68,7 +69,7 @@
     adding = true;
     try {
       const source = mode === 'file' ? await addSourceFile(value) : await addSource(value);
-      toast(`Источник «${source.name}» добавлен`, 'success');
+      toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
       open = false;
     } catch (err) {
       error = errorMessage(err);
@@ -84,11 +85,11 @@
   }
 </script>
 
-<Modal bind:open title="Добавить источник">
+<Modal bind:open title={msg('modals.addSourceTitle')}>
   {#if step === 'input'}
     <div class="form">
       <label class="field">
-        <span class="field-label">URL источника</span>
+        <span class="field-label">{msg('modals.addSourceUrlLabel')}</span>
         <input
           class="input"
           type="text"
@@ -99,12 +100,12 @@
       </label>
       <div class="or">
         <span class="line"></span>
-        <span class="or-text">или</span>
+        <span class="or-text">{msg('modals.addSourceOr')}</span>
         <span class="line"></span>
       </div>
       <Button onclick={pickFile}>
         <FileUp size="1.6rem" strokeWidth={1.8} />
-        Выбрать файл фида
+        {msg('modals.addSourcePickFile')}
       </Button>
       {#if path}
         <span class="picked" title={path}>{path}</span>
@@ -119,37 +120,37 @@
   {:else if step === 'checking'}
     <div class="loading">
       <span class="spinner"></span>
-      <span class="loading-text">Проверка источника…</span>
-      <span class="loading-note">Импорт большого фида может занять несколько секунд.</span>
+      <span class="loading-text">{msg('modals.addSourceChecking')}</span>
+      <span class="loading-note">{msg('modals.addSourceCheckingNote')}</span>
     </div>
   {:else if preview}
     <div class="preview">
       <div class="preview-row">
-        <span class="key">Название</span>
+        <span class="key">{msg('modals.addSourceName')}</span>
         <span class="value">{preview.name}</span>
       </div>
       <div class="preview-row">
-        <span class="key">{preview.type === 'file' ? 'Файл' : 'URL'}</span>
+        <span class="key">{preview.type === 'file' ? msg('modals.addSourceFileLabel') : 'URL'}</span>
         <span class="value location" title={preview.type === 'file' ? preview.path : preview.url}>
           {preview.type === 'file' ? preview.path : preview.url}
         </span>
       </div>
       <div class="preview-row">
-        <span class="key">Версия фида</span>
+        <span class="key">{msg('modals.addSourceFeedVersion')}</span>
         <span class="value">{preview.feedVersion}</span>
       </div>
       <div class="preview-row">
-        <span class="key">Записей</span>
+        <span class="key">{msg('modals.addSourceEntries')}</span>
         <span class="value">{preview.entries}</span>
       </div>
       <div class="preview-row">
-        <span class="key">Некорректных записей</span>
+        <span class="key">{msg('modals.addSourceInvalidEntries')}</span>
         <span class="value">{preview.invalid}</span>
       </div>
       {#if preview.duplicate}
         <p class="warn">
           <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-          Такой источник уже добавлен
+          {msg('modals.addSourceDuplicate')}
         </p>
       {/if}
       {#if preview.warnings?.length}
@@ -167,11 +168,11 @@
 
   {#snippet footer()}
     {#if step === 'input'}
-      <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={!url.trim() && !path} onclick={check}>Проверить источник</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={!url.trim() && !path} onclick={check}>{msg('modals.addSourceCheck')}</Button>
     {:else if step === 'preview'}
-      <Button onclick={back}>Назад</Button>
-      <Button variant="primary" disabled={adding} onclick={submit}>{adding ? 'Добавление…' : 'Добавить'}</Button>
+      <Button onclick={back}>{msg('common.back')}</Button>
+      <Button variant="primary" disabled={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
     {/if}
   {/snippet}
 </Modal>

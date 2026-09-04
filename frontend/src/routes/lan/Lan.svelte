@@ -10,6 +10,7 @@
   import { offerLabel, rejectedSummary, transferLabel } from '../../lib/lan/lanText';
   import { cancel, hashing, lanStats, offers, receive, shares, transfers, unshare } from '../../lib/stores/lan';
   import { bytesSize, formatCount, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   const preparing = $derived(
     [...$hashing.values()].filter((p) => !$shares.some((s) => s.gameId === p.gameId && s.enabled)),
@@ -29,39 +30,39 @@
 </script>
 
 <Card surface="panel">
-  <PageHeader title="Локальная сеть" subtitle="Передача игр напрямую другим компьютерам в вашей локальной сети." />
+  <PageHeader title={msg('transfers.lanTitle')} subtitle={msg('transfers.lanSubtitle')} />
 
   <div class="stats">
     <div class="stat">
-      <StatTile value={formatCount($lanStats.peersKnown)} label="Компьютеров рядом">
+      <StatTile value={formatCount($lanStats.peersKnown)} label={msg('transfers.lanPeersLabel')}>
         {#snippet icon()}<MonitorSmartphone size="1.8rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
     <div class="stat">
-      <StatTile value={formatCount($lanStats.offersKnown)} label="Доступно игр">
+      <StatTile value={formatCount($lanStats.offersKnown)} label={msg('transfers.lanOffersLabel')}>
         {#snippet icon()}<Wifi size="1.8rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
     <div class="stat">
-      <StatTile value={formatCount($lanStats.sharesActive)} label="Раздаю игр">
+      <StatTile value={formatCount($lanStats.sharesActive)} label={msg('transfers.lanSharesLabel')}>
         {#snippet icon()}<Share2 size="1.8rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
   </div>
 
   <section class="section">
-    <h2>Доступно рядом <span class="count">{$offers.length}</span></h2>
+    <h2>{msg('transfers.lanNearbyHeading')} <span class="count">{$offers.length}</span></h2>
     {#if $offers.length === 0}
       <EmptyState
-        title="Ничего не найдено"
-        description="Не видно других компьютеров? Убедитесь, что раздача включена и на другом компьютере, что сеть отмечена как «частная», и разрешите Typhon доступ, если Windows спросит про брандмауэр при первом запуске."
+        title={msg('transfers.lanEmptyTitle')}
+        description={msg('transfers.lanEmptyDescription')}
       >
         {#snippet icon()}
           <Wifi size="2rem" strokeWidth={1.8} />
         {/snippet}
       </EmptyState>
       {#if rejectedNote}
-        <p class="muted">Отклонено: {rejectedNote}</p>
+        <p class="muted">{msg('transfers.lanRejectedPrefix', { summary: rejectedNote })}</p>
       {/if}
     {:else}
       <div class="rows">
@@ -69,7 +70,7 @@
           <div class="row">
             <span class="row-title">{offerLabel(offer)}</span>
             <div class="row-actions">
-              <Button variant="primary" size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>Скачать</Button>
+              <Button variant="primary" size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>{msg('transfers.lanDownload')}</Button>
             </div>
           </div>
         {/each}
@@ -78,15 +79,15 @@
   </section>
 
   <section class="section">
-    <h2>Я раздаю <span class="count">{$shares.length}</span></h2>
+    <h2>{msg('transfers.lanSharingHeading')} <span class="count">{$shares.length}</span></h2>
     {#if $shares.length === 0 && preparing.length === 0}
-      <p class="muted">Вы пока ничего не раздаёте.</p>
+      <p class="muted">{msg('transfers.lanNoShares')}</p>
     {:else}
       <div class="rows">
         {#each preparing as progress (progress.gameId)}
           <div class="row">
             <div class="row-text">
-              <span class="row-title">Готовится к раздаче… {Math.round(hashPct(progress.processedBytes, progress.totalBytes))}%</span>
+              <span class="row-title">{msg('transfers.lanPreparingPercent', { percent: Math.round(hashPct(progress.processedBytes, progress.totalBytes)) })}</span>
               <ProgressBar value={hashPct(progress.processedBytes, progress.totalBytes)} height={4} />
             </div>
           </div>
@@ -97,7 +98,7 @@
             <span class="row-size">{bytesSize(share.sizeBytes)}</span>
             <span class="row-date">{relativeDate(share.builtAt)}</span>
             <div class="row-actions">
-              <Button size="sm" onclick={() => unshare(share.gameId)}>Перестать раздавать</Button>
+              <Button size="sm" onclick={() => unshare(share.gameId)}>{msg('transfers.lanStopSharing')}</Button>
             </div>
           </div>
         {/each}
@@ -106,9 +107,9 @@
   </section>
 
   <section class="section">
-    <h2>Передачи <span class="count">{activeTransfers.length}</span></h2>
+    <h2>{msg('transfers.lanTransfersHeading')} <span class="count">{activeTransfers.length}</span></h2>
     {#if activeTransfers.length === 0}
-      <p class="muted">Нет активных передач.</p>
+      <p class="muted">{msg('transfers.lanNoTransfers')}</p>
     {:else}
       <div class="rows">
         {#each activeTransfers as transfer (transfer.id)}
@@ -119,7 +120,7 @@
               <span class="row-sub">{transferLabel(transfer)}</span>
             </div>
             <div class="row-actions">
-              <IconButton label="Отменить" size="sm" onclick={() => cancel(transfer.id)}>
+              <IconButton label={msg('transfers.lanCancelLabel')} size="sm" onclick={() => cancel(transfer.id)}>
                 <X size="1.5rem" strokeWidth={1.8} />
               </IconButton>
             </div>

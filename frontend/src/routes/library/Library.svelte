@@ -33,6 +33,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   type Filter = 'all' | 'installed' | 'recent';
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
@@ -80,7 +81,7 @@
       if (games.length === 0) return;
       catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось загрузить данные игр', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.libraryLoadGamesError'), 'danger');
     }
   }
 
@@ -100,28 +101,28 @@
   });
 
   const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
-    { id: 'all', label: 'Все' },
-    { id: 'installed', label: 'Установленные', icon: MonitorDown },
-    { id: 'recent', label: 'Недавние', icon: Clock },
+    { id: 'all', label: msg('games.filterAll') },
+    { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
+    { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
   ];
 
   const sortLabels: Record<Sort, string> = {
-    alpha: 'По алфавиту',
-    recent: 'По последнему запуску',
-    playtime: 'По наигранному времени',
-    size: 'По размеру',
+    alpha: msg('games.sortAlpha'),
+    recent: msg('games.librarySortRecent'),
+    playtime: msg('games.librarySortPlaytime'),
+    size: msg('games.sortSize'),
   };
 
   const sectionTitles: Record<Filter, string> = {
-    all: 'Все игры',
-    installed: 'Установленные',
-    recent: 'Недавние',
+    all: msg('games.allGamesTitle'),
+    installed: msg('games.filterInstalled'),
+    recent: msg('games.recentLabel'),
   };
 
   function installedEntry(game: LibraryGame): Entry {
     const bits: string[] = [];
     if (game.uninstalled) {
-      bits.push('Не установлена');
+      bits.push(msg('games.gameNotInstalledWord'));
     } else {
       if (game.version) bits.push(game.version);
       if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
@@ -145,7 +146,7 @@
     const bits: string[] = [];
     if (game?.releaseYear) bits.push(String(game.releaseYear));
     if (game?.developer) bits.push(game.developer);
-    bits.push(statusLabels[item.status]);
+    bits.push(statusLabels(item.status));
     return {
       id: gameId,
       title: game?.title || item.name,
@@ -211,7 +212,7 @@
 
   function entryMeta(entry: Entry) {
     if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
-    return entry.installed ? '' : 'Не установлена';
+    return entry.installed ? '' : msg('games.gameNotInstalledWord');
   }
 
   function recentMeta(entry: Entry) {
@@ -223,19 +224,19 @@
       if ($runningGames.has(id)) await stopGame(id);
       else await playGame(id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
     }
   }
 </script>
 
 <Card surface="panel">
-  <PageHeader title="Библиотека" />
+  <PageHeader title={msg('games.libraryWord')} />
 
   {#if hero && !heroHidden}
     <div class="continue" role="presentation" oncontextmenu={(event) => openGameMenu(event, hero.id)}>
-      <Card title="Продолжить играть">
+      <Card title={msg('games.libraryContinuePlayingTitle')}>
         {#snippet action()}
-          <IconButton label="Скрыть" size="sm" onclick={() => (heroHidden = true)}>
+          <IconButton label={msg('games.libraryHideLabel')} size="sm" onclick={() => (heroHidden = true)}>
             <X size="1.6rem" strokeWidth={1.8} />
           </IconButton>
         {/snippet}
@@ -245,19 +246,19 @@
           </div>
           <div class="continue-info">
             <h3 class="continue-title">{hero.title}</h3>
-            <p class="continue-meta">Последняя сессия: {relativeDate(hero.lastPlayed)}</p>
-            <p class="continue-meta">Наиграно: {playtime(hero.playtimeSeconds)}</p>
+            <p class="continue-meta">{msg('games.libraryLastSessionLabel', { date: relativeDate(hero.lastPlayed) })}</p>
+            <p class="continue-meta">{msg('games.libraryPlaytimeLabel', { time: playtime(hero.playtimeSeconds) })}</p>
             <div class="continue-actions">
               <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
                 {#if $runningGames.has(hero.id)}
                   <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-                  Остановить
+                  {msg('games.stop')}
                 {:else}
                   <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-                  Продолжить
+                  {msg('common.continue')}
                 {/if}
               </Button>
-              <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>Подробнее</Button>
+              <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
             </div>
           </div>
         </div>
@@ -268,8 +269,8 @@
   {#if recentGames.length > 0}
     <section class="section">
       <div class="section-head">
-        <h2>Недавние</h2>
-        <button class="link" onclick={() => (filter = 'recent')}>Показать все</button>
+        <h2>{msg('games.recentLabel')}</h2>
+        <button class="link" onclick={() => (filter = 'recent')}>{msg('games.libraryShowAllButton')}</button>
       </div>
       <div class="recent-row">
         {#each recentGames as entry (entry.id)}
@@ -303,7 +304,7 @@
 
     <div class="toolbar">
       <div class="search-wrap">
-        <SearchInput bind:value={search} placeholder="Поиск в библиотеке" />
+        <SearchInput bind:value={search} placeholder={msg('games.librarySearchPlaceholder')} />
       </div>
       <div class="toolbar-right">
         {#each filters as f (f.id)}
@@ -334,8 +335,8 @@
         <SegmentedControl
           bind:value={$libraryView}
           options={[
-            { id: 'grid', label: 'Сетка' },
-            { id: 'list', label: 'Список' },
+            { id: 'grid', label: msg('games.viewGrid') },
+            { id: 'list', label: msg('games.viewList') },
           ]}
         >
           {#snippet item(option)}
@@ -351,11 +352,11 @@
 
     {#if visibleGames.length === 0}
       {#if search.trim()}
-        <EmptyState title="Ничего не найдено" description="Попробуйте изменить запрос поиска." />
+        <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
       {:else}
         <EmptyState
-          title="Здесь пока пусто"
-          description="Игры появятся тут после установки или загрузки. Каталог источников — в разделе «Все игры»."
+          title={msg('games.libraryEmptyTitle')}
+          description={msg('games.libraryEmptyDescription')}
         />
       {/if}
     {:else if $libraryView === 'grid'}

@@ -1,25 +1,27 @@
 import type { FeedEvent, ReactionCount } from '../services/social';
 import { relativeDate } from '../utils/format';
+import { msg } from '../i18n';
+import type { SocialKey } from '../i18n/catalog/ru/social';
 
 export type ReactionId = 'fire' | 'salute' | 'heart' | 'clap' | 'skull' | 'party' | 'eyes' | 'joy';
 
 export const REACTIONS: ReactionId[] = ['fire', 'salute', 'heart', 'clap', 'skull', 'party', 'eyes', 'joy'];
 
-const REACTION_LABELS: Record<ReactionId, string> = {
-  fire: 'Огонь',
-  salute: 'Салют',
-  heart: 'Сердце',
-  clap: 'Аплодисменты',
-  skull: 'Череп',
-  party: 'Праздник',
-  eyes: 'Глаза',
-  joy: 'Смех',
+const REACTION_KEYS: Record<ReactionId, SocialKey> = {
+  fire: 'social.reactionFire',
+  salute: 'social.reactionSalute',
+  heart: 'social.reactionHeart',
+  clap: 'social.reactionClap',
+  skull: 'social.reactionSkull',
+  party: 'social.reactionParty',
+  eyes: 'social.reactionEyes',
+  joy: 'social.reactionJoy',
 };
 
-const KIND_LABELS: Record<string, string> = {
-  completed: 'Пройдена',
-  started: 'Новая игра',
-  favorited: 'В любимых',
+const KIND_KEYS: Record<string, SocialKey> = {
+  completed: 'social.feedCompleted',
+  started: 'social.feedStarted',
+  favorited: 'social.feedFavorited',
 };
 
 export interface FeedDayGroup {
@@ -29,15 +31,17 @@ export interface FeedDayGroup {
 }
 
 export function reactionLabel(emoji: string): string {
-  return REACTION_LABELS[emoji as ReactionId] ?? emoji;
+  const key = REACTION_KEYS[emoji as ReactionId];
+  return key ? msg(key) : emoji;
 }
 
 export function isReaction(emoji: string): emoji is ReactionId {
-  return emoji in REACTION_LABELS;
+  return emoji in REACTION_KEYS;
 }
 
 export function kindLabel(kind: string): string {
-  return KIND_LABELS[kind] ?? '';
+  const key = KIND_KEYS[kind];
+  return key ? msg(key) : '';
 }
 
 export function eventLine(event: { kind: string; game: { title: string } }): string {

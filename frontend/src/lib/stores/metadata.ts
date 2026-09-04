@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { ensureArt, getGameArt, isMetadataAvailable, type GameArt, type MetadataView } from '../services/metadata';
 import type { CatalogGame } from '../services/sources';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const metadataAvailable = writable(false);
@@ -88,7 +89,7 @@ async function pump() {
     }
   } catch (err) {
     pending.clear();
-    toast(err instanceof Error && err.message ? err.message : 'Не удалось загрузить обложки', 'danger');
+    toast(err instanceof Error && err.message ? err.message : msg('state.metadataLoadFailed'), 'danger');
   } finally {
     pumping = false;
   }

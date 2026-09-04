@@ -3,11 +3,12 @@
   import Modal from './Modal.svelte';
   import ReleaseNotesList from './ReleaseNotesList.svelte';
   import { dismissReleaseNotes, releaseNotes, unseenReleaseNotes } from '../stores/selfupdate';
+  import { msg } from '../i18n';
 
   const notes = $derived($unseenReleaseNotes);
   const open = $derived(notes.length > 0);
   const title = $derived(
-    notes.length === 1 ? `Что нового в версии ${notes[0].version}` : `Что нового в версии ${$releaseNotes.currentVersion}`,
+    msg('modals.releaseNotesTitle', { version: notes.length === 1 ? notes[0].version : $releaseNotes.currentVersion }),
   );
 </script>
 
@@ -18,11 +19,11 @@
   onclose={dismissReleaseNotes}
 >
   {#if notes.length > 1}
-    <p class="lead">Лаунчер обновился сразу на несколько версий — вот что изменилось.</p>
+    <p class="lead">{msg('modals.releaseNotesMultiple')}</p>
   {/if}
   <ReleaseNotesList notes={notes} currentVersion={$releaseNotes.currentVersion} />
   {#snippet footer()}
-    <Button variant="primary" onclick={dismissReleaseNotes}>Понятно</Button>
+    <Button variant="primary" onclick={dismissReleaseNotes}>{msg('common.gotIt')}</Button>
   {/snippet}
 </Modal>
 

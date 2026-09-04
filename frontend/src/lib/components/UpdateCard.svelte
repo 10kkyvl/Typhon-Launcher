@@ -5,7 +5,7 @@
   import ProgressBar from './ProgressBar.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import Modal from './Modal.svelte';
-  import type { Update } from '../services/updates';
+  import type { StrategyType, Update } from '../services/updates';
   import { getUpdateHistory, type UpdateHistory } from '../services/updates';
   import {
     abortUpdate,
@@ -16,6 +16,7 @@
     strategyLabels,
   } from '../stores/updates';
   import { bytesSize, relativeDate } from '../utils/format';
+  import { msg } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
 
@@ -28,7 +29,7 @@
   const plan = $derived(update.plan ?? null);
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
   const isUpdate = $derived(availability.kind === 'update');
-  const headline = $derived(isUpdate ? 'Доступно обновление' : 'Доступен новый релиз');
+  const headline = $derived(isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable'));
 
   const sizeLabel = $derived.by(() => {
     if (plan) return bytesSize(plan.downloadBytes);
@@ -36,7 +37,7 @@
     return '—';
   });
 
-  const strategyLabel = $derived(strategyLabels[plan?.strategy ?? availability.strategy] ?? '—');
+  const strategyLabel = $derived(strategyLabels(plan?.strategy ?? availability.strategy));
 
   async function openHistory() {
     history = await getUpdateHistory(update.gameId);
@@ -64,24 +65,24 @@
     <div class="titles">
       <h3 class="card-title">{headline}</h3>
       <p class="versions">
-        <span class="from">{availability.installedVersion || 'версия неизвестна'}</span>
+        <span class="from">{availability.installedVersion || msg('ui.versionUnknown')}</span>
         <span class="arrow">→</span>
-        <span class="to">{availability.targetVersion || 'новый релиз'}</span>
+        <span class="to">{availability.targetVersion || msg('ui.newRelease')}</span>
       </p>
     </div>
     <div class="badges">
       {#if update.state === 'update_ready'}
-        <StatusBadge kind="success" label="Готово к установке" />
+        <StatusBadge kind="success" label={msg('ui.readyToInstall')} />
       {:else if busy}
-        <StatusBadge kind="accent" label={stepLabels[update.step ?? 'download']} />
+        <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
       {:else if !isUpdate}
-        <StatusBadge kind="warning" label="Версии не сравнимы" dot={false} />
+        <StatusBadge kind="warning" label={msg('ui.versionsNotComparable')} dot={false} />
       {/if}
     </div>
   </div>
 
   {#if update.planning}
-    <p class="muted">Расчёт объёма загрузки…</p>
+    <p class="muted">{msg('ui.calculatingDownloadSize')}</p>
   {:else if busy}
     <div class="progress">
       <ProgressBar value={update.progress * 100} />
@@ -90,22 +91,22 @@
   {:else}
     <dl class="summary">
       <div>
-        <dt>Загрузка</dt>
+        <dt>{msg('ui.downloadLabel')}</dt>
         <dd>{sizeLabel}</dd>
       </div>
       <div>
-        <dt>Способ</dt>
+        <dt>{msg('ui.method')}</dt>
         <dd>{strategyLabel}</dd>
       </div>
       {#if plan && plan.reusedBytes > 0}
         <div>
-          <dt>Уже есть</dt>
+          <dt>{msg('ui.alreadyHave')}</dt>
           <dd>{bytesSize(plan.reusedBytes)}</dd>
         </div>
       {/if}
       {#if plan && availability.patchCount > 0}
         <div>
-          <dt>Патчей</dt>
+          <dt>{msg('ui.patches')}</dt>
           <dd>{availability.patchCount}</dd>
         </div>
       {/if}
@@ -119,35 +120,35 @@
     <p class="error">{update.error}</p>
   {/if}
   {#if running}
-    <p class="muted reason">Игра запущена. Закройте её перед обновлением.</p>
+    <p class="muted reason">{msg('ui.gameRunningBeforeUpdate')}</p>
   {/if}
 
   <div class="actions">
     {#if busy}
       <Button onclick={() => abortUpdate(update.gameId)}>
         <X size="1.5rem" strokeWidth={1.8} />
-        Прервать
+        {msg('ui.abort')}
       </Button>
     {:else if plan}
-      <Button variant="primary" disabled={running} onclick={() => (confirmOpen = true)}>Обновить</Button>
+      <Button variant="primary" disabled={running} onclick={() => (confirmOpen = true)}>{msg('ui.updateAction')}</Button>
       <Button onclick={() => (detailsOpen = !detailsOpen)}>
-        Подробности
+        {msg('ui.details')}
         <ChevronDown size="1.5rem" strokeWidth={1.8} />
       </Button>
     {:else}
       <Button variant="primary" disabled={update.planning} onclick={() => preparePlan(update.gameId)}>
-        Рассчитать обновление
+        {msg('ui.calculateUpdate')}
       </Button>
     {/if}
     {#if update.canRollback}
       <Button onclick={() => restorePrevious(update.gameId)}>
         <RotateCcw size="1.5rem" strokeWidth={1.8} />
-        Вернуть предыдущую версию
+        {msg('ui.restorePreviousVersion')}
       </Button>
     {/if}
     <Button onclick={openHistory}>
       <History size="1.5rem" strokeWidth={1.8} />
-      История
+      {msg('ui.history')}
     </Button>
   </div>
 
@@ -155,24 +156,24 @@
     <div class="details">
       <dl class="summary">
         <div>
-          <dt>Текущая</dt>
+          <dt>{msg('ui.current')}</dt>
           <dd>{plan.installedVersion || '—'}</dd>
         </div>
         <div>
-          <dt>Целевая</dt>
+          <dt>{msg('ui.target')}</dt>
           <dd>{plan.targetVersion || '—'}</dd>
         </div>
         <div>
-          <dt>Нужно места</dt>
+          <dt>{msg('ui.spaceNeeded')}</dt>
           <dd>{bytesSize(plan.requiredDiskBytes)}</dd>
         </div>
         <div>
-          <dt>Резервная копия сохранений</dt>
-          <dd>{plan.backupAvailable ? 'Будет создана' : 'Недоступна'}</dd>
+          <dt>{msg('ui.saveBackup')}</dt>
+          <dd>{plan.backupAvailable ? msg('ui.backupWillBeCreated') : msg('ui.backupUnavailable')}</dd>
         </div>
         <div>
-          <dt>Откат</dt>
-          <dd>{plan.rollbackAvailable ? 'Доступен' : 'Недоступен'}</dd>
+          <dt>{msg('ui.rollback')}</dt>
+          <dd>{plan.rollbackAvailable ? msg('ui.available') : msg('ui.notAvailable')}</dd>
         </div>
       </dl>
       <ol class="steps">
@@ -188,48 +189,48 @@
 </Card>
 </div>
 
-<Modal bind:open={confirmOpen} title="Обновить игру?">
+<Modal bind:open={confirmOpen} title={msg('ui.updateGameTitle')}>
   <dl class="summary modal-summary">
     <div>
-      <dt>Текущая версия</dt>
+      <dt>{msg('ui.currentVersion')}</dt>
       <dd>{plan?.installedVersion || '—'}</dd>
     </div>
     <div>
-      <dt>Новая версия</dt>
+      <dt>{msg('ui.newVersion')}</dt>
       <dd>{plan?.targetVersion || '—'}</dd>
     </div>
     <div>
-      <dt>Загрузка</dt>
+      <dt>{msg('ui.downloadLabel')}</dt>
       <dd>{sizeLabel}</dd>
     </div>
     <div>
-      <dt>Нужно места</dt>
+      <dt>{msg('ui.spaceNeeded')}</dt>
       <dd>{plan ? bytesSize(plan.requiredDiskBytes) : '—'}</dd>
     </div>
     <div>
-      <dt>Способ</dt>
+      <dt>{msg('ui.method')}</dt>
       <dd>{strategyLabel}</dd>
     </div>
     <div>
-      <dt>Резервная копия сохранений</dt>
-      <dd>{plan?.backupAvailable ? 'Будет создана' : 'Недоступна'}</dd>
+      <dt>{msg('ui.saveBackup')}</dt>
+      <dd>{plan?.backupAvailable ? msg('ui.backupWillBeCreated') : msg('ui.backupUnavailable')}</dd>
     </div>
   </dl>
   {#snippet footer()}
-    <Button onclick={() => (confirmOpen = false)}>Отмена</Button>
-    <Button variant="primary" onclick={confirm}>Обновить</Button>
+    <Button onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
+    <Button variant="primary" onclick={confirm}>{msg('ui.updateAction')}</Button>
   {/snippet}
 </Modal>
 
-<Modal bind:open={historyOpen} title="История обновлений">
+<Modal bind:open={historyOpen} title={msg('ui.updateHistoryTitle')}>
   {#if history.length === 0}
-    <p class="muted">Обновлений пока не было.</p>
+    <p class="muted">{msg('ui.noUpdatesYet')}</p>
   {:else}
     <ul class="history">
       {#each history as entry (entry.id)}
         <li>
           <span class="step-label">{entry.fromVersion || '—'} → {entry.toVersion || '—'}</span>
-          <span class="muted">{strategyLabels[entry.strategy as keyof typeof strategyLabels] ?? entry.strategy}</span>
+          <span class="muted">{strategyLabels(entry.strategy as StrategyType) ?? entry.strategy}</span>
           <span class="muted">{relativeDate(entry.startedAt)}</span>
           <span class="muted">{entry.status}</span>
         </li>
@@ -237,7 +238,7 @@
     </ul>
   {/if}
   {#snippet footer()}
-    <Button onclick={() => (historyOpen = false)}>Закрыть</Button>
+    <Button onclick={() => (historyOpen = false)}>{msg('common.close')}</Button>
   {/snippet}
 </Modal>
 

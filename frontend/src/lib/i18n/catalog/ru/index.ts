@@ -1,4 +1,5 @@
 import type { Message } from '../../types';
+import { common } from './common';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
@@ -7,8 +8,15 @@ import { install } from './install';
 import { downloads } from './downloads';
 import { installed } from './installed';
 import { settings } from './settings';
+import { modals } from './modals';
+import { ui } from './ui';
+import { social } from './social';
+import { games } from './games';
+import { transfers } from './transfers';
+import { state } from './state';
 
 export const ru = {
+  ...common,
   ...format,
   ...friends,
   ...profile,
@@ -17,6 +25,12 @@ export const ru = {
   ...downloads,
   ...installed,
   ...settings,
+  ...modals,
+  ...ui,
+  ...social,
+  ...games,
+  ...transfers,
+  ...state,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;

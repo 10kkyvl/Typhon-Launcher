@@ -13,6 +13,7 @@
   import { route } from '../stores/router';
   import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
 
   const status = $derived($selfUpdateStatus);
   const progress = $derived($selfUpdateProgress);
@@ -28,11 +29,11 @@
 </script>
 
 {#if applying}
-  <div class="overlay" role="dialog" aria-modal="true" aria-label="Установка обновления">
+  <div class="overlay" role="dialog" aria-modal="true" aria-label={msg('ui.installingUpdateTitle')}>
     <div class="panel">
       <RotateCcw class="spin" size="3.2rem" strokeWidth={1.6} />
-      <h3>Устанавливаем версию {version}</h3>
-      <p>Лаунчер закроется, установит обновление и запустится сам. Это займёт меньше минуты.</p>
+      <h3>{msg('ui.installingVersion', { version })}</h3>
+      <p>{msg('ui.launcherWillRestartShort')}</p>
       <div class="marquee"><span></span></div>
     </div>
   </div>
@@ -42,25 +43,25 @@
   <div class="card">
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
-      <span class="title">Загрузка обновления {version}</span>
-      <IconButton label="Отменить загрузку" size="sm" onclick={requestCancelDownload}>
+      <span class="title">{msg('ui.downloadingUpdate', { version })}</span>
+      <IconButton label={msg('ui.cancelDownload')} size="sm" onclick={requestCancelDownload}>
         <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>
     <ProgressBar value={pct} />
-    <span class="meta">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)} · {Math.round(pct)}%</span>
+    <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
 {:else if outcome}
   <div class="card" class:card-danger={!outcome.ok}>
     <div class="row">
       {#if outcome.ok}
         <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
-        <span class="title">Лаунчер обновлён до {outcome.version}</span>
+        <span class="title">{msg('ui.launcherUpdatedTo', { version: outcome.version })}</span>
       {:else}
         <TriangleAlert size="1.8rem" strokeWidth={1.8} />
-        <span class="title">Обновление {outcome.version} не установилось</span>
+        <span class="title">{msg('ui.updateFailedVersion', { version: outcome.version })}</span>
       {/if}
-      <IconButton label="Скрыть" size="sm" onclick={dismissOutcome}>
+      <IconButton label={msg('ui.hide')} size="sm" onclick={dismissOutcome}>
         <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>

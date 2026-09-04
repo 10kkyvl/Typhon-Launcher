@@ -53,7 +53,7 @@
 </script>
 
 {#if played.length > 0 || playingNow.length > 0}
-  <Card title="Друзья">
+  <Card title={msg('games.friendsPanelTitle')}>
     {#if played.length > 0}
       <p class="line">{playedLine}</p>
       <ul class="people">
@@ -79,7 +79,7 @@
     {/if}
 
     {#if playingNow.length > 0}
-      <p class="line sub">Играют сейчас</p>
+      <p class="line sub">{msg('games.friendsPanelPlayingNow')}</p>
       <ul class="people">
         {#each playingNow as friend (friend.id)}
           <li class="person">
@@ -95,7 +95,7 @@
     {/if}
 
     <button class="show-all" type="button" onclick={() => navigate('friends')}>
-      Смотреть всех друзей
+      {msg('games.friendsPanelSeeAll')}
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
     </button>
   </Card>

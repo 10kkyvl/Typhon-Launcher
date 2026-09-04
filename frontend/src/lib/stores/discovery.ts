@@ -7,6 +7,7 @@ import {
   type DiscoveryProgress,
   type DiscoveryResult,
 } from '../services/discovery';
+import { msg } from '../i18n';
 
 export const scanning = writable(false);
 export const scanProgress = writable<DiscoveryProgress>({ processed: 0, total: 0 });
@@ -42,11 +43,11 @@ export async function rescan(): Promise<DiscoveryResult> {
 }
 
 export function scanSummary(result: DiscoveryResult): string {
-  const parts = [`Найдено ${result.candidates}`];
-  if (result.added > 0) parts.push(`добавлено ${result.added}`);
-  if (result.updated > 0) parts.push(`обновлено ${result.updated}`);
-  if (result.known > 0) parts.push(`уже в библиотеке ${result.known}`);
-  if (result.skipped > 0) parts.push(`пропущено ${result.skipped}`);
-  if (result.errors > 0) parts.push(`с ошибками ${result.errors}`);
+  const parts = [msg('state.discoveryFound', { count: result.candidates })];
+  if (result.added > 0) parts.push(msg('state.discoveryAdded', { count: result.added }));
+  if (result.updated > 0) parts.push(msg('state.discoveryUpdated', { count: result.updated }));
+  if (result.known > 0) parts.push(msg('state.discoveryKnown', { count: result.known }));
+  if (result.skipped > 0) parts.push(msg('state.discoverySkipped', { count: result.skipped }));
+  if (result.errors > 0) parts.push(msg('state.discoveryErrors', { count: result.errors }));
   return parts.join(' · ');
 }

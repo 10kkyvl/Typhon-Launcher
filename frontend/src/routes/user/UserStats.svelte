@@ -3,17 +3,18 @@
   import StatTile from '../../lib/components/StatTile.svelte';
   import type { StatsView } from '../../lib/services/social';
   import { formatCount } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import HiddenBadge from '../profile/HiddenBadge.svelte';
 
   let { stats }: { stats: StatsView | null } = $props();
 
-  const hint = 'Владелец профиля скрыл эти данные';
+  const hint = msg('social.statsHiddenHint');
 </script>
 
 {#if stats}
   <div class="stats-row">
     <div class="stat">
-      <StatTile value={formatCount(stats.games)} label="Игр">
+      <StatTile value={formatCount(stats.games)} label={msg('social.statGames')}>
         {#snippet icon()}<Gamepad2 size="1.8rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
@@ -22,16 +23,16 @@
         <div class="tile">
           <span class="icon"><Clock size="1.8rem" strokeWidth={1.8} /></span>
           <HiddenBadge text={hint} />
-          <span class="label">Часов</span>
+          <span class="label">{msg('social.statHours')}</span>
         </div>
       {:else}
-        <StatTile value={formatCount(stats.hours)} label="Часов">
+        <StatTile value={formatCount(stats.hours)} label={msg('social.statHours')}>
           {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
         </StatTile>
       {/if}
     </div>
     <div class="stat">
-      <StatTile value={formatCount(stats.completed)} label="Пройдено">
+      <StatTile value={formatCount(stats.completed)} label={msg('social.statCompleted')}>
         {#snippet icon()}<CheckCircle2 size="1.8rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
@@ -39,7 +40,7 @@
 {:else}
   <div class="stats-hidden">
     <HiddenBadge text={hint} />
-    <span class="label">Статистика скрыта</span>
+    <span class="label">{msg('social.statsHiddenLabel')}</span>
   </div>
 {/if}
 

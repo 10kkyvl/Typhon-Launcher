@@ -8,6 +8,7 @@
   import { profile, profileByCode, sendRequest, type PublicProfile } from '../../lib/services/social';
   import { commonLine, isFriendCode, relationHint } from '../../lib/social/view';
   import { toast } from '../../lib/stores/toasts';
+  import { msg } from '../../lib/i18n';
 
   let { open = $bindable(false), onsent }: { open?: boolean; onsent?: () => void } = $props();
 
@@ -54,7 +55,7 @@
     } catch (err) {
       if (current !== attempt) return;
       found = null;
-      error = accountErrorText(err, 'Не удалось найти пользователя');
+      error = accountErrorText(err, msg('social.friendsFindUserFailed'));
     } finally {
       if (current === attempt) searching = false;
     }
@@ -78,23 +79,23 @@
     sending = true;
     try {
       const result = await sendRequest(found.username);
-      toast(result.accepted ? 'Вы теперь друзья' : 'Заявка отправлена', 'success');
+      toast(result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing'), 'success');
       open = false;
       reset();
       onsent?.();
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось отправить заявку'), 'danger');
+      toast(accountErrorText(err, msg('social.friendsSendRequestFailed')), 'danger');
     } finally {
       sending = false;
     }
   }
 </script>
 
-<Modal bind:open title="Добавить друга" width="52rem" onclose={reset}>
+<Modal bind:open title={msg('social.friendsAddFriend')} width="52rem" onclose={reset}>
   <div class="body">
     <SearchInput
       bind:value={query}
-      placeholder="@имя или код TY-XXXX-XXXX"
+      placeholder={msg('social.friendsSearchPlaceholder')}
       loading={searching}
       oninput={schedule}
       onkeydown={submit}
@@ -120,7 +121,7 @@
     {:else if error}
       <p class="hint danger">{error}</p>
     {:else if !query.trim()}
-      <p class="hint">Найдите по имени пользователя или по коду, которым с вами поделились.</p>
+      <p class="hint">{msg('social.friendsSearchHint')}</p>
     {/if}
   </div>
 
@@ -132,10 +133,10 @@
         reset();
       }}
     >
-      Отмена
+      {msg('common.cancel')}
     </Button>
     {#if canSend}
-      <Button variant="primary" disabled={sending} onclick={send}>Отправить заявку</Button>
+      <Button variant="primary" disabled={sending} onclick={send}>{msg('social.friendsSendRequest')}</Button>
     {/if}
   {/snippet}
 </Modal>

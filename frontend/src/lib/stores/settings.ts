@@ -3,7 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { getSettings, saveSettings, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
-import { applyLanguage } from '../i18n';
+import { applyLanguage, msg } from '../i18n';
 
 export const settings = writable<Settings | null>(null);
 
@@ -26,7 +26,7 @@ export async function initSettings() {
 export async function updateSettings(patch: Partial<Settings>) {
   const current = get(settings);
   if (!current) {
-    toast('Настройки ещё не загружены', 'danger');
+    toast(msg('state.settingsNotLoaded'), 'danger');
     return;
   }
   const next = { ...current, ...patch };
@@ -35,7 +35,7 @@ export async function updateSettings(patch: Partial<Settings>) {
     await saveSettings(next);
   } catch (err) {
     console.error('save settings', err);
-    toast('Не удалось сохранить настройки', 'danger');
+    toast(msg('state.settingsSaveFailed'), 'danger');
     settings.set(current);
   }
 }

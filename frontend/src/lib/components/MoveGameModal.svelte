@@ -13,6 +13,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
+  import { msg } from '../i18n';
 
   const game = $derived(
     $moveTarget ? ($libraryGames.find((g) => g.id === $moveTarget?.gameId) ?? null) : null,
@@ -68,7 +69,7 @@
 
   async function pickFolder() {
     if (!inWails) {
-      toast('Выбор папки доступен только в desktop-сборке');
+      toast(msg('modals.moveGameDesktopOnly'));
       return;
     }
     picking = true;
@@ -81,10 +82,10 @@
         diskInfo = await getStorageInfoFor(folder);
       } catch (err) {
         diskInfo = null;
-        failure = message(err, 'Не удалось определить свободное место');
+        failure = message(err, msg('modals.moveGameFreeSpaceUnknown'));
       }
     } catch (err) {
-      toast(message(err, 'Не удалось открыть диалог выбора папки'), 'danger');
+      toast(message(err, msg('modals.moveGameFolderDialogFailed')), 'danger');
     } finally {
       picking = false;
     }
@@ -99,7 +100,7 @@
       jobId = created.id;
       startedJob = created;
     } catch (err) {
-      failure = message(err, 'Не удалось начать перенос');
+      failure = message(err, msg('modals.moveGameStartFailed'));
     } finally {
       starting = false;
     }
@@ -111,7 +112,7 @@
     try {
       await cancelMove(job.id);
     } catch (err) {
-      toast(message(err, 'Не удалось отменить перенос'), 'danger');
+      toast(message(err, msg('modals.moveGameCancelFailed')), 'danger');
     } finally {
       cancelling = false;
     }
@@ -128,14 +129,14 @@
   }
 </script>
 
-<Modal open={!!$moveTarget} title="Перенос игры" width="52rem" onclose={close}>
+<Modal open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
   {#if game}
     <div class="move">
       <div class="field">
-        <span class="field-label">Сейчас установлена в</span>
+        <span class="field-label">{msg('modals.moveGameCurrentlyIn')}</span>
         <p class="path">{game.installDir}</p>
         {#if game.sizeBytes > 0}
-          <span class="field-sub">Размер игры — {bytesSize(game.sizeBytes)}</span>
+          <span class="field-sub">{msg('modals.moveGameSize', { size: bytesSize(game.sizeBytes) })}</span>
         {/if}
       </div>
 
@@ -152,16 +153,16 @@
         </div>
       {:else}
         {#if jobFailed}
-          <p class="failure">{moveErrorText(jobFailed.error, 'Не удалось перенести игру')}</p>
+          <p class="failure">{moveErrorText(jobFailed.error, msg('modals.moveGameFailed'))}</p>
         {/if}
 
         <div class="field">
-          <span class="field-label">Новая папка</span>
+          <span class="field-label">{msg('modals.moveGameNewFolder')}</span>
           <div class="pick-controls">
-            <input class="input sm" type="text" readonly placeholder="Папка не выбрана" value={picked} />
+            <input class="input sm" type="text" readonly placeholder={msg('modals.moveGameFolderPlaceholder')} value={picked} />
             <Button size="sm" disabled={picking} onclick={pickFolder}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
-              Обзор
+              {msg('modals.moveGameBrowse')}
             </Button>
           </div>
         </div>
@@ -170,8 +171,8 @@
           <div class="disk">
             <HardDrive size="1.7rem" strokeWidth={1.8} />
             <div class="disk-text">
-              <span class="disk-name">Диск {diskInfo.volume || '—'}{diskInfo.filesystem ? ` · ${diskInfo.filesystem}` : ''}</span>
-              <span class="disk-meta">Свободно {bytesSize(diskInfo.freeBytes)} из {bytesSize(diskInfo.totalBytes)}</span>
+              <span class="disk-name">{msg('modals.moveGameDiskName', { volume: diskInfo.volume || '—' })}{diskInfo.filesystem ? ` · ${diskInfo.filesystem}` : ''}</span>
+              <span class="disk-meta">{msg('modals.moveGameDiskFree', { free: bytesSize(diskInfo.freeBytes), total: bytesSize(diskInfo.totalBytes) })}</span>
             </div>
           </div>
         {/if}
@@ -179,12 +180,11 @@
         <div class="safety">
           <ShieldCheck size="1.7rem" strokeWidth={1.8} />
           <p>
-            Перенос безопасен: файлы копируются в новое место и проверяются по хешу, и только после этого
-            исходная папка удаляется. Пока проверка не пройдёт, старые файлы не тронуты.
+            {msg('modals.moveGameSafetyText')}
           </p>
         </div>
 
-        <p class="hint">Перенос больших игр может занять продолжительное время — лаунчер можно свернуть.</p>
+        <p class="hint">{msg('modals.moveGameHint')}</p>
 
         {#if failure}
           <p class="failure">{failure}</p>
@@ -196,15 +196,15 @@
   {#snippet footer()}
     {#if jobActive && job}
       <Button variant="danger" disabled={cancelling} onclick={cancel}>
-        {cancelling ? 'Отменяем…' : 'Отменить перенос'}
+        {cancelling ? msg('modals.moveGameCancelling') : msg('modals.moveGameCancelMove')}
       </Button>
     {:else}
-      <Button onclick={close}>Отмена</Button>
+      <Button onclick={close}>{msg('common.cancel')}</Button>
       {#if jobFailed}
-        <Button variant="primary" onclick={retry}>Попробовать снова</Button>
+        <Button variant="primary" onclick={retry}>{msg('modals.moveGameRetry')}</Button>
       {:else}
         <Button variant="primary" disabled={!picked || starting} onclick={start}>
-          {starting ? 'Начинаем…' : 'Перенести'}
+          {starting ? msg('modals.moveGameStarting') : msg('modals.moveGameStart')}
         </Button>
       {/if}
     {/if}

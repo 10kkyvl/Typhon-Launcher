@@ -17,6 +17,7 @@ import {
   type VerifyState,
 } from '../services/updates';
 import { errorMessage } from '../utils/errors';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const updates = writable<Update[]>([]);
@@ -32,33 +33,42 @@ export const updatesAvailable = derived(updates, ($updates) =>
   $updates.filter((u) => u.availability.available && u.state !== 'idle').length,
 );
 
-export const strategyLabels: Record<StrategyType, string> = {
-  '': 'Не определена',
-  full_release: 'Полная переустановка',
-  torrent_reuse: 'Повторное использование файлов',
-  patch_chain: 'Патчи',
-};
+export function strategyLabels(strategy: StrategyType): string {
+  const labels: Record<StrategyType, string> = {
+    '': msg('state.updatesStrategyUnknown'),
+    full_release: msg('state.updatesStrategyFullRelease'),
+    torrent_reuse: msg('state.updatesStrategyTorrentReuse'),
+    patch_chain: msg('state.updatesStrategyPatchChain'),
+  };
+  return labels[strategy];
+}
 
-export const stepLabels: Record<StepKind, string> = {
-  download: 'Загрузка',
-  recheck: 'Проверка файлов',
-  apply_patch: 'Применение патча',
-  extract: 'Распаковка',
-  install: 'Установка',
-  verify: 'Проверка',
-  swap: 'Замена версии',
-  cleanup: 'Очистка',
-};
+export function stepLabels(step: StepKind): string {
+  const labels: Record<StepKind, string> = {
+    download: msg('common.loading'),
+    recheck: msg('state.updatesStepRecheck'),
+    apply_patch: msg('state.updatesStepApplyPatch'),
+    extract: msg('state.updatesStepExtract'),
+    install: msg('state.updatesStepInstall'),
+    verify: msg('state.updatesStepVerify'),
+    swap: msg('state.updatesStepSwap'),
+    cleanup: msg('state.updatesStepCleanup'),
+  };
+  return labels[step];
+}
 
-export const updateStateLabels: Record<UpdateState, string> = {
-  idle: 'Актуальная версия',
-  update_available: 'Доступно обновление',
-  update_downloading: 'Загрузка обновления',
-  update_ready: 'Обновление готово',
-  updating: 'Обновление',
-  update_failed: 'Ошибка обновления',
-  update_rollback: 'Откат',
-};
+export function updateStateLabels(state: UpdateState): string {
+  const labels: Record<UpdateState, string> = {
+    idle: msg('state.updatesStateIdle'),
+    update_available: msg('state.updatesStateAvailable'),
+    update_downloading: msg('state.updatesStateDownloading'),
+    update_ready: msg('state.updatesStateReady'),
+    updating: msg('state.updatesStateUpdating'),
+    update_failed: msg('state.updatesStateFailed'),
+    update_rollback: msg('state.updatesStateRollback'),
+  };
+  return labels[state];
+}
 
 function upsert(item: Update) {
   updates.update((list) => {
@@ -83,23 +93,27 @@ export async function initUpdates() {
   Events.On('update:available', (event) => {
     const item = event.data as Update;
     upsert(item);
-    const label = item.availability.kind === 'update' ? 'Доступно обновление' : 'Доступен новый релиз';
-    toast(`${label}: «${item.title}»`);
+    toast(
+      msg(
+        item.availability.kind === 'update' ? 'state.updatesUpdateAvailableTitled' : 'state.updatesReleaseAvailableTitled',
+        { title: item.title },
+      ),
+    );
   });
   Events.On('update:completed', (event) => {
     const item = event.data as Update;
     upsert(item);
-    toast(`«${item.title}» обновлена`, 'success');
+    toast(msg('state.updatesUpdatedToast', { title: item.title }), 'success');
   });
   Events.On('update:failed', (event) => {
     const item = event.data as Update;
     upsert(item);
-    toast(`Не удалось обновить «${item.title}»: ${item.error}`, 'danger');
+    toast(msg('state.updatesFailedToast', { title: item.title, error: item.error ?? '' }), 'danger');
   });
   Events.On('update:rollback', (event) => {
     const item = event.data as Update;
     upsert(item);
-    toast(`Восстановлена предыдущая версия «${item.title}»`);
+    toast(msg('state.updatesRollbackToast', { title: item.title }));
   });
 
   for (const name of ['verify:started', 'verify:updated', 'verify:completed', 'repair:started', 'repair:updated']) {
@@ -108,8 +122,8 @@ export async function initUpdates() {
   Events.On('repair:completed', (event) => {
     const state = event.data as VerifyState;
     upsertVerify(state);
-    if (state.error) toast(`Восстановление не завершено: ${state.error}`, 'danger');
-    else toast('Файлы игры восстановлены', 'success');
+    if (state.error) toast(msg('state.updatesRepairIncomplete', { error: state.error }), 'danger');
+    else toast(msg('state.updatesRepairComplete'), 'success');
   });
 }
 

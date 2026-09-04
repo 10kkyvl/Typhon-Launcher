@@ -121,7 +121,7 @@
 
   function win(action: 'minimise' | 'maximise' | 'close') {
     if (!inWails) {
-      toast('Доступно только в desktop-сборке');
+      toast(msg('ui.desktopOnly'));
       return;
     }
     if (action === 'minimise') Window.Minimise();
@@ -135,10 +135,10 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <header class="topbar" style="--wails-draggable: drag" ondblclick={onTitlebarDoubleClick}>
   <div class="no-drag nav-buttons">
-    <IconButton label="Назад" disabled={!$canGoBack} onclick={goBack}>
+    <IconButton label={msg('common.back')} disabled={!$canGoBack} onclick={goBack}>
       <ChevronLeft size="1.8rem" strokeWidth={1.8} />
     </IconButton>
-    <IconButton label="Вперёд" disabled={!$canGoForward} onclick={goForward}>
+    <IconButton label={msg('ui.forward')} disabled={!$canGoForward} onclick={goForward}>
       <ChevronRight size="1.8rem" strokeWidth={1.8} />
     </IconButton>
   </div>
@@ -147,7 +147,7 @@
     <SearchInput
       bind:value={search}
       bind:input={searchInput}
-      placeholder="Поиск игр и релизов"
+      placeholder={msg('search.placeholder')}
       shortcut="Ctrl K"
       loading={results.loading}
       oninput={(value) => overlay.setQuery(value)}
@@ -157,7 +157,7 @@
     {#if results.open && results.query.trim() !== ''}
       <div class="results" bind:this={resultsBox}>
         {#if results.games.length > 0}
-          <div class="results-head">Игры</div>
+          <div class="results-head">{msg('search.games')}</div>
           {#each results.games as hit, i (hit.id)}
             <button class="result" class:active={results.active === i} onclick={() => openGame(hit)}>
               <span class="result-art">
@@ -167,7 +167,7 @@
                 <span class="result-line">
                   <span class="result-title">{hit.title}</span>
                   {#if hit.installed}
-                    <span class="result-badge">Установлено</span>
+                    <span class="result-badge">{msg('ui.installed')}</span>
                   {/if}
                 </span>
                 {#if gameHint(hit)}
@@ -177,12 +177,12 @@
             </button>
           {/each}
           {#if results.moreGames > 0}
-            <div class="results-more">и ещё {results.moreGames}</div>
+            <div class="results-more">{msg('search.more', { count: results.moreGames })}</div>
           {/if}
         {/if}
 
         {#if results.releases.length > 0}
-          <div class="results-head">Релизы без совпадения</div>
+          <div class="results-head">{msg('search.releasesNoMatch')}</div>
           {#each results.releases as hit, i (hit.id)}
             <button
               class="result"
@@ -198,14 +198,14 @@
             </button>
           {/each}
           {#if results.moreReleases > 0}
-            <div class="results-more">и ещё {results.moreReleases}</div>
+            <div class="results-more">{msg('search.more', { count: results.moreReleases })}</div>
           {/if}
         {/if}
 
         {#if results.error}
           <div class="results-error">{results.error}</div>
         {:else if showEmpty}
-          <div class="results-empty">Ничего не найдено</div>
+          <div class="results-empty">{msg('search.nothingFound')}</div>
         {/if}
       </div>
     {/if}
@@ -213,7 +213,7 @@
 
   <div class="no-drag right">
     <div class="icon-slot" use:clickOutside={() => (notificationsOpen = false)}>
-      <IconButton label="Уведомления" active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
+      <IconButton label={msg('ui.notifications')} active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
         <Bell size="1.8rem" strokeWidth={1.8} />
       </IconButton>
       {#if $notifications.length > 0}
@@ -222,13 +222,13 @@
       {#if notificationsOpen}
         <div class="notifications">
           <div class="notifications-head-row">
-            <div class="notifications-head">Уведомления</div>
+            <div class="notifications-head">{msg('ui.notifications')}</div>
             {#if $notifications.length > 0}
-              <button class="notifications-mark-read" onclick={markAllRead}>Прочитать все</button>
+              <button class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
             {/if}
           </div>
           {#if $notifications.length === 0}
-            <div class="notifications-empty">Пока ничего нового</div>
+            <div class="notifications-empty">{msg('ui.nothingNewYet')}</div>
           {:else}
             {#each $notifications as n (n.id)}
               <button class="notification" onclick={() => openNotification(n)}>
@@ -242,14 +242,14 @@
             onclick={() => {
               notificationsOpen = false;
               openHistory();
-            }}>Вся история</button
+            }}>{msg('ui.allHistory')}</button
           >
         </div>
       {/if}
     </div>
 
     <div class="icon-slot">
-      <IconButton label="Друзья" onclick={() => navigate('friends')}>
+      <IconButton label={msg('ui.friends')} onclick={() => navigate('friends')}>
         <Users size="1.8rem" strokeWidth={1.8} />
       </IconButton>
       {#if $incomingCount > 0}
@@ -258,13 +258,13 @@
     </div>
 
     <div class="window-controls">
-      <button class="wc" aria-label="Свернуть" onclick={() => win('minimise')}>
+      <button class="wc" aria-label={msg('ui.minimize')} onclick={() => win('minimise')}>
         <Minus size="1.6rem" strokeWidth={1.6} />
       </button>
-      <button class="wc" aria-label="Развернуть" onclick={() => win('maximise')}>
+      <button class="wc" aria-label={msg('ui.maximize')} onclick={() => win('maximise')}>
         <Square size="1.2rem" strokeWidth={1.6} />
       </button>
-      <button class="wc close" aria-label="Закрыть" onclick={() => win('close')}>
+      <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
         <X size="1.6rem" strokeWidth={1.6} />
       </button>
     </div>

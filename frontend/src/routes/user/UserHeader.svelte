@@ -8,6 +8,7 @@
   import type { PublicProfile } from '../../lib/services/social';
   import { presenceDot } from '../../lib/social/presence';
   import { memberSince, relationLabel } from '../../lib/social/view';
+  import { msg } from '../../lib/i18n';
   import UserStats from './UserStats.svelte';
 
   let {
@@ -27,16 +28,16 @@
   const presence = $derived(presenceDot(profile.presence));
   const playing = $derived(presence !== 'offline' && profile.presence?.gameId != null);
   const playingLine = $derived(
-    playing ? (profile.presence?.gameTitle ? `Играет в ${profile.presence.gameTitle}` : 'Играет') : '',
+    playing ? (profile.presence?.gameTitle ? msg('social.playingIn', { name: profile.presence.gameTitle }) : msg('social.playing')) : '',
   );
   const pending = $derived(profile.relation === 'none' || profile.relation === 'outgoing' || profile.relation === 'incoming');
 
   const friendMenu: MenuItem[] = [
-    { id: 'unfriend', label: 'Удалить из друзей', danger: true },
-    { id: 'block', label: 'Заблокировать', danger: true },
+    { id: 'unfriend', label: msg('social.unfriendLabel'), danger: true },
+    { id: 'block', label: msg('social.blockLabel'), danger: true },
   ];
 
-  const blockMenu: MenuItem[] = [{ id: 'block', label: 'Заблокировать', danger: true }];
+  const blockMenu: MenuItem[] = [{ id: 'block', label: msg('social.blockLabel'), danger: true }];
 </script>
 
 <section class="user-header">
@@ -70,7 +71,7 @@
             <Button disabled>{relationLabel('friend')}</Button>
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
-                <IconButton label="Ещё" onclick={toggle}>
+                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -82,16 +83,16 @@
               </Button>
             {:else if profile.relation === 'outgoing'}
               <Button disabled>{relationLabel('outgoing')}</Button>
-              <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>Отменить</Button>
+              <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>{msg('social.cancelRequestButton')}</Button>
             {:else}
               <Button variant="primary" disabled={busy} onclick={() => onaction('accept')}>
                 {relationLabel('incoming')}
               </Button>
-              <Button variant="ghost" disabled={busy} onclick={() => onaction('decline')}>Отклонить</Button>
+              <Button variant="ghost" disabled={busy} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
             {/if}
             <DropdownMenu items={blockMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
-                <IconButton label="Ещё" onclick={toggle}>
+                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

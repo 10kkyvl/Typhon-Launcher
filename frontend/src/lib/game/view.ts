@@ -1,3 +1,4 @@
+import { msg } from '../i18n';
 import type { MediaAsset, MetadataMatch, MetadataView } from '../services/metadata';
 
 const blanks = new Set(['', '-', '--', '—', 'n/a', 'na', 'null', 'undefined', 'unknown', 'неизвестно']);
@@ -196,14 +197,14 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   if (status.busy) {
     return { kind: 'progress', label: status.busy.label, disabled: true, progress: status.busy.progress };
   }
-  if (status.running) return { kind: 'stop', label: 'Остановить', disabled: false };
+  if (status.running) return { kind: 'stop', label: msg('games.stop'), disabled: false };
   if (status.installed) {
-    if (status.updateAvailable) return { kind: 'update', label: 'Обновить', disabled: false };
-    return { kind: 'play', label: 'Играть', disabled: false };
+    if (status.updateAvailable) return { kind: 'update', label: msg('common.refresh'), disabled: false };
+    return { kind: 'play', label: msg('games.play'), disabled: false };
   }
-  if (status.releaseCount > 0) return { kind: 'install', label: 'Установить', disabled: false };
-  if (status.releasesLoading) return { kind: 'resolving', label: 'Проверяем загрузки…', disabled: true };
-  return { kind: 'unavailable', label: 'Нет доступных загрузок', disabled: true };
+  if (status.releaseCount > 0) return { kind: 'install', label: msg('games.primaryInstall'), disabled: false };
+  if (status.releasesLoading) return { kind: 'resolving', label: msg('games.primaryResolving'), disabled: true };
+  return { kind: 'unavailable', label: msg('games.primaryUnavailable'), disabled: true };
 }
 
 export type TerminalDownloadStatus = 'failed' | 'completed';
@@ -220,9 +221,9 @@ export function hubAction(status: HubStatus): PrimaryAction {
   if (status.installed || status.running || status.busy) return primaryAction(status);
   if (status.terminalDownload) {
     if (status.terminalDownload.status === 'failed') {
-      return { kind: 'retry-download', label: 'Повторить загрузку', disabled: false };
+      return { kind: 'retry-download', label: msg('games.hubRetryDownload'), disabled: false };
     }
-    return { kind: 'install-download', label: 'Установить', disabled: false };
+    return { kind: 'install-download', label: msg('games.primaryInstall'), disabled: false };
   }
   return primaryAction(status);
 }

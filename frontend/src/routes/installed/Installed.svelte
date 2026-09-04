@@ -53,9 +53,9 @@
   type Sort = 'recent' | 'alpha' | 'size';
 
   const sortLabels: Record<Sort, string> = {
-    recent: 'Недавние',
-    alpha: 'По алфавиту',
-    size: 'По размеру',
+    recent: msg('games.recentLabel'),
+    alpha: msg('games.sortAlpha'),
+    size: msg('games.sortSize'),
   };
 
   let search = $state('');
@@ -119,7 +119,7 @@
 
   function openAddDialog() {
     if (!inWails) {
-      toast('Добавление игр доступно только в desktop-сборке');
+      toast(msg('games.installedAddDesktopOnly'));
       return;
     }
     newExecutable = '';
@@ -129,13 +129,13 @@
 
   async function browseExecutable() {
     try {
-      const path = await selectExecutable('Выберите исполняемый файл игры');
+      const path = await selectExecutable(msg('games.installedSelectExeDialog'));
       if (path) {
         newExecutable = path;
         if (!newTitle.trim()) newTitle = titleFromPath(path);
       }
     } catch {
-      toast('Не удалось открыть диалог выбора файла', 'danger');
+      toast(msg('games.installedOpenDialogError'), 'danger');
     }
   }
 
@@ -144,10 +144,10 @@
     adding = true;
     try {
       const game = await addGame(newExecutable.trim(), newTitle.trim());
-      toast(`«${game.title}» добавлена в библиотеку`, 'success');
+      toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
       addOpen = false;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось добавить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.installedAddGameError'), 'danger');
     } finally {
       adding = false;
     }
@@ -157,7 +157,7 @@
     try {
       await playGame(game.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
     }
   }
 
@@ -165,7 +165,7 @@
     try {
       await stopGame(game.id);
     } catch {
-      toast('Не удалось остановить игру', 'danger');
+      toast(msg('games.errorStopFailed'), 'danger');
     }
   }
 
@@ -173,7 +173,7 @@
     try {
       await openFolder(game.installDir);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('games.errorFolderUnavailable'), 'danger');
     }
   }
 
@@ -194,44 +194,44 @@
   }
 
   const menuItems = [
-    { id: 'folder', label: 'Открыть папку' },
-    { id: 'executable', label: 'Выбрать файл запуска' },
-    { id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true },
-    { id: 'remove', label: 'Удалить из библиотеки', danger: true },
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'executable', label: msg('games.installedChooseExeLabel') },
+    { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
   ];
 
   const scanLabel = $derived(
     $scanProgress.total > 0
-      ? `Поиск ${$scanProgress.processed}/${$scanProgress.total}`
-      : 'Поиск игр...',
+      ? msg('games.installedScanProgress', { processed: $scanProgress.processed, total: $scanProgress.total })
+      : msg('games.installedScanning'),
   );
 
   async function findGames() {
     if (!inWails) {
-      toast('Поиск игр доступен только в desktop-сборке');
+      toast(msg('games.installedScanDesktopOnly'));
       return;
     }
     if ($scanning) return;
     try {
       const result = await rescan();
       if (result.cancelled) {
-        toast('Поиск остановлен');
+        toast(msg('games.installedScanStopped'));
         return;
       }
       toast(scanSummary(result), result.errors > 0 ? 'danger' : 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось выполнить поиск', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.installedScanError'), 'danger');
     }
   }
 
   async function chooseExecutable(game: LibraryGame) {
     try {
-      const path = await selectExecutable(`Файл запуска — ${game.title}`);
+      const path = await selectExecutable(msg('games.installedChooseExeDialog', { title: game.title }));
       if (!path) return;
       await setExecutable(game.id, path);
-      toast(`Файл запуска для «${game.title}» сохранён`, 'success');
+      toast(msg('games.installedExeSavedToast', { title: game.title }), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось выбрать файл', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.installedChooseExeError'), 'danger');
     }
   }
 
@@ -244,8 +244,8 @@
   }
 
   function statusLabel(game: LibraryGame, running: boolean) {
-    if (running) return 'Запущена';
-    if (!game.executable) return 'Нужен файл запуска';
+    if (running) return msg('games.runningLabel');
+    if (!game.executable) return msg('games.installedNeedsExeLabel');
     return relativeDate(game.lastPlayed);
   }
 
@@ -253,14 +253,14 @@
 </script>
 
 <PageHeader
-  title="Установлено"
+  title={msg('games.installedStatusWord')}
   subtitle={$installedGames.length > 0
     ? msg('installed.youHave', { count: $installedGames.length })
-    : 'Локальная библиотека пуста'}
+    : msg('games.installedEmptySubtitle')}
 >
   {#snippet actions()}
     <div class="search-wrap">
-      <SearchInput bind:value={search} placeholder="Поиск в установленных играх" />
+      <SearchInput bind:value={search} placeholder={msg('games.installedSearchPlaceholder')} />
     </div>
     <DropdownMenu
       items={[
@@ -272,7 +272,7 @@
     >
       {#snippet trigger({ open, toggle })}
         <Chip selected={open} onclick={toggle}>
-          Сортировка: {sortLabels[sort]}
+          {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
           <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </Chip>
       {/snippet}
@@ -280,8 +280,8 @@
     <SegmentedControl
       bind:value={$installedView}
       options={[
-        { id: 'list', label: 'Список' },
-        { id: 'grid', label: 'Сетка' },
+        { id: 'list', label: msg('games.viewList') },
+        { id: 'grid', label: msg('games.viewGrid') },
       ]}
     >
       {#snippet item(option)}
@@ -294,11 +294,11 @@
     </SegmentedControl>
     <Button onclick={findGames} disabled={$scanning}>
       <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
-      {$scanning ? scanLabel : 'Найти игры'}
+      {$scanning ? scanLabel : msg('games.installedFindGames')}
     </Button>
     <Button variant="primary" onclick={openAddDialog}>
       <Plus size="1.5rem" strokeWidth={2} />
-      Добавить игру
+      {msg('games.installedAddGameButton')}
     </Button>
   {/snippet}
 </PageHeader>
@@ -310,13 +310,13 @@
         <div class="disk">
           <HardDrive size="1.8rem" strokeWidth={1.8} />
           <div class="disk-text">
-            <span class="disk-name">Библиотека не настроена</span>
-            <span class="disk-meta">Выберите диск, на котором будут жить игры, загрузки и скриншоты</span>
+            <span class="disk-name">{msg('games.installedLibraryNotSetTitle')}</span>
+            <span class="disk-meta">{msg('games.installedLibraryNotSetHint')}</span>
           </div>
         </div>
         <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
           <FolderOpen size="1.5rem" strokeWidth={1.8} />
-          Выбрать папку
+          {msg('games.installedChooseFolderButton')}
         </Button>
       </div>
     </Card>
@@ -331,9 +331,12 @@
               <HardDrive size="1.8rem" strokeWidth={1.8} />
             </span>
             <div class="disk-text">
-              <span class="disk-name">Хранилище библиотеки</span>
+              <span class="disk-name">{msg('games.installedStorageTitle')}</span>
               <span class="disk-meta">
-                Использовано {bytesSize($storageInfo.usedBytes)} из {bytesSize($storageInfo.totalBytes)}
+                {msg('games.installedStorageUsage', {
+                  used: bytesSize($storageInfo.usedBytes),
+                  total: bytesSize($storageInfo.totalBytes),
+                })}
               </span>
             </div>
           </div>
@@ -347,23 +350,23 @@
         <ul class="storage-legend">
           <li>
             <span class="dot games"></span>
-            <span class="legend-label">Игры</span>
+            <span class="legend-label">{msg('games.installedLegendGames')}</span>
             <span class="legend-value">{bytesSize(gamesBytes)}</span>
           </li>
           {#if otherBytes !== null}
             <li>
               <span class="dot other"></span>
-              <span class="legend-label">Другое</span>
+              <span class="legend-label">{msg('games.installedLegendOther')}</span>
               <span class="legend-value">{bytesSize(otherBytes)}</span>
             </li>
           {/if}
           <li>
             <span class="dot free"></span>
-            <span class="legend-label">Свободно</span>
+            <span class="legend-label">{msg('games.installedLegendFree')}</span>
             <span class="legend-value">{bytesSize($storageInfo.freeBytes)}</span>
           </li>
         </ul>
-        <Button onclick={() => navigate('settings', { tab: 'general' })}>Управление хранилищем</Button>
+        <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
       </div>
     </Card>
   </div>
@@ -371,8 +374,8 @@
 
 {#if $installedGames.length === 0}
   <EmptyState
-    title="Игры ещё не добавлены"
-    description="Найдите игры в папке библиотеки или добавьте установленную игру вручную, указав её исполняемый файл."
+    title={msg('games.installedNoGamesTitle')}
+    description={msg('games.installedNoGamesDescription')}
   >
     {#snippet icon()}
       <Gamepad2 size="2rem" strokeWidth={1.8} />
@@ -380,16 +383,16 @@
     {#snippet actions()}
       <Button variant="primary" onclick={findGames} disabled={$scanning}>
         <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
-        {$scanning ? scanLabel : 'Найти игры'}
+        {$scanning ? scanLabel : msg('games.installedFindGames')}
       </Button>
       <Button onclick={openAddDialog}>
         <Plus size="1.5rem" strokeWidth={2} />
-        Добавить игру
+        {msg('games.installedAddGameButton')}
       </Button>
     {/snippet}
   </EmptyState>
 {:else if filteredGames.length === 0}
-  <EmptyState title="Ничего не найдено" description="Попробуйте изменить поисковый запрос.">
+  <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
     {#snippet icon()}
       <Search size="2rem" strokeWidth={1.8} />
     {/snippet}
@@ -411,33 +414,33 @@
           </div>
         </button>
         <div class="status">
-          <span class="status-label">Последний запуск</span>
+          <span class="status-label">{msg('games.lastPlayedLabel')}</span>
           <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
         </div>
         <div class="actions">
           {#if running}
             <Button size="sm" onclick={() => stop(game)}>
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-              Стоп
+              {msg('games.installedStopButton')}
             </Button>
           {:else if !game.executable}
             <Button size="sm" onclick={() => chooseExecutable(game)}>
               <FolderOpen size="1.3rem" strokeWidth={1.8} />
-              Указать файл
+              {msg('games.installedSetExeButton')}
             </Button>
           {:else}
             <Button variant="primary" size="sm" onclick={() => play(game)}>
               <Gamepad2 size="1.3rem" strokeWidth={2} />
-              Играть
+              {msg('games.play')}
             </Button>
           {/if}
           <Button size="sm" onclick={() => openInstallDir(game)}>
             <FolderOpen size="1.3rem" strokeWidth={1.8} />
-            Открыть папку
+            {msg('games.openFolder')}
           </Button>
           <DropdownMenu items={menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
-              <IconButton label="Меню" size="sm" onclick={toggle}>
+              <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
                 <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
               </IconButton>
             {/snippet}
@@ -459,7 +462,9 @@
           <span class="card-meta">
             {sizeLabel(game)}
             {#if update?.available}
-              <span class="card-update">{update.kind === 'update' ? 'Обновление' : 'Новый релиз'}</span>
+              <span class="card-update">
+                {update.kind === 'update' ? msg('games.updateKindUpdate') : msg('games.updateKindNewRelease')}
+              </span>
             {/if}
           </span>
         </div>
@@ -485,25 +490,25 @@
   />
 {/if}
 
-<Modal bind:open={addOpen} title="Добавить установленную игру">
+<Modal bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
   <div class="form">
     <label class="field">
-      <span class="field-label">Исполняемый файл</span>
+      <span class="field-label">{msg('games.executableLabel')}</span>
       <div class="field-row">
         <input class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
-        <Button onclick={browseExecutable}>Обзор</Button>
+        <Button onclick={browseExecutable}>{msg('games.installedBrowseButton')}</Button>
       </div>
     </label>
     <label class="field">
-      <span class="field-label">Название</span>
-      <input class="input" type="text" placeholder="Название игры" bind:value={newTitle} />
+      <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
+      <input class="input" type="text" placeholder={msg('games.installedTitlePlaceholder')} bind:value={newTitle} />
     </label>
-    <p class="form-hint">Папка установки будет определена автоматически по расположению файла.</p>
+    <p class="form-hint">{msg('games.installedFolderAutoHint')}</p>
   </div>
   {#snippet footer()}
-    <Button onclick={() => (addOpen = false)}>Отмена</Button>
+    <Button onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!newExecutable.trim() || adding} onclick={submitAdd}>
-      {adding ? 'Добавление...' : 'Добавить'}
+      {adding ? msg('games.installedAddingLabel') : msg('common.add')}
     </Button>
   {/snippet}
 </Modal>

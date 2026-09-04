@@ -25,6 +25,10 @@ export function makeFormat(loc: Locale, t: Translate) {
     new Intl.NumberFormat(loc, { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
 
   const date = new Intl.DateTimeFormat(loc);
+  const longDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' });
+  const shortDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short' });
+  const dateTimeFormat = new Intl.DateTimeFormat(loc, { dateStyle: 'short', timeStyle: 'medium' });
+  const clockFormat = new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' });
 
   const clock = (seconds: number) => {
     const min = Math.floor(seconds / 60);
@@ -96,6 +100,16 @@ export function makeFormat(loc: Locale, t: Translate) {
       return `${num(Math.round(value / KB_BYTES))} ${t('units.kbs')}`;
     },
 
+    longDate: (value: Date) => longDateFormat.format(value),
+
+    shortDate: (value: Date) => shortDateFormat.format(value),
+
+    numericDate: (value: Date) => date.format(value),
+
+    dateTime: (value: Date) => dateTimeFormat.format(value),
+
+    clockTime: (value: Date) => clockFormat.format(value),
+
     rateMbText,
 
     rateLimitLabel: (bytesPerSec: number) =>
@@ -120,4 +134,9 @@ export const bytesLabel: Format['bytesLabel'] = (bytes) => current.bytesLabel(by
 export const bytesSize: Format['bytesSize'] = (bytes) => current.bytesSize(bytes);
 export const speedBytes: Format['speedBytes'] = (bytes) => current.speedBytes(bytes);
 export const rateMbText: Format['rateMbText'] = (bytes) => current.rateMbText(bytes);
+export const longDate: Format['longDate'] = (value) => current.longDate(value);
+export const shortDate: Format['shortDate'] = (value) => current.shortDate(value);
+export const numericDate: Format['numericDate'] = (value) => current.numericDate(value);
+export const dateTime: Format['dateTime'] = (value) => current.dateTime(value);
+export const clockTime: Format['clockTime'] = (value) => current.clockTime(value);
 export const rateLimitLabel: Format['rateLimitLabel'] = (bytes) => current.rateLimitLabel(bytes);

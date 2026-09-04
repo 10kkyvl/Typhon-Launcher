@@ -104,10 +104,10 @@
 
   async function browseDestination() {
     try {
-      const path = await selectFolder('Выберите папку загрузки');
+      const path = await selectFolder(msg('modals.addDownloadChooseFolder'));
       if (path) destination = path;
     } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
+      toast(msg('modals.addDownloadFolderDialogFailed'), 'danger');
     }
   }
 
@@ -129,28 +129,28 @@
 {#if !libraryReady}
   <LibrarySetupModal bind:open />
 {:else}
-<Modal bind:open title="Добавить загрузку" width={step === 'files' ? '62rem' : '48rem'}>
+<Modal bind:open title={msg('modals.addDownloadTitle')} width={step === 'files' ? '62rem' : '48rem'}>
   {#if step === 'source'}
     <div class="source">
       <label class="field">
-        <span class="field-label">Magnet-ссылка</span>
+        <span class="field-label">{msg('modals.addDownloadMagnetLabel')}</span>
         <input class="input" type="text" placeholder="magnet:?xt=urn:btih:…" bind:value={source} />
       </label>
       <div class="or">
         <span class="line"></span>
-        <span class="or-text">или</span>
+        <span class="or-text">{msg('modals.addDownloadOr')}</span>
         <span class="line"></span>
       </div>
       <Button onclick={pickTorrent}>
         <FileUp size="1.6rem" strokeWidth={1.8} />
-        Выбрать .torrent файл
+        {msg('modals.addDownloadPickTorrent')}
       </Button>
     </div>
   {:else if step === 'loading'}
     <div class="loading">
       <span class="spinner"></span>
-      <span class="loading-text">Получение метаданных…</span>
-      <span class="loading-note">Это может занять до полутора минут.</span>
+      <span class="loading-text">{msg('modals.addDownloadFetchingMetadata')}</span>
+      <span class="loading-note">{msg('modals.addDownloadFetchingNote')}</span>
     </div>
   {:else if info}
     <div class="files">
@@ -159,10 +159,10 @@
         <span class="torrent-size">{bytesSize(info.totalBytes)}</span>
       </div>
       <div class="dest">
-        <span class="field-label">Папка назначения</span>
+        <span class="field-label">{msg('modals.addDownloadDestinationLabel')}</span>
         <div class="dest-controls">
           <input class="input sm" type="text" readonly value={destination} />
-          <Button size="sm" onclick={browseDestination}>Обзор</Button>
+          <Button size="sm" onclick={browseDestination}>{msg('modals.addDownloadBrowse')}</Button>
         </div>
       </div>
       <div class="file-list">
@@ -186,14 +186,14 @@
 
   {#snippet footer()}
     {#if step === 'source'}
-      <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>Продолжить</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>{msg('common.continue')}</Button>
     {:else if step === 'files'}
       <span class="summary">
         {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
-      <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>Начать загрузку</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
 </Modal>

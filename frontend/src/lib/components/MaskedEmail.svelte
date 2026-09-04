@@ -2,6 +2,7 @@
   import { Eye, EyeOff } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
   import { maskEmail } from '../utils/email';
+  import { msg } from '../i18n';
 
   let { email }: { email: string } = $props();
 
@@ -20,7 +21,7 @@
   {#if email}
     <IconButton
       size="sm"
-      label={revealed ? 'Скрыть email' : 'Показать email'}
+      label={revealed ? msg('ui.hideEmail') : msg('ui.showEmail')}
       onclick={() => (revealed = !revealed)}
     >
       {#if revealed}

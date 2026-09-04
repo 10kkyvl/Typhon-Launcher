@@ -4,6 +4,7 @@
   import type { UserCard } from '../../lib/services/social';
   import { mutualMore } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
+  import { msg } from '../../lib/i18n';
 
   let { friends, count }: { friends: UserCard[]; count: number } = $props();
 
@@ -11,9 +12,9 @@
   const more = $derived(mutualMore(shown.length, count));
 </script>
 
-<Card title={`Общие друзья (${count})`}>
+<Card title={msg('social.userMutualTitle', { count })}>
   {#snippet action()}
-    <button class="all" type="button" onclick={() => navigate('friends')}>Все</button>
+    <button class="all" type="button" onclick={() => navigate('friends')}>{msg('social.viewAllButton')}</button>
   {/snippet}
   <div class="row">
     {#each shown as friend (friend.id)}

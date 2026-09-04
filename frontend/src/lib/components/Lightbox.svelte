@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, X } from '@lucide/svelte';
   import { stepIndex } from '../game/view';
+  import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
 
   export interface LightboxItem {
@@ -12,7 +13,7 @@
     open = $bindable(false),
     index = $bindable(0),
     items,
-    label = 'Просмотр изображения',
+    label = msg('ui.imageViewer'),
   }: {
     open?: boolean;
     index?: number;
@@ -55,7 +56,7 @@
   >
     <div class="frame" role="dialog" aria-modal="true" aria-label={label}>
       {#if broken}
-        <p class="broken">Изображение недоступно</p>
+        <p class="broken">{msg('ui.imageUnavailable')}</p>
       {:else}
         <img src={current.url} alt="" onerror={() => (failed = { ...failed, [current.id]: true })} />
       {/if}
@@ -63,12 +64,12 @@
 
     {#if items.length > 1}
       <div class="nav prev">
-        <IconButton label="Предыдущее" onclick={() => step(-1)}>
+        <IconButton label={msg('ui.previous')} onclick={() => step(-1)}>
           <ChevronLeft size="2.4rem" strokeWidth={1.6} />
         </IconButton>
       </div>
       <div class="nav next">
-        <IconButton label="Следующее" onclick={() => step(1)}>
+        <IconButton label={msg('ui.next')} onclick={() => step(1)}>
           <ChevronRight size="2.4rem" strokeWidth={1.6} />
         </IconButton>
       </div>
@@ -76,7 +77,7 @@
     {/if}
 
     <div class="close">
-      <IconButton label="Закрыть" onclick={() => (open = false)}>
+      <IconButton label={msg('common.close')} onclick={() => (open = false)}>
         <X size="2rem" strokeWidth={1.8} />
       </IconButton>
     </div>

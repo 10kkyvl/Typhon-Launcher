@@ -22,6 +22,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, leaveGuest } from '../../lib/stores/user';
   import { formatCount } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import FriendCodeCard from '../friends/FriendCodeCard.svelte';
   import FriendRow from '../friends/FriendRow.svelte';
 
@@ -50,7 +51,7 @@
   }
 
   function signIn(view: 'login' | 'register') {
-    leaveGuest(view).catch((err) => report(err, 'Не удалось открыть вход'));
+    leaveGuest(view).catch((err) => report(err, msg('transfers.activityOpenSignInError')));
   }
 
   function openUser(friend: FriendView) {
@@ -72,13 +73,13 @@
   });
 </script>
 
-<PageHeader title="Активность" subtitle="Лента событий ваших друзей" />
+<PageHeader title={msg('transfers.activityTitle')} subtitle={msg('transfers.activitySubtitle')} />
 
 <div class="page">
   {#if isGuest}
     <EmptyState
-      title="Активность доступна с аккаунтом"
-      description="Войдите, чтобы видеть события друзей: пройденные игры, новинки и попавшее в любимые."
+      title={msg('transfers.activityGuestTitle')}
+      description={msg('transfers.activityGuestDescription')}
     >
       {#snippet icon()}
         <Users size="2.2rem" strokeWidth={1.6} />
@@ -86,21 +87,21 @@
       {#snippet actions()}
         <Button variant="primary" onclick={() => signIn('login')}>
           <LogIn size="1.5rem" strokeWidth={1.8} />
-          Войти
+          {msg('transfers.activitySignIn')}
         </Button>
-        <Button onclick={() => signIn('register')}>Создать аккаунт</Button>
+        <Button onclick={() => signIn('register')}>{msg('transfers.activityCreateAccount')}</Button>
       {/snippet}
     </EmptyState>
   {:else if $needsSocialConsent}
     <EmptyState
-      title="Нужна синхронизация с аккаунтом"
-      description="Лента активности работает поверх синхронизации: без неё серверу нечего показывать в ленте друзей."
+      title={msg('transfers.activityConsentTitle')}
+      description={msg('transfers.activityConsentDescription')}
     >
       {#snippet icon()}
         <Users size="2.2rem" strokeWidth={1.6} />
       {/snippet}
       {#snippet actions()}
-        <Button variant="primary" onclick={() => (consentOpen = true)}>Включить синхронизацию</Button>
+        <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('transfers.activityEnableSync')}</Button>
       {/snippet}
     </EmptyState>
   {:else}
@@ -114,17 +115,17 @@
             {#if user?.bio}<p class="bio">{user.bio}</p>{/if}
           </div>
           <div class="stats">
-            <StatTile value={formatCount(stats.games)} label="Игр" />
-            <StatTile value={formatCount(stats.hours)} label="Часов" />
-            <StatTile value={formatCount(stats.completed)} label="Пройдено" />
+            <StatTile value={formatCount(stats.games)} label={msg('transfers.activityStatGames')} />
+            <StatTile value={formatCount(stats.hours)} label={msg('transfers.activityStatHours')} />
+            <StatTile value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
           </div>
         </Card>
 
         <FriendCodeCard variant="share" bind:code={myCode} />
 
-        <Card title={`Онлайн друзья (${onlineFriends.length})`}>
+        <Card title={msg('transfers.activityOnlineFriendsTitle', { count: onlineFriends.length })}>
           {#if onlineFriends.length === 0}
-            <p class="muted">Сейчас никого нет в сети</p>
+            <p class="muted">{msg('transfers.activityNoOneOnline')}</p>
           {:else}
             <div class="friends">
               {#each onlineFriends.slice(0, ONLINE_LIMIT) as friend (friend.id)}
@@ -138,7 +139,7 @@
             </div>
           {/if}
           <div class="show-all">
-            <Button onclick={() => navigate('friends')}>Показать всех друзей</Button>
+            <Button onclick={() => navigate('friends')}>{msg('transfers.activityShowAllFriends')}</Button>
           </div>
         </Card>
       </div>
@@ -146,11 +147,11 @@
       <div class="center">
         {#if $feedEvents.length === 0}
           {#if $feedLoading}
-            <p class="muted">Загрузка…</p>
+            <p class="muted">{msg('transfers.activityLoading')}</p>
           {:else}
             <EmptyState
-              title="Пока тихо"
-              description="Здесь появятся события друзей: пройденные игры, новинки и попавшее в любимые."
+              title={msg('transfers.activityFeedEmptyTitle')}
+              description={msg('transfers.activityFeedEmptyDescription')}
             />
           {/if}
         {:else}
@@ -164,16 +165,16 @@
           {/each}
           {#if $feedCursor > 0}
             <div class="more">
-              <Button disabled={$feedLoading} onclick={() => moreFeed()}>Показать ещё</Button>
+              <Button disabled={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
             </div>
           {/if}
         {/if}
       </div>
 
       <div class="right">
-        <Card title="Друзья в игре">
+        <Card title={msg('transfers.activityPlayingTitle')}>
           {#if playingFriends.length === 0}
-            <p class="muted">Сейчас никто из друзей не играет</p>
+            <p class="muted">{msg('transfers.activityNoOnePlaying')}</p>
           {:else}
             <div class="friends">
               {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
