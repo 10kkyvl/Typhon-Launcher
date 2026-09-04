@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"typhon/internal/account"
 	"typhon/internal/app"
@@ -583,5 +584,44 @@ func TestModel_JSONTags(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "presence") {
 		t.Errorf("FriendView json %s must omit a nil presence", encoded)
+	}
+
+	bare, err := json.Marshal(PresenceView{Status: "offline"})
+	if err != nil {
+		t.Fatalf("marshal presence: %v", err)
+	}
+	if string(bare) != `{"status":"offline"}` {
+		t.Errorf("bare PresenceView json = %s, want only the status", bare)
+	}
+
+	gameID := int64(1942)
+	since := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
+	full, err := json.Marshal(PresenceView{Status: "online", GameID: &gameID, GameTitle: "The Witcher 3", Since: &since, LastSeenAt: &since})
+	if err != nil {
+		t.Fatalf("marshal presence: %v", err)
+	}
+	for _, key := range []string{`"status"`, `"gameId":1942`, `"gameTitle"`, `"since"`, `"lastSeenAt"`} {
+		if !strings.Contains(string(full), key) {
+			t.Errorf("PresenceView json %s misses %s", full, key)
+		}
+	}
+}
+
+func TestPresenceView_Decode(t *testing.T) {
+	var view PresenceView
+	if err := json.Unmarshal([]byte(`{"status":"online","gameId":1942,"gameTitle":"The Witcher 3","lastSeenAt":"2025-03-01T10:00:00Z"}`), &view); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if view.Status != "online" || view.GameTitle != "The Witcher 3" {
+		t.Fatalf("view = %+v", view)
+	}
+	if view.GameID == nil || *view.GameID != 1942 {
+		t.Fatalf("gameId = %v", view.GameID)
+	}
+	if view.Since != nil {
+		t.Fatalf("since = %v, want nil", view.Since)
+	}
+	if view.LastSeenAt == nil || !view.LastSeenAt.Equal(time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)) {
+		t.Fatalf("lastSeenAt = %v", view.LastSeenAt)
 	}
 }

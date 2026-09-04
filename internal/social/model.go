@@ -46,10 +46,11 @@ type ShowcaseBlock struct {
 }
 
 type PresenceView struct {
-	Status    string    `json:"status"`
-	GameID    string    `json:"gameId"`
-	GameTitle string    `json:"gameTitle"`
-	Since     time.Time `json:"since"`
+	Status     string     `json:"status"`
+	GameID     *int64     `json:"gameId,omitempty"`
+	GameTitle  string     `json:"gameTitle,omitempty"`
+	Since      *time.Time `json:"since,omitempty"`
+	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
 }
 
 type PublicProfile struct {
