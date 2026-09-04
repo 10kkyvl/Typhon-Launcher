@@ -20,6 +20,7 @@ import (
 const (
 	defaultInterval  = 30 * time.Second
 	defaultClearWait = 2 * time.Second
+	rateLimitBackoff = 2 * defaultInterval
 )
 
 var ErrInvalidStatus = errors.New("online: unknown presence status")
@@ -43,6 +44,7 @@ type Service struct {
 
 	interval  time.Duration
 	newTicker func(time.Duration) (<-chan time.Time, func())
+	now       func() time.Time
 	sent      chan struct{}
 
 	mu           sync.Mutex
@@ -52,7 +54,8 @@ type Service struct {
 	healthy      bool
 	healthyKnown bool
 	unsupported  bool
-	backoff      int
+	syncOn       bool
+	retryAfter   time.Time
 	unsubscribe  func()
 	cancel       context.CancelFunc
 
@@ -78,6 +81,7 @@ func NewService(baseURL string, token func() (string, error), resolveIGDBID func
 		status:        set.GetSettings().PresenceStatus,
 		interval:      defaultInterval,
 		newTicker:     realTicker,
+		now:           time.Now,
 		running:       map[string]runningGame{},
 		kick:          make(chan struct{}, 1),
 	}, nil
@@ -85,10 +89,14 @@ func NewService(baseURL string, token func() (string, error), resolveIGDBID func
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancel := context.WithCancel(ctx)
-	unsubscribe := s.settings.Subscribe(s.applySettings)
 
 	s.mu.Lock()
 	s.cancel = cancel
+	s.syncOn = s.settings.GetSettings().AccountSync
+	s.mu.Unlock()
+
+	unsubscribe := s.settings.Subscribe(s.applySettings)
+	s.mu.Lock()
 	s.unsubscribe = unsubscribe
 	s.mu.Unlock()
 
@@ -112,6 +120,10 @@ func (s *Service) ServiceShutdown() error {
 		cancel()
 	}
 	s.wg.Wait()
+
+	if !s.enabled() {
+		return nil
+	}
 
 	// ctx сервиса уже отменён; снятие присутствия — best-effort с собственным
 	// коротким таймаутом, чтобы не задерживать остановку приложения.
@@ -176,10 +188,21 @@ func (s *Service) applySettings(next settings.Settings) {
 	if changed {
 		s.status = next.PresenceStatus
 	}
+	syncOn := s.syncOn
+	s.syncOn = next.AccountSync
 	s.mu.Unlock()
+
+	if next.AccountSync && !syncOn {
+		s.Kick()
+		return
+	}
 	if changed {
 		s.poke()
 	}
+}
+
+func (s *Service) enabled() bool {
+	return s.settings.GetSettings().AccountSync
 }
 
 func (s *Service) poke() {
@@ -239,16 +262,22 @@ func (s *Service) snapshot() payload {
 }
 
 func (s *Service) send(ctx context.Context, forced bool) {
+	if !s.enabled() {
+		return
+	}
+
 	s.mu.Lock()
 	if !forced {
 		if s.unsupported {
 			s.mu.Unlock()
 			return
 		}
-		if s.backoff > 0 {
-			s.backoff--
-			s.mu.Unlock()
-			return
+		if !s.retryAfter.IsZero() {
+			if s.now().Before(s.retryAfter) {
+				s.mu.Unlock()
+				return
+			}
+			s.retryAfter = time.Time{}
 		}
 	}
 	s.mu.Unlock()
@@ -275,7 +304,9 @@ func (s *Service) send(ctx context.Context, forced bool) {
 	s.mu.Lock()
 	s.unsupported = false
 	if rateLimited {
-		s.backoff = 2
+		s.retryAfter = s.now().Add(rateLimitBackoff)
+	} else {
+		s.retryAfter = time.Time{}
 	}
 	wasHealthy := s.healthy
 	known := s.healthyKnown

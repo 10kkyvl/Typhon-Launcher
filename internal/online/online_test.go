@@ -31,10 +31,28 @@ type harness struct {
 	t        *testing.T
 	svc      *Service
 	settings *settings.Service
+	clock    *fakeClock
 	tick     chan time.Time
 	sent     chan struct{}
 	reqs     chan request
 	stop     sync.Once
+}
+
+type fakeClock struct {
+	mu sync.Mutex
+	at time.Time
+}
+
+func (c *fakeClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.at
+}
+
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.at = c.at.Add(d)
 }
 
 func staticToken(tok string) func() (string, error) {
@@ -43,11 +61,17 @@ func staticToken(tok string) func() (string, error) {
 
 func newHarness(t *testing.T, token func() (string, error), status int, resolve func(string) string) *harness {
 	t.Helper()
+	return newSyncedHarness(t, token, status, resolve, true)
+}
+
+func newSyncedHarness(t *testing.T, token func() (string, error), status int, resolve func(string) string, accountSync bool) *harness {
+	t.Helper()
 	h := &harness{
-		t:    t,
-		tick: make(chan time.Time),
-		sent: make(chan struct{}),
-		reqs: make(chan request, 64),
+		t:     t,
+		clock: &fakeClock{at: time.Date(2025, 3, 10, 12, 0, 0, 0, time.UTC)},
+		tick:  make(chan time.Time),
+		sent:  make(chan struct{}),
+		reqs:  make(chan request, 64),
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -67,6 +91,7 @@ func newHarness(t *testing.T, token func() (string, error), status int, resolve 
 		t.Fatalf("settings service: %v", err)
 	}
 	h.settings = set
+	h.setSync(accountSync)
 
 	if resolve == nil {
 		resolve = func(string) string { return "" }
@@ -76,9 +101,19 @@ func newHarness(t *testing.T, token func() (string, error), status int, resolve 
 		t.Fatalf("NewService: %v", err)
 	}
 	svc.newTicker = func(time.Duration) (<-chan time.Time, func()) { return h.tick, func() {} }
+	svc.now = h.clock.now
 	svc.sent = h.sent
 	h.svc = svc
 	return h
+}
+
+func (h *harness) setSync(on bool) {
+	h.t.Helper()
+	next := h.settings.GetSettings()
+	next.AccountSync = on
+	if err := h.settings.SaveSettings(next); err != nil {
+		h.t.Fatalf("SaveSettings: %v", err)
+	}
 }
 
 func (h *harness) start() {
@@ -459,13 +494,14 @@ func TestRestartReenablesAfterUnsupported(t *testing.T) {
 	}
 }
 
-func newRateLimitedHarness(t *testing.T) *harness {
+func newRateLimitedHarness(t *testing.T, resolve func(string) string) *harness {
 	t.Helper()
 	h := &harness{
-		t:    t,
-		tick: make(chan time.Time),
-		sent: make(chan struct{}),
-		reqs: make(chan request, 64),
+		t:     t,
+		clock: &fakeClock{at: time.Date(2025, 3, 10, 12, 0, 0, 0, time.UTC)},
+		tick:  make(chan time.Time),
+		sent:  make(chan struct{}),
+		reqs:  make(chan request, 64),
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -489,24 +525,34 @@ func newRateLimitedHarness(t *testing.T) *harness {
 		t.Fatalf("settings service: %v", err)
 	}
 	h.settings = set
+	h.setSync(true)
 
-	svc, err := NewService(srv.URL, staticToken("tok"), func(string) string { return "" }, set)
+	if resolve == nil {
+		resolve = func(string) string { return "" }
+	}
+	svc, err := NewService(srv.URL, staticToken("tok"), resolve, set)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
 	svc.newTicker = func(time.Duration) (<-chan time.Time, func()) { return h.tick, func() {} }
+	svc.now = h.clock.now
 	svc.sent = h.sent
 	h.svc = svc
 	return h
 }
 
-func TestRateLimitedSkipsTwoTicks(t *testing.T) {
-	h := newRateLimitedHarness(t)
+func TestRateLimitedDefersUntilTheDeadline(t *testing.T) {
+	h := newRateLimitedHarness(t, func(id string) string {
+		if id == "game-a" {
+			return "111"
+		}
+		return ""
+	})
 	h.start()
 	h.awaitSend()
 	h.nextRequest()
 
-	h.tickNow()
+	h.svc.SessionStarted(library.Game{ID: "a", CanonicalGameID: "game-a"})
 	h.awaitSend()
 	h.noRequest()
 
@@ -514,9 +560,102 @@ func TestRateLimitedSkipsTwoTicks(t *testing.T) {
 	h.awaitSend()
 	h.noRequest()
 
+	h.clock.advance(rateLimitBackoff)
 	h.tickNow()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.GameID != "111" {
+		t.Fatalf("gameId = %q, want the state accumulated during the backoff", p.GameID)
+	}
+}
+
+func TestRateLimitedSendsAfterADeadlinePoke(t *testing.T) {
+	h := newRateLimitedHarness(t, nil)
+	h.start()
 	h.awaitSend()
 	h.nextRequest()
+
+	if err := h.svc.SetStatus(settings.PresenceAway); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	h.awaitSend()
+	h.noRequest()
+
+	h.clock.advance(rateLimitBackoff)
+	if err := h.svc.SetStatus(settings.PresenceBusy); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceBusy {
+		t.Fatalf("status = %q, want busy", p.Status)
+	}
+}
+
+func TestSyncOffSendsNothing(t *testing.T) {
+	h := newSyncedHarness(t, staticToken("tok"), http.StatusNoContent, nil, false)
+	h.start()
+	h.awaitSend()
+	h.noRequest()
+
+	h.svc.SessionStarted(library.Game{ID: "a", CanonicalGameID: "game-a"})
+	h.awaitSend()
+	h.noRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.shutdown()
+	h.noRequest()
+}
+
+func TestSyncTurnedOnReports(t *testing.T) {
+	h := newSyncedHarness(t, staticToken("tok"), http.StatusNoContent, nil, false)
+	h.start()
+	h.awaitSend()
+	h.noRequest()
+
+	h.setSync(true)
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want PUT once sync is on", req.method)
+	}
+}
+
+func TestSyncTurnedOffStopsReporting(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.setSync(false)
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	h.shutdown()
+	h.noRequest()
+}
+
+func TestShutdownStopsSettingsUpdates(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.shutdown()
+	if req := h.nextRequest(); req.method != http.MethodDelete {
+		t.Fatalf("got %s, want DELETE", req.method)
+	}
+
+	next := h.settings.GetSettings()
+	next.PresenceStatus = settings.PresenceAway
+	if err := h.settings.SaveSettings(next); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	if got := h.svc.Status(); got != settings.PresenceOnline {
+		t.Fatalf("Status() = %q, want it untouched after shutdown", got)
+	}
+	h.noRequest()
 }
 
 type logSink struct {
