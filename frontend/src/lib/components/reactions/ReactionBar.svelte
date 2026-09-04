@@ -78,7 +78,7 @@
     background: var(--accent-subtle);
     border-color: var(--accent-ring);
     color: var(--accent-text);
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     opacity: 1;
   }
 

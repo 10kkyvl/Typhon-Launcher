@@ -70,7 +70,7 @@
   .primary {
     background: var(--accent);
     color: #fff;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
   }
 
   .primary:hover:not(:disabled) {
@@ -79,6 +79,7 @@
 
   .secondary {
     background: var(--surface-3);
+    border-color: var(--border-strong);
     color: var(--text);
   }
 

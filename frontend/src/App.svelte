@@ -22,6 +22,7 @@
   import { initUpdates } from './lib/stores/updates';
   import { authState, initAuth } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
+  import Activity from './routes/activity/Activity.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
   import Catalog from './routes/catalog/Catalog.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
@@ -88,6 +89,8 @@
       <Lan />
     {:else if $route.name === 'friends'}
       <Friends tab={$route.params.tab} />
+    {:else if $route.name === 'activity'}
+      <Activity />
     {:else if $route.name === 'user'}
       <UserProfile username={$route.params.username} />
     {:else if $route.name === 'profile'}

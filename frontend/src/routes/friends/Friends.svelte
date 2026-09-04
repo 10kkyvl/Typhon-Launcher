@@ -4,7 +4,6 @@
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import FeedRow from '../../lib/components/FeedRow.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
@@ -21,10 +20,8 @@
     unfriend,
     type UserCard,
   } from '../../lib/services/social';
-  import { feedDayGroups } from '../../lib/social/feed';
   import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
-  import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, reactToEvent } from '../../lib/stores/feed';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
@@ -46,12 +43,10 @@
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
   const friends = $derived(sortFriends(page.friends));
-  const feedGroups = $derived(feedDayGroups($feedEvents));
 
   const tabs = $derived([
     { id: 'friends', label: `Друзья (${page.friends.length})` },
     { id: 'requests', label: `Заявки (${$incomingCount + page.outgoing.length})` },
-    { id: 'feed', label: 'Лента' },
     { id: 'blocked', label: 'Заблокированные' },
   ]);
 
@@ -122,10 +117,6 @@
 
   $effect(() => {
     if (tab === 'blocked' && !isGuest && !$needsSocialConsent) loadBlocks();
-  });
-
-  $effect(() => {
-    if (tab === 'feed' && !isGuest && !$needsSocialConsent) void loadFeed(true);
   });
 
   onMount(() => {
@@ -263,29 +254,6 @@
             {/each}
           {/if}
         {/if}
-      {:else if tab === 'feed'}
-        {#if $feedEvents.length === 0}
-          {#if $feedLoading}
-            <p class="muted">Загрузка…</p>
-          {:else}
-            <EmptyState
-              title="Пока тихо"
-              description="Здесь появятся события друзей: пройденные игры, новинки и попавшее в любимые."
-            />
-          {/if}
-        {:else}
-          {#each feedGroups as group (group.key)}
-            <h4 class="eyebrow">{group.label}</h4>
-            {#each group.events as event (event.id)}
-              <FeedRow {event} onreact={(emoji) => reactToEvent(event.id, emoji)} />
-            {/each}
-          {/each}
-          {#if $feedCursor > 0}
-            <div class="more">
-              <Button disabled={$feedLoading} onclick={() => moreFeed()}>Показать ещё</Button>
-            </div>
-          {/if}
-        {/if}
       {:else if blocked.length === 0}
         <EmptyState
           title="Никого не заблокировано"
@@ -333,18 +301,6 @@
 
   .list :global(.row + .row) {
     border-top: 1px solid var(--border);
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-    padding: var(--space-5) 0.8rem;
-  }
-
-  .more {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-5) 0;
   }
 
   .eyebrow {

@@ -5,6 +5,7 @@
     ChevronRight,
     Minus,
     Square,
+    Users,
     X,
   } from '@lucide/svelte';
   import { Window } from '@wailsio/runtime';
@@ -14,6 +15,7 @@
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
   import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
+  import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize, plural } from '../utils/format';
@@ -209,7 +211,7 @@
   </div>
 
   <div class="no-drag right">
-    <div class="bell" use:clickOutside={() => (notificationsOpen = false)}>
+    <div class="icon-slot" use:clickOutside={() => (notificationsOpen = false)}>
       <IconButton label="Уведомления" active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
         <Bell size="1.8rem" strokeWidth={1.8} />
       </IconButton>
@@ -242,6 +244,15 @@
             }}>Вся история</button
           >
         </div>
+      {/if}
+    </div>
+
+    <div class="icon-slot">
+      <IconButton label="Друзья" onclick={() => navigate('friends')}>
+        <Users size="1.8rem" strokeWidth={1.8} />
+      </IconButton>
+      {#if $incomingCount > 0}
+        <span class="badge">{$incomingCount}</span>
       {/if}
     </div>
 
@@ -462,7 +473,7 @@
     margin-left: auto;
   }
 
-  .bell {
+  .icon-slot {
     position: relative;
   }
 

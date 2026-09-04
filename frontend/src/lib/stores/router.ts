@@ -10,6 +10,7 @@ export type RouteName =
   | 'history'
   | 'lan'
   | 'friends'
+  | 'activity'
   | 'user'
   | 'profile'
   | 'settings';

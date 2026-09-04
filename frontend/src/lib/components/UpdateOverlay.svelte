@@ -92,7 +92,7 @@
     color: var(--text);
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
   }
 
@@ -144,7 +144,7 @@
     padding: var(--space-4) var(--space-5);
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
-    border-radius: var(--cut) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-modal);
   }
 

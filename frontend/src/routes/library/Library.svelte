@@ -301,7 +301,7 @@
   <section class="section">
     <div class="section-head">
       <h2>Друзья</h2>
-      <button class="link" onclick={() => navigate('friends', { tab: 'feed' })}>Все</button>
+      <button class="link" onclick={() => navigate('activity')}>Все</button>
     </div>
     <div class="feed">
       {#each latestEvents as event (event.id)}
@@ -435,7 +435,7 @@
   .dot {
     width: 1.8rem;
     height: 0.3rem;
-    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
+    border-radius: 0.3rem;
     background: rgba(255, 255, 255, 0.25);
     transition: background var(--dur) var(--ease);
   }
@@ -494,7 +494,7 @@
   .chip.selected {
     background: var(--hover-strong);
     color: var(--text);
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
   }
 
   .chip.selected :global(svg),

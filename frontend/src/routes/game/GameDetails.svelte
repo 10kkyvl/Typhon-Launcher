@@ -1133,7 +1133,7 @@
     width: min(42rem, 100%);
     height: var(--control-lg);
     padding: 0 1.8rem;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     background: var(--surface-3);
   }
 

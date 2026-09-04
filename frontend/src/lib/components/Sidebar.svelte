@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
+  import { Activity, Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
@@ -25,6 +25,7 @@
       { name: 'downloads', label: 'Загрузки', icon: Download },
       { name: 'sources', label: 'Источники', icon: Database },
       { name: 'friends', label: 'Друзья', icon: Users },
+      { name: 'activity', label: 'Активность', icon: Activity },
       { name: 'history', label: 'История', icon: History },
     ],
   ];

@@ -33,7 +33,7 @@
   .hero {
     position: relative;
     width: 100%;
-    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    border-radius: var(--radius-xl);
     overflow: hidden;
     background: var(--surface);
   }

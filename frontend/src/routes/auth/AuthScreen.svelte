@@ -383,7 +383,7 @@
     color: #fff;
     font-size: var(--font-md);
     font-weight: 600;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     transition:
       background var(--dur) var(--ease),
       transform var(--dur-fast) var(--ease);
