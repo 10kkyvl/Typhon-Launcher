@@ -8,8 +8,18 @@ import {
   type Record,
   type Status,
 } from '../services/history';
-import { errorMessage } from '../utils/errors';
+import { errorCode, msg } from '../i18n';
+import type { MessageKey } from '../i18n';
 import { toast } from './toasts';
+
+const REASONS: { [code: string]: MessageKey } = {
+  'history.clear_failed': 'history.clear_failed',
+};
+
+export function historyErrorText(err: unknown, fallback: string = msg('errLibrary.historyErrFallback')): string {
+  const key = REASONS[errorCode(err)];
+  return key ? msg(key) : fallback;
+}
 
 export const history = writable<Record[]>([]);
 export const historyStatus = writable<Status>({ degraded: false, message: '' });
@@ -44,6 +54,6 @@ export async function clearHistory() {
     await clearHistoryRequest();
     history.set([]);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(historyErrorText(err), 'danger');
   }
 }

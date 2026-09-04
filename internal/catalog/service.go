@@ -15,6 +15,7 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -25,9 +26,11 @@ const (
 )
 
 var (
-	errNotFound          = errors.New("игра не найдена")
-	errEmptyIGDBID       = errors.New("не указан IGDB id")
-	errEmptyCatalogTitle = errors.New("укажите название игры")
+	errNotFound          = uierr.New("catalog.game_not_found", "игра не найдена")
+	errEmptyIGDBID       = uierr.New("catalog.no_igdb_id", "не указан IGDB id")
+	errEmptyCatalogTitle = uierr.New("catalog.no_title", "укажите название игры")
+	errDuplicateID       = uierr.New("catalog.duplicate_id", "игра с таким идентификатором уже есть")
+	errNothingToLearn    = uierr.New("catalog.nothing_to_learn", "нечего запоминать")
 )
 
 type Service struct {
@@ -104,14 +107,20 @@ func (s *Service) persistGamesLocked() error {
 	if s.gamesPath == "" {
 		return errors.New("catalog path unavailable")
 	}
-	return storage.Save(s.gamesPath, gamesVersion, s.games)
+	if err := storage.Save(s.gamesPath, gamesVersion, s.games); err != nil {
+		return uierr.Wrap("catalog.save_failed", err)
+	}
+	return nil
 }
 
 func (s *Service) persistOverridesLocked() error {
 	if s.overridesPath == "" {
 		return errors.New("match overrides path unavailable")
 	}
-	return storage.Save(s.overridesPath, overridesVersion, s.overrides)
+	if err := storage.Save(s.overridesPath, overridesVersion, s.overrides); err != nil {
+		return uierr.Wrap("catalog.save_failed", err)
+	}
+	return nil
 }
 
 func (s *Service) ListGames() []Game {
@@ -202,7 +211,7 @@ func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 func (s *Service) AddGame(game Game) (Game, error) {
 	game.Title = strings.TrimSpace(game.Title)
 	if game.Title == "" {
-		return Game{}, errors.New("укажите название игры")
+		return Game{}, errEmptyCatalogTitle
 	}
 	if game.ID == "" {
 		game.ID = NewID()
@@ -217,7 +226,7 @@ func (s *Service) AddGame(game Game) (Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.idx.byID[game.ID]; exists {
-		return Game{}, errors.New("игра с таким идентификатором уже есть")
+		return Game{}, errDuplicateID
 	}
 	s.games = append(s.games, game)
 	s.idx.add(game)
@@ -245,7 +254,7 @@ func (s *Service) EnsureGame(title string, year int) (Game, error) {
 func (s *Service) LearnMatch(normalized, gameID string) error {
 	normalized = strings.TrimSpace(normalized)
 	if normalized == "" || gameID == "" {
-		return errors.New("нечего запоминать")
+		return errNothingToLearn
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

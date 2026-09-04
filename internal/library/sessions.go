@@ -1,7 +1,6 @@
 package library
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"typhon/internal/procs"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
 
@@ -19,11 +19,11 @@ type SessionEvent struct {
 }
 
 var (
-	errSessionNotRunning       = errors.New("игра не запущена")
-	errSessionCannotConfirm    = errors.New("не удалось подтвердить процесс игры")
-	errSessionProcessGone      = errors.New("процесс игры больше не найден")
-	errSessionIdentityMismatch = errors.New("процесс с этим pid принадлежит другой программе")
-	errSessionIdentityUnknown  = errors.New("время запуска процесса неизвестно, подтверждение невозможно")
+	errSessionNotRunning       = uierr.New("library.not_running", "игра не запущена")
+	errSessionCannotConfirm    = uierr.New("library.cannot_confirm_process", "не удалось подтвердить процесс игры")
+	errSessionProcessGone      = uierr.New("library.process_gone", "процесс игры больше не найден")
+	errSessionIdentityMismatch = uierr.New("library.process_identity_mismatch", "процесс с этим pid принадлежит другой программе")
+	errSessionIdentityUnknown  = uierr.New("library.process_identity_unknown", "время запуска процесса неизвестно, подтверждение невозможно")
 )
 
 func (s *Service) PlayGame(id string) error {
@@ -31,17 +31,17 @@ func (s *Service) PlayGame(id string) error {
 	defer s.mu.Unlock()
 
 	if _, ok := s.running[id]; ok {
-		return errors.New("игра уже запущена")
+		return uierr.New("library.already_running", "игра уже запущена")
 	}
 	game := s.findLocked(id)
 	if game == nil {
-		return errors.New("игра не найдена")
+		return uierr.New("library.game_not_found", "игра не найдена")
 	}
 	if game.Uninstalled {
-		return errors.New("игра не установлена")
+		return uierr.New("library.not_installed", "игра не установлена")
 	}
 	if _, err := os.Stat(game.Executable); err != nil {
-		return errors.New("исполняемый файл больше не существует")
+		return uierr.New("library.executable_missing", "исполняемый файл больше не существует")
 	}
 
 	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
@@ -52,7 +52,7 @@ func (s *Service) PlayGame(id string) error {
 	proc, err := s.start(game.Executable, game.LaunchArgs, workDir)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
-		return fmt.Errorf("не удалось запустить игру: %w", err)
+		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
 
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows

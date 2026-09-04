@@ -11,11 +11,12 @@ import {
   setSourceEnabled,
   type Source,
 } from '../services/sources';
+import { sourceErrorText } from '../sources/sourceErrors';
 import { errorMessage } from '../utils/errors';
 import { msg } from '../i18n';
 import { toast } from './toasts';
 
-export { errorMessage };
+export { errorMessage, sourceErrorText };
 
 export const sources = writable<Source[]>([]);
 export const refreshingAll = writable(false);
@@ -82,7 +83,7 @@ export async function refresh(id: string) {
       'success',
     );
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 
@@ -92,7 +93,7 @@ export async function refreshAll() {
     await refreshAllSources();
     await reload();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   } finally {
     refreshingAll.set(false);
   }
@@ -103,7 +104,7 @@ export async function toggle(id: string, enabled: boolean) {
     await setSourceEnabled(id, enabled);
     await reload();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 
@@ -112,7 +113,7 @@ export async function remove(id: string) {
     await removeSourceRequest(id);
     sources.update((list) => list.filter((s) => s.id !== id));
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 

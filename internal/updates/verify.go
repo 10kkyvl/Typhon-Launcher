@@ -13,10 +13,11 @@ import (
 	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/sources"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
 
-var errRepairUnavailable = errors.New("восстановление недоступно для этой установки")
+var errRepairUnavailable = uierr.New("updates.repair_unavailable", "восстановление недоступно для этой установки")
 
 func (s *Service) emitVerify(gameID, event string, apply func(*VerifyState)) VerifyState {
 	s.mu.Lock()

@@ -15,8 +15,9 @@
     startInstall,
     type PlanInfo,
   } from '../services/install';
+  import { installErrorText } from '../install/installErrors';
   import { openFolder, selectFolder } from '../services/settings';
-  import { downloadsById, errorMessage } from '../stores/downloads';
+  import { downloadsById } from '../stores/downloads';
   import {
     installActive,
     installStatusLabels,
@@ -133,7 +134,7 @@
       mode = 'copy';
     } catch (err) {
       if (!open || current !== token) return;
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
       open = false;
     } finally {
       if (current === token) loading = false;
@@ -177,7 +178,7 @@
     try {
       await action();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
     busy = false;
   }
@@ -431,7 +432,7 @@
         <span class="pkg-name">{installation.name}</span>
         <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
-      <p class="note danger">{installation.error || msg('modals.installNotCompleted')}</p>
+      <p class="note danger">{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</p>
     </div>
   {/if}
 

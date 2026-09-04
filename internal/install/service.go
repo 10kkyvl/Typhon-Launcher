@@ -20,6 +20,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -48,29 +49,32 @@ const (
 const interruptedMessage = "установка была прервана"
 
 var (
-	errNotFound         = errors.New("установка не найдена")
-	errNoDownloads      = errors.New("менеджер загрузок недоступен")
-	errNotCompleted     = errors.New("загрузка ещё не завершена")
-	errBusy             = errors.New("установка этой загрузки уже выполняется")
-	errNoDestination    = errors.New("укажите папку установки")
-	errDestNotEmpty     = errors.New("папка установки уже существует и не пуста")
-	errUnknownType      = errors.New("тип пакета не распознан")
-	errUnavailable      = errors.New("недоступно для этой установки")
-	errExternalRuns     = errors.New("установщик запущен отдельно, дождитесь его завершения")
-	errInstallerFail    = errors.New("установщик завершился с ошибкой")
-	errNoExecutable     = errors.New("исполняемый файл не найден")
-	errOutsideInstall   = errors.New("файл находится вне папки установки")
-	errEmptyInstall     = errors.New("папка установки пуста")
-	errNoLibrary        = errors.New("библиотека недоступна")
-	errEmptyDestination = errors.New("каталог установки не задан")
-	errNeedsUser        = errors.New("этот пакет требует участия пользователя")
+	errNotFound         = uierr.New("install.not_found", "установка не найдена")
+	errNoDownloads      = uierr.New("install.no_downloads", "менеджер загрузок недоступен")
+	errNotCompleted     = uierr.New("install.not_completed", "загрузка ещё не завершена")
+	errBusy             = uierr.New("install.busy", "установка этой загрузки уже выполняется")
+	errNoDestination    = uierr.New("install.no_destination", "укажите папку установки")
+	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
+	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
+	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
+	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
+	errInstallerFail    = uierr.New("install.installer_failed", "установщик завершился с ошибкой")
+	errNoExecutable     = uierr.New("install.no_executable", "исполняемый файл не найден")
+	errOutsideInstall   = uierr.New("install.outside_install", "файл находится вне папки установки")
+	errEmptyInstall     = uierr.New("install.empty_install", "папка установки пуста")
+	errNoLibrary        = uierr.New("install.no_library", "библиотека недоступна")
+	errEmptyDestination = uierr.New("install.empty_destination", "каталог установки не задан")
+	errNeedsUser        = uierr.New("install.needs_user", "этот пакет требует участия пользователя")
 
-	errInstallerNoOutput = errors.New("установщик не создал файлов в папке установки")
+	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
 
 	// errInstallerNotConfirmedStopped значит, что процесс всё ещё может писать
 	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
-	errInstallerNotConfirmedStopped = errors.New("установщик не подтвердил остановку")
-	errInstallerStillRunning        = errors.New("установка ещё идёт в фоне: установщик с правами администратора не завершился")
+	errInstallerNotConfirmedStopped = uierr.New("install.installer_not_confirmed_stopped", "установщик не подтвердил остановку")
+	errInstallerStillRunning        = uierr.New("install.installer_still_running", "установка ещё идёт в фоне: установщик с правами администратора не завершился")
+
+	errFreeSpaceUnknown = uierr.New("install.free_space_unknown", "не удалось определить свободное место на диске")
+	errNotEnoughSpace   = uierr.New("install.not_enough_space", "недостаточно места на диске")
 )
 
 type downloadSource interface {
@@ -1427,7 +1431,7 @@ func (s *Service) freeBytes(path string) (int64, error) {
 	}
 	info, err := s.freeSpace(path)
 	if err != nil {
-		return 0, fmt.Errorf("свободное место %s: %w", path, err)
+		return 0, fmt.Errorf("%w: %s: %w", errFreeSpaceUnknown, path, err)
 	}
 	if info.FreeBytes > math.MaxInt64 {
 		return math.MaxInt64, nil
@@ -1446,7 +1450,7 @@ func (s *Service) checkSpace(destination string, need int64) error {
 	if free >= need {
 		return nil
 	}
-	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s", humanSize(need), humanSize(free))
+	return fmt.Errorf("%w: нужно %s, свободно %s", errNotEnoughSpace, humanSize(need), humanSize(free))
 }
 
 func (s *Service) installRoots() []string {

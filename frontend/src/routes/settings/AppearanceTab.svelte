@@ -15,7 +15,7 @@
   } from '../../lib/services/theme';
   import { activeTheme, refreshThemes, resetAppearance, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
   import { toast } from '../../lib/stores/toasts';
-  import { errorMessage } from '../../lib/utils/errors';
+  import { themeErrorText } from '../../lib/theme/themeErrors';
 
   const list = $derived($themeList);
   const active = $derived($activeTheme);
@@ -89,7 +89,7 @@
       toast(msg('settings.appearanceSavedToast', { name: saved.name }), 'success');
       await refreshThemes();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       saving = false;
     }
@@ -105,7 +105,7 @@
       draft = null;
       await refreshThemes();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       deleting = false;
     }
@@ -121,7 +121,7 @@
       await refreshThemes();
       startEditing(theme);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       importing = false;
     }
@@ -136,7 +136,7 @@
       await exportTheme(draft.id, path);
       toast(msg('settings.appearanceExportedToast', { name: draft.name }), 'success');
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(themeErrorText(err), 'danger');
     } finally {
       exporting = false;
     }

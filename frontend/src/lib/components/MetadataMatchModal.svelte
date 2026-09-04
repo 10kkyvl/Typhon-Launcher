@@ -7,7 +7,7 @@
     type MetadataCandidate,
     type MetadataView,
   } from '../services/metadata';
-  import { errorMessage } from '../utils/errors';
+  import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
@@ -58,7 +58,7 @@
     try {
       candidates = await findMetadataCandidates(id);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(metadataErrorText(err), 'danger');
       candidates = [];
     } finally {
       loadingCandidates = false;
@@ -82,7 +82,7 @@
       } catch (err) {
         if (token === searchToken) {
           searchResults = [];
-          toast(errorMessage(err), 'danger');
+          toast(metadataErrorText(err), 'danger');
         }
       } finally {
         if (token === searchToken) searching = false;
@@ -107,7 +107,7 @@
       open = false;
       onapplied?.(view);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(metadataErrorText(err), 'danger');
     } finally {
       applying = false;
       pending = null;

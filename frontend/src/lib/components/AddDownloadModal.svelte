@@ -11,7 +11,7 @@
     type TorrentInfo,
   } from '../services/downloads';
   import { selectFolder } from '../services/settings';
-  import { errorMessage } from '../stores/downloads';
+  import { installErrorText } from '../install/installErrors';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
@@ -86,7 +86,7 @@
       step = 'files';
     } catch (err) {
       if (!open || current !== token) return;
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
       step = 'source';
     }
   }
@@ -98,7 +98,7 @@
       source = path;
       await proceed(path);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
   }
 
@@ -120,7 +120,7 @@
       pendingHash = '';
       open = false;
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
     starting = false;
   }

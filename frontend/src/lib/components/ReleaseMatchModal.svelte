@@ -11,6 +11,7 @@
     type ReleaseView,
   } from '../services/sources';
   import { errorMessage } from '../stores/sources';
+  import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
@@ -90,7 +91,7 @@
       open = false;
       onchanged?.();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(metadataErrorText(err, errorMessage(err)), 'danger');
     } finally {
       submitting = false;
     }

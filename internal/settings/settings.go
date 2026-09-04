@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -54,10 +55,10 @@ const (
 )
 
 var (
-	ErrLibraryNotConfigured = errors.New("библиотека не настроена")
-	ErrLibraryPathRelative  = errors.New("путь библиотеки должен быть абсолютным")
-	ErrLibraryPathRoot      = errors.New("библиотека не может быть корнем диска")
-	ErrLibraryParentEmpty   = errors.New("не выбрана папка для библиотеки")
+	ErrLibraryNotConfigured = uierr.New("settings.library_not_configured", "библиотека не настроена")
+	ErrLibraryPathRelative  = uierr.New("settings.library_path_relative", "путь библиотеки должен быть абсолютным")
+	ErrLibraryPathRoot      = uierr.New("settings.library_path_root", "библиотека не может быть корнем диска")
+	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
 )
 
 type Settings struct {
@@ -573,10 +574,10 @@ func createLibrary(root string) error {
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("создать папку %s: %w", dir, err)
+			return uierr.Wrap("settings.library_create_failed", fmt.Errorf("создать папку %s: %w", dir, err))
 		}
 		if err := checkWritable(dir); err != nil {
-			return err
+			return uierr.Wrap("settings.library_not_writable", err)
 		}
 	}
 	return nil

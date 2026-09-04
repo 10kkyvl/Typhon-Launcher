@@ -9,13 +9,14 @@ import (
 	"strings"
 
 	"typhon/internal/shortcut"
+	"typhon/internal/uierr"
 )
 
 var (
-	errShortcutUnsupported  = errors.New("ярлыки поддерживаются только в Windows")
-	errShortcutUninstalled  = errors.New("игра не установлена")
-	errShortcutNoExecutable = errors.New("у игры не задан исполняемый файл")
-	errShortcutBadID        = errors.New("идентификатор игры непригоден для командной строки")
+	errShortcutUnsupported  = uierr.New("library.shortcut_unsupported", "ярлыки поддерживаются только в Windows")
+	errShortcutUninstalled  = uierr.New("library.not_installed", "игра не установлена")
+	errShortcutNoExecutable = uierr.New("library.no_shortcut_executable", "у игры не задан исполняемый файл")
+	errShortcutBadID        = uierr.New("library.shortcut_bad_id", "идентификатор игры непригоден для командной строки")
 )
 
 type shortcutBackend interface {

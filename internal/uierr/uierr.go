@@ -16,11 +16,11 @@ type Error struct {
 	err  error
 }
 
-func New(code, detail string) *Error {
+func New(code, detail string) error {
 	return &Error{code: code, err: errors.New(detail)}
 }
 
-func Wrap(code string, err error) *Error {
+func Wrap(code string, err error) error {
 	return &Error{code: code, err: err}
 }
 

@@ -2,19 +2,20 @@ package feed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrEmptyPath      = errors.New("путь к файлу фида не указан")
-	ErrRelativePath   = errors.New("путь к файлу фида должен быть абсолютным")
-	ErrNotRegularFile = errors.New("файл фида не является обычным файлом")
+	ErrEmptyPath      = uierr.New("sources.feed_path_empty", "путь к файлу фида не указан")
+	ErrRelativePath   = uierr.New("sources.feed_path_relative", "путь к файлу фида должен быть абсолютным")
+	ErrNotRegularFile = uierr.New("sources.feed_not_regular_file", "файл фида не является обычным файлом")
 )
 
 func ValidatePath(raw string) (string, error) {

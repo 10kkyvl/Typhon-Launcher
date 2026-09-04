@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"errors"
 	"log/slog"
 	"sort"
 	"strings"
@@ -9,6 +8,7 @@ import (
 
 	"typhon/internal/catalog"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 	"typhon/internal/version"
 )
 
@@ -18,9 +18,9 @@ const (
 )
 
 var (
-	errReleaseNotFound = errors.New("релиз не найден")
-	errNoURI           = errors.New("у релиза нет ссылки для загрузки")
-	errNoCatalog       = errors.New("каталог игр недоступен")
+	errReleaseNotFound = uierr.New("sources.release_not_found", "релиз не найден")
+	errNoURI           = uierr.New("sources.no_uri", "у релиза нет ссылки для загрузки")
+	errNoCatalog       = uierr.New("sources.catalog_unavailable", "каталог игр недоступен")
 )
 
 func (s *Service) QueryReleases(q ReleaseQuery) ReleasePage {

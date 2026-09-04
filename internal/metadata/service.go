@@ -20,6 +20,7 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -46,11 +47,11 @@ const (
 )
 
 var (
-	errNoGameID   = errors.New("не указана игра")
-	errNotStarted = errors.New("сервис метаданных не запущен")
-	errEmptyQuery = errors.New("пустой поисковый запрос")
-	errNoTitle    = errors.New("провайдер вернул игру без названия")
-	errBusy       = errors.New("метаданные этой игры уже обновляются")
+	errNoGameID   = uierr.New("metadata.no_game_id", "не указана игра")
+	errNotStarted = uierr.New("metadata.not_started", "сервис метаданных не запущен")
+	errEmptyQuery = uierr.New("metadata.empty_query", "пустой поисковый запрос")
+	errNoTitle    = uierr.New("metadata.no_title", "провайдер вернул игру без названия")
+	errBusy       = uierr.New("metadata.busy", "метаданные этой игры уже обновляются")
 )
 
 // MatchState рассказывает карточке игры, на какой стадии поиск метаданных:

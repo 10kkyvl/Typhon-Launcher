@@ -21,9 +21,8 @@
   import { filterHistory } from '../../lib/history/historyFilter';
   import { historyLabel } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
-  import { clearHistory, history, historyStatus } from '../../lib/stores/history';
+  import { clearHistory, history, historyErrorText, historyStatus } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
-  import { errorMessage } from '../../lib/utils/errors';
   import { relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
@@ -84,7 +83,7 @@
       toast(msg('transfers.historyCleared'), 'success');
       clearOpen = false;
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(historyErrorText(err), 'danger');
     } finally {
       clearing = false;
     }

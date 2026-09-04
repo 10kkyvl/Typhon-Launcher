@@ -2,7 +2,6 @@ package feed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,12 +11,14 @@ import (
 	"strings"
 
 	"typhon/internal/redact"
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrBadScheme      = errors.New("недопустимая схема URL: разрешены только http и https")
-	ErrTooLarge       = errors.New("размер ответа превышает допустимый лимит")
-	ErrBadContentType = errors.New("недопустимый Content-Type ответа")
+	ErrBadScheme      = uierr.New("sources.feed_bad_scheme", "недопустимая схема URL: разрешены только http и https")
+	ErrTooLarge       = uierr.New("sources.feed_too_large", "размер ответа превышает допустимый лимит")
+	ErrBadContentType = uierr.New("sources.feed_bad_content_type", "недопустимый Content-Type ответа")
+	ErrNoHost         = uierr.New("sources.feed_no_host", "URL не содержит хост")
 )
 
 type StatusError struct {
@@ -44,14 +45,14 @@ type Result struct {
 func ValidateURL(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return "", fmt.Errorf("некорректный URL: %w", err)
+		return "", uierr.Wrap("sources.feed_invalid_url", fmt.Errorf("некорректный URL: %w", err))
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return "", ErrBadScheme
 	}
 	if u.Host == "" {
-		return "", errors.New("URL не содержит хост")
+		return "", ErrNoHost
 	}
 	u.Scheme = scheme
 	u.Host = strings.ToLower(u.Host)
@@ -121,7 +122,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return Result{}, &StatusError{StatusCode: resp.StatusCode}
+		return Result{}, uierr.Wrap("sources.feed_bad_status", &StatusError{StatusCode: resp.StatusCode})
 	}
 
 	if !acceptableContentType(resp.Header.Get("Content-Type")) {

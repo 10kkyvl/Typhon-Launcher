@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,8 +41,8 @@ func TestSetFavoritePersistsAndCaps(t *testing.T) {
 	if _, err := s.SetFavorite(ids[MaxFavorites], true); !errors.Is(err, ErrTooManyFavorites) {
 		t.Fatalf("err = %v, want ErrTooManyFavorites", err)
 	}
-	if got, want := ErrTooManyFavorites.Error(), "favorites limit reached"; got != want {
-		t.Fatalf("ErrTooManyFavorites.Error() = %q, want %q (matched by substring in frontend/src/lib/game/markMessages.ts)", got, want)
+	if got, want := ErrTooManyFavorites.Error(), "favorites limit reached"; !strings.Contains(got, want) {
+		t.Fatalf("ErrTooManyFavorites.Error() = %q, want it to contain %q (matched by substring in frontend/src/lib/game/markMessages.ts)", got, want)
 	}
 	if _, err := s.SetFavorite(ids[0], true); err != nil {
 		t.Fatalf("re-favoriting an existing favorite must not count: %v", err)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -229,7 +230,7 @@ func (s *attemptStore) flush() error {
 		s.mu.Lock()
 		s.dirty = true
 		s.mu.Unlock()
-		return fmt.Errorf("save metadata attempts: %w", err)
+		return uierr.Wrap("metadata.save_failed", fmt.Errorf("save metadata attempts: %w", err))
 	}
 	return nil
 }

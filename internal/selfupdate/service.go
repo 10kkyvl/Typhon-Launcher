@@ -16,6 +16,7 @@ import (
 
 	"typhon/internal/app"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -28,7 +29,7 @@ const (
 
 var checkInterval = 6 * time.Hour
 
-var errNoUpdateChecked = errors.New("selfupdate: check for an update before downloading")
+var errNoUpdateChecked = uierr.New("selfupdate.check_first", "selfupdate: check for an update before downloading")
 
 // startWorker is a seam for tests: the real one spawns a detached process.
 var startWorker = startUpdateWorker

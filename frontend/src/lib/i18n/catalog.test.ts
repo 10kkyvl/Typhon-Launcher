@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ru } from './catalog/ru';
 import { en } from './catalog/en';
+import * as ruNamespaces from './catalog/ru';
+import * as enNamespaces from './catalog/en';
 import type { Message } from './types';
 
 const keys = Object.keys(ru) as (keyof typeof ru)[];
@@ -20,7 +22,26 @@ function texts(message: Message): string[] {
   return typeof message === 'string' ? [message] : (Object.values(message) as string[]);
 }
 
+function duplicates(namespaces: Record<string, unknown>) {
+  const seen = new Map<string, string>();
+  const clashes: string[] = [];
+  for (const [name, value] of Object.entries(namespaces)) {
+    if (name === 'ru' || name === 'en' || typeof value !== 'object' || value === null) continue;
+    for (const key of Object.keys(value)) {
+      const owner = seen.get(key);
+      if (owner) clashes.push(`${key}: ${owner} and ${name}`);
+      else seen.set(key, name);
+    }
+  }
+  return clashes;
+}
+
 describe('catalog', () => {
+  it('defines every key in exactly one namespace', () => {
+    expect(duplicates(ruNamespaces)).toEqual([]);
+    expect(duplicates(enNamespaces)).toEqual([]);
+  });
+
   it('covers every russian key in english', () => {
     const missing = keys.filter((key) => en[key] === undefined);
     expect(missing).toEqual([]);

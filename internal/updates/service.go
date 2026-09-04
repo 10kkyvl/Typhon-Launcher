@@ -18,6 +18,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -53,18 +54,18 @@ const (
 var pollInterval = time.Second
 
 var (
-	errNotTracked = errors.New("для этой игры нет данных об обновлении")
+	errNotTracked = uierr.New("updates.not_tracked", "для этой игры нет данных об обновлении")
 
-	errEmptyInstallDir = errors.New("каталог установки не задан")
-	errNoPlan          = errors.New("сначала подготовьте план обновления")
-	errGameRunning     = errors.New("игра запущена — закройте её перед обновлением")
-	errBusy            = errors.New("операция уже выполняется")
-	errNoRollback      = errors.New("предыдущая версия недоступна")
-	errNoIdentity      = errors.New("проверка недоступна для этой установки")
-	errNoDownloads     = errors.New("менеджер загрузок недоступен")
-	errNoInstaller     = errors.New("установщик недоступен")
-	errNoLibrary       = errors.New("библиотека недоступна")
-	errUpdateFailed    = errors.New("не удалось применить обновление")
+	errEmptyInstallDir = uierr.New("updates.no_install_dir", "каталог установки не задан")
+	errNoPlan          = uierr.New("updates.no_plan", "сначала подготовьте план обновления")
+	errGameRunning     = uierr.New("updates.game_running", "игра запущена — закройте её перед обновлением")
+	errBusy            = uierr.New("updates.busy", "операция уже выполняется")
+	errNoRollback      = uierr.New("updates.no_rollback", "предыдущая версия недоступна")
+	errNoIdentity      = uierr.New("updates.no_identity", "проверка недоступна для этой установки")
+	errNoDownloads     = uierr.New("updates.no_downloads", "менеджер загрузок недоступен")
+	errNoInstaller     = uierr.New("updates.no_installer", "установщик недоступен")
+	errNoLibrary       = uierr.New("updates.no_library", "библиотека недоступна")
+	errUpdateFailed    = uierr.New("updates.update_failed", "не удалось применить обновление")
 )
 
 type librarySource interface {

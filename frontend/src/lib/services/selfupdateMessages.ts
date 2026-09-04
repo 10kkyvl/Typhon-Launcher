@@ -1,37 +1,77 @@
-import { msg } from '../i18n';
+import { errorCode, msg } from '../i18n';
+import type { MessageKey } from '../i18n';
 import type { SelfUpdateOutcome, SelfUpdateStatus } from './selfupdate';
 
-function reasons(): [string, string][] {
-  return [
-    ['left the launcher binary unchanged', msg('state.selfupdateReasonBinaryUnchanged')],
-    ['launcher did not exit', msg('state.selfupdateReasonLauncherDidNotExit')],
-    ['downloaded hash differs', msg('state.selfupdateReasonCorruptDownload')],
-    ['downloaded size differs', msg('state.selfupdateReasonCorruptDownload')],
-    ['no verified update is ready', msg('state.selfupdateReasonInstallerNotFound')],
-    ['run installer', msg('state.selfupdateReasonInstallerFailed')],
-    ['artifact download stalled', msg('state.selfupdateReasonServerStalled')],
-    ['Client.Timeout', msg('state.selfupdateReasonServerTimeout')],
-    ['context deadline exceeded', msg('state.selfupdateReasonServerTimeout')],
-    ['context canceled', msg('state.selfupdateReasonDownloadCancelled')],
-    ['no such host', msg('state.selfupdateReasonCannotReachServer')],
-    ['connection refused', msg('state.selfupdateReasonCannotReachServer')],
-    ['dial tcp', msg('state.selfupdateReasonCannotReachServer')],
-    ['tls:', msg('state.selfupdateReasonTlsFailed')],
-    ['artifact endpoint returned an error status', msg('state.selfupdateReasonServerErrorStatus')],
-    ['manifest endpoint returned an error status', msg('state.selfupdateReasonServerErrorStatus')],
-    ['signature does not verify', msg('state.selfupdateReasonSignatureInvalid')],
-    ['unknown key', msg('state.selfupdateReasonSignatureInvalid')],
-    ['manifest is malformed', msg('state.selfupdateReasonManifestCorrupt')],
-    ['manifest exceeds the size limit', msg('state.selfupdateReasonManifestCorrupt')],
-    ['manifest version is not comparable', msg('state.selfupdateReasonManifestCorrupt')],
-    ['manifest has no artifact for this platform', msg('state.selfupdateReasonPlatformUnsupported')],
-    ['another update operation is in progress', msg('state.selfupdateReasonOperationInProgress')],
-    ['check for an update before downloading', msg('state.selfupdateReasonCheckFirst')],
-    ['not enough space', msg('state.selfupdateReasonNoSpace')],
-    ['Access is denied', msg('state.selfupdateReasonAccessDenied')],
-    ['permission denied', msg('state.selfupdateReasonAccessDenied')],
-  ];
-}
+const REASONS: Record<string, MessageKey> = {
+  'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
+  'selfupdate.parent_still_running': 'state.selfupdateReasonLauncherDidNotExit',
+  'selfupdate.hash_mismatch': 'state.selfupdateReasonCorruptDownload',
+  'selfupdate.size_mismatch': 'state.selfupdateReasonCorruptDownload',
+  'selfupdate.not_ready': 'state.selfupdateReasonInstallerNotFound',
+  'selfupdate.stalled': 'state.selfupdateReasonServerStalled',
+  'selfupdate.artifact_status': 'state.selfupdateReasonServerErrorStatus',
+  'selfupdate.manifest_status': 'state.selfupdateReasonServerErrorStatus',
+  'selfupdate.bad_signature': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.unknown_key': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.bad_public_key': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.invalid_manifest': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.manifest_too_large': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_version': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_version_path': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.empty_config_dir': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.unsupported_artifact_kind': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_name': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_url': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_size': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_hash': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_release_note': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_change_kind': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.empty_note_text': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_note_text': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.too_many_release_notes': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.unordered_release_notes': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.no_artifact': 'state.selfupdateReasonPlatformUnsupported',
+  'selfupdate.apply_unsupported': 'state.selfupdateReasonPlatformUnsupported',
+  'selfupdate.busy': 'state.selfupdateReasonOperationInProgress',
+  'selfupdate.check_first': 'state.selfupdateReasonCheckFirst',
+  'selfupdate.read_only': 'errUpdates.selfupdateReadOnly',
+  'selfupdate.manifest_outdated': 'errUpdates.selfupdateManifestOutdated',
+  'selfupdate.installer_failed': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_empty': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_unsafe': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_dir': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_outside_cache': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_not_regular_file': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_unsafe': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_outside_install': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_regular': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_digest_mismatch': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.relaunch_path_empty': 'state.selfupdateReasonInstallerFailed',
+};
+
+// net/http, crypto/tls and the OS surface these directly, with no sentinel of
+// ours to attach a code to; classifying them in Go would mean intercepting
+// every dial/read/write call in the package, so their own stable english
+// wording is matched here instead, once, as a last resort.
+const RESIDUAL: [string, MessageKey][] = [
+  ['Client.Timeout', 'state.selfupdateReasonServerTimeout'],
+  ['context deadline exceeded', 'state.selfupdateReasonServerTimeout'],
+  ['context canceled', 'state.selfupdateReasonDownloadCancelled'],
+  ['no such host', 'state.selfupdateReasonCannotReachServer'],
+  ['connection refused', 'state.selfupdateReasonCannotReachServer'],
+  ['dial tcp', 'state.selfupdateReasonCannotReachServer'],
+  ['tls:', 'state.selfupdateReasonTlsFailed'],
+  ['not enough space', 'state.selfupdateReasonNoSpace'],
+  ['Access is denied', 'state.selfupdateReasonAccessDenied'],
+  ['permission denied', 'state.selfupdateReasonAccessDenied'],
+];
 
 function codeReasons(): Record<string, string> {
   return {
@@ -44,8 +84,10 @@ function codeReasons(): Record<string, string> {
 }
 
 function translate(raw: string): string {
-  const known = reasons().find(([marker]) => raw.includes(marker));
-  return known ? known[1] : '';
+  const key = REASONS[errorCode(raw)];
+  if (key) return msg(key);
+  const known = RESIDUAL.find(([marker]) => raw.includes(marker));
+  return known ? msg(known[1]) : '';
 }
 
 export function outcomeReason(outcome: SelfUpdateOutcome): string {

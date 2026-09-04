@@ -16,9 +16,40 @@ import {
   type UpdateState,
   type VerifyState,
 } from '../services/updates';
-import { errorMessage } from '../utils/errors';
-import { msg } from '../i18n';
+import { errorCode, msg } from '../i18n';
+import type { MessageKey } from '../i18n';
 import { toast } from './toasts';
+
+const REASONS: Record<string, MessageKey> = {
+  'updates.not_tracked': 'errUpdates.updatesNotTracked',
+  'updates.no_install_dir': 'errUpdates.updatesNoInstallDir',
+  'updates.no_plan': 'errUpdates.updatesNoPlan',
+  'updates.game_running': 'errUpdates.updatesGameRunning',
+  'updates.busy': 'errUpdates.updatesBusy',
+  'updates.no_rollback': 'errUpdates.updatesNoRollback',
+  'updates.no_identity': 'errUpdates.updatesNoIdentity',
+  'updates.no_downloads': 'errUpdates.updatesNoDownloads',
+  'updates.no_installer': 'errUpdates.updatesNoInstaller',
+  'updates.no_library': 'errUpdates.updatesNoLibrary',
+  'updates.update_failed': 'errUpdates.updatesUpdateFailed',
+  'updates.download_failed': 'errUpdates.updatesDownloadFailed',
+  'updates.install_failed': 'errUpdates.updatesInstallFailed',
+  'updates.staging_empty': 'errUpdates.updatesStagingEmpty',
+  'updates.no_launch_target': 'errUpdates.updatesNoLaunchTarget',
+  'updates.swap_failed': 'errUpdates.updatesSwapFailed',
+  'updates.carry_over_failed': 'errUpdates.updatesCarryOverFailed',
+  'updates.prefetch_unavailable': 'errUpdates.updatesPrefetchUnavailable',
+  'updates.no_free_space_for_backup': 'errUpdates.updatesNoFreeSpaceForBackup',
+  'updates.download_stalled': 'errUpdates.updatesDownloadStalled',
+  'updates.no_target': 'errUpdates.updatesNoTarget',
+  'updates.repair_unavailable': 'errUpdates.updatesRepairUnavailable',
+};
+
+function updateErrorText(raw: unknown): string {
+  const key = REASONS[errorCode(raw)];
+  if (key) return msg(key);
+  return raw instanceof Error ? raw.message : String(raw ?? '');
+}
 
 export const updates = writable<Update[]>([]);
 export const verifications = writable<Record<string, VerifyState>>({});
@@ -108,7 +139,7 @@ export async function initUpdates() {
   Events.On('update:failed', (event) => {
     const item = event.data as Update;
     upsert(item);
-    toast(msg('state.updatesFailedToast', { title: item.title, error: item.error ?? '' }), 'danger');
+    toast(msg('state.updatesFailedToast', { title: item.title, error: updateErrorText(item.error) }), 'danger');
   });
   Events.On('update:rollback', (event) => {
     const item = event.data as Update;
@@ -122,7 +153,7 @@ export async function initUpdates() {
   Events.On('repair:completed', (event) => {
     const state = event.data as VerifyState;
     upsertVerify(state);
-    if (state.error) toast(msg('state.updatesRepairIncomplete', { error: state.error }), 'danger');
+    if (state.error) toast(msg('state.updatesRepairIncomplete', { error: updateErrorText(state.error) }), 'danger');
     else toast(msg('state.updatesRepairComplete'), 'success');
   });
 }
@@ -131,7 +162,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(updateErrorText(err), 'danger');
   }
 }
 

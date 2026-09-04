@@ -13,11 +13,9 @@ import {
   type Download,
   type DownloadStatus,
 } from '../services/downloads';
-import { errorMessage } from '../utils/errors';
+import { installErrorText } from '../install/installErrors';
 import { msg } from '../i18n';
 import { toast } from './toasts';
-
-export { errorMessage };
 
 export const downloads = writable<Download[]>([]);
 
@@ -96,7 +94,7 @@ export async function initDownloads() {
   Events.On('download:failed', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(msg('state.downloadsFailedToast', { name: item.name, error: item.error }), 'danger');
+    toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });
   Events.On('download:removed', (event) => {
     const { id } = event.data as { id: string };
@@ -108,7 +106,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(installErrorText(err), 'danger');
   }
 }
 

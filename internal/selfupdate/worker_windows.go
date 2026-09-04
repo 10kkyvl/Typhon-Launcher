@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/windows"
+
+	"typhon/internal/uierr"
 )
 
 const stillActive = 259
@@ -74,7 +76,7 @@ func workerProcessAlive(pid int) (bool, error) {
 
 func relaunch(path string) error {
 	if path == "" {
-		return errors.New("selfupdate: relaunch path is empty")
+		return uierr.New("selfupdate.relaunch_path_empty", "selfupdate: relaunch path is empty")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("stat relaunch target: %w", err)

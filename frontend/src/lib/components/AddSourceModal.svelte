@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { FileUp, TriangleAlert } from '@lucide/svelte';
-  import { add as addSource, addFile as addSourceFile, errorMessage } from '../stores/sources';
+  import { add as addSource, addFile as addSourceFile, sourceErrorText } from '../stores/sources';
   import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
@@ -40,7 +40,7 @@
     try {
       selected = await selectFeedFile();
     } catch (err) {
-      error = errorMessage(err);
+      error = sourceErrorText(err);
       return;
     }
     if (!selected) return;
@@ -58,7 +58,7 @@
       preview = mode === 'file' ? await testSourceFile(value) : await testSource(value);
       step = 'preview';
     } catch (err) {
-      error = errorMessage(err);
+      error = sourceErrorText(err);
       step = 'input';
     }
   }
@@ -72,7 +72,7 @@
       toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
       open = false;
     } catch (err) {
-      error = errorMessage(err);
+      error = sourceErrorText(err);
       step = 'input';
     } finally {
       adding = false;

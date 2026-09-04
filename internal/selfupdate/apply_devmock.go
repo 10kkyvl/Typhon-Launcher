@@ -11,14 +11,15 @@ import (
 	"path/filepath"
 
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 )
 
 var (
-	errTargetNotAbsolute      = errors.New("selfupdate: launcher path is not absolute")
-	errTargetNotClean         = errors.New("selfupdate: launcher path is not clean")
-	errTargetOutsideInstall   = errors.New("selfupdate: launcher path is outside the install dir")
-	errTargetNotRegularFile   = errors.New("selfupdate: launcher path is not a regular file")
-	errTargetDigestUnexpected = errors.New("selfupdate: copied launcher differs from the verified artifact")
+	errTargetNotAbsolute      = uierr.New("selfupdate.launcher_path_not_absolute", "selfupdate: launcher path is not absolute")
+	errTargetNotClean         = uierr.New("selfupdate.launcher_path_not_clean", "selfupdate: launcher path is not clean")
+	errTargetOutsideInstall   = uierr.New("selfupdate.launcher_path_outside_install", "selfupdate: launcher path is outside the install dir")
+	errTargetNotRegularFile   = uierr.New("selfupdate.launcher_path_not_regular", "selfupdate: launcher path is not a regular file")
+	errTargetDigestUnexpected = uierr.New("selfupdate.launcher_digest_mismatch", "selfupdate: copied launcher differs from the verified artifact")
 )
 
 // Apply replaces the launcher binary in place: POSIX lets a running

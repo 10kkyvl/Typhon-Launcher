@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/download"
 	"typhon/internal/library"
+	"typhon/internal/uierr"
 )
 
 type RemovalMethod string
@@ -30,17 +31,17 @@ const (
 )
 
 var (
-	errGameRunning        = errors.New("игра запущена, закройте её перед удалением")
-	errGameBusy           = errors.New("по этой игре идёт установка или обновление")
-	errRemoveSeeding      = errors.New("раздача активна, остановите её перед удалением")
-	errFilesLocked        = errors.New("файлы игры заняты другим процессом")
-	errUninstallCancelled = errors.New("удаление отменено в установщике")
-	errUninstallFailed    = errors.New("деинсталлятор завершился с ошибкой")
-	errNoUninstaller      = errors.New("деинсталлятор не найден")
-	errBadCommand         = errors.New("команда удаления записана неверно")
-	errUnsafeRemoval      = errors.New("этот каталог нельзя удалять целиком")
-	errNoLibraryAccess    = errors.New("библиотека недоступна")
-	errNothingToRemove    = errors.New("удалять с диска нечего")
+	errGameRunning        = uierr.New("install.game_running", "игра запущена, закройте её перед удалением")
+	errGameBusy           = uierr.New("install.game_busy", "по этой игре идёт установка или обновление")
+	errRemoveSeeding      = uierr.New("install.remove_seeding", "раздача активна, остановите её перед удалением")
+	errFilesLocked        = uierr.New("install.files_locked", "файлы игры заняты другим процессом")
+	errUninstallCancelled = uierr.New("install.uninstall_cancelled", "удаление отменено в установщике")
+	errUninstallFailed    = uierr.New("install.uninstall_failed", "деинсталлятор завершился с ошибкой")
+	errNoUninstaller      = uierr.New("install.no_uninstaller", "деинсталлятор не найден")
+	errBadCommand         = uierr.New("install.bad_command", "команда удаления записана неверно")
+	errUnsafeRemoval      = uierr.New("install.unsafe_removal", "этот каталог нельзя удалять целиком")
+	errNoLibraryAccess    = uierr.New("install.no_library_access", "библиотека недоступна")
+	errNothingToRemove    = uierr.New("install.nothing_to_remove", "удалять с диска нечего")
 )
 
 type RemovalInfo struct {
