@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { ChevronDown, EllipsisVertical } from '@lucide/svelte';
+  import { Calendar, EllipsisVertical, Gamepad2 } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { PublicProfile } from '../../lib/services/social';
-  import { dotKind, presenceDot, presenceLine } from '../../lib/social/presence';
+  import { presenceDot } from '../../lib/social/presence';
   import { memberSince, relationLabel } from '../../lib/social/view';
+  import UserStats from './UserStats.svelte';
 
   let {
     profile,
@@ -25,7 +25,10 @@
   const name = $derived(profile.displayName || profile.username);
   const since = $derived(memberSince(profile.createdAt));
   const presence = $derived(presenceDot(profile.presence));
-  const presenceText = $derived(presenceLine(profile.presence, new Date(), profile.relation === 'self'));
+  const playing = $derived(presence !== 'offline' && profile.presence?.gameId != null);
+  const playingLine = $derived(
+    playing ? (profile.presence?.gameTitle ? `Играет в ${profile.presence.gameTitle}` : 'Играет') : '',
+  );
   const pending = $derived(profile.relation === 'none' || profile.relation === 'outgoing' || profile.relation === 'incoming');
 
   const friendMenu: MenuItem[] = [
@@ -45,44 +48,59 @@
         <h2 class="display-name">{name}</h2>
         <span class="username">@{profile.username}</span>
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
-        <div class="status">
-          <StatusBadge plain kind={dotKind(presence)} label={presenceText} />
+        <div class="meta">
+          {#if playingLine}
+            <span class="meta-item">
+              <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+              {playingLine}
+            </span>
+          {/if}
+          {#if since}
+            <span class="meta-item">
+              <Calendar size="1.5rem" strokeWidth={1.8} />
+              {since}
+            </span>
+          {/if}
         </div>
-        {#if since}<span class="since">{since}</span>{/if}
       </div>
 
-      <div class="head-actions">
-        {#if profile.relation === 'friend'}
-          <DropdownMenu items={friendMenu} onselect={onaction}>
-            {#snippet trigger({ toggle })}
-              <Button disabled={busy} onclick={toggle}>
-                {relationLabel('friend')}
-                <ChevronDown size="1.5rem" strokeWidth={1.8} />
+      <div class="right">
+        <div class="head-actions">
+          {#if profile.relation === 'friend'}
+            <Button disabled>{relationLabel('friend')}</Button>
+            <DropdownMenu items={friendMenu} onselect={onaction}>
+              {#snippet trigger({ toggle })}
+                <IconButton label="Ещё" onclick={toggle}>
+                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                </IconButton>
+              {/snippet}
+            </DropdownMenu>
+          {:else if pending}
+            {#if profile.relation === 'none'}
+              <Button variant="primary" disabled={busy} onclick={() => onaction('add')}>
+                {relationLabel('none')}
               </Button>
-            {/snippet}
-          </DropdownMenu>
-        {:else if pending}
-          {#if profile.relation === 'none'}
-            <Button variant="primary" disabled={busy} onclick={() => onaction('add')}>
-              {relationLabel('none')}
-            </Button>
-          {:else if profile.relation === 'outgoing'}
-            <Button disabled>{relationLabel('outgoing')}</Button>
-            <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>Отменить</Button>
-          {:else}
-            <Button variant="primary" disabled={busy} onclick={() => onaction('accept')}>
-              {relationLabel('incoming')}
-            </Button>
-            <Button variant="ghost" disabled={busy} onclick={() => onaction('decline')}>Отклонить</Button>
+            {:else if profile.relation === 'outgoing'}
+              <Button disabled>{relationLabel('outgoing')}</Button>
+              <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>Отменить</Button>
+            {:else}
+              <Button variant="primary" disabled={busy} onclick={() => onaction('accept')}>
+                {relationLabel('incoming')}
+              </Button>
+              <Button variant="ghost" disabled={busy} onclick={() => onaction('decline')}>Отклонить</Button>
+            {/if}
+            <DropdownMenu items={blockMenu} onselect={onaction}>
+              {#snippet trigger({ toggle })}
+                <IconButton label="Ещё" onclick={toggle}>
+                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                </IconButton>
+              {/snippet}
+            </DropdownMenu>
           {/if}
-          <DropdownMenu items={blockMenu} onselect={onaction}>
-            {#snippet trigger({ toggle })}
-              <IconButton label="Ещё" onclick={toggle}>
-                <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
-        {/if}
+        </div>
+        <div class="stats">
+          <UserStats stats={profile.stats} />
+        </div>
       </div>
     </div>
   </Card>
@@ -91,7 +109,7 @@
 <style>
   .user-header {
     display: block;
-    margin-bottom: var(--space-10);
+    margin-bottom: var(--space-6);
   }
 
   .head {
@@ -129,18 +147,40 @@
     color: var(--text-2);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
-  .status {
-    display: inline-flex;
+  .meta {
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
+    flex-wrap: wrap;
+    gap: var(--space-4);
     margin-top: 0.4rem;
   }
 
-  .since {
-    font-size: var(--font-xs);
+  .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .meta-item :global(svg) {
     color: var(--text-3);
+    flex-shrink: 0;
+  }
+
+  .right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-4);
+    flex-shrink: 0;
   }
 
   .head-actions {
@@ -153,6 +193,11 @@
   @media (max-width: 1200px) {
     .head {
       flex-wrap: wrap;
+    }
+
+    .right {
+      align-items: flex-start;
+      width: 100%;
     }
   }
 </style>

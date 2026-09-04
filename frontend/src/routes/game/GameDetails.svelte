@@ -14,6 +14,7 @@
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
@@ -26,6 +27,7 @@
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
@@ -293,6 +295,17 @@
   const shotCols = $derived(
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
   );
+
+  let activeTab = $state('overview');
+
+  const tabs = $derived([
+    { id: 'overview', label: 'Обзор' },
+    ...(shots.length > 0 ? [{ id: 'screenshots', label: 'Скриншоты' }] : []),
+  ]);
+
+  $effect(() => {
+    if (activeTab === 'screenshots' && shots.length === 0) activeTab = 'overview';
+  });
 
   const installFacts = $derived.by(() => {
     if (!localGame || !installed) return [];
@@ -776,111 +789,131 @@
     </div>
   </section>
 
+  {#if tabs.length > 1}
+    <div class="tabs-wrap">
+      <Tabs {tabs} bind:value={activeTab} />
+    </div>
+  {/if}
+
   <div class="body">
     <div class="main">
-      {#if metaState === 'searching'}
-        <div class="meta-note" role="status">
-          <span class="spinner"></span>
-          <div class="meta-text">
-            <p class="meta-title">Ищем описание и обложку</p>
-            <p class="meta-hint">Сопоставляем «{title || 'игру'}» с базой IGDB — это занимает несколько секунд.</p>
-          </div>
-        </div>
-      {:else if metaState === 'unmatched' || metaState === 'failed'}
-        <div class="meta-note">
-          <div class="meta-text">
-            <p class="meta-title">
-              {metaState === 'unmatched' ? 'Не удалось подобрать описание' : 'Метаданные не загрузились'}
-            </p>
-            <p class="meta-hint">
-              {metaState === 'unmatched'
-                ? 'В базе IGDB нет однозначного совпадения. Выберите игру вручную или оставьте карточку как есть.'
-                : 'Сервис метаданных не ответил. Попробуйте ещё раз или выберите игру вручную.'}
-            </p>
-          </div>
-          <div class="meta-actions">
-            {#if metaState === 'failed'}
-              <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
-                {metaRefreshing ? 'Повторяем…' : 'Повторить'}
-              </Button>
-              <Button size="sm" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {:else}
-              <Button size="sm" variant="primary" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {/if}
-            <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>Не искать</Button>
-          </div>
-        </div>
-      {/if}
-
-      {#if summary.text}
-        <p class="summary">{summary.text}</p>
-        {#if summary.expandable}
-          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
-            {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
-          </button>
-        {/if}
-      {:else if !title || metaState === 'searching'}
-        <div class="skeleton line"></div>
-        <div class="skeleton line"></div>
-        <div class="skeleton line short"></div>
-      {/if}
-
-      {#if tags.length > 0}
-        <div class="tags">
-          {#each tags as tag (tag)}
-            <span class="tag">{tag}</span>
+      {#if activeTab === 'screenshots'}
+        <div
+          class="shots"
+          class:featured={shots.length >= 5}
+          class:one={shots.length === 1}
+          style:--cols={shotCols}
+        >
+          {#each shots as shot, index (shot.id)}
+            <button class="shot" onclick={() => openShot(index)} aria-label="Открыть скриншот">
+              <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
+            </button>
           {/each}
         </div>
-      {/if}
+      {:else}
+        {#if metaState === 'searching'}
+          <div class="meta-note" role="status">
+            <span class="spinner"></span>
+            <div class="meta-text">
+              <p class="meta-title">Ищем описание и обложку</p>
+              <p class="meta-hint">Сопоставляем «{title || 'игру'}» с базой IGDB — это занимает несколько секунд.</p>
+            </div>
+          </div>
+        {:else if metaState === 'unmatched' || metaState === 'failed'}
+          <div class="meta-note">
+            <div class="meta-text">
+              <p class="meta-title">
+                {metaState === 'unmatched' ? 'Не удалось подобрать описание' : 'Метаданные не загрузились'}
+              </p>
+              <p class="meta-hint">
+                {metaState === 'unmatched'
+                  ? 'В базе IGDB нет однозначного совпадения. Выберите игру вручную или оставьте карточку как есть.'
+                  : 'Сервис метаданных не ответил. Попробуйте ещё раз или выберите игру вручную.'}
+              </p>
+            </div>
+            <div class="meta-actions">
+              {#if metaState === 'failed'}
+                <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
+                  {metaRefreshing ? 'Повторяем…' : 'Повторить'}
+                </Button>
+                <Button size="sm" onclick={() => openMatch('find')}>Выбрать вручную</Button>
+              {:else}
+                <Button size="sm" variant="primary" onclick={() => openMatch('find')}>Выбрать вручную</Button>
+              {/if}
+              <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>Не искать</Button>
+            </div>
+          </div>
+        {/if}
 
-      {#if shots.length > 0}
-        <section class="section">
-          <h2 class="heading">Скриншоты</h2>
-          <div
-            class="shots"
-            class:featured={shots.length >= 5}
-            class:one={shots.length === 1}
-            style:--cols={shotCols}
-          >
-            {#each shots as shot, index (shot.id)}
-              <button class="shot" onclick={() => openShot(index)} aria-label="Открыть скриншот">
-                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-              </button>
+        {#if summary.text}
+          <p class="summary">{summary.text}</p>
+          {#if summary.expandable}
+            <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
+              {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
+            </button>
+          {/if}
+        {:else if !title || metaState === 'searching'}
+          <div class="skeleton line"></div>
+          <div class="skeleton line"></div>
+          <div class="skeleton line short"></div>
+        {/if}
+
+        {#if tags.length > 0}
+          <div class="tags">
+            {#each tags as tag (tag)}
+              <span class="tag">{tag}</span>
             {/each}
           </div>
-        </section>
-      {/if}
+        {/if}
 
-      {#if showUpdateCard && update}
-        <section class="section">
-          <UpdateCard bind:this={updateCard} {update} {running} />
-        </section>
-      {/if}
+        {#if showUpdateCard && update}
+          <section class="section">
+            <UpdateCard bind:this={updateCard} {update} {running} />
+          </section>
+        {/if}
 
-      {#if installed && localGame}
-        <section class="section">
-          <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-        </section>
-      {/if}
+        {#if installed && localGame}
+          <section class="section">
+            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+          </section>
 
-      {#if releasesLoading || releaseGroups.length > 0}
-        <section class="section">
-          <h2 class="heading">Доступные загрузки</h2>
-          <ReleaseList
-            groups={releaseGroups}
-            loading={releasesLoading}
-            currentReleaseId={localGame?.releaseId ?? ''}
-            updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-            ondownload={downloadRelease}
-          />
-        </section>
+          <section class="section">
+            <h2 class="heading">Установка</h2>
+            <div class="path">
+              <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
+              <IconButton label="Открыть папку" size="sm" onclick={reveal}>
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            </div>
+            <dl class="facts">
+              {#each installFacts as fact (fact.label)}
+                <div class="fact">
+                  <dt>{fact.label}</dt>
+                  <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+                </div>
+              {/each}
+            </dl>
+          </section>
+        {/if}
+
+        {#if releasesLoading || releaseGroups.length > 0}
+          <section class="section">
+            <h2 class="heading">Доступные загрузки</h2>
+            <ReleaseList
+              groups={releaseGroups}
+              loading={releasesLoading}
+              currentReleaseId={localGame?.releaseId ?? ''}
+              updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              ondownload={downloadRelease}
+            />
+          </section>
+        {/if}
       {/if}
     </div>
 
     <aside class="side">
       {#if gameFacts.length > 0}
-        <section class="side-block">
-          <h2 class="heading sm">Об игре</h2>
+        <Card title="Об игре">
           <dl class="facts">
             {#each gameFacts as fact (fact.label)}
               <div class="fact">
@@ -889,27 +922,7 @@
               </div>
             {/each}
           </dl>
-        </section>
-      {/if}
-
-      {#if installed && localGame}
-        <section class="panel">
-          <h2 class="heading sm">Установка</h2>
-          <div class="path">
-            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
-            <IconButton label="Открыть папку" size="sm" onclick={reveal}>
-              <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          </div>
-          <dl class="facts">
-            {#each installFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-        </section>
+        </Card>
       {/if}
 
       <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
@@ -1064,6 +1077,7 @@
     width: clamp(11rem, 10vw, 16rem);
     flex-shrink: 0;
     margin-bottom: -3.6rem;
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
   }
@@ -1162,6 +1176,10 @@
 
   .note.danger {
     color: var(--danger);
+  }
+
+  .tabs-wrap {
+    margin-bottom: var(--space-8);
   }
 
   .body {
@@ -1283,12 +1301,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .heading.sm {
-    font-size: var(--font-md);
-    color: var(--text-2);
-    margin-bottom: var(--space-2);
-  }
-
   .shots {
     display: grid;
     grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
@@ -1325,12 +1337,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-  }
-
-  .panel {
-    padding: var(--space-5);
-    background: var(--surface);
-    border-radius: var(--radius-lg);
   }
 
   .path {

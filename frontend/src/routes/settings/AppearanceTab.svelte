@@ -143,8 +143,7 @@
 </script>
 
 <div class="single-column">
-  <section class="group">
-    <h3>Оформление</h3>
+  <Card title="Оформление">
     <div class="preset-grid">
       <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
         <span class="preset-swatch system"></span>
@@ -177,11 +176,10 @@
         {importing ? 'Импорт…' : 'Импорт'}
       </Button>
     </div>
-  </section>
+  </Card>
 
   {#if draft}
-    <section class="group">
-      <h3>Редактирование: {draft.name}</h3>
+    <Card title={`Редактирование: ${draft.name}`}>
       {#if draft.builtIn}
         <p class="hint">Это встроенная тема — изменения сохранятся как новая тема.</p>
       {/if}
@@ -248,7 +246,7 @@
         </div>
 
         <div class="editor-preview">
-          <Card>
+          <Card surface="panel">
             <div class="preview" style={previewStyle}>
               <span class="preview-title">Typhon</span>
               <span class="preview-sub">Живое превью темы</span>
@@ -257,11 +255,10 @@
           </Card>
         </div>
       </div>
-    </section>
+    </Card>
   {/if}
 
-  <section class="group">
-    <h3>Сброс</h3>
+  <Card title="Сброс">
     <div class="row">
       <div class="row-text">
         <span class="row-label">Вернуть оформление по умолчанию</span>
@@ -269,23 +266,15 @@
       </div>
       <Button size="sm" variant="danger" onclick={resetAppearance}>Сбросить</Button>
     </div>
-  </section>
+  </Card>
 </div>
 
 <style>
   .single-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     max-width: 96rem;
-  }
-
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  .group h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-3);
   }
 
   .hint {

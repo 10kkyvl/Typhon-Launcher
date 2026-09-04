@@ -1,85 +1,55 @@
 <script lang="ts">
-  import { monthLine } from '../../lib/profile/view';
+  import { CheckCircle2, Clock, Gamepad2 } from '@lucide/svelte';
+  import StatTile from '../../lib/components/StatTile.svelte';
   import type { ProfileStats } from '../../lib/services/profile';
   import { formatCount } from '../../lib/utils/format';
   import HiddenBadge from './HiddenBadge.svelte';
 
   let { stats, hidden }: { stats: ProfileStats; hidden: boolean } = $props();
-
-  const month = $derived(monthLine(stats));
-
-  const tiles = $derived([
-    { label: 'Игры', value: formatCount(stats.games) },
-    { label: 'Часов', value: formatCount(stats.hours) },
-    { label: 'Пройдено', value: formatCount(stats.completed) },
-    { label: 'Играю сейчас', value: formatCount(stats.playing) },
-  ]);
 </script>
 
-<section class="group">
-  <div class="group-head">
-    <h3>Статистика</h3>
-    {#if hidden}<HiddenBadge />{/if}
+<div class="stats-row">
+  <div class="stat">
+    <StatTile value={formatCount(stats.games)} label="Игр">
+      {#snippet icon()}<Gamepad2 size="1.8rem" strokeWidth={1.8} />{/snippet}
+    </StatTile>
   </div>
-  {#if month}<p class="month">За этот месяц: {month}</p>{/if}
-  <div class="tiles">
-    {#each tiles as tile (tile.label)}
-      <div class="tile">
-        <span class="value">{tile.value}</span>
-        <span class="label">{tile.label}</span>
-      </div>
-    {/each}
+  <div class="stat">
+    <StatTile value={formatCount(stats.hours)} label="Часов">
+      {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
+    </StatTile>
   </div>
-</section>
+  <div class="stat">
+    <StatTile value={formatCount(stats.completed)} label="Пройдено">
+      {#snippet icon()}<CheckCircle2 size="1.8rem" strokeWidth={1.8} />{/snippet}
+    </StatTile>
+  </div>
+  {#if hidden}
+    <div class="hidden-flag">
+      <HiddenBadge text="Статистика скрыта от других. Вы её видите." />
+    </div>
+  {/if}
+</div>
 
 <style>
-  .group {
-    margin-bottom: var(--space-10);
+  .stats-row {
+    display: flex;
+    align-items: flex-start;
   }
 
-  .group-head {
+  .stat {
+    padding: 0 var(--space-6);
+    border-left: 1px solid var(--border);
+  }
+
+  .stat:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .hidden-flag {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-
-  h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-  }
-
-  .month {
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    margin-bottom: var(--space-3);
-  }
-
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: var(--space-4);
-  }
-
-  .tile {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: var(--space-3) var(--space-4);
-    background: var(--surface);
-    border-radius: var(--radius-md);
-  }
-
-  .value {
-    font-size: var(--font-title);
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
-    line-height: 1.1;
-  }
-
-  .label {
-    font-size: var(--font-xs);
-    color: var(--text-3);
+    margin-left: var(--space-3);
   }
 </style>

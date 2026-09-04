@@ -2,6 +2,7 @@
   import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
@@ -230,8 +231,7 @@
 {#if tab === 'general'}
   <div class="columns">
     <div class="column">
-      <section class="group">
-        <h3>Запуск и поведение</h3>
+      <Card title="Запуск и поведение">
         <div class="rows">
           <div class="row">
             <div class="row-text">
@@ -267,10 +267,9 @@
             />
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Библиотека</h3>
+      <Card title="Библиотека">
         <div class="rows">
           <div class="row folder-row">
             <span class="row-label folder-label">Папка библиотеки</span>
@@ -314,19 +313,17 @@
           {/if}
           <LibraryLocationRow />
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Экспериментальное</h3>
+      <Card title="Экспериментальное">
         <div class="rows">
           <LanSettingsRow />
         </div>
-      </section>
+      </Card>
     </div>
 
     <div class="column">
-      <section class="group">
-        <h3>Интерфейс</h3>
+      <Card title="Интерфейс">
         <div class="rows">
           <div class="row">
             <div class="row-text">
@@ -368,10 +365,9 @@
             />
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Приватность</h3>
+      <Card title="Приватность">
         <div class="rows">
           <div class="row">
             <div class="row-text">
@@ -432,10 +428,9 @@
             </div>
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Синхронизация</h3>
+      <Card title="Синхронизация">
         <div class="rows">
           <div class="row">
             <div class="row-text">
@@ -487,13 +482,12 @@
             </Button>
           </div>
         </div>
-      </section>
+      </Card>
     </div>
   </div>
 {:else if tab === 'downloads'}
   <div class="single-column">
-    <section class="group">
-      <h3>Загрузки</h3>
+    <Card title="Загрузки">
       <div class="rows">
         <div class="row">
           <div class="row-text">
@@ -566,10 +560,9 @@
           />
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Установка</h3>
+    <Card title="Установка">
       <div class="rows">
         <div class="row">
           <div class="row-text">
@@ -645,10 +638,9 @@
           />
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Обновления</h3>
+    <Card title="Обновления">
       <div class="rows">
         <div class="row">
           <div class="row-text">
@@ -707,13 +699,13 @@
           />
         </div>
       </div>
-    </section>
+    </Card>
   </div>
 {:else if tab === 'appearance'}
   <AppearanceTab />
 {:else if tab === 'about'}
   <div class="single-column">
-    <section class="group about">
+    <Card>
       <div class="about-logo">
         <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
@@ -779,10 +771,9 @@
         </div>
         <UpdateBanner />
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Диагностика</h3>
+    <Card title="Диагностика">
       <div class="rows">
         <div class="row">
           <div class="row-text">
@@ -801,10 +792,9 @@
           </Button>
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Правовая информация</h3>
+    <Card title="Правовая информация">
       {#if legalError}
         <p class="row-sub">{legalError}</p>
       {:else}
@@ -826,7 +816,7 @@
           </div>
         </div>
       {/if}
-    </section>
+    </Card>
   </div>
 {/if}
 
@@ -859,22 +849,17 @@
   }
 
   .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     min-width: 0;
   }
 
   .single-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     max-width: 96rem;
-  }
-
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  .group h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-3);
   }
 
   .rows {

@@ -1,101 +1,63 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
-  import type { PlayingEntry } from '../../lib/services/profile';
-  import { recentLabel } from '../../lib/profile/view';
+  import Card from '../../lib/components/Card.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import type { GameRef } from '../../lib/services/profile';
   import { navigate } from '../../lib/stores/router';
   import HiddenBadge from './HiddenBadge.svelte';
 
-  let { entries, hidden }: { entries: PlayingEntry[]; hidden: boolean } = $props();
+  let { running, hidden }: { running: GameRef[]; hidden: boolean } = $props();
+
+  const game = $derived(running[0] ?? null);
 </script>
 
-{#if entries.length > 0}
-  <section class="group">
-    <div class="group-head">
-      <h3>Сейчас играю</h3>
-      {#if hidden}<HiddenBadge />{/if}
-    </div>
-    <ul class="rows">
-      {#each entries as entry (entry.game.id)}
-        <li>
-          <button class="row" onclick={() => navigate('game', { id: entry.game.id })}>
-            <span class="cover">
-              <Artwork src={entry.game.cover} alt="" ratio="3 / 4" radius="var(--radius-sm)" />
-            </span>
-            <span class="title">{entry.game.title}</span>
-            <span class="time">{recentLabel(entry.recentSeconds)}</span>
-          </button>
-        </li>
-      {/each}
-    </ul>
-  </section>
+{#if game}
+  <Card title="Сейчас играет">
+    {#snippet action()}
+      {#if hidden}<HiddenBadge text="Скрыто от других. Вы видите это, остальные — нет." />{/if}
+    {/snippet}
+    <button class="playing" type="button" onclick={() => navigate('game', { id: game.id })}>
+      <span class="cover">
+        <Artwork src={game.cover} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
+      </span>
+      <span class="title">{game.title}</span>
+      <StatusBadge kind="success" label="Играет" plain />
+    </button>
+  </Card>
 {/if}
 
 <style>
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  .group-head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-
-  h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-  }
-
-  .rows {
-    list-style: none;
+  .playing {
     display: flex;
     flex-direction: column;
-  }
-
-  .rows li + li .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
+    align-items: flex-start;
+    gap: 0.8rem;
     width: 100%;
-    padding: 0.8rem;
+    padding: 0;
     background: none;
     border: 0;
-    border-radius: var(--radius-md);
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: background var(--dur) var(--ease);
-  }
-
-  .row:hover {
-    background: var(--hover);
   }
 
   .cover {
-    width: 3.6rem;
-    flex-shrink: 0;
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .playing:hover .cover {
+    transform: scale(1.01);
   }
 
   .title {
-    flex: 1;
-    min-width: 0;
     font-size: var(--font-md);
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .time {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-    white-space: nowrap;
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    line-height: 1.3;
   }
 </style>

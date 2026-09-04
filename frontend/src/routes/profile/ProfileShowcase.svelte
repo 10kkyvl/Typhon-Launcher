@@ -1,57 +1,60 @@
 <script lang="ts">
+  import { Heart } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import type { ShowcaseKind } from '../../lib/services/account';
   import type { ShowcaseBlock } from '../../lib/services/profile';
-  import { SHOWCASE_HINTS, SHOWCASE_TITLES, shortDate } from '../../lib/profile/view';
+  import { SHOWCASE_TITLES, shortDate } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
 
-  let { blocks }: { blocks: ShowcaseBlock[] } = $props();
+  let { blocks, onmanage }: { blocks: ShowcaseBlock[]; onmanage: () => void } = $props();
 
-  const title = (kind: string) => SHOWCASE_TITLES[kind as ShowcaseKind] ?? kind;
-  const hint = (kind: string) => SHOWCASE_HINTS[kind as ShowcaseKind] ?? '';
+  const visible = $derived(blocks.filter((block) => block.games.length > 0));
+
+  function title(kind: string): string {
+    if (kind === 'favorites') return 'Любимые игры';
+    return SHOWCASE_TITLES[kind as ShowcaseKind] ?? kind;
+  }
 </script>
 
-{#each blocks as block (block.kind)}
-  <section class="group">
-    <h3>{title(block.kind)}</h3>
-    {#if block.games.length === 0}
-      <p class="hint">{hint(block.kind)}</p>
-    {:else}
-      <div class="grid">
-        {#each block.games as game (game.id)}
-          <button class="tile" onclick={() => navigate('game', { id: game.id })}>
-            <Artwork src={game.cover} alt="" ratio="3 / 4" radius="var(--radius-md)" />
-            <span class="caption">{game.title}</span>
-            {#if block.kind === 'recently_completed' && game.statusAt}
-              <span class="completed">Пройдена {shortDate(game.statusAt)}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-    {/if}
-  </section>
+{#snippet grid(block: ShowcaseBlock)}
+  <div class="grid">
+    {#each block.games as game (game.id)}
+      <button class="tile" type="button" onclick={() => navigate('game', { id: game.id })}>
+        <span class="cover">
+          <Artwork src={game.cover} alt="" ratio="3 / 4" radius="var(--radius-md)" />
+          {#if block.kind === 'favorites'}
+            <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
+          {/if}
+        </span>
+        <span class="caption">{game.title}</span>
+        {#if block.kind === 'recently_completed' && game.statusAt}
+          <span class="completed">Пройдена {shortDate(game.statusAt)}</span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/snippet}
+
+{#each visible as block (block.kind)}
+  {#if block.kind === 'favorites'}
+    <Card title={title(block.kind)}>
+      {#snippet action()}
+        <button class="manage" type="button" onclick={onmanage}>Управлять избранным</button>
+      {/snippet}
+      {@render grid(block)}
+    </Card>
+  {:else}
+    <Card title={title(block.kind)}>
+      {@render grid(block)}
+    </Card>
+  {/if}
 {/each}
 
 <style>
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-3);
-  }
-
-  .hint {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     gap: var(--space-3);
   }
 
@@ -67,6 +70,25 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+  }
+
+  .cover {
+    position: relative;
+    display: block;
+  }
+
+  .heart {
+    position: absolute;
+    left: 0.7rem;
+    bottom: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    background: rgba(5, 8, 12, 0.6);
+    color: var(--danger);
   }
 
   .caption {
@@ -87,9 +109,17 @@
     color: var(--text-3);
   }
 
-  @media (max-width: 1200px) {
-    .grid {
-      grid-template-columns: repeat(3, 1fr);
-    }
+  .manage {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--accent-text);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .manage:hover {
+    text-decoration: underline;
   }
 </style>

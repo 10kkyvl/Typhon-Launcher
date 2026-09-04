@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { CheckCircle2, Clock, Gamepad2 } from '@lucide/svelte';
+  import StatTile from '../../lib/components/StatTile.svelte';
   import type { StatsView } from '../../lib/services/social';
   import { formatCount } from '../../lib/utils/format';
   import HiddenBadge from '../profile/HiddenBadge.svelte';
@@ -6,96 +8,83 @@
   let { stats }: { stats: StatsView | null } = $props();
 
   const hint = 'Владелец профиля скрыл эти данные';
-
-  const tiles = $derived(
-    stats
-      ? [
-          { label: 'Игры', value: formatCount(stats.games), hidden: false },
-          { label: 'Часов', value: formatCount(stats.hours ?? 0), hidden: stats.hours == null },
-          { label: 'Пройдено', value: formatCount(stats.completed), hidden: false },
-        ]
-      : [],
-  );
 </script>
 
-<section class="group">
-  <div class="group-head">
-    <h3>Статистика</h3>
-    {#if !stats}<HiddenBadge text={hint} />{/if}
-  </div>
-  {#if !stats}
-    <p class="muted">Статистика скрыта</p>
-  {:else}
-    <div class="tiles">
-      {#each tiles as tile (tile.label)}
-        <div class="tile">
-          <span class="value" class:hidden={tile.hidden}>
-            {#if tile.hidden}
-              <HiddenBadge text={hint} />
-            {:else}
-              {tile.value}
-            {/if}
-          </span>
-          <span class="label">{tile.label}</span>
-        </div>
-      {/each}
+{#if stats}
+  <div class="stats-row">
+    <div class="stat">
+      <StatTile value={formatCount(stats.games)} label="Игр">
+        {#snippet icon()}<Gamepad2 size="1.8rem" strokeWidth={1.8} />{/snippet}
+      </StatTile>
     </div>
-  {/if}
-</section>
+    <div class="stat">
+      {#if stats.hours == null}
+        <div class="tile">
+          <span class="icon"><Clock size="1.8rem" strokeWidth={1.8} /></span>
+          <HiddenBadge text={hint} />
+          <span class="label">Часов</span>
+        </div>
+      {:else}
+        <StatTile value={formatCount(stats.hours)} label="Часов">
+          {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
+        </StatTile>
+      {/if}
+    </div>
+    <div class="stat">
+      <StatTile value={formatCount(stats.completed)} label="Пройдено">
+        {#snippet icon()}<CheckCircle2 size="1.8rem" strokeWidth={1.8} />{/snippet}
+      </StatTile>
+    </div>
+  </div>
+{:else}
+  <div class="stats-hidden">
+    <HiddenBadge text={hint} />
+    <span class="label">Статистика скрыта</span>
+  </div>
+{/if}
 
 <style>
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  .group-head {
+  .stats-row {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
+    align-items: flex-start;
   }
 
-  h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
+  .stat {
+    padding: 0 var(--space-6);
+    border-left: 1px solid var(--border);
   }
 
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: var(--space-4);
+  .stat:first-child {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .tile {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    padding: var(--space-3) var(--space-4);
-    background: var(--surface);
-    border-radius: var(--radius-md);
+    align-items: flex-start;
+    gap: 0.8rem;
+    min-width: 0;
   }
 
-  .value {
-    font-size: var(--font-title);
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
-    line-height: 1.1;
-  }
-
-  .value.hidden {
+  .tile .icon {
     display: inline-flex;
-    align-items: center;
-    min-height: calc(var(--font-title) * 1.1);
+    color: var(--text-3);
   }
 
-  .label {
-    font-size: var(--font-xs);
+  .tile .label {
+    font-size: var(--font-sm);
+    color: var(--text-3);
+  }
+
+  .stats-hidden {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .stats-hidden .label {
+    font-size: var(--font-sm);
     color: var(--text-3);
   }
 </style>

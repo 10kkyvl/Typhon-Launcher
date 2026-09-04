@@ -1,8 +1,11 @@
 <script lang="ts">
   import { LogIn, UserRound } from '@lucide/svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { PublicProfile } from '../../lib/services/social';
@@ -15,7 +18,7 @@
     sendRequest,
     unfriend,
   } from '../../lib/services/social';
-  import { showcaseTitle } from '../../lib/social/view';
+  import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
@@ -25,7 +28,6 @@
   import UserHeader from './UserHeader.svelte';
   import UserMutual from './UserMutual.svelte';
   import UserRecent from './UserRecent.svelte';
-  import UserStats from './UserStats.svelte';
 
   let { username }: { username?: string } = $props();
 
@@ -41,12 +43,23 @@
   const stranger = $derived(!!data && data.relation !== 'friend' && data.relation !== 'self');
   const closed = $derived(!!data && data.visibility === 'private' && data.relation !== 'self');
   const restricted = $derived(!!data && data.visibility === 'friends' && stranger);
-  const showcase = $derived(data && !closed ? data.showcase : []);
   const common = $derived(data && !closed && data.common && data.common.count > 0 ? data.common : null);
   const recent = $derived(data && !closed ? data.recentlyPlayed : []);
   const activity = $derived(data && !closed ? data.recentActivity : []);
   const favorites = $derived(data && !closed ? data.favorites : []);
   const mutual = $derived(data && !closed && data.mutualCount > 0 ? data.mutualFriends : []);
+
+  const presenceGame = $derived.by(() => {
+    if (!data || closed) return null;
+    const gameId = data.presence?.gameId;
+    if (gameId == null) return null;
+    const cover =
+      data.recentlyPlayed.find((g) => g.igdbId === gameId)?.coverUrl ??
+      data.favorites.find((g) => g.igdbId === gameId)?.coverUrl ??
+      data.common?.games.find((g) => g.igdbId === gameId)?.coverUrl ??
+      '';
+    return { igdbId: gameId, title: data.presence?.gameTitle ?? '', coverUrl: cover };
+  });
 
   async function load(target: string, quiet = false) {
     if (quiet) {
@@ -184,51 +197,52 @@
   </EmptyState>
 {:else if data}
   <div class="profile" class:refreshing>
-    <div class="main">
-      <div class="area area-header">
-        <UserHeader profile={data} {busy} onaction={act} />
-        {#if closed}
-          <p class="muted note">Профиль закрыт</p>
-        {:else if restricted}
-          <p class="muted note">Остальное видно друзьям</p>
-        {/if}
-      </div>
-      {#if !closed}
-        {#if common}
-          <div class="area area-common">
-            <UserCommon {common} {name} />
-          </div>
-        {/if}
-        {#if recent.length > 0}
-          <div class="area area-recent">
+    <UserHeader profile={data} {busy} onaction={act} />
+    {#if closed}
+      <p class="muted note">Профиль закрыт</p>
+    {:else if restricted}
+      <p class="muted note">Остальное видно друзьям</p>
+    {:else}
+      <div class="columns">
+        <div class="main">
+          {#if recent.length > 0}
             <UserRecent games={recent} />
+          {/if}
+          {#if common}
+            <UserCommon {common} {name} />
+          {/if}
+          <div class="pair">
+            <div class="pair-left">
+              {#if activity.length > 0}
+                <UserActivity items={activity} />
+              {/if}
+            </div>
+            <div class="pair-right">
+              <UserCovers title="Любимые игры" games={favorites} hearts />
+            </div>
           </div>
-        {/if}
-        {#if activity.length > 0}
-          <div class="area area-activity">
-            <UserActivity items={activity} />
-          </div>
-        {/if}
-        <div class="area area-showcase">
-          {#each showcase as fblock (fblock.kind)}
-            <UserCovers title={showcaseTitle(fblock.kind)} games={fblock.games} columns="main" />
-          {/each}
         </div>
-      {/if}
-    </div>
-    {#if !closed}
-      <div class="side">
-        <div class="area area-stats">
-          <UserStats stats={data.stats} />
-        </div>
-        <div class="area area-favorites">
-          <UserCovers title="Любимые" games={favorites} />
-        </div>
-        {#if mutual.length > 0}
-          <div class="area area-mutual">
+        <div class="side">
+          {#if presenceGame}
+            <Card title="Сейчас играет">
+              <button class="playing" type="button" onclick={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}>
+                <span class="cover">
+                  <Artwork src={presenceGame.coverUrl} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
+                </span>
+                <span class="title">{presenceGame.title}</span>
+                <StatusBadge kind="success" label="Играет" plain />
+              </button>
+            </Card>
+          {/if}
+          {#if data.bio}
+            <Card title="О себе">
+              <p class="bio">{data.bio}</p>
+            </Card>
+          {/if}
+          {#if mutual.length > 0}
             <UserMutual friends={mutual} count={data.mutualCount} />
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
     {/if}
   </div>
@@ -254,60 +268,89 @@
     opacity: 0.6;
   }
 
-  .main,
-  .side {
-    display: contents;
+  .columns {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
   }
 
-  .area {
+  .main,
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     min-width: 0;
   }
 
-  .area-header {
-    order: 1;
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+    align-items: start;
   }
 
-  .area-stats {
-    order: 2;
+  .pair-left,
+  .pair-right {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
   }
 
-  .area-favorites {
-    order: 3;
+  .bio {
+    font-size: var(--font-sm);
+    line-height: 1.55;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 
-  .area-mutual {
-    order: 4;
+  .playing {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
-  .area-common {
-    order: 5;
+  .playing .cover {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: transform var(--dur) var(--ease);
   }
 
-  .area-recent {
-    order: 6;
+  .playing:hover .cover {
+    transform: scale(1.01);
   }
 
-  .area-activity {
-    order: 7;
-  }
-
-  .area-showcase {
-    order: 8;
+  .playing .title {
+    font-size: var(--font-md);
+    font-weight: 600;
+    letter-spacing: var(--tracking-heading);
+    line-height: 1.3;
   }
 
   @media (min-width: 1600px) {
-    .profile {
+    .columns {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 40rem;
-      gap: 0 var(--space-12);
+      gap: 0 var(--space-6);
       align-items: start;
     }
+  }
 
-    .main,
-    .side {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
+  @media (max-width: 1200px) {
+    .pair {
+      grid-template-columns: 1fr;
     }
   }
 </style>

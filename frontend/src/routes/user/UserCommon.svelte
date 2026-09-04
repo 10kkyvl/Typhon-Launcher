@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Card from '../../lib/components/Card.svelte';
   import type { CommonGames } from '../../lib/services/social';
   import { commonGameLabel, commonGamesTitle } from '../../lib/social/view';
   import GameRow from './GameRow.svelte';
@@ -8,28 +9,16 @@
   const rows = $derived(common.games.slice(0, 6));
 </script>
 
-<section class="group">
-  <h3>Играете оба</h3>
+<Card title="Играете оба">
   <p class="count">{commonGamesTitle(common.count)}</p>
   <div class="list">
     {#each rows as game (game.igdbId)}
       <GameRow {game} meta={commonGameLabel(game.viewerOwned, game.targetOwned, name)} />
     {/each}
   </div>
-</section>
+</Card>
 
 <style>
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-2);
-  }
-
   .count {
     font-size: var(--font-sm);
     color: var(--text-2);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Copy, EllipsisVertical, LogIn } from '@lucide/svelte';
+  import { Calendar, Copy, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -7,29 +7,33 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
-  import type { GameRef } from '../../lib/services/profile';
+  import type { GameRef, ProfileStats as ProfileStatsData } from '../../lib/services/profile';
   import { friendCode } from '../../lib/services/social';
-  import { statusLine } from '../../lib/profile/view';
-  import { dotKind, ownStatusLine, statusDot } from '../../lib/social/presence';
   import { joinDate } from '../../lib/social/view';
+  import { statusDot } from '../../lib/social/presence';
   import { presenceStatus } from '../../lib/stores/presence';
   import { settings } from '../../lib/stores/settings';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import HiddenBadge from './HiddenBadge.svelte';
+  import ProfileStats from './ProfileStats.svelte';
 
   type MenuItem = { id: string; label: string; danger?: boolean; separator?: boolean };
 
   let {
     running,
+    stats,
     showOnline,
     showPlaying,
+    showStats,
     onsettings,
   }: {
     running: GameRef[];
+    stats: ProfileStatsData;
     showOnline: boolean;
     showPlaying: boolean;
+    showStats: boolean;
     onsettings: () => void;
   } = $props();
 
@@ -43,23 +47,14 @@
   let warnedCode = false;
 
   const isGuest = $derived($authState === 'guest');
-  const online = $derived($authState === 'authenticated');
-  const status = $derived(statusLine(running, online));
-  const own = $derived(!isGuest && online ? ownStatusLine($presenceStatus, status.kind === 'playing') : '');
-  const invisible = $derived(!isGuest && online && $presenceStatus === 'invisible');
-  const statusText = $derived(own || status.text);
-  const statusKind = $derived(
-    own ? dotKind(statusDot($presenceStatus)) : status.kind === 'offline' ? 'neutral' : 'success',
-  );
-  const statusHidden = $derived(
-    !isGuest && (invisible || (status.kind === 'playing' ? !showPlaying : !showOnline)),
-  );
 
   const avatarName = $derived(
     !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : 'Гость',
   );
 
   const memberSince = $derived($currentUser ? joinDate($currentUser.createdAt) : '');
+  const playing = $derived(running[0] ?? null);
+  const playingHidden = $derived(!!playing && !showPlaying);
 
   const dirty = $derived(
     !!$currentUser &&
@@ -167,7 +162,12 @@
 <section class="profile-header">
   <Card>
     <div class="head">
-      <Avatar size="lg" name={avatarName} src={isGuest ? undefined : $currentUser?.avatarUrl} />
+      <Avatar
+        size="lg"
+        name={avatarName}
+        src={isGuest ? undefined : $currentUser?.avatarUrl}
+        status={isGuest ? undefined : statusDot($presenceStatus)}
+      />
 
       <div class="identity">
         {#if isGuest}
@@ -187,37 +187,52 @@
               </IconButton>
             </div>
           {/if}
-        {/if}
-        <div class="status">
-          <StatusBadge plain kind={statusKind} label={statusText} />
-          {#if statusHidden}
-            <span class="muted">· скрыто от других</span>
-          {/if}
-        </div>
-        {#if !isGuest}
-          <div class="avatar-actions">
-            <AvatarEditor size="sm" disabled={$isOffline} />
+          <div class="meta">
+            {#if playing}
+              <span class="meta-item">
+                <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+                Играет в {playing.title}
+                {#if playingHidden}<HiddenBadge text="Скрыто от других. Вы видите статус, остальные — нет." />{/if}
+              </span>
+            {/if}
+            {#if memberSince}
+              <span class="meta-item">
+                <Calendar size="1.5rem" strokeWidth={1.8} />
+                Участник с {memberSince}
+              </span>
+            {/if}
+            {#if !showOnline}
+              <HiddenBadge text="Статус «В сети» скрыт от других. Вы его видите." />
+            {/if}
           </div>
         {/if}
       </div>
 
-      <div class="head-actions">
-        {#if isGuest}
-          <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), 'Не удалось открыть вход')}>
-            <LogIn size="1.5rem" strokeWidth={1.8} />
-            Войти
-          </Button>
-          <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), 'Не удалось открыть вход')}>
-            Создать аккаунт
-          </Button>
-        {:else}
-          <DropdownMenu items={menuItems} onselect={onMenu}>
-            {#snippet trigger({ toggle })}
-              <IconButton label="Ещё" onclick={toggle}>
-                <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
+      <div class="right">
+        <div class="head-actions">
+          {#if isGuest}
+            <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), 'Не удалось открыть вход')}>
+              <LogIn size="1.5rem" strokeWidth={1.8} />
+              Войти
+            </Button>
+            <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), 'Не удалось открыть вход')}>
+              Создать аккаунт
+            </Button>
+          {:else}
+            <AvatarEditor size="sm" disabled={$isOffline} />
+            <DropdownMenu items={menuItems} onselect={onMenu}>
+              {#snippet trigger({ toggle })}
+                <IconButton label="Ещё" onclick={toggle}>
+                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                </IconButton>
+              {/snippet}
+            </DropdownMenu>
+          {/if}
+        </div>
+        {#if !isGuest}
+          <div class="stats">
+            <ProfileStats {stats} hidden={!showStats} />
+          </div>
         {/if}
       </div>
     </div>
@@ -275,7 +290,7 @@
 <style>
   .profile-header {
     display: block;
-    margin-bottom: var(--space-10);
+    margin-bottom: var(--space-6);
   }
 
   .head {
@@ -311,6 +326,11 @@
     max-width: 56rem;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .code {
@@ -324,27 +344,38 @@
     color: var(--text-3);
   }
 
-  .status {
-    display: inline-flex;
+  .meta {
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
+    flex-wrap: wrap;
+    gap: var(--space-4);
     margin-top: 0.4rem;
   }
 
-  .muted {
-    font-size: var(--font-xs);
-    color: var(--text-3);
+  .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: var(--font-sm);
+    color: var(--text-2);
   }
 
-  .avatar-actions {
+  .meta-item :global(svg) {
+    color: var(--text-3);
+    flex-shrink: 0;
+  }
+
+  .right {
     display: flex;
-    gap: 0.8rem;
-    margin-top: var(--space-3);
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-4);
+    flex-shrink: 0;
   }
 
   .head-actions {
     display: flex;
+    align-items: center;
     gap: 0.8rem;
     flex-shrink: 0;
   }
@@ -451,6 +482,11 @@
   @media (max-width: 1200px) {
     .head {
       flex-wrap: wrap;
+    }
+
+    .right {
+      align-items: flex-start;
+      width: 100%;
     }
   }
 </style>

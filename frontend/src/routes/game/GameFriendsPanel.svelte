@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { ChevronRight } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
@@ -50,9 +52,7 @@
 </script>
 
 {#if played.length > 0 || playingNow.length > 0}
-  <section class="panel">
-    <h2 class="heading sm">Друзья</h2>
-
+  <Card title="Друзья">
     {#if played.length > 0}
       <p class="line">{playedLine}</p>
       <ul class="people">
@@ -92,24 +92,15 @@
         {/each}
       </ul>
     {/if}
-  </section>
+
+    <button class="show-all" type="button" onclick={() => navigate('friends')}>
+      Смотреть всех друзей
+      <ChevronRight size="1.4rem" strokeWidth={1.8} />
+    </button>
+  </Card>
 {/if}
 
 <style>
-  .panel {
-    padding: var(--space-5);
-    background: var(--surface);
-    border-radius: var(--radius-lg);
-  }
-
-  .heading.sm {
-    font-size: var(--font-md);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    color: var(--text-2);
-    margin-bottom: var(--space-2);
-  }
-
   .line {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -165,5 +156,19 @@
   .time {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .show-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: var(--space-4);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--accent-text);
+  }
+
+  .show-all:hover {
+    text-decoration: underline;
   }
 </style>
