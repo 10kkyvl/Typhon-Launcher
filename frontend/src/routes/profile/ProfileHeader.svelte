@@ -12,7 +12,9 @@
   import type { GameRef } from '../../lib/services/profile';
   import { friendCode } from '../../lib/services/social';
   import { statusLine } from '../../lib/profile/view';
+  import { dotKind, ownStatusLine, statusDot } from '../../lib/social/presence';
   import { joinDate } from '../../lib/social/view';
+  import { presenceStatus } from '../../lib/stores/presence';
   import { settings } from '../../lib/stores/settings';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -43,7 +45,11 @@
   const isGuest = $derived($authState === 'guest');
   const online = $derived($authState === 'authenticated');
   const status = $derived(statusLine(running, online));
-  const statusKind = $derived(status.kind === 'offline' ? 'neutral' : 'success');
+  const own = $derived(!isGuest && online ? ownStatusLine($presenceStatus, status.kind === 'playing') : '');
+  const statusText = $derived(own || status.text);
+  const statusKind = $derived(
+    own ? dotKind(statusDot($presenceStatus)) : status.kind === 'offline' ? 'neutral' : 'success',
+  );
   const statusHidden = $derived(!isGuest && (status.kind === 'playing' ? !showPlaying : !showOnline));
 
   const avatarName = $derived(
@@ -180,7 +186,7 @@
           {/if}
         {/if}
         <div class="status">
-          <StatusBadge plain kind={statusKind} label={status.text} />
+          <StatusBadge plain kind={statusKind} label={statusText} />
           {#if statusHidden}
             <span class="muted">· скрыто от других</span>
           {/if}

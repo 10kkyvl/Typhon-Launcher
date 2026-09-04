@@ -7,6 +7,7 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { PublicProfile } from '../../lib/services/social';
+  import { dotKind, presenceDot, presenceLine } from '../../lib/social/presence';
   import { memberSince, relationLabel } from '../../lib/social/view';
 
   let {
@@ -23,6 +24,7 @@
 
   const name = $derived(profile.displayName || profile.username);
   const since = $derived(memberSince(profile.createdAt));
+  const presence = $derived(presenceDot(profile.presence));
   const pending = $derived(profile.relation === 'none' || profile.relation === 'outgoing' || profile.relation === 'incoming');
 
   const friendMenu: MenuItem[] = [
@@ -43,7 +45,7 @@
         <span class="username">@{profile.username}</span>
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="status">
-          <StatusBadge plain kind="neutral" label="—" />
+          <StatusBadge plain kind={dotKind(presence)} label={presenceLine(profile.presence)} />
         </div>
         {#if since}<span class="since">{since}</span>{/if}
       </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { Check } from '@lucide/svelte';
   import { clickOutside } from '../utils/clickOutside';
 
   export interface MenuItem {
@@ -7,6 +8,8 @@
     label: string;
     danger?: boolean;
     separator?: boolean;
+    checked?: boolean;
+    dot?: 'online' | 'away' | 'busy' | 'offline';
   }
 
   let {
@@ -45,7 +48,9 @@
           <div class="separator"></div>
         {/if}
         <button class="item" class:danger={item.danger} onclick={() => pick(item.id)}>
-          {item.label}
+          {#if item.dot}<span class="dot {item.dot}"></span>{/if}
+          <span class="label">{item.label}</span>
+          {#if item.checked}<Check size="1.5rem" strokeWidth={2.2} />{/if}
         </button>
       {/each}
     </div>
@@ -78,7 +83,9 @@
   }
 
   .item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
     width: 100%;
     padding: 0.7rem 1rem;
     border-radius: var(--radius-sm);
@@ -94,6 +101,39 @@
   .item:hover {
     background: var(--hover-strong);
     color: var(--text);
+  }
+
+  .label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item :global(svg) {
+    flex-shrink: 0;
+    color: var(--text-3);
+  }
+
+  .dot {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot.online {
+    background: var(--success);
+  }
+
+  .dot.away {
+    background: var(--warning);
+  }
+
+  .dot.busy {
+    background: var(--danger);
+  }
+
+  .dot.offline {
+    background: var(--text-3);
   }
 
   .item.danger {

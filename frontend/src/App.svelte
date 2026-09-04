@@ -13,6 +13,7 @@
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
   import { initMoves } from './lib/stores/relocate';
+  import { initPresence } from './lib/stores/presence';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { initSettings, settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
@@ -49,6 +50,7 @@
   initHistory();
   initLan();
   initSocial();
+  initPresence();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {

@@ -13,9 +13,10 @@ export interface UserCard {
 
 export interface PresenceView {
   status: string;
-  gameId: string;
-  gameTitle: string;
-  since: string;
+  gameId?: number | null;
+  gameTitle?: string;
+  since?: string | null;
+  lastSeenAt?: string | null;
 }
 
 export interface FriendView extends UserCard {
