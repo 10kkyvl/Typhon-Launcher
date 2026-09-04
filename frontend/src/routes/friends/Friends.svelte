@@ -20,6 +20,7 @@
     unfriend,
     type UserCard,
   } from '../../lib/services/social';
+  import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
@@ -41,6 +42,7 @@
 
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
+  const friends = $derived(sortFriends(page.friends));
 
   const tabs = $derived([
     { id: 'friends', label: `Друзья (${page.friends.length})` },
@@ -177,8 +179,13 @@
         {#if page.friends.length === 0}
           <EmptyState title="Пока никого" description="Добавьте друга по имени пользователя или по коду." />
         {:else}
-          {#each page.friends as friend (friend.id)}
-            <FriendRow user={friend} onopen={() => openProfile(friend)}>
+          {#each friends as friend (friend.id)}
+            <FriendRow
+              user={friend}
+              status={presenceDot(friend.presence)}
+              meta={presenceLine(friend.presence)}
+              onopen={() => openProfile(friend)}
+            >
               {#snippet actions()}
                 <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
                   {#snippet trigger({ toggle })}

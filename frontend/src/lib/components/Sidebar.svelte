@@ -2,12 +2,16 @@
   import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
+  import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
+  import { STATUS_LABELS, statusDot } from '../social/presence';
+  import { presenceStatus, updatePresenceStatus } from '../stores/presence';
   import { incomingCount } from '../stores/social';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import Avatar from './Avatar.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
+  import type { MenuItem } from './DropdownMenu.svelte';
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -38,7 +42,17 @@
 
   const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? 'Гость' : '');
 
-  const profileMenu = $derived(
+  const statusItems = $derived<MenuItem[]>(
+    PRESENCE_STATUSES.map((status, index) => ({
+      id: `status:${status}`,
+      label: STATUS_LABELS[status],
+      dot: statusDot(status),
+      checked: $presenceStatus === status,
+      separator: index === 0,
+    })),
+  );
+
+  const profileMenu = $derived<MenuItem[]>(
     isGuest
       ? [
           { id: 'profile', label: 'Профиль' },
@@ -46,6 +60,7 @@
         ]
       : [
           { id: 'profile', label: 'Профиль' },
+          ...statusItems,
           { id: 'logout', label: 'Выйти', danger: true, separator: true },
         ],
   );
@@ -53,6 +68,14 @@
   async function onProfileSelect(id: string) {
     if (id === 'profile') {
       navigate('profile');
+      return;
+    }
+    if (id.startsWith('status:')) {
+      try {
+        await updatePresenceStatus(id.slice('status:'.length) as PresenceStatus);
+      } catch (err) {
+        toast(accountErrorText(err, 'Не удалось сменить статус'), 'danger');
+      }
       return;
     }
     try {
@@ -116,7 +139,7 @@
               size="sm"
               name={avatarName}
               src={$currentUser?.avatarUrl}
-              status={$currentUser ? 'online' : undefined}
+              status={$currentUser ? statusDot($presenceStatus) : undefined}
             />
           </span>
           <span class="profile-text">

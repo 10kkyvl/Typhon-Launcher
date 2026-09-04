@@ -6,18 +6,20 @@
   let {
     user,
     meta,
+    status,
     actions,
     onopen,
   }: {
     user: UserCard;
     meta?: string;
+    status?: 'online' | 'away' | 'busy' | 'offline';
     actions?: Snippet;
     onopen?: () => void;
   } = $props();
 </script>
 
 {#snippet who()}
-  <Avatar size="sm" name={user.displayName || user.username} src={user.avatarUrl} />
+  <Avatar size="sm" name={user.displayName || user.username} src={user.avatarUrl} {status} />
   <span class="names">
     <span class="name">{user.displayName || user.username}</span>
     <span class="handle">@{user.username}</span>

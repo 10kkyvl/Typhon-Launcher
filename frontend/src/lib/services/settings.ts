@@ -38,6 +38,7 @@ export interface Settings {
   anonymousDiagnostics: boolean;
   telemetryConsentVersion: number;
   accountSync: boolean;
+  presenceStatus: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -78,6 +79,7 @@ const fallbackDefaults: Settings = {
   anonymousDiagnostics: true,
   telemetryConsentVersion: 0,
   accountSync: false,
+  presenceStatus: 'online',
 };
 
 export async function getSettings(): Promise<Settings> {
