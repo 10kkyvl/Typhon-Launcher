@@ -121,9 +121,10 @@
 
   .pair-left,
   .pair-right {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
+    display: contents;
+  }
+
+  .pair > :global(*) {
     min-width: 0;
   }
 
