@@ -327,7 +327,7 @@ func main() {
 	settingsService.Subscribe(presenceWatcher.Apply)
 
 	resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
-	socialService, err := social.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID)
+	socialService, err := social.NewService(account.BaseURL(), accountService.SessionToken, socialSettings{settingsService}, resolveGameID)
 	if err != nil {
 		fatal("start social service", err)
 	}

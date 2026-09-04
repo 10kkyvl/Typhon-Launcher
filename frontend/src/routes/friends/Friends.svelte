@@ -124,7 +124,7 @@
 
 <PageHeader title="Друзья" subtitle="Заявки, список друзей и заблокированные">
   {#snippet actions()}
-    {#if !isGuest}
+    {#if !isGuest && !$needsSocialConsent}
       <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>Мой код</Button>
       <Button variant="primary" onclick={() => (addOpen = true)}>
         <UserPlus size="1.5rem" strokeWidth={1.8} />
@@ -272,7 +272,9 @@
   {/if}
 </div>
 
-<AddFriendModal bind:open={addOpen} onsent={reload} />
+{#if !isGuest && !$needsSocialConsent}
+  <AddFriendModal bind:open={addOpen} onsent={reload} />
+{/if}
 <SocialConsentScreen bind:open={consentOpen} />
 
 <style>

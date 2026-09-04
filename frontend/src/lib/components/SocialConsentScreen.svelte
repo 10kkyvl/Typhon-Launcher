@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { updateSettings } from '../stores/settings';
+  import { get } from 'svelte/store';
+  import { accountErrorText } from '../services/accountMessages';
+  import { settings, updateSettings } from '../stores/settings';
+  import { loadFriends } from '../stores/social';
+  import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
 
@@ -17,7 +21,11 @@
     saving = true;
     try {
       await updateSettings({ accountSync: true });
+      if (!get(settings)?.accountSync) return;
+      await loadFriends();
       close();
+    } catch (err) {
+      toast(accountErrorText(err, 'Не удалось включить синхронизацию'), 'danger');
     } finally {
       saving = false;
     }

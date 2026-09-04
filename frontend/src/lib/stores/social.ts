@@ -24,6 +24,14 @@ export const incomingCount = derived(
   ([$friendsPage, $requestsSignal]) => $requestsSignal ?? $friendsPage.incoming.length,
 );
 
+let peak = 0;
+
+export const incomingPeak = derived(incomingCount, ($incomingCount) => {
+  if ($incomingCount <= 0) peak = 0;
+  else if ($incomingCount > peak) peak = $incomingCount;
+  return peak;
+});
+
 export const needsSocialConsent = derived(
   [settings, authState],
   ([$settings, $authState]) => $authState === 'authenticated' && !!$settings && !$settings.accountSync,
@@ -39,7 +47,7 @@ function setPage(page: FriendsPage) {
   requestsSignal.set(null);
 }
 
-async function load() {
+export async function loadFriends(): Promise<void> {
   try {
     setPage(await fetchFriends());
   } catch (err) {
@@ -66,9 +74,13 @@ export async function initSocial(): Promise<void> {
   authState.subscribe((state) => {
     const changed = previous !== state;
     previous = state;
-    if (!changed || state !== 'authenticated') return;
+    if (!changed) return;
+    if (state !== 'authenticated') {
+      setPage(emptyFriendsPage());
+      return;
+    }
     kick().catch((err) => report(err, 'Не удалось обновить список друзей'));
   });
 
-  await load();
+  await loadFriends();
 }

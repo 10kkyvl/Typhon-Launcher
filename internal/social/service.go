@@ -3,7 +3,6 @@ package social
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -21,13 +20,14 @@ const (
 )
 
 var (
-	ErrNotRunning = errors.New("social: service is not running")
+	ErrNotRunning   = errors.New("social: service is not running")
+	ErrSyncDisabled = errors.New("sync_disabled")
 
 	errEmptyUserID   = errors.New("social: user id is empty")
 	errEmptyQuery    = errors.New("social: query is empty")
 	errEmptyUsername = errors.New("social: username is empty")
 	errEmptyCode     = errors.New("social: friend code is empty")
-	errUnknownGame   = errors.New("social: game has no igdb id")
+	errUnknownGame   = errors.New("unknown_game")
 )
 
 var igdbIDPattern = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
@@ -43,8 +43,14 @@ func realTicker(d time.Duration) (<-chan time.Time, func()) {
 	return t.C, t.Stop
 }
 
+type SettingsPort interface {
+	AccountSync() bool
+	Subscribe(fn func(accountSync bool)) func()
+}
+
 type Service struct {
 	client        *client
+	settings      SettingsPort
 	resolveIGDBID func(canonicalGameID string) string
 
 	interval  time.Duration
@@ -60,6 +66,8 @@ type Service struct {
 	kicks        uint64
 	healthy      bool
 	healthyKnown bool
+	syncOn       bool
+	unsubscribe  func()
 	ctx          context.Context
 	cancel       context.CancelFunc
 
@@ -67,9 +75,12 @@ type Service struct {
 	kick chan struct{}
 }
 
-func NewService(baseURL string, token func() (string, error), resolveIGDBID func(canonicalGameID string) string) (*Service, error) {
+func NewService(baseURL string, token func() (string, error), settingsPort SettingsPort, resolveIGDBID func(canonicalGameID string) string) (*Service, error) {
 	if resolveIGDBID == nil {
 		return nil, errors.New("social: resolveIGDBID callback is nil")
+	}
+	if settingsPort == nil {
+		return nil, errors.New("social: settings port is nil")
 	}
 	cl, err := newClient(baseURL, token)
 	if err != nil {
@@ -77,6 +88,7 @@ func NewService(baseURL string, token func() (string, error), resolveIGDBID func
 	}
 	return &Service{
 		client:        cl,
+		settings:      settingsPort,
 		resolveIGDBID: resolveIGDBID,
 		interval:      defaultPollInterval,
 		newTicker:     realTicker,
@@ -90,6 +102,12 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Lock()
 	s.ctx = runCtx
 	s.cancel = cancel
+	s.syncOn = s.settings.AccountSync()
+	s.mu.Unlock()
+
+	unsubscribe := s.settings.Subscribe(s.onAccountSync)
+	s.mu.Lock()
+	s.unsubscribe = unsubscribe
 	s.mu.Unlock()
 
 	s.wg.Add(1)
@@ -101,12 +119,31 @@ func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil
+	unsubscribe := s.unsubscribe
+	s.unsubscribe = nil
 	s.mu.Unlock()
+	if unsubscribe != nil {
+		unsubscribe()
+	}
 	if cancel != nil {
 		cancel()
 	}
 	s.wg.Wait()
 	return nil
+}
+
+func (s *Service) onAccountSync(accountSync bool) {
+	s.mu.Lock()
+	was := s.syncOn
+	s.syncOn = accountSync
+	s.mu.Unlock()
+	if accountSync && !was {
+		s.Kick()
+	}
+}
+
+func (s *Service) enabled() bool {
+	return s.settings.AccountSync()
 }
 
 func (s *Service) loop(ctx context.Context) {
@@ -129,7 +166,7 @@ func (s *Service) loop(ctx context.Context) {
 }
 
 func (s *Service) poll(ctx context.Context) {
-	if !s.isPaused() {
+	if s.enabled() && !s.isPaused() {
 		s.health(s.refresh(ctx))
 	}
 	if s.polled == nil {
@@ -209,6 +246,9 @@ func (s *Service) poke() {
 }
 
 func (s *Service) runContext() (context.Context, error) {
+	if !s.enabled() {
+		return nil, ErrSyncDisabled
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ctx == nil {
@@ -221,11 +261,17 @@ func (s *Service) Kick() {
 	s.mu.Lock()
 	s.paused = false
 	s.kicks++
+	s.page = FriendsPage{}
+	s.loaded = false
+	s.incoming = 0
 	s.mu.Unlock()
 	s.poke()
 }
 
 func (s *Service) Friends() (FriendsPage, error) {
+	if !s.enabled() {
+		return FriendsPage{}, nil
+	}
 	ctx, err := s.runContext()
 	if err != nil {
 		return FriendsPage{}, err
@@ -379,7 +425,7 @@ func (s *Service) GameFriends(canonicalGameID string) (GameFriends, error) {
 	}
 	igdbID := s.resolveIGDBID(canonicalGameID)
 	if !igdbIDPattern.MatchString(igdbID) {
-		return GameFriends{}, fmt.Errorf("%w: %q", errUnknownGame, canonicalGameID)
+		return GameFriends{}, errUnknownGame
 	}
 	return s.client.gameFriends(ctx, igdbID)
 }

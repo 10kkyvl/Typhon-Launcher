@@ -20,13 +20,51 @@ type emitted struct {
 	data any
 }
 
+type fakeSettings struct {
+	mu   sync.Mutex
+	on   bool
+	subs []func(bool)
+}
+
+func (f *fakeSettings) AccountSync() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.on
+}
+
+func (f *fakeSettings) Subscribe(fn func(bool)) func() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id := len(f.subs)
+	f.subs = append(f.subs, fn)
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.subs[id] = nil
+	}
+}
+
+func (f *fakeSettings) set(on bool) {
+	f.mu.Lock()
+	f.on = on
+	subs := make([]func(bool), len(f.subs))
+	copy(subs, f.subs)
+	f.mu.Unlock()
+	for _, fn := range subs {
+		if fn != nil {
+			fn(on)
+		}
+	}
+}
+
 type harness struct {
-	t      *testing.T
-	svc    *Service
-	tick   chan time.Time
-	polled chan struct{}
-	reqs   atomic.Int32
-	paths  chan string
+	t        *testing.T
+	svc      *Service
+	settings *fakeSettings
+	tick     chan time.Time
+	polled   chan struct{}
+	reqs     atomic.Int32
+	paths    chan string
 
 	mu    sync.Mutex
 	emits []emitted
@@ -35,10 +73,11 @@ type harness struct {
 func newHarness(t *testing.T, resolve func(string) string, handler func(h *harness, w http.ResponseWriter, r *http.Request)) *harness {
 	t.Helper()
 	h := &harness{
-		t:      t,
-		tick:   make(chan time.Time),
-		polled: make(chan struct{}),
-		paths:  make(chan string, 64),
+		t:        t,
+		settings: &fakeSettings{on: true},
+		tick:     make(chan time.Time),
+		polled:   make(chan struct{}),
+		paths:    make(chan string, 64),
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.reqs.Add(1)
@@ -50,7 +89,7 @@ func newHarness(t *testing.T, resolve func(string) string, handler func(h *harne
 	}))
 	t.Cleanup(srv.Close)
 
-	svc, err := NewService(srv.URL, staticToken("tok"), resolve)
+	svc, err := NewService(srv.URL, staticToken("tok"), h.settings, resolve)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -403,8 +442,12 @@ func TestService_GameFriendsResolvesTheIGDBID(t *testing.T) {
 	}
 
 	before := h.reqs.Load()
-	if _, err := h.svc.GameFriends("unknown"); err == nil {
+	_, err = h.svc.GameFriends("unknown")
+	if err == nil {
 		t.Fatal("want an error for a game without an IGDB id")
+	}
+	if err.Error() != "unknown_game" {
+		t.Fatalf("GameFriends error = %q, want the unknown_game error code", err)
 	}
 	if got := h.reqs.Load(); got != before {
 		t.Fatalf("requests = %d, want %d: an unresolved id must not hit the API", got, before)
@@ -535,19 +578,23 @@ func TestService_ShutdownStopsTheLoop(t *testing.T) {
 
 func TestNewService_Validates(t *testing.T) {
 	resolve := func(string) string { return "1942" }
-	if _, err := NewService("", staticToken("tok"), resolve); err == nil {
+	set := &fakeSettings{on: true}
+	if _, err := NewService("", staticToken("tok"), set, resolve); err == nil {
 		t.Error("want an error for an empty base url")
 	}
-	if _, err := NewService("http://example.com", staticToken("tok"), resolve); err == nil {
+	if _, err := NewService("http://example.com", staticToken("tok"), set, resolve); err == nil {
 		t.Error("want an error for a plain http non-loopback base url")
 	}
-	if _, err := NewService("https://api.example.com", nil, resolve); err == nil {
+	if _, err := NewService("https://api.example.com", nil, set, resolve); err == nil {
 		t.Error("want an error for a nil token resolver")
 	}
-	if _, err := NewService("https://api.example.com", staticToken("tok"), nil); err == nil {
+	if _, err := NewService("https://api.example.com", staticToken("tok"), set, nil); err == nil {
 		t.Error("want an error for a nil resolveIGDBID callback")
 	}
-	svc, err := NewService("https://api.example.com", staticToken("tok"), resolve)
+	if _, err := NewService("https://api.example.com", staticToken("tok"), nil, resolve); err == nil {
+		t.Error("want an error for a nil settings port")
+	}
+	svc, err := NewService("https://api.example.com", staticToken("tok"), set, resolve)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -588,4 +635,128 @@ func TestService_KickDuringInFlightUnauthorizedDoesNotPause(t *testing.T) {
 	if got := h.reqs.Load(); got != 3 {
 		t.Fatalf("requests after a tick = %d, want 3", got)
 	}
+}
+
+func TestService_SyncOffMakesNoRequests(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(1))
+	})
+	h.settings.set(false)
+
+	h.start()
+	h.awaitPoll()
+	h.sendTick()
+	h.awaitPoll()
+
+	if got := h.reqs.Load(); got != 0 {
+		t.Fatalf("requests = %d, want 0 while account sync is off", got)
+	}
+	if got := h.names(); len(got) != 0 {
+		t.Fatalf("emits = %v, want none while account sync is off", got)
+	}
+
+	page, err := h.svc.Friends()
+	if err != nil {
+		t.Fatalf("Friends with sync off: %v", err)
+	}
+	if len(page.Friends) != 0 || len(page.Incoming) != 0 || len(page.Outgoing) != 0 {
+		t.Fatalf("Friends = %+v, want an empty page", page)
+	}
+	if got := h.reqs.Load(); got != 0 {
+		t.Fatalf("requests after Friends = %d, want 0", got)
+	}
+}
+
+func TestService_SyncOffFailsEveryOtherCall(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(1))
+	})
+	h.settings.set(false)
+
+	h.start()
+	h.awaitPoll()
+
+	calls := map[string]func() error{
+		"refresh":            h.svc.Refresh,
+		"accept":             func() error { return h.svc.Accept("u1") },
+		"decline":            func() error { return h.svc.Decline("u1") },
+		"unfriend":           func() error { return h.svc.Unfriend("u1") },
+		"block":              func() error { return h.svc.Block("u1") },
+		"unblock":            func() error { return h.svc.Unblock("u1") },
+		"send request":       func() error { _, err := h.svc.SendRequest("alex"); return err },
+		"blocks":             func() error { _, err := h.svc.Blocks(); return err },
+		"friend code":        func() error { _, err := h.svc.FriendCode(); return err },
+		"rotate friend code": func() error { _, err := h.svc.RotateFriendCode(); return err },
+		"profile":            func() error { _, err := h.svc.Profile("alex"); return err },
+		"profile by code":    func() error { _, err := h.svc.ProfileByCode("TY-ABCD-EFGH"); return err },
+		"user games":         func() error { _, err := h.svc.UserGames("alex", ""); return err },
+		"game friends":       func() error { _, err := h.svc.GameFriends("igdb:1942"); return err },
+	}
+	for name, call := range calls {
+		if err := call(); !errors.Is(err, ErrSyncDisabled) {
+			t.Errorf("%s with sync off = %v, want ErrSyncDisabled", name, err)
+		}
+	}
+	if got := h.reqs.Load(); got != 0 {
+		t.Fatalf("requests = %d, want 0 while account sync is off", got)
+	}
+	if ErrSyncDisabled.Error() != "sync_disabled" {
+		t.Fatalf("ErrSyncDisabled = %q, want the sync_disabled error code", ErrSyncDisabled)
+	}
+}
+
+func TestService_EnablingSyncPollsImmediately(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(1))
+	})
+	h.settings.set(false)
+
+	h.start()
+	h.awaitPoll()
+	if got := h.reqs.Load(); got != 0 {
+		t.Fatalf("requests = %d, want 0 before the setting flips", got)
+	}
+
+	h.settings.set(true)
+	h.awaitPoll()
+
+	if got := h.reqs.Load(); got != 1 {
+		t.Fatalf("requests after enabling sync = %d, want 1", got)
+	}
+	if got := countName(h.names(), EventFriends); got != 1 {
+		t.Fatalf("%s emits = %d, want 1", EventFriends, got)
+	}
+}
+
+func TestService_KickDropsTheCachedPage(t *testing.T) {
+	release := make(chan struct{})
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		if h.reqs.Load() == 2 {
+			<-release
+		}
+		writeJSON(h.t, w, pageWithIncoming(2))
+	})
+
+	h.start()
+	h.awaitPoll()
+
+	h.svc.Kick()
+	for h.reqs.Load() < 2 {
+		runtime.Gosched()
+	}
+
+	h.svc.mu.Lock()
+	loaded := h.svc.loaded
+	page := h.svc.page
+	incoming := h.svc.incoming
+	h.svc.mu.Unlock()
+	if loaded {
+		t.Fatal("Kick must drop the cached page so the next account fetches fresh")
+	}
+	if len(page.Friends) != 0 || len(page.Incoming) != 0 || incoming != 0 {
+		t.Fatalf("cached page after Kick = %+v (incoming %d), want empty", page, incoming)
+	}
+
+	close(release)
+	h.awaitPoll()
 }

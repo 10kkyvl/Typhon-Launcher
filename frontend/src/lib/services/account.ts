@@ -74,6 +74,7 @@ export interface BootstrapState {
 
 const KNOWN_CODES = new Set([
   'unauthenticated',
+  'sync_disabled',
   'invalid_credentials',
   'username_taken',
   'email_taken',
@@ -93,8 +94,8 @@ const KNOWN_CODES = new Set([
   'bad_request',
   'request_blocked',
   'user_not_found',
+  'unknown_game',
   'already_friends',
-  'friend_blocked',
   'friend_limit',
   'request_limit',
   'block_limit',

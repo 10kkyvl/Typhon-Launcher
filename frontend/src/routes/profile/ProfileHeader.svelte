@@ -13,6 +13,7 @@
   import { friendCode } from '../../lib/services/social';
   import { statusLine } from '../../lib/profile/view';
   import { joinDate } from '../../lib/social/view';
+  import { settings } from '../../lib/stores/settings';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
 
@@ -37,6 +38,7 @@
   let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
   let code = $state('');
+  let warnedCode = false;
 
   const isGuest = $derived($authState === 'guest');
   const online = $derived($authState === 'authenticated');
@@ -60,7 +62,7 @@
   const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
 
   $effect(() => {
-    if (isGuest || $authState !== 'authenticated') {
+    if (isGuest || $authState !== 'authenticated' || !$settings?.accountSync) {
       code = '';
       return;
     }
@@ -69,8 +71,12 @@
       .then((value) => {
         if (!cancelled) code = value;
       })
-      .catch(() => {
-        if (!cancelled) code = '';
+      .catch((err) => {
+        if (cancelled) return;
+        code = '';
+        if (warnedCode) return;
+        warnedCode = true;
+        console.warn('friend code request failed', err);
       });
     return () => {
       cancelled = true;
