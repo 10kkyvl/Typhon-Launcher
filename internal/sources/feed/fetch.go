@@ -18,6 +18,7 @@ var (
 	ErrBadScheme      = errors.New("недопустимая схема URL: разрешены только http и https")
 	ErrTooLarge       = errors.New("размер ответа превышает допустимый лимит")
 	ErrBadContentType = errors.New("недопустимый Content-Type ответа")
+	ErrChallenge      = errors.New("источник закрыт защитой Cloudflare: скачайте файл фида в браузере и добавьте его кнопкой «Выбрать файл фида»")
 )
 
 type StatusError struct {
@@ -56,6 +57,10 @@ func ValidateURL(raw string) (string, error) {
 	u.Scheme = scheme
 	u.Host = strings.ToLower(u.Host)
 	return u.String(), nil
+}
+
+func challenged(h http.Header) bool {
+	return strings.EqualFold(strings.TrimSpace(h.Get("cf-mitigated")), "challenge")
 }
 
 func acceptableContentType(ct string) bool {
@@ -121,6 +126,10 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if challenged(resp.Header) {
+			slog.Warn("feed blocked by challenge", "host", redact.URL(normalized), "status", resp.StatusCode)
+			return Result{}, ErrChallenge
+		}
 		return Result{}, &StatusError{StatusCode: resp.StatusCode}
 	}
 
