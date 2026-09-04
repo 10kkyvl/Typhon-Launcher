@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -288,6 +290,72 @@ func TestService_PausesOnUnauthorizedUntilKick(t *testing.T) {
 	if got := h.reqs.Load(); got != 3 {
 		t.Fatalf("requests after resuming = %d, want 3: polling must continue after Kick", got)
 	}
+}
+
+func TestService_StopsPollingWhenTheServerHasNoSocialAPI(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		if h.reqs.Load() == 1 {
+			http.NotFound(w, &http.Request{})
+			return
+		}
+		writeJSON(h.t, w, pageWithIncoming(1))
+	})
+
+	h.start()
+	h.awaitPoll()
+	if got := h.reqs.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+
+	for i := range 3 {
+		h.sendTick()
+		h.awaitPoll()
+		if got := h.reqs.Load(); got != 1 {
+			t.Fatalf("requests after tick %d = %d, want 1: a server without the social api must not be polled again", i+1, got)
+		}
+	}
+
+	h.svc.Kick()
+	h.awaitPoll()
+	if got := h.reqs.Load(); got != 2 {
+		t.Fatalf("requests after Kick = %d, want 2", got)
+	}
+}
+
+func TestDecodeErrorSeparatesAMissingRouteFromAMissingRecord(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		check  func(error) bool
+	}{
+		{"routeless 404", http.StatusNotFound, "404 page not found\n", func(err error) bool { return errors.Is(err, ErrUnsupported) }},
+		{"coded 404", http.StatusNotFound, `{"error":{"code":"not_found"}}`, func(err error) bool {
+			var api *APIError
+			return errors.As(err, &api) && api.Code == "not_found"
+		}},
+		{"empty 404", http.StatusNotFound, "", func(err error) bool { return errors.Is(err, ErrUnsupported) }},
+		{"500", http.StatusInternalServerError, "boom", func(err error) bool {
+			var srv *ServerError
+			return errors.As(err, &srv) && srv.Status == http.StatusInternalServerError
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := decodeError(tt.status, strings.NewReader(tt.body))
+			if !tt.check(err) {
+				t.Fatalf("decodeError(%d, %q) = %v", tt.status, tt.body, err)
+			}
+		})
+	}
+
+	t.Run("unreadable body", func(t *testing.T) {
+		err := decodeError(http.StatusNotFound, iotest.ErrReader(errors.New("boom")))
+		var srv *ServerError
+		if !errors.As(err, &srv) || srv.Status != http.StatusNotFound {
+			t.Fatalf("decodeError with an unreadable body = %v, want a ServerError: an unread body is not evidence of a missing route", err)
+		}
+	})
 }
 
 func TestService_EmitsRequestsOnlyOnCountChange(t *testing.T) {

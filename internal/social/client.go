@@ -23,7 +23,10 @@ const (
 	requestTimeout   = 30 * time.Second
 )
 
-var ErrUnauthorized = errors.New("social: not authenticated")
+var (
+	ErrUnauthorized = errors.New("social: not authenticated")
+	ErrUnsupported  = errors.New("social: not supported by this server")
+)
 
 type APIError struct {
 	Code   string
@@ -323,8 +326,11 @@ func decodeError(status int, body io.Reader) error {
 
 	var env errorEnvelope
 	if err := json.Unmarshal(data, &env); err != nil || env.Error.Code == "" {
-		if status == http.StatusUnauthorized {
+		switch status {
+		case http.StatusUnauthorized:
 			return ErrUnauthorized
+		case http.StatusNotFound:
+			return ErrUnsupported
 		}
 		return &ServerError{Status: status}
 	}

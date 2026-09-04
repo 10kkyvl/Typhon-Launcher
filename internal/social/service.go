@@ -205,7 +205,7 @@ func (s *Service) refresh(ctx context.Context) error {
 	s.mu.Unlock()
 	page, err := s.client.friendsPage(ctx)
 	if err != nil {
-		if errors.Is(err, ErrUnauthorized) {
+		if errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrUnsupported) {
 			s.mu.Lock()
 			if s.kicks == started {
 				s.paused = true
@@ -246,15 +246,23 @@ func (s *Service) health(err error) {
 	switch {
 	case !known:
 		if !nowHealthy {
-			slog.Warn("social refresh failing", "error", err)
+			logRefreshFailure(err)
 		}
 	case nowHealthy && !wasHealthy:
 		slog.Info("social refresh recovered")
 	case !nowHealthy && wasHealthy:
-		slog.Warn("social refresh failing", "error", err)
+		logRefreshFailure(err)
 	case !nowHealthy:
 		slog.Debug("social refresh failed", "error", err)
 	}
+}
+
+func logRefreshFailure(err error) {
+	if errors.Is(err, ErrUnsupported) {
+		slog.Warn("social not supported by this server")
+		return
+	}
+	slog.Warn("social refresh failing", "error", err)
 }
 
 func (s *Service) isPaused() bool {
