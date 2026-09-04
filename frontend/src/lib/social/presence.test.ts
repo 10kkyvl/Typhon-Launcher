@@ -174,3 +174,15 @@ describe('ownStatusLine', () => {
     expect(ownStatusLine('away', true)).toBe('');
   });
 });
+
+describe('playing without a title', () => {
+  it('still reads as playing and sorts first', () => {
+    const untitled = { status: 'online', gameId: 1942 } as const;
+    expect(presenceLine(untitled)).toBe('Играет');
+    const list = [
+      { id: 'b', username: 'b', displayName: 'B', since: '', presence: { status: 'online' } },
+      { id: 'a', username: 'a', displayName: 'A', since: '', presence: untitled },
+    ] as never[];
+    expect(sortFriends(list).map((f: { id: string }) => f.id)).toEqual(['a', 'b']);
+  });
+});

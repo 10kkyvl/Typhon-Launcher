@@ -63,7 +63,7 @@ export function sinceLabel(iso: string | null | undefined, now = new Date()): st
 
 export function presenceLine(presence?: PresenceView | null, now = new Date()): string {
   const dot = presenceDot(presence);
-  if (dot !== 'offline' && presence?.gameTitle) return `Играет: ${presence.gameTitle}`;
+  if (playing(presence)) return presence?.gameTitle ? `Играет: ${presence.gameTitle}` : 'Играет';
   if (dot !== 'offline') return LINES[dot];
   const seen = sinceLabel(presence?.lastSeenAt, now);
   return seen ? `${LINES.offline} · ${seen}` : LINES.offline;
@@ -81,10 +81,13 @@ const RANKS: Record<PresenceDot, number> = {
   offline: 4,
 };
 
+function playing(presence?: PresenceView | null): boolean {
+  return presenceDot(presence) !== 'offline' && presence?.gameId != null;
+}
+
 function rank(presence?: PresenceView | null): number {
-  const dot = presenceDot(presence);
-  if (dot !== 'offline' && presence?.gameTitle) return 0;
-  return RANKS[dot];
+  if (playing(presence)) return 0;
+  return RANKS[presenceDot(presence)];
 }
 
 function seenAt(presence?: PresenceView | null): number {
