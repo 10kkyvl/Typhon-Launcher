@@ -15,8 +15,8 @@ Version 0.3.1. Go + [Wails 3](https://v3.wails.io) on the backend, Svelte 5 on t
 metadata, search across the library, the catalog and every source at once, and a disk
 scan that finds games already installed on the machine and adopts them.
 
-**Sources and downloads.** Release feeds in the Hydra format, added by URL or from a
-local file, matched against the catalog. Downloads run through a bundled BitTorrent
+**Sources and downloads.** Release feeds — a JSON list of titles with their magnet or
+URI links — added by URL or from a file on disk and matched against the catalog. Downloads run through a bundled BitTorrent
 engine with per-piece progress kept on disk, so a restart resumes instead of
 rehashing everything.
 
