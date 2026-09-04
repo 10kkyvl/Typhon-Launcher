@@ -16,7 +16,9 @@
     {#each shown as friend (friend.id)}
       <button
         class="person"
-        title={friend.displayName}
+        type="button"
+        aria-label={friend.displayName || friend.username}
+        title={friend.displayName || friend.username}
         onclick={() => navigate('user', { username: friend.username })}
       >
         <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} />

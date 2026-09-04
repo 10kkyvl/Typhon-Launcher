@@ -1,29 +1,41 @@
 <script lang="ts">
   import type { StatsView } from '../../lib/services/social';
   import { formatCount } from '../../lib/utils/format';
+  import HiddenBadge from '../profile/HiddenBadge.svelte';
 
   let { stats }: { stats: StatsView | null } = $props();
+
+  const hint = 'Владелец профиля скрыл эти данные';
 
   const tiles = $derived(
     stats
       ? [
-          { label: 'Игры', value: formatCount(stats.games) },
-          { label: 'Часов', value: stats.hours == null ? 'скрыто' : formatCount(stats.hours) },
-          { label: 'Пройдено', value: formatCount(stats.completed) },
+          { label: 'Игры', value: formatCount(stats.games), hidden: false },
+          { label: 'Часов', value: formatCount(stats.hours ?? 0), hidden: stats.hours == null },
+          { label: 'Пройдено', value: formatCount(stats.completed), hidden: false },
         ]
       : [],
   );
 </script>
 
 <section class="group">
-  <h3>Статистика</h3>
-  {#if tiles.length === 0}
+  <div class="group-head">
+    <h3>Статистика</h3>
+    {#if !stats}<HiddenBadge text={hint} />{/if}
+  </div>
+  {#if !stats}
     <p class="muted">Статистика скрыта</p>
   {:else}
     <div class="tiles">
       {#each tiles as tile (tile.label)}
         <div class="tile">
-          <span class="value">{tile.value}</span>
+          <span class="value" class:hidden={tile.hidden}>
+            {#if tile.hidden}
+              <HiddenBadge text={hint} />
+            {:else}
+              {tile.value}
+            {/if}
+          </span>
           <span class="label">{tile.label}</span>
         </div>
       {/each}
@@ -36,11 +48,17 @@
     margin-bottom: var(--space-10);
   }
 
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
   h3 {
     font-size: var(--font-xl);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-3);
   }
 
   .muted {
@@ -68,6 +86,12 @@
     font-weight: 600;
     letter-spacing: var(--tracking-title);
     line-height: 1.1;
+  }
+
+  .value.hidden {
+    display: inline-flex;
+    align-items: center;
+    min-height: calc(var(--font-title) * 1.1);
   }
 
   .label {

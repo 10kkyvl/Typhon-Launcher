@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { EllipsisVertical, LogIn, UserPlus, Users } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -20,15 +20,16 @@
     unfriend,
     type UserCard,
   } from '../../lib/services/social';
-  import { commonLine } from '../../lib/social/view';
+  import { commonLine, sentAt } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
-  import { relativeDate } from '../../lib/utils/format';
   import AddFriendModal from './AddFriendModal.svelte';
   import FriendCodeCard from './FriendCodeCard.svelte';
   import FriendRow from './FriendRow.svelte';
+
+  let { tab: initialTab }: { tab?: string } = $props();
 
   let tab = $state('friends');
   let addOpen = $state(false);
@@ -36,13 +37,14 @@
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
   let busy = $state('');
+  let myCode = $state('');
 
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
 
   const tabs = $derived([
     { id: 'friends', label: `Друзья (${page.friends.length})` },
-    { id: 'requests', label: `Заявки (${$incomingCount})` },
+    { id: 'requests', label: `Заявки (${$incomingCount + page.outgoing.length})` },
     { id: 'blocked', label: 'Заблокированные' },
   ]);
 
@@ -105,6 +107,13 @@
   }
 
   $effect(() => {
+    const next = initialTab;
+    untrack(() => {
+      if (next && tabs.some((t) => t.id === next)) tab = next;
+    });
+  });
+
+  $effect(() => {
     if (tab === 'blocked' && !isGuest && !$needsSocialConsent) loadBlocks();
   });
 
@@ -157,7 +166,7 @@
   {:else}
     {#if codeOpen}
       <div class="code">
-        <FriendCodeCard />
+        <FriendCodeCard bind:code={myCode} />
       </div>
     {/if}
 
@@ -217,11 +226,11 @@
           {/if}
 
           {#if page.outgoing.length > 0}
-            <h3 class="eyebrow">Отправленные</h3>
+            <h4 class="eyebrow">Отправленные</h4>
             {#each page.outgoing as request (request.id)}
               <FriendRow
                 user={request}
-                meta={relativeDate(request.createdAt)}
+                meta={sentAt(request.createdAt)}
                 onopen={() => openProfile(request)}
               >
                 {#snippet actions()}
@@ -288,9 +297,9 @@
   .eyebrow {
     margin: var(--space-5) 0 var(--space-2);
     padding: 0 0.8rem;
-    font-size: var(--font-xs);
+    font-size: 1.2rem;
     font-weight: 600;
-    letter-spacing: var(--tracking-heading);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-3);
   }

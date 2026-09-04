@@ -2,7 +2,7 @@ import { SHOWCASE_TITLES } from '../profile/view';
 import type { ShowcaseKind } from '../services/account';
 import type { Relation } from '../services/social';
 import type { Notification } from '../stores/notifications';
-import { plural } from '../utils/format';
+import { plural, relativeDate } from '../utils/format';
 
 const RELATION_LABELS: Record<Relation, string> = {
   none: 'Добавить в друзья',
@@ -40,6 +40,11 @@ export function isFriendCode(input: string): boolean {
 
 function count(n: number, adjective: [string, string, string], noun: [string, string, string]): string {
   return `${n} ${plural(n, ...adjective)} ${plural(n, ...noun)}`;
+}
+
+export function sentAt(iso: string | null): string {
+  const when = relativeDate(iso);
+  return when === '—' ? when : `Отправлена ${when.toLocaleLowerCase('ru-RU')}`;
 }
 
 export function commonGamesTitle(games: number): string {

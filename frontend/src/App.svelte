@@ -85,7 +85,7 @@
     {:else if $route.name === 'lan'}
       <Lan />
     {:else if $route.name === 'friends'}
-      <Friends />
+      <Friends tab={$route.params.tab} />
     {:else if $route.name === 'user'}
       <UserProfile username={$route.params.username} />
     {:else if $route.name === 'profile'}

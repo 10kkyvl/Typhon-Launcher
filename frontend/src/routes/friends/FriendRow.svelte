@@ -16,14 +16,24 @@
   } = $props();
 </script>
 
+{#snippet who()}
+  <Avatar size="sm" name={user.displayName || user.username} src={user.avatarUrl} />
+  <span class="names">
+    <span class="name">{user.displayName || user.username}</span>
+    <span class="handle">@{user.username}</span>
+  </span>
+{/snippet}
+
 <div class="row">
-  <button class="who" type="button" onclick={() => onopen?.()}>
-    <Avatar size="sm" name={user.displayName || user.username} src={user.avatarUrl} />
-    <span class="names">
-      <span class="name">{user.displayName || user.username}</span>
-      <span class="handle">@{user.username}</span>
-    </span>
-  </button>
+  {#if onopen}
+    <button class="who" type="button" onclick={onopen}>
+      {@render who()}
+    </button>
+  {:else}
+    <div class="who">
+      {@render who()}
+    </div>
+  {/if}
   <span class="meta">{meta || '—'}</span>
   {#if actions}
     <div class="actions">
@@ -44,6 +54,14 @@
 
   .row:hover {
     background: var(--hover);
+  }
+
+  button.who {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
   }
 
   .who {

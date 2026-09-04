@@ -9,6 +9,7 @@ import {
   memberSince,
   mutualMore,
   relationLabel,
+  sentAt,
   showcaseTitle,
 } from './view';
 
@@ -188,5 +189,19 @@ describe('showcaseTitle', () => {
 
   it('неизвестный вид показывает как есть, а не пустотой', () => {
     expect(showcaseTitle('whatever')).toBe('whatever');
+  });
+});
+
+describe('sentAt', () => {
+  const today = new Date().toISOString();
+
+  it('дата в подписи со строчной буквы', () => {
+    expect(sentAt(today)).toBe('Отправлена сегодня');
+  });
+
+  it('без даты остаётся прочерк, а не «Отправлена —»', () => {
+    expect(sentAt(null)).toBe('—');
+    expect(sentAt('')).toBe('—');
+    expect(sentAt('не дата')).toBe('—');
   });
 });

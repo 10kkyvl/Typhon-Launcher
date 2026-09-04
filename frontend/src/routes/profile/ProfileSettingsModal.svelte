@@ -101,7 +101,7 @@
           <span class="row-label">Кто видит профиль</span>
           <span class="row-sub">Друзьям всегда видно больше, чем остальным</span>
         </div>
-        <SegmentedControl options={visibilityOptions} bind:value={visibility} />
+        <SegmentedControl options={visibilityOptions} bind:value={visibility} disabled={$isOffline} />
       </div>
       {#each flags as flag (flag.key)}
         <div class="row">

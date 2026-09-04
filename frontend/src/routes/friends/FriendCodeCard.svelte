@@ -9,8 +9,9 @@
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
   import { toast } from '../../lib/stores/toasts';
 
-  let code = $state('');
-  let loading = $state(true);
+  let { code = $bindable('') }: { code?: string } = $props();
+
+  let loading = $state(!code);
   let rotating = $state(false);
   let confirmOpen = $state(false);
 
@@ -29,9 +30,9 @@
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
-      toast('Код скопирован', 'success');
+      toast('Скопировано', 'info');
     } catch {
-      toast('Не удалось скопировать код', 'danger');
+      toast('Не удалось скопировать', 'danger');
     }
   }
 
@@ -50,7 +51,7 @@
   }
 
   onMount(() => {
-    load();
+    if (!code) load();
   });
 </script>
 

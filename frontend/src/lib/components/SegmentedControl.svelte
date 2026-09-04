@@ -5,10 +5,12 @@
     options,
     value = $bindable(),
     item,
+    disabled = false,
   }: {
     options: { id: string; label: string }[];
     value: string;
     item?: Snippet<[{ id: string; label: string }]>;
+    disabled?: boolean;
   } = $props();
 </script>
 
@@ -20,6 +22,7 @@
       aria-label={option.label}
       aria-pressed={value === option.id}
       title={option.label}
+      {disabled}
       onclick={() => (value = option.id)}
     >
       {#if item}
@@ -62,5 +65,14 @@
   .segment.selected {
     background: var(--surface-4);
     color: var(--text);
+  }
+
+  .segment:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .segment:disabled:hover {
+    color: var(--text-3);
   }
 </style>
