@@ -88,6 +88,7 @@ export interface FeedEvent {
   createdAt: string;
   reactions: ReactionCount[];
   mine: string[];
+  note: string;
 }
 
 export interface FeedPage {
@@ -346,6 +347,7 @@ export async function feed(cursor = ''): Promise<FeedPage> {
         ...event,
         reactions: list(event.reactions),
         mine: list(event.mine),
+        note: event.note ?? '',
       })),
       next: page?.next ?? 0,
     };
@@ -367,6 +369,15 @@ export async function unreact(id: string, emoji: string): Promise<void> {
   if (!inWails) throw unauthenticated();
   try {
     await SocialService.Unreact(id, emoji);
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function setNote(id: string, note: string): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await SocialService.SetNote(id, note);
   } catch (err) {
     throw toAccountError(err);
   }

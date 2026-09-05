@@ -42,6 +42,7 @@ export const state: Record<StateKey, Message> = {
 
   'state.feedLoadFailed': 'Failed to load the feed',
   'state.feedReactFailed': 'Failed to send reaction',
+  'state.feedNoteFailed': 'Failed to save the note',
 
   'state.librarySessionEnded': 'Session ended: {minutes} min',
 

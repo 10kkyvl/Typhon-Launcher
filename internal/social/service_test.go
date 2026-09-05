@@ -1002,6 +1002,82 @@ func TestService_ReactRejectsBadEmojiAndID(t *testing.T) {
 	}
 }
 
+func TestService_SetNoteRejectsBadID(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, _ *http.Request) {
+		writeJSON(h.t, w, pageWithIncoming(0))
+	})
+	h.start()
+	h.awaitPoll()
+	before := h.reqs.Load()
+
+	if err := h.svc.SetNote("not-a-number", "gg"); !errors.Is(err, errBadEventID) {
+		t.Fatalf("SetNote with a bad id = %v, want errBadEventID", err)
+	}
+	if got := h.reqs.Load(); got != before {
+		t.Fatalf("requests = %d, want %d: a bad id must not reach the API", got, before)
+	}
+}
+
+func TestService_SetNoteEnforcesRuneLimit(t *testing.T) {
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() == "/v1/me/friends" {
+			writeJSON(h.t, w, pageWithIncoming(0))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h.start()
+	h.awaitPoll()
+	<-h.paths
+
+	ok := strings.Repeat("п", MaxNote)
+	if err := h.svc.SetNote("7", ok); err != nil {
+		t.Fatalf("SetNote with %d cyrillic runes = %v, want nil", MaxNote, err)
+	}
+	select {
+	case path := <-h.paths:
+		if path != "PUT /v1/activity/7/note" {
+			t.Fatalf("path = %q, want PUT /v1/activity/7/note", path)
+		}
+	default:
+		t.Fatal("no request recorded")
+	}
+
+	before := h.reqs.Load()
+	tooLong := strings.Repeat("п", MaxNote+1)
+	if err := h.svc.SetNote("7", tooLong); !errors.Is(err, ErrNoteTooLong) {
+		t.Fatalf("SetNote with %d cyrillic runes = %v, want ErrNoteTooLong", MaxNote+1, err)
+	}
+	if got := h.reqs.Load(); got != before {
+		t.Fatalf("requests = %d, want %d: a too-long note must not reach the API", got, before)
+	}
+}
+
+func TestService_SetNoteSendsEmptyForWhitespace(t *testing.T) {
+	var gotBody string
+	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() == "/v1/me/friends" {
+			writeJSON(h.t, w, pageWithIncoming(0))
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			h.t.Errorf("read body: %v", err)
+		}
+		gotBody = strings.TrimSpace(string(body))
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h.start()
+	h.awaitPoll()
+
+	if err := h.svc.SetNote("7", "   "); err != nil {
+		t.Fatalf("SetNote: %v", err)
+	}
+	if gotBody != `{"note":""}` {
+		t.Fatalf("body = %q, want an empty note", gotBody)
+	}
+}
+
 func TestService_FeedAndReactSurfaceAPIErrors(t *testing.T) {
 	h := newHarness(t, func(string) string { return "1942" }, func(h *harness, w http.ResponseWriter, r *http.Request) {
 		if r.URL.EscapedPath() == "/v1/me/friends" {

@@ -85,6 +85,7 @@ type Event struct {
 	CreatedAt time.Time       `json:"createdAt"`
 	Reactions []ReactionCount `json:"reactions"`
 	Mine      []string        `json:"mine"`
+	Note      string          `json:"note"`
 }
 
 type ReactionCount struct {

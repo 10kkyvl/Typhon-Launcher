@@ -24,6 +24,7 @@ vi.mock('../services/social', () => ({
   feed: vi.fn(async () => ({ events: [], next: 0 })),
   react: vi.fn(async () => {}),
   unreact: vi.fn(async () => {}),
+  setNote: vi.fn(async () => {}),
 }));
 
 function event(id: number, emoji = 'fire', count = 0) {
@@ -35,6 +36,7 @@ function event(id: number, emoji = 'fire', count = 0) {
     createdAt: '2026-09-03T10:00:00Z',
     reactions: count > 0 ? [{ emoji, count }] : [],
     mine: [] as string[],
+    note: '',
   };
 }
 
@@ -164,5 +166,63 @@ describe('реакции', () => {
     await sending;
 
     expect(get(feedPending).has(7)).toBe(false);
+  });
+});
+
+describe('подпись события', () => {
+  it('сохраняет подпись и показывает её сразу', async () => {
+    const { loadFeed, noteEvent, fetchFeed, feedEvents } = await load();
+    fetchFeed.mockResolvedValueOnce({ events: [event(7)], next: 0 } as never);
+    await loadFeed();
+
+    const { setNote } = await import('../services/social');
+    await noteEvent(7, '  Прошёл спустя три года  ');
+
+    expect(vi.mocked(setNote)).toHaveBeenCalledWith('7', 'Прошёл спустя три года');
+    expect(get(feedEvents)[0].note).toBe('Прошёл спустя три года');
+  });
+
+  it('возвращает прежнюю подпись, когда сервер отказал', async () => {
+    const { loadFeed, noteEvent, fetchFeed, feedEvents } = await load();
+    fetchFeed.mockResolvedValueOnce({ events: [{ ...event(7), note: 'старая' }], next: 0 } as never);
+    await loadFeed();
+
+    const { setNote } = await import('../services/social');
+    vi.mocked(setNote).mockRejectedValueOnce(new Error('offline'));
+
+    await noteEvent(7, 'новая');
+
+    expect(get(feedEvents)[0].note).toBe('старая');
+  });
+
+  it('не шлёт запрос, когда подпись не изменилась', async () => {
+    const { loadFeed, noteEvent, fetchFeed } = await load();
+    fetchFeed.mockResolvedValueOnce({ events: [{ ...event(7), note: 'та же' }], next: 0 } as never);
+    await loadFeed();
+
+    const { setNote } = await import('../services/social');
+    await noteEvent(7, '  та же  ');
+
+    expect(vi.mocked(setNote)).not.toHaveBeenCalled();
+  });
+
+  it('обрезает подпись до лимита перед отправкой', async () => {
+    const { loadFeed, noteEvent, fetchFeed } = await load();
+    fetchFeed.mockResolvedValueOnce({ events: [event(7)], next: 0 } as never);
+    await loadFeed();
+
+    const { setNote } = await import('../services/social');
+    await noteEvent(7, 'я'.repeat(1200));
+
+    expect(vi.mocked(setNote)).toHaveBeenCalledWith('7', 'я'.repeat(1000));
+  });
+
+  it('молчит про неизвестное событие', async () => {
+    const { noteEvent } = await load();
+    const { setNote } = await import('../services/social');
+
+    await noteEvent(99, 'что-то');
+
+    expect(vi.mocked(setNote)).not.toHaveBeenCalled();
   });
 });

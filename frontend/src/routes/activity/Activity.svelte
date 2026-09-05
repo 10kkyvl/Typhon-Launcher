@@ -15,7 +15,7 @@
   import { feedDayGroups } from '../../lib/social/feed';
   import { popularGames } from '../../lib/social/popular';
   import { presenceDot, presenceLine, sortFriends, statusDot } from '../../lib/social/presence';
-  import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, reactToEvent } from '../../lib/stores/feed';
+  import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, noteEvent, reactToEvent } from '../../lib/stores/feed';
   import { presenceStatus } from '../../lib/stores/presence';
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { navigate } from '../../lib/stores/router';
@@ -76,129 +76,129 @@
 
 <PageHeader title={msg('transfers.activityTitle')} subtitle={msg('transfers.activitySubtitle')} />
 
-<div class="page">
-  {#if isGuest}
-    <EmptyState
-      title={msg('transfers.activityGuestTitle')}
-      description={msg('transfers.activityGuestDescription')}
-    >
-      {#snippet icon()}
-        <Users size="2.2rem" strokeWidth={1.6} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={() => signIn('login')}>
-          <LogIn size="1.5rem" strokeWidth={1.8} />
-          {msg('transfers.activitySignIn')}
-        </Button>
-        <Button onclick={() => signIn('register')}>{msg('transfers.activityCreateAccount')}</Button>
-      {/snippet}
-    </EmptyState>
-  {:else if $needsSocialConsent}
-    <EmptyState
-      title={msg('transfers.activityConsentTitle')}
-      description={msg('transfers.activityConsentDescription')}
-    >
-      {#snippet icon()}
-        <Users size="2.2rem" strokeWidth={1.6} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('transfers.activityEnableSync')}</Button>
-      {/snippet}
-    </EmptyState>
-  {:else}
-    <div class="layout">
-      <div class="left">
-        <Card>
-          <div class="profile">
-            <Avatar size="lg" name={displayName} src={user?.avatarUrl} status={ownDot} />
-            <h3 class="name">{displayName}</h3>
-            {#if user}<span class="handle">@{user.username}</span>{/if}
-            {#if user?.bio}<p class="bio">{user.bio}</p>{/if}
-          </div>
-          <div class="stats">
-            <StatTile value={formatCount(stats.games)} label={msg('transfers.activityStatGames')} />
-            <StatTile value={formatCount(stats.hours)} label={msg('transfers.activityStatHours')} />
-            <StatTile value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
-          </div>
-        </Card>
+{#if isGuest}
+  <EmptyState
+    title={msg('transfers.activityGuestTitle')}
+    description={msg('transfers.activityGuestDescription')}
+  >
+    {#snippet icon()}
+      <Users size="2.2rem" strokeWidth={1.6} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={() => signIn('login')}>
+        <LogIn size="1.5rem" strokeWidth={1.8} />
+        {msg('transfers.activitySignIn')}
+      </Button>
+      <Button onclick={() => signIn('register')}>{msg('transfers.activityCreateAccount')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else if $needsSocialConsent}
+  <EmptyState
+    title={msg('transfers.activityConsentTitle')}
+    description={msg('transfers.activityConsentDescription')}
+  >
+    {#snippet icon()}
+      <Users size="2.2rem" strokeWidth={1.6} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('transfers.activityEnableSync')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else}
+  <div class="layout">
+    <div class="left">
+      <Card>
+        <div class="profile">
+          <Avatar size="lg" name={displayName} src={user?.avatarUrl} status={ownDot} />
+          <h3 class="name">{displayName}</h3>
+          {#if user}<span class="handle">@{user.username}</span>{/if}
+          {#if user?.bio}<p class="bio">{user.bio}</p>{/if}
+        </div>
+        <div class="stats">
+          <StatTile value={formatCount(stats.games)} label={msg('transfers.activityStatGames')} />
+          <StatTile value={formatCount(stats.hours)} label={msg('transfers.activityStatHours')} />
+          <StatTile value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
+        </div>
+      </Card>
 
-        <Card title={msg('transfers.activityOnlineFriendsTitle', { count: onlineFriends.length })}>
-          {#if onlineFriends.length === 0}
-            <p class="muted">{msg('transfers.activityNoOneOnline')}</p>
-          {:else}
-            <div class="friends">
-              {#each onlineFriends.slice(0, ONLINE_LIMIT) as friend (friend.id)}
-                <FriendRow
-                  user={friend}
-                  status={presenceDot(friend.presence)}
-                  meta={presenceLine(friend.presence)}
-                  onopen={() => openUser(friend)}
-                />
-              {/each}
-            </div>
-          {/if}
-          <div class="show-all">
-            <Button onclick={() => navigate('friends')}>{msg('transfers.activityShowAllFriends')}</Button>
-          </div>
-        </Card>
-      </div>
-
-      <div class="center">
-        {#if $feedEvents.length === 0}
-          {#if $feedLoading}
-            <p class="muted">{msg('transfers.activityLoading')}</p>
-          {:else}
-            <EmptyState
-              title={msg('transfers.activityFeedEmptyTitle')}
-              description={msg('transfers.activityFeedEmptyDescription')}
-            />
-          {/if}
+      <Card title={msg('transfers.activityOnlineFriendsTitle', { count: onlineFriends.length })}>
+        {#if onlineFriends.length === 0}
+          <p class="muted">{msg('transfers.activityNoOneOnline')}</p>
         {:else}
-          {#each feedGroups as group (group.key)}
-            <h4 class="eyebrow">{group.label}</h4>
-            {#each group.events as event (event.id)}
-              <Card>
-                <FeedRow {event} onreact={(emoji) => reactToEvent(event.id, emoji)} />
-              </Card>
+          <div class="friends">
+            {#each onlineFriends.slice(0, ONLINE_LIMIT) as friend (friend.id)}
+              <FriendRow
+                user={friend}
+                status={presenceDot(friend.presence)}
+                meta={presenceLine(friend.presence)}
+                onopen={() => openUser(friend)}
+              />
             {/each}
-          {/each}
-          {#if $feedCursor > 0}
-            <div class="more">
-              <Button disabled={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
-            </div>
-          {/if}
+          </div>
         {/if}
-      </div>
-
-      <div class="right">
-        <Card title={msg('transfers.activityPlayingTitle')}>
-          {#if playingFriends.length === 0}
-            <p class="muted">{msg('transfers.activityNoOnePlaying')}</p>
-          {:else}
-            <div class="friends">
-              {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
-                <FriendRow user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
-              {/each}
-            </div>
-          {/if}
-        </Card>
-
-        <PopularGames games={popular} />
-      </div>
+        <div class="show-all">
+          <Button onclick={() => navigate('friends')}>{msg('transfers.activityShowAllFriends')}</Button>
+        </div>
+      </Card>
     </div>
-  {/if}
-</div>
+
+    <div class="center">
+      {#if $feedEvents.length === 0}
+        {#if $feedLoading}
+          <p class="muted">{msg('transfers.activityLoading')}</p>
+        {:else}
+          <EmptyState
+            title={msg('transfers.activityFeedEmptyTitle')}
+            description={msg('transfers.activityFeedEmptyDescription')}
+          />
+        {/if}
+      {:else}
+        {#each feedGroups as group (group.key)}
+          <h4 class="eyebrow">{group.label}</h4>
+          {#each group.events as event (event.id)}
+            <Card>
+              <FeedRow
+                {event}
+                own={event.user.id === user?.id}
+                onreact={(emoji) => reactToEvent(event.id, emoji)}
+                onnote={(note) => noteEvent(event.id, note)}
+              />
+            </Card>
+          {/each}
+        {/each}
+        {#if $feedCursor > 0}
+          <div class="more">
+            <Button disabled={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    <div class="right">
+      <Card title={msg('transfers.activityPlayingTitle')}>
+        {#if playingFriends.length === 0}
+          <p class="muted">{msg('transfers.activityNoOnePlaying')}</p>
+        {:else}
+          <div class="friends">
+            {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
+              <FriendRow user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
+            {/each}
+          </div>
+        {/if}
+      </Card>
+
+      <PopularGames games={popular} />
+    </div>
+  </div>
+{/if}
 
 <SocialConsentScreen bind:open={consentOpen} />
 
 <style>
-  .page {
-    max-width: 148rem;
-  }
-
   .layout {
     display: grid;
-    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+    grid-template-columns: 30rem minmax(0, 92rem) 30rem;
+    justify-content: space-between;
     gap: var(--space-6);
     align-items: start;
   }

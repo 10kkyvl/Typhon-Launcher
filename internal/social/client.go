@@ -72,6 +72,10 @@ type friendCodeBody struct {
 	Code string `json:"code"`
 }
 
+type noteBody struct {
+	Note string `json:"note"`
+}
+
 type client struct {
 	baseURL    string
 	token      func() (string, error)
@@ -237,6 +241,14 @@ func (c *client) unreact(ctx context.Context, id int64, emoji string) error {
 
 func reactionPath(id int64, emoji string) string {
 	return account.APIPrefix + "/activity/" + strconv.FormatInt(id, 10) + "/reactions/" + url.PathEscape(emoji)
+}
+
+func (c *client) setNote(ctx context.Context, id int64, note string) error {
+	return c.do(ctx, http.MethodPut, notePath(id), noteBody{Note: note}, nil)
+}
+
+func notePath(id int64) string {
+	return account.APIPrefix + "/activity/" + strconv.FormatInt(id, 10) + "/note"
 }
 
 func normalizeFeedPage(page FeedPage) FeedPage {

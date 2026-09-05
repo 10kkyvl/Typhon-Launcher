@@ -7,16 +7,21 @@
   import { relativeDate } from '../utils/format';
   import Artwork from './Artwork.svelte';
   import Avatar from './Avatar.svelte';
+  import FeedNote from './FeedNote.svelte';
   import ReactionBar from './reactions/ReactionBar.svelte';
 
   let {
     event,
     compact = false,
+    own = false,
     onreact,
+    onnote,
   }: {
     event: FeedEvent;
     compact?: boolean;
+    own?: boolean;
     onreact?: (emoji: string) => void;
+    onnote?: (note: string) => void;
   } = $props();
 
   const name = $derived(event.user.displayName || event.user.username);
@@ -64,6 +69,10 @@
         <span class="caption">{event.game.title}</span>
       {/if}
     </button>
+
+    {#if !compact}
+      <FeedNote note={event.note} own={own && onnote != null} saving={$feedPending.has(event.id)} onsave={onnote} />
+    {/if}
 
     {#if !compact && onreact}
       <ReactionBar {event} disabled={$feedPending.has(event.id)} ontoggle={onreact} />

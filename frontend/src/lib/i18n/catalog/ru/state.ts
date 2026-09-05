@@ -39,6 +39,7 @@ export const state = {
 
   'state.feedLoadFailed': 'Не удалось загрузить ленту',
   'state.feedReactFailed': 'Не удалось отправить реакцию',
+  'state.feedNoteFailed': 'Не удалось сохранить подпись',
 
   'state.librarySessionEnded': 'Сессия завершена: {minutes} мин',
 

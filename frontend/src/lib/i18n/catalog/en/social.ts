@@ -59,6 +59,15 @@ export const social: Record<SocialKey, Message> = {
   'social.playing': 'Playing',
   'social.playingNamed': 'Playing: {name}',
   'social.playingLabel': 'Playing:',
+  'social.noteAdd': 'Add note',
+  'social.noteEdit': 'Edit note',
+  'social.notePlaceholder': 'A few words about it',
+  'social.noteSave': 'Save',
+  'social.noteCancel': 'Cancel',
+  'social.noteRemove': 'Remove note',
+  'social.noteMore': 'More',
+  'social.noteLess': 'Less',
+  'social.noteLeft': 'Left: {count}',
   'social.playingIn': 'Playing {name}',
 
   // lib/social/openGame.ts

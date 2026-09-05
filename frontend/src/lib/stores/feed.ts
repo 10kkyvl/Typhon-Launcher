@@ -4,10 +4,12 @@ import { accountErrorText } from '../services/accountMessages';
 import {
   feed as fetchFeed,
   react as sendReact,
+  setNote as sendNote,
   unreact as sendUnreact,
   type FeedEvent,
 } from '../services/social';
 import { hasReacted, toggleReaction } from '../social/feed';
+import { NOTE_LIMIT, trimNote } from '../social/note';
 import { msg } from '../i18n';
 import { toast } from './toasts';
 
@@ -115,6 +117,28 @@ export async function reactToEvent(id: number, emoji: string): Promise<void> {
   } catch (err) {
     replace(id, (event) => (hasReacted(event, emoji) === remove ? event : toggleReaction(event, emoji)));
     report(err, msg('state.feedReactFailed'));
+  } finally {
+    pending.delete(key);
+    publishPending();
+  }
+}
+
+export async function noteEvent(id: number, note: string): Promise<void> {
+  const current = get(feedEvents).find((event) => event.id === id);
+  if (!current) return;
+  const next = [...trimNote(note)].slice(0, NOTE_LIMIT).join('');
+  if (next === current.note) return;
+  const previous = current.note;
+  const key = `${id}:note`;
+  if (pending.has(key)) return;
+  pending.add(key);
+  publishPending();
+  replace(id, (event) => ({ ...event, note: next }));
+  try {
+    await sendNote(String(id), next);
+  } catch (err) {
+    replace(id, (event) => ({ ...event, note: previous }));
+    report(err, msg('state.feedNoteFailed'));
   } finally {
     pending.delete(key);
     publishPending();

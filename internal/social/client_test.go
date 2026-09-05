@@ -220,6 +220,24 @@ func TestClient_RequestShape(t *testing.T) {
 			wantMethod: http.MethodDelete,
 			wantPath:   "/v1/activity/1942/reactions/fire",
 		},
+		{
+			name: "set note",
+			call: func(ctx context.Context, c *client) error {
+				return c.setNote(ctx, 1942, "gg wp")
+			},
+			wantMethod: http.MethodPut,
+			wantPath:   "/v1/activity/1942/note",
+			wantBody:   `{"note":"gg wp"}`,
+		},
+		{
+			name: "set note clears with empty string",
+			call: func(ctx context.Context, c *client) error {
+				return c.setNote(ctx, 1942, "")
+			},
+			wantMethod: http.MethodPut,
+			wantPath:   "/v1/activity/1942/note",
+			wantBody:   `{"note":""}`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -503,6 +521,8 @@ func TestClient_DecodesErrorEnvelope(t *testing.T) {
 		{name: "limit", status: http.StatusRequestEntityTooLarge, body: `{"error":{"code":"friend_limit"}}`, code: "friend_limit"},
 		{name: "activity not found", status: http.StatusNotFound, body: `{"error":{"code":"activity_not_found"}}`, code: "activity_not_found"},
 		{name: "reaction invalid", status: http.StatusUnprocessableEntity, body: `{"error":{"code":"reaction_invalid","field":"emoji"}}`, code: "reaction_invalid", field: "emoji"},
+		{name: "note too long", status: http.StatusUnprocessableEntity, body: `{"error":{"code":"note_too_long"}}`, code: "note_too_long"},
+		{name: "bad request", status: http.StatusBadRequest, body: `{"error":{"code":"bad_request"}}`, code: "bad_request"},
 	}
 
 	for _, tc := range tests {
@@ -526,6 +546,20 @@ func TestClient_DecodesErrorEnvelope(t *testing.T) {
 				t.Fatalf("Error() = %q, want the bare code %q", apiErr.Error(), tc.code)
 			}
 		})
+	}
+}
+
+func TestClient_SetNoteErrorStatus(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		if _, err := io.WriteString(w, `{"error":{"code":"activity_not_found"}}`); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+	err := c.setNote(t.Context(), 1942, "gg")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "activity_not_found" {
+		t.Fatalf("setNote error = %v (%T), want APIError activity_not_found", err, err)
 	}
 }
 

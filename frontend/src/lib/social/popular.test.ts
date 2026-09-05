@@ -15,6 +15,7 @@ function event(patch: Partial<FeedEvent> = {}): FeedEvent {
     createdAt: '2026-09-03T12:00:00Z',
     reactions: [],
     mine: [],
+    note: '',
     ...patch,
   };
 }

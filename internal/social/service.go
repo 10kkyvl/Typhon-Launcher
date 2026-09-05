@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -19,12 +20,14 @@ const (
 
 	defaultPollInterval = 60 * time.Second
 	feedPageSize        = 30
+	MaxNote             = 1000
 )
 
 var (
 	ErrNotRunning   = errors.New("social: service is not running")
 	ErrSyncDisabled = errors.New("sync_disabled")
 	ErrBadEmoji     = errors.New("reaction_invalid")
+	ErrNoteTooLong  = errors.New("note_too_long")
 
 	errEmptyUserID   = errors.New("social: user id is empty")
 	errEmptyQuery    = errors.New("social: query is empty")
@@ -486,6 +489,22 @@ func (s *Service) reaction(id, emoji string, call func(context.Context, int64, s
 		return err
 	}
 	return call(ctx, eventID, emoji)
+}
+
+func (s *Service) SetNote(id string, note string) error {
+	eventID, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
+	if err != nil {
+		return errBadEventID
+	}
+	trimmed := strings.TrimSpace(note)
+	if utf8.RuneCountInString(trimmed) > MaxNote {
+		return ErrNoteTooLong
+	}
+	ctx, err := s.runContext()
+	if err != nil {
+		return err
+	}
+	return s.client.setNote(ctx, eventID, trimmed)
 }
 
 func (s *Service) GameFriends(canonicalGameID string) (GameFriends, error) {

@@ -56,6 +56,15 @@ export const social = {
   'social.playing': 'Играет',
   'social.playingNamed': 'Играет: {name}',
   'social.playingLabel': 'Играет:',
+  'social.noteAdd': 'Подписать',
+  'social.noteEdit': 'Изменить подпись',
+  'social.notePlaceholder': 'Пара слов об этом',
+  'social.noteSave': 'Сохранить',
+  'social.noteCancel': 'Отмена',
+  'social.noteRemove': 'Убрать подпись',
+  'social.noteMore': 'Ещё',
+  'social.noteLess': 'Свернуть',
+  'social.noteLeft': 'Осталось: {count}',
   'social.playingIn': 'Играет в {name}',
 
   // lib/social/openGame.ts
