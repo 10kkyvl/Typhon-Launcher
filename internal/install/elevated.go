@@ -25,6 +25,10 @@ var (
 	workerCancelWait    = 30 * time.Second
 )
 
+// workerStateReadRetries — сколько тиков подряд чтение state.json может
+// падать, прежде чем это считается сбоем, а не подменой файла воркером.
+const workerStateReadRetries = 8
+
 type workerHandle interface {
 	wait() (int, error)
 	close()
@@ -93,6 +97,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 
 	cancelRequested := false
 	var cancelDeadline <-chan time.Time
+	stateReadFailures := 0
 	for {
 		select {
 		case res := <-exited:
@@ -113,8 +118,21 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		case <-ticker.C:
 			state, found, stateErr := readWorkerState(spec.StatePath)
 			if stateErr != nil {
-				return 0, fmt.Errorf("состояние установки: %w", stateErr)
+				// Воркер подменяет state.json переименованием, и на Windows
+				// чтение ровно в этот момент получает ERROR_SHARING_VIOLATION.
+				// Это «ещё не готово», а не сбой установки, поэтому одиночная
+				// ошибка стоит следующего тика, а не отказа. Ошибка, которая
+				// не проходит workerStateReadRetries тиков подряд, — уже не
+				// подмена файла, и вот её мы возвращаем.
+				stateReadFailures++
+				if stateReadFailures >= workerStateReadRetries {
+					return 0, fmt.Errorf("состояние установки: %w", stateErr)
+				}
+				slog.Debug("read installer worker state", "path", spec.StatePath,
+					"attempt", stateReadFailures, "error", stateErr)
+				continue
 			}
+			stateReadFailures = 0
 			if found && state.Done {
 				return finishElevatedState(state)
 			}

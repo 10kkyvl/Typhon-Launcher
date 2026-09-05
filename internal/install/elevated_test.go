@@ -304,3 +304,60 @@ func TestRunElevatedCancellationTimesOutWhenWorkerNeverResponds(t *testing.T) {
 		t.Fatalf("runElevated took %v, far past the cancel wait deadline of %v", elapsed, workerCancelWait)
 	}
 }
+
+// TestRunElevatedSurvivesTransientStateReadFailure закрывает виндовое падение
+// CI: воркер подменяет state.json переименованием, и чтение ровно в этот
+// момент получает от Windows «файл занят другим процессом». Цикл опроса
+// считал любую ошибку чтения провалом установки, так что мгновенная блокировка
+// роняла установку, которая на самом деле шла нормально. Каталог на месте
+// файла даёт ту же ошибку чтения на любой ОС.
+func TestRunElevatedSurvivesTransientStateReadFailure(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.Mkdir(statePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t9", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+
+	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
+		return longRunningProcess(t, 10), nil
+	})
+
+	go func() {
+		<-time.After(60 * time.Millisecond)
+		if err := os.Remove(statePath); err != nil {
+			t.Errorf("remove blocking directory: %v", err)
+			return
+		}
+		if err := writeWorkerState(statePath, workerState{Done: true, Code: 3}); err != nil {
+			t.Errorf("writeWorkerState: %v", err)
+		}
+	}()
+
+	code, err := runElevated(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("runElevated error = %v, want the transient read to be retried", err)
+	}
+	if code != 3 {
+		t.Fatalf("code = %d, want 3", code)
+	}
+}
+
+// TestRunElevatedReportsPersistentStateReadFailure — вторая половина: ошибка,
+// которая не проходит, остаётся ошибкой, а не полирует установку молчанием.
+func TestRunElevatedReportsPersistentStateReadFailure(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.Mkdir(statePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+
+	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
+		return longRunningProcess(t, 10), nil
+	})
+
+	if _, err := runElevated(context.Background(), spec); err == nil {
+		t.Fatal("runElevated returned nil for a state file that never became readable")
+	}
+}
