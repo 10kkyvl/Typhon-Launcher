@@ -171,14 +171,23 @@ func TestConcurrentFetchMetadataSameHashNeverDoublesUp(t *testing.T) {
 			t.Fatalf("unexpected FetchMetadata error: %v", r.err)
 		}
 	}
-	// While the reservation is held, the second call can only ever observe
-	// "busy" (m.pending is not set until the winner's cl.add and GotInfo
-	// wait are both done, long after this race starts): if it instead
-	// squeezed through as a second, independent success, the manager called
-	// cl.add twice for the same hash and only one of the two liveTorrents
-	// survives in m.pending, leaking the other's storage handle.
-	if oks != 1 {
-		t.Fatalf("successful concurrent FetchMetadata calls = %d, want exactly 1", oks)
+	// Two successes are a legitimate outcome, not a doubled add: the
+	// metainfo comes from a local file, so GotInfo resolves at once and the
+	// winner can reach m.pending before the loser even takes the lock, at
+	// which point the loser is answered from m.pending instead of touching
+	// the client (manager.go's "already pending" branch). What must never
+	// happen is a second cl.add for the same hash — that is the leak the
+	// reservation exists to prevent, and it shows up here as a torrent count
+	// above one (a second liveTorrent whose storage nothing owns) or as an
+	// errTorrentAlreadyAdded caught by the default branch above. The two
+	// halves of the fix are each pinned deterministically elsewhere:
+	// TestReserveHashIsExclusive for the reservation, and
+	// TestAddRejectsSecondSpecForSameHash for the isNew check this relies on.
+	if oks == 0 {
+		t.Fatal("both concurrent FetchMetadata calls failed, want at least one to succeed")
+	}
+	if got := len(m.client.cl.Torrents()); got != 1 {
+		t.Fatalf("torrents in the client = %d, want exactly 1 for one infohash", got)
 	}
 
 	m.DiscardMetadata(hash)
