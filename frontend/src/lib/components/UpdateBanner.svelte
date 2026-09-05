@@ -16,6 +16,7 @@
   } from '../stores/selfupdate';
   import { statusReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
 
   let confirmOpen = $state(false);
 
@@ -38,49 +39,49 @@
   <div class="banner banner-danger">
     <div class="banner-text">
       <AlertTriangle size="1.8rem" strokeWidth={1.8} />
-      <span>{statusReason(status) || 'Не удалось проверить обновления'}</span>
+      <span>{statusReason(status) || msg('ui.updateCheckFailed')}</span>
     </div>
     <Button size="sm" onclick={retryFailed}>
       <RefreshCw size="1.5rem" strokeWidth={1.8} />
-      Повторить
+      {msg('common.retry')}
     </Button>
   </div>
 {:else if downloading || view === 'downloading'}
   <div class="banner">
     <div class="banner-text">
-      <span>Загрузка обновления {status.availableVersion}</span>
+      <span>{msg('ui.downloadingUpdate', { version: status.availableVersion ?? '' })}</span>
     </div>
     <div class="progress">
       <ProgressBar value={pct} />
-      <span class="muted">{bytesSize(downloadedBytes)} из {bytesSize(totalBytes)} · {Math.round(pct)}%</span>
+      <span class="muted">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
       <Button size="sm" onclick={requestCancelDownload}>
         <X size="1.5rem" strokeWidth={1.8} />
-        Отменить
+        {msg('ui.cancelVerb')}
       </Button>
     </div>
   </div>
 {:else if view === 'applying'}
   <div class="banner">
     <div class="banner-text">
-      <span>Устанавливаем обновление {status.availableVersion}</span>
+      <span>{msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}</span>
     </div>
-    <p class="muted">Лаунчер закроется и запустится заново.</p>
+    <p class="muted">{msg('ui.launcherRestartShort')}</p>
   </div>
 {:else if view === 'ready'}
   <div class="banner">
     <div class="banner-text">
-      <span>Обновление {status.availableVersion} загружено и готово к установке</span>
+      <span>{msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}</span>
     </div>
-    <p class="muted">Лаунчер закроется и перезапустится с новой версией.</p>
+    <p class="muted">{msg('ui.launcherRestartNewVersion')}</p>
     <div class="actions">
-      <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>Перезапустить и обновить</Button>
-      <Button size="sm" onclick={requestDismiss}>Не сейчас</Button>
+      <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>{msg('ui.restartAndUpdate')}</Button>
+      <Button size="sm" onclick={requestDismiss}>{msg('ui.notNow')}</Button>
     </div>
   </div>
 {:else if view === 'available'}
   <div class="banner">
     <div class="banner-text">
-      <span>Доступна версия {status.availableVersion}</span>
+      <span>{msg('ui.versionAvailable', { version: status.availableVersion ?? '' })}</span>
     </div>
     {#if status.notes}
       <p class="muted notes">{status.notes}</p>
@@ -88,22 +89,21 @@
     <div class="actions">
       <Button variant="primary" size="sm" onclick={requestDownload}>
         <Download size="1.5rem" strokeWidth={1.8} />
-        Скачать
+        {msg('ui.download')}
       </Button>
     </div>
   </div>
 {/if}
 
-<Modal bind:open={confirmOpen} title="Перезапустить лаунчер?">
+<Modal bind:open={confirmOpen} title={msg('ui.restartLauncherTitle')}>
   <p class="modal-text">
-    Typhon Launcher закроется прямо сейчас, установит обновление {status.availableVersion} и запустится заново.
-    Незавершённые загрузки и установки продолжатся после перезапуска.
+    {msg('ui.restartLauncherWarning', { version: status.availableVersion ?? '' })}
   </p>
   {#snippet footer()}
-    <Button onclick={() => (confirmOpen = false)}>Отмена</Button>
+    <Button onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" onclick={confirmApply}>
       <RotateCcw size="1.5rem" strokeWidth={1.8} />
-      Перезапустить и обновить
+      {msg('ui.restartAndUpdate')}
     </Button>
   {/snippet}
 </Modal>

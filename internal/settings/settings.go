@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -26,6 +27,15 @@ const (
 	RefreshSixHours = "6h"
 	RefreshHalfDay  = "12h"
 	RefreshDaily    = "24h"
+
+	LanguageSystem = "system"
+	LanguageRU     = "ru"
+	LanguageEN     = "en"
+
+	PresenceOnline    = "online"
+	PresenceAway      = "away"
+	PresenceBusy      = "busy"
+	PresenceInvisible = "invisible"
 
 	KeepPreviousOff         = "off"
 	KeepPreviousFirstLaunch = "first_launch"
@@ -45,15 +55,16 @@ const (
 )
 
 var (
-	ErrLibraryNotConfigured = errors.New("библиотека не настроена")
-	ErrLibraryPathRelative  = errors.New("путь библиотеки должен быть абсолютным")
-	ErrLibraryPathRoot      = errors.New("библиотека не может быть корнем диска")
-	ErrLibraryParentEmpty   = errors.New("не выбрана папка для библиотеки")
+	ErrLibraryNotConfigured = uierr.New("settings.library_not_configured", "библиотека не настроена")
+	ErrLibraryPathRelative  = uierr.New("settings.library_path_relative", "путь библиотеки должен быть абсолютным")
+	ErrLibraryPathRoot      = uierr.New("settings.library_path_root", "библиотека не может быть корнем диска")
+	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
 )
 
 type Settings struct {
 	Theme                  string  `json:"theme"`
 	UIScale                float64 `json:"uiScale"`
+	Language               string  `json:"language"`
 	LibraryPath            string  `json:"libraryPath"`
 	DownloadsPath          string  `json:"downloadsPath"`
 	GamesPath              string  `json:"gamesPath"`
@@ -85,6 +96,8 @@ type Settings struct {
 
 	LANSharing bool `json:"lanSharing"`
 
+	PresenceStatus string `json:"presenceStatus"`
+
 	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
@@ -114,6 +127,7 @@ func Defaults() Settings {
 	return Settings{
 		Theme:                  "dark",
 		UIScale:                1,
+		Language:               LanguageSystem,
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
@@ -140,6 +154,8 @@ func Defaults() Settings {
 		AllowTorrentReuse:        true,
 
 		LANSharing: false,
+
+		PresenceStatus: PresenceOnline,
 
 		AccountSync:           false,
 		SourcesNoticeAccepted: false,
@@ -199,6 +215,24 @@ func applyStoredConsent(s Settings, p consentProbe) Settings {
 		s.TelemetryConsentVersion = 0
 	}
 	return s
+}
+
+func ValidLanguage(lang string) bool {
+	switch lang {
+	case LanguageSystem, LanguageRU, LanguageEN:
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidPresenceStatus(status string) bool {
+	switch status {
+	case PresenceOnline, PresenceAway, PresenceBusy, PresenceInvisible:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeLibraryPath(path string) (string, error) {
@@ -278,6 +312,12 @@ func sanitize(s Settings) (Settings, error) {
 	case RefreshManual, RefreshHourly, RefreshSixHours, RefreshHalfDay, RefreshDaily:
 	default:
 		s.SourceRefreshInterval = RefreshSixHours
+	}
+	if !ValidLanguage(s.Language) {
+		s.Language = LanguageSystem
+	}
+	if !ValidPresenceStatus(s.PresenceStatus) {
+		s.PresenceStatus = PresenceOnline
 	}
 	switch s.KeepPreviousVersion {
 	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
@@ -534,10 +574,10 @@ func createLibrary(root string) error {
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("создать папку %s: %w", dir, err)
+			return uierr.Wrap("settings.library_create_failed", fmt.Errorf("создать папку %s: %w", dir, err))
 		}
 		if err := checkWritable(dir); err != nil {
-			return err
+			return uierr.Wrap("settings.library_not_writable", err)
 		}
 	}
 	return nil

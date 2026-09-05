@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,15 +15,17 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/uierr"
+
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 )
 
 var (
-	errSymlinkInShare   = errors.New("lan: shared tree contains a symlink")
-	errIrregularInShare = errors.New("lan: shared tree contains a non-regular file")
-	errEmptyShareRoot   = errors.New("lan: share root is empty")
-	errShareRootNotDir  = errors.New("lan: share root is not a directory")
+	errSymlinkInShare   = uierr.New("lan.share_symlink", "lan: shared tree contains a symlink")
+	errIrregularInShare = uierr.New("lan.share_irregular_file", "lan: shared tree contains a non-regular file")
+	errEmptyShareRoot   = uierr.New("lan.share_root_empty", "lan: share root is empty")
+	errShareRootNotDir  = uierr.New("lan.share_root_not_dir", "lan: share root is not a directory")
 )
 
 // BuildInfo walks root and produces the metainfo.Info that describes it,

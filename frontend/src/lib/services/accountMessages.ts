@@ -1,30 +1,46 @@
+import { msg } from '../i18n';
 import { AccountError } from './account';
 
-const MESSAGES: Record<string, string> = {
-  invalid_credentials: 'Неверный email, имя пользователя или пароль',
-  username_taken: 'Это имя пользователя уже занято',
-  email_taken: 'На этот email уже зарегистрирован аккаунт',
-  invalid_username: '3–24 символа: латиница, цифры, _ и точка (не в начале и не в конце)',
-  invalid_display_name: 'От 1 до 32 символов',
-  invalid_email: 'Введите корректный email',
-  invalid_password: 'От 8 до 128 символов',
-  email_immutable: 'Email пока нельзя изменить',
-  launcher_outdated: 'Версия лаунчера устарела, обновите Typhon, чтобы пользоваться аккаунтом',
-  no_changes: 'Нечего сохранять',
-  avatar_too_large: 'Файл больше 10 МБ',
-  unsupported_avatar: 'Поддерживаются PNG, JPEG и WebP',
-  invalid_avatar: 'Не удалось прочитать изображение',
-  unauthenticated: 'Сессия истекла, войдите заново',
-  network_error: 'Нет связи с сервером',
-  rate_limited: 'Слишком много попыток, подождите немного и повторите',
-  bad_request: 'Сервер отклонил запрос',
-  request_blocked: 'Запрос заблокирован на подступах к серверу, напишите в поддержку',
-  internal: 'Ошибка на стороне сервера, попробуйте позже',
-  server_error: 'Сервер ответил непонятным образом, попробуйте позже',
-};
+function messages(): Record<string, string> {
+  return {
+    invalid_credentials: msg('state.accountErrorInvalidCredentials'),
+    username_taken: msg('state.accountErrorUsernameTaken'),
+    email_taken: msg('state.accountErrorEmailTaken'),
+    invalid_username: msg('state.accountErrorInvalidUsername'),
+    invalid_display_name: msg('state.accountErrorInvalidDisplayName'),
+    invalid_email: msg('state.accountErrorInvalidEmail'),
+    invalid_password: msg('state.accountErrorInvalidPassword'),
+    email_immutable: msg('state.accountErrorEmailImmutable'),
+    launcher_outdated: msg('state.accountErrorLauncherOutdated'),
+    no_changes: msg('state.accountErrorNoChanges'),
+    avatar_too_large: msg('state.accountErrorAvatarTooLarge'),
+    unsupported_avatar: msg('state.accountErrorUnsupportedAvatar'),
+    invalid_avatar: msg('state.accountErrorInvalidAvatar'),
+    invalid_profile: msg('state.accountErrorInvalidProfile'),
+    invalid_bio: msg('state.accountErrorInvalidBio'),
+    unauthenticated: msg('state.accountErrorUnauthenticated'),
+    sync_disabled: msg('state.accountErrorSyncDisabled'),
+    network_error: msg('state.accountErrorNetwork'),
+    rate_limited: msg('state.accountErrorRateLimited'),
+    bad_request: msg('state.accountErrorBadRequest'),
+    request_blocked: msg('state.accountErrorRequestBlocked'),
+    user_not_found: msg('state.accountErrorUserNotFound'),
+    already_friends: msg('state.accountErrorAlreadyFriends'),
+    friend_limit: msg('state.accountErrorLimitReached'),
+    request_limit: msg('state.accountErrorLimitReached'),
+    block_limit: msg('state.accountErrorLimitReached'),
+    friend_self: msg('state.accountErrorFriendSelf'),
+    no_request: msg('state.accountErrorNoRequest'),
+    not_friends: msg('state.accountErrorNotFriends'),
+    activity_not_found: msg('state.accountErrorActivityNotFound'),
+    reaction_invalid: msg('state.accountErrorReactionInvalid'),
+    internal: msg('state.accountErrorInternal'),
+    server_error: msg('state.accountErrorServerError'),
+  };
+}
 
-export function accountMessage(code: string, fallback = 'Не удалось выполнить операцию'): string {
-  return MESSAGES[code] ?? fallback;
+export function accountMessage(code: string, fallback = msg('state.accountErrorGeneric')): string {
+  return messages()[code] ?? fallback;
 }
 
 export function accountErrorText(err: unknown, fallback?: string): string {

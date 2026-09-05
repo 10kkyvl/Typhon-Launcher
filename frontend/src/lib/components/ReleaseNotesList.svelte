@@ -1,14 +1,20 @@
 <script lang="ts">
   import type { ReleaseChangeKind, ReleaseNote } from '../services/selfupdate';
+  import { longDate } from '../utils/format';
+  import { msg, type MessageKey } from '../i18n';
 
   let { notes, currentVersion = '' }: { notes: ReleaseNote[]; currentVersion?: string } = $props();
 
-  const kindLabels: Record<ReleaseChangeKind, string> = {
-    added: 'Добавлено',
-    changed: 'Изменено',
-    fixed: 'Исправлено',
-    removed: 'Удалено',
-  };
+  const kindKeys = {
+    added: 'ui.changeAdded',
+    changed: 'ui.changeChanged',
+    fixed: 'ui.changeFixed',
+    removed: 'ui.changeRemoved',
+  } as const satisfies Record<ReleaseChangeKind, MessageKey>;
+
+  function kindLabel(kind: ReleaseChangeKind) {
+    return msg(kindKeys[kind]);
+  }
 
   const kindOrder: ReleaseChangeKind[] = ['added', 'changed', 'fixed', 'removed'];
 
@@ -21,7 +27,7 @@
   function publishedLabel(iso: string) {
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    return longDate(date);
   }
 </script>
 
@@ -29,9 +35,9 @@
   {#each notes as note (note.version)}
     <article class="note">
       <header>
-        <h4>Версия {note.version}</h4>
+        <h4>{msg('ui.versionLabel', { version: note.version })}</h4>
         {#if note.version === currentVersion}
-          <span class="current">установлена</span>
+          <span class="current">{msg('ui.versionInstalledMark')}</span>
         {/if}
         {#if publishedLabel(note.publishedAt)}
           <span class="date">{publishedLabel(note.publishedAt)}</span>
@@ -42,7 +48,7 @@
       {/if}
       {#each groups(note) as group (group.kind)}
         <section class="group">
-          <span class="kind kind-{group.kind}">{kindLabels[group.kind]}</span>
+          <span class="kind kind-{group.kind}">{kindLabel(group.kind)}</span>
           <ul>
             {#each group.items as change, i (change.text + i)}
               <li>{change.text}</li>

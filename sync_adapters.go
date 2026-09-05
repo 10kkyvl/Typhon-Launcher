@@ -17,6 +17,14 @@ func (a syncSettings) Get() settings.Settings { return a.svc.GetSettings() }
 
 func (a syncSettings) Save(next settings.Settings) error { return a.svc.SaveSettings(next) }
 
+type socialSettings struct{ svc *settings.Service }
+
+func (a socialSettings) AccountSync() bool { return a.svc.GetSettings().AccountSync }
+
+func (a socialSettings) Subscribe(fn func(accountSync bool)) func() {
+	return a.svc.Subscribe(func(next settings.Settings) { fn(next.AccountSync) })
+}
+
 type syncLibrary struct{ svc *library.Service }
 
 func (a syncLibrary) Snapshot() ([]accountsync.Game, error) {
@@ -28,6 +36,10 @@ func (a syncLibrary) Snapshot() ([]accountsync.Game, error) {
 			PlaytimeSeconds: item.PlaytimeSeconds,
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
+			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
+			Status:          item.Status,
+			StatusAt:        item.StatusAt,
 		})
 	}
 	return out, nil
@@ -41,6 +53,10 @@ func (a syncLibrary) Apply(items []accountsync.Game) error {
 			PlaytimeSeconds: item.PlaytimeSeconds,
 			LastPlayed:      item.LastPlayed,
 			Owned:           item.Owned,
+			Favorite:        item.Favorite,
+			FavoriteAt:      item.FavoriteAt,
+			Status:          item.Status,
+			StatusAt:        item.StatusAt,
 		})
 	}
 	return a.svc.ApplySync(merged)

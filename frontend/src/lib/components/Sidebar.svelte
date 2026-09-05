@@ -1,56 +1,69 @@
 <script lang="ts">
-  import { Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Wifi } from '@lucide/svelte';
+  import { Activity, Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
+  import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
+  import { STATUS_LABELS, statusDot } from '../social/presence';
+  import { presenceStatus, updatePresenceStatus } from '../stores/presence';
+  import { incomingCount } from '../stores/social';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
+  import { msg } from '../i18n';
+  import Avatar from './Avatar.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
+  import type { MenuItem } from './DropdownMenu.svelte';
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
   const groups: NavItem[][] = [
     [
-      { name: 'library', label: 'Библиотека', icon: LayoutGrid },
-      { name: 'catalog', label: 'Все игры', icon: Gamepad2 },
-      { name: 'installed', label: 'Установлено', icon: MonitorDown },
+      { name: 'library', label: msg('ui.library'), icon: LayoutGrid },
+      { name: 'catalog', label: msg('ui.allGames'), icon: Gamepad2 },
+      { name: 'installed', label: msg('ui.installed'), icon: MonitorDown },
     ],
     [
-      { name: 'downloads', label: 'Загрузки', icon: Download },
-      { name: 'sources', label: 'Источники', icon: Database },
-      { name: 'history', label: 'История', icon: History },
+      { name: 'downloads', label: msg('ui.downloadsNav'), icon: Download },
+      { name: 'sources', label: msg('ui.sourcesNav'), icon: Database },
+      { name: 'friends', label: msg('ui.friends'), icon: Users },
+      { name: 'activity', label: msg('ui.activity'), icon: Activity },
+      { name: 'history', label: msg('ui.history'), icon: History },
     ],
   ];
 
-  const lanItem: NavItem = { name: 'lan', label: 'Локальная сеть', icon: Wifi };
+  const lanItem: NavItem = { name: 'lan', label: msg('ui.localNetwork'), icon: Wifi };
 
-  const settingsItem: NavItem = { name: 'settings', label: 'Настройки', icon: Settings };
-
-  let avatarFailed = $state(false);
+  const settingsItem: NavItem = { name: 'settings', label: msg('ui.settingsNav'), icon: Settings };
 
   const isActive = (name: RouteName) =>
-    $route.name === name || (name === 'library' && $route.name === 'game');
+    $route.name === name ||
+    (name === 'library' && $route.name === 'game') ||
+    (name === 'friends' && $route.name === 'user');
 
   const isGuest = $derived($authState === 'guest');
 
-  const avatarInitial = $derived(
-    $currentUser ? ($currentUser.displayName || $currentUser.username).slice(0, 1).toUpperCase() : isGuest ? 'Г' : '?',
+  const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? msg('ui.guest') : '');
+
+  const statusItems = $derived<MenuItem[]>(
+    PRESENCE_STATUSES.map((status, index) => ({
+      id: `status:${status}`,
+      label: STATUS_LABELS[status],
+      dot: statusDot(status),
+      checked: $presenceStatus === status,
+      separator: index === 0,
+    })),
   );
 
-  $effect(() => {
-    $currentUser?.avatarUrl;
-    avatarFailed = false;
-  });
-
-  const profileMenu = $derived(
+  const profileMenu = $derived<MenuItem[]>(
     isGuest
       ? [
-          { id: 'profile', label: 'Профиль' },
-          { id: 'login', label: 'Войти в аккаунт', separator: true },
+          { id: 'profile', label: msg('ui.profile') },
+          { id: 'login', label: msg('ui.signIn'), separator: true },
         ]
       : [
-          { id: 'profile', label: 'Профиль' },
-          { id: 'logout', label: 'Выйти', danger: true, separator: true },
+          { id: 'profile', label: msg('ui.profile') },
+          ...statusItems,
+          { id: 'logout', label: msg('ui.signOut'), danger: true, separator: true },
         ],
   );
 
@@ -59,11 +72,19 @@
       navigate('profile');
       return;
     }
+    if (id.startsWith('status:')) {
+      try {
+        await updatePresenceStatus(id.slice('status:'.length) as PresenceStatus);
+      } catch (err) {
+        toast(accountErrorText(err, msg('ui.statusChangeFailed')), 'danger');
+      }
+      return;
+    }
     try {
       if (id === 'login') await leaveGuest();
       else await signOut();
     } catch (err) {
-      toast(accountErrorText(err, 'Не удалось выйти'), 'danger');
+      toast(accountErrorText(err, msg('ui.signOutFailed')), 'danger');
     }
   }
 </script>
@@ -78,6 +99,9 @@
     <span class="indicator"></span>
     <item.icon size="2rem" strokeWidth={1.8} />
     <span class="nav-label">{item.label}</span>
+    {#if item.name === 'friends' && $incomingCount > 0}
+      <span class="count">{$incomingCount}</span>
+    {/if}
   </button>
 {/snippet}
 
@@ -113,24 +137,22 @@
           onclick={toggle}
         >
           <span class="avatar">
-            {#if avatarFailed || !$currentUser?.avatarUrl}
-              <span class="avatar-fallback">{avatarInitial}</span>
-            {:else}
-              <img src={$currentUser.avatarUrl} alt="" draggable="false" onerror={() => (avatarFailed = true)} />
-            {/if}
-            {#if $currentUser}
-              <span class="status-dot"></span>
-            {/if}
+            <Avatar
+              size="sm"
+              name={avatarName}
+              src={$currentUser?.avatarUrl}
+              status={$currentUser ? statusDot($presenceStatus) : undefined}
+            />
           </span>
           <span class="profile-text">
             {#if $currentUser}
               <span class="profile-name">{$currentUser.displayName}</span>
-              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title="Нет связи с сервером аккаунтов, показан кэш профиля"> · офлайн</span>{/if}</span>
+              <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
             {:else if isGuest}
-              <span class="profile-name">Гость</span>
-              <span class="profile-status">Без аккаунта</span>
+              <span class="profile-name">{msg('ui.guest')}</span>
+              <span class="profile-status">{msg('ui.noAccount')}</span>
             {:else}
-              <span class="profile-name">Не авторизован</span>
+              <span class="profile-name">{msg('ui.notAuthorized')}</span>
             {/if}
           </span>
         </button>
@@ -245,6 +267,19 @@
     white-space: nowrap;
   }
 
+  .count {
+    margin-left: auto;
+    min-width: 1.8rem;
+    padding: 0 0.5rem;
+    border-radius: 0.9rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    line-height: 1.8rem;
+    text-align: center;
+  }
+
   .bottom {
     margin-top: auto;
     display: flex;
@@ -275,41 +310,9 @@
   }
 
   .avatar {
-    position: relative;
-    width: 3.2rem;
-    height: 3.2rem;
+    display: block;
     flex-shrink: 0;
-  }
-
-  .avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .avatar-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    font-weight: 600;
-  }
-
-  .status-dot {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 0.9rem;
-    height: 0.9rem;
-    border-radius: 50%;
-    background: var(--success);
-    border: 2px solid var(--bg-sidebar);
+    --avatar-ring: var(--bg-sidebar);
   }
 
   .profile-text {
@@ -366,6 +369,18 @@
       justify-content: center;
       padding: 0;
       width: 100%;
+    }
+
+    .count {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.4rem;
+      margin-left: 0;
+      min-width: 1.6rem;
+      padding: 0 0.4rem;
+      border-radius: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.6rem;
     }
 
     .profile {

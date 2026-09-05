@@ -3,6 +3,7 @@
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
   import {
     centerOffset,
     clampOffset,
@@ -130,7 +131,7 @@
   }
 </script>
 
-<Modal bind:open title="Аватар" width="42rem">
+<Modal bind:open title={msg('modals.avatarCropTitle')} width="42rem">
   <div class="crop">
     <div
       class="stage"
@@ -161,7 +162,7 @@
     </div>
 
     <div class="zoom">
-      <IconButton size="sm" label="Отдалить" disabled={!ready || zoom <= minZoom} onclick={() => applyZoom(zoom - 0.25)}>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomOut')} disabled={!ready || zoom <= minZoom} onclick={() => applyZoom(zoom - 0.25)}>
         <Minus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
       <input
@@ -172,26 +173,26 @@
         step="0.01"
         value={zoom}
         disabled={!ready}
-        aria-label="Масштаб"
+        aria-label={msg('modals.avatarCropZoomLevel')}
         oninput={(e) => applyZoom(clampZoom(Number(e.currentTarget.value)))}
       />
-      <IconButton size="sm" label="Приблизить" disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
         <Plus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>
 
     {#if failed}
-      <span class="error">Не удалось открыть изображение</span>
+      <span class="error">{msg('modals.avatarCropLoadFailed')}</span>
     {:else}
-      <span class="hint">Перетащите изображение и подберите масштаб — в профиле аватар показывается кружком</span>
+      <span class="hint">{msg('modals.avatarCropHint')}</span>
     {/if}
   </div>
 
   {#snippet footer()}
     {#if error}<span class="error foot-error">{error}</span>{/if}
-    <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>Отмена</Button>
+    <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!ready || saving} onclick={save}>
-      {saving ? 'Сохранение…' : 'Сохранить'}
+      {saving ? msg('modals.avatarCropSaving') : msg('common.save')}
     </Button>
   {/snippet}
 </Modal>

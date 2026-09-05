@@ -2,12 +2,14 @@
   import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import { msg } from '../../lib/i18n';
   import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
@@ -23,7 +25,7 @@
   import { inWails } from '../../lib/services/backend';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
-  import { getSettings, openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
     getAppInfo,
@@ -40,12 +42,16 @@
 
   let { tab: initialTab }: { tab?: string } = $props();
 
-  const tabs = [
-    { id: 'general', label: 'Общие' },
-    { id: 'downloads', label: 'Загрузки' },
-    { id: 'appearance', label: 'Оформление' },
-    { id: 'about', label: 'О программе' },
-  ];
+  function tabOptions() {
+    return [
+      { id: 'general', label: msg('settings.generalTab') },
+      { id: 'downloads', label: msg('settings.downloadsTab') },
+      { id: 'appearance', label: msg('settings.appearanceTab') },
+      { id: 'about', label: msg('settings.aboutTab') },
+    ];
+  }
+
+  const tabs = $derived(tabOptions());
 
   let tab = $state('general');
 
@@ -83,20 +89,20 @@
     try {
       legalDocs = await listLegalDocuments();
     } catch {
-      legalError = inWails ? 'Не удалось загрузить список документов.' : 'Правовые документы недоступны вне приложения.';
+      legalError = inWails ? msg('settings.aboutLegalLoadError') : msg('settings.aboutLegalUnavailable');
     }
   });
 
   async function saveLogs() {
     if (!inWails) {
-      toast('Логи доступны только в desktop-сборке');
+      toast(msg('settings.aboutLogsDesktopOnly'));
       return;
     }
     logsSaving = true;
     try {
       const bundle = await exportLogs();
       logsBundle = bundle;
-      toast('Логи сохранены в папку «Загрузки»', 'success');
+      toast(msg('settings.aboutLogsSavedToast'), 'success');
       try {
         await openFolder(bundle.dir);
       } catch {
@@ -115,9 +121,9 @@
     syncingNow = true;
     try {
       await syncNow();
-      toast('Синхронизация выполнена', 'success');
+      toast(msg('settings.generalSyncDoneToast'), 'success');
     } catch (err) {
-      toast(accountSyncReason(err, 'Не удалось синхронизировать данные'), 'danger');
+      toast(accountSyncReason(err, msg('settings.generalSyncFailedToast')), 'danger');
     } finally {
       syncingNow = false;
     }
@@ -125,14 +131,14 @@
 
   async function runForgetRemote() {
     if (forgettingRemote) return;
-    if (!window.confirm('Удалить синхронизированные данные с сервера? Это действие необратимо.')) return;
+    if (!window.confirm(msg('settings.generalSyncForgetConfirm'))) return;
     forgettingRemote = true;
     try {
       await forgetRemote();
       settings.set(await getSettings());
-      toast('Данные удалены с сервера', 'success');
+      toast(msg('settings.generalSyncForgetSuccessToast'), 'success');
     } catch (err) {
-      toast(accountSyncReason(err, 'Не удалось удалить данные с сервера'), 'danger');
+      toast(accountSyncReason(err, msg('settings.generalSyncForgetFailedToast')), 'danger');
     } finally {
       forgettingRemote = false;
     }
@@ -146,11 +152,15 @@
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
 
-  const folderRows: { key: PathKey; label: string }[] = [
-    { key: 'gamesPath', label: 'Игры' },
-    { key: 'downloadsPath', label: 'Загрузки' },
-    { key: 'screenshotsPath', label: 'Скриншоты' },
-  ];
+  function folderRowOptions(): { key: PathKey; label: string }[] {
+    return [
+      { key: 'gamesPath', label: msg('settings.generalLibraryFolderGames') },
+      { key: 'downloadsPath', label: msg('settings.generalLibraryFolderDownloads') },
+      { key: 'screenshotsPath', label: msg('settings.generalLibraryFolderScreenshots') },
+    ];
+  }
+
+  const folderRows = $derived(folderRowOptions());
 
   let librarySetupOpen = $state(false);
   let historyOpen = $state(false);
@@ -161,7 +171,7 @@
 
   function openLibrarySetup() {
     if (!inWails) {
-      toast('Выбор папки доступен только в desktop-сборке');
+      toast(msg('settings.generalLibraryDesktopOnlyToast'));
       return;
     }
     librarySetupOpen = true;
@@ -172,54 +182,59 @@
     try {
       await openFolder(path);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('settings.generalLibraryFolderUnavailableToast'), 'danger');
     }
   }
 
   const downloadLimitPresets = [10, 25, 50];
   const uploadLimitPresets = [1, 5, 10];
 
-  const maxActiveOptions = [
-    { id: '1', label: '1' },
-    { id: '2', label: '2' },
-    { id: '3', label: '3' },
-    { id: '5', label: '5' },
-  ];
-
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
-    return maxActiveOptions.some((o) => o.id === id) ? id : '2';
+    return maxActiveDownloadOptions.some((o) => o.id === id) ? id : '2';
   });
 
-  const cleanupPolicyOptions = [
-    { id: 'keep', label: 'Оставлять загруженные файлы' },
-    { id: 'ask', label: 'Спрашивать' },
-    { id: 'delete', label: 'Удалять после установки' },
-  ];
+  function cleanupPolicyOptionsList() {
+    return [
+      { id: 'keep', label: msg('settings.downloadsCleanupKeep') },
+      { id: 'ask', label: msg('settings.downloadsCleanupAsk') },
+      { id: 'delete', label: msg('settings.downloadsCleanupDelete') },
+    ];
+  }
+
+  const cleanupPolicyOptions = $derived(cleanupPolicyOptionsList());
 
   const cleanupPolicy = $derived.by(() => {
     const id = current?.installCleanupPolicy ?? 'delete';
     return cleanupPolicyOptions.some((o) => o.id === id) ? id : 'delete';
   });
 
-  const sourceRefreshOptions = [
-    { id: 'manual', label: 'Вручную' },
-    { id: '1h', label: 'Каждый час' },
-    { id: '6h', label: 'Каждые 6 часов' },
-    { id: '12h', label: 'Каждые 12 часов' },
-    { id: '24h', label: 'Раз в сутки' },
-  ];
+  function sourceRefreshOptionsList() {
+    return [
+      { id: 'manual', label: msg('settings.downloadsSourceRefreshManual') },
+      { id: '1h', label: msg('settings.downloadsSourceRefreshHourly') },
+      { id: '6h', label: msg('settings.downloadsSourceRefresh6h') },
+      { id: '12h', label: msg('settings.downloadsSourceRefresh12h') },
+      { id: '24h', label: msg('settings.downloadsSourceRefreshDaily') },
+    ];
+  }
+
+  const sourceRefreshOptions = $derived(sourceRefreshOptionsList());
 
   const sourceRefreshInterval = $derived.by(() => {
     const id = current?.sourceRefreshInterval ?? '6h';
     return sourceRefreshOptions.some((o) => o.id === id) ? id : '6h';
   });
 
-  const keepPreviousOptions = [
-    { id: 'off', label: 'Не сохранять' },
-    { id: 'first_launch', label: 'До первого успешного запуска' },
-    { id: '24h', label: '24 часа' },
-  ];
+  function keepPreviousOptionsList() {
+    return [
+      { id: 'off', label: msg('settings.downloadsKeepPreviousOff') },
+      { id: 'first_launch', label: msg('settings.downloadsKeepPreviousFirstLaunch') },
+      { id: '24h', label: msg('settings.downloadsKeepPrevious24h') },
+    ];
+  }
+
+  const keepPreviousOptions = $derived(keepPreviousOptionsList());
 
   const keepPreviousVersion = $derived.by(() => {
     const id = current?.keepPreviousVersion ?? 'first_launch';
@@ -228,7 +243,7 @@
 
 </script>
 
-<PageHeader title="Настройки" />
+<PageHeader title={msg('settings.pageTitle')} />
 
 <div class="tabs-wrap">
   <Tabs {tabs} bind:value={tab} />
@@ -237,63 +252,61 @@
 {#if tab === 'general'}
   <div class="columns">
     <div class="column">
-      <section class="group">
-        <h3>Запуск и поведение</h3>
+      <Card title={msg('settings.generalStartupCardTitle')}>
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Запускать при старте системы</span>
-              <span class="row-sub">Открывать Typhon при входе в Windows</span>
+              <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
+              <span class="row-sub">{msg('settings.generalLaunchOnStartupSub')}</span>
             </div>
             <Toggle
               checked={current?.launchOnStartup ?? false}
-              label="Запуск при старте системы"
+              label={msg('settings.generalLaunchOnStartupLabel')}
               onchange={(v) => set({ launchOnStartup: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Сворачивать в трей</span>
-              <span class="row-sub">При закрытии окна прятать лаунчер в область уведомлений</span>
+              <span class="row-label">{msg('settings.generalMinimizeToTrayLabel')}</span>
+              <span class="row-sub">{msg('settings.generalMinimizeToTraySub')}</span>
             </div>
             <Toggle
               checked={current?.minimizeToTray ?? true}
-              label="Сворачивать в трей"
+              label={msg('settings.generalMinimizeToTrayLabel')}
               onchange={(v) => set({ minimizeToTray: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Discord Rich Presence</span>
-              <span class="row-sub">Показывать в Discord, во что вы играете</span>
+              <span class="row-label">{msg('settings.generalDiscordRpcLabel')}</span>
+              <span class="row-sub">{msg('settings.generalDiscordRpcSub')}</span>
             </div>
             <Toggle
               checked={current?.discordRichPresence ?? false}
-              label="Discord Rich Presence"
+              label={msg('settings.generalDiscordRpcLabel')}
               onchange={(v) => set({ discordRichPresence: v })}
             />
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Библиотека</h3>
+      <Card title={msg('settings.generalLibraryCardTitle')}>
         <div class="rows">
           <div class="row folder-row">
-            <span class="row-label folder-label">Папка библиотеки</span>
+            <span class="row-label folder-label">{msg('settings.generalLibraryPathLabel')}</span>
             <div class="folder-controls">
               <input
                 class="input sm"
                 type="text"
                 readonly
-                placeholder="Не настроена"
+                placeholder={msg('settings.generalLibraryPathPlaceholder')}
                 value={current?.libraryPath ?? ''}
               />
               <Button size="sm" onclick={openLibrarySetup}>
-                {current?.libraryPath ? 'Изменить' : 'Выбрать'}
+                {current?.libraryPath ? msg('common.edit') : msg('common.select')}
               </Button>
               <IconButton
-                label="Открыть папку"
+                label={msg('settings.generalLibraryOpenFolderLabel')}
                 size="sm"
                 disabled={!current?.libraryPath}
                 onclick={() => openPath(current?.libraryPath)}
@@ -308,7 +321,7 @@
                 <span class="row-label folder-label">{folder.label}</span>
                 <div class="folder-controls">
                   <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
-                  <IconButton label="Открыть папку" size="sm" onclick={() => openPath(current?.[folder.key])}>
+                  <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
                     <FolderOpen size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 </div>
@@ -316,36 +329,50 @@
             {/each}
           {:else}
             <span class="row-sub">
-              Игры, загрузки и скриншоты хранятся внутри папки библиотеки. Пока она не выбрана, скачивать нечего.
+              {msg('settings.generalLibraryEmptyHint')}
             </span>
           {/if}
           <LibraryLocationRow />
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Экспериментальное</h3>
+      <Card title={msg('settings.generalExperimentalCardTitle')}>
         <div class="rows">
           <LanSettingsRow />
         </div>
-      </section>
+      </Card>
     </div>
 
     <div class="column">
-      <section class="group">
-        <h3>Интерфейс</h3>
+      <Card title={msg('settings.generalInterfaceCardTitle')}>
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Размер интерфейса</span>
-              <span class="row-sub">Масштаб элементов интерфейса</span>
+              <span class="row-label">{msg('settings.language')}</span>
+              <span class="row-sub">{msg('settings.languageSub')}</span>
+            </div>
+            <Select
+              value={$settings?.language ?? 'system'}
+              width="22rem"
+              options={[
+                { id: 'system', label: msg('settings.languageSystem') },
+                { id: 'ru', label: 'Русский' },
+                { id: 'en', label: 'English' },
+              ]}
+              onchange={(id) => set({ language: id })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.generalUiScaleLabel')}</span>
+              <span class="row-sub">{msg('settings.generalUiScaleSub')}</span>
             </div>
             <Select
               value={scaleValue}
               width="22rem"
               options={[
                 { id: '90', label: '90%' },
-                { id: '100', label: '100% (по умолчанию)' },
+                { id: '100', label: msg('settings.generalUiScaleDefaultOption') },
                 { id: '110', label: '110%' },
                 { id: '125', label: '125%' },
               ]}
@@ -354,132 +381,110 @@
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Анимации интерфейса</span>
-              <span class="row-sub">Включить плавные переходы и анимации</span>
+              <span class="row-label">{msg('settings.generalAnimationsLabel')}</span>
+              <span class="row-sub">{msg('settings.generalAnimationsSub')}</span>
             </div>
             <Toggle
               checked={current?.animationsEnabled ?? true}
-              label="Анимации"
+              label={msg('settings.generalAnimationsToggleLabel')}
               onchange={(v) => set({ animationsEnabled: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Аппаратное ускорение</span>
-              <span class="row-sub">Отрисовка интерфейса через GPU. Применится после перезапуска лаунчера</span>
+              <span class="row-label">{msg('settings.generalHwAccelLabel')}</span>
+              <span class="row-sub">{msg('settings.generalHwAccelSub')}</span>
             </div>
             <Toggle
               checked={current?.hardwareAcceleration ?? true}
-              label="Аппаратное ускорение"
+              label={msg('settings.generalHwAccelLabel')}
               onchange={(v) => set({ hardwareAcceleration: v })}
             />
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Приватность</h3>
+      <Card title={msg('settings.generalPrivacyCardTitle')}>
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Анонимная статистика использования</span>
-              <span class="row-sub"
-                >Отправлять анонимные события о запусках игр, загрузках, установках и обновлениях: только
-                идентификатор игры, длительность, объём и код ошибки. По умолчанию выключено.</span
-              >
+              <span class="row-label">{msg('settings.generalPrivacyStatsLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacyStatsSub')}</span>
             </div>
             <Toggle
               checked={current?.anonymousUsageStats ?? false}
-              label="Анонимная статистика использования"
+              label={msg('settings.generalPrivacyStatsLabel')}
               onchange={(v) => set({ anonymousUsageStats: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Анонимная диагностика</span>
-              <span class="row-sub"
-                >Отправляет обезличенные сведения об ошибках и сбоях Typhon для диагностики. Перед отправкой из них
-                удаляются пути, имя устройства и сетевые адреса.</span
-              >
+              <span class="row-label">{msg('settings.generalPrivacyDiagLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacyDiagSub')}</span>
             </div>
             <Toggle
               checked={current?.anonymousDiagnostics ?? false}
-              label="Анонимная диагностика"
+              label={msg('settings.generalPrivacyDiagLabel')}
               onchange={(v) => set({ anonymousDiagnostics: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Показать отправленные данные</span>
-              <span class="row-sub"
-                >Последние события и отчёты, ушедшие на сервер, в том виде, в котором они были отправлены</span
-              >
+              <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
             </div>
             <Button size="sm" onclick={() => (sentDataOpen = true)}>
               <Eye size="1.5rem" strokeWidth={1.8} />
-              Показать
+              {msg('settings.generalPrivacyShowSentButton')}
             </Button>
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Состояние сессии</span>
-              <span class="row-sub"
-                >Typhon передаёт минимальное анонимное состояние активной сессии — включён ли лаунчер и
-                идентификатор игры, если она запущена, — для агрегированной статистики сервиса в реальном
-                времени. Эти данные не связаны с учётной записью, хранятся недолго и не зависят от переключателя
-                выше.</span
-              >
+              <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
               <button
                 type="button"
                 class="privacy-link"
-                onclick={() => openLegalDoc({ id: 'privacy', title: 'Политика конфиденциальности' })}
+                onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
               >
-                Политика конфиденциальности
+                {msg('settings.generalPrivacyPolicyLinkLabel')}
               </button>
             </div>
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="group">
-        <h3>Синхронизация</h3>
+      <Card title={msg('settings.generalSyncCardTitle')}>
         <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Синхронизация между устройствами</span>
-              <span class="row-sub"
-                >Переносит между вашими устройствами часть настроек приложения, список игр каталога, дату
-                последнего запуска и наигранное время. Источники, ссылки на релизы, их названия, пути на
-                диске, лимиты скорости и согласия на сбор статистики и диагностики не передаются. По
-                умолчанию выключено.</span
-              >
+              <span class="row-label">{msg('settings.generalSyncEnableLabel')}</span>
+              <span class="row-sub">{msg('settings.generalSyncEnableSub')}</span>
               {#if !accountReady}
-                <span class="row-sub">Нужен вход в аккаунт — в гостевом режиме синхронизация недоступна.</span>
+                <span class="row-sub">{msg('settings.generalSyncNeedsAccountSub')}</span>
               {/if}
             </div>
             <Toggle
               checked={current?.accountSync ?? false}
-              label="Синхронизация между устройствами"
+              label={msg('settings.generalSyncEnableLabel')}
               disabled={!accountReady}
               onchange={(v) => set({ accountSync: v })}
             />
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Синхронизировать сейчас</span>
-              <span class="row-sub">Отправить и получить изменения немедленно, не дожидаясь фонового цикла</span>
+              <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
+              <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
             </div>
             <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
               <RefreshCw size="1.5rem" strokeWidth={1.8} />
-              {syncingNow ? 'Синхронизация…' : 'Синхронизировать сейчас'}
+              {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
             </Button>
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Удалить данные с сервера</span>
-              <span class="row-sub"
-                >Необратимо удаляет всё, что синхронизировано с сервером, и выключает синхронизацию</span
-              >
+              <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
+              <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
             </div>
             <Button
               size="sm"
@@ -488,22 +493,21 @@
               onclick={runForgetRemote}
             >
               <Trash2 size="1.5rem" strokeWidth={1.8} />
-              {forgettingRemote ? 'Удаляем…' : 'Удалить данные с сервера'}
+              {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
             </Button>
           </div>
         </div>
-      </section>
+      </Card>
     </div>
   </div>
 {:else if tab === 'downloads'}
   <div class="single-column">
-    <section class="group">
-      <h3>Загрузки</h3>
+    <Card title={msg('settings.downloadsTab')}>
       <div class="rows">
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Ограничение скорости загрузки</span>
-            <span class="row-sub">Максимальная скорость входящего трафика</span>
+            <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
           </div>
           <RateLimitInput
             value={current?.downloadRateLimit ?? 0}
@@ -513,8 +517,8 @@
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Ограничение скорости отдачи</span>
-            <span class="row-sub">Максимальная скорость исходящего трафика</span>
+            <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
           </div>
           <RateLimitInput
             value={current?.uploadRateLimit ?? 0}
@@ -524,44 +528,42 @@
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Одновременные загрузки</span>
-            <span class="row-sub">Количество активных загрузок</span>
+            <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
           </div>
           <Select
             value={maxActiveValue}
             width="20rem"
-            options={maxActiveOptions}
+            options={maxActiveDownloadOptions}
             onchange={(id) => set({ maxActiveDownloads: Number(id) })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Отдавать во время загрузки</span>
-            <span class="row-sub"
-              >Разрешает передавать другим участникам уже загруженные части во время активной BitTorrent-загрузки.</span
-            >
+            <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
           </div>
           <Toggle
             checked={current?.uploadWhileDownloading ?? false}
-            label="Отдача"
+            label={msg('settings.downloadsUploadWhileDownloadingToggle')}
             onchange={(v) => set({ uploadWhileDownloading: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Раздавать после загрузки</span>
-            <span class="row-sub">Продолжать отдавать завершённую загрузку другим участникам.</span>
+            <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
           </div>
           <Toggle
             checked={current?.seedAfterDownload ?? false}
-            label="Раздача"
+            label={msg('settings.downloadsSeedAfterToggle')}
             onchange={(v) => set({ seedAfterDownload: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Обновление источников</span>
-            <span class="row-sub">Как часто проверять источники на новые релизы</span>
+            <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
           </div>
           <Select
             value={sourceRefreshInterval}
@@ -571,15 +573,14 @@
           />
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Установка</h3>
+    <Card title={msg('settings.downloadsInstallCardTitle')}>
       <div class="rows">
         <div class="row">
           <div class="row-text">
-            <span class="row-label">После установки</span>
-            <span class="row-sub">Что делать с загруженными файлами</span>
+            <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
           </div>
           <Select
             value={cleanupPolicy}
@@ -590,108 +591,101 @@
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Автоустановка portable/архивов</span>
-            <span class="row-sub">Устанавливать сразу после завершения загрузки</span>
+            <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
           </div>
           <Toggle
             checked={current?.autoInstall ?? false}
-            label="Автоустановка"
+            label={msg('settings.downloadsAutoInstallToggle')}
             onchange={(v) => set({ autoInstall: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Не создавать ярлыки</span>
-            <span class="row-sub"
-              >Отклонять ярлыки на рабочем столе и папки в меню «Пуск», а созданные установщиком —
-              удалять: игры запускаются из лаунчера</span
-            >
+            <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
           </div>
           <Toggle
             checked={current?.installSkipShortcuts ?? true}
-            label="Без ярлыков"
+            label={msg('settings.downloadsSkipShortcutsToggle')}
             onchange={(v) => set({ installSkipShortcuts: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Ярлыки на рабочем столе</span>
-            <span class="row-sub">Создавать ярлык игры после установки</span>
+            <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
           </div>
           <Toggle
             checked={current?.desktopShortcuts ?? true}
-            label="Ярлыки игр"
+            label={msg('settings.downloadsDesktopShortcutsToggle')}
             onchange={(v) => set({ desktopShortcuts: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Отклонять дополнения установщика</span>
-            <span class="row-sub"
-              >DirectX, .NET, Visual C++, ассоциации файлов и прочие предложения. Если игра не
-              запускается без них — выключите</span
-            >
+            <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
           </div>
           <Toggle
             checked={current?.installSkipExtras ?? true}
-            label="Без дополнений"
+            label={msg('settings.downloadsSkipExtrasToggle')}
             onchange={(v) => set({ installSkipExtras: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Проверять установку после завершения</span>
-            <span class="row-sub">Искать исполняемый файл и проверять содержимое папки</span>
+            <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
           </div>
           <Toggle
             checked={current?.verifyAfterInstall ?? true}
-            label="Проверка установки"
+            label={msg('settings.downloadsVerifyAfterInstallToggle')}
             onchange={(v) => set({ verifyAfterInstall: v })}
           />
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Обновления</h3>
+    <Card title={msg('settings.downloadsUpdatesCardTitle')}>
       <div class="rows">
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Проверять автоматически</span>
-            <span class="row-sub">Искать новые релизы после обновления источников</span>
+            <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
           </div>
           <Toggle
             checked={current?.updateCheckAutomatically ?? true}
-            label="Проверка обновлений"
+            label={msg('settings.downloadsUpdateCheckAutoToggle')}
             onchange={(v) => set({ updateCheckAutomatically: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Скачивать обновления автоматически</span>
-            <span class="row-sub">Данные загружаются заранее, установка остаётся ручной</span>
+            <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
           </div>
           <Toggle
             checked={current?.updateAutoDownload ?? false}
-            label="Автозагрузка обновлений"
+            label={msg('settings.downloadsUpdateAutoDownloadToggle')}
             onchange={(v) => set({ updateAutoDownload: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Резервная копия сохранений</span>
-            <span class="row-sub">Создавать снимок сохранений, когда их расположение известно</span>
+            <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
           </div>
           <Toggle
             checked={current?.updateSaveBackup ?? true}
-            label="Резервная копия"
+            label={msg('settings.downloadsSaveBackupToggle')}
             onchange={(v) => set({ updateSaveBackup: v })}
           />
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Хранить предыдущую версию</span>
-            <span class="row-sub">Позволяет откатиться, если обновление оказалось неудачным</span>
+            <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
           </div>
           <Select
             value={keepPreviousVersion}
@@ -702,114 +696,112 @@
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Переиспользовать файлы торрента</span>
-            <span class="row-sub">Скачивать только изменившиеся блоки, когда раскладка совпадает</span>
+            <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
+            <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
           </div>
           <Toggle
             checked={current?.allowTorrentReuse ?? true}
-            label="Повторное использование файлов"
+            label={msg('settings.downloadsTorrentReuseToggle')}
             onchange={(v) => set({ allowTorrentReuse: v })}
           />
         </div>
       </div>
-    </section>
+    </Card>
   </div>
 {:else if tab === 'appearance'}
   <AppearanceTab />
 {:else if tab === 'about'}
   <div class="single-column">
-    <section class="group about">
+    <Card>
       <div class="about-logo">
         <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
         <div>
           <h3>Typhon Launcher</h3>
-          <span class="row-sub">Версия {appInfo?.version ?? '—'} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+          <span class="row-sub">{msg('settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
         </div>
       </div>
       <div class="rows">
         {#if systemInfo}
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Система</span>
+              <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
               <span class="row-sub">{systemInfo.os}</span>
             </div>
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Процессор</span>
-              <span class="row-sub">{systemInfo.cpu} · {systemInfo.cores} потоков</span>
+              <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
+              <span class="row-sub">{systemInfo.cpu} · {msg('settings.aboutCpuThreads', { cores: systemInfo.cores })}</span>
             </div>
           </div>
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Память</span>
+              <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
               <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
             </div>
           </div>
         {/if}
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Проверить обновления клиента</span>
+            <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
             <span class="row-sub">
               {#if $selfUpdateChecking}
-                Проверка обновлений…
+                {msg('settings.aboutCheckUpdatesChecking')}
               {:else}
-                Установлена версия {$selfUpdateStatus.currentVersion || appInfo?.version || '—'}
+                {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
                 {#if $selfUpdateStatus.checkedAt}
-                  · проверено {relativeDate($selfUpdateStatus.checkedAt)}
+                  · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
                 {/if}
               {/if}
             </span>
           </div>
           <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
-            {$selfUpdateChecking ? 'Проверка…' : 'Проверить'}
+            {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
           </Button>
         </div>
         <div class="row">
           <div class="row-text">
-            <span class="row-label">История обновлений</span>
+            <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
             <span class="row-sub">
               {#if $releaseNotesHistory.length > 0}
-                Что менялось в лаунчере от версии к версии
+                {msg('settings.aboutHistoryHasNotes')}
               {:else}
-                Появится после первой проверки обновлений
+                {msg('settings.aboutHistoryEmpty')}
               {/if}
             </span>
           </div>
           <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
             <ScrollText size="1.5rem" strokeWidth={1.8} />
-            Что нового
+            {msg('settings.aboutHistoryButtonLabel')}
           </Button>
         </div>
         <UpdateBanner />
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Диагностика</h3>
+    <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
       <div class="rows">
         <div class="row">
           <div class="row-text">
-            <span class="row-label">Логи лаунчера</span>
+            <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
             <span class="row-sub">
               {#if logsBundle}
-                {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} — приложите архив к сообщению об ошибке
+                {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
               {:else}
-                Архив с журналом сохранится в папку «Загрузки» — приложите его к сообщению об ошибке
+                {msg('settings.aboutLogsSaveHint')}
               {/if}
             </span>
           </div>
           <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
             <Download size="1.5rem" strokeWidth={1.8} />
-            {logsSaving ? 'Сохраняем…' : 'Скачать логи'}
+            {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
           </Button>
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="group">
-      <h3>Правовая информация</h3>
+    <Card title={msg('settings.aboutLegalCardTitle')}>
       {#if legalError}
         <p class="row-sub">{legalError}</p>
       {:else}
@@ -819,34 +811,34 @@
               <div class="row-text">
                 <span class="row-label">{meta.title}</span>
               </div>
-              <Button size="sm" onclick={() => openLegalDoc(meta)}>Открыть</Button>
+              <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
             </div>
           {/each}
           <div class="row">
             <div class="row-text">
-              <span class="row-label">Уведомление об источниках</span>
-              <span class="row-sub">Правила добавления сторонних источников релизов</span>
+              <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
+              <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
             </div>
-            <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>Открыть</Button>
+            <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
           </div>
         </div>
       {/if}
-    </section>
+    </Card>
   </div>
 {/if}
 
 <LibrarySetupModal
   bind:open={librarySetupOpen}
-  title={current?.libraryPath ? 'Сменить папку библиотеки' : 'Куда устанавливать игры'}
+  title={current?.libraryPath ? msg('settings.generalLibrarySetupTitleChange') : msg('settings.generalLibrarySetupTitleNew')}
   note={current?.libraryPath
-    ? 'Уже установленные игры останутся в прежней папке — лаунчер их не переносит. В новую библиотеку попадёт всё, что скачается дальше.'
+    ? msg('settings.generalLibrarySetupChangeNote')
     : ''}
 />
 
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 <SentDataModal bind:open={sentDataOpen} />
-<Modal bind:open={historyOpen} title="История обновлений" width="52rem">
+<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="52rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>
 
@@ -864,22 +856,17 @@
   }
 
   .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     min-width: 0;
   }
 
   .single-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
     max-width: 96rem;
-  }
-
-  .group {
-    margin-bottom: var(--space-10);
-  }
-
-  .group h3 {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-3);
   }
 
   .rows {

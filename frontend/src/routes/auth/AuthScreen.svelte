@@ -6,6 +6,7 @@
   import { inWails } from '../../lib/services/backend';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import { msg } from '../../lib/i18n';
 
   type FieldErrors = Partial<Record<'email' | 'username' | 'displayName' | 'password' | 'general', string>>;
 
@@ -28,7 +29,7 @@
 
   function applyError(err: unknown) {
     const field = accountErrorField(err);
-    const message = accountErrorText(err, 'Не удалось выполнить вход');
+    const message = accountErrorText(err, msg('transfers.authGenericError'));
     switch (field) {
       case 'email':
       case 'username':
@@ -74,7 +75,7 @@
     try {
       await enterAsGuest();
     } catch (err) {
-      errors = { general: accountErrorText(err, 'Не удалось продолжить без аккаунта') };
+      errors = { general: accountErrorText(err, msg('transfers.authGuestError')) };
     } finally {
       busy = false;
     }
@@ -88,7 +89,7 @@
 
   function win(action: 'minimise' | 'maximise' | 'close') {
     if (!inWails) {
-      toast('Доступно только в desktop-сборке');
+      toast(msg('transfers.authDesktopOnly'));
       return;
     }
     if (action === 'minimise') Window.Minimise();
@@ -99,13 +100,13 @@
 
 <div class="auth" style="--wails-draggable: drag">
   <div class="window-controls" style="--wails-draggable: no-drag">
-    <button class="wc" aria-label="Свернуть" onclick={() => win('minimise')}>
+    <button class="wc" aria-label={msg('transfers.authMinimizeLabel')} onclick={() => win('minimise')}>
       <Minus size="1.6rem" strokeWidth={1.6} />
     </button>
-    <button class="wc" aria-label="Развернуть" onclick={() => win('maximise')}>
+    <button class="wc" aria-label={msg('transfers.authMaximizeLabel')} onclick={() => win('maximise')}>
       <Square size="1.2rem" strokeWidth={1.6} />
     </button>
-    <button class="wc close" aria-label="Закрыть" onclick={() => win('close')}>
+    <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
       <X size="1.6rem" strokeWidth={1.6} />
     </button>
   </div>
@@ -117,14 +118,14 @@
     </div>
 
     {#if offline}
-      <h1 class="title">Нет связи с сервером</h1>
-      <p class="subtitle">{accountMessage($authReason, 'Сервер аккаунтов недоступен')}</p>
+      <h1 class="title">{msg('transfers.authOfflineTitle')}</h1>
+      <p class="subtitle">{accountMessage($authReason, msg('transfers.authServerUnavailable'))}</p>
       <div class="offline-actions">
-        <Button variant="primary" size="lg" onclick={() => retryBootstrap()}>Повторить</Button>
+        <Button variant="primary" size="lg" onclick={() => retryBootstrap()}>{msg('common.retry')}</Button>
       </div>
-      <p class="note">Сохранённая сессия не удалена — она восстановится, когда сервер снова ответит.</p>
+      <p class="note">{msg('transfers.authOfflineNote')}</p>
     {:else}
-      <h1 class="title">{isRegister ? 'Создание аккаунта' : 'Вход в Typhon'}</h1>
+      <h1 class="title">{isRegister ? msg('transfers.authRegisterTitle') : msg('transfers.authLoginTitle')}</h1>
 
       <form class="form" onsubmit={onSubmit}>
         {#if isRegister}
@@ -142,7 +143,7 @@
           </label>
 
           <label class="field">
-            <span class="label">Имя пользователя</span>
+            <span class="label">{msg('transfers.authUsernameLabel')}</span>
             <input
               class="input"
               class:invalid={!!errors.username}
@@ -156,7 +157,7 @@
           </label>
 
           <label class="field">
-            <span class="label">Отображаемое имя</span>
+            <span class="label">{msg('transfers.authDisplayNameLabel')}</span>
             <input
               class="input"
               class:invalid={!!errors.displayName}
@@ -170,7 +171,7 @@
           </label>
         {:else}
           <label class="field">
-            <span class="label">Email или имя пользователя</span>
+            <span class="label">{msg('transfers.authIdentifierLabel')}</span>
             <input
               class="input"
               class:invalid={!!errors.username}
@@ -184,7 +185,7 @@
         {/if}
 
         <label class="field">
-          <span class="label">Пароль</span>
+          <span class="label">{msg('transfers.authPasswordLabel')}</span>
           <input
             class="input"
             class:invalid={!!errors.password}
@@ -202,26 +203,26 @@
 
         <button class="submit" type="submit" disabled={busy}>
           {#if busy}
-            {isRegister ? 'Создание…' : 'Вход…'}
+            {isRegister ? msg('transfers.authRegistering') : msg('transfers.authSigningIn')}
           {:else}
-            {isRegister ? 'Создать аккаунт' : 'Войти'}
+            {isRegister ? msg('transfers.authCreateAccount') : msg('transfers.authSignInAction')}
           {/if}
         </button>
       </form>
 
       <div class="guest">
-        <span class="guest-divider"><span>или</span></span>
-        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>Войти как гость</button>
-        <p class="guest-hint">Библиотека, загрузки и источники работают локально. Профиль и аватар — только с аккаунтом.</p>
+        <span class="guest-divider"><span>{msg('transfers.authOrDivider')}</span></span>
+        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</button>
+        <p class="guest-hint">{msg('transfers.authGuestHint')}</p>
       </div>
 
       <p class="switch">
         {#if isRegister}
-          Уже есть аккаунт?
-          <button class="link" type="button" onclick={() => switchView('login')}>Войти</button>
+          {msg('transfers.authHaveAccount')}
+          <button class="link" type="button" onclick={() => switchView('login')}>{msg('transfers.authSignInAction')}</button>
         {:else}
-          Нет аккаунта?
-          <button class="link" type="button" onclick={() => switchView('register')}>Создать аккаунт</button>
+          {msg('transfers.authNoAccount')}
+          <button class="link" type="button" onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</button>
         {/if}
       </p>
     {/if}
@@ -383,7 +384,7 @@
     color: #fff;
     font-size: var(--font-md);
     font-weight: 600;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     transition:
       background var(--dur) var(--ease),
       transform var(--dur-fast) var(--ease);

@@ -8,13 +8,15 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"typhon/internal/uierr"
 )
 
 const installWorkerFlag = "--install-worker"
 
 var (
 	errWorkerStatePath   = errors.New("путь состояния установки не задан")
-	errWorkerNotFinished = errors.New("повышенный воркер установки не подтвердил завершение")
+	errWorkerNotFinished = uierr.New("install.worker_not_finished", "повышенный воркер установки не подтвердил завершение")
 
 	// Подменяются в тестах, чтобы не поднимать настоящий UAC-запрос и не ждать
 	// боевые тайминги.

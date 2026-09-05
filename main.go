@@ -28,12 +28,16 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/online"
+	"typhon/internal/playlog"
 	"typhon/internal/presence"
+	"typhon/internal/profile"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
+	"typhon/internal/social"
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
@@ -115,6 +119,9 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
+	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[social.FriendsPage](social.EventFriends)
+	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -219,6 +226,10 @@ func main() {
 	if err != nil {
 		fatal("start library service", err)
 	}
+	playlogService, err := playlog.NewService()
+	if err != nil {
+		fatal("start playlog service", err)
+	}
 	downloadManager, err := download.NewManager(settingsService)
 	if err != nil {
 		fatal("start download manager", err)
@@ -308,9 +319,24 @@ func main() {
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
+	libraryService.SetPlayRecorder(playlogService.Record)
+	profileService := profile.NewService(libraryService, playlogService, func() []string {
+		return accountService.CurrentProfileSettings().Showcase
+	})
 	libraryService.AddSessionWatcher(presenceWatcher)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
+
+	resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
+	socialService, err := social.NewService(account.BaseURL(), accountService.SessionToken, socialSettings{settingsService}, resolveGameID)
+	if err != nil {
+		fatal("start social service", err)
+	}
+	onlineService, err := online.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID, settingsService)
+	if err != nil {
+		fatal("start online service", err)
+	}
+	libraryService.AddSessionWatcher(onlineService)
 
 	var extraServices []application.Service
 
@@ -321,7 +347,6 @@ func main() {
 	if err != nil {
 		slog.Error("load client identity", "error", err)
 	} else {
-		resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
 		heartbeatService, err := heartbeat.NewService(identity, resolveGameID)
 		if err != nil {
 			fatal("start presence", err)
@@ -368,8 +393,11 @@ func main() {
 		application.NewService(appService),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
+		application.NewService(socialService),
+		application.NewService(onlineService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
+		application.NewService(profileService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
 		application.NewService(catalogService),

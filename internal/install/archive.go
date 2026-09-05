@@ -10,12 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 const copyBufferSize = 256 * 1024
 
 var (
-	errUnsupportedArchive = errors.New("формат архива не поддерживается, распакуйте вручную")
+	errUnsupportedArchive = uierr.New("install.unsupported_archive", "формат архива не поддерживается, распакуйте вручную")
 	errNoEstimate         = errors.New("не удалось определить размер распакованного архива")
 )
 

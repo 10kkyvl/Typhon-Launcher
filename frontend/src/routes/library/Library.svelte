@@ -8,15 +8,19 @@
     MonitorDown,
     Play,
     Square,
+    X,
   } from '@lucide/svelte';
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
+  import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
-  import GameHero from '../../lib/components/GameHero.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
@@ -29,6 +33,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   type Filter = 'all' | 'installed' | 'recent';
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
@@ -47,7 +52,8 @@
 
   let filter = $state<Filter>('all');
   let sort = $state<Sort>('alpha');
-  let heroIndex = $state(0);
+  let search = $state('');
+  let heroHidden = $state(false);
   let catalogGames = $state<Record<string, CatalogGame>>({});
 
   const installedByGame = $derived.by(() => {
@@ -75,7 +81,7 @@
       if (games.length === 0) return;
       catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось загрузить данные игр', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.libraryLoadGamesError'), 'danger');
     }
   }
 
@@ -95,28 +101,28 @@
   });
 
   const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
-    { id: 'all', label: 'Все' },
-    { id: 'installed', label: 'Установленные', icon: MonitorDown },
-    { id: 'recent', label: 'Недавние', icon: Clock },
+    { id: 'all', label: msg('games.filterAll') },
+    { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
+    { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
   ];
 
   const sortLabels: Record<Sort, string> = {
-    alpha: 'По алфавиту',
-    recent: 'По последнему запуску',
-    playtime: 'По наигранному времени',
-    size: 'По размеру',
+    alpha: msg('games.sortAlpha'),
+    recent: msg('games.librarySortRecent'),
+    playtime: msg('games.librarySortPlaytime'),
+    size: msg('games.sortSize'),
   };
 
   const sectionTitles: Record<Filter, string> = {
-    all: 'Моя библиотека',
-    installed: 'Установленные',
-    recent: 'Недавние',
+    all: msg('games.allGamesTitle'),
+    installed: msg('games.filterInstalled'),
+    recent: msg('games.recentLabel'),
   };
 
   function installedEntry(game: LibraryGame): Entry {
     const bits: string[] = [];
     if (game.uninstalled) {
-      bits.push('Не установлена');
+      bits.push(msg('games.gameNotInstalledWord'));
     } else {
       if (game.version) bits.push(game.version);
       if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
@@ -140,7 +146,7 @@
     const bits: string[] = [];
     if (game?.releaseYear) bits.push(String(game.releaseYear));
     if (game?.developer) bits.push(game.developer);
-    bits.push(statusLabels[item.status]);
+    bits.push(statusLabels(item.status));
     return {
       id: gameId,
       title: game?.title || item.name,
@@ -161,7 +167,9 @@
   });
 
   const visibleGames = $derived.by(() => {
+    const query = search.trim().toLowerCase();
     const filtered = entries.filter((entry) => {
+      if (query && !entry.title.toLowerCase().includes(query)) return false;
       switch (filter) {
         case 'installed':
           return entry.installed;
@@ -192,26 +200,23 @@
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  const featured = $derived(
-    $installedGames
-      .map(installedEntry)
-      .toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed))
-      .slice(0, 5),
+  const playedGames = $derived(
+    $installedGames.map(installedEntry).toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed)),
   );
 
-  const hero = $derived(featured[Math.min(heroIndex, Math.max(featured.length - 1, 0))]);
+  const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null));
 
-  onMount(() => {
-    const timer = setInterval(() => {
-      if (featured.length === 0) return;
-      heroIndex = (heroIndex + 1) % featured.length;
-    }, 8000);
-    return () => clearInterval(timer);
-  });
+  const recentGames = $derived(
+    playedGames.filter((entry) => entry.lastPlayed !== null && entry.id !== hero?.id),
+  );
 
   function entryMeta(entry: Entry) {
     if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
-    return entry.installed ? '' : 'Не установлена';
+    return entry.installed ? '' : msg('games.gameNotInstalledWord');
+  }
+
+  function recentMeta(entry: Entry) {
+    return `${playtime(entry.playtimeSeconds)} · ${relativeDate(entry.lastPlayed)}`;
   }
 
   async function toggleRun(id: string) {
@@ -219,267 +224,221 @@
       if ($runningGames.has(id)) await stopGame(id);
       else await playGame(id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
     }
   }
 </script>
 
-<PageHeader title="Библиотека">
-  {#snippet actions()}
-    <SegmentedControl
-      bind:value={$libraryView}
-      options={[
-        { id: 'grid', label: 'Сетка' },
-        { id: 'list', label: 'Список' },
-      ]}
-    >
-      {#snippet item(option)}
-        {#if option.id === 'grid'}
-          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-        {:else}
-          <List size="1.6rem" strokeWidth={1.8} />
-        {/if}
-      {/snippet}
-    </SegmentedControl>
-  {/snippet}
-</PageHeader>
+<Card surface="panel">
+  <PageHeader title={msg('games.libraryWord')} />
 
-{#if hero}
-  <div class="hero-block" role="presentation" oncontextmenu={(event) => openGameMenu(event, hero.id)}>
-    <GameHero src={hero.hero} alt={hero.title} ratio="3.4 / 1" minHeight="24rem" maxHeight="34rem">
-      <h2 class="hero-title">{hero.title}</h2>
-      {#if hero.subtitle}
-        <p class="hero-genres">{hero.subtitle}</p>
-      {/if}
-      <p class="hero-tagline">
-        {hero.lastPlayed ? `Последний запуск: ${relativeDate(hero.lastPlayed)}` : 'Ещё не запускалась'}
-        {hero.playtimeSeconds > 0 ? ` · ${playtime(hero.playtimeSeconds)}` : ''}
-      </p>
-      <div class="hero-actions">
-        <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
-          {#if $runningGames.has(hero.id)}
-            <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-            Остановить
-          {:else}
-            <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-            Играть
-          {/if}
-        </Button>
-        <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>Подробнее</Button>
+  {#if hero && !heroHidden}
+    <div class="continue" role="presentation" oncontextmenu={(event) => openGameMenu(event, hero.id)}>
+      <Card title={msg('games.libraryContinuePlayingTitle')}>
+        {#snippet action()}
+          <IconButton label={msg('games.libraryHideLabel')} size="sm" onclick={() => (heroHidden = true)}>
+            <X size="1.6rem" strokeWidth={1.8} />
+          </IconButton>
+        {/snippet}
+        <div class="continue-body">
+          <div class="continue-cover">
+            <Artwork src={hero.hero || hero.cover} alt={hero.title} ratio="8 / 5" radius="var(--radius-md)" />
+          </div>
+          <div class="continue-info">
+            <h3 class="continue-title">{hero.title}</h3>
+            <p class="continue-meta">{msg('games.libraryLastSessionLabel', { date: relativeDate(hero.lastPlayed) })}</p>
+            <p class="continue-meta">{msg('games.libraryPlaytimeLabel', { time: playtime(hero.playtimeSeconds) })}</p>
+            <div class="continue-actions">
+              <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
+                {#if $runningGames.has(hero.id)}
+                  <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+                  {msg('games.stop')}
+                {:else}
+                  <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+                  {msg('common.continue')}
+                {/if}
+              </Button>
+              <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  {/if}
+
+  {#if recentGames.length > 0}
+    <section class="section">
+      <div class="section-head">
+        <h2>{msg('games.recentLabel')}</h2>
+        <button class="link" onclick={() => (filter = 'recent')}>{msg('games.libraryShowAllButton')}</button>
       </div>
-    </GameHero>
-    {#if featured.length > 1}
-      <div class="hero-dots">
-        {#each featured as g, i (g.id)}
+      <div class="recent-row">
+        {#each recentGames as entry (entry.id)}
+          <div class="recent-item">
+            <GameCard
+              id={entry.id}
+              title={entry.title}
+              cover={entry.hero || entry.cover}
+              variant="capsule"
+              installed={entry.installed}
+              running={$runningGames.has(entry.id)}
+              onplay={() => toggleRun(entry.id)}
+            >
+              {#snippet footer()}
+                <span class="recent-meta">
+                  <span class="dot"></span>
+                  {recentMeta(entry)}
+                </span>
+              {/snippet}
+            </GameCard>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <section class="section">
+    <div class="section-head">
+      <h2>{sectionTitles[filter]}</h2>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <SearchInput bind:value={search} placeholder={msg('games.librarySearchPlaceholder')} />
+      </div>
+      <div class="toolbar-right">
+        {#each filters as f (f.id)}
+          <Chip selected={filter === f.id} onclick={() => (filter = f.id)}>
+            {#if f.icon}
+              <f.icon size="1.4rem" strokeWidth={1.8} />
+            {/if}
+            {f.label}
+          </Chip>
+        {/each}
+        <DropdownMenu
+          items={[
+            { id: 'alpha', label: sortLabels.alpha },
+            { id: 'recent', label: sortLabels.recent },
+            { id: 'playtime', label: sortLabels.playtime },
+            { id: 'size', label: sortLabels.size },
+          ]}
+          onselect={(id) => (sort = id as Sort)}
+        >
+          {#snippet trigger({ open, toggle })}
+            <Chip selected={open} onclick={toggle}>
+              <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+              {sortLabels[sort]}
+              <ChevronDown size="1.4rem" strokeWidth={1.8} />
+            </Chip>
+          {/snippet}
+        </DropdownMenu>
+        <SegmentedControl
+          bind:value={$libraryView}
+          options={[
+            { id: 'grid', label: msg('games.viewGrid') },
+            { id: 'list', label: msg('games.viewList') },
+          ]}
+        >
+          {#snippet item(option)}
+            {#if option.id === 'grid'}
+              <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+            {:else}
+              <List size="1.6rem" strokeWidth={1.8} />
+            {/if}
+          {/snippet}
+        </SegmentedControl>
+      </div>
+    </div>
+
+    {#if visibleGames.length === 0}
+      {#if search.trim()}
+        <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
+      {:else}
+        <EmptyState
+          title={msg('games.libraryEmptyTitle')}
+          description={msg('games.libraryEmptyDescription')}
+        />
+      {/if}
+    {:else if $libraryView === 'grid'}
+      <div class="grid">
+        {#each visibleGames as entry (entry.id)}
+          <GameCard
+            id={entry.id}
+            title={entry.title}
+            cover={entry.cover}
+            installed={entry.installed}
+            running={$runningGames.has(entry.id)}
+            meta={entryMeta(entry)}
+            onplay={() => toggleRun(entry.id)}
+          />
+        {/each}
+      </div>
+    {:else}
+      <div class="list">
+        {#each visibleGames as entry (entry.id)}
           <button
-            class="dot"
-            class:on={i === heroIndex}
-            aria-label={g.title}
-            onclick={() => (heroIndex = i)}
-          ></button>
+            class="list-row"
+            onclick={() => navigate('game', { id: entry.id })}
+            oncontextmenu={(event) => openGameMenu(event, entry.id)}
+          >
+            <div class="list-thumb">
+              <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
+            </div>
+            <span class="list-title">{entry.title}</span>
+            <span class="list-meta">{entry.subtitle}</span>
+            <span class="list-meta right">{entryMeta(entry)}</span>
+          </button>
         {/each}
       </div>
     {/if}
-  </div>
-{/if}
-
-<div class="toolbar">
-  <div class="filters">
-    {#each filters as f (f.id)}
-      <button class="chip" class:selected={filter === f.id} onclick={() => (filter = f.id)}>
-        {#if f.icon}
-          <f.icon size="1.4rem" strokeWidth={1.8} />
-        {/if}
-        {f.label}
-      </button>
-    {/each}
-  </div>
-  <div class="toolbar-right">
-    <DropdownMenu
-      items={[
-        { id: 'alpha', label: sortLabels.alpha },
-        { id: 'recent', label: sortLabels.recent },
-        { id: 'playtime', label: sortLabels.playtime },
-        { id: 'size', label: sortLabels.size },
-      ]}
-      onselect={(id) => (sort = id as Sort)}
-    >
-      {#snippet trigger({ open, toggle })}
-        <button class="chip quiet" class:open onclick={toggle}>
-          <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-          {sortLabels[sort]}
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
-        </button>
-      {/snippet}
-    </DropdownMenu>
-  </div>
-</div>
-
-<section class="section">
-  <div class="section-head">
-    <h2>{sectionTitles[filter]}</h2>
-  </div>
-
-  {#if visibleGames.length === 0}
-    <EmptyState
-      title="Здесь пока пусто"
-      description="Игры появятся тут после установки или загрузки. Каталог источников — в разделе «Все игры»."
-    />
-  {:else if $libraryView === 'grid'}
-    <div class="grid">
-      {#each visibleGames as entry (entry.id)}
-        <GameCard
-          id={entry.id}
-          title={entry.title}
-          cover={entry.cover}
-          installed={entry.installed}
-          running={$runningGames.has(entry.id)}
-          meta={entryMeta(entry)}
-          onplay={() => toggleRun(entry.id)}
-        />
-      {/each}
-    </div>
-  {:else}
-    <div class="list">
-      {#each visibleGames as entry (entry.id)}
-        <button
-          class="list-row"
-          onclick={() => navigate('game', { id: entry.id })}
-          oncontextmenu={(event) => openGameMenu(event, entry.id)}
-        >
-          <div class="list-thumb">
-            <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
-          </div>
-          <span class="list-title">{entry.title}</span>
-          <span class="list-meta">{entry.subtitle}</span>
-          <span class="list-meta right">{entryMeta(entry)}</span>
-        </button>
-      {/each}
-    </div>
-  {/if}
-</section>
+  </section>
+</Card>
 
 <style>
-  .hero-block {
-    position: relative;
+  .continue {
     margin-bottom: var(--space-8);
   }
 
-  .hero-title {
-    font-size: var(--font-hero);
+  .continue-body {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+
+  .continue-cover {
+    width: 28rem;
+    flex-shrink: 0;
+  }
+
+  .continue-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    min-width: 0;
+    padding-top: 0.4rem;
+  }
+
+  .continue-title {
+    font-size: var(--font-xl);
     font-weight: 600;
-    line-height: 1.05;
-    letter-spacing: var(--tracking-title);
-    text-shadow: 0 2px 1.8rem rgba(0, 0, 0, 0.5);
+    letter-spacing: var(--tracking-heading);
   }
 
-  .hero-genres {
-    margin-top: 1rem;
+  .continue-meta {
     font-size: var(--font-sm);
-    color: rgba(255, 255, 255, 0.7);
-    text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.5);
+    color: var(--text-2);
   }
 
-  .hero-tagline {
-    margin-top: 1.2rem;
-    max-width: 46rem;
-    font-size: var(--font-md);
-    line-height: 1.5;
-    color: rgba(238, 242, 246, 0.85);
-    text-shadow: 0 1px 0.8rem rgba(0, 0, 0, 0.5);
-  }
-
-  .hero-actions {
+  .continue-actions {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    margin-top: var(--space-5);
-  }
-
-  .hero-dots {
-    position: absolute;
-    right: 2rem;
-    bottom: 1.8rem;
-    display: flex;
-    gap: 0.6rem;
-  }
-
-  .dot {
-    width: 1.8rem;
-    height: 0.3rem;
-    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
-    background: rgba(255, 255, 255, 0.25);
-    transition: background var(--dur) var(--ease);
-  }
-
-  .dot:hover {
-    background: rgba(255, 255, 255, 0.5);
-  }
-
-  .dot.on {
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-5);
-    flex-wrap: wrap;
-  }
-
-  .filters,
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    height: var(--control-sm);
-    padding: 0 1.1rem;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .chip :global(svg) {
-    color: var(--text-3);
-    transition: color var(--dur) var(--ease);
-  }
-
-  .chip:hover,
-  .chip.open {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .chip.selected {
-    background: var(--hover-strong);
-    color: var(--text);
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
-  }
-
-  .chip.selected :global(svg),
-  .chip:hover :global(svg) {
-    color: var(--text-2);
-  }
-
-  .chip.quiet {
-    color: var(--text-3);
+    margin-top: var(--space-3);
   }
 
   .section {
-    margin-bottom: var(--space-10);
+    margin-bottom: var(--space-8);
   }
 
   .section-head {
@@ -491,6 +450,67 @@
 
   .section-head h2 {
     font-size: var(--font-xl);
+  }
+
+  .link {
+    font-size: var(--font-sm);
+    color: var(--text-3);
+    transition: color var(--dur) var(--ease);
+  }
+
+  .link:hover {
+    color: var(--text);
+  }
+
+  .recent-row {
+    display: flex;
+    gap: var(--space-4);
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+  }
+
+  .recent-item {
+    flex: 0 0 auto;
+    width: 27rem;
+  }
+
+  .recent-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .recent-meta .dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .search-wrap {
+    flex: 1;
+    min-width: 22rem;
+    max-width: 34rem;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
   }
 
   .grid {

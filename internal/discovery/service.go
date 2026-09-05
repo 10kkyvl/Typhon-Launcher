@@ -12,6 +12,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -23,9 +24,9 @@ const (
 )
 
 var (
-	ErrBusy       = errors.New("поиск игр уже выполняется")
-	errNotStarted = errors.New("сервис поиска игр не запущен")
-	errNoScan     = errors.New("поиск игр не выполняется")
+	ErrBusy       = uierr.New("discovery.busy", "поиск игр уже выполняется")
+	errNotStarted = uierr.New("discovery.not_started", "сервис поиска игр не запущен")
+	errNoScan     = uierr.New("discovery.no_scan", "поиск игр не выполняется")
 )
 
 type gameLibrary interface {

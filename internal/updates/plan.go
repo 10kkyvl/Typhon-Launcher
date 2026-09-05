@@ -2,13 +2,13 @@ package updates
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"time"
 
 	"typhon/internal/download"
 	"typhon/internal/sources"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 	planScanText     = "Сверка установленных файлов"
 )
 
-var errNoTarget = errors.New("релиз для обновления недоступен")
+var errNoTarget = uierr.New("updates.no_target", "релиз для обновления недоступен")
 
 type planInput struct {
 	Installed InstalledGame

@@ -1,7 +1,8 @@
 // Command notices generates THIRD_PARTY_NOTICES.md from a curated manifest of
 // third-party components. License identification is done by hand in
 // manifest.json; this tool only locates and concatenates the verbatim
-// license texts already present on disk (Go module cache, npm node_modules).
+// license texts already present on disk (Go module cache, npm node_modules,
+// licenses vendored into the repository).
 package main
 
 import (
@@ -29,10 +30,18 @@ type Component struct {
 	LicenseFrom  string `json:"licenseFrom"`
 	ManualReview bool   `json:"manualReview"`
 	Note         string `json:"note"`
+	NoteEn       string `json:"noteEn"`
+	LicenseEn    string `json:"licenseEn"`
 }
 
 type Manifest struct {
 	Components []Component `json:"components"`
+}
+
+type Roots struct {
+	GoModCache string
+	NpmRoot    string
+	RepoRoot   string
 }
 
 type Group struct {
@@ -74,11 +83,15 @@ func validateComponent(c Component) error {
 	}
 	switch c.Source {
 	case "go", "npm":
+		if c.Version == "" {
+			return fmt.Errorf("component %s: empty version", c.Name)
+		}
+	case "file":
+		if c.LicenseFrom != "" {
+			return fmt.Errorf("component %s: source file does not use licenseFrom", c.Name)
+		}
 	default:
 		return fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
-	}
-	if c.Version == "" {
-		return fmt.Errorf("component %s: empty version", c.Name)
 	}
 	if c.LicenseFile == "" {
 		return fmt.Errorf("component %s: empty licenseFile", c.Name)
@@ -86,20 +99,37 @@ func validateComponent(c Component) error {
 	return nil
 }
 
-func licensePath(c Component, goModCache, npmRoot string) (string, error) {
+func repoRelativePath(name, rel string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("component %s: empty repository path", name)
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("component %s: repository path %q escapes the repository", name, rel)
+	}
+	return clean, nil
+}
+
+func licensePath(c Component, roots Roots) (string, error) {
 	switch c.Source {
 	case "go":
 		dir := c.LicenseFrom
 		if dir == "" {
 			dir = c.Name + "@" + c.Version
 		}
-		return filepath.Join(goModCache, dir, c.LicenseFile), nil
+		return filepath.Join(roots.GoModCache, dir, c.LicenseFile), nil
 	case "npm":
 		dir := c.LicenseFrom
 		if dir == "" {
 			dir = c.Name
 		}
-		return filepath.Join(npmRoot, dir, c.LicenseFile), nil
+		return filepath.Join(roots.NpmRoot, dir, c.LicenseFile), nil
+	case "file":
+		rel, err := repoRelativePath(c.Name, c.LicenseFile)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(roots.RepoRoot, rel), nil
 	default:
 		return "", fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
 	}
@@ -117,8 +147,8 @@ func readLicenseText(path string) (string, error) {
 	return text, nil
 }
 
-func resolveLicenseText(c Component, goModCache, npmRoot string) (string, error) {
-	path, err := licensePath(c, goModCache, npmRoot)
+func resolveLicenseText(c Component, roots Roots) (string, error) {
+	path, err := licensePath(c, roots)
 	if err != nil {
 		return "", fmt.Errorf("component %s %s: %w", c.Name, c.Version, err)
 	}
@@ -138,7 +168,7 @@ func sortComponents(cs []Component) {
 	})
 }
 
-func buildGroups(components []Component, goModCache, npmRoot string) ([]Group, []Component, error) {
+func buildGroups(components []Component, roots Roots) ([]Group, []Component, error) {
 	ordered := make([]Component, len(components))
 	copy(ordered, components)
 	sortComponents(ordered)
@@ -152,7 +182,7 @@ func buildGroups(components []Component, goModCache, npmRoot string) ([]Group, [
 			manual = append(manual, c)
 			continue
 		}
-		text, err := resolveLicenseText(c, goModCache, npmRoot)
+		text, err := resolveLicenseText(c, roots)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -177,6 +207,78 @@ func buildGroups(components []Component, goModCache, npmRoot string) ([]Group, [
 	return groups, manual, nil
 }
 
+type frame struct {
+	title           string
+	intro           string
+	summaryHeading  string
+	tableHeader     string
+	noteFormat      string
+	mplHeading      string
+	mplIntro        string
+	manualHeading   string
+	declaredFormat  string
+	appendixHeading string
+}
+
+var frames = map[string]frame{
+	"ru": {
+		title:           "# Сторонние компоненты Typhon\n\n",
+		intro:           "Этот файл перечисляет сторонние компоненты (библиотеки и модули), распространяемые вместе с Typhon, и приводит дословные тексты их лицензий. Лицензия каждого компонента определена человеком: автоматическое определение лицензий ненадёжно.\n\n",
+		summaryHeading:  "## Сводная таблица\n\n",
+		tableHeader:     "| Компонент | Версия | Лицензия |\n",
+		noteFormat:      "Примечание (%s): %s\n\n",
+		mplHeading:      "## MPL-2.0\n\n",
+		mplIntro:        "Typhon использует перечисленные ниже модули под лицензией Mozilla Public License 2.0 без изменения их исходного кода. Поэтому исходники этих модулей предоставляются в исходной форме апстрима — по адресам их публичных репозиториев, версии зафиксированы в `go.mod`/`go.sum` Typhon. Дословный текст MPL-2.0 приведён в приложении ниже. Компоненты под MPL-2.0:\n\n",
+		manualHeading:   "## Компоненты с отдельными условиями распространения\n\n",
+		declaredFormat:  "Заявленная лицензия: %s.\n\n",
+		appendixHeading: "## Приложение: тексты лицензий\n\n",
+	},
+	"en": {
+		title:           "# Typhon Third-Party Components\n\n",
+		intro:           "This file lists the third-party components (libraries and modules) distributed with Typhon and reproduces the verbatim texts of their licenses. The license of every component was determined by hand: automatic license detection is unreliable.\n\n",
+		summaryHeading:  "## Summary table\n\n",
+		tableHeader:     "| Component | Version | License |\n",
+		noteFormat:      "Note (%s): %s\n\n",
+		mplHeading:      "## MPL-2.0\n\n",
+		mplIntro:        "Typhon uses the modules listed below under the Mozilla Public License 2.0 without modifying their source code. Their sources are therefore provided in the original upstream form — at the addresses of their public repositories, with versions pinned in Typhon's `go.mod`/`go.sum`. The verbatim text of MPL-2.0 is reproduced in the appendix below. Components under MPL-2.0:\n\n",
+		manualHeading:   "## Components with separate distribution terms\n\n",
+		declaredFormat:  "Declared license: %s.\n\n",
+		appendixHeading: "## Appendix: license texts\n\n",
+	},
+}
+
+func isASCII(s string) bool {
+	for _, r := range s {
+		if r > 127 {
+			return false
+		}
+	}
+	return true
+}
+
+func componentNote(c Component, lang string) (string, error) {
+	if lang != "en" {
+		return c.Note, nil
+	}
+	if c.Note != "" && c.NoteEn == "" {
+		return "", fmt.Errorf("component %s: note has no noteEn translation", c.Name)
+	}
+	return c.NoteEn, nil
+}
+
+func componentLicense(c Component, lang string) (string, error) {
+	if lang != "en" {
+		return c.License, nil
+	}
+	if c.LicenseEn != "" {
+		return c.LicenseEn, nil
+	}
+	if !isASCII(c.License) {
+		return "", fmt.Errorf("component %s: license %q has no licenseEn translation", c.Name, c.License)
+	}
+	return c.License, nil
+}
+
 func componentLabel(c Component) string {
 	if c.Version == "" {
 		return c.Name
@@ -184,35 +286,46 @@ func componentLabel(c Component) string {
 	return fmt.Sprintf("%s %s", c.Name, c.Version)
 }
 
-func render(m Manifest, groups []Group, manual []Component) string {
+func render(m Manifest, groups []Group, manual []Component, lang string) (string, error) {
+	f, ok := frames[lang]
+	if !ok {
+		return "", fmt.Errorf("unknown language %q", lang)
+	}
+
 	all := make([]Component, len(m.Components))
 	copy(all, m.Components)
 	sortComponents(all)
 
 	var b strings.Builder
 
-	b.WriteString("# Сторонние компоненты Typhon\n\n")
-	b.WriteString("Этот файл перечисляет сторонние компоненты (библиотеки и модули), " +
-		"распространяемые вместе с Typhon, и приводит дословные тексты их лицензий. " +
-		"Лицензия каждого компонента определена человеком: автоматическое определение " +
-		"лицензий ненадёжно.\n\n")
+	b.WriteString(f.title)
+	b.WriteString(f.intro)
 
-	b.WriteString("## Сводная таблица\n\n")
-	b.WriteString("| Компонент | Версия | Лицензия |\n")
+	b.WriteString(f.summaryHeading)
+	b.WriteString(f.tableHeader)
 	b.WriteString("| --- | --- | --- |\n")
 	for _, c := range all {
 		version := c.Version
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", c.Name, version, c.License)
+		license, err := componentLicense(c, lang)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", c.Name, version, license)
 	}
 	b.WriteString("\n")
 
 	for _, c := range all {
-		if !c.ManualReview && c.Note != "" {
-			fmt.Fprintf(&b, "Примечание (%s): %s\n\n", c.Name, c.Note)
+		if c.ManualReview || c.Note == "" {
+			continue
 		}
+		note, err := componentNote(c, lang)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, f.noteFormat, c.Name, note)
 	}
 
 	var mpl []Component
@@ -222,12 +335,8 @@ func render(m Manifest, groups []Group, manual []Component) string {
 		}
 	}
 	if len(mpl) > 0 {
-		b.WriteString("## MPL-2.0\n\n")
-		b.WriteString("Typhon использует перечисленные ниже модули под лицензией Mozilla " +
-			"Public License 2.0 без изменения их исходного кода. Поэтому исходники этих " +
-			"модулей предоставляются в исходной форме апстрима — по адресам их публичных " +
-			"репозиториев, версии зафиксированы в `go.mod`/`go.sum` Typhon. Дословный текст " +
-			"MPL-2.0 приведён в приложении ниже. Компоненты под MPL-2.0:\n\n")
+		b.WriteString(f.mplHeading)
+		b.WriteString(f.mplIntro)
 		for _, c := range mpl {
 			fmt.Fprintf(&b, "- %s\n", componentLabel(c))
 		}
@@ -235,15 +344,23 @@ func render(m Manifest, groups []Group, manual []Component) string {
 	}
 
 	if len(manual) > 0 {
-		b.WriteString("## Компоненты с отдельными условиями распространения\n\n")
+		b.WriteString(f.manualHeading)
 		for _, c := range manual {
+			license, err := componentLicense(c, lang)
+			if err != nil {
+				return "", err
+			}
+			note, err := componentNote(c, lang)
+			if err != nil {
+				return "", err
+			}
 			fmt.Fprintf(&b, "### %s\n\n", componentLabel(c))
-			fmt.Fprintf(&b, "Заявленная лицензия: %s.\n\n", c.License)
-			fmt.Fprintf(&b, "%s\n\n", c.Note)
+			fmt.Fprintf(&b, f.declaredFormat, license)
+			fmt.Fprintf(&b, "%s\n\n", note)
 		}
 	}
 
-	b.WriteString("## Приложение: тексты лицензий\n\n")
+	b.WriteString(f.appendixHeading)
 	for _, g := range groups {
 		labels := make([]string, len(g.Components))
 		for i, c := range g.Components {
@@ -255,19 +372,23 @@ func render(m Manifest, groups []Group, manual []Component) string {
 		b.WriteString("\n```\n\n")
 	}
 
-	return b.String()
+	return b.String(), nil
 }
 
-func generate(manifestPath, goModCache, npmRoot string) ([]byte, error) {
+func generate(manifestPath string, roots Roots, lang string) ([]byte, error) {
 	m, err := loadManifest(manifestPath)
 	if err != nil {
 		return nil, err
 	}
-	groups, manual, err := buildGroups(m.Components, goModCache, npmRoot)
+	groups, manual, err := buildGroups(m.Components, roots)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(render(m, groups, manual)), nil
+	text, err := render(m, groups, manual, lang)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(text), nil
 }
 
 func goModCacheDir() (string, error) {
@@ -282,13 +403,29 @@ func goModCacheDir() (string, error) {
 	return dir, nil
 }
 
+func defaultOutput(lang string) string {
+	if lang == "ru" {
+		return "THIRD_PARTY_NOTICES.md"
+	}
+	return "THIRD_PARTY_NOTICES." + lang + ".md"
+}
+
 func run() error {
 	manifestPath := flag.String("manifest", filepath.Join("tools", "notices", "manifest.json"), "path to manifest.json")
 	npmRoot := flag.String("npm-root", filepath.Join("frontend", "node_modules"), "path to frontend node_modules")
+	repoRoot := flag.String("repo-root", ".", "path to the repository root for licenses vendored in the repository")
 	goModCacheFlag := flag.String("gomodcache", "", "override GOMODCACHE (default: go env GOMODCACHE)")
-	out := flag.String("o", "THIRD_PARTY_NOTICES.md", "output file path")
+	lang := flag.String("lang", "ru", "language of the generated text around the license texts: ru or en")
+	out := flag.String("o", "", "output file path (default: THIRD_PARTY_NOTICES.md, THIRD_PARTY_NOTICES.en.md for -lang en)")
 	check := flag.Bool("check", false, "check that the output file matches the manifest instead of writing it")
 	flag.Parse()
+
+	if _, ok := frames[*lang]; !ok {
+		return fmt.Errorf("unknown language %q", *lang)
+	}
+	if *out == "" {
+		*out = defaultOutput(*lang)
+	}
 
 	goModCache := *goModCacheFlag
 	if goModCache == "" {
@@ -299,7 +436,7 @@ func run() error {
 		goModCache = dir
 	}
 
-	content, err := generate(*manifestPath, goModCache, *npmRoot)
+	content, err := generate(*manifestPath, Roots{GoModCache: goModCache, NpmRoot: *npmRoot, RepoRoot: *repoRoot}, *lang)
 	if err != nil {
 		return err
 	}

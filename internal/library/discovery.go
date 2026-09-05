@@ -1,7 +1,6 @@
 package library
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,11 +8,12 @@ import (
 	"time"
 
 	"typhon/internal/platform"
+	"typhon/internal/uierr"
 )
 
 var (
-	errOutsideInstall = errors.New("файл находится вне папки установки")
-	errNoExecutable   = errors.New("исполняемый файл не найден")
+	errOutsideInstall = uierr.New("library.executable_outside_install", "файл находится вне папки установки")
+	errNoExecutable   = uierr.New("library.no_executable", "исполняемый файл не найден")
 )
 
 type Outcome string
@@ -134,7 +134,7 @@ func (s *Service) createDiscoveredLocked(d Discovered, installDir, executable st
 		title = TitleFromExecutable(executable)
 	}
 	if title == "" {
-		return Game{}, "", errors.New("не удалось определить название игры")
+		return Game{}, "", uierr.New("library.no_discovered_title", "не удалось определить название игры")
 	}
 	game := Game{
 		ID:              newID(),

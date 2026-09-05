@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -54,7 +55,7 @@ var (
 	applyTimeout       = 5 * time.Minute
 )
 
-var errParentStillRunning = errors.New("selfupdate: launcher did not exit before the timeout")
+var errParentStillRunning = uierr.New("selfupdate.parent_still_running", "selfupdate: launcher did not exit before the timeout")
 
 func WorkerDir(configDir string) (string, error) {
 	dir, err := CacheDir(configDir)

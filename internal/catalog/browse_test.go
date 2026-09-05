@@ -148,6 +148,140 @@ func TestQueryGamesEmptyCatalog(t *testing.T) {
 	}
 }
 
+func TestQueryGamesGenre(t *testing.T) {
+	s := newTestService(t)
+	seed(t, s,
+		Game{Title: "Elden Ring", Genres: []string{"RPG", "Action"}},
+		Game{Title: "Baldur's Gate 3", Genres: []string{"RPG", "Tactical"}},
+		Game{Title: "Counter-Strike 2", Genres: []string{"Shooter", "Tactical"}},
+		Game{Title: "The Witcher 3: Wild Hunt", Genres: []string{"RPG", "Adventure"}},
+		Game{Title: "Celeste", Genres: []string{"Platformer"}},
+		Game{Title: "Hades", Genres: []string{"Roguelike", "Action"}},
+		Game{Title: "Katana Zero", Genres: []string{"Hack and slash/Beat 'em up", "Indie"}},
+		Game{Title: "Stardew Valley", Genres: []string{"Simulator"}},
+	)
+
+	cases := []struct {
+		name  string
+		genre string
+		want  []string
+	}{
+		{
+			"экшен",
+			"Экшен",
+			[]string{"Elden Ring", "Hades", "Katana Zero"},
+		},
+		{
+			"ролевые",
+			"Ролевые",
+			[]string{"Baldur's Gate 3", "Elden Ring", "The Witcher 3: Wild Hunt"},
+		},
+		{
+			"шутеры",
+			"Шутеры",
+			[]string{"Counter-Strike 2"},
+		},
+		{
+			"приключения",
+			"Приключения",
+			[]string{"Celeste", "The Witcher 3: Wild Hunt"},
+		},
+		{
+			"стратегии",
+			"Стратегии",
+			[]string{"Baldur's Gate 3", "Counter-Strike 2"},
+		},
+		{
+			"инди",
+			"Инди",
+			[]string{"Katana Zero"},
+		},
+		{
+			"case insensitive",
+			"шутеры",
+			[]string{"Counter-Strike 2"},
+		},
+		{
+			"empty genre keeps all",
+			"",
+			[]string{
+				"Baldur's Gate 3", "Celeste", "Counter-Strike 2", "Elden Ring",
+				"Hades", "Katana Zero", "Stardew Valley", "The Witcher 3: Wild Hunt",
+			},
+		},
+		{
+			"unknown label matches nothing",
+			"Гонки",
+			nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			page := s.QueryGames(GameQuery{Genre: tc.genre, PageSize: maxPageSize})
+			if page.Total != len(tc.want) {
+				t.Fatalf("total = %d, want %d (items=%v)", page.Total, len(tc.want), titlesOf(page.Items))
+			}
+			got := titlesOf(page.Items)
+			for i, title := range tc.want {
+				if got[i] != title {
+					t.Fatalf("item %d = %q, want %q (got=%v)", i, got[i], title, got)
+				}
+			}
+		})
+	}
+}
+
+func titlesOf(games []Game) []string {
+	out := make([]string, len(games))
+	for i, g := range games {
+		out[i] = g.Title
+	}
+	return out
+}
+
+func TestGenreFacetsCountsMatchFilteredResults(t *testing.T) {
+	s := newTestService(t)
+	seed(t, s,
+		Game{Title: "Elden Ring", Genres: []string{"RPG", "Action"}},
+		Game{Title: "Baldur's Gate 3", Genres: []string{"RPG", "Tactical"}},
+		Game{Title: "Counter-Strike 2", Genres: []string{"Shooter", "Tactical"}},
+		Game{Title: "The Witcher 3: Wild Hunt", Genres: []string{"RPG", "Adventure"}},
+		Game{Title: "Celeste", Genres: []string{"Platformer"}},
+		Game{Title: "Hades", Genres: []string{"Roguelike", "Action"}},
+		Game{Title: "Katana Zero", Genres: []string{"Hack and slash/Beat 'em up", "Indie"}},
+		Game{Title: "Stardew Valley", Genres: []string{"Simulator"}},
+		Game{Title: "No Genre Game"},
+	)
+
+	facets := s.GenreFacets()
+	if len(facets) != 6 {
+		t.Fatalf("facets = %d, want 6", len(facets))
+	}
+	for _, facet := range facets {
+		page := s.QueryGames(GameQuery{Genre: facet.Label, PageSize: maxPageSize})
+		if facet.Count != page.Total {
+			t.Fatalf("facet %q count = %d, want %d (matches QueryGames)", facet.Label, facet.Count, page.Total)
+		}
+		if facet.Count == 0 {
+			t.Fatalf("facet %q count = 0, want > 0 given seeded data", facet.Label)
+		}
+	}
+}
+
+func TestGenreFacetsEmptyCatalog(t *testing.T) {
+	s := newTestService(t)
+	facets := s.GenreFacets()
+	if len(facets) != 6 {
+		t.Fatalf("facets = %d, want 6", len(facets))
+	}
+	for _, facet := range facets {
+		if facet.Count != 0 {
+			t.Fatalf("facet %q count = %d, want 0 on empty catalog", facet.Label, facet.Count)
+		}
+	}
+}
+
 func TestGetGames(t *testing.T) {
 	s := newTestService(t)
 	games := seed(t, s,

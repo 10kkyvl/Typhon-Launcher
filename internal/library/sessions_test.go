@@ -630,3 +630,39 @@ func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 		t.Fatal("session still running after StopGame")
 	}
 }
+
+func TestFinishSessionCallsPlayRecorder(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	base := time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC)
+	clock := base
+	s.now = func() time.Time { return clock }
+
+	var mu sync.Mutex
+	type rec struct {
+		id         string
+		start, end time.Time
+	}
+	var got []rec
+	s.SetPlayRecorder(func(gameID string, startedAt, endedAt time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, rec{gameID, startedAt, endedAt})
+	})
+
+	startedAt := base
+	s.mu.Lock()
+	s.running["orphan"] = &session{startedAt: startedAt, lastSeen: startedAt, external: true}
+	s.mu.Unlock()
+	clock = base.Add(90 * time.Second)
+	s.finishSession("orphan", startedAt)
+	s.wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 {
+		t.Fatalf("records = %d, want 1", len(got))
+	}
+	if got[0].id != "orphan" || !got[0].start.Equal(startedAt) || !got[0].end.Equal(clock) {
+		t.Fatalf("record = %+v, want orphan %s..%s", got[0], startedAt, clock)
+	}
+}

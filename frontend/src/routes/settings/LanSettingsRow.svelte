@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { msg } from '../../lib/i18n';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { lanStats } from '../../lib/stores/lan';
   import { settings, updateSettings } from '../../lib/stores/settings';
@@ -6,27 +7,27 @@
 
 <div class="row">
   <div class="row-text">
-    <span class="row-label">Раздача игр по локальной сети</span>
-    <span class="row-sub"
-      >Функция не проверена в реальной сети — протестирован только режим на одном компьютере. Включение
-      открывает сетевой порт для обмена с другими компьютерами в той же локальной сети; игры
-      раздаются только им.</span
-    >
+    <span class="row-label">{msg('settings.generalLanLabel')}</span>
+    <span class="row-sub">{msg('settings.generalLanSub')}</span>
   </div>
   <Toggle
     checked={$settings?.lanSharing ?? false}
-    label="Раздача игр по локальной сети"
+    label={msg('settings.generalLanLabel')}
     onchange={(v) => updateSettings({ lanSharing: v })}
   />
 </div>
 {#if $settings?.lanSharing}
   <div class="row">
     <div class="row-text">
-      <span class="row-label">Состояние сети</span>
+      <span class="row-label">{msg('settings.generalLanStateLabel')}</span>
       <span class="row-sub"
-        >Известно компьютеров: {$lanStats.peersKnown} · раздач видно: {$lanStats.offersKnown} · раздаём
-        сами: {$lanStats.sharesActive} · объявлений отправлено: {$lanStats.announcesSent}, получено:
-        {$lanStats.announcesReceived}</span
+        >{msg('settings.generalLanStatsLine', {
+          peersKnown: $lanStats.peersKnown,
+          offersKnown: $lanStats.offersKnown,
+          sharesActive: $lanStats.sharesActive,
+          announcesSent: $lanStats.announcesSent,
+          announcesReceived: $lanStats.announcesReceived,
+        })}</span
       >
     </div>
   </div>

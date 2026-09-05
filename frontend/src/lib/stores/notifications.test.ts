@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-vi.mock('@wailsio/runtime', () => ({ Events: { On: vi.fn(() => vi.fn()) } }));
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => vi.fn()) },
+  Call: { ByID: vi.fn() },
+  CancellablePromise: class {},
+}));
 vi.mock('../services/backend', () => ({ inWails: false }));
 
 vi.mock('../services/downloads', () => ({
@@ -133,6 +137,52 @@ describe('обновление лаунчера в списке уведомле
     selfUpdateStatus.set(status({ state: 'checking' }) as never);
 
     expect(get(notifications.notifications).some((n) => n.id.startsWith('launcher-update'))).toBe(false);
+  });
+});
+
+describe('заявки в друзья', () => {
+  function request(id: string) {
+    return { id, username: id, displayName: id, avatarUrl: '', createdAt: '', mutualCount: 0, commonCount: 0 };
+  }
+
+  it('входящие заявки дают уведомление с маршрутом friends', async () => {
+    const { notifications } = await load(makeStorage());
+    const { friendsPage } = await import('./social');
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b')], outgoing: [] });
+
+    const items = get(notifications.notifications).filter((n) => n.id.startsWith('friends:'));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ id: 'friends:incoming:2', route: 'friends', terminal: false });
+  });
+
+  it('прочитанное уведомление возвращается, когда заявок стало больше', async () => {
+    const { notifications } = await load(makeStorage());
+    const { friendsPage } = await import('./social');
+    friendsPage.set({ friends: [], incoming: [request('a')], outgoing: [] });
+    notifications.markAllRead();
+    expect(get(notifications.notifications).some((n) => n.id.startsWith('friends:'))).toBe(false);
+
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b')], outgoing: [] });
+
+    const items = get(notifications.notifications).filter((n) => n.id.startsWith('friends:'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('friends:incoming:2');
+  });
+
+  it('прочитанное уведомление не возвращается, когда заявок стало меньше', async () => {
+    const { notifications } = await load(makeStorage());
+    const { friendsPage } = await import('./social');
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b'), request('c')], outgoing: [] });
+    notifications.markAllRead();
+
+    friendsPage.set({ friends: [], incoming: [request('a'), request('b')], outgoing: [] });
+
+    expect(get(notifications.notifications).some((n) => n.id.startsWith('friends:'))).toBe(false);
+  });
+
+  it('без входящих заявок уведомления нет', async () => {
+    const { notifications } = await load(makeStorage());
+    expect(get(notifications.notifications).some((n) => n.id.startsWith('friends:'))).toBe(false);
   });
 });
 

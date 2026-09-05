@@ -1,14 +1,17 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import GameStatusModal from './GameStatusModal.svelte';
   import Modal from './Modal.svelte';
   import RemoveGameModal from './RemoveGameModal.svelte';
   import { quickActions, type QuickAction } from '../game/quickActions';
   import {
     createShortcut,
     locateSaves,
+    markError,
     playGame,
     removeShortcut,
+    setFavorite,
     setSavesDir,
     stopGame,
     type LibraryGame,
@@ -25,6 +28,7 @@
   import { verify } from '../stores/updates';
   import { errorMessage } from '../utils/errors';
   import { truncateMiddle } from '../utils/format';
+  import { msg } from '../i18n';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
 
@@ -37,6 +41,8 @@
           hasShortcut: Boolean(game.shortcutPath),
           lanEnabled: Boolean($settings?.lanSharing),
           lanShared: $shares.some((s) => s.gameId === game.id),
+          favorite: Boolean(game.favorite),
+          status: game.status ?? '',
         })
       : [],
   );
@@ -48,12 +54,23 @@
   let savesOpen = $state(false);
   let savesCandidates = $state<string[]>([]);
 
+  let statusOpen = $state(false);
+  let statusID = $state<string | null>(null);
+  const statusGame = $derived(statusID ? ($libraryGames.find((g) => g.id === statusID) ?? null) : null);
+
   function run(current: LibraryGame, action: QuickAction) {
     switch (action) {
       case 'play':
         return guard(() => playGame(current.id));
       case 'stop':
         return guard(() => stopGame(current.id));
+      case 'favorite-add':
+      case 'favorite-remove':
+        return mark(() => setFavorite(current.id, action === 'favorite-add'), msg('ui.favoriteChangeFailed'));
+      case 'status':
+        statusID = current.id;
+        statusOpen = true;
+        return;
       case 'folder':
         return guard(() => openFolder(current.installDir));
       case 'saves':
@@ -90,6 +107,14 @@
     }
   }
 
+  async function mark(fn: () => Promise<unknown>, fallback: string) {
+    try {
+      await fn();
+    } catch (err) {
+      toast(markError(err, fallback), 'danger');
+    }
+  }
+
   async function openSaves(current: LibraryGame) {
     let found: SavesResult;
     try {
@@ -111,15 +136,15 @@
     }
     toast(
       unreadable > 0
-        ? 'Часть папок прочитать не удалось. Укажите папку сохранений вручную'
-        : 'Папка сохранений не найдена. Укажите её вручную',
+        ? msg('ui.savesPartialUnreadable')
+        : msg('ui.savesNotFound'),
     );
     await pickSaves(current);
   }
 
   async function pickSaves(current: LibraryGame) {
     await guard(async () => {
-      const dir = await selectFolder(`Папка сохранений — ${current.title}`);
+      const dir = await selectFolder(msg('ui.savesDirDialogTitle', { title: current.title }));
       if (!dir) return;
       await setSavesDir(current.id, dir);
       await openFolder(dir);
@@ -152,11 +177,15 @@
   />
 {/if}
 
+{#if statusGame && statusOpen}
+  <GameStatusModal bind:open={statusOpen} game={statusGame} />
+{/if}
+
 {#if target}
   <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} />
 
-  <Modal bind:open={savesOpen} title="Папка сохранений" width="52rem">
-    <p class="hint">Подходящих папок нашлось несколько. Выберите ту, что относится к «{target.title}».</p>
+  <Modal bind:open={savesOpen} title={msg('ui.savesDirTitle')} width="52rem">
+    <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
     <div class="candidates">
       {#each savesCandidates as candidate (candidate)}
         <button class="candidate" onclick={() => useCandidate(candidate)} title={candidate}>
@@ -165,7 +194,7 @@
       {/each}
     </div>
     {#snippet footer()}
-      <Button onclick={() => (savesOpen = false)}>Отмена</Button>
+      <Button onclick={() => (savesOpen = false)}>{msg('common.cancel')}</Button>
       <Button
         variant="primary"
         onclick={() => {
@@ -174,7 +203,7 @@
           if (current) void pickSaves(current);
         }}
       >
-        Указать другую
+        {msg('ui.pickAnotherFolder')}
       </Button>
     {/snippet}
   </Modal>

@@ -48,7 +48,7 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   release:
@@ -265,3 +265,57 @@ jobs:
             -d '{"ref":"main"}'
 
           echo "asked $SITE_REPOSITORY to deploy $RELEASE_VERSION"
+
+      # Runs last on purpose: the launcher updates itself from the manifest
+      # published above, so a hiccup here must not fail a release that already
+      # shipped. The GitHub release is the second way to get the installer,
+      # for people who would rather download it from the repository.
+      - name: Publish the GitHub release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Prints the body of one "## <version> — <date>" entry: everything
+          # up to the next release heading.
+          entry() {
+            awk -v want="$1" '
+              /^## / {
+                if (found) exit
+                if ($2 == want) { found = 1; next }
+              }
+              found { print }
+            ' "$2"
+          }
+
+          ru="$(entry "$RELEASE_VERSION" CHANGELOG.md)"
+          en="$(entry "$RELEASE_VERSION" CHANGELOG.en.md)"
+
+          if [ -z "$(printf '%s' "$ru" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.md has no entry for $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          if [ -z "$(printf '%s' "$en" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.en.md has no entry for $RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          {
+            printf '## Что нового\n\n%s\n' "$ru"
+            printf '\n---\n\n'
+            printf "## What's new\n\n%s\n" "$en"
+            printf '\n---\n\n'
+            printf 'Windows 10+ x64. Скачайте `typhon-amd64-installer.exe` ниже.\n'
+            printf 'Установленный лаунчер обновится сам.\n\n'
+            printf 'Windows 10+ x64. Download `typhon-amd64-installer.exe` below.\n'
+            printf 'An installed launcher updates itself.\n'
+          } > release-body.md
+
+          gh release create "$RELEASE_TAG" \
+            bin/typhon-amd64-installer.exe \
+            --title "Typhon $RELEASE_VERSION" \
+            --notes-file release-body.md

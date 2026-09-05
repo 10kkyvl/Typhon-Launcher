@@ -1,7 +1,9 @@
 package accountsync
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/library"
 	"typhon/internal/settings"
 
 	"github.com/google/uuid"
@@ -17,7 +20,9 @@ import (
 )
 
 const (
-	syncInterval       = 15 * time.Minute
+	syncInterval       = 5 * time.Minute
+	nudgeDelay         = 3 * time.Second
+	minSyncGap         = 30 * time.Second
 	maxHydratePerSync  = 20
 	maxGamesPerRequest = 500
 )
@@ -35,12 +40,17 @@ type Service struct {
 	catalog  CatalogPort
 	metadata MetadataPort
 
-	mu      sync.Mutex
-	state   syncState
-	syncing bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	mu         sync.Mutex
+	state      syncState
+	syncing    bool
+	lastSync   time.Time
+	nudge      chan struct{}
+	nudgeDelay time.Duration
+	minGap     time.Duration
+	unwatch    func()
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 func NewService(
@@ -70,13 +80,16 @@ func NewService(
 	}
 
 	return &Service{
-		store:    st,
-		client:   client,
-		settings: settingsPort,
-		library:  library,
-		catalog:  catalog,
-		metadata: metadata,
-		state:    loaded,
+		store:      st,
+		client:     client,
+		settings:   settingsPort,
+		library:    library,
+		catalog:    catalog,
+		metadata:   metadata,
+		state:      loaded,
+		nudge:      make(chan struct{}, 1),
+		nudgeDelay: nudgeDelay,
+		minGap:     minSyncGap,
 	}, nil
 }
 
@@ -86,13 +99,39 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Unlock()
 	s.wg.Add(1)
 	go s.schedule()
+	s.watchLibrary()
 	return nil
+}
+
+func (s *Service) watchLibrary() {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	unwatch := app.Event.On(library.EventUpdated, func(*application.CustomEvent) {
+		s.Nudge()
+	})
+	s.mu.Lock()
+	s.unwatch = unwatch
+	s.mu.Unlock()
+}
+
+func (s *Service) Nudge() {
+	select {
+	case s.nudge <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
+	unwatch := s.unwatch
+	s.unwatch = nil
 	cancel := s.cancel
 	s.mu.Unlock()
+	if unwatch != nil {
+		unwatch()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -107,16 +146,61 @@ func (s *Service) schedule() {
 	s.mu.Unlock()
 	ticker := time.NewTicker(syncInterval)
 	defer ticker.Stop()
+	debounce := time.NewTimer(time.Hour)
+	if !debounce.Stop() {
+		<-debounce.C
+	}
+	defer debounce.Stop()
+
+	waiting := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.Sync(ctx); err != nil {
-				slog.Warn("scheduled account sync failed", "error", err)
+			s.runScheduled(ctx)
+		case <-s.nudge:
+			if waiting {
+				continue
 			}
+			waiting = true
+			debounce.Reset(s.nudgeDelay)
+		case <-debounce.C:
+			if left := s.gapLeft(); left > 0 {
+				debounce.Reset(left)
+				continue
+			}
+			waiting = false
+			s.runScheduled(ctx)
 		}
 	}
+}
+
+func (s *Service) runScheduled(ctx context.Context) {
+	err := s.Sync(ctx)
+	if err == nil || errors.Is(err, ErrSyncInProgress) || errors.Is(err, context.Canceled) {
+		return
+	}
+	slog.Warn("scheduled account sync failed", "error", err)
+}
+
+func (s *Service) gapLeft() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastSync.IsZero() {
+		return 0
+	}
+	left := s.minGap - time.Since(s.lastSync)
+	if left < 0 {
+		return 0
+	}
+	return left
+}
+
+func (s *Service) markSynced() {
+	s.mu.Lock()
+	s.lastSync = time.Now()
+	s.mu.Unlock()
 }
 
 func (s *Service) SyncNow() error {
@@ -198,6 +282,7 @@ func (s *Service) Sync(ctx context.Context) error {
 		s.mu.Unlock()
 	}()
 
+	s.markSynced()
 	return s.attempt(ctx, true)
 }
 
@@ -269,6 +354,15 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			delta = 0
 		}
 
+		status, statusAt := local.Status, local.StatusAt
+		if hasRemote && remote.StatusAt != nil && (statusAt == nil || remote.StatusAt.After(*statusAt)) {
+			status, statusAt = remote.Status, remote.StatusAt
+		}
+		favorite, favoriteAt := local.Favorite, local.FavoriteAt
+		if hasRemote && remote.FavoriteAt != nil && (favoriteAt == nil || remote.FavoriteAt.After(*favoriteAt)) {
+			favorite, favoriteAt = remote.Favorite, remote.FavoriteAt
+		}
+
 		results[igdbID] = gameCompute{
 			combined: Game{
 				IGDBID:          igdbID,
@@ -276,6 +370,10 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 				PlaytimeSeconds: combinedSeconds,
 				Owned:           local.Owned || remoteOwned,
 				LastPlayed:      laterOf(local.LastPlayed, remoteLastPlayed),
+				Favorite:        favorite,
+				FavoriteAt:      favoriteAt,
+				Status:          status,
+				StatusAt:        statusAt,
 			},
 			device: prev.DeviceSeconds + delta,
 		}
@@ -295,6 +393,10 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		pushGames = append(pushGames, wireGame{
 			IGDBID:          id,
 			Owned:           r.combined.Owned,
+			Favorite:        r.combined.Favorite,
+			FavoriteAt:      r.combined.FavoriteAt,
+			Status:          r.combined.Status,
+			StatusAt:        r.combined.StatusAt,
 			LastPlayedAt:    r.combined.LastPlayed,
 			PlaytimeSeconds: r.device,
 		})
@@ -305,7 +407,16 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	revision := snap.SettingsRevision
 	totalSkipped := 0
 
+	settled, err := samePortable(pushSettings, snap.Settings)
+	if err != nil {
+		return err
+	}
+	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB)
+
 	for i, chunk := range chunkGames(pushGames, maxGamesPerRequest) {
+		if idle {
+			break
+		}
 		req := putRequest{
 			DeviceID:         deviceID,
 			SettingsRevision: revision,
@@ -360,6 +471,48 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	s.mu.Unlock()
 
 	return nil
+}
+
+func samePortable(a, b settings.Portable) (bool, error) {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false, fmt.Errorf("encode local settings: %w", err)
+	}
+	right, err := json.Marshal(b)
+	if err != nil {
+		return false, fmt.Errorf("encode remote settings: %w", err)
+	}
+	return bytes.Equal(left, right), nil
+}
+
+func sameStamp(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Truncate(time.Microsecond).Equal(b.Truncate(time.Microsecond))
+}
+
+func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame) bool {
+	for igdbID, r := range results {
+		rem, known := remote[igdbID]
+		if !known {
+			return false
+		}
+		prev, seen := st.Games[igdbID]
+		if !seen || prev.DeviceSeconds != r.device {
+			return false
+		}
+		if rem.Owned != r.combined.Owned || rem.Favorite != r.combined.Favorite || rem.Status != r.combined.Status {
+			return false
+		}
+		if !sameStamp(rem.FavoriteAt, r.combined.FavoriteAt) || !sameStamp(rem.StatusAt, r.combined.StatusAt) {
+			return false
+		}
+		if !sameStamp(rem.LastPlayedAt, r.combined.LastPlayed) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) applyRemoteSettings(remote settings.Portable) error {

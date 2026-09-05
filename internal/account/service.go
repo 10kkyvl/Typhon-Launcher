@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -311,6 +312,17 @@ func (s *Service) GetCurrentUser() (CurrentUser, error) {
 	}
 	defer cancel()
 	return s.client.Me(ctx)
+}
+
+//wails:ignore
+func (s *Service) CurrentProfileSettings() ProfileSettings {
+	profile := s.currentProfile()
+	if profile.User.ID == "" {
+		return DefaultProfileSettings()
+	}
+	settings := profile.User.Profile
+	settings.Showcase = slices.Clone(settings.Showcase)
+	return settings
 }
 
 func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {

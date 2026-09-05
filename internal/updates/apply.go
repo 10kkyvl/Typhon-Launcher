@@ -17,6 +17,7 @@ import (
 	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/platform"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
 
@@ -27,18 +28,18 @@ const (
 )
 
 var (
-	errDownloadFailed = errors.New("не удалось скачать данные обновления")
-	errInstallFailed  = errors.New("не удалось установить обновление")
-	errStagingEmpty   = errors.New("временная установка пуста")
-	errNoLaunchTarget = errors.New("исполняемый файл не найден после обновления")
-	errSwapFailed     = errors.New("не удалось заменить установленную версию")
-	errCarryOver      = errors.New("не удалось перенести пользовательские файлы из предыдущей версии")
+	errDownloadFailed = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
+	errInstallFailed  = uierr.New("updates.install_failed", "не удалось установить обновление")
+	errStagingEmpty   = uierr.New("updates.staging_empty", "временная установка пуста")
+	errNoLaunchTarget = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
+	errSwapFailed     = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
+	errCarryOver      = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
 
-	errUnavailablePrefetch = errors.New("предварительная загрузка недоступна для этой стратегии")
+	errUnavailablePrefetch = uierr.New("updates.prefetch_unavailable", "предварительная загрузка недоступна для этой стратегии")
 
-	errNoFreeSpaceForBackup = errors.New("недостаточно места для резервной копии перед обновлением")
+	errNoFreeSpaceForBackup = uierr.New("updates.no_free_space_for_backup", "недостаточно места для резервной копии перед обновлением")
 
-	errDownloadStalled = errors.New("загрузка остановилась: нет сети или источников, повторите обновление позже")
+	errDownloadStalled = uierr.New("updates.download_stalled", "загрузка остановилась: нет сети или источников, повторите обновление позже")
 )
 
 // updateStallTimeout bounds how long an update job waits on a download that

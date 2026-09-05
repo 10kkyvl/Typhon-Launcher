@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"typhon/internal/uierr"
 
 	"typhon/internal/download"
 	"typhon/internal/hashdir"
@@ -146,7 +147,7 @@ func (s *Service) List() []Job {
 func (s *Service) SelectTargetFolder() (string, error) {
 	app := application.Get()
 	if app == nil {
-		return "", errors.New("диалог недоступен")
+		return "", uierr.New("relocate.dialog_unavailable", "диалог недоступен")
 	}
 	dialog := app.Dialog.OpenFile().
 		SetTitle("Выберите папку назначения").
@@ -179,10 +180,10 @@ func (s *Service) context() (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closing {
-		return nil, errors.New("операция переноса недоступна: сервис завершает работу")
+		return nil, uierr.New("relocate.shutting_down", "операция переноса недоступна: сервис завершает работу")
 	}
 	if s.ctx == nil {
-		return nil, errors.New("операция переноса недоступна: сервис ещё не запущен")
+		return nil, uierr.New("relocate.not_ready", "операция переноса недоступна: сервис ещё не запущен")
 	}
 	return s.ctx, nil
 }
@@ -231,7 +232,7 @@ func (s *Service) registerJob(job Job) error {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
-		return errors.New("операция переноса недоступна: сервис завершает работу")
+		return uierr.New("relocate.shutting_down", "операция переноса недоступна: сервис завершает работу")
 	}
 	if err := s.conflictsLocked(job.GameID, job.Source, job.Target); err != nil {
 		s.mu.Unlock()

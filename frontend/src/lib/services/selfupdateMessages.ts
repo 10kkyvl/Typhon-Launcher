@@ -1,49 +1,93 @@
+import { errorCode, msg } from '../i18n';
+import type { MessageKey } from '../i18n';
 import type { SelfUpdateOutcome, SelfUpdateStatus } from './selfupdate';
 
-const REASONS: [string, string][] = [
-  [
-    'left the launcher binary unchanged',
-    'Установщик не заменил файлы запущенного лаунчера. Откройте Typhon из меню Пуск или переустановите вручную.',
-  ],
-  ['launcher did not exit', 'Лаунчер не закрылся вовремя, обновление отменено.'],
-  ['downloaded hash differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
-  ['downloaded size differs', 'Загруженный установщик повреждён. Скачайте обновление заново.'],
-  ['no verified update is ready', 'Установщик не найден. Скачайте обновление заново.'],
-  ['run installer', 'Установщик завершился с ошибкой.'],
-  ['artifact download stalled', 'Сервер обновлений перестал отдавать данные. Проверьте соединение и попробуйте ещё раз.'],
-  ['Client.Timeout', 'Сервер обновлений не ответил вовремя. Проверьте соединение и попробуйте ещё раз.'],
-  ['context deadline exceeded', 'Сервер обновлений не ответил вовремя. Проверьте соединение и попробуйте ещё раз.'],
-  ['context canceled', 'Загрузка обновления прервана.'],
-  ['no such host', 'Не удалось связаться с сервером обновлений. Проверьте интернет.'],
-  ['connection refused', 'Не удалось связаться с сервером обновлений. Проверьте интернет.'],
-  ['dial tcp', 'Не удалось связаться с сервером обновлений. Проверьте интернет.'],
-  ['tls:', 'Не удалось установить защищённое соединение с сервером обновлений.'],
-  ['artifact endpoint returned an error status', 'Сервер обновлений вернул ошибку. Попробуйте позже.'],
-  ['manifest endpoint returned an error status', 'Сервер обновлений вернул ошибку. Попробуйте позже.'],
-  ['signature does not verify', 'Подпись обновления не совпала. Обновление отклонено.'],
-  ['unknown key', 'Подпись обновления не совпала. Обновление отклонено.'],
-  ['manifest is malformed', 'Сервер обновлений вернул повреждённые данные. Попробуйте позже.'],
-  ['manifest exceeds the size limit', 'Сервер обновлений вернул повреждённые данные. Попробуйте позже.'],
-  ['manifest version is not comparable', 'Сервер обновлений вернул повреждённые данные. Попробуйте позже.'],
-  ['manifest has no artifact for this platform', 'Для этой системы обновление не опубликовано.'],
-  ['another update operation is in progress', 'Другая операция обновления уже идёт.'],
-  ['check for an update before downloading', 'Сначала проверьте обновления.'],
-  ['not enough space', 'На диске не хватает места для обновления.'],
-  ['Access is denied', 'Нет прав на запись в папку обновлений.'],
-  ['permission denied', 'Нет прав на запись в папку обновлений.'],
-];
-
-const CODE_REASONS: Record<string, string> = {
-  manifest: 'Не удалось проверить обновления.',
-  artifact: 'Не удалось проверить обновления.',
-  version: 'Не удалось проверить обновления.',
-  download: 'Не удалось загрузить обновление.',
-  apply: 'Не удалось установить обновление.',
+const REASONS: Record<string, MessageKey> = {
+  'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
+  'selfupdate.parent_still_running': 'state.selfupdateReasonLauncherDidNotExit',
+  'selfupdate.hash_mismatch': 'state.selfupdateReasonCorruptDownload',
+  'selfupdate.size_mismatch': 'state.selfupdateReasonCorruptDownload',
+  'selfupdate.not_ready': 'state.selfupdateReasonInstallerNotFound',
+  'selfupdate.stalled': 'state.selfupdateReasonServerStalled',
+  'selfupdate.artifact_status': 'state.selfupdateReasonServerErrorStatus',
+  'selfupdate.manifest_status': 'state.selfupdateReasonServerErrorStatus',
+  'selfupdate.bad_signature': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.unknown_key': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.bad_public_key': 'state.selfupdateReasonSignatureInvalid',
+  'selfupdate.invalid_manifest': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.manifest_too_large': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_version': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_version_path': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.empty_config_dir': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.unsupported_artifact_kind': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_name': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_url': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_artifact_size': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_hash': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_release_note': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_change_kind': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.empty_note_text': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.invalid_note_text': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.too_many_release_notes': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.unordered_release_notes': 'state.selfupdateReasonManifestCorrupt',
+  'selfupdate.no_artifact': 'state.selfupdateReasonPlatformUnsupported',
+  'selfupdate.apply_unsupported': 'state.selfupdateReasonPlatformUnsupported',
+  'selfupdate.busy': 'state.selfupdateReasonOperationInProgress',
+  'selfupdate.check_first': 'state.selfupdateReasonCheckFirst',
+  'selfupdate.read_only': 'errUpdates.selfupdateReadOnly',
+  'selfupdate.manifest_outdated': 'errUpdates.selfupdateManifestOutdated',
+  'selfupdate.installer_failed': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_empty': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_unsafe': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.install_dir_not_dir': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_outside_cache': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_not_regular_file': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.installer_path_unsafe': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_absolute': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_clean': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_outside_install': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_path_not_regular': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.launcher_digest_mismatch': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.relaunch_path_empty': 'state.selfupdateReasonInstallerFailed',
 };
 
+// net/http, crypto/tls and the OS surface these directly, with no sentinel of
+// ours to attach a code to; classifying them in Go would mean intercepting
+// every dial/read/write call in the package, so their own stable english
+// wording is matched here instead, once, as a last resort.
+const RESIDUAL: [string, MessageKey][] = [
+  ['Client.Timeout', 'state.selfupdateReasonServerTimeout'],
+  ['context deadline exceeded', 'state.selfupdateReasonServerTimeout'],
+  ['context canceled', 'state.selfupdateReasonDownloadCancelled'],
+  ['no such host', 'state.selfupdateReasonCannotReachServer'],
+  ['connection refused', 'state.selfupdateReasonCannotReachServer'],
+  ['dial tcp', 'state.selfupdateReasonCannotReachServer'],
+  ['tls:', 'state.selfupdateReasonTlsFailed'],
+  ['not enough space', 'state.selfupdateReasonNoSpace'],
+  ['Access is denied', 'state.selfupdateReasonAccessDenied'],
+  ['permission denied', 'state.selfupdateReasonAccessDenied'],
+];
+
+function codeReasons(): Record<string, string> {
+  return {
+    manifest: msg('state.selfupdateCodeCheckFailed'),
+    artifact: msg('state.selfupdateCodeCheckFailed'),
+    version: msg('state.selfupdateCodeCheckFailed'),
+    download: msg('state.selfupdateCodeDownloadFailed'),
+    apply: msg('state.selfupdateCodeApplyFailed'),
+  };
+}
+
 function translate(raw: string): string {
-  const known = REASONS.find(([marker]) => raw.includes(marker));
-  return known ? known[1] : '';
+  const key = REASONS[errorCode(raw)];
+  if (key) return msg(key);
+  const known = RESIDUAL.find(([marker]) => raw.includes(marker));
+  return known ? msg(known[1]) : '';
 }
 
 export function outcomeReason(outcome: SelfUpdateOutcome): string {
@@ -59,5 +103,5 @@ export function updateReason(err: unknown): string {
 export function statusReason(status: SelfUpdateStatus): string {
   const raw = status.error ?? '';
   if (!raw) return '';
-  return translate(raw) || CODE_REASONS[status.errorCode ?? ''] || raw;
+  return translate(raw) || codeReasons()[status.errorCode ?? ''] || raw;
 }

@@ -2,6 +2,7 @@
   import { tick, untrack } from 'svelte';
   import Select from './Select.svelte';
   import { rateLimitLabel, rateMbText } from '../utils/format';
+  import { msg } from '../i18n';
 
   let {
     value,
@@ -22,7 +23,7 @@
   const options = $derived([
     { id: 'none', label: rateLimitLabel(0) },
     ...presets.map((mb) => ({ id: String(mb), label: rateLimitLabel(mb * MB) })),
-    { id: 'custom', label: 'Своё значение' },
+    { id: 'custom', label: msg('ui.customValue') },
   ]);
 
   const presetId = $derived.by(() => {
@@ -69,7 +70,7 @@
     }
     const mb = Number(raw);
     if (!Number.isFinite(mb) || mb < minMb || mb > maxMb) {
-      error = `Введите число от ${rateMbText(minMb * MB)} до ${rateMbText(maxMb * MB)}`;
+      error = msg('ui.numberRangeHint', { min: rateMbText(minMb * MB), max: rateMbText(maxMb * MB) });
       return;
     }
     error = '';
@@ -102,7 +103,7 @@
         type="text"
         inputmode="decimal"
         placeholder={rateMbText(50 * MB)}
-        aria-label="Скорость в МБ/с"
+        aria-label={msg('ui.speedMbps')}
         aria-invalid={error !== ''}
         value={draft}
         oninput={(event) => {
@@ -113,7 +114,7 @@
         onblur={commit}
         onkeydown={keydown}
       />
-      <span class="unit">МБ/с</span>
+      <span class="unit">{msg('units.mbs')}</span>
     </div>
     {#if error}
       <span class="error">{error}</span>

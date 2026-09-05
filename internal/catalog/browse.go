@@ -12,8 +12,21 @@ const (
 	maxPageSize     = 200
 )
 
+var genreGroups = []struct {
+	label   string
+	sources []string
+}{
+	{"Экшен", []string{"Action", "Fighting", "Hack and slash/Beat 'em up"}},
+	{"Ролевые", []string{"Role-playing (RPG)", "RPG"}},
+	{"Шутеры", []string{"Shooter"}},
+	{"Приключения", []string{"Adventure", "Point-and-click", "Platform", "Platformer"}},
+	{"Стратегии", []string{"Strategy", "Real Time Strategy (RTS)", "Turn-based strategy (TBS)", "Tactical"}},
+	{"Инди", []string{"Indie"}},
+}
+
 type GameQuery struct {
 	Search   string `json:"search"`
+	Genre    string `json:"genre"`
 	Sort     string `json:"sort"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
@@ -24,6 +37,11 @@ type GamePage struct {
 	Total    int    `json:"total"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
+}
+
+type GenreFacet struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
 }
 
 func (s *Service) QueryGames(q GameQuery) GamePage {
@@ -38,6 +56,7 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	}
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 	normalized := titles.Normalize(search)
+	genre := strings.TrimSpace(q.Genre)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -48,6 +67,9 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 		if search != "" && !entryMatches(e, search, normalized) {
 			continue
 		}
+		if genre != "" && !genreMatches(e.game.Genres, genre) {
+			continue
+		}
 		filtered = append(filtered, e.game)
 	}
 	sortGames(filtered, q.Sort)
@@ -56,6 +78,47 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	start := min((q.Page-1)*q.PageSize, total)
 	end := min(start+q.PageSize, total)
 	return GamePage{Items: filtered[start:end], Total: total, Page: q.Page, PageSize: q.PageSize}
+}
+
+func (s *Service) GenreFacets() []GenreFacet {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	counts := make([]int, len(genreGroups))
+	for i := range s.idx.entries {
+		genres := s.idx.entries[i].game.Genres
+		for gi, group := range genreGroups {
+			if genresMatchAny(genres, group.sources) {
+				counts[gi]++
+			}
+		}
+	}
+
+	out := make([]GenreFacet, len(genreGroups))
+	for i, group := range genreGroups {
+		out[i] = GenreFacet{Label: group.label, Count: counts[i]}
+	}
+	return out
+}
+
+func genreMatches(genres []string, label string) bool {
+	for _, group := range genreGroups {
+		if strings.EqualFold(group.label, label) {
+			return genresMatchAny(genres, group.sources)
+		}
+	}
+	return false
+}
+
+func genresMatchAny(genres, sources []string) bool {
+	for _, g := range genres {
+		for _, src := range sources {
+			if strings.EqualFold(g, src) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Service) GetGames(ids []string) []Game {

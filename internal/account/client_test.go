@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,39 @@ func TestClientMe(t *testing.T) {
 	}
 	if user.Username != "egor" || user.ID != "u1" {
 		t.Fatalf("unexpected user: %+v", user)
+	}
+}
+
+func TestClientMeOldStyleProfileReplyGetsNewDefaults(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(`{
+			"id": "u1", "username": "egor", "displayName": "Egor", "email": "egor@example.com",
+			"createdAt": "2024-01-02T03:04:05Z",
+			"profile": {
+				"showStats": false, "showPlaying": true, "showActivity": true, "showOnline": true,
+				"showcase": ["favorites"]
+			}
+		}`)); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("test-token"))
+	user, err := c.Me(context.Background())
+	if err != nil {
+		t.Fatalf("Me() error = %v", err)
+	}
+	if user.Profile.Visibility != VisibilityFriends {
+		t.Errorf("visibility = %q, want %q", user.Profile.Visibility, VisibilityFriends)
+	}
+	if !user.Profile.ShowPlaytime || !user.Profile.ShowLibrary {
+		t.Errorf("profile = %+v, want the two new toggles defaulted to true", user.Profile)
+	}
+	if user.Profile.ShowStats {
+		t.Errorf("profile = %+v, want showStats to keep the server's value (false)", user.Profile)
 	}
 }
 
@@ -208,7 +242,7 @@ func TestClientUndecodableSuccessBody(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for undecodable body, got user %+v", user)
 	}
-	if user != (CurrentUser{}) {
+	if !reflect.DeepEqual(user, CurrentUser{}) {
 		t.Fatalf("expected zero user on error, got %+v", user)
 	}
 }

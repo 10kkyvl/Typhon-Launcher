@@ -17,6 +17,7 @@
   import SearchInput from './SearchInput.svelte';
   import Select from './Select.svelte';
   import StatusBadge from './StatusBadge.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -26,21 +27,29 @@
 
   const source = $derived(sourceId ? $sources.find((s) => s.id === sourceId) : undefined);
 
-  const statusOptions = [
-    { id: 'all', label: 'Все' },
-    { id: 'matched', label: 'Сопоставлено' },
-    { id: 'review', label: 'На проверку' },
-    { id: 'unmatched', label: 'Без совпадения' },
-    { id: 'removed', label: 'Удалённые' },
-    { id: 'new', label: 'Новые' },
-  ];
+  const statusOptions = $derived([
+    { id: 'all', label: msg('modals.sourceDetailsStatusAll') },
+    { id: 'matched', label: msg('modals.sourceDetailsStatusMatched') },
+    { id: 'review', label: msg('modals.sourceDetailsStatusReview') },
+    { id: 'unmatched', label: msg('modals.sourceDetailsStatusUnmatched') },
+    { id: 'removed', label: msg('modals.sourceDetailsStatusRemoved') },
+    { id: 'new', label: msg('modals.sourceDetailsStatusNew') },
+  ]);
 
-  const statusBadge: Record<string, { kind: 'success' | 'warning' | 'neutral'; label: string }> = {
-    active: { kind: 'success', label: 'Активен' },
-    disabled: { kind: 'neutral', label: 'Отключен' },
-    error: { kind: 'neutral', label: 'Ошибка' },
-    updating: { kind: 'neutral', label: 'Обновление' },
-  };
+  function statusBadgeInfo(status: string): { kind: 'success' | 'warning' | 'neutral'; label: string } | undefined {
+    switch (status) {
+      case 'active':
+        return { kind: 'success', label: msg('modals.sourceDetailsStatusActive') };
+      case 'disabled':
+        return { kind: 'neutral', label: msg('modals.sourceDetailsStatusDisabled') };
+      case 'error':
+        return { kind: 'neutral', label: msg('common.error') };
+      case 'updating':
+        return { kind: 'neutral', label: msg('modals.sourceDetailsStatusUpdating') };
+      default:
+        return undefined;
+    }
+  }
 
   let details = $state<SourceDetails | null>(null);
   let filterStatus = $state('all');
@@ -146,7 +155,7 @@
 
   async function doRemove() {
     if (!source) return;
-    if (!window.confirm(`Удалить источник «${source.name}»?`)) return;
+    if (!window.confirm(msg('modals.sourceDetailsRemoveConfirm', { name: source.name }))) return;
     await removeSource(source.id);
     open = false;
   }
@@ -160,24 +169,24 @@
   }
 
   function matchLabel(view: ReleaseView) {
-    if (view.release.matchStatus === 'matched') return { kind: 'success' as const, label: 'Сопоставлено' };
-    if (view.release.matchStatus === 'review') return { kind: 'warning' as const, label: 'На проверку' };
-    return { kind: 'neutral' as const, label: 'Без совпадения' };
+    if (view.release.matchStatus === 'matched') return { kind: 'success' as const, label: msg('modals.sourceDetailsStatusMatched') };
+    if (view.release.matchStatus === 'review') return { kind: 'warning' as const, label: msg('modals.sourceDetailsStatusReview') };
+    return { kind: 'neutral' as const, label: msg('modals.sourceDetailsStatusUnmatched') };
   }
 
   const from = $derived(total === 0 ? 0 : (page - 1) * pageSize + 1);
   const to = $derived(Math.min(page * pageSize, total));
 </script>
 
-<Modal bind:open title={source?.name ?? 'Источник'} width="92rem">
+<Modal bind:open title={source?.name ?? msg('modals.sourceDetailsTitle')} width="92rem">
   {#if source}
     <div class="sections">
       <section class="head">
         <div class="head-meta">
           <span class="url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
           <div class="head-badges">
-            <StatusBadge kind={statusBadge[source.status]?.kind ?? 'neutral'} label={statusBadge[source.status]?.label ?? source.status} />
-            <span class="updated">Обновлено: {relativeDate(source.lastUpdatedAt)}</span>
+            <StatusBadge kind={statusBadgeInfo(source.status)?.kind ?? 'neutral'} label={statusBadgeInfo(source.status)?.label ?? source.status} />
+            <span class="updated">{msg('modals.sourceDetailsUpdatedAt', { date: relativeDate(source.lastUpdatedAt) })}</span>
           </div>
           {#if source.lastError}
             <p class="error">{source.lastError}</p>
@@ -185,41 +194,41 @@
         </div>
         <div class="head-actions">
           <Button size="sm" disabled={refreshing || source.status === 'updating'} onclick={doRefresh}>
-            {source.status === 'updating' ? 'Обновление…' : 'Обновить'}
+            {source.status === 'updating' ? msg('modals.sourceDetailsRefreshing') : msg('common.refresh')}
           </Button>
-          <Button size="sm" onclick={doToggle}>{source.enabled ? 'Отключить' : 'Включить'}</Button>
-          <Button size="sm" variant="danger" onclick={doRemove}>Удалить</Button>
+          <Button size="sm" onclick={doToggle}>{source.enabled ? msg('modals.sourceDetailsDisable') : msg('modals.sourceDetailsEnable')}</Button>
+          <Button size="sm" variant="danger" onclick={doRemove}>{msg('common.delete')}</Button>
         </div>
       </section>
 
       {#if details}
         <section class="counters">
-          <div class="counter"><span class="counter-label">Всего</span><span class="counter-value">{details.total}</span></div>
-          <div class="counter"><span class="counter-label">Доступно</span><span class="counter-value">{details.available}</span></div>
-          <div class="counter"><span class="counter-label">Удалено</span><span class="counter-value">{details.removed}</span></div>
-          <div class="counter"><span class="counter-label">Новых</span><span class="counter-value">{details.new}</span></div>
-          <div class="counter"><span class="counter-label">Игнор</span><span class="counter-value">{details.ignored}</span></div>
+          <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterTotal')}</span><span class="counter-value">{details.total}</span></div>
+          <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterAvailable')}</span><span class="counter-value">{details.available}</span></div>
+          <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterRemoved')}</span><span class="counter-value">{details.removed}</span></div>
+          <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterNew')}</span><span class="counter-value">{details.new}</span></div>
+          <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterIgnored')}</span><span class="counter-value">{details.ignored}</span></div>
         </section>
       {/if}
 
       <section class="filters">
         <Select options={statusOptions} bind:value={filterStatus} width="18rem" onchange={onFilterChange} />
-        <SearchInput bind:value={search} placeholder="Поиск релизов" oninput={onSearchInput} />
+        <SearchInput bind:value={search} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 
       <section class="table">
         <div class="thead">
-          <span class="th">Исходное название</span>
-          <span class="th">Игра</span>
-          <span class="th">Версия</span>
-          <span class="th">Размер</span>
-          <span class="th">Загружено</span>
-          <span class="th">Статус</span>
+          <span class="th">{msg('modals.sourceDetailsColRawTitle')}</span>
+          <span class="th">{msg('modals.sourceDetailsColGame')}</span>
+          <span class="th">{msg('modals.sourceDetailsColVersion')}</span>
+          <span class="th">{msg('modals.sourceDetailsColSize')}</span>
+          <span class="th">{msg('modals.sourceDetailsColUploaded')}</span>
+          <span class="th">{msg('modals.sourceDetailsColStatus')}</span>
         </div>
         {#if loadingReleases}
-          <p class="empty">Загрузка…</p>
+          <p class="empty">{msg('modals.sourceDetailsLoading')}</p>
         {:else if releases.length === 0}
-          <p class="empty">Релизов не найдено</p>
+          <p class="empty">{msg('modals.sourceDetailsNoReleases')}</p>
         {:else}
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}
@@ -232,7 +241,7 @@
               <span class="cell">{relativeDate(view.release.uploadedAt)}</span>
               <span class="cell status">
                 {#if view.release.availability === 'removed'}
-                  <StatusBadge kind="danger" label="Недоступен" />
+                  <StatusBadge kind="danger" label={msg('modals.sourceDetailsUnavailable')} />
                 {:else}
                   <StatusBadge kind={badge.kind} label={badge.label} />
                   {#if view.release.matchStatus === 'matched'}
@@ -240,14 +249,14 @@
                   {/if}
                 {/if}
                 {#if view.release.new}
-                  <StatusBadge kind="accent" label="Новое" dot={false} />
+                  <StatusBadge kind="accent" label={msg('modals.sourceDetailsNewBadge')} dot={false} />
                 {/if}
               </span>
             </button>
           {/each}
         {/if}
         <div class="tfoot">
-          <span class="range">{from}–{to} из {total}</span>
+          <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
           <div class="pager">
             <Button size="sm" disabled={page <= 1} onclick={prevPage}>
               <ChevronLeft size="1.5rem" strokeWidth={1.8} />

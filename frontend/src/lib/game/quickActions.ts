@@ -1,6 +1,12 @@
+import { msg } from '../i18n';
+import { statusLabel } from './status';
+
 export type QuickAction =
   | 'play'
   | 'stop'
+  | 'favorite-add'
+  | 'favorite-remove'
+  | 'status'
   | 'folder'
   | 'saves'
   | 'verify'
@@ -26,37 +32,52 @@ export interface QuickActionState {
   hasShortcut: boolean;
   lanEnabled: boolean;
   lanShared: boolean;
+  favorite: boolean;
+  status: string;
+}
+
+function markItems(state: QuickActionState): QuickActionItem[] {
+  return [
+    state.favorite
+      ? { id: 'favorite-remove', label: msg('games.actionFavoriteRemove') }
+      : { id: 'favorite-add', label: msg('games.actionFavoriteAdd') },
+    { id: 'status', label: msg('games.actionStatus', { status: statusLabel(state.status) }) },
+  ];
 }
 
 export function quickActions(state: QuickActionState): QuickActionItem[] {
   const items: QuickActionItem[] = [];
   if (!state.installed) {
-    return [{ id: 'remove', label: 'Удалить из библиотеки', danger: true }];
+    return [
+      ...markItems(state),
+      { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
+    ];
   }
   if (state.running) {
-    items.push({ id: 'stop', label: 'Остановить' });
+    items.push({ id: 'stop', label: msg('games.stop') });
   } else if (state.hasExecutable) {
-    items.push({ id: 'play', label: 'Играть' });
+    items.push({ id: 'play', label: msg('games.play') });
   }
-  items.push({ id: 'folder', label: 'Открыть папку' });
-  items.push({ id: 'saves', label: 'Открыть сохранения' });
-  items.push({ id: 'verify', label: 'Проверить файлы' });
+  items.push(...markItems(state));
+  items.push({ id: 'folder', label: msg('games.openFolder') });
+  items.push({ id: 'saves', label: msg('games.actionOpenSaves') });
+  items.push({ id: 'verify', label: msg('games.actionVerify') });
   if (!state.running) {
-    items.push({ id: 'move', label: 'Переместить на другой диск' });
+    items.push({ id: 'move', label: msg('games.actionMove') });
   }
   if (state.lanEnabled) {
     items.push(
       state.lanShared
-        ? { id: 'lan-unshare', label: 'Не раздавать в локальной сети' }
-        : { id: 'lan-share', label: 'Раздать в локальной сети' },
+        ? { id: 'lan-unshare', label: msg('games.actionLanUnshare') }
+        : { id: 'lan-share', label: msg('games.actionLanShare') },
     );
   }
   items.push(
     state.hasShortcut
-      ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }
-      : { id: 'shortcut-create', label: 'Создать ярлык на рабочем столе' },
+      ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
+      : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
   );
-  items.push({ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true });
-  items.push({ id: 'remove', label: 'Удалить из библиотеки', danger: true });
+  items.push({ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true });
+  items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true });
   return items;
 }

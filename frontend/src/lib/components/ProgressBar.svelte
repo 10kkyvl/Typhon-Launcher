@@ -22,13 +22,13 @@
   .track {
     width: 100%;
     background: rgba(255, 255, 255, 0.07);
-    border-radius: var(--cut) 99rem 99rem var(--cut);
+    border-radius: 99rem;
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    border-radius: var(--cut) 99rem 99rem var(--cut);
+    border-radius: 99rem;
     transition: width 600ms linear;
   }
 </style>

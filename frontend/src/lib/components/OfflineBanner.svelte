@@ -2,6 +2,7 @@
   import { RefreshCw, WifiOff } from '@lucide/svelte';
   import Button from './Button.svelte';
   import { retryBootstrap } from '../stores/user';
+  import { msg } from '../i18n';
 
   let retrying = $state(false);
 
@@ -19,12 +20,11 @@
 <div class="offline-banner">
   <span class="icon"><WifiOff size="1.6rem" strokeWidth={1.8} /></span>
   <span class="text">
-    Автономный режим: нет связи с сервером аккаунтов. Профиль показан из кэша, каталог, библиотека и загрузки
-    работают как обычно.
+    {msg('ui.offlineBannerText')}
   </span>
   <Button size="sm" disabled={retrying} onclick={retry}>
     <RefreshCw size="1.4rem" strokeWidth={1.8} class={retrying ? 'spin' : ''} />
-    {retrying ? 'Проверяем связь…' : 'Повторить'}
+    {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
   </Button>
 </div>
 

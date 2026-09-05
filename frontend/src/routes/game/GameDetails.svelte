@@ -1,12 +1,23 @@
 <script lang="ts">
-  import { BookmarkPlus, ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
+  import {
+    BookmarkPlus,
+    ChevronRight,
+    Download,
+    EllipsisVertical,
+    FolderOpen,
+    Heart,
+    Play,
+    Square,
+  } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -16,8 +27,11 @@
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
     clean,
@@ -45,7 +59,15 @@
     type DownloadOrigin,
     type DownloadStatus,
   } from '../../lib/services/downloads';
-  import { addCatalogGame, createShortcut, playGame, removeShortcut, stopGame } from '../../lib/services/library';
+  import {
+    addCatalogGame,
+    createShortcut,
+    markError,
+    playGame,
+    removeShortcut,
+    setFavorite,
+    stopGame,
+  } from '../../lib/services/library';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -70,7 +92,8 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesLabel, numericDate, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
 
   let { id }: { id: string } = $props();
 
@@ -82,6 +105,7 @@
 
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
+  let statusOpen = $state(false);
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -230,7 +254,7 @@
     if (!info) return '';
     if (info.releaseDate) {
       const date = new Date(info.releaseDate);
-      if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('ru-RU');
+      if (!Number.isNaN(date.getTime())) return numericDate(date);
     }
     return info.releaseYear ? String(info.releaseYear) : '';
   });
@@ -262,10 +286,10 @@
 
   const gameFacts = $derived(
     facts([
-      { label: 'Дата выхода', value: releaseDateLabel },
-      { label: 'Разработчик', value: info?.developer },
-      { label: 'Издатель', value: info?.publisher },
-      { label: 'Платформы', value: joinLimited(platforms, 4), full: platforms.join(', ') },
+      { label: msg('games.detailFactReleaseDate'), value: releaseDateLabel },
+      { label: msg('games.detailFactDeveloper'), value: info?.developer },
+      { label: msg('games.detailFactPublisher'), value: info?.publisher },
+      { label: msg('games.detailFactPlatforms'), value: joinLimited(platforms, 4), full: platforms.join(', ') },
     ]),
   );
 
@@ -273,16 +297,27 @@
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
   );
 
+  let activeTab = $state('overview');
+
+  const tabs = $derived([
+    { id: 'overview', label: msg('games.detailTabOverview') },
+    ...(shots.length > 0 ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
+  ]);
+
+  $effect(() => {
+    if (activeTab === 'screenshots' && shots.length === 0) activeTab = 'overview';
+  });
+
   const installFacts = $derived.by(() => {
     if (!localGame || !installed) return [];
     const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
     return facts([
-      { label: 'Версия', value: localGame.version },
-      { label: 'Размер', value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
-      { label: 'Исполняемый файл', value: exe, full: localGame.executable, mono: true },
-      { label: 'Наиграно', value: playtime(localGame.playtimeSeconds) },
-      { label: 'Последний запуск', value: relativeDate(localGame.lastPlayed) },
-      { label: 'Добавлена', value: relativeDate(localGame.installedAt) },
+      { label: msg('games.detailFactVersion'), value: localGame.version },
+      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
+      { label: msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
+      { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
+      { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },
+      { label: msg('games.detailFactAdded'), value: relativeDate(localGame.installedAt) },
     ]);
   });
 
@@ -316,11 +351,11 @@
 
   const busy = $derived(
     busyState([
-      ownInstall ? { active: true, label: installStatusLabels[ownInstall.status], progress: ownInstall.progress } : null,
+      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
-        ? { active: true, label: stepLabels[update.step ?? 'download'], progress: update.progress }
+        ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,
-      ownDownload ? { active: true, label: statusLabels[ownDownload.status], progress: ownDownload.progress } : null,
+      ownDownload ? { active: true, label: statusLabels(ownDownload.status), progress: ownDownload.progress } : null,
     ]),
   );
 
@@ -344,26 +379,29 @@
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
-            { id: 'meta-refresh', label: metaRefreshing ? 'Обновление…' : 'Обновить метаданные' },
-            { id: 'meta-change', label: 'Сменить сопоставление' },
+            {
+              id: 'meta-refresh',
+              label: metaRefreshing ? msg('games.detailMetaRefreshingLabel') : msg('games.detailMetaRefreshLabel'),
+            },
+            { id: 'meta-change', label: msg('games.detailMetaChangeLabel') },
           ]
-        : [{ id: 'meta-find', label: 'Найти метаданные' }]
+        : [{ id: 'meta-find', label: msg('games.detailMetaFindLabel') }]
       : []),
     ...(installed
       ? [
           localGame?.shortcutPath
-            ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }
-            : { id: 'shortcut-create', label: 'Создать ярлык на рабочем столе' },
+            ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
+            : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
+    ...(installed ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }] : []),
     ...(localGame
-      ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed }]
       : []),
     ...(terminalDownload
       ? [
-          { id: 'remove-download', label: 'Удалить загрузку', danger: true, separator: true },
-          { id: 'discard-download', label: 'Удалить загрузку и файлы', danger: true },
+          { id: 'remove-download', label: msg('games.detailRemoveDownloadLabel'), danger: true, separator: true },
+          { id: 'discard-download', label: msg('games.detailDiscardDownloadLabel'), danger: true },
         ]
       : []),
   ]);
@@ -397,12 +435,26 @@
     }
   }
 
+  async function mark(fn: () => Promise<unknown>, fallback: string) {
+    try {
+      await fn();
+    } catch (err) {
+      toast(markError(err, fallback), 'danger');
+    }
+  }
+
+  function toggleFavorite() {
+    const current = localGame;
+    if (!current) return;
+    void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
+  }
+
   async function createDesktopShortcut() {
     if (!localGame) return;
     try {
       await createShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось создать ярлык', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutCreateError'), 'danger');
     }
   }
 
@@ -411,7 +463,7 @@
     try {
       await removeShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить ярлык', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutRemoveError'), 'danger');
     }
   }
 
@@ -420,9 +472,9 @@
     metaRefreshing = true;
     try {
       metaView = await refreshMetadata(canonicalId);
-      toast('Метаданные обновлены', 'success');
+      toast(msg('games.detailMetaRefreshedToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось обновить метаданные', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaRefreshError'), 'danger');
     } finally {
       metaRefreshing = false;
     }
@@ -434,7 +486,7 @@
     try {
       metaView = await dismissMetadataMatch(canonicalId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось отложить поиск метаданных', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaSkipError'), 'danger');
     } finally {
       metaSkipping = false;
     }
@@ -485,7 +537,7 @@
     try {
       await resumeDownload(terminalDownload.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось повторить загрузку', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailRetryDownloadError'), 'danger');
     }
   }
 
@@ -505,7 +557,7 @@
       await removeDownload(terminalDownload.id);
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailRemoveDownloadError'), 'danger');
     }
   }
 
@@ -520,7 +572,7 @@
       await (freesDisk ? cancelDownload(id) : deleteDownloadData(id));
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку и файлы', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailDiscardDownloadError'), 'danger');
     }
   }
 
@@ -531,7 +583,7 @@
       downloadOrigin = { releaseId: request.releaseId, sourceId: request.sourceId, gameId: request.gameId };
       downloadModalOpen = true;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось подготовить загрузку', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailPrepareDownloadError'), 'danger');
     }
   }
 
@@ -549,7 +601,7 @@
     try {
       await playGame(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
     }
   }
 
@@ -558,7 +610,7 @@
     try {
       await stopGame(localGame.id);
     } catch {
-      toast('Не удалось остановить игру', 'danger');
+      toast(msg('games.errorStopFailed'), 'danger');
     }
   }
 
@@ -567,7 +619,7 @@
     try {
       await openFolder(localGame.installDir);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('games.errorFolderUnavailable'), 'danger');
     }
   }
 
@@ -578,9 +630,9 @@
     addingToLibrary = true;
     try {
       await addCatalogGame(canonicalId, title, coverSrc);
-      toast('Игра добавлена в библиотеку', 'success');
+      toast(msg('games.detailAddedToLibraryToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось добавить игру в библиотеку', 'danger');
+      toast(err instanceof Error && err.message ? err.message : msg('games.detailAddToLibraryError'), 'danger');
     } finally {
       addingToLibrary = false;
     }
@@ -606,9 +658,9 @@
 </script>
 
 {#if missing}
-  <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
+  <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
     {#snippet actions()}
-      <Button onclick={() => navigate('library')}>В библиотеку</Button>
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
     {/snippet}
   </EmptyState>
 {:else}
@@ -622,12 +674,12 @@
 
     <nav class="breadcrumb">
       {#if installed}
-        <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
+        <button class="crumb" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</button>
       {:else}
-        <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
+        <button class="crumb" onclick={() => navigate('library')}>{msg('games.libraryWord')}</button>
       {/if}
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
-      <span class="crumb current">{title || 'Игра'}</span>
+      <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
     </nav>
 
     <div class="foot">
@@ -642,16 +694,19 @@
       <div class="ident">
         <div class="state">
           {#if running}
-            <StatusBadge kind="accent" label="Запущена" />
+            <StatusBadge kind="accent" label={msg('games.runningLabel')} />
           {:else if installed}
-            <StatusBadge kind="success" label="Установлено" dot={false} />
+            <StatusBadge kind="success" label={msg('games.installedStatusWord')} dot={false} />
           {:else if localGame}
-            <StatusBadge kind="neutral" label="Удалена с компьютера" dot={false} />
+            <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
           {:else if title}
-            <StatusBadge kind="neutral" label="Не установлено" dot={false} />
+            <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
           {/if}
           {#if updateAvailable && !busy}
-            <StatusBadge kind="accent" label="Доступно обновление" />
+            <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
+          {/if}
+          {#if localGame?.status}
+            <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
           {/if}
         </div>
 
@@ -693,21 +748,35 @@
           {#if primary.kind === 'update'}
             <Button size="lg" onclick={play}>
               <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-              Играть
+              {msg('games.play')}
             </Button>
           {/if}
 
           {#if !localGame && canonicalId}
             <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
               <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
-              Добавить в библиотеку
+              {msg('games.detailAddToLibraryButton')}
+            </Button>
+          {/if}
+
+          {#if localGame}
+            <IconButton
+              label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
+              active={Boolean(localGame.favorite)}
+              onclick={toggleFavorite}
+            >
+              <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+            </IconButton>
+
+            <Button size="lg" onclick={() => (statusOpen = true)}>
+              {msg('games.actionStatus', { status: statusLabel(localGame.status) })}
             </Button>
           {/if}
 
           {#if menuItems.length > 0}
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
-                <IconButton label="Ещё" onclick={toggle}>
+                <IconButton label={msg('games.moreLabel')} onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -718,117 +787,139 @@
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
           <p class="note danger">{terminalDownload.error}</p>
         {:else if localGame && !installed}
-          <p class="note">Игра удалена с компьютера — установите её снова из доступных загрузок.</p>
+          <p class="note">{msg('games.detailUninstalledNote')}</p>
         {/if}
       </div>
     </div>
   </section>
 
+  {#if tabs.length > 1}
+    <div class="tabs-wrap">
+      <Tabs {tabs} bind:value={activeTab} />
+    </div>
+  {/if}
+
   <div class="body">
     <div class="main">
-      {#if metaState === 'searching'}
-        <div class="meta-note" role="status">
-          <span class="spinner"></span>
-          <div class="meta-text">
-            <p class="meta-title">Ищем описание и обложку</p>
-            <p class="meta-hint">Сопоставляем «{title || 'игру'}» с базой IGDB — это занимает несколько секунд.</p>
-          </div>
-        </div>
-      {:else if metaState === 'unmatched' || metaState === 'failed'}
-        <div class="meta-note">
-          <div class="meta-text">
-            <p class="meta-title">
-              {metaState === 'unmatched' ? 'Не удалось подобрать описание' : 'Метаданные не загрузились'}
-            </p>
-            <p class="meta-hint">
-              {metaState === 'unmatched'
-                ? 'В базе IGDB нет однозначного совпадения. Выберите игру вручную или оставьте карточку как есть.'
-                : 'Сервис метаданных не ответил. Попробуйте ещё раз или выберите игру вручную.'}
-            </p>
-          </div>
-          <div class="meta-actions">
-            {#if metaState === 'failed'}
-              <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
-                {metaRefreshing ? 'Повторяем…' : 'Повторить'}
-              </Button>
-              <Button size="sm" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {:else}
-              <Button size="sm" variant="primary" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {/if}
-            <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>Не искать</Button>
-          </div>
-        </div>
-      {/if}
-
-      {#if summary.text}
-        <p class="summary">{summary.text}</p>
-        {#if summary.expandable}
-          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
-            {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
-          </button>
-        {/if}
-      {:else if !title || metaState === 'searching'}
-        <div class="skeleton line"></div>
-        <div class="skeleton line"></div>
-        <div class="skeleton line short"></div>
-      {/if}
-
-      {#if tags.length > 0}
-        <div class="tags">
-          {#each tags as tag (tag)}
-            <span class="tag">{tag}</span>
+      {#if activeTab === 'screenshots'}
+        <div
+          class="shots"
+          class:featured={shots.length >= 5}
+          class:one={shots.length === 1}
+          style:--cols={shotCols}
+        >
+          {#each shots as shot, index (shot.id)}
+            <button class="shot" onclick={() => openShot(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
+              <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
+            </button>
           {/each}
         </div>
-      {/if}
+      {:else}
+        {#if metaState === 'searching'}
+          <div class="meta-note" role="status">
+            <span class="spinner"></span>
+            <div class="meta-text">
+              <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
+              <p class="meta-hint">
+                {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
+              </p>
+            </div>
+          </div>
+        {:else if metaState === 'unmatched' || metaState === 'failed'}
+          <div class="meta-note">
+            <div class="meta-text">
+              <p class="meta-title">
+                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+              </p>
+              <p class="meta-hint">
+                {metaState === 'unmatched'
+                  ? msg('games.detailMetaUnmatchedHint')
+                  : msg('games.detailMetaFailedHint')}
+              </p>
+            </div>
+            <div class="meta-actions">
+              {#if metaState === 'failed'}
+                <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
+                  {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
+                </Button>
+                <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+              {:else}
+                <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+              {/if}
+              <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+            </div>
+          </div>
+        {/if}
 
-      {#if shots.length > 0}
-        <section class="section">
-          <h2 class="heading">Скриншоты</h2>
-          <div
-            class="shots"
-            class:featured={shots.length >= 5}
-            class:one={shots.length === 1}
-            style:--cols={shotCols}
-          >
-            {#each shots as shot, index (shot.id)}
-              <button class="shot" onclick={() => openShot(index)} aria-label="Открыть скриншот">
-                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-              </button>
+        {#if summary.text}
+          <p class="summary">{summary.text}</p>
+          {#if summary.expandable}
+            <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
+              {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
+            </button>
+          {/if}
+        {:else if !title || metaState === 'searching'}
+          <div class="skeleton line"></div>
+          <div class="skeleton line"></div>
+          <div class="skeleton line short"></div>
+        {/if}
+
+        {#if tags.length > 0}
+          <div class="tags">
+            {#each tags as tag (tag)}
+              <span class="tag">{tag}</span>
             {/each}
           </div>
-        </section>
-      {/if}
+        {/if}
 
-      {#if showUpdateCard && update}
-        <section class="section">
-          <UpdateCard bind:this={updateCard} {update} {running} />
-        </section>
-      {/if}
+        {#if showUpdateCard && update}
+          <section class="section">
+            <UpdateCard bind:this={updateCard} {update} {running} />
+          </section>
+        {/if}
 
-      {#if installed && localGame}
-        <section class="section">
-          <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-        </section>
-      {/if}
+        {#if installed && localGame}
+          <section class="section">
+            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+          </section>
 
-      {#if releasesLoading || releaseGroups.length > 0}
-        <section class="section">
-          <h2 class="heading">Доступные загрузки</h2>
-          <ReleaseList
-            groups={releaseGroups}
-            loading={releasesLoading}
-            currentReleaseId={localGame?.releaseId ?? ''}
-            updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-            ondownload={downloadRelease}
-          />
-        </section>
+          <section class="section">
+            <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
+            <div class="path">
+              <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
+              <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            </div>
+            <dl class="facts">
+              {#each installFacts as fact (fact.label)}
+                <div class="fact">
+                  <dt>{fact.label}</dt>
+                  <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+                </div>
+              {/each}
+            </dl>
+          </section>
+        {/if}
+
+        {#if releasesLoading || releaseGroups.length > 0}
+          <section class="section">
+            <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+            <ReleaseList
+              groups={releaseGroups}
+              loading={releasesLoading}
+              currentReleaseId={localGame?.releaseId ?? ''}
+              updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              ondownload={downloadRelease}
+            />
+          </section>
+        {/if}
       {/if}
     </div>
 
     <aside class="side">
       {#if gameFacts.length > 0}
-        <section class="side-block">
-          <h2 class="heading sm">Об игре</h2>
+        <Card title={msg('games.detailAboutTitle')}>
           <dl class="facts">
             {#each gameFacts as fact (fact.label)}
               <div class="fact">
@@ -837,32 +928,16 @@
               </div>
             {/each}
           </dl>
-        </section>
+        </Card>
       {/if}
 
-      {#if installed && localGame}
-        <section class="panel">
-          <h2 class="heading sm">Установка</h2>
-          <div class="path">
-            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
-            <IconButton label="Открыть папку" size="sm" onclick={reveal}>
-              <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          </div>
-          <dl class="facts">
-            {#each installFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-        </section>
-      {/if}
+      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
     </aside>
   </div>
 
   {#if localGame}
+    <GameStatusModal bind:open={statusOpen} game={localGame} />
+
     <RemoveGameModal
       bind:open={removeOpen}
       bind:mode={removeMode}
@@ -874,7 +949,7 @@
     />
   {/if}
 
-  <Modal bind:open={pickerOpen} title="Выберите загрузку" width="86rem">
+  <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
     <ReleaseList
       groups={availableGroups}
       currentReleaseId={localGame?.releaseId ?? ''}
@@ -1008,6 +1083,7 @@
     width: clamp(11rem, 10vw, 16rem);
     flex-shrink: 0;
     margin-bottom: -3.6rem;
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
   }
@@ -1077,7 +1153,7 @@
     width: min(42rem, 100%);
     height: var(--control-lg);
     padding: 0 1.8rem;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     background: var(--surface-3);
   }
 
@@ -1106,6 +1182,10 @@
 
   .note.danger {
     color: var(--danger);
+  }
+
+  .tabs-wrap {
+    margin-bottom: var(--space-8);
   }
 
   .body {
@@ -1227,12 +1307,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .heading.sm {
-    font-size: var(--font-md);
-    color: var(--text-2);
-    margin-bottom: var(--space-2);
-  }
-
   .shots {
     display: grid;
     grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
@@ -1269,12 +1343,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-  }
-
-  .panel {
-    padding: var(--space-5);
-    background: var(--surface);
-    border-radius: var(--radius-lg);
   }
 
   .path {

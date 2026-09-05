@@ -1,7 +1,9 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { Play, Square } from '@lucide/svelte';
   import { openGameMenu } from '../stores/gameMenu';
   import { navigate } from '../stores/router';
+  import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
 
   let {
@@ -11,6 +13,8 @@
     installed = false,
     running = false,
     meta,
+    variant = 'poster',
+    footer,
     onplay,
   }: {
     id: string;
@@ -19,18 +23,22 @@
     installed?: boolean;
     running?: boolean;
     meta?: string;
+    variant?: 'poster' | 'capsule';
+    footer?: Snippet;
     onplay?: () => void;
   } = $props();
+
+  const ratio = $derived(variant === 'capsule' ? '16 / 9' : '3 / 4');
 </script>
 
 <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)}>
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
-      <Artwork src={cover} alt={title} ratio="3 / 4" radius="var(--radius-md)" />
+      <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
     {#if installed && onplay}
-      <button class="play" class:running aria-label={running ? 'Остановить' : 'Играть'} onclick={onplay}>
+      <button class="play" class:running aria-label={running ? msg('ui.stop') : msg('ui.play')} onclick={onplay}>
         {#if running}
           <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
         {:else}
@@ -45,6 +53,9 @@
       <span class="meta">{meta}</span>
     {/if}
   </button>
+  {#if footer}
+    <div class="footer">{@render footer()}</div>
+  {/if}
 </div>
 
 <style>
@@ -95,7 +106,7 @@
     justify-content: center;
     width: 3.2rem;
     height: 3.2rem;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     background: var(--accent);
     color: #fff;
     opacity: 0;
@@ -144,5 +155,12 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
   }
 </style>

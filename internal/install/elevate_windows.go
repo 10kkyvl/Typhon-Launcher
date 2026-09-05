@@ -13,6 +13,13 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"typhon/internal/uierr"
+)
+
+var (
+	errElevationDeclined = uierr.New("install.elevation_declined", "нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос")
+	errNoElevatedProcess = uierr.New("install.no_elevated_process", "процесс установщика с правами администратора не запустился")
 )
 
 const (

@@ -2,7 +2,8 @@
   import { Download } from '@lucide/svelte';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
-  import { bytesSize, plural, relativeDate } from '../utils/format';
+  import { bytesSize, relativeDate } from '../utils/format';
+  import { msg } from '../i18n';
   import Button from './Button.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
@@ -25,7 +26,7 @@
 
 <div class="release-list">
   {#if loading && groups.length === 0}
-    <p class="hint">Загрузка релизов…</p>
+    <p class="hint">{msg('release.loading')}</p>
   {:else}
     {#each groups as group (group.release.id)}
       {@const release = group.release}
@@ -52,7 +53,7 @@
               title={group.duplicates.map((d) => d.sourceName).join(', ')}
             >
               +{group.duplicates.length}
-              {plural(group.duplicates.length, 'источник', 'источника', 'источников')}
+              {msg('release.duplicateSources', { count: group.duplicates.length })}
             </span>
           {/if}
         </span>
@@ -62,19 +63,19 @@
             <StatusBadge kind="neutral" label={release.repacker.toUpperCase()} plain />
           {/if}
           {#if current}
-            <StatusBadge kind="success" label="Установлено" plain />
+            <StatusBadge kind="success" label={msg('ui.installed')} plain />
           {:else if updateReleaseId && release.id === updateReleaseId}
-            <StatusBadge kind="accent" label="Обновление" plain />
+            <StatusBadge kind="accent" label={msg('ui.update')} plain />
           {:else if release.new}
-            <StatusBadge kind="accent" label="Новое" plain />
+            <StatusBadge kind="accent" label={msg('release.new')} plain />
           {/if}
           {#if removed}
-            <StatusBadge kind="danger" label="Недоступно" plain />
+            <StatusBadge kind="danger" label={msg('release.unavailable')} plain />
           {/if}
         </div>
         <Button size="sm" disabled={removed} onclick={() => ondownload(group)}>
           <Download size="1.4rem" strokeWidth={1.8} />
-          Скачать
+          {msg('ui.download')}
         </Button>
       </div>
     {/each}

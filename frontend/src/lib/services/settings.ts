@@ -5,6 +5,7 @@ import { inWails } from './backend';
 export interface Settings {
   theme: string;
   uiScale: number;
+  language: string;
   libraryPath: string;
   downloadsPath: string;
   gamesPath: string;
@@ -38,6 +39,7 @@ export interface Settings {
   anonymousDiagnostics: boolean;
   telemetryConsentVersion: number;
   accountSync: boolean;
+  presenceStatus: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -45,6 +47,7 @@ const FALLBACK_KEY = 'typhon.settings';
 const fallbackDefaults: Settings = {
   theme: 'dark',
   uiScale: 1,
+  language: 'system',
   libraryPath: '',
   downloadsPath: '',
   gamesPath: '',
@@ -78,7 +81,16 @@ const fallbackDefaults: Settings = {
   anonymousDiagnostics: true,
   telemetryConsentVersion: 0,
   accountSync: false,
+  presenceStatus: 'online',
 };
+
+export const maxActiveDownloadOptions = [
+  { id: '1', label: '1' },
+  { id: '2', label: '2' },
+  { id: '3', label: '3' },
+  { id: '5', label: '5' },
+];
+
 
 export async function getSettings(): Promise<Settings> {
   if (inWails) {

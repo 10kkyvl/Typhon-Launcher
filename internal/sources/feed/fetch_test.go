@@ -218,3 +218,36 @@ func TestValidateURL(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchCloudflareChallenge(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("cf-mitigated", "challenge")
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
+	if !errors.Is(err, ErrChallenge) {
+		t.Fatalf("expected ErrChallenge, got %T: %v", err, err)
+	}
+}
+
+func TestFetchForbiddenWithoutChallengeStaysStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	_, err := Fetch(context.Background(), loopbackClient(), srv.URL, Conditional{})
+	if errors.Is(err, ErrChallenge) {
+		t.Fatal("plain 403 must not be reported as a Cloudflare challenge")
+	}
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("expected *StatusError, got %T: %v", err, err)
+	}
+	if statusErr.StatusCode != http.StatusForbidden {
+		t.Errorf("StatusCode = %d, want 403", statusErr.StatusCode)
+	}
+}

@@ -1,6 +1,9 @@
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
+import { markError } from '../game/markMessages';
+
+export { markError };
 
 export interface LibraryGame {
   id: string;
@@ -11,6 +14,7 @@ export interface LibraryGame {
   cover: string;
   version: string;
   sizeBytes: number;
+  sizeUnknown?: boolean;
   lastPlayed: string | null;
   playtimeSeconds: number;
   installedAt: string;
@@ -21,6 +25,10 @@ export interface LibraryGame {
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;
+  favorite?: boolean;
+  favoriteAt?: string | null;
+  status?: string;
+  statusAt?: string | null;
 }
 
 export interface SavesResult {
@@ -74,6 +82,16 @@ export async function createShortcut(id: string): Promise<void> {
 export async function removeShortcut(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await LibraryService.RemoveShortcut(id);
+}
+
+export async function setFavorite(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;
+}
+
+export async function setStatus(id: string, status: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetStatus(id, status)) as unknown as LibraryGame;
 }
 
 export async function locateSaves(id: string): Promise<SavesResult> {

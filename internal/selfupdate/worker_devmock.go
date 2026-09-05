@@ -15,6 +15,7 @@ import (
 
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -118,7 +119,7 @@ func workerProcessAlive(pid int) (bool, error) {
 
 func relaunch(path string) error {
 	if path == "" {
-		return errors.New("selfupdate: relaunch path is empty")
+		return uierr.New("selfupdate.relaunch_path_empty", "selfupdate: relaunch path is empty")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("stat relaunch target: %w", err)

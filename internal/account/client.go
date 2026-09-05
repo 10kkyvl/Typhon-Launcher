@@ -24,17 +24,21 @@ const (
 )
 
 type CurrentUser struct {
-	ID          string    `json:"id"`
-	Username    string    `json:"username"`
-	DisplayName string    `json:"displayName"`
-	Email       string    `json:"email"`
-	AvatarURL   string    `json:"avatarUrl"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string          `json:"id"`
+	Username    string          `json:"username"`
+	DisplayName string          `json:"displayName"`
+	Email       string          `json:"email"`
+	AvatarURL   string          `json:"avatarUrl"`
+	Bio         string          `json:"bio"`
+	Profile     ProfileSettings `json:"profile"`
+	CreatedAt   time.Time       `json:"createdAt"`
 }
 
 type Patch struct {
-	Username    *string `json:"username,omitempty"`
-	DisplayName *string `json:"displayName,omitempty"`
+	Username    *string          `json:"username,omitempty"`
+	DisplayName *string          `json:"displayName,omitempty"`
+	Bio         *string          `json:"bio,omitempty"`
+	Profile     *ProfileSettings `json:"profile,omitempty"`
 }
 
 type errorEnvelope struct {
@@ -196,7 +200,7 @@ func (c *Client) doUser(
 	if err := json.NewDecoder(limited).Decode(&user); err != nil {
 		return CurrentUser{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("decode response body: %w", err)}
 	}
-	return user, nil
+	return withProfileDefaults(user), nil
 }
 
 func (c *Client) resolveToken() (string, error) {

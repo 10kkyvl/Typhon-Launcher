@@ -20,6 +20,7 @@ import (
 	"typhon/internal/procs"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -52,6 +53,10 @@ type Game struct {
 	Uninstalled       bool       `json:"uninstalled,omitempty"`
 	ShortcutPath      string     `json:"shortcutPath,omitempty"`
 	SavesDir          string     `json:"savesDir,omitempty"`
+	Favorite          bool       `json:"favorite,omitempty"`
+	FavoriteAt        *time.Time `json:"favoriteAt,omitempty"`
+	Status            string     `json:"status,omitempty"`
+	StatusAt          *time.Time `json:"statusAt,omitempty"`
 }
 
 type Uninstall struct {
@@ -97,11 +102,34 @@ type InstalledUpdate struct {
 }
 
 var (
-	errEmptyInstallDir      = errors.New("каталог установки не задан")
-	errNotFound             = errors.New("игра не найдена")
-	errEmptyCanonicalGameID = errors.New("не указан идентификатор игры каталога")
-	errEmptyCatalogTitle    = errors.New("не указано название игры")
+	errEmptyInstallDir      = uierr.New("library.no_install_dir", "каталог установки не задан")
+	errNotFound             = uierr.New("library.game_not_found", "игра не найдена")
+	errEmptyCanonicalGameID = uierr.New("library.no_canonical_id", "не указан идентификатор игры каталога")
+	errEmptyCatalogTitle    = uierr.New("library.no_catalog_title", "не указано название игры")
 )
+
+const MaxFavorites = 6
+
+const (
+	StatusPlaying   = "playing"
+	StatusCompleted = "completed"
+	StatusDropped   = "dropped"
+	StatusBacklog   = "backlog"
+	StatusPaused    = "paused"
+)
+
+func ValidStatus(s string) bool {
+	switch s {
+	case "", StatusPlaying, StatusCompleted, StatusDropped, StatusBacklog, StatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
+var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites limit reached")
+
+var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
 	mu            sync.Mutex
@@ -111,6 +139,7 @@ type Service struct {
 	excluded      []string
 	running       map[string]*session
 	onSession     func(gameID string, seconds int64)
+	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
@@ -188,6 +217,14 @@ func NewServiceAt(path string) (*Service, error) {
 	return s, nil
 }
 
+type legacyGame struct {
+	Game
+	Completed   bool       `json:"completed"`
+	CompletedAt *time.Time `json:"completedAt"`
+}
+
+func legacyStamp() time.Time { return time.Unix(0, 0).UTC() }
+
 func (s *Service) load() ([]Game, error) {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -196,9 +233,26 @@ func (s *Service) load() ([]Game, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read library %s: %w", s.path, err)
 	}
-	var games []Game
-	if err := json.Unmarshal(data, &games); err != nil {
+	var stored []legacyGame
+	if err := json.Unmarshal(data, &stored); err != nil {
 		return nil, fmt.Errorf("parse library %s: %w", s.path, err)
+	}
+	games := make([]Game, 0, len(stored))
+	for _, entry := range stored {
+		g := entry.Game
+		if entry.Completed && g.Status == "" {
+			g.Status = StatusCompleted
+			g.StatusAt = entry.CompletedAt
+		}
+		if g.Status != "" && g.StatusAt == nil {
+			stamp := legacyStamp()
+			g.StatusAt = &stamp
+		}
+		if g.Favorite && g.FavoriteAt == nil {
+			stamp := legacyStamp()
+			g.FavoriteAt = &stamp
+		}
+		games = append(games, g)
 	}
 	return games, nil
 }
@@ -220,6 +274,8 @@ func (s *Service) persist() error {
 	return nil
 }
 
+const EventUpdated = "library:updated"
+
 func emit(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
@@ -227,7 +283,7 @@ func emit(name string, data any) {
 }
 
 func (s *Service) emitUpdated() {
-	emit("library:updated", s.games)
+	emit(EventUpdated, s.games)
 }
 
 func (s *Service) GetGames() []Game {
@@ -264,7 +320,7 @@ func (s *Service) GetRunningGames() []string {
 func (s *Service) AddGame(executable, title string) (Game, error) {
 	info, err := os.Stat(executable)
 	if err != nil || info.IsDir() {
-		return Game{}, errors.New("исполняемый файл не найден")
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
 	}
 	provided := strings.TrimSpace(title)
 	title = provided
@@ -295,7 +351,7 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 			continue
 		}
 		if !s.games[i].Uninstalled {
-			return Game{}, errors.New("эта игра уже добавлена")
+			return Game{}, uierr.New("library.already_added", "эта игра уже добавлена")
 		}
 		return s.reviveLocked(i, provided, installDir, size, unknown)
 	}
@@ -347,7 +403,7 @@ func (s *Service) reviveLocked(pos int, title, installDir string, size int64, un
 func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	info, err := os.Stat(g.Executable)
 	if err != nil || info.IsDir() {
-		return Game{}, errors.New("исполняемый файл не найден")
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
 	}
 	installDir := strings.TrimSpace(g.InstallDir)
 	if installDir == "" {
@@ -436,6 +492,13 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetPlayRecorder(fn func(gameID string, startedAt, endedAt time.Time)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playRecord = fn
 }
 
 //wails:ignore
@@ -594,6 +657,66 @@ func (s *Service) MarkUninstalled(id string) error {
 		return nil
 	}
 	return errNotFound
+}
+
+func (s *Service) SetFavorite(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if game.Favorite == on {
+		return *game, nil
+	}
+	if on && s.favoriteCountLocked() >= MaxFavorites {
+		return Game{}, ErrTooManyFavorites
+	}
+	previous := *game
+	game.Favorite = on
+	now := s.now()
+	game.FavoriteAt = &now
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) SetStatus(id, status string) (Game, error) {
+	if !ValidStatus(status) {
+		return Game{}, ErrInvalidStatus
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if game.Status == status {
+		return *game, nil
+	}
+	previous := *game
+	game.Status = status
+	now := s.now()
+	game.StatusAt = &now
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) favoriteCountLocked() int {
+	count := 0
+	for i := range s.games {
+		if s.games[i].Favorite {
+			count++
+		}
+	}
+	return count
 }
 
 //wails:ignore

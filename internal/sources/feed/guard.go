@@ -2,13 +2,14 @@ package feed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
 	"strings"
 	"time"
+
+	"typhon/internal/uierr"
 )
 
 const (
@@ -20,9 +21,9 @@ const (
 )
 
 var (
-	ErrBlockedAddress = errors.New("адрес источника запрещён: локальные и приватные сети недоступны")
-	ErrNoAddress      = errors.New("не удалось определить адрес источника")
-	ErrTooManyHops    = fmt.Errorf("слишком много редиректов (лимит %d)", MaxRedirects)
+	ErrBlockedAddress = uierr.New("sources.feed_blocked_address", "адрес источника запрещён: локальные и приватные сети недоступны")
+	ErrNoAddress      = uierr.New("sources.feed_no_address", "не удалось определить адрес источника")
+	ErrTooManyHops    = uierr.New("sources.feed_too_many_hops", fmt.Sprintf("слишком много редиректов (лимит %d)", MaxRedirects))
 )
 
 var cgnat = netip.MustParsePrefix("100.64.0.0/10")

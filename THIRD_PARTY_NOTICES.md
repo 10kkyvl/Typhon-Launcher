@@ -9,6 +9,7 @@
 | @fontsource-variable/inter-tight | 5.3.0 | OFL-1.1 |
 | @lucide/svelte | 1.33.0 | ISC |
 | @wailsio/runtime | 3.0.0-beta.10 | MIT |
+| Fluent Emoji (Microsoft) | - | MIT |
 | Microsoft Edge WebView2 Runtime | - | Условия распространения Microsoft (не Go/npm-модуль) |
 | github.com/anacrolix/btree | v0.0.0-20251201064447-d86c3fa41bd8 | Apache-2.0 |
 | github.com/anacrolix/chansync | v0.7.0 | MIT |
@@ -36,6 +37,8 @@
 | svelte | 5.56.9 | MIT |
 
 Примечание (@wailsio/runtime): Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля.
+
+Примечание (Fluent Emoji (Microsoft)): Не npm- и не Go-модуль: иконки реакций в `frontend/src/lib/components/reactions/` — это SVG в плоском стиле (flat) из репозитория https://github.com/microsoft/fluentui-emoji, вставленные в код инлайном. Дословный текст лицензии взят из файла `LICENSE` этого репозитория и хранится в `tools/notices/licenses/fluentui-emoji-LICENSE`.
 
 Примечание (svelte): Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon.
 
@@ -233,6 +236,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+### MIT — Fluent Emoji (Microsoft)
+
+```
+MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
 ```
 
 ### Apache-2.0 — github.com/anacrolix/btree v0.0.0-20251201064447-d86c3fa41bd8

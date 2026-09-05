@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -36,7 +37,7 @@
     <div class="modal" style:width role="dialog" aria-modal="true" aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
-        <IconButton label="Закрыть" size="sm" onclick={close}>
+        <IconButton label={msg('common.close')} size="sm" onclick={close}>
           <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>
@@ -71,7 +72,7 @@
     flex-direction: column;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
     animation: rise var(--dur-panel) var(--ease);
   }
@@ -80,7 +81,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.8rem 1.8rem 0 2.4rem;
+    padding: 1.8rem 1.8rem 1.6rem 2.4rem;
+    border-bottom: 1px solid var(--border);
   }
 
   h3 {

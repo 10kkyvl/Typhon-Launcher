@@ -33,6 +33,7 @@
   .badge.plain {
     height: auto;
     padding: 0;
+    gap: 0.7rem;
     background: none;
     font-size: var(--font-xs);
     font-weight: 400;

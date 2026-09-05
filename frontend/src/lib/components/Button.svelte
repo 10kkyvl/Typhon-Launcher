@@ -5,18 +5,20 @@
     variant = 'secondary',
     size = 'md',
     disabled = false,
+    pressed,
     onclick,
     children,
   }: {
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
+    pressed?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button class="btn {variant} {size}" {disabled} {onclick}>
+<button class="btn {variant} {size}" {disabled} aria-pressed={pressed} {onclick}>
   {@render children?.()}
 </button>
 
@@ -25,6 +27,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    vertical-align: middle;
     gap: 0.7rem;
     font-size: var(--font-sm);
     font-weight: 500;
@@ -68,7 +71,7 @@
   .primary {
     background: var(--accent);
     color: #fff;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
   }
 
   .primary:hover:not(:disabled) {
@@ -77,6 +80,7 @@
 
   .secondary {
     background: var(--surface-3);
+    border-color: var(--border-strong);
     color: var(--text);
   }
 
