@@ -253,6 +253,20 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
+// waitJobDone ждёт, пока горутина установки не снимет свою запись из s.jobs.
+// waitStatus для этого недостаточно: терминальный статус публикуется внутри
+// run, а endJob выполняется отложенно уже после его возврата, поэтому тест,
+// который сразу за статусом дёргает Retry или Start, попадает в это окно и
+// получает errUnavailable.
+func (s *Service) waitJobDone(t *testing.T, id string) {
+	t.Helper()
+	waitFor(t, "install job to be released", func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.jobs[id] == nil
+	})
+}
+
 func (s *Service) waitStatus(t *testing.T, id string, want Status) Installation {
 	t.Helper()
 	var last Installation
@@ -876,6 +890,7 @@ func TestRetryAfterFailure(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	s.waitStatus(t, item.ID, StatusCompleted)
+	s.waitJobDone(t, item.ID)
 
 	s.mu.Lock()
 	stored := s.findLocked(item.ID)
