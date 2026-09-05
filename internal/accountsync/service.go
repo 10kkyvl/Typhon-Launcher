@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/library"
 	"typhon/internal/settings"
 
 	"github.com/google/uuid"
@@ -18,6 +19,8 @@ import (
 
 const (
 	syncInterval       = 15 * time.Minute
+	nudgeDelay         = 3 * time.Second
+	minSyncGap         = 30 * time.Second
 	maxHydratePerSync  = 20
 	maxGamesPerRequest = 500
 )
@@ -35,12 +38,17 @@ type Service struct {
 	catalog  CatalogPort
 	metadata MetadataPort
 
-	mu      sync.Mutex
-	state   syncState
-	syncing bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	mu         sync.Mutex
+	state      syncState
+	syncing    bool
+	lastSync   time.Time
+	nudge      chan struct{}
+	nudgeDelay time.Duration
+	minGap     time.Duration
+	unwatch    func()
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 func NewService(
@@ -70,13 +78,16 @@ func NewService(
 	}
 
 	return &Service{
-		store:    st,
-		client:   client,
-		settings: settingsPort,
-		library:  library,
-		catalog:  catalog,
-		metadata: metadata,
-		state:    loaded,
+		store:      st,
+		client:     client,
+		settings:   settingsPort,
+		library:    library,
+		catalog:    catalog,
+		metadata:   metadata,
+		state:      loaded,
+		nudge:      make(chan struct{}, 1),
+		nudgeDelay: nudgeDelay,
+		minGap:     minSyncGap,
 	}, nil
 }
 
@@ -86,13 +97,39 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Unlock()
 	s.wg.Add(1)
 	go s.schedule()
+	s.watchLibrary()
 	return nil
+}
+
+func (s *Service) watchLibrary() {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	unwatch := app.Event.On(library.EventUpdated, func(*application.CustomEvent) {
+		s.Nudge()
+	})
+	s.mu.Lock()
+	s.unwatch = unwatch
+	s.mu.Unlock()
+}
+
+func (s *Service) Nudge() {
+	select {
+	case s.nudge <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
+	unwatch := s.unwatch
+	s.unwatch = nil
 	cancel := s.cancel
 	s.mu.Unlock()
+	if unwatch != nil {
+		unwatch()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -107,16 +144,61 @@ func (s *Service) schedule() {
 	s.mu.Unlock()
 	ticker := time.NewTicker(syncInterval)
 	defer ticker.Stop()
+	debounce := time.NewTimer(time.Hour)
+	if !debounce.Stop() {
+		<-debounce.C
+	}
+	defer debounce.Stop()
+
+	waiting := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.Sync(ctx); err != nil {
-				slog.Warn("scheduled account sync failed", "error", err)
+			s.runScheduled(ctx)
+		case <-s.nudge:
+			if waiting {
+				continue
 			}
+			waiting = true
+			debounce.Reset(s.nudgeDelay)
+		case <-debounce.C:
+			if left := s.gapLeft(); left > 0 {
+				debounce.Reset(left)
+				continue
+			}
+			waiting = false
+			s.runScheduled(ctx)
 		}
 	}
+}
+
+func (s *Service) runScheduled(ctx context.Context) {
+	err := s.Sync(ctx)
+	if err == nil || errors.Is(err, ErrSyncInProgress) || errors.Is(err, context.Canceled) {
+		return
+	}
+	slog.Warn("scheduled account sync failed", "error", err)
+}
+
+func (s *Service) gapLeft() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastSync.IsZero() {
+		return 0
+	}
+	left := s.minGap - time.Since(s.lastSync)
+	if left < 0 {
+		return 0
+	}
+	return left
+}
+
+func (s *Service) markSynced() {
+	s.mu.Lock()
+	s.lastSync = time.Now()
+	s.mu.Unlock()
 }
 
 func (s *Service) SyncNow() error {
@@ -198,6 +280,7 @@ func (s *Service) Sync(ctx context.Context) error {
 		s.mu.Unlock()
 	}()
 
+	s.markSynced()
 	return s.attempt(ctx, true)
 }
 

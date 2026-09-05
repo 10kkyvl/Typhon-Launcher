@@ -274,6 +274,8 @@ func (s *Service) persist() error {
 	return nil
 }
 
+const EventUpdated = "library:updated"
+
 func emit(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
@@ -281,7 +283,7 @@ func emit(name string, data any) {
 }
 
 func (s *Service) emitUpdated() {
-	emit("library:updated", s.games)
+	emit(EventUpdated, s.games)
 }
 
 func (s *Service) GetGames() []Game {
