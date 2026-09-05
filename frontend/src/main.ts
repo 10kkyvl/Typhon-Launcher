@@ -6,6 +6,7 @@ import App from './App.svelte';
 import { installDiagnostics } from './lib/services/diagnostics';
 import { mountThemeGuard } from './lib/components/ThemeGuard';
 import { initTheme, resetAppearance } from './lib/stores/theme';
+import { installSmoothScroll } from './lib/utils/smoothscroll';
 
 installDiagnostics();
 
@@ -13,6 +14,7 @@ mount(App, { target: document.getElementById('app')! });
 
 initTheme();
 mountThemeGuard();
+installSmoothScroll();
 
 window.addEventListener('keydown', (event) => {
   if (event.ctrlKey && event.shiftKey && event.altKey && event.code === 'KeyT') {
