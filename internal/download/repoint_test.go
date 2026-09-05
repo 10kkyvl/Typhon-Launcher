@@ -88,6 +88,7 @@ func TestRepointRewritesDestinations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closePieceCompletionOnCleanup(t, reloaded)
 	withTestContext(t, reloaded)
 	if err := reloaded.loadLocked(); err != nil {
 		t.Fatal(err)

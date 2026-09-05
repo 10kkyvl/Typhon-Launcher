@@ -19,13 +19,7 @@ func TestNoContextFallbackReturnsNoClientError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
-	t.Cleanup(func() {
-		if m.pieceCompletion != nil {
-			if err := m.pieceCompletion.Close(); err != nil {
-				t.Logf("close piece completion: %v", err)
-			}
-		}
-	})
+	closePieceCompletionOnCleanup(t, m)
 
 	m.mu.Lock()
 	m.client = offlineClient(t)

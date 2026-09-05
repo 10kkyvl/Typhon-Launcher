@@ -240,18 +240,32 @@ func mustManagerAt(t testing.TB, dir string) *Manager {
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
-	t.Cleanup(func() {
-		// ServiceShutdown already closed it in tests that call it themselves
-		// and nils the field, so this only fires for tests that never start
-		// the manager.
-		if m.pieceCompletion != nil {
-			if err := m.pieceCompletion.Close(); err != nil {
-				t.Logf("close piece completion: %v", err)
-			}
-		}
-	})
+	closePieceCompletionOnCleanup(t, m)
 	withTestContext(t, m)
 	return m
+}
+
+// closePieceCompletionOnCleanup закрывает базу готовности кусков, которую
+// newManagerAt открывает вместе с менеджером. Она держит фоновую горутину, и
+// без этого каждый менеджер, чей тест не звал ServiceShutdown, оставлял её
+// жить до конца тестового бинарника. Общий хелпер, а не копия на каждой точке
+// создания: забытая копия — это молчаливая утечка, а не ошибка сборки.
+func closePieceCompletionOnCleanup(t testing.TB, m *Manager) {
+	t.Helper()
+	t.Cleanup(func() {
+		// ServiceShutdown уже закрыл базу и обнулил поле в тестах, которые его
+		// вызывают, так что здесь остаются только незапущенные менеджеры.
+		m.mu.Lock()
+		pc := m.pieceCompletion
+		m.pieceCompletion = nil
+		m.mu.Unlock()
+		if pc == nil {
+			return
+		}
+		if err := pc.Close(); err != nil {
+			t.Logf("close piece completion: %v", err)
+		}
+	})
 }
 
 func withTestContext(t testing.TB, m *Manager) {
@@ -1001,6 +1015,7 @@ func newManagerWithSettings(t *testing.T, cfg settings.Settings) (*Manager, *set
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	closePieceCompletionOnCleanup(t, m)
 	withTestContext(t, m)
 	m.max = 2
 	return m, svc
