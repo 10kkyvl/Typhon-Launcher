@@ -13,6 +13,7 @@
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { FriendView } from '../../lib/services/social';
   import { feedDayGroups } from '../../lib/social/feed';
+  import { popularGames } from '../../lib/social/popular';
   import { presenceDot, presenceLine, sortFriends, statusDot } from '../../lib/social/presence';
   import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, reactToEvent } from '../../lib/stores/feed';
   import { presenceStatus } from '../../lib/stores/presence';
@@ -24,6 +25,7 @@
   import { formatCount } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import FriendRow from '../friends/FriendRow.svelte';
+  import PopularGames from './PopularGames.svelte';
 
   const ONLINE_LIMIT = 8;
   const PLAYING_LIMIT = 6;
@@ -42,6 +44,7 @@
     sortFriends($friendsPage.friends).filter((friend) => presenceDot(friend.presence) !== 'offline'),
   );
   const playingFriends = $derived(onlineFriends.filter((friend) => friend.presence?.gameId != null));
+  const popular = $derived(popularGames($feedEvents, $friendsPage.friends, user?.id ?? ''));
 
   function report(err: unknown, fallback: string) {
     if (err instanceof AccountError && err.code === 'unauthenticated') return;
@@ -179,6 +182,8 @@
             </div>
           {/if}
         </Card>
+
+        <PopularGames games={popular} />
       </div>
     </div>
   {/if}

@@ -170,6 +170,14 @@ export const transfers = {
   'transfers.activityShowMore': 'Показать ещё',
   'transfers.activityPlayingTitle': 'Друзья в игре',
   'transfers.activityNoOnePlaying': 'Сейчас никто из друзей не играет',
+  'transfers.activityPopularTitle': 'Популярно у друзей',
+  'transfers.activityPopularEmpty': 'Пока не из чего собрать топ',
+  'transfers.activityPopularFriends': {
+    one: '{count} друг',
+    few: '{count} друга',
+    many: '{count} друзей',
+  },
+  'transfers.activityPopularPlayingNow': 'в игре: {count}',
 
   'transfers.authDesktopOnly': 'Доступно только в desktop-сборке',
   'transfers.authGenericError': 'Не удалось выполнить вход',

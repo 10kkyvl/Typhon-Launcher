@@ -173,6 +173,10 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.activityShowMore': 'Show more',
   'transfers.activityPlayingTitle': 'Friends in game',
   'transfers.activityNoOnePlaying': 'None of your friends are playing right now',
+  'transfers.activityPopularTitle': 'Popular with friends',
+  'transfers.activityPopularEmpty': 'Not enough friend activity yet',
+  'transfers.activityPopularFriends': { one: '{count} friend', other: '{count} friends' },
+  'transfers.activityPopularPlayingNow': 'in game: {count}',
 
   'transfers.authDesktopOnly': 'Only available in the desktop build',
   'transfers.authGenericError': 'Failed to sign in',

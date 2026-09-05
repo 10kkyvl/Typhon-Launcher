@@ -83,7 +83,7 @@ export function sinceLabel(iso: string | null | undefined, now = new Date()): st
 export function presenceLine(presence?: PresenceView | null, now = new Date(), own = false): string {
   if (presence?.status === 'invisible') return own ? STATUS_LABELS.invisible : DOT_LABELS.offline;
   const dot = presenceDot(presence);
-  if (playing(presence)) {
+  if (isPlaying(presence)) {
     return presence?.gameTitle ? msg('social.playingNamed', { name: presence.gameTitle }) : msg('social.playing');
   }
   if (dot !== 'offline') return DOT_LABELS[dot];
@@ -105,12 +105,12 @@ const RANKS: Record<PresenceDot, number> = {
   offline: 4,
 };
 
-function playing(presence?: PresenceView | null): boolean {
+export function isPlaying(presence?: PresenceView | null): boolean {
   return presenceDot(presence) !== 'offline' && presence?.gameId != null;
 }
 
 function rank(presence?: PresenceView | null): number {
-  if (playing(presence)) return 0;
+  if (isPlaying(presence)) return 0;
   return RANKS[presenceDot(presence)];
 }
 
