@@ -1,7 +1,9 @@
 package accountsync
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,7 +20,7 @@ import (
 )
 
 const (
-	syncInterval       = 15 * time.Minute
+	syncInterval       = 5 * time.Minute
 	nudgeDelay         = 3 * time.Second
 	minSyncGap         = 30 * time.Second
 	maxHydratePerSync  = 20
@@ -405,7 +407,16 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	revision := snap.SettingsRevision
 	totalSkipped := 0
 
+	settled, err := samePortable(pushSettings, snap.Settings)
+	if err != nil {
+		return err
+	}
+	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB)
+
 	for i, chunk := range chunkGames(pushGames, maxGamesPerRequest) {
+		if idle {
+			break
+		}
 		req := putRequest{
 			DeviceID:         deviceID,
 			SettingsRevision: revision,
@@ -460,6 +471,48 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	s.mu.Unlock()
 
 	return nil
+}
+
+func samePortable(a, b settings.Portable) (bool, error) {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false, fmt.Errorf("encode local settings: %w", err)
+	}
+	right, err := json.Marshal(b)
+	if err != nil {
+		return false, fmt.Errorf("encode remote settings: %w", err)
+	}
+	return bytes.Equal(left, right), nil
+}
+
+func sameStamp(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Truncate(time.Microsecond).Equal(b.Truncate(time.Microsecond))
+}
+
+func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame) bool {
+	for igdbID, r := range results {
+		rem, known := remote[igdbID]
+		if !known {
+			return false
+		}
+		prev, seen := st.Games[igdbID]
+		if !seen || prev.DeviceSeconds != r.device {
+			return false
+		}
+		if rem.Owned != r.combined.Owned || rem.Favorite != r.combined.Favorite || rem.Status != r.combined.Status {
+			return false
+		}
+		if !sameStamp(rem.FavoriteAt, r.combined.FavoriteAt) || !sameStamp(rem.StatusAt, r.combined.StatusAt) {
+			return false
+		}
+		if !sameStamp(rem.LastPlayedAt, r.combined.LastPlayed) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) applyRemoteSettings(remote settings.Portable) error {
