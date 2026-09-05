@@ -37,6 +37,7 @@ type GameRef struct {
 	ID              string     `json:"id"`
 	Title           string     `json:"title"`
 	Cover           string     `json:"cover"`
+	CanonicalGameID string     `json:"canonicalGameId,omitempty"`
 	PlaytimeSeconds int64      `json:"playtimeSeconds"`
 	Status          string     `json:"status"`
 	StatusAt        *time.Time `json:"statusAt,omitempty"`
@@ -233,5 +234,5 @@ func timeOf(t *time.Time) time.Time {
 }
 
 func ref(g library.Game) GameRef {
-	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
+	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, CanonicalGameID: g.CanonicalGameID, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
 }

@@ -1,4 +1,5 @@
 import type { ShowcaseKind, Visibility } from '../services/account';
+import type { GameArt } from '../services/metadata';
 import type { GameRef, ProfileStats } from '../services/profile';
 import { playtime, shortDate as formatShortDate } from '../utils/format';
 import { msg } from '../i18n';
@@ -71,4 +72,8 @@ export function statusLine(running: GameRef[], online: boolean): { kind: StatusK
   return online
     ? { kind: 'online', text: msg('social.presenceOnline') }
     : { kind: 'offline', text: msg('social.presenceOffline') };
+}
+
+export function coverOf(game: GameRef, art: Record<string, GameArt>): string {
+  return (game.canonicalGameId && art[game.canonicalGameId]?.cover) || game.cover;
 }

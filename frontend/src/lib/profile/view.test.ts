@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, monthLine, recentLabel, shortDate, statusLine, visibilityLabel } from './view';
+import { coverOf, dayLabel, monthLine, recentLabel, shortDate, statusLine, visibilityLabel } from './view';
 
 const now = new Date(2026, 8, 3, 15, 0, 0);
 
@@ -87,5 +87,21 @@ describe('visibilityLabel', () => {
   it('falls back to friends for anything unknown', () => {
     expect(visibilityLabel('')).toBe('Друзья');
     expect(visibilityLabel('everyone')).toBe('Друзья');
+  });
+});
+
+describe('coverOf', () => {
+  const game = { id: 'local', title: '007 First Light', canonicalGameId: 'bcc', cover: '/media/games/bcc/stale.jpg', playtimeSeconds: 0, status: '' };
+
+  it('prefers the catalog art over the snapshot stored in the library', () => {
+    expect(coverOf(game, { bcc: { cover: '/media/games/bcc/fresh.jpg', hero: '' } })).toBe('/media/games/bcc/fresh.jpg');
+  });
+
+  it('falls back to the stored cover when the catalog has no art', () => {
+    expect(coverOf(game, {})).toBe('/media/games/bcc/stale.jpg');
+  });
+
+  it('survives a game with no canonical id', () => {
+    expect(coverOf({ ...game, canonicalGameId: undefined }, {})).toBe('/media/games/bcc/stale.jpg');
   });
 });

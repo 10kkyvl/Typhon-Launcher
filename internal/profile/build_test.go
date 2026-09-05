@@ -171,3 +171,13 @@ func TestRefCarriesStatus(t *testing.T) {
 		t.Fatalf("Running[0] = %+v, want cp with status carried through ref()", snap.Running)
 	}
 }
+
+// Обложка в библиотеке — снимок URL на момент добавления игры, и он протухает,
+// когда медиа-кеш перекачивает ассет под новым идентификатором. Интерфейс умеет
+// добрать актуальную обложку из каталога, но только если знает канонический id.
+func TestRefCarriesCanonicalGameID(t *testing.T) {
+	got := ref(library.Game{ID: "local", Title: "007 First Light", CanonicalGameID: "bcc546bd4ab58c4e"})
+	if got.CanonicalGameID != "bcc546bd4ab58c4e" {
+		t.Fatalf("CanonicalGameID = %q, ожидался bcc546bd4ab58c4e", got.CanonicalGameID)
+	}
+}

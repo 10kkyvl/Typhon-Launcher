@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Heart } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Card from '../../lib/components/Card.svelte';
   import type { ShowcaseBlock } from '../../lib/services/profile';
-  import { showcaseLabel, shortDate } from '../../lib/profile/view';
+  import { coverOf, showcaseLabel, shortDate } from '../../lib/profile/view';
+  import { gameArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { msg } from '../../lib/i18n';
 
@@ -22,10 +22,7 @@
     {#each block.games as game (game.id)}
       <button class="tile" type="button" onclick={() => navigate('game', { id: game.id })}>
         <span class="cover">
-          <Artwork src={game.cover} alt="" ratio="3 / 4" radius="var(--radius-md)" />
-          {#if block.kind === 'favorites'}
-            <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
-          {/if}
+          <Artwork src={coverOf(game, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
         </span>
         <span class="caption">{game.title}</span>
         {#if block.kind === 'recently_completed' && game.statusAt}
@@ -75,20 +72,17 @@
   .cover {
     position: relative;
     display: block;
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--border);
+    transition:
+      transform var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
   }
 
-  .heart {
-    position: absolute;
-    left: 0.7rem;
-    bottom: 0.7rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.6rem;
-    height: 2.6rem;
-    border-radius: 50%;
-    background: rgba(5, 8, 12, 0.6);
-    color: var(--danger);
+  .tile:hover .cover,
+  .tile:focus-visible .cover {
+    transform: scale(1.01);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
   }
 
   .caption {

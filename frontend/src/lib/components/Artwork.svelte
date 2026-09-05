@@ -2,11 +2,13 @@
   let {
     src,
     alt = '',
+    label = '',
     ratio,
     radius = '0',
   }: {
     src: string;
     alt?: string;
+    label?: string;
     ratio?: string;
     radius?: string;
   } = $props();
@@ -19,7 +21,7 @@
   });
 
   const initials = $derived(
-    alt
+    (label || alt)
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
@@ -30,7 +32,7 @@
 
 <div class="artwork" style:aspect-ratio={ratio} style:border-radius={radius}>
   {#if failed || !src}
-    <div class="fallback" aria-label={alt}>
+    <div class="fallback" aria-label={alt || undefined}>
       <span>{initials || '?'}</span>
     </div>
   {:else}

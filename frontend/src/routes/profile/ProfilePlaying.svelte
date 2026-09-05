@@ -1,5 +1,7 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
+  import { coverOf } from '../../lib/profile/view';
+  import { gameArt } from '../../lib/stores/metadata';
   import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { GameRef } from '../../lib/services/profile';
@@ -19,7 +21,7 @@
     {/snippet}
     <button class="playing" type="button" onclick={() => navigate('game', { id: game.id })}>
       <span class="cover">
-        <Artwork src={game.cover} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
+        <Artwork src={coverOf(game, $gameArt)} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
       </span>
       <span class="title">{game.title}</span>
       <StatusBadge kind="success" label={msg('social.playing')} plain />

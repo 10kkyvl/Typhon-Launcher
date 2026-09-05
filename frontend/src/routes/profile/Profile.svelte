@@ -6,7 +6,9 @@
   import { DEFAULT_PROFILE } from '../../lib/services/account';
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { libraryGames } from '../../lib/stores/library';
+  import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { authState, currentUser } from '../../lib/stores/user';
+  import { coverOf } from '../../lib/profile/view';
   import { playtime, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import ProfileActivity from './ProfileActivity.svelte';
@@ -28,6 +30,16 @@
   function openSettings() {
     settingsOpen = true;
   }
+
+  $effect(() => {
+    const snapshot = $profileSnapshot;
+    const ids = [
+      ...snapshot.playing.map((entry) => entry.game.canonicalGameId),
+      ...snapshot.running.map((game) => game.canonicalGameId),
+      ...snapshot.showcase.flatMap((block) => block.games.map((game) => game.canonicalGameId)),
+    ].filter((id): id is string => Boolean(id));
+    if (ids.length > 0) loadArt(ids);
+  });
 
   onMount(() => {
     initProfile();
@@ -54,7 +66,7 @@
             <div class="recent-row">
               {#each $profileSnapshot.playing as entry (entry.game.id)}
                 <div class="recent-item">
-                  <GameCard id={entry.game.id} title={entry.game.title} cover={entry.game.cover} variant="capsule">
+                  <GameCard id={entry.game.id} title={entry.game.title} cover={coverOf(entry.game, $gameArt)} variant="capsule">
                     {#snippet footer()}
                       <span class="recent-meta">
                         <span class="dot"></span>

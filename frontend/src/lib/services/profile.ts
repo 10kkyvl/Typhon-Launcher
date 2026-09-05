@@ -5,6 +5,7 @@ export interface GameRef {
   id: string;
   title: string;
   cover: string;
+  canonicalGameId?: string;
   playtimeSeconds: number;
   status: string;
   statusAt?: string | null;
