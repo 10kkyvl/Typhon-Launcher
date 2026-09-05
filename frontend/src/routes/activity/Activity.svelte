@@ -23,14 +23,12 @@
   import { authState, currentUser, leaveGuest } from '../../lib/stores/user';
   import { formatCount } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
-  import FriendCodeCard from '../friends/FriendCodeCard.svelte';
   import FriendRow from '../friends/FriendRow.svelte';
 
   const ONLINE_LIMIT = 8;
   const PLAYING_LIMIT = 6;
 
   let consentOpen = $state(false);
-  let myCode = $state('');
 
   const isGuest = $derived($authState === 'guest');
   const feedGroups = $derived(feedDayGroups($feedEvents));
@@ -120,8 +118,6 @@
             <StatTile value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
           </div>
         </Card>
-
-        <FriendCodeCard variant="share" bind:code={myCode} />
 
         <Card title={msg('transfers.activityOnlineFriendsTitle', { count: onlineFriends.length })}>
           {#if onlineFriends.length === 0}

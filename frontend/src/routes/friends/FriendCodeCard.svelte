@@ -10,10 +10,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
 
-  let {
-    code = $bindable(''),
-    variant = 'full',
-  }: { code?: string; variant?: 'full' | 'share' } = $props();
+  let { code = $bindable('') }: { code?: string } = $props();
 
   let loading = $state(!code);
   let rotating = $state(false);
@@ -59,37 +56,22 @@
   });
 </script>
 
-{#if variant === 'share'}
-  <Card title={msg('social.friendsMyCodeTitle')}>
-    <div class="share">
-      <p class="hint">{msg('social.friendsShareHint')}</p>
-      <div class="field">
-        <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
-      </div>
-      <Button variant="primary" disabled={!code} onclick={copy}>
-        <Copy size="1.5rem" strokeWidth={1.8} />
-        {msg('social.friendsCopyCode')}
+<Card padding="var(--space-4) var(--space-5)">
+  <div class="card">
+    <div class="text">
+      <span class="label">{msg('social.friendsYourCode')}</span>
+      <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
+    </div>
+    <div class="actions">
+      <IconButton label={msg('social.friendsCopyCode')} size="sm" disabled={!code} onclick={copy}>
+        <Copy size="1.6rem" strokeWidth={1.8} />
+      </IconButton>
+      <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
+        {msg('social.friendsGenerateNew')}
       </Button>
     </div>
-  </Card>
-{:else}
-  <Card padding="var(--space-4) var(--space-5)">
-    <div class="card">
-      <div class="text">
-        <span class="label">{msg('social.friendsYourCode')}</span>
-        <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
-      </div>
-      <div class="actions">
-        <IconButton label={msg('social.friendsCopyCode')} size="sm" disabled={!code} onclick={copy}>
-          <Copy size="1.6rem" strokeWidth={1.8} />
-        </IconButton>
-        <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
-          {msg('social.friendsGenerateNew')}
-        </Button>
-      </div>
-    </div>
-  </Card>
-{/if}
+  </div>
+</Card>
 
 <Modal bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
   <p class="warn">
@@ -148,33 +130,5 @@
     font-size: var(--font-md);
     line-height: 1.6;
     color: var(--text-2);
-  }
-
-  .share {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .hint {
-    font-size: var(--font-sm);
-    line-height: 1.5;
-    color: var(--text-3);
-  }
-
-  .field {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    height: var(--control-lg);
-    padding: 0 var(--space-4);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-  }
-
-  .field .code {
-    font-size: var(--font-md);
   }
 </style>
