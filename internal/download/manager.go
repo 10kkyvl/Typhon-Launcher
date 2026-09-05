@@ -869,6 +869,18 @@ func (m *Manager) endJob(id string) {
 	close(job.done)
 }
 
+// detachEngineLocked gates a torrent off and removes it from the client
+// altogether. Leaving it attached with upload merely disallowed would send no
+// data, but the torrent keeps announcing itself to the tracker (wantPeers
+// counts peers, not seeding), so the user stays listed in the swarm of
+// something they turned off. Dropping is the only way out of the swarm.
+func (m *Manager) detachEngineLocked(id string, eng engineTorrent) {
+	eng.disallowUpload()
+	delete(m.engines, id)
+	delete(m.rates, id)
+	go eng.drop()
+}
+
 func (m *Manager) dropLocked(id string) {
 	for i, d := range m.items {
 		if d.ID == id {
@@ -979,6 +991,10 @@ func (m *Manager) markFailed(id, message string, cause error) {
 	}
 	if eng := m.engines[id]; eng != nil {
 		eng.disallowDownload()
+		// A failed download is not downloading, so upload-while-downloading
+		// no longer covers it; leaving upload on would keep serving data
+		// from a torrent the user sees as stopped.
+		eng.disallowUpload()
 	}
 	m.idleLocked(d, StatusFailed)
 	d.Error = message
@@ -1158,10 +1174,7 @@ func (m *Manager) completeLocked(d *Download) {
 		if seed {
 			eng.allowUpload()
 		} else {
-			eng.disallowUpload()
-			delete(m.engines, d.ID)
-			delete(m.rates, d.ID)
-			go eng.drop()
+			m.detachEngineLocked(d.ID, eng)
 		}
 	}
 	m.persistLocked()
@@ -1228,20 +1241,31 @@ func (m *Manager) applySettings(next settings.Settings) {
 	for _, d := range m.items {
 		eng := m.engines[d.ID]
 		if d.Status != StatusCompleted {
-			if eng != nil && d.Status == StatusDownloading {
-				applyUpload(eng, next.UploadWhileDownloading)
+			// Only a running download is covered by upload-while-downloading;
+			// anything queued, paused or failed keeps its engine attached and
+			// must be gated off, or the toggle would never reach it.
+			if eng != nil {
+				applyUpload(eng, next.UploadWhileDownloading && d.Status == StatusDownloading)
 			}
 			continue
 		}
 		switch {
 		case !next.SeedAfterDownload:
-			if eng != nil {
-				eng.disallowUpload()
-			}
 			if d.Seeding {
 				d.Seeding = false
 				emit(eventUpdated, snapshot(d))
 			}
+			if eng == nil {
+				continue
+			}
+			// A job in flight owns this engine; gate it off now and let
+			// settleRestored detach it when the job lands, rather than
+			// dropping the torrent out from under it.
+			if m.jobs[d.ID] != nil {
+				eng.disallowUpload()
+				continue
+			}
+			m.detachEngineLocked(d.ID, eng)
 		case eng != nil:
 			if !d.Seeding {
 				d.Seeding = true
@@ -1417,9 +1441,15 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 	m.engines[j.id] = eng
 	eng.setPriorities(selectionOf(d))
 	if j.complete {
+		// The setting can have been turned off while this job was running,
+		// which is exactly the window applySettings hands over to us.
 		seed := m.config().SeedAfterDownload
 		d.Seeding = seed
-		applyUpload(eng, seed)
+		if seed {
+			eng.allowUpload()
+		} else {
+			m.detachEngineLocked(j.id, eng)
+		}
 		emit(eventUpdated, snapshot(d))
 		m.persistLocked()
 		m.mu.Unlock()

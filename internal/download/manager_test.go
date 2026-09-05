@@ -628,28 +628,94 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	}
 }
 
-func TestSeedToggleWithEngine(t *testing.T) {
-	m := newTestManager(t, 2)
-	d := m.addTestItem("a", StatusCompleted)
-	eng := &fakeTorrent{size: 100, done: 100, uploading: true}
+// seedingItem is a completed download that is live in the client, the state
+// the seed toggle actually acts on.
+func seedingItem(t *testing.T, m *Manager, id string, seeding bool) *fakeTorrent {
+	t.Helper()
+	d := m.addTestItem(id, StatusCompleted)
+	eng := &fakeTorrent{size: 100, done: 100, uploading: seeding}
 	m.mu.Lock()
-	d.Seeding = true
-	m.engines["a"] = eng
+	d.Seeding = seeding
+	m.engines[id] = eng
 	m.mu.Unlock()
+	return eng
+}
+
+func seedingOf(t *testing.T, m *Manager, id string) bool {
+	t.Helper()
+	d, err := m.Get(id)
+	if err != nil {
+		t.Fatalf("get %s: %v", id, err)
+	}
+	return d.Seeding
+}
+
+func (m *Manager) engineAttached(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.engines[id]
+	return ok
+}
+
+// Turning seeding off must take the torrent out of the client, not merely
+// choke it: an attached torrent keeps announcing to the tracker, so the user
+// would stay listed in the swarm of something they switched off.
+func TestSeedToggleOffDetachesEngine(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", true)
 
 	cfg := settings.Defaults()
 	cfg.SeedAfterDownload = false
 	m.applySettings(cfg)
-	if got, _ := m.Get("a"); got.Seeding {
+
+	if seedingOf(t, m, "a") {
 		t.Fatal("seeding still reported")
 	}
 	if eng.isUploading() {
 		t.Fatal("upload still allowed")
 	}
+	if m.engineAttached("a") {
+		t.Fatal("engine still attached with seeding off")
+	}
+	waitUntil(t, "engine drop", eng.wasDropped)
+}
 
+// The engine survives the toggle only while a job owns it; settleRestored
+// detaches it when that job lands.
+func TestSeedToggleOffDefersToRunningJob(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", true)
+	if _, started := m.beginJob(m.ctx, "a"); !started {
+		t.Fatal("could not begin job")
+	}
+	t.Cleanup(func() { m.endJob("a") })
+
+	cfg := settings.Defaults()
+	cfg.SeedAfterDownload = false
+	m.applySettings(cfg)
+
+	if eng.isUploading() {
+		t.Fatal("upload still allowed")
+	}
+	if !m.engineAttached("a") {
+		t.Fatal("engine dropped out from under a running job")
+	}
+	if eng.wasDropped() {
+		t.Fatal("engine dropped out from under a running job")
+	}
+}
+
+// Re-enabling while the engine is still attached (the window above) seeds
+// again without a re-add.
+func TestSeedToggleOnUsesAttachedEngine(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", false)
+
+	cfg := settings.Defaults()
 	cfg.SeedAfterDownload = true
 	m.applySettings(cfg)
-	if got, _ := m.Get("a"); !got.Seeding {
+
+	if !seedingOf(t, m, "a") {
 		t.Fatal("seeding not enabled")
 	}
 	if !eng.isUploading() {
@@ -1040,6 +1106,46 @@ func TestUploadSettingAppliesToActiveDownload(t *testing.T) {
 	m.applySettings(cfg)
 	if eng.isUploading() {
 		t.Fatal("upload still allowed after disabling the setting")
+	}
+}
+
+// A download that is not running is not covered by upload-while-downloading,
+// and it keeps its engine attached, so both the stop itself and a later flip
+// of the setting have to gate upload off.
+func TestStoppedDownloadStopsUploading(t *testing.T) {
+	cases := []struct {
+		name string
+		stop func(t *testing.T, m *Manager)
+	}{
+		{"failed", func(t *testing.T, m *Manager) { m.markFailed("a", "boom", nil) }},
+		{"paused", func(t *testing.T, m *Manager) {
+			if err := m.Pause("a"); err != nil {
+				t.Fatalf("pause: %v", err)
+			}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := settings.Defaults()
+			cfg.UploadWhileDownloading = true
+			m, _ := newManagerWithSettings(t, cfg)
+
+			eng := m.addTestDownload("a")
+			if !eng.isUploading() {
+				t.Fatal("upload not allowed with the setting on")
+			}
+
+			c.stop(t, m)
+			if eng.isUploading() {
+				t.Fatal("stopped download keeps uploading")
+			}
+
+			cfg.UploadWhileDownloading = false
+			m.applySettings(cfg)
+			if eng.isUploading() {
+				t.Fatal("stopped download uploads after the setting was turned off")
+			}
+		})
 	}
 }
 
