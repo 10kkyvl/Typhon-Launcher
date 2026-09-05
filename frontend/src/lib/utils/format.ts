@@ -29,6 +29,7 @@ export function makeFormat(loc: Locale, t: Translate) {
   const shortDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short' });
   const dateTimeFormat = new Intl.DateTimeFormat(loc, { dateStyle: 'short', timeStyle: 'medium' });
   const clockFormat = new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' });
+  const weekdayFormat = new Intl.DateTimeFormat(loc, { weekday: 'short' });
 
   const clock = (seconds: number) => {
     const min = Math.floor(seconds / 60);
@@ -110,6 +111,8 @@ export function makeFormat(loc: Locale, t: Translate) {
 
     clockTime: (value: Date) => clockFormat.format(value),
 
+    weekday: (value: Date) => weekdayFormat.format(value),
+
     rateMbText,
 
     rateLimitLabel: (bytesPerSec: number) =>
@@ -139,4 +142,5 @@ export const shortDate: Format['shortDate'] = (value) => current.shortDate(value
 export const numericDate: Format['numericDate'] = (value) => current.numericDate(value);
 export const dateTime: Format['dateTime'] = (value) => current.dateTime(value);
 export const clockTime: Format['clockTime'] = (value) => current.clockTime(value);
+export const weekday: Format['weekday'] = (value) => current.weekday(value);
 export const rateLimitLabel: Format['rateLimitLabel'] = (bytes) => current.rateLimitLabel(bytes);

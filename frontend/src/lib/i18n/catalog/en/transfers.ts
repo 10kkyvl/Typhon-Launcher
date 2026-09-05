@@ -163,9 +163,10 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.activityStatGames': 'Games',
   'transfers.activityStatHours': 'Hours',
   'transfers.activityStatCompleted': 'Completed',
-  'transfers.activityOnlineFriendsTitle': 'Online friends ({count})',
-  'transfers.activityNoOneOnline': 'No one is online right now',
-  'transfers.activityShowAllFriends': 'Show all friends',
+  'transfers.activityWeekTitle': 'Your week',
+  'transfers.activityWeekWindow': 'over the last 7 days',
+  'transfers.activityWeekEmpty': "You haven't played anything this week",
+  'transfers.activityWeekIdle': 'no play',
   'transfers.activityLoading': 'Loading…',
   'transfers.activityFeedEmptyTitle': "It's quiet here",
   'transfers.activityFeedEmptyDescription':

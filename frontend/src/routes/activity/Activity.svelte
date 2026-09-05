@@ -12,10 +12,12 @@
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { FriendView } from '../../lib/services/social';
+  import { weekSummary } from '../../lib/profile/week';
   import { feedDayGroups } from '../../lib/social/feed';
   import { popularGames } from '../../lib/social/popular';
-  import { presenceDot, presenceLine, sortFriends, statusDot } from '../../lib/social/presence';
+  import { isPlaying, presenceDot, sortFriends, statusDot } from '../../lib/social/presence';
   import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, noteEvent, reactToEvent } from '../../lib/stores/feed';
+  import { loadArt } from '../../lib/stores/metadata';
   import { presenceStatus } from '../../lib/stores/presence';
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { navigate } from '../../lib/stores/router';
@@ -26,8 +28,8 @@
   import { msg } from '../../lib/i18n';
   import FriendRow from '../friends/FriendRow.svelte';
   import PopularGames from './PopularGames.svelte';
+  import WeekActivity from './WeekActivity.svelte';
 
-  const ONLINE_LIMIT = 8;
   const PLAYING_LIMIT = 6;
 
   let consentOpen = $state(false);
@@ -40,11 +42,11 @@
   const stats = $derived($profileSnapshot.stats);
   const ownDot = $derived(statusDot($presenceStatus));
 
-  const onlineFriends = $derived(
-    sortFriends($friendsPage.friends).filter((friend) => presenceDot(friend.presence) !== 'offline'),
+  const playingFriends = $derived(
+    sortFriends($friendsPage.friends).filter((friend) => isPlaying(friend.presence)),
   );
-  const playingFriends = $derived(onlineFriends.filter((friend) => friend.presence?.gameId != null));
   const popular = $derived(popularGames($feedEvents, $friendsPage.friends, user?.id ?? ''));
+  const week = $derived(weekSummary($profileSnapshot.activity));
 
   function report(err: unknown, fallback: string) {
     if (err instanceof AccountError && err.code === 'unauthenticated') return;
@@ -67,6 +69,11 @@
 
   $effect(() => {
     if (!isGuest && !$needsSocialConsent) void loadFeed(true);
+  });
+
+  $effect(() => {
+    const ids = week.games.map((item) => item.game.canonicalGameId).filter((id): id is string => Boolean(id));
+    if (ids.length > 0) void loadArt(ids);
   });
 
   onMount(() => {
@@ -121,25 +128,7 @@
         </div>
       </Card>
 
-      <Card title={msg('transfers.activityOnlineFriendsTitle', { count: onlineFriends.length })}>
-        {#if onlineFriends.length === 0}
-          <p class="muted">{msg('transfers.activityNoOneOnline')}</p>
-        {:else}
-          <div class="friends">
-            {#each onlineFriends.slice(0, ONLINE_LIMIT) as friend (friend.id)}
-              <FriendRow
-                user={friend}
-                status={presenceDot(friend.presence)}
-                meta={presenceLine(friend.presence)}
-                onopen={() => openUser(friend)}
-              />
-            {/each}
-          </div>
-        {/if}
-        <div class="show-all">
-          <Button onclick={() => navigate('friends')}>{msg('transfers.activityShowAllFriends')}</Button>
-        </div>
-      </Card>
+      <WeekActivity {week} />
     </div>
 
     <div class="center">
@@ -205,10 +194,14 @@
 
   .left,
   .right {
+    position: sticky;
+    top: var(--space-4);
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
     min-width: 0;
+    max-height: calc(100vh - var(--topbar-h) - var(--space-8));
+    overflow-y: auto;
   }
 
   .center {
@@ -264,17 +257,6 @@
     flex-direction: column;
     margin: 0 calc(var(--space-6) * -1);
   }
-
-  .show-all {
-    margin-top: var(--space-4);
-  }
-
-  .show-all :global(.btn) {
-    width: 100%;
-  }
-
-
-
 
   .muted {
     font-size: var(--font-sm);

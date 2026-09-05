@@ -160,9 +160,10 @@ export const transfers = {
   'transfers.activityStatGames': 'Игр',
   'transfers.activityStatHours': 'Часов',
   'transfers.activityStatCompleted': 'Пройдено',
-  'transfers.activityOnlineFriendsTitle': 'Онлайн друзья ({count})',
-  'transfers.activityNoOneOnline': 'Сейчас никого нет в сети',
-  'transfers.activityShowAllFriends': 'Показать всех друзей',
+  'transfers.activityWeekTitle': 'Ваша неделя',
+  'transfers.activityWeekWindow': 'за последние 7 дней',
+  'transfers.activityWeekEmpty': 'На этой неделе вы ещё не играли',
+  'transfers.activityWeekIdle': 'без игры',
   'transfers.activityLoading': 'Загрузка…',
   'transfers.activityFeedEmptyTitle': 'Пока тихо',
   'transfers.activityFeedEmptyDescription':
