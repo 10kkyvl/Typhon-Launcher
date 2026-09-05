@@ -85,7 +85,7 @@ func cpuName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer key.Close()
+	defer closeKey(key)
 	name, _, err := key.GetStringValue("ProcessorNameString")
 	return name, err
 }
@@ -95,7 +95,7 @@ func windowsProductName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer key.Close()
+	defer closeKey(key)
 	name, _, err := key.GetStringValue("ProductName")
 	if err != nil {
 		return "", err

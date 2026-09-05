@@ -176,6 +176,8 @@ export const state = {
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',
 
+  'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
+
   'state.themeFallbackName': 'Тёмная',
 } as const;
 

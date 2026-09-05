@@ -53,7 +53,11 @@ func (s *Service) recoverJob(ctx context.Context, job Job) {
 // the leftover journal entry.
 func (s *Service) surfaceStale(job Job) {
 	emit(eventForStage(job.Stage), job.clone())
-	s.removeJob(job.ID)
+	if err := s.removeJob(job.ID); err != nil {
+		// Logged and surfaced via move:degraded inside removeJob already;
+		// recoverAll's goroutine has no synchronous caller to report to.
+		return
+	}
 }
 
 func (s *Service) markRecoveryFailed(jobID string, err error) {

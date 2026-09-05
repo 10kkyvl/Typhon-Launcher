@@ -804,7 +804,10 @@ const (
 func verifyInstall(item Installation) error {
 	if item.Destination != "" {
 		entries, err := os.ReadDir(item.Destination)
-		if err != nil || len(entries) == 0 {
+		if err != nil {
+			return fmt.Errorf("чтение папки установки: %w", err)
+		}
+		if len(entries) == 0 {
 			return errEmptyInstall
 		}
 	}

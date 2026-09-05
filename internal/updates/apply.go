@@ -765,12 +765,35 @@ func (s *Service) rememberPrevious(game library.Game, path string) {
 	}
 
 	s.mu.Lock()
+	previous, had := s.rollbacks[game.ID]
 	s.rollbacks[game.ID] = entry
-	s.persistRollbacksLocked()
+	if err := s.persistRollbacksLocked(); err != nil {
+		if had {
+			s.rollbacks[game.ID] = previous
+		} else {
+			delete(s.rollbacks, game.ID)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks", "game", game.ID, "error", err)
+		return
+	}
+	var beforeUpdate *Update
 	if u, ok := s.updates[game.ID]; ok {
+		before := *u
+		beforeUpdate = &before
 		u.CanRollback = true
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if beforeUpdate != nil {
+			*s.updates[game.ID] = *beforeUpdate
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", game.ID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
 }
 
@@ -862,14 +885,8 @@ func (s *Service) Rollback(gameID string) error {
 }
 
 func (s *Service) forgetPrevious(gameID string) {
-	s.mu.Lock()
-	delete(s.rollbacks, gameID)
-	s.persistRollbacksLocked()
-	if u, ok := s.updates[gameID]; ok {
-		u.CanRollback = false
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	s.forgetRollbackBestEffort(gameID)
+	s.updateFieldsBestEffort(gameID, func(u *Update) { u.CanRollback = false })
 }
 
 // swapDirectories writes the journal after the stale previous is removed and
@@ -958,15 +975,12 @@ func (s *Service) recoverPatchJournal(j SwapJournal) {
 		return
 	}
 	msg := fmt.Sprintf("Обновление прервано на патче до %s; предыдущая версия восстановлена", j.Version)
-	s.mu.Lock()
-	if u, ok := s.updates[j.GameID]; ok {
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
 		u.State = StateFailed
 		u.Error = msg
 		u.Step = ""
 		u.Progress = 0
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	})
 }
 
 func (s *Service) recoverInplaceJournal(j SwapJournal) {
@@ -975,24 +989,18 @@ func (s *Service) recoverInplaceJournal(j SwapJournal) {
 			s.failJournalRecovery(j, err)
 			return
 		}
-		s.mu.Lock()
-		delete(s.rollbacks, j.GameID)
-		s.persistRollbacksLocked()
-		s.mu.Unlock()
+		s.forgetRollbackBestEffort(j.GameID)
 	}
 	if err := s.clearJournal(j.GameID); err != nil {
 		s.failJournalRecovery(j, err)
 		return
 	}
-	s.mu.Lock()
-	if u, ok := s.updates[j.GameID]; ok {
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
 		u.State = StateFailed
 		u.Error = interruptedUpdateText
 		u.Step = ""
 		u.Progress = 0
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	})
 }
 
 func (s *Service) recoverSwapJournal(j SwapJournal) {
@@ -1003,10 +1011,7 @@ func (s *Service) recoverSwapJournal(j SwapJournal) {
 			s.failJournalRecovery(j, err)
 			return
 		}
-		s.mu.Lock()
-		delete(s.rollbacks, j.GameID)
-		s.persistRollbacksLocked()
-		s.mu.Unlock()
+		s.forgetRollbackBestEffort(j.GameID)
 	case !exists(j.InstallDir) && exists(j.Staging):
 		if err := os.Rename(j.Staging, j.InstallDir); err != nil {
 			s.failJournalRecovery(j, err)
@@ -1020,15 +1025,12 @@ func (s *Service) recoverSwapJournal(j SwapJournal) {
 		s.failJournalRecovery(j, err)
 		return
 	}
-	s.mu.Lock()
-	if u, ok := s.updates[j.GameID]; ok {
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
 		u.State = StateFailed
 		u.Error = msg
 		u.Step = ""
 		u.Progress = 0
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	})
 }
 
 // failJournalRecovery logs and surfaces the error without clearing the
@@ -1036,12 +1038,7 @@ func (s *Service) recoverSwapJournal(j SwapJournal) {
 // so a recovery step that itself fails must leave it for the next start.
 func (s *Service) failJournalRecovery(j SwapJournal, err error) {
 	slog.Error("recover swap journal", "game", j.GameID, "kind", j.Kind, "error", err)
-	s.mu.Lock()
-	if u, ok := s.updates[j.GameID]; ok {
-		u.Error = err.Error()
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) { u.Error = err.Error() })
 }
 
 func exists(path string) bool {

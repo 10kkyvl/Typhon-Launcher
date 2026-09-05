@@ -316,13 +316,18 @@ func TestServiceStartupCorruptJournalFails(t *testing.T) {
 	}
 }
 
+// With the config directory entirely read-only, every persist in the update
+// job fails, including the one that would have recorded "update_failed": an
+// in-memory-only failure status would vanish on the next restart while
+// claiming to be recorded, so the tracked state instead rolls back to the
+// last value that genuinely reached disk (invariant I.4) and the service
+// reports degraded so the failure is not silently lost.
 func TestApplyFullReleaseJournalPersistFailureAbortsBeforeRename(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("read-only directory permissions behave differently on windows")
 	}
 	h := newHarness(t)
-	plan := h.plan(t)
-	_ = plan
+	h.plan(t)
 	if err := os.Chmod(filepath.Dir(h.service.store.path("x")), 0o500); err != nil { //nolint:gosec // G302: временно закрываем права каталога, чтобы смоделировать сбой persist (инвариант 5)
 		t.Fatal(err)
 	}
@@ -335,9 +340,17 @@ func TestApplyFullReleaseJournalPersistFailureAbortsBeforeRename(t *testing.T) {
 	if err := h.service.StartUpdate("local-1"); err != nil {
 		t.Fatal(err)
 	}
-	u := h.waitState(t, StateFailed)
-	if u.Error == "" {
-		t.Fatal("expected a failure message")
+	h.service.wg.Wait()
+
+	u, ok := h.service.snapshot("local-1")
+	if !ok || u.State != StateAvailable {
+		t.Fatalf("state = %+v, want it to stay at the last value that reached disk", u)
+	}
+	h.service.mu.Lock()
+	degraded := h.service.status
+	h.service.mu.Unlock()
+	if !degraded.Degraded || degraded.Message == "" {
+		t.Fatalf("service status = %+v, want degraded with a message", degraded)
 	}
 	if data, err := os.ReadFile(filepath.Join(h.installDir, "game.exe")); err != nil || string(data) != "old executable" {
 		t.Fatalf("installation touched before journal could be persisted: %q %v", data, err)

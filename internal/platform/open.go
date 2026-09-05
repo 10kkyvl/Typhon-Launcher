@@ -17,7 +17,7 @@ func OpenFolder(path string) error {
 	}
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("explorer.exe", path).Start()
+		return openFolderWindows(path)
 	case "darwin":
 		return exec.Command("open", path).Start()
 	default:

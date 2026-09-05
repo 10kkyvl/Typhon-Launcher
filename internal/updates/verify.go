@@ -19,16 +19,36 @@ import (
 
 var errRepairUnavailable = uierr.New("updates.repair_unavailable", "восстановление недоступно для этой установки")
 
+// emitVerify applies apply to the tracked verify state for gameID and, for
+// every event but the transient progress ticks, persists it before emitting.
+// A persist failure rolls the entry back (removing it if this call created
+// it), marks the service degraded and skips the event entirely: emitting it
+// anyway would tell the frontend a step completed when the disk state
+// backing it never landed.
 func (s *Service) emitVerify(gameID, event string, apply func(*VerifyState)) VerifyState {
 	s.mu.Lock()
-	state, ok := s.verifications[gameID]
-	if !ok {
+	state, existed := s.verifications[gameID]
+	before := VerifyState{GameID: gameID}
+	if existed {
+		before = *state
+	} else {
 		state = &VerifyState{GameID: gameID}
 		s.verifications[gameID] = state
 	}
 	apply(state)
 	if event != eventVerifyUpdated && event != eventRepairUpdated {
-		s.persistVerifyLocked()
+		if err := s.persistVerifyLocked(); err != nil {
+			if existed {
+				*state = before
+			} else {
+				delete(s.verifications, gameID)
+			}
+			s.markDegradedLocked(err)
+			s.mu.Unlock()
+			slog.Error("persist verify state", "game", gameID, "error", err)
+			return before
+		}
+		s.clearDegradedLocked()
 	}
 	snap := *state
 	s.mu.Unlock()

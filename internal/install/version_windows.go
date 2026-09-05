@@ -57,10 +57,18 @@ func queryString(block []byte, lang, key string) string {
 	return strings.TrimSpace(windows.UTF16PtrToString((*uint16)(ptr)))
 }
 
+// fixedVersionSizeOK проверяет, что VerQueryValue вернул блок не меньше
+// VS_FIXEDFILEINFO, прежде чем по нему кастуют указатель: без этого
+// усечённый ресурс версии читался бы за своими границами (соседняя
+// translationID делает тот же выбор для \VarFileInfo\Translation).
+func fixedVersionSizeOK(size uint32) bool {
+	return size >= uint32(unsafe.Sizeof(windows.VS_FIXEDFILEINFO{}))
+}
+
 func fixedVersion(block []byte) (string, bool) {
 	var ptr unsafe.Pointer
 	var size uint32
-	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\`, unsafe.Pointer(&ptr), &size); err != nil || size == 0 {
+	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\`, unsafe.Pointer(&ptr), &size); err != nil || !fixedVersionSizeOK(size) {
 		return "", false
 	}
 	fixed := (*windows.VS_FIXEDFILEINFO)(ptr)

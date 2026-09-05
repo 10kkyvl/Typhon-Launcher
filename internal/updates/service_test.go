@@ -237,7 +237,9 @@ func newHarness(t *testing.T) *harness {
 
 func (h *harness) plan(t *testing.T) UpdatePlan {
 	t.Helper()
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	plan, err := h.service.buildPlan(context.Background(), "local-1")
 	if err != nil {
 		t.Fatalf("build plan: %v", err)
@@ -263,7 +265,9 @@ func (h *harness) waitState(t *testing.T, want State) Update {
 
 func TestCheckReportsAvailableUpdate(t *testing.T) {
 	h := newHarness(t)
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	u, ok := h.service.snapshot("local-1")
 	if !ok || u.State != StateAvailable {
 		t.Fatalf("update = %+v", u)
@@ -442,7 +446,9 @@ func TestPatchesFromReleasesFeedIntoPlan(t *testing.T) {
 		MatchConfidence: 1,
 		Availability:    sources.AvailabilityAvailable,
 	})
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	plan, err := h.service.buildPlan(context.Background(), "local-1")
 	if err != nil {
 		t.Fatal(err)

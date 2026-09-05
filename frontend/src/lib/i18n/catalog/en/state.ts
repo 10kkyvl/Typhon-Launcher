@@ -177,5 +177,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateCodeDownloadFailed': 'Failed to download the update.',
   'state.selfupdateCodeApplyFailed': 'Failed to install the update.',
 
+  'state.stateSaveFailed': 'Could not save state to disk: {message}',
+
   'state.themeFallbackName': 'Dark',
 };

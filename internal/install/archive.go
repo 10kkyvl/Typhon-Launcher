@@ -120,7 +120,15 @@ func writeEntry(ctx context.Context, target string, mode fs.FileMode, src io.Rea
 		return err
 	}
 	if err := copyStream(ctx, f, src, rep, buf); err != nil {
-		f.Close()
+		if cerr := f.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		if cerr := f.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
 		return err
 	}
 	return f.Close()

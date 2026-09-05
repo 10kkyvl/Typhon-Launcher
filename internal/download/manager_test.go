@@ -174,7 +174,12 @@ func (m *Manager) addTestItem(id string, status Status) *Download {
 	}
 	m.mu.Lock()
 	m.items = append(m.items, d)
-	m.persistLocked()
+	// Test setup against a fresh t.TempDir() store: a failure here is a bug
+	// worth failing loudly on, not something to discard.
+	if err := m.persistLocked(); err != nil {
+		m.mu.Unlock()
+		panic(err)
+	}
 	m.mu.Unlock()
 	return d
 }

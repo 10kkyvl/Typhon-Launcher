@@ -215,7 +215,9 @@ func TestPreparePlanLeavesVerifyStateUntouched(t *testing.T) {
 		BadPieces:    6,
 	}
 
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	if _, err := h.service.buildPlan(context.Background(), "local-1"); err != nil {
 		t.Fatalf("build plan: %v", err)
 	}

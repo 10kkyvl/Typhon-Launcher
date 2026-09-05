@@ -156,7 +156,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	}
 
 	if plan.method == RemovalInstaller {
-		if err := s.runUninstaller(s.baseContext(), plan); err != nil {
+		base, err := s.baseContext()
+		if err != nil {
+			return err
+		}
+		if err := s.runUninstaller(base, plan); err != nil {
 			return err
 		}
 	}

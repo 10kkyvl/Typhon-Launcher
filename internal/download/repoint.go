@@ -102,7 +102,7 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 		d.Destination = filepath.Join(newRoot, rel)
 	}
 	if len(changed) > 0 {
-		if err := m.store.save(recordsFromLocked(m.items)); err != nil {
+		if err := m.persistLocked(); err != nil {
 			for _, c := range changed {
 				c.item.Destination = c.was
 			}
@@ -119,36 +119,6 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 
 func downloadSettled(s Status) bool {
 	return s == StatusCompleted || s == StatusFailed || s == StatusPaused
-}
-
-// recordsFromLocked mirrors persistLocked's record construction. It is
-// duplicated rather than shared because persistLocked swallows its save
-// error via slog (manager.go is off limits here), and Repoint must see that
-// error to roll back the Destination rewrite it just made in memory.
-func recordsFromLocked(items []*Download) []record {
-	records := make([]record, 0, len(items))
-	for _, d := range items {
-		records = append(records, record{
-			ID:          d.ID,
-			Name:        d.Name,
-			Type:        d.Type,
-			Source:      d.Source,
-			InfoHash:    d.InfoHash,
-			Destination: d.Destination,
-			Status:      d.Status,
-			Selected:    selectedIndices(d),
-			Downloaded:  d.Downloaded,
-			Total:       d.Total,
-			Seeding:     d.Seeding,
-			Flat:        d.Flat,
-			InPlace:     d.InPlace,
-			Origin:      d.Origin,
-			AddedAt:     d.AddedAt,
-			CompletedAt: d.CompletedAt,
-			Error:       d.Error,
-		})
-	}
-	return records
 }
 
 // moveTreeIfPresent moves oldRoot to newRoot. A missing oldRoot is not an

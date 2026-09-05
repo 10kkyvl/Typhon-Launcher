@@ -4,6 +4,7 @@
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
+  import { initDegradedNotices } from './lib/stores/degraded';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initHistory } from './lib/stores/history';
@@ -38,6 +39,7 @@
   import Sources from './routes/sources/Sources.svelte';
   import UserProfile from './routes/user/UserProfile.svelte';
 
+  initDegradedNotices();
   initDownloads();
   initInstalls();
   initSettings().then(refreshStorage);

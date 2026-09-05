@@ -195,3 +195,55 @@ func TestAddStartsWithUploadDisallowed(t *testing.T) {
 		t.Fatal("fresh torrent reports seeding before the upload setting is applied")
 	}
 }
+
+// TestAddRejectsSecondSpecForSameHash is the deterministic, single-goroutine
+// counterpart to the concurrency tests in toctou_test.go: it proves add's
+// own defence in depth (checking AddTorrentSpec's "new" return) works even
+// with no race involved. Client.AddTorrentSpec merges a second spec for an
+// already-tracked infohash into the first *torrent.Torrent instead of
+// erroring, and MergeSpec documents that it ignores the second spec's
+// Storage — silently returning a *liveTorrent built from that ignored
+// storage would make the caller believe its destination was in effect when
+// it never was.
+func TestAddRejectsSecondSpecForSameHash(t *testing.T) {
+	const uri = "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&dn=Startup+Panic"
+	cl := offlineClient(t)
+
+	spec1, err := magnetSpec(uri)
+	if err != nil {
+		t.Fatalf("magnetSpec: %v", err)
+	}
+	firstDest := t.TempDir()
+	lt1, err := cl.add(spec1, firstDest, storageOpts{})
+	if err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+	t.Cleanup(lt1.drop)
+
+	spec2, err := magnetSpec(uri)
+	if err != nil {
+		t.Fatalf("magnetSpec: %v", err)
+	}
+	secondDest := t.TempDir()
+	lt2, err := cl.add(spec2, secondDest, storageOpts{})
+	if err == nil {
+		t.Cleanup(lt2.drop)
+		t.Fatal("second add for the same infohash succeeded, want errTorrentAlreadyAdded")
+	}
+	if !errors.Is(err, errTorrentAlreadyAdded) {
+		t.Fatalf("second add error = %v, want errTorrentAlreadyAdded", err)
+	}
+	if lt2 != nil {
+		t.Fatal("second add returned a non-nil *liveTorrent alongside its error")
+	}
+
+	// The original torrent must be unaffected: still exactly one torrent in
+	// the client, still the one built with the first destination.
+	torrents := cl.cl.Torrents()
+	if len(torrents) != 1 {
+		t.Fatalf("torrents tracked by client = %d, want 1", len(torrents))
+	}
+	if torrents[0] != lt1.t {
+		t.Fatal("the tracked torrent is not the first liveTorrent's")
+	}
+}

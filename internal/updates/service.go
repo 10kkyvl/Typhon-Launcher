@@ -31,6 +31,7 @@ const (
 	eventCompleted = "update:completed"
 	eventFailed    = "update:failed"
 	eventRollback  = "update:rollback"
+	eventDegraded  = "update:degraded"
 
 	eventVerifyStarted   = "verify:started"
 	eventVerifyUpdated   = "verify:updated"
@@ -67,6 +68,14 @@ var (
 	errNoLibrary       = uierr.New("updates.no_library", "библиотека недоступна")
 	errUpdateFailed    = uierr.New("updates.update_failed", "не удалось применить обновление")
 )
+
+// degradedStatus is the update:degraded event payload. It stays unexported
+// with no accessor method: adding either would change the wails bindings
+// generated for Service, which is not allowed here.
+type degradedStatus struct {
+	Degraded bool   `json:"degraded"`
+	Message  string `json:"message"`
+}
 
 type librarySource interface {
 	GetInstalledGames() []library.Game
@@ -110,6 +119,7 @@ type Service struct {
 	rollbacks     map[string]*Rollback
 	journals      map[string]*SwapJournal
 	history       []UpdateHistory
+	status        degradedStatus
 
 	jobs    map[string]*job
 	waiters map[string]chan install.Installation
@@ -182,12 +192,31 @@ func emit(name string, data any) {
 	}
 }
 
+// markDegradedLocked records a persist failure and notifies the frontend.
+// The caller must hold s.mu.
+func (s *Service) markDegradedLocked(err error) {
+	s.status = degradedStatus{Degraded: true, Message: err.Error()}
+	emit(eventDegraded, s.status)
+}
+
+// clearDegradedLocked resets a previously recorded persist failure once a
+// save succeeds again. It only emits when the status actually changes, so a
+// healthy service does not fire update:degraded on every successful save.
+// The caller must hold s.mu.
+func (s *Service) clearDegradedLocked() {
+	if !s.status.Degraded {
+		return
+	}
+	s.status = degradedStatus{}
+	emit(eventDegraded, s.status)
+}
+
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	startupCtx, cancel := context.WithCancel(ctx)
+	s.ctx, s.cancel = startupCtx, cancel
 	storedUpdates, err := s.store.loadUpdates()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -195,7 +224,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedVerifications, err := s.store.loadVerifications()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -203,7 +231,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedRollbacks, err := s.store.loadRollbacks()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -211,7 +238,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedHistory, err := s.store.loadHistory()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -219,7 +245,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedJournals, err := s.store.loadJournals()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -274,13 +299,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 
 	s.wg.Add(1)
-	go s.housekeeping()
+	go s.housekeeping(startupCtx)
 
 	if s.config().UpdateCheckAutomatically {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.checkAll(s.baseContext())
+			s.checkAll(startupCtx)
 		}()
 	}
 	return nil
@@ -301,49 +326,46 @@ func (s *Service) ServiceShutdown() error {
 	s.wg.Wait()
 
 	s.mu.Lock()
-	s.persistLocked()
+	err := s.persistLocked()
 	s.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("persist updates on shutdown: %w", err)
+	}
 	return nil
 }
 
-func (s *Service) baseContext() context.Context {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.ctx == nil {
-		return context.Background()
-	}
-	return s.ctx
-}
-
-func (s *Service) persistLocked() {
+func (s *Service) persistLocked() error {
 	list := make([]Update, 0, len(s.updates))
 	for _, u := range s.updates {
 		list = append(list, *u)
 	}
 	sortUpdates(list)
 	if err := s.store.saveUpdates(list); err != nil {
-		slog.Error("persist updates", "error", err)
+		return fmt.Errorf("save updates: %w", err)
 	}
+	return nil
 }
 
-func (s *Service) persistVerifyLocked() {
+func (s *Service) persistVerifyLocked() error {
 	list := make([]VerifyState, 0, len(s.verifications))
 	for _, v := range s.verifications {
 		list = append(list, *v)
 	}
 	if err := s.store.saveVerifications(list); err != nil {
-		slog.Error("persist verifications", "error", err)
+		return fmt.Errorf("save verifications: %w", err)
 	}
+	return nil
 }
 
-func (s *Service) persistRollbacksLocked() {
+func (s *Service) persistRollbacksLocked() error {
 	list := make([]Rollback, 0, len(s.rollbacks))
 	for _, r := range s.rollbacks {
 		list = append(list, *r)
 	}
 	if err := s.store.saveRollbacks(list); err != nil {
-		slog.Error("persist rollbacks", "error", err)
+		return fmt.Errorf("save rollbacks: %w", err)
 	}
+	return nil
 }
 
 func (s *Service) persistJournalsLocked() error {
@@ -407,6 +429,11 @@ func (s *Service) snapshot(gameID string) (Update, bool) {
 	return *u, true
 }
 
+// mutate applies apply to the tracked update for gameID and persists the
+// result. A persist failure rolls the in-memory copy back to what apply
+// started from, marks the service degraded (update:degraded) and logs the
+// error: mutate has no caller that could act differently on the error than
+// log it, so the handling lives here once instead of at every call site.
 func (s *Service) mutate(gameID string, apply func(*Update)) (Update, bool) {
 	s.mu.Lock()
 	u, ok := s.updates[gameID]
@@ -414,12 +441,68 @@ func (s *Service) mutate(gameID string, apply func(*Update)) (Update, bool) {
 		s.mu.Unlock()
 		return Update{}, false
 	}
+	before := *u
 	apply(u)
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		*u = before
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", gameID, "error", err)
+		return before, true
+	}
+	s.clearDegradedLocked()
 	snap := *u
 	s.mu.Unlock()
 	emit(eventUpdated, snap)
 	return snap, true
+}
+
+// updateFieldsBestEffort is mutate for recovery code that runs once at
+// startup for many games in a row: a single unwritable state file must not
+// stop every other game's journal recovery, so a persist failure here rolls
+// the change back, marks the service degraded and logs, rather than
+// aborting ServiceStartup.
+func (s *Service) updateFieldsBestEffort(gameID string, apply func(*Update)) {
+	s.mu.Lock()
+	u, ok := s.updates[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	before := *u
+	apply(u)
+	if err := s.persistLocked(); err != nil {
+		*u = before
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
+}
+
+// forgetRollbackBestEffort removes gameID's kept-previous-version record and
+// persists it, rolling back and marking the service degraded on failure. See
+// updateFieldsBestEffort for why this stays a logged best effort rather than
+// a propagated error.
+func (s *Service) forgetRollbackBestEffort(gameID string) {
+	s.mu.Lock()
+	entry, ok := s.rollbacks[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.rollbacks, gameID)
+	if err := s.persistRollbacksLocked(); err != nil {
+		s.rollbacks[gameID] = entry
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 // planProgress reports progress of a long planning step without persisting it:
@@ -529,9 +612,17 @@ func versionSourceOf(raw string) VersionSource {
 	}
 }
 
-// CheckUpdates recomputes availability for every installed game.
+// CheckUpdates recomputes availability for every installed game. When the
+// service has not completed ServiceStartup yet there is no context to run
+// the check under, so it is skipped rather than run with a substitute
+// context (invariant 20): the caller still gets whatever was already known.
 func (s *Service) CheckUpdates() []Update {
-	s.checkAll(s.baseContext())
+	s.mu.Lock()
+	ctx := s.ctx
+	s.mu.Unlock()
+	if ctx != nil {
+		s.checkAll(ctx)
+	}
 	return s.GetUpdates()
 }
 
@@ -540,7 +631,9 @@ func (s *Service) CheckGame(gameID string) (Update, error) {
 	if !ok {
 		return Update{}, errNotTracked
 	}
-	s.check(game)
+	if err := s.check(game); err != nil {
+		return Update{}, err
+	}
 	u, ok := s.snapshot(gameID)
 	if !ok {
 		return Update{}, errNotTracked
@@ -559,32 +652,75 @@ func (s *Service) checkAll(ctx context.Context) {
 			return
 		}
 		known[game.ID] = true
-		s.check(game)
+		if err := s.check(game); err != nil {
+			slog.Error("check update", "game", game.ID, "error", err)
+		}
 	}
 	s.prune(known)
 }
 
+// prune drops tracked updates and verifications for games no longer
+// installed. A persist failure rolls the deleted entries back into memory
+// instead of leaving them removed only in RAM (invariant I.4), marks the
+// service degraded and logs: prune runs from checkAll in the background, so
+// there is no caller left to hand the error to.
 func (s *Service) prune(known map[string]bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	removed := false
+	removedUpdates := map[string]*Update{}
+	removedVerifications := map[string]*VerifyState{}
 	for id := range s.updates {
 		if known[id] {
 			continue
 		}
+		removedUpdates[id] = s.updates[id]
+		if v, ok := s.verifications[id]; ok {
+			removedVerifications[id] = v
+		}
+	}
+	if len(removedUpdates) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	for id := range removedUpdates {
 		delete(s.updates, id)
 		delete(s.verifications, id)
-		removed = true
 	}
-	if removed {
-		s.persistLocked()
-		s.persistVerifyLocked()
+	restore := func() {
+		for id, u := range removedUpdates {
+			s.updates[id] = u
+		}
+		for id, v := range removedVerifications {
+			s.verifications[id] = v
+		}
 	}
+	if err := s.persistLocked(); err != nil {
+		restore()
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist pruned updates", "error", err)
+		return
+	}
+	if err := s.persistVerifyLocked(); err != nil {
+		restore()
+		if persistErr := s.persistLocked(); persistErr != nil {
+			slog.Error("restore updates on disk after failed verification prune", "error", persistErr)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist pruned verifications", "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
-func (s *Service) check(game library.Game) {
+// check resolves update availability for game and persists it. A persist
+// failure rolls the in-memory entry back to what it was before this call
+// (removing it entirely if check itself created it), marks the service
+// degraded and returns the error so CheckGame can surface it to the UI.
+func (s *Service) check(game library.Game) error {
 	if s.releases == nil {
-		return
+		return nil
 	}
 	installed := installedOf(game)
 	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
@@ -592,8 +728,11 @@ func (s *Service) check(game library.Game) {
 	availability.GameID = game.ID
 
 	s.mu.Lock()
-	current, ok := s.updates[game.ID]
-	if !ok {
+	current, existed := s.updates[game.ID]
+	var before Update
+	if existed {
+		before = *current
+	} else {
 		current = &Update{GameID: game.ID}
 		s.updates[game.ID] = current
 	}
@@ -616,7 +755,17 @@ func (s *Service) check(game library.Game) {
 			current.Plan = nil
 		}
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if existed {
+			*current = before
+		} else {
+			delete(s.updates, game.ID)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("persist update check for %s: %w", game.ID, err)
+	}
+	s.clearDegradedLocked()
 	snap := *current
 	s.mu.Unlock()
 
@@ -627,16 +776,32 @@ func (s *Service) check(game library.Game) {
 			"strategy", availability.Strategy, "confidence", availability.Confidence)
 		emit(eventAvailable, snap)
 	}
+	return nil
 }
 
 // HandleSourcesRefreshed re-resolves availability once new releases arrive.
+// The recheck runs in its own goroutine because it walks every installed
+// game, but that goroutine is counted in s.wg and refuses to start once the
+// service is closing or has no context yet, so ServiceShutdown never races a
+// check still writing state after it returns (invariant 19).
 //
 //wails:ignore
 func (s *Service) HandleSourcesRefreshed() {
 	if !s.config().UpdateCheckAutomatically {
 		return
 	}
-	go s.checkAll(s.baseContext())
+	s.mu.Lock()
+	if s.closing || s.ctx == nil {
+		s.mu.Unlock()
+		return
+	}
+	ctx := s.ctx
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		s.checkAll(ctx)
+	}()
 }
 
 // HandleInstallFinished routes installer results back to a waiting update job.
@@ -679,20 +844,40 @@ func (s *Service) HandleSessionEnded(gameID string, seconds int64) {
 	}
 	path := entry.Path
 	delete(s.rollbacks, gameID)
-	s.persistRollbacksLocked()
+	if err := s.persistRollbacksLocked(); err != nil {
+		s.rollbacks[gameID] = entry
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks after session end", "game", gameID, "error", err)
+		return
+	}
+	var beforeUpdate *Update
 	if u, tracked := s.updates[gameID]; tracked {
+		before := *u
+		beforeUpdate = &before
 		u.CanRollback = false
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		// rollbacks.json already committed the removal above; restoring the
+		// in-memory entry here would only put memory out of sync with disk
+		// again, so only the update flag is rolled back (invariant I.4).
+		if beforeUpdate != nil {
+			*s.updates[gameID] = *beforeUpdate
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist updates after session end", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
 
 	slog.Info("previous version removed after a successful launch", "game", gameID, "path", path)
 	removeTree(path)
 }
 
-func (s *Service) housekeeping() {
+func (s *Service) housekeeping(ctx context.Context) {
 	defer s.wg.Done()
-	ctx := s.baseContext()
 	ticker := time.NewTicker(housekeepingInterval)
 	defer ticker.Stop()
 	s.sweepPrevious()
@@ -706,24 +891,61 @@ func (s *Service) housekeeping() {
 	}
 }
 
+// sweepPrevious removes kept-previous-version directories past their
+// KeepUntil deadline. A persist failure rolls the removed rollback entries
+// (and the update flags they cleared) back into memory and skips deleting
+// their directories, so a state file the disk refused to write never causes
+// a backup to be deleted while memory still thinks it exists.
 func (s *Service) sweepPrevious() {
 	now := time.Now()
 	var stale []string
 	s.mu.Lock()
+	removedRollbacks := map[string]*Rollback{}
+	changedUpdates := map[string]Update{}
 	for id, entry := range s.rollbacks {
 		if entry.KeepUntil == nil || now.Before(*entry.KeepUntil) {
 			continue
 		}
 		stale = append(stale, entry.Path)
+		removedRollbacks[id] = entry
 		delete(s.rollbacks, id)
 		if u, ok := s.updates[id]; ok {
+			changedUpdates[id] = *u
 			u.CanRollback = false
 		}
 	}
-	if len(stale) > 0 {
-		s.persistRollbacksLocked()
-		s.persistLocked()
+	if len(stale) == 0 {
+		s.mu.Unlock()
+		return
 	}
+	restore := func() {
+		for id, entry := range removedRollbacks {
+			s.rollbacks[id] = entry
+		}
+		for id, before := range changedUpdates {
+			if u, ok := s.updates[id]; ok {
+				*u = before
+			}
+		}
+	}
+	if err := s.persistRollbacksLocked(); err != nil {
+		restore()
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks during sweep", "error", err)
+		return
+	}
+	if err := s.persistLocked(); err != nil {
+		restore()
+		if persistErr := s.persistRollbacksLocked(); persistErr != nil {
+			slog.Error("restore rollbacks on disk after failed sweep persist", "error", persistErr)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist updates during sweep", "error", err)
+		return
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
 
 	for _, path := range stale {
@@ -732,17 +954,17 @@ func (s *Service) sweepPrevious() {
 	}
 }
 
+// beginJob claims the job slot for gameID. It refuses instead of starting
+// when the service has not completed ServiceStartup yet (s.ctx is nil):
+// invariant 20 forbids substituting context.Background() here, so a job that
+// cannot be tied to the service's lifecycle simply does not start.
 func (s *Service) beginJob(gameID string) (context.Context, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closing || s.jobs[gameID] != nil {
+	if s.closing || s.ctx == nil || s.jobs[gameID] != nil {
 		return nil, false
 	}
-	base := s.ctx
-	if base == nil {
-		base = context.Background()
-	}
-	ctx, cancel := context.WithCancel(base)
+	ctx, cancel := context.WithCancel(s.ctx)
 	s.jobs[gameID] = &job{cancel: cancel, done: make(chan struct{})}
 	return ctx, true
 }
@@ -768,22 +990,33 @@ func (s *Service) cancelJob(gameID string) {
 	}
 }
 
+// appendHistory records entry in the update-history journal. A persist
+// failure rolls the journal back to its previous contents, marks the
+// service degraded and logs: appendHistory runs from the background update
+// goroutine, which has nothing more useful to do with the error than log it.
 func (s *Service) appendHistory(entry UpdateHistory) {
 	s.mu.Lock()
+	previous := append([]UpdateHistory(nil), s.history...)
 	s.history = append(s.history, entry)
 	if len(s.history) > maxHistory {
 		s.history = s.history[len(s.history)-maxHistory:]
 	}
 	list := append([]UpdateHistory(nil), s.history...)
-	s.mu.Unlock()
 	if err := s.store.saveHistory(list); err != nil {
+		s.history = previous
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
 		slog.Error("persist update history", "error", err)
+		return
 	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 func (s *Service) finishHistory(id, status, message string) {
 	now := time.Now()
 	s.mu.Lock()
+	previous := append([]UpdateHistory(nil), s.history...)
 	for i := range s.history {
 		if s.history[i].ID != id {
 			continue
@@ -794,10 +1027,15 @@ func (s *Service) finishHistory(id, status, message string) {
 		break
 	}
 	list := append([]UpdateHistory(nil), s.history...)
-	s.mu.Unlock()
 	if err := s.store.saveHistory(list); err != nil {
+		s.history = previous
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
 		slog.Error("persist update history", "error", err)
+		return
 	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 func (s *Service) recheck(gameID string) {

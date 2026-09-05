@@ -20,6 +20,7 @@ const (
 	playlogVersion = 1
 	Retention      = 90 * 24 * time.Hour
 	eventRecorded  = "playlog:recorded"
+	eventDegraded  = "playlog:degraded"
 )
 
 type Session struct {
@@ -28,11 +29,17 @@ type Session struct {
 	EndedAt   time.Time `json:"endedAt"`
 }
 
+type degradedStatus struct {
+	Degraded bool   `json:"degraded"`
+	Message  string `json:"message"`
+}
+
 type Service struct {
 	mu       sync.Mutex
 	path     string
 	sessions []Session
 	now      func() time.Time
+	status   degradedStatus
 }
 
 func NewService() (*Service, error) {
@@ -75,6 +82,12 @@ func (s *Service) load() ([]Session, error) {
 	return sessions, nil
 }
 
+// Record appends a session, then persists the log. On a persist failure the
+// in-memory sessions are rolled back to their state before the call, the
+// service enters a degraded state (surfaced by playlog:degraded), and the
+// failure is logged: SetPlayRecorder wires this method into
+// library.Service's fixed, error-less callback signature, so there is no
+// synchronous caller left to hand the error back to.
 func (s *Service) Record(gameID string, startedAt, endedAt time.Time) {
 	if gameID == "" || !endedAt.After(startedAt) {
 		return
@@ -82,12 +95,17 @@ func (s *Service) Record(gameID string, startedAt, endedAt time.Time) {
 	session := Session{GameID: gameID, StartedAt: startedAt, EndedAt: endedAt}
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := append([]Session(nil), s.sessions...)
 	s.sessions = prune(append(s.sessions, session), s.now())
 	if err := storage.Save(s.path, playlogVersion, s.sessions); err != nil {
+		s.sessions = previous
+		s.status = degradedStatus{Degraded: true, Message: err.Error()}
 		slog.Error("persist playlog", "path", s.path, "error", err)
+		emit(eventDegraded, s.status)
+		return
 	}
-	s.mu.Unlock()
-
+	s.status = degradedStatus{}
 	emit(eventRecorded, session)
 }
 
