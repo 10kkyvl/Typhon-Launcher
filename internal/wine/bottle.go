@@ -1,0 +1,106 @@
+package wine
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"typhon/internal/storage"
+)
+
+// markerName — файл, по которому бутыль опознаётся как наш. Учёт бутылей
+// выведен из файловой системы, а не из отдельного файла состояния: так он не
+// может разойтись с реальностью, переживает потерю конфига, и пользователь
+// видит рядом с бутылем, чей он.
+const markerName = "typhon-bottle.json"
+
+// Bottle — один бутыль CrossOver, отданный под одну установку.
+type Bottle struct {
+	Key   string // канонический путь каталога установки
+	Name  string // имя бутыля в CrossOver
+	Path  string // каталог самого бутыля
+	Drive string // буква, под которой в бутыле видна папка игр
+	Games string // native-путь папки игр
+}
+
+type marker struct {
+	Key   string `json:"key"`
+	Name  string `json:"name"`
+	Drive string `json:"drive"`
+	Games string `json:"games"`
+}
+
+func writeMarker(bottlePath string, b Bottle) error {
+	data, err := json.MarshalIndent(marker{Key: b.Key, Name: b.Name, Drive: b.Drive, Games: b.Games}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("метка бутыля: %w", err)
+	}
+	return storage.WriteAtomic(filepath.Join(bottlePath, markerName), append(data, '\n'))
+}
+
+// readMarker не отличает отсутствие метки от битой: и то и другое значит
+// «этот бутыль не наш», а вызывающему в обоих случаях делать одно и то же.
+func readMarker(bottlePath string) (Bottle, bool) {
+	data, err := os.ReadFile(filepath.Join(bottlePath, markerName))
+	if err != nil {
+		return Bottle{}, false
+	}
+	var m marker
+	if err := json.Unmarshal(data, &m); err != nil {
+		return Bottle{}, false
+	}
+	if m.Key == "" || m.Drive == "" || m.Games == "" {
+		return Bottle{}, false
+	}
+	return Bottle{Key: m.Key, Name: m.Name, Path: bottlePath, Drive: m.Drive, Games: m.Games}, true
+}
+
+// bottleName делает имя, которое человек узнает в UI CrossOver, но которое
+// при этом заведомо безопасно как имя каталога: хвост хеша разводит игры с
+// одинаковыми первыми буквами и снимает вопрос экранирования.
+func bottleName(destDir string) string {
+	safe := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		case r == ' ', r == '-', r == '_':
+			return '-'
+		default:
+			return -1
+		}
+	}, filepath.Base(destDir))
+	safe = strings.Trim(safe, "-")
+	if len(safe) > 32 {
+		safe = strings.Trim(safe[:32], "-")
+	}
+	sum := sha256.Sum256([]byte(destDir))
+	suffix := hex.EncodeToString(sum[:4])
+	if safe == "" {
+		return "Typhon-" + suffix
+	}
+	return "Typhon-" + safe + "-" + suffix
+}
+
+// ToWindows переводит путь внутри папки игр в путь на букве бутыля.
+func (b Bottle) ToWindows(native string) (string, error) {
+	rel, err := filepath.Rel(b.Games, native)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("путь %s вне папки игр %s", native, b.Games)
+	}
+	return strings.ToUpper(b.Drive) + `:\` + strings.ReplaceAll(rel, "/", `\`), nil
+}
+
+// ToNative — обратный перевод. Пути на других буквах не наши: их вызывающий
+// обязан отличать от своих, а не молча принимать.
+func (b Bottle) ToNative(win string) (string, error) {
+	prefix := strings.ToUpper(b.Drive) + `:\`
+	if !strings.HasPrefix(strings.ToUpper(win), prefix) {
+		return "", fmt.Errorf("путь %s не на диске %s", win, prefix)
+	}
+	rel := strings.ReplaceAll(win[len(prefix):], `\`, "/")
+	return filepath.Join(b.Games, rel), nil
+}
