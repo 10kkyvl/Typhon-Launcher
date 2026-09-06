@@ -15,6 +15,7 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
@@ -326,6 +327,15 @@ func main() {
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
+
+	// Журнал совместимости набирается сам из исходов запусков: без него
+	// каждый пользователь заново выясняет, какие игры на его машине не идут.
+	compatService, err := compat.NewService()
+	if err != nil {
+		fatal("start compat service", err)
+	}
+	libraryService.SetOutcomeRecorder(compatService.RecordSession)
+	libraryService.SetLaunchFailureRecorder(compatService.RecordLaunchFailure)
 	profileService := profile.NewService(libraryService, playlogService, func() []string {
 		return accountService.CurrentProfileSettings().Showcase
 	})
@@ -415,6 +425,7 @@ func main() {
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),
+		application.NewService(compatService),
 		application.NewService(themeService),
 		application.NewService(lanService),
 		application.NewService(relocateService),

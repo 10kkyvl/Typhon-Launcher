@@ -56,6 +56,7 @@ func (s *Service) PlayGame(id string) error {
 	proc, err := s.start(s.ctx, game.Executable, game.LaunchArgs, workDir)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
+		s.noteLaunchFailureLocked(id, err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
 
@@ -119,6 +120,11 @@ func (s *Service) StopGame(id string) error {
 	s.mu.Lock()
 	current, ok := s.running[id]
 	ctx := s.ctx
+	if ok {
+		// Ставим до убийства: сессию закроет чужая горутина, и к тому
+		// моменту отличить закрытие пользователем от падения будет нечем.
+		current.stoppedByUser = true
+	}
 	s.mu.Unlock()
 	if !ok {
 		return errSessionNotRunning
@@ -178,12 +184,25 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		return
 	}
 
+	stoppedByUser := false
+	if current, ok := s.running[id]; ok {
+		stoppedByUser = current.stoppedByUser
+	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
 		w.SessionStopped(id)
 	}
 	endedAt := s.now()
 	seconds := int64(endedAt.Sub(startedAt).Seconds())
+	if s.onOutcome != nil {
+		note := s.onOutcome
+		played := endedAt.Sub(startedAt)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			note(id, played, stoppedByUser)
+		}()
+	}
 	if s.onSession != nil {
 		notify := s.onSession
 		s.wg.Add(1)
@@ -243,4 +262,18 @@ func (s *Service) findLocked(id string) *Game {
 		}
 	}
 	return nil
+}
+
+// noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
+// на всё время запуска, а журнал совместимости пишется в своей горутине.
+func (s *Service) noteLaunchFailureLocked(gameID, reason string) {
+	if s.onLaunchFail == nil {
+		return
+	}
+	note := s.onLaunchFail
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		note(gameID, reason)
+	}()
 }

@@ -132,13 +132,18 @@ var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites lim
 var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
-	mu            sync.Mutex
-	path          string
-	excludedPath  string
-	games         []Game
-	excluded      []string
-	running       map[string]*session
-	onSession     func(gameID string, seconds int64)
+	mu           sync.Mutex
+	path         string
+	excludedPath string
+	games        []Game
+	excluded     []string
+	running      map[string]*session
+	onSession    func(gameID string, seconds int64)
+	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
+	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
+	// наигранного времени.
+	onOutcome     func(gameID string, played time.Duration, stoppedByUser bool)
+	onLaunchFail  func(gameID string, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
@@ -175,6 +180,10 @@ type session struct {
 	startedAt time.Time // с этого момента считается наигранное время
 	lastSeen  time.Time
 	external  bool
+	// stoppedByUser отделяет «игру закрыли» от «игра умерла сама»: для
+	// журнала совместимости это разные события, а по одной длительности их
+	// не различить.
+	stoppedByUser bool
 }
 
 func NewService() (*Service, error) {
@@ -498,6 +507,20 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetOutcomeRecorder(fn func(gameID string, played time.Duration, stoppedByUser bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onOutcome = fn
+}
+
+//wails:ignore
+func (s *Service) SetLaunchFailureRecorder(fn func(gameID string, reason string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onLaunchFail = fn
 }
 
 //wails:ignore
