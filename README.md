@@ -96,7 +96,7 @@ Everything below is for working on the launcher, not for using it.
 |---|---|
 | Go | 1.25.0 |
 | Node | 22 |
-| Wails CLI | `v3.0.0-beta.10` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10` |
+| Wails CLI | `v3.0.0-beta.17` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17` |
 
 Go + [Wails 3](https://v3.wails.io) on the backend, Svelte 5 on the front, current
 version 0.3.1.

@@ -465,7 +465,10 @@ func main() {
 			Middleware: metadataService.Middleware,
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// С включённым сворачиванием в трей приложение обязано пережить
+			// закрытие окна: иначе крестик убивает лаунчер вместе с
+			// загрузками, а иконка в строке меню возвращать уже нечего.
+			ApplicationShouldTerminateAfterLastWindowClosed: !current.MinimizeToTray,
 		},
 	})
 
@@ -529,7 +532,12 @@ func main() {
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if trayController.CloseRequested() {
 			event.Cancel()
+			return
 		}
+		// Трея нет — значит возвращать окно будет нечем. На macOS выход по
+		// закрытию последнего окна отключён ради трея, поэтому без этого
+		// вызова остался бы процесс без окна и без иконки.
+		wails.Quit()
 	})
 
 	if playRequested {

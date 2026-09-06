@@ -94,7 +94,7 @@ infohash, списки файлов и история загрузок серв�
 |---|---|
 | Go | 1.25.0 |
 | Node | 22 |
-| Wails CLI | `v3.0.0-beta.10` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10` |
+| Wails CLI | `v3.0.0-beta.17` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17` |
 
 Go + [Wails 3](https://v3.wails.io) на бэкенде, Svelte 5 на фронте, текущая версия 0.3.1.
 

@@ -71,7 +71,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
 
       - name: Verify tag matches VERSION
         if: github.ref_type == 'tag'
@@ -144,7 +144,7 @@ jobs:
 
       - name: Install wails3 CLI
         shell: bash
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
 
       - name: Install NSIS
         shell: pwsh

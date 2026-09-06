@@ -20,7 +20,7 @@ permissions:
 
 env:
   GOLANGCI_LINT_VERSION: v2.13.1
-  WAILS_VERSION: v3.0.0-beta.10
+  WAILS_VERSION: v3.0.0-beta.17
 
 jobs:
   lint:
@@ -137,7 +137,7 @@ jobs:
       # Упаковка бандла ломается отдельно от кода: иконки, Info.plist, ditto.
       # Ловим это здесь, а не в момент релиза.
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
 
       - name: Set up Node
         uses: actions/setup-node@v4
