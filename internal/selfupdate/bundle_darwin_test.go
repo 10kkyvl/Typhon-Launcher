@@ -253,6 +253,7 @@ func TestApplyReplacesTheBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
+	//nolint:gosec // G703: archive лежит в кеше внутри t.TempDir(), внешнего ввода в пути нет
 	if err := os.WriteFile(archive, body, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -324,6 +325,7 @@ func TestApplyRejectsTamperedArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
+	//nolint:gosec // G703: archive лежит в кеше внутри t.TempDir(), внешнего ввода в пути нет
 	if err := os.WriteFile(archive, body, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
