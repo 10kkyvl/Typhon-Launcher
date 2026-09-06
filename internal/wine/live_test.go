@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // liveEnv включает проверки против настоящего CrossOver. По умолчанию они не
@@ -133,9 +134,14 @@ func TestLiveProcessesSeeARealWindowsProgram(t *testing.T) {
 	}
 }
 
+// waitForProcess опрашивает таблицу процессов: синхронизироваться тут не с
+// чем, процесс запускает не тест, а wine, и появляется он не мгновенно.
 func waitForProcess(t *testing.T, m *Manager, bottle Bottle, native string) Process {
 	t.Helper()
-	for range 30 {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.After(15 * time.Second)
+	for {
 		list, err := m.Processes(t.Context(), bottle)
 		if err != nil {
 			t.Fatalf("Processes: %v", err)
@@ -145,8 +151,11 @@ func waitForProcess(t *testing.T, m *Manager, bottle Bottle, native string) Proc
 				return p
 			}
 		}
-		waitABit()
+		select {
+		case <-deadline:
+			t.Fatalf("процесс %s не появился в бутыле за отведённое время", native)
+			return Process{}
+		case <-ticker.C:
+		}
 	}
-	t.Fatalf("процесс %s не появился в бутыле за отведённое время", native)
-	return Process{}
 }
