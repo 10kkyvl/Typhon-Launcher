@@ -127,6 +127,20 @@ tasks:
     cmds:
       - task: create:app:bundle
 
+  package:zip:
+    summary: Packages the `.app` bundle into the zip the self-update downloads
+    deps:
+      - task: package
+    platforms: [darwin]
+    cmds:
+      # ditto, а не zip: он единственный сохраняет ресурсные вилки, права и
+      # симлинки бандла так, как их ждёт macOS обратно при распаковке.
+      - rm -f "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+      - ditto -c -k --sequesterRsrc --keepParent "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+      ARTIFACT_NAME: '{{.ARTIFACT_NAME | default (printf "typhon-darwin-%s.zip" (.ARCH | default ARCH))}}'
+
   package:dmg:
     summary: Packages the application into a styled `.dmg`
     deps:

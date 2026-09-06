@@ -5,10 +5,14 @@ package selfupdate
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/settings"
 )
 
 type zipEntry struct {
@@ -223,5 +227,140 @@ func TestBundleOfRejectsLooseBinary(t *testing.T) {
 		if _, err := bundleOf(path); err == nil {
 			t.Fatalf("bundleOf(%q): want error", path)
 		}
+	}
+}
+
+// Полная проверка Apply: подменяем домашний каталог, кладём архив в кеш и
+// состояние в стор — так же, как это делает загрузчик, — и убеждаемся, что
+// бандл действительно подменён.
+func TestApplyReplacesTheBundle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		t.Fatalf("ConfigDir: %v", err)
+	}
+	cacheDir, err := CacheDir(configDir)
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	archive := filepath.Join(cacheDir, "typhon-darwin-arm64.zip")
+	body, err := os.ReadFile(appZip(t, "new binary"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if err := os.WriteFile(archive, body, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	sum := sha256.Sum256(body)
+
+	store, err := NewStore(configDir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := store.Save(stored{
+		AvailableVersion: "9.9.9",
+		ReadyPath:        archive,
+		Artifact: &Artifact{
+			OS: "darwin", Arch: "arm64", Kind: KindBundle,
+			Name: "typhon-darwin-arm64.zip", URL: "https://example.invalid/typhon.zip",
+			Size: int64(len(body)), SHA256: hex.EncodeToString(sum[:]),
+		},
+	}); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	apps := filepath.Join(home, "Applications")
+	exe := filepath.Join(apps, "Typhon.app", "Contents", "MacOS", "typhon")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(exe, []byte("old binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := Apply(t.Context(), archive, filepath.Dir(exe), exe); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	got, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatalf("ReadFile after apply: %v", err)
+	}
+	if string(got) != "new binary" {
+		t.Fatalf("после обновления = %q, want %q", string(got), "new binary")
+	}
+	// Временный каталог распаковки не должен пережить обновление.
+	entries, err := os.ReadDir(apps)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("рядом с бандлом остался мусор: %v", entries)
+	}
+}
+
+// Архив с подделанным содержимым обязан быть отвергнут до подмены: подпись
+// манифеста только тогда чего-то стоит, когда хеш проверяется на месте.
+func TestApplyRejectsTamperedArchive(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		t.Fatalf("ConfigDir: %v", err)
+	}
+	cacheDir, err := CacheDir(configDir)
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	archive := filepath.Join(cacheDir, "typhon-darwin-arm64.zip")
+	body, err := os.ReadFile(appZip(t, "tampered binary"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if err := os.WriteFile(archive, body, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	store, err := NewStore(configDir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	wrong := sha256.Sum256([]byte("what the manifest promised"))
+	if err := store.Save(stored{
+		AvailableVersion: "9.9.9",
+		ReadyPath:        archive,
+		Artifact: &Artifact{
+			OS: "darwin", Arch: "arm64", Kind: KindBundle,
+			Name: "typhon-darwin-arm64.zip", URL: "https://example.invalid/typhon.zip",
+			Size: int64(len(body)), SHA256: hex.EncodeToString(wrong[:]),
+		},
+	}); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	exe := filepath.Join(home, "Applications", "Typhon.app", "Contents", "MacOS", "typhon")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(exe, []byte("old binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := Apply(t.Context(), archive, filepath.Dir(exe), exe); err == nil {
+		t.Fatal("Apply на подделанном архиве: want error")
+	}
+	got, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "old binary" {
+		t.Fatal("подделанный архив подменил бандл")
 	}
 }
