@@ -116,6 +116,9 @@ type Service struct {
 	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
 	// прогон тестов создаёт настоящие бутыли на машине разработчика.
 	prepareRuntime func(ctx context.Context, installDir, executable string) error
+	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
+	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
+	releaseRuntime func(installDir string) error
 
 	items      []*Installation
 	jobs       map[string]*job
@@ -166,6 +169,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
+	s.releaseRuntime = releaseRuntime
 	return s, nil
 }
 

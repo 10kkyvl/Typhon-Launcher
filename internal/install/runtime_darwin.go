@@ -50,3 +50,20 @@ func windowsExecutable(path string) bool {
 		return false
 	}
 }
+
+// releaseRuntime сносит бутыль вместе с каталогом установки. Отсутствие
+// бутыля не ошибка: игру могли поставить до появления macOS-поддержки, а
+// удаление обязано доходить до конца в любом случае.
+func releaseRuntime(installDir string) error {
+	if installDir == "" {
+		return nil
+	}
+	rt, err := wine.Detect()
+	if errors.Is(err, wine.ErrNotInstalled) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return wine.NewManager(rt).Remove(installDir)
+}
