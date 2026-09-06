@@ -1,0 +1,5 @@
+  PID                  STARTED COMMAND
+87451 Sun Sep  6 07:31:35 2026 C:\windows\system32\notepad.exe
+88170 Sun Sep  6 07:33:37 2026 T:\DemoGame\InnoSetup\Compil32.exe
+88171 Sun Sep  6 07:33:38 2026 T:\Some Game\bin\game.exe --windowed
+86921 Sun Sep  6 07:29:02 2026 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/../../bin/wineserver
