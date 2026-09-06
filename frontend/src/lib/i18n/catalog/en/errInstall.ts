@@ -87,4 +87,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadSeeding': 'The files are currently seeding — stop seeding first',
   'errInstall.downloadTorrentReadFailed': 'Could not read the torrent file',
   'errInstall.downloadUnavailable': 'Unavailable for this download',
+
+  'errInstall.wineBottleCreateFailed': 'Could not prepare the CrossOver environment for this game',
+  'errInstall.wineNotInstalled': 'CrossOver is required to install and run games on macOS',
 };
