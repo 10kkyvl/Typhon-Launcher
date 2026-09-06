@@ -748,3 +748,33 @@ func TestLaunchFailureIsRecorded(t *testing.T) {
 		t.Fatal("код отказа не записан")
 	}
 }
+
+// Не поднявшееся окружение запуска — тоже несостоявшийся запуск. На macOS это
+// самая частая причина, по которой игра не идёт: бутыль CrossOver не завёлся.
+// Журнал, молчащий об этом, оставляет пользователя без подсказки.
+func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, _ string) { codes <- code })
+	s.prepare = func(context.Context, string, string) error {
+		return errors.New("бутыль не завёлся")
+	}
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("PlayGame: ожидалась ошибка")
+	}
+
+	select {
+	case code := <-codes:
+		if code != "library.runtime_failed" {
+			t.Fatalf("код отказа = %q, want library.runtime_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("отказ окружения не попал в журнал")
+	}
+}

@@ -50,6 +50,11 @@ func (s *Service) PlayGame(id string) error {
 	}
 	if err := s.prepare(s.ctx, game.InstallDir, game.Executable); err != nil {
 		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
+		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
+		// стартовавший процесс. На macOS это вообще самая частая причина, по
+		// которой игра не идёт, и журнал, молчащий о ней, оставляет
+		// пользователя без единственной подсказки, которая у него была.
+		s.noteLaunchFailureLocked(id, "library.runtime_failed", err.Error())
 		return uierr.Wrap("library.runtime_failed", fmt.Errorf("не удалось подготовить окружение запуска: %w", err))
 	}
 

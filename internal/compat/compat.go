@@ -33,8 +33,9 @@ const (
 )
 
 const (
-	// playedSeconds — с какой длительности считаем, что игра точно
-	// запустилась. Минуты хватает: до меню доходят и медленные сборки.
+	// playedSeconds — сколько игра должна отработать, чтобы считаться
+	// запустившейся. Минуты хватает: до меню доходят и медленные сборки.
+	// Набрать её можно и одной сессией, и несколькими — см. RunSeconds.
 	playedSeconds = 60
 	// selfExitSeconds — короче этого закрывшаяся сама игра считается упавшей.
 	// Пользовательская остановка сюда не относится: он мог просто передумать.
@@ -45,13 +46,21 @@ const (
 
 // Record — что известно про одну игру.
 type Record struct {
-	GameID      string    `json:"gameId"`
-	Attempts    int       `json:"attempts"`
-	Failures    int       `json:"failures"`
-	BestSeconds int64     `json:"bestSeconds"`
-	LastError   string    `json:"lastError,omitempty"`
-	LastCode    string    `json:"lastCode,omitempty"`
-	LastAt      time.Time `json:"lastAt"`
+	GameID      string `json:"gameId"`
+	Attempts    int    `json:"attempts"`
+	Failures    int    `json:"failures"`
+	BestSeconds int64  `json:"bestSeconds"`
+	// RunSeconds — сколько игра в сумме проработала, считая только сессии,
+	// пережившие окно самопроизвольного закрытия. Одной сессии не всегда
+	// хватает: человек закрывает игру, когда ему вздумается, и запуск,
+	// оборвавшийся на пятьдесят шестой секунде, доказывает ровно то же, что и
+	// шестидесятая. Порог в тридцать секунд на каждую сессию оставляет за
+	// бортом циклический вылет: он тем и отличается, что каждая попытка
+	// короткая.
+	RunSeconds int64     `json:"runSeconds,omitempty"`
+	LastError  string    `json:"lastError,omitempty"`
+	LastCode   string    `json:"lastCode,omitempty"`
+	LastAt     time.Time `json:"lastAt"`
 }
 
 // Status — ответ на вопрос «работает ли эта игра», в том виде, в каком его
@@ -62,6 +71,7 @@ type Status struct {
 	Attempts    int    `json:"attempts"`
 	Failures    int    `json:"failures"`
 	BestSeconds int64  `json:"bestSeconds"`
+	RunSeconds  int64  `json:"runSeconds,omitempty"`
 	LastError   string `json:"lastError,omitempty"`
 	LastCode    string `json:"lastCode,omitempty"`
 }
@@ -166,8 +176,11 @@ func (s *Service) RecordSession(gameID string, played time.Duration, stoppedByUs
 	if seconds > r.BestSeconds {
 		r.BestSeconds = seconds
 	}
+	if seconds >= selfExitSeconds {
+		r.RunSeconds += seconds
+	}
 	switch {
-	case seconds >= playedSeconds:
+	case seconds >= playedSeconds || r.RunSeconds >= playedSeconds:
 		// Игра доказала, что работает: прошлые неудачи больше ничего не значат.
 		r.Failures = 0
 		r.LastError = ""
@@ -234,11 +247,12 @@ func statusOf(r Record) Status {
 		Attempts:    r.Attempts,
 		Failures:    r.Failures,
 		BestSeconds: r.BestSeconds,
+		RunSeconds:  r.RunSeconds,
 		LastError:   r.LastError,
 		LastCode:    r.LastCode,
 	}
 	switch {
-	case r.BestSeconds >= playedSeconds:
+	case r.BestSeconds >= playedSeconds || r.RunSeconds >= playedSeconds:
 		st.State = StateWorks
 	case r.Failures >= brokenAfter:
 		st.State = StateBroken

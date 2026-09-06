@@ -155,3 +155,86 @@ func TestCorruptFileStartsEmpty(t *testing.T) {
 		t.Fatalf("State = %q", got.State)
 	}
 }
+
+// Человек закрывает игру, когда ему вздумается, и запуск, оборвавшийся на
+// пятьдесят шестой секунде, доказывает работоспособность ровно так же, как
+// шестидесятая. Минута набирается и несколькими заходами.
+func TestMinuteMayBeCollectedAcrossSessions(t *testing.T) {
+	s := newTestService(t)
+	s.RecordSession("g1", 35*time.Second, true)
+	if got := s.Status("g1"); got.State != StateUnknown {
+		t.Fatalf("после одной сессии State = %q, want %q", got.State, StateUnknown)
+	}
+
+	s.RecordSession("g1", 35*time.Second, true)
+	if got := s.Status("g1"); got.State != StateWorks {
+		t.Fatalf("State = %q, want %q", got.State, StateWorks)
+	}
+}
+
+// Короткие сессии в этот счёт не идут — тем и отличается циклический вылет,
+// что каждая попытка короткая. Иначе игра, падающая раз за разом, объявила бы
+// себя работающей просто потому, что падала часто.
+func TestCrashLoopNeverCollectsAMinute(t *testing.T) {
+	s := newTestService(t)
+	for range 30 {
+		s.RecordSession("g1", 20*time.Second, false)
+	}
+
+	got := s.Status("g1")
+	if got.State == StateWorks {
+		t.Fatalf("циклический вылет объявлен рабочим: %+v", got)
+	}
+	if got.State != StateBroken {
+		t.Fatalf("State = %q, want %q", got.State, StateBroken)
+	}
+}
+
+// Пользовательские остановки короче тридцати секунд не говорят ни за, ни
+// против: они не копятся и не считаются неудачами.
+func TestShortUserStopsSayNothing(t *testing.T) {
+	s := newTestService(t)
+	for range 30 {
+		s.RecordSession("g1", 20*time.Second, true)
+	}
+
+	if got := s.Status("g1"); got.State != StateUnknown {
+		t.Fatalf("State = %q, want %q", got.State, StateUnknown)
+	}
+}
+
+// Набранная минута — такое же доказательство, как одна долгая сессия, и точно
+// так же отменяет прошлые неудачи.
+func TestCollectedMinuteClearsBroken(t *testing.T) {
+	s := newTestService(t)
+	s.RecordLaunchFailure("g1", "library.launch_failed", "не поехало")
+	s.RecordLaunchFailure("g1", "library.launch_failed", "не поехало")
+	if got := s.Status("g1"); got.State != StateBroken {
+		t.Fatalf("подготовка: State = %q", got.State)
+	}
+
+	s.RecordSession("g1", 35*time.Second, true)
+	s.RecordSession("g1", 35*time.Second, true)
+
+	if got := s.Status("g1"); got.State != StateWorks {
+		t.Fatalf("State = %q, want %q", got.State, StateWorks)
+	}
+}
+
+func TestCollectedMinuteSurvivesRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "compat.json")
+	first, err := NewServiceAt(path)
+	if err != nil {
+		t.Fatalf("NewServiceAt: %v", err)
+	}
+	first.RecordSession("g1", 35*time.Second, true)
+	first.RecordSession("g1", 35*time.Second, true)
+
+	second, err := NewServiceAt(path)
+	if err != nil {
+		t.Fatalf("NewServiceAt again: %v", err)
+	}
+	if got := second.Status("g1"); got.State != StateWorks {
+		t.Fatalf("после перезапуска State = %q", got.State)
+	}
+}
