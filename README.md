@@ -28,9 +28,10 @@ responsibility.
 
 The Windows build is the one that ships. A macOS build exists and runs games through
 [CrossOver](https://www.codeweavers.com/crossover), which you install yourself — without it
-the launcher still downloads, but cannot install or start a game. That build is not signed
-yet, so Gatekeeper refuses it on the first launch: open it from the context menu once, or
-clear the quarantine attribute by hand. There is no Linux version.
+the launcher still downloads, but cannot install or start a game. That build carries no Apple
+Developer signature and is not going to get one, so Gatekeeper blocks it after a download:
+allow it once in System Settings → Privacy & Security, or clear the quarantine attribute
+with `xattr -dr com.apple.quarantine /Applications/Typhon.app`. There is no Linux version.
 
 ## What it does
 
