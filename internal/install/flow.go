@@ -525,7 +525,12 @@ func (s *Service) commitExtracted(ctx context.Context, partial, destination stri
 
 func (s *Service) commit(ctx context.Context, partial, destination string) error {
 	if entries, err := os.ReadDir(destination); err == nil && len(entries) == 0 {
-		os.Remove(destination)
+		// Best-effort: this only clears the way for the Rename below. If it
+		// fails, Rename fails too and falls back to MoveDir, which handles a
+		// non-empty (or still-present) destination on its own.
+		if err := os.Remove(destination); err != nil {
+			slog.Warn("remove empty destination before rename", "destination", destination, "error", err)
+		}
 	}
 	if err := os.Rename(partial, destination); err == nil {
 		return nil

@@ -16,6 +16,8 @@ import (
 func TestPlayGameTracksSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
+	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+	s.AddSessionWatcher(watcher)
 
 	exe, exitArgs := testExecutable(t)
 	game, err := s.AddGame(exe, "Session Test")
@@ -30,12 +32,10 @@ func TestPlayGameTracksSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for len(s.GetRunningGames()) > 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("session never finished")
-		}
-		time.Sleep(50 * time.Millisecond)
+	select {
+	case <-watcher.stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("session never finished")
 	}
 
 	if s.GetInstalledGames()[0].LastPlayed == nil {
@@ -55,6 +55,8 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	exe := testPlaceExecutable(t, filepath.Join(gameDir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
+	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+	s.AddSessionWatcher(watcher)
 	game, err := s.AddGame(exe, "Nested Game")
 	if err != nil {
 		t.Fatal(err)
@@ -68,12 +70,10 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	if err := s.PlayGame(game.ID); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for len(s.GetRunningGames()) > 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("session never finished")
-		}
-		time.Sleep(50 * time.Millisecond)
+	select {
+	case <-watcher.stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("session never finished")
 	}
 
 	if _, err := os.Stat(filepath.Join(gameDir, "cwd.txt")); err != nil {

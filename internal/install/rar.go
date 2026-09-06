@@ -14,7 +14,7 @@ func extractRar(ctx context.Context, archivePath, dest string, rep *reporter) er
 	if err != nil {
 		return errUnsupportedArchive
 	}
-	defer rc.Close()
+	defer closeReadOnly(archivePath, rc)
 
 	buf := make([]byte, copyBufferSize)
 	for {

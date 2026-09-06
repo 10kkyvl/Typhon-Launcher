@@ -360,7 +360,7 @@ func copyFile(ctx context.Context, src, dst string, mode fs.FileMode, rep *repor
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer closeReadOnly(src, in)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}

@@ -196,14 +196,23 @@ func (m *Manager) addTestDownload(id string) *fakeTorrent {
 
 func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if cond() {
+		return
 	}
-	t.Fatalf("timed out waiting for %s", what)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if cond() {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
 }
 
 func (m *Manager) statusOf(t *testing.T, id string) Status {
@@ -316,7 +325,10 @@ func TestCompletionPromotesNext(t *testing.T) {
 		"c": StatusDownloading,
 		"d": StatusQueued,
 	})
-	done, _ := m.Get("a")
+	done, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
 	if done.CompletedAt == nil || done.Progress != 1 {
 		t.Fatalf("completed download = %+v", done)
 	}
@@ -387,20 +399,20 @@ func TestPauseCompletedIsRejected(t *testing.T) {
 	m.sample(context.Background(), time.Now())
 	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 
-	if err := m.Pause("a"); err != errUnavailable {
+	if err := m.Pause("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("pause completed = %v, want %v", err, errUnavailable)
 	}
-	if err := m.Resume("a"); err != errUnavailable {
+	if err := m.Resume("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("resume completed = %v, want %v", err, errUnavailable)
 	}
 }
 
 func TestUnknownDownload(t *testing.T) {
 	m := newTestManager(t, 2)
-	if err := m.Pause("nope"); err != errNotFound {
+	if err := m.Pause("nope"); !errors.Is(err, errNotFound) {
 		t.Fatalf("pause = %v, want %v", err, errNotFound)
 	}
-	if _, err := m.Get("nope"); err != errNotFound {
+	if _, err := m.Get("nope"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get = %v, want %v", err, errNotFound)
 	}
 }
@@ -443,7 +455,7 @@ func TestMoveBounds(t *testing.T) {
 	if got := m.order(); got[2] != "c" {
 		t.Fatalf("order = %v", got)
 	}
-	if err := m.MoveUp("a"); err != errUnavailable {
+	if err := m.MoveUp("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("move active = %v, want %v", err, errUnavailable)
 	}
 }
@@ -458,7 +470,7 @@ func TestCancelDropsAndRemoves(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUntil(t, "torrent to be dropped", engine.wasDropped)
-	if _, err := m.Get("a"); err != errNotFound {
+	if _, err := m.Get("a"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get after cancel = %v", err)
 	}
 	assertStatuses(t, m, map[string]Status{"b": StatusDownloading, "c": StatusDownloading})
@@ -535,7 +547,7 @@ func TestCancelDuringVerifyDoesNotDeadlock(t *testing.T) {
 	if eng.wasDroppedDuringVerify() {
 		t.Fatal("torrent dropped while verify was still running")
 	}
-	if _, err := m.Get("a"); err != errNotFound {
+	if _, err := m.Get("a"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get after cancel = %v, want %v", err, errNotFound)
 	}
 	if len(m.List()) != 0 {
@@ -596,13 +608,13 @@ func TestResumeWithoutEngineReportsRestoreFailure(t *testing.T) {
 	d.Error = restoreFailedMessage
 	m.mu.Unlock()
 
-	if err := m.Resume("a"); err != errNoRestore {
+	if err := m.Resume("a"); !errors.Is(err, errNoRestore) {
 		t.Fatalf("resume = %v, want %v", err, errNoRestore)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
 		t.Fatalf("status = %s, want %s", got, StatusFailed)
 	}
-	if err := m.ForceStart("a"); err != errNoRestore {
+	if err := m.ForceStart("a"); !errors.Is(err, errNoRestore) {
 		t.Fatalf("force start = %v, want %v", err, errNoRestore)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
@@ -617,7 +629,7 @@ func TestResumeWithoutEngineNeedsClientToReattach(t *testing.T) {
 	d.Source = "magnet:?xt=urn:btih:" + strings.Repeat("a", 40)
 	m.mu.Unlock()
 
-	if err := m.Resume("a"); err != errNoClient {
+	if err := m.Resume("a"); !errors.Is(err, errNoClient) {
 		t.Fatalf("resume = %v, want %v", err, errNoClient)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
@@ -635,7 +647,11 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	m.sample(context.Background(), time.Now())
 
 	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
-	if got, _ := m.Get("a"); got.Seeding {
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
+	if got.Seeding {
 		t.Fatal("seeding reported with seed-after-download off")
 	}
 	waitUntil(t, "engine drop", eng.wasDropped)
@@ -754,7 +770,11 @@ func TestSeedToggleWithoutEngineDoesNotClaimSeeding(t *testing.T) {
 	cfg.SeedAfterDownload = true
 	m.applySettings(cfg)
 
-	if got, _ := m.Get("a"); got.Seeding {
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
+	if got.Seeding {
 		t.Fatal("seeding reported without a live torrent")
 	}
 }
@@ -777,10 +797,17 @@ func TestFailWithoutClientSurfacesError(t *testing.T) {
 	if queued.Status != StatusFailed || queued.Error != errNoClient.Error() {
 		t.Fatalf("queued download = %s / %q", queued.Status, queued.Error)
 	}
-	if paused, _ := m.Get("b"); paused.Status != StatusPaused {
+	paused, err := m.Get("b")
+	if err != nil {
+		t.Fatalf("get b: %v", err)
+	}
+	if paused.Status != StatusPaused {
 		t.Fatalf("paused download = %s, want %s", paused.Status, StatusPaused)
 	}
-	got, _ := m.Get("c")
+	got, err := m.Get("c")
+	if err != nil {
+		t.Fatalf("get c: %v", err)
+	}
 	if got.Status != StatusCompleted || got.Seeding {
 		t.Fatalf("completed download = %s seeding=%v", got.Status, got.Seeding)
 	}
@@ -898,7 +925,7 @@ func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
 	m.findLocked("a").Seeding = true
 	m.mu.Unlock()
 
-	if err := m.DeleteData("a"); err != errSeeding {
+	if err := m.DeleteData("a"); !errors.Is(err, errSeeding) {
 		t.Fatalf("error = %v, want %v", err, errSeeding)
 	}
 	if _, err := m.Get("a"); err != nil {
@@ -909,10 +936,10 @@ func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
 func TestDeleteDataRefusesUnfinishedDownload(t *testing.T) {
 	m := newTestManager(t, 2)
 	m.addTestItem("a", StatusQueued)
-	if err := m.DeleteData("a"); err != errUnavailable {
+	if err := m.DeleteData("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("error = %v, want %v", err, errUnavailable)
 	}
-	if err := m.DeleteData("missing"); err != errNotFound {
+	if err := m.DeleteData("missing"); !errors.Is(err, errNotFound) {
 		t.Fatalf("error = %v, want %v", err, errNotFound)
 	}
 }

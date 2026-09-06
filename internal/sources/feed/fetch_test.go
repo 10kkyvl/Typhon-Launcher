@@ -22,7 +22,9 @@ func TestFetchSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", "\"abc\"")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(validFeedJSON))
+		if _, err := w.Write([]byte(validFeedJSON)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -93,7 +95,9 @@ func TestFetchBadContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(validFeedJSON))
+		if _, err := w.Write([]byte(validFeedJSON)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -156,7 +160,10 @@ func TestFetchBodyTooLargeWithoutContentLength(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		flusher, _ := w.(http.Flusher)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Errorf("http.ResponseWriter does not implement http.Flusher")
+		}
 		chunk := make([]byte, 1<<20)
 		for i := range chunk {
 			chunk[i] = ' '
