@@ -29,6 +29,7 @@ import (
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
+	"typhon/internal/platform"
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
 	"typhon/internal/profile"
@@ -156,6 +157,11 @@ func main() {
 	registerLocalIdentity()
 	if devmock.Enabled {
 		slog.Warn("devmock build: Windows-only subsystems are mocked", "marker", devmock.Banner())
+	}
+	// Отсутствие CrossOver — не повод не стартовать: каталог и загрузки
+	// работают и без него, а установка и запуск отдадут понятную ошибку.
+	if status := platform.Wine(); status.Required {
+		slog.Info("wine runtime", "installed", status.Installed, "version", status.Version)
 	}
 
 	// diagService is assigned once the identity/telemetry block below
