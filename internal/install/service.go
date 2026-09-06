@@ -111,6 +111,11 @@ type Service struct {
 	store     *store
 	removals  *removalStore
 	runner    runner
+	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
+	// не прямой вызов: на macOS настоящая реализация заводит бутыль
+	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
+	// прогон тестов создаёт настоящие бутыли на машине разработчика.
+	prepareRuntime func(installDir, executable string) error
 
 	items      []*Installation
 	jobs       map[string]*job
@@ -160,6 +165,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		freeSpace: platform.GetStorageInfo,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
+	s.prepareRuntime = prepareRuntime
 	return s, nil
 }
 

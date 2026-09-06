@@ -156,6 +156,11 @@ type Service struct {
 	launcherPath  func() (string, error)
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
+	// prepare готовит окружение запуска. Поле, а не прямой вызов: на macOS
+	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
+	// возможность её подменить, иначе прогон оставляет после себя
+	// настоящие бутыли на машине разработчика.
+	prepare func(installDir, executable string) error
 }
 
 type SessionWatcher interface {
@@ -203,6 +208,7 @@ func NewServiceAt(path string) (*Service, error) {
 		launcherPath:  os.Executable,
 		saveRoots:     platform.SaveRoots,
 		start:         newGameStarter(),
+		prepare:       prepareRuntime,
 	}
 	games, err := s.load()
 	if err != nil {

@@ -3,7 +3,7 @@
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
   import { toast } from '../stores/toasts';
-  import { bytesSize, dateTime, speedBytes } from '../utils/format';
+  import { bytesSize, dateTime, progressPercent, speedBytes } from '../utils/format';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -52,7 +52,7 @@
           </div>
           <div class="row">
             <span class="key">{msg('modals.downloadDetailsProgress')}</span>
-            <span class="value">{Math.floor(download.progress * 100)}%</span>
+            <span class="value">{progressPercent(download.progress)}%</span>
           </div>
           <div class="row">
             <span class="key">{msg('modals.downloadDetailsAdded')}</span>

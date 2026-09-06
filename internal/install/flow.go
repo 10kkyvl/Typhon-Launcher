@@ -602,6 +602,12 @@ func (s *Service) complete(id string) error {
 			return err
 		}
 		game = registered
+		// Окружение запуска — то же удобство поверх установки, что и ярлык:
+		// если бутыль не завёлся, игра всё равно установлена, а попытка
+		// повторится при первом запуске.
+		if err := s.prepareRuntime(item.Destination, game.Executable); err != nil {
+			slog.Warn("prepare game runtime", "id", game.ID, "error", err)
+		}
 		if cfg.DesktopShortcuts {
 			// Ярлык — удобство поверх установки, а не её часть: рабочий
 			// стол может быть недоступен, и объявлять из-за этого

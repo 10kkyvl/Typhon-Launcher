@@ -7,6 +7,15 @@ const TB_BYTES = 1024 ** 4;
 
 const DASH = '—';
 
+// progressPercent — единственный способ показать долю выполнения числом.
+// Раньше каждое место округляло по-своему, и одно и то же значение выглядело
+// как 4% на карточке игры и 3% в панели активности. Округляем вниз: показать
+// 100% раньше, чем работа кончилась, — это обещание, которого никто не давал.
+export function progressPercent(value: number) {
+  const clamped = Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+  return Math.floor(clamped * 100);
+}
+
 export function bytesToGb(bytes: number) {
   return bytes / GB_BYTES;
 }

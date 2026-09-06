@@ -92,7 +92,7 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, numericDate, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
   let { id }: { id: string } = $props();
@@ -373,7 +373,7 @@
     }),
   );
 
-  const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
+  const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
   const menuItems = $derived([
     ...($metadataAvailable && canonicalId

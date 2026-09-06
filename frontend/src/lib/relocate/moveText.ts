@@ -1,6 +1,6 @@
 import { msg } from '../i18n';
 import type { MoveJob, MoveStage } from '../services/relocate';
-import { bytesSize } from '../utils/format';
+import { bytesSize, progressPercent } from '../utils/format';
 
 export function stageLabel(stage: MoveStage): string {
   switch (stage) {
@@ -29,7 +29,7 @@ export function stageLabel(stage: MoveStage): string {
 
 export function movePercent(job: Pick<MoveJob, 'copiedBytes' | 'totalBytes'>): number {
   if (job.totalBytes <= 0) return 0;
-  return Math.min(100, Math.max(0, Math.round((job.copiedBytes / job.totalBytes) * 100)));
+  return progressPercent(job.copiedBytes / job.totalBytes);
 }
 
 export function moveSummary(job: Pick<MoveJob, 'stage' | 'phase' | 'copiedBytes' | 'totalBytes'>): string {

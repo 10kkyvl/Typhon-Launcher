@@ -166,3 +166,17 @@ func TestIsWindowsExecutable(t *testing.T) {
 		}
 	}
 }
+
+// prepareRuntime не должен трогать бутыли ради нативной программы: заводить
+// под неё 300 МБ окружения незачем.
+func TestPrepareRuntimeSkipsNativeExecutable(t *testing.T) {
+	if err := prepareRuntime("/Users/x/Games/Demo", "/Users/x/Games/Demo/game"); err != nil {
+		t.Fatalf("prepareRuntime for a native executable: %v", err)
+	}
+}
+
+func TestPrepareRuntimeSkipsEmptyInstallDir(t *testing.T) {
+	if err := prepareRuntime("", "/Users/x/Games/Demo/game.exe"); err != nil {
+		t.Fatalf("prepareRuntime without an install dir: %v", err)
+	}
+}
