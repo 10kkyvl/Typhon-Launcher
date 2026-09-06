@@ -8,19 +8,18 @@ import (
 	"typhon/internal/devmock"
 )
 
+// Перечисление процессов поддержано там, где есть чему их перечислять:
+// Windows нативно, macOS через бутыли CrossOver, devmock — фейковым реестром.
 func TestSupportedMatchesGOOS(t *testing.T) {
-	want := runtime.GOOS == "windows" || devmock.Enabled
+	want := runtime.GOOS == "windows" || runtime.GOOS == "darwin" || devmock.Enabled
 	if got := Supported(); got != want {
 		t.Fatalf("Supported() = %v, want %v for GOOS=%s", got, want, runtime.GOOS)
 	}
 }
 
 func TestListOnUnsupportedPlatform(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("this case is exercised on non-Windows platforms only")
-	}
-	if devmock.Enabled {
-		t.Skip("devmock provides a supported List on this platform")
+	if Supported() {
+		t.Skip("this case is exercised on platforms without process enumeration only")
 	}
 	got, err := List(context.Background())
 	if err == nil {
