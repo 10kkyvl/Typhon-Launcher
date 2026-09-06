@@ -51,8 +51,75 @@ permissions:
   contents: write
 
 jobs:
+  macos:
+    name: Build the macOS bundle
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+
+      - name: Verify tag matches VERSION
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$version" ]; then
+            echo "tag v$tag does not match VERSION ($version)" >&2
+            exit 1
+          fi
+
+      # Один универсальный бандл вместо двух сборок: он покрывает и Apple
+      # Silicon, и Intel, а манифест ссылается на него обеими архитектурами.
+      - name: Package the universal bundle
+        env:
+          CGO_ENABLED: "1"
+        run: wails3 task darwin:package:zip:universal
+
+      - name: Verify the bundle carries no devmock code
+        run: |
+          set -euo pipefail
+          exe="bin/typhon.app/Contents/MacOS/typhon"
+          if [ ! -s "$exe" ]; then
+            echo "$exe is missing or empty" >&2
+            exit 1
+          fi
+          archs="$(lipo -archs "$exe")"
+          case "$archs" in
+            *x86_64*arm64*|*arm64*x86_64*) ;;
+            *) echo "bundle is not universal: $archs" >&2; exit 1 ;;
+          esac
+          if LC_ALL=C grep -q "TYPHON_DEVMOCK_ENABLED" "$exe"; then
+            echo "devmock marker found in the release bundle" >&2
+            exit 1
+          fi
+
+      - name: Upload the bundle for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-darwin-universal
+          path: bin/typhon-darwin-universal.zip
+          if-no-files-found: error
+          retention-days: 1
+
   release:
     name: Build, sign and publish the Windows release
+    needs: macos
     runs-on: windows-latest
     env:
       TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
@@ -169,6 +236,22 @@ jobs:
             exit 1
           fi
 
+      - name: Download the macOS bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: typhon-darwin-universal
+          path: bin
+
+      - name: Verify the macOS artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="bin/typhon-darwin-universal.zip"
+          if [ ! -s "$bundle" ]; then
+            echo "$bundle is missing or empty" >&2
+            exit 1
+          fi
+
       - name: Build and sign the self-update manifest
         shell: bash
         env:
@@ -181,7 +264,9 @@ jobs:
             -changelog CHANGELOG.md \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
-            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe" \
+            -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-universal.zip" \
+            -artifact "os=darwin,arch=amd64,kind=bundle,path=bin/typhon-darwin-universal.zip"
 
       - name: Publish installer and manifest to Garage over SSH
         shell: bash
@@ -226,6 +311,10 @@ jobs:
             "s3://$bucket/launcher/releases/$version/typhon-amd64-installer.exe" \
             --endpoint-url http://127.0.0.1:3900
 
+          run_aws s3 cp /data/typhon-darwin-universal.zip \
+            "s3://$bucket/launcher/releases/$version/typhon-darwin-universal.zip" \
+            --endpoint-url http://127.0.0.1:3900
+
           run_aws s3 cp /data/manifest.json \
             "s3://$bucket/launcher/manifest.json" \
             --endpoint-url http://127.0.0.1:3900 \
@@ -237,6 +326,7 @@ jobs:
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
+            bin/typhon-darwin-universal.zip \
             manifest.json \
             publish-remote.sh \
             "$VPS_USER@$VPS_HOST:$remote_dir/"

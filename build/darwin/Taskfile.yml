@@ -141,6 +141,17 @@ tasks:
       ARCH: '{{.ARCH | default ARCH}}'
       ARTIFACT_NAME: '{{.ARTIFACT_NAME | default (printf "typhon-darwin-%s.zip" (.ARCH | default ARCH))}}'
 
+  package:zip:universal:
+    summary: Packages the universal `.app` bundle into the self-update artifact
+    deps:
+      - task: package:universal
+    platforms: [darwin]
+    cmds:
+      - rm -f "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+      - ditto -c -k --sequesterRsrc --keepParent "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+    vars:
+      ARTIFACT_NAME: '{{.ARTIFACT_NAME | default "typhon-darwin-universal.zip"}}'
+
   package:dmg:
     summary: Packages the application into a styled `.dmg`
     deps:
