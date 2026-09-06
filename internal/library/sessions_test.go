@@ -711,7 +711,11 @@ func TestSessionOutcomeMarksUserStop(t *testing.T) {
 func TestLaunchFailureIsRecorded(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	reasons := make(chan string, 1)
-	s.SetLaunchFailureRecorder(func(_ string, reason string) { reasons <- reason })
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, reason string) {
+		codes <- code
+		reasons <- reason
+	})
 	s.start = func(context.Context, string, []string, string) (gameProcess, error) {
 		return nil, errors.New("окружение не готово")
 	}
@@ -732,5 +736,15 @@ func TestLaunchFailureIsRecorded(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("неудачный запуск не записан")
+	}
+
+	// Код нужен общей статистике: по тексту причины отказы не различить.
+	select {
+	case code := <-codes:
+		if code != "library.launch_failed" {
+			t.Fatalf("код отказа = %q, want library.launch_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("код отказа не записан")
 	}
 }

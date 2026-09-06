@@ -165,3 +165,49 @@ func TestRegisterInstalledRejectsMissingExecutable(t *testing.T) {
 		t.Fatal("expected error for missing executable")
 	}
 }
+
+// Сборка нужна общей статистике: репаки разных сборщиков ведут себя по-разному,
+// и сложить их в одну цифру значит соврать.
+func TestRegisterInstalledKeepsTheBuild(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+
+	game, err := s.RegisterInstalled(InstalledGame{
+		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
+		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
+		Repacker: "fitgirl", ReleaseVersion: "1.0.28518",
+	})
+	if err != nil {
+		t.Fatalf("RegisterInstalled: %v", err)
+	}
+	if game.Repacker != "fitgirl" || game.ReleaseVersion != "1.0.28518" {
+		t.Fatalf("сборка потеряна: %+v", game)
+	}
+}
+
+// Переустановка другой сборкой обязана переписать прошлую: иначе статистика
+// припишет исход не тому репаку.
+func TestReinstallReplacesTheBuild(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	base := InstalledGame{
+		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
+		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
+		Repacker: "fitgirl", ReleaseVersion: "1.0",
+	}
+	if _, err := s.RegisterInstalled(base); err != nil {
+		t.Fatalf("первая установка: %v", err)
+	}
+
+	next := base
+	next.ReleaseID = "rel-2"
+	next.Repacker = "dodi"
+	next.ReleaseVersion = "1.2"
+	game, err := s.RegisterInstalled(next)
+	if err != nil {
+		t.Fatalf("переустановка: %v", err)
+	}
+	if game.Repacker != "dodi" || game.ReleaseVersion != "1.2" {
+		t.Fatalf("сборка не обновилась: %+v", game)
+	}
+}

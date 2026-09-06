@@ -56,7 +56,7 @@ func (s *Service) PlayGame(id string) error {
 	proc, err := s.start(s.ctx, game.Executable, game.LaunchArgs, workDir)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
-		s.noteLaunchFailureLocked(id, err.Error())
+		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
 
@@ -266,7 +266,7 @@ func (s *Service) findLocked(id string) *Game {
 
 // noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
 // на всё время запуска, а журнал совместимости пишется в своей горутине.
-func (s *Service) noteLaunchFailureLocked(gameID, reason string) {
+func (s *Service) noteLaunchFailureLocked(gameID, code, reason string) {
 	if s.onLaunchFail == nil {
 		return
 	}
@@ -274,6 +274,6 @@ func (s *Service) noteLaunchFailureLocked(gameID, reason string) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		note(gameID, reason)
+		note(gameID, code, reason)
 	}()
 }

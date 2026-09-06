@@ -30,7 +30,7 @@ func TestUnknownUntilTried(t *testing.T) {
 // клеймить её с первого раза значит врать пользователю.
 func TestOneFailureIsNotBroken(t *testing.T) {
 	s := newTestService(t)
-	s.RecordLaunchFailure("g1", "нет бутыля")
+	s.RecordLaunchFailure("g1", "launch_failed", "нет бутыля")
 
 	got := s.Status("g1")
 	if got.State != StateUnknown {
@@ -43,8 +43,8 @@ func TestOneFailureIsNotBroken(t *testing.T) {
 
 func TestTwoFailuresMarkBroken(t *testing.T) {
 	s := newTestService(t)
-	s.RecordLaunchFailure("g1", "нет бутыля")
-	s.RecordLaunchFailure("g1", "нет бутыля")
+	s.RecordLaunchFailure("g1", "launch_failed", "нет бутыля")
+	s.RecordLaunchFailure("g1", "launch_failed", "нет бутыля")
 
 	got := s.Status("g1")
 	if got.State != StateBroken {
@@ -96,8 +96,8 @@ func TestLongSessionMarksWorking(t *testing.T) {
 // и держать её в списке сломанных больше не за что.
 func TestSuccessClearsBroken(t *testing.T) {
 	s := newTestService(t)
-	s.RecordLaunchFailure("g1", "не поехало")
-	s.RecordLaunchFailure("g1", "не поехало")
+	s.RecordLaunchFailure("g1", "launch_failed", "не поехало")
+	s.RecordLaunchFailure("g1", "launch_failed", "не поехало")
 	if got := s.Status("g1"); got.State != StateBroken {
 		t.Fatalf("подготовка: State = %q", got.State)
 	}
@@ -111,10 +111,10 @@ func TestSuccessClearsBroken(t *testing.T) {
 
 func TestBrokenListsOnlyBrokenGames(t *testing.T) {
 	s := newTestService(t)
-	s.RecordLaunchFailure("broken", "не поехало")
-	s.RecordLaunchFailure("broken", "не поехало")
+	s.RecordLaunchFailure("broken", "launch_failed", "не поехало")
+	s.RecordLaunchFailure("broken", "launch_failed", "не поехало")
 	s.RecordSession("fine", time.Hour, true)
-	s.RecordLaunchFailure("once", "разово")
+	s.RecordLaunchFailure("once", "launch_failed", "разово")
 
 	got := s.Broken()
 	if len(got) != 1 || got[0].GameID != "broken" {
@@ -128,8 +128,8 @@ func TestSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServiceAt: %v", err)
 	}
-	first.RecordLaunchFailure("g1", "нет бутыля")
-	first.RecordLaunchFailure("g1", "нет бутыля")
+	first.RecordLaunchFailure("g1", "launch_failed", "нет бутыля")
+	first.RecordLaunchFailure("g1", "launch_failed", "нет бутыля")
 
 	second, err := NewServiceAt(path)
 	if err != nil {

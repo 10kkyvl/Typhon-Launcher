@@ -45,6 +45,8 @@ type Game struct {
 	ReleaseID         string     `json:"releaseId,omitempty"`
 	SourceID          string     `json:"sourceId,omitempty"`
 	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
+	Repacker          string     `json:"repacker,omitempty"`
+	ReleaseVersion    string     `json:"releaseVersion,omitempty"`
 	Source            string     `json:"source,omitempty"`
 	InstallType       string     `json:"installType,omitempty"`
 	Owned             bool       `json:"owned,omitempty"`
@@ -85,6 +87,8 @@ type InstalledGame struct {
 	ReleaseID        string    `json:"releaseId"`
 	SourceID         string    `json:"sourceId"`
 	CanonicalGameID  string    `json:"canonicalGameId"`
+	Repacker         string    `json:"repacker"`
+	ReleaseVersion   string    `json:"releaseVersion"`
 	InstallType      string    `json:"installType"`
 	Owned            bool      `json:"owned"`
 	Uninstall        Uninstall `json:"uninstall,omitzero"`
@@ -143,7 +147,7 @@ type Service struct {
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.
 	onOutcome     func(gameID string, played time.Duration, stoppedByUser bool)
-	onLaunchFail  func(gameID string, reason string)
+	onLaunchFail  func(gameID, code, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
@@ -452,6 +456,12 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		if g.CanonicalGameID != "" {
 			s.games[i].CanonicalGameID = g.CanonicalGameID
 		}
+		// Переустановка может принести другую сборку, и тогда прошлая больше
+		// не описывает то, что лежит на диске.
+		if g.ReleaseID != "" {
+			s.games[i].Repacker = g.Repacker
+			s.games[i].ReleaseVersion = g.ReleaseVersion
+		}
 		s.games[i].Source = SourceManaged
 		s.games[i].InstallType = g.InstallType
 		s.games[i].Owned = g.Owned
@@ -485,6 +495,8 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		ReleaseID:        g.ReleaseID,
 		SourceID:         g.SourceID,
 		CanonicalGameID:  g.CanonicalGameID,
+		Repacker:         g.Repacker,
+		ReleaseVersion:   g.ReleaseVersion,
 		Source:           SourceManaged,
 		InstallType:      g.InstallType,
 		Owned:            g.Owned,
@@ -517,7 +529,7 @@ func (s *Service) SetOutcomeRecorder(fn func(gameID string, played time.Duration
 }
 
 //wails:ignore
-func (s *Service) SetLaunchFailureRecorder(fn func(gameID string, reason string)) {
+func (s *Service) SetLaunchFailureRecorder(fn func(gameID, code, reason string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onLaunchFail = fn

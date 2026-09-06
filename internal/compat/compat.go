@@ -50,6 +50,7 @@ type Record struct {
 	Failures    int       `json:"failures"`
 	BestSeconds int64     `json:"bestSeconds"`
 	LastError   string    `json:"lastError,omitempty"`
+	LastCode    string    `json:"lastCode,omitempty"`
 	LastAt      time.Time `json:"lastAt"`
 }
 
@@ -62,6 +63,7 @@ type Status struct {
 	Failures    int    `json:"failures"`
 	BestSeconds int64  `json:"bestSeconds"`
 	LastError   string `json:"lastError,omitempty"`
+	LastCode    string `json:"lastCode,omitempty"`
 }
 
 type Service struct {
@@ -127,8 +129,12 @@ func (s *Service) persistLocked() {
 
 // RecordLaunchFailure отмечает, что игра не запустилась вовсе.
 //
+// RecordLaunchFailure принимает код отказа рядом с текстом. Текст остаётся
+// пользователю, код нужен общей статистике: «не запустилась» и «не встало
+// окружение» — разные диагнозы, а по тексту их не различить.
+//
 //wails:ignore
-func (s *Service) RecordLaunchFailure(gameID, reason string) {
+func (s *Service) RecordLaunchFailure(gameID, code, reason string) {
 	if gameID == "" {
 		return
 	}
@@ -138,6 +144,7 @@ func (s *Service) RecordLaunchFailure(gameID, reason string) {
 	r.Attempts++
 	r.Failures++
 	r.LastError = reason
+	r.LastCode = code
 	r.LastAt = time.Now().UTC()
 	s.persistLocked()
 }
@@ -164,9 +171,11 @@ func (s *Service) RecordSession(gameID string, played time.Duration, stoppedByUs
 		// Игра доказала, что работает: прошлые неудачи больше ничего не значат.
 		r.Failures = 0
 		r.LastError = ""
+		r.LastCode = ""
 	case !stoppedByUser && seconds < selfExitSeconds:
 		r.Failures++
 		r.LastError = "игра закрылась сама сразу после запуска"
+		r.LastCode = "self_exit"
 	}
 	s.persistLocked()
 }
@@ -226,6 +235,7 @@ func statusOf(r Record) Status {
 		Failures:    r.Failures,
 		BestSeconds: r.BestSeconds,
 		LastError:   r.LastError,
+		LastCode:    r.LastCode,
 	}
 	switch {
 	case r.BestSeconds >= playedSeconds:

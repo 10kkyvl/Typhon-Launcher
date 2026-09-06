@@ -5,6 +5,8 @@
   import { navigate } from '../stores/router';
   import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
+  import type { CompatInfo } from '../services/sources';
+  import { compatBadge } from '../game/compat';
 
   let {
     id,
@@ -13,6 +15,7 @@
     installed = false,
     running = false,
     meta,
+    compat,
     variant = 'poster',
     footer,
     onplay,
@@ -23,12 +26,26 @@
     installed?: boolean;
     running?: boolean;
     meta?: string;
+    compat?: CompatInfo;
     variant?: 'poster' | 'capsule';
     footer?: Snippet;
     onplay?: () => void;
   } = $props();
 
   const ratio = $derived(variant === 'capsule' ? '16 / 9' : '3 / 4');
+
+  // Бейджа нет, пока сервер не отдал строку: он отдаёт её только выше порога
+  // наблюдений, и молчание тут честнее любой цифры.
+  const badge = $derived(compatBadge(compat));
+  const compatWorks = $derived(badge?.works === true);
+  const compatLabel = $derived(
+    badge
+      ? msg(badge.works ? 'games.compatBadgeWorks' : 'games.compatBadgeBroken', {
+          works: String(badge.works_count),
+          total: String(badge.total),
+        })
+      : '',
+  );
 </script>
 
 <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)}>
@@ -37,6 +54,9 @@
       <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
+    {#if compatLabel}
+      <span class="compat" class:works={compatWorks} title={compatLabel}>{compatLabel}</span>
+    {/if}
     {#if installed && onplay}
       <button class="play" class:running aria-label={running ? msg('ui.stop') : msg('ui.play')} onclick={onplay}>
         {#if running}
@@ -64,6 +84,27 @@
     flex-direction: column;
     gap: 0.9rem;
     min-width: 0;
+  }
+
+  .compat {
+    position: absolute;
+    left: 0.6rem;
+    bottom: 0.6rem;
+    max-width: calc(100% - 1.2rem);
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--danger) 88%, black);
+    color: white;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .compat.works {
+    background: color-mix(in srgb, var(--success) 88%, black);
   }
 
   .cover-wrap {

@@ -703,6 +703,8 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		ReleaseID:        item.Origin.ReleaseID,
 		SourceID:         item.Origin.SourceID,
 		CanonicalGameID:  item.Origin.GameID,
+		Repacker:         s.repackerOf(item.Origin.ReleaseID),
+		ReleaseVersion:   item.Origin.Version,
 		InstallType:      string(item.Type),
 		Owned:            item.Owned,
 		Uninstall:        item.Uninstall,

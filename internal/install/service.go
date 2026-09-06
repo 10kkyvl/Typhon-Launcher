@@ -125,6 +125,7 @@ type Service struct {
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
+	repacker   func(releaseID string) string
 	usage      func(usagestats.Event)
 
 	historyRecorder func(history.Record) error
@@ -187,6 +188,17 @@ func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
 	s.title = fn
 }
 
+// SetRepackerResolver сообщает установке, чьей сборкой поставлена игра. Держать
+// это в библиотеке, а не смотреть в источники позже, приходится потому, что
+// релиз из фида пропадает при чистке, а игра остаётся.
+//
+//wails:ignore
+func (s *Service) SetRepackerResolver(fn func(releaseID string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repacker = fn
+}
+
 //wails:ignore
 func (s *Service) SetUsageRecorder(rec func(usagestats.Event)) {
 	s.mu.Lock()
@@ -231,6 +243,19 @@ func (s *Service) titleOf(origin download.Origin) string {
 		return ""
 	}
 	return strings.TrimSpace(resolve(origin))
+}
+
+func (s *Service) repackerOf(releaseID string) string {
+	if releaseID == "" {
+		return ""
+	}
+	s.mu.Lock()
+	resolve := s.repacker
+	s.mu.Unlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(releaseID))
 }
 
 func (s *Service) nameFor(d download.Download) string {

@@ -1,12 +1,17 @@
 <script lang="ts">
   import { TriangleAlert } from '@lucide/svelte';
+  import { settings } from '../stores/settings';
   import { respondTelemetryConsent } from '../stores/telemetryConsent';
   import { errorMessage } from '../utils/errors';
   import Button from './Button.svelte';
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
 
-  let usageStats = $state(false);
+  // На свежей установке статистика не отмечена — её включают отдельным
+  // действием. Но этот же экран показывается повторно, когда состав данных
+  // расширился, и там предвыбор обязан повторять прошлый ответ: иначе человек,
+  // у которого статистика была включена, соглашается — и молча её выключает.
+  let usageStats = $state(($settings?.telemetryConsentVersion ?? 0) > 0 && Boolean($settings?.anonymousUsageStats));
   let saving = $state(false);
   let error = $state('');
 
@@ -42,6 +47,18 @@
       "timestamp": "2026-08-28T22:14:07Z",
       "properties": { "game_id": "1020", "duration_seconds": 3600 }
     }
+  ]
+}`;
+
+  // Пример отчёта о совместимости показывается рядом с остальными: экран
+  // обещает показать, что именно уходит, и обещание должно оставаться полным.
+  const compatReport = `{
+  "client_id": "9a4f1d20-5b8e-42c7-b1a3-77e0c9f2d834",
+  "app_version": "0.4.1",
+  "env": { "os_version": "15.6", "crossover": "26.3", "chip": "apple_m4" },
+  "games": [
+    { "game_id": "232567", "repacker": "fitgirl", "version": "1.0.28518",
+      "state": "works" }
   ]
 }`;
 
@@ -96,6 +113,10 @@
           <div class="example">
             <span class="example-label">{msg('modals.telemetryConsentUsageEventLabel')}</span>
             <pre class="example-pre">{usageEvent}</pre>
+          </div>
+          <div class="example">
+            <span class="example-label">{msg('modals.telemetryConsentCompatReportLabel')}</span>
+            <pre class="example-pre">{compatReport}</pre>
           </div>
         </div>
       </details>

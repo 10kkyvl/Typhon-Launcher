@@ -47,7 +47,17 @@ const (
 	// shows. A stored version of zero means the user has never been asked,
 	// which is a different state from having been asked and declined: the
 	// first is worth one prompt, the second must never be re-prompted.
-	CurrentTelemetryConsent = 1
+	//
+	// Version 2 added compatibility reports, which carry the chip family and
+	// the macOS version. Version 1 promised no hardware at all, so an answer
+	// given to it cannot cover them.
+	CurrentTelemetryConsent = 2
+
+	// legacyTelemetryConsent is the version a switch turned on by hand before
+	// the prompt existed answers. That is the version whose text the user
+	// acted on, and recording anything higher would hand the newer text an
+	// answer nobody gave it.
+	legacyTelemetryConsent = 1
 
 	dirGames       = "Games"
 	dirDownloads   = "Downloads"
@@ -121,6 +131,14 @@ func (s Settings) UsageStatsAllowed() bool {
 
 func (s Settings) DiagnosticsAllowed() bool {
 	return s.TelemetryConsentRecorded() && s.AnonymousDiagnostics
+}
+
+// CompatReportsAllowed gates the compatibility reports on the current consent
+// rather than on any recorded answer. An answer given to an older prompt stays
+// valid for what it covered, and covers nothing else: raising the version is
+// how the promise made in that older text keeps being kept.
+func (s Settings) CompatReportsAllowed() bool {
+	return s.TelemetryConsentVersion >= CurrentTelemetryConsent && s.AnonymousUsageStats
 }
 
 func Defaults() Settings {
@@ -210,7 +228,7 @@ func applyStoredConsent(s Settings, p consentProbe) Settings {
 	// — it is equally the shipped default nobody ever touched — so those
 	// installs see the prompt once.
 	if s.AnonymousUsageStats || s.AnonymousDiagnostics {
-		s.TelemetryConsentVersion = CurrentTelemetryConsent
+		s.TelemetryConsentVersion = legacyTelemetryConsent
 	} else {
 		s.TelemetryConsentVersion = 0
 	}
