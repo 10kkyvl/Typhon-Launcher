@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -32,6 +33,10 @@ func (b *blockingLibrary) GetRunningGames() []string { return b.inner.GetRunning
 
 func (b *blockingLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error) {
 	return b.inner.ApplyInstalledUpdate(u)
+}
+
+func (b *blockingLibrary) LocateSaves(ctx context.Context, id string) (library.SavesResult, error) {
+	return b.inner.LocateSaves(ctx, id)
 }
 
 // TestServiceShutdownWaitsForHandleSourcesRefreshedGoroutine covers

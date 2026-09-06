@@ -78,6 +78,7 @@ export const state = {
   'state.updatesStrategyFullRelease': 'Полная переустановка',
   'state.updatesStrategyTorrentReuse': 'Повторное использование файлов',
   'state.updatesStrategyPatchChain': 'Патчи',
+  'state.updatesStepBackup': 'Резервная копия',
   'state.updatesStepRecheck': 'Проверка файлов',
   'state.updatesStepApplyPatch': 'Применение патча',
   'state.updatesStepExtract': 'Распаковка',

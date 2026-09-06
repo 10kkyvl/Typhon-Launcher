@@ -81,6 +81,7 @@ export const state: Record<StateKey, Message> = {
   'state.updatesStrategyFullRelease': 'Full reinstall',
   'state.updatesStrategyTorrentReuse': 'Reusing existing files',
   'state.updatesStrategyPatchChain': 'Patches',
+  'state.updatesStepBackup': 'Backing up',
   'state.updatesStepRecheck': 'Verifying files',
   'state.updatesStepApplyPatch': 'Applying patch',
   'state.updatesStepExtract': 'Extracting',

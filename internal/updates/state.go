@@ -20,6 +20,7 @@ type Update struct {
 	Message      string             `json:"message,omitempty"`
 	Error        string             `json:"error,omitempty"`
 	CanRollback  bool               `json:"canRollback"`
+	SavesBackup  string             `json:"savesBackup,omitempty"`
 	CheckedAt    time.Time          `json:"checkedAt"`
 }
 

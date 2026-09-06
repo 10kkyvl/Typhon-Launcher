@@ -14,6 +14,7 @@ export type AvailabilityKind = 'none' | 'update' | 'new_release';
 export type StrategyType = '' | 'full_release' | 'torrent_reuse' | 'patch_chain';
 export type VerifyMethod = 'pending' | 'torrent' | 'manifest' | 'unavailable';
 export type StepKind =
+  | 'backup'
   | 'download'
   | 'recheck'
   | 'apply_patch'
@@ -62,11 +63,9 @@ export interface UpdatePlan {
   downloadBytes: number;
   reusedBytes: number;
   requiredDiskBytes: number;
-  backupRecommended: boolean;
   backupAvailable: boolean;
-  backupCreated: boolean;
-  requiresRestart: boolean;
   rollbackAvailable: boolean;
+  savesPath?: string;
   confidence: number;
   createdAt: string;
 }
@@ -85,6 +84,7 @@ export interface Update {
   message?: string;
   error?: string;
   canRollback: boolean;
+  savesBackup?: string;
   checkedAt: string;
 }
 

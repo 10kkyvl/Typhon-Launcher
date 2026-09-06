@@ -36,7 +36,7 @@ func updatesCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []str
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := updatesCodesIn(t, updatesGoCodePattern, "service.go", "apply.go", "plan.go", "verify.go")
+	goCodes := updatesCodesIn(t, updatesGoCodePattern, "service.go", "apply.go", "plan.go", "verify.go", "saves.go")
 	if len(goCodes) < 20 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 20", len(goCodes))
 	}

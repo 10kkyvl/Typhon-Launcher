@@ -145,6 +145,15 @@ func (s *Service) buildPlan(ctx context.Context, gameID string) (*UpdatePlan, er
 		if err != nil {
 			return nil, err
 		}
+		saves, err := s.locateSaves(ctx, gameID)
+		if err != nil {
+			return nil, err
+		}
+		plan.SavesPath = saves
+		plan.BackupAvailable = saves != ""
+		if saves != "" {
+			plan.Steps = append([]UpdateStep{{Kind: StepBackup, Label: "Снимок сохранений"}}, plan.Steps...)
+		}
 		plan.ID = newID()
 		plan.GameID = gameID
 		plan.CreatedAt = time.Now()
@@ -229,7 +238,6 @@ func (f fullReleaseStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan,
 		Strategy:           StrategyFullRelease,
 		DownloadBytes:      size,
 		RequiredDiskBytes:  size*2 + size/stagingOverhead,
-		BackupRecommended:  true,
 		Confidence:         baseConfidenceOf(in),
 		RollbackAvailable:  true,
 		Steps: []UpdateStep{
@@ -272,9 +280,9 @@ func (t torrentReuseStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan
 		ReuseFlat:          report.Flat,
 		DownloadBytes:      report.MissingBytes,
 		ReusedBytes:        report.MatchedBytes,
-		RequiredDiskBytes:  report.MissingBytes,
-		BackupRecommended:  true,
+		RequiredDiskBytes:  report.MissingBytes + in.Installed.SizeBytes,
 		Confidence:         baseConfidenceOf(in),
+		RollbackAvailable:  true,
 		Steps: []UpdateStep{
 			{Kind: StepRecheck, Label: "Проверка существующих файлов", Bytes: report.MatchedBytes},
 			{Kind: StepDownload, Label: "Загрузка изменившихся данных", ReleaseID: in.Target.ID, Bytes: report.MissingBytes},
@@ -343,9 +351,9 @@ func (p patchChainStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan, 
 		Strategy:           StrategyPatchChain,
 		Steps:              steps,
 		DownloadBytes:      path.Bytes,
-		RequiredDiskBytes:  path.Bytes + largest*2,
-		BackupRecommended:  true,
+		RequiredDiskBytes:  path.Bytes + largest*2 + in.Installed.SizeBytes,
 		Confidence:         baseConfidenceOf(in),
+		RollbackAvailable:  true,
 		Patches:            path.Steps,
 	}
 	return plan, nil

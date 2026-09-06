@@ -175,6 +175,12 @@
           <dt>{msg('ui.rollback')}</dt>
           <dd>{plan.rollbackAvailable ? msg('ui.available') : msg('ui.notAvailable')}</dd>
         </div>
+        {#if update.savesBackup}
+          <div>
+            <dt>{msg('ui.saveBackupPath')}</dt>
+            <dd class="path">{update.savesBackup}</dd>
+          </div>
+        {/if}
       </dl>
       <ol class="steps">
         {#each plan.steps as step, index (index)}
@@ -314,6 +320,13 @@
     font-size: var(--font-md);
     font-weight: 500;
     font-variant-numeric: tabular-nums;
+  }
+
+  .summary dd.path {
+    font-size: var(--font-sm);
+    font-weight: 400;
+    max-width: 32ch;
+    overflow-wrap: anywhere;
   }
 
   .modal-summary {

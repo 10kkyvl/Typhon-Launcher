@@ -76,6 +76,7 @@ export function strategyLabels(strategy: StrategyType): string {
 
 export function stepLabels(step: StepKind): string {
   const labels: Record<StepKind, string> = {
+    backup: msg('state.updatesStepBackup'),
     download: msg('common.loading'),
     recheck: msg('state.updatesStepRecheck'),
     apply_patch: msg('state.updatesStepApplyPatch'),

@@ -18,10 +18,12 @@ import (
 )
 
 type fakeLibrary struct {
-	mu      sync.Mutex
-	games   []library.Game
-	running []string
-	applied []library.InstalledUpdate
+	mu       sync.Mutex
+	games    []library.Game
+	running  []string
+	applied  []library.InstalledUpdate
+	saves    string
+	savesErr error
 }
 
 func (f *fakeLibrary) GetInstalledGames() []library.Game {
@@ -50,6 +52,15 @@ func (f *fakeLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.G
 		return f.games[i], nil
 	}
 	return library.Game{}, errors.New("not found")
+}
+
+func (f *fakeLibrary) LocateSaves(_ context.Context, _ string) (library.SavesResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.savesErr != nil {
+		return library.SavesResult{}, f.savesErr
+	}
+	return library.SavesResult{Path: f.saves}, nil
 }
 
 type fakeReleases struct{ list []sources.Release }

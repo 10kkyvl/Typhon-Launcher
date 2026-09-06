@@ -81,6 +81,7 @@ type librarySource interface {
 	GetInstalledGames() []library.Game
 	GetRunningGames() []string
 	ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error)
+	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 }
 
 type releaseSource interface {

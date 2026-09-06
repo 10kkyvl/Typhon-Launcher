@@ -117,6 +117,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.newVersion': 'New version',
   'ui.spaceNeeded': 'Space needed',
   'ui.saveBackup': 'Save backup',
+  'ui.saveBackupPath': 'Saves snapshot',
   'ui.backupWillBeCreated': 'Will be created',
   'ui.backupUnavailable': 'Unavailable',
   'ui.rollback': 'Rollback',

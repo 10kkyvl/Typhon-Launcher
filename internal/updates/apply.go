@@ -17,6 +17,7 @@ import (
 	"typhon/internal/install"
 	"typhon/internal/library"
 	"typhon/internal/platform"
+	"typhon/internal/settings"
 	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
@@ -217,6 +218,17 @@ func (s *Service) runUpdate(ctx context.Context, plan UpdatePlan) error {
 	handler := s.strategyFor(plan.Strategy)
 	if handler == nil {
 		return errUpdateFailed
+	}
+	if plan.SavesPath != "" {
+		s.setStep(plan.GameID, StepBackup, "Снимок сохранений")
+	}
+	snapshot, err := s.backupSaves(ctx, plan)
+	if err != nil {
+		return err
+	}
+	if snapshot != "" {
+		slog.Info("saves snapshot taken", "game", plan.GameID, "from", plan.SavesPath, "path", snapshot)
+		s.mutate(plan.GameID, func(u *Update) { u.SavesBackup = snapshot })
 	}
 	return handler.Apply(ctx, plan)
 }
@@ -555,17 +567,8 @@ func (s *Service) applyTorrentReuse(ctx context.Context, plan UpdatePlan) error 
 // recovering, while a crash after the journal is written is guaranteed a
 // complete, hashed backup to restore from (invariant 15).
 func (s *Service) backupInPlace(ctx context.Context, gameID, installDir, version string) (string, error) {
-	total, err := install.DirSize(ctx, installDir)
+	previous, err := copyInstallAside(ctx, installDir)
 	if err != nil {
-		return "", err
-	}
-	if err := checkBackupFreeSpace(installDir, total); err != nil {
-		return "", err
-	}
-	previous := installDir + previousSuffix
-	removeTree(previous)
-	if err := install.CopyDirVerified(ctx, installDir, previous, nil); err != nil {
-		removeTree(previous)
 		return "", err
 	}
 	if err := s.setJournal(SwapJournal{
@@ -576,6 +579,30 @@ func (s *Service) backupInPlace(ctx context.Context, gameID, installDir, version
 		Version:    version,
 		StartedAt:  time.Now(),
 	}); err != nil {
+		removeTree(previous)
+		return "", err
+	}
+	return previous, nil
+}
+
+// copyInstallAside takes the verified full copy every in-place strategy needs
+// before its first destructive write. A crash during the copy itself leaves
+// installDir untouched, so the copy is safe to redo from scratch on the next
+// attempt (invariant 15).
+func copyInstallAside(ctx context.Context, installDir string) (string, error) {
+	previous, err := previousDir(installDir)
+	if err != nil {
+		return "", err
+	}
+	total, err := install.DirSize(ctx, installDir)
+	if err != nil {
+		return "", err
+	}
+	if err := checkBackupFreeSpace(installDir, total); err != nil {
+		return "", err
+	}
+	removeTree(previous)
+	if err := install.CopyDirVerified(ctx, installDir, previous, nil); err != nil {
 		removeTree(previous)
 		return "", err
 	}
@@ -615,6 +642,12 @@ func checkBackupFreeSpace(path string, needed int64) error {
 // chain interrupted partway through never reports a version it did not fully
 // apply (invariant 14), and a retry after a crash resumes from the last
 // registered version instead of redoing the whole chain.
+//
+// Every patch merges into the live installation, so the chain takes the same
+// full copy the in-place strategies take (invariant 15). Unlike them it keeps
+// it as a rollback entry from the first patch on: a chain that stops halfway
+// leaves the game at an intermediate version nobody asked for, and the way
+// back to the version the player started with is that copy.
 func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	game, ok := s.installedGame(plan.GameID)
 	if !ok {
@@ -625,28 +658,66 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 		return err
 	}
 	defer removeTree(staging)
+
+	s.setStep(plan.GameID, StepBackup, "Резервная копия установки")
+	previous, err := copyInstallAside(ctx, game.InstallDir)
+	if err != nil {
+		return err
+	}
+	s.registerRollback(game, previous)
+
+	touched, err := s.runPatchChain(ctx, plan, game, staging)
+	if err != nil {
+		if !touched {
+			s.forgetPrevious(plan.GameID)
+			removeTree(previous)
+		}
+		return err
+	}
+	s.settlePrevious(plan.GameID, previous)
+	return nil
+}
+
+// runPatchChain reports whether the installation still differs from the copy
+// taken before the chain, so a chain that failed without leaving anything
+// behind can drop that copy instead of offering the player a rollback to the
+// version they are already on.
+func (s *Service) runPatchChain(ctx context.Context, plan UpdatePlan, game library.Game, staging string) (touched bool, err error) {
 	backup := game.InstallDir + patchBackupSuffix
+	applied := 0
+	stopped := Patch{}
+
+	// A chain that dies halfway leaves the game on a version nobody asked
+	// for, so the failure has to say which patch it stopped on: the code the
+	// interface translates travels inside the message and survives the
+	// prefix (invariant 24).
+	defer func() {
+		if err != nil && stopped.ID != "" {
+			err = fmt.Errorf("патч %s → %s: %w", stopped.FromVersion, stopped.ToVersion, err)
+		}
+	}()
 
 	for _, patch := range plan.Patches {
+		stopped = patch
 		if err := ctx.Err(); err != nil {
-			return err
+			return applied > 0, err
 		}
 		if s.running(plan.GameID) {
-			return errGameRunning
+			return applied > 0, errGameRunning
 		}
 		s.setStep(plan.GameID, StepDownload, "Загрузка патча "+patch.FromVersion+" → "+patch.ToVersion)
 		task, err := s.downloadRelease(ctx, plan, patch.ReleaseID, s.config().DownloadsPath, false, false)
 		if err != nil {
-			return err
+			return applied > 0, err
 		}
 		if err := s.waitDownload(ctx, plan.GameID, task.ID); err != nil {
-			return err
+			return applied > 0, err
 		}
 
 		removeTree(staging)
 		s.setStep(plan.GameID, StepExtract, "Распаковка патча "+patch.ToVersion)
 		if _, err := s.installInto(ctx, task.ID, staging); err != nil {
-			return err
+			return applied > 0, err
 		}
 
 		s.setStep(plan.GameID, StepApplyPatch, "Применение патча "+patch.ToVersion)
@@ -660,54 +731,57 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 			Patch:      patch.ID,
 			StartedAt:  time.Now(),
 		}); err != nil {
-			return err
+			return applied > 0, err
 		}
 		if err := install.MergeDirWithBackup(ctx, staging, game.InstallDir, backup, nil); err != nil {
 			slog.Error("apply patch", "game", plan.GameID, "patch", patch.ID, "error", err)
-			if restoreErr := install.RestoreMergeBackup(game.InstallDir, backup); restoreErr != nil {
-				slog.Error("restore patch backup", "game", plan.GameID, "patch", patch.ID, "error", restoreErr)
-				return errUpdateFailed
-			}
-			if clearErr := s.clearJournal(plan.GameID); clearErr != nil {
-				slog.Error("clear patch journal", "game", plan.GameID, "error", clearErr)
-			}
-			return errUpdateFailed
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, errUpdateFailed
 		}
 		removeTree(staging)
 
 		executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
 		if err != nil {
-			if restoreErr := install.RestoreMergeBackup(game.InstallDir, backup); restoreErr != nil {
-				slog.Error("restore patch backup", "game", plan.GameID, "patch", patch.ID, "error", restoreErr)
-			} else if clearErr := s.clearJournal(plan.GameID); clearErr != nil {
-				slog.Error("clear patch journal", "game", plan.GameID, "error", clearErr)
-			}
-			return err
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, err
 		}
 		if executable == "" {
-			if restoreErr := install.RestoreMergeBackup(game.InstallDir, backup); restoreErr != nil {
-				slog.Error("restore patch backup", "game", plan.GameID, "patch", patch.ID, "error", restoreErr)
-			} else if clearErr := s.clearJournal(plan.GameID); clearErr != nil {
-				slog.Error("clear patch journal", "game", plan.GameID, "error", clearErr)
-			}
-			return errNoLaunchTarget
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, errNoLaunchTarget
 		}
 
 		if err := s.registerVersionAs(ctx, game, patch.ToVersion, patch.ReleaseID, executable, game.InstallDir); err != nil {
-			return err
+			return true, err
 		}
-		game, ok = s.installedGame(plan.GameID)
+		updated, ok := s.installedGame(plan.GameID)
 		if !ok {
-			return errNotTracked
+			return true, errNotTracked
 		}
+		game = updated
 		removeTree(backup)
 		if err := s.clearJournal(plan.GameID); err != nil {
-			return err
+			return true, err
 		}
+		applied++
 		slog.Info("patch applied", "game", plan.GameID, "from", patch.FromVersion, "to", patch.ToVersion)
 	}
 
-	return nil
+	return applied > 0, nil
+}
+
+// undoPatch rolls the interrupted patch back and reports whether the
+// installation is back to its pre-patch state. A restore that itself failed
+// leaves files from the patch behind, and the copy taken before the chain is
+// then the only way back.
+func (s *Service) undoPatch(gameID, patchID, installDir, backup string) bool {
+	if err := install.RestoreMergeBackup(installDir, backup); err != nil {
+		slog.Error("restore patch backup", "game", gameID, "patch", patchID, "error", err)
+		return false
+	}
+	if err := s.clearJournal(gameID); err != nil {
+		slog.Error("clear patch journal", "game", gameID, "error", err)
+	}
+	return true
 }
 
 func (s *Service) registerVersion(ctx context.Context, game library.Game, plan UpdatePlan, executable, installDir string) error {
@@ -742,11 +816,19 @@ func (s *Service) registerVersionAs(ctx context.Context, game library.Game, vers
 }
 
 func (s *Service) rememberPrevious(game library.Game, path string) {
-	policy := s.config().KeepPreviousVersion
-	if policy == "off" {
+	if s.config().KeepPreviousVersion == settings.KeepPreviousOff {
 		removeTree(path)
 		return
 	}
+	s.registerRollback(game, path)
+}
+
+// registerRollback records the rollback entry whatever KeepPreviousVersion
+// says. A strategy writing into the live installation needs the copy for the
+// whole operation, so the policy decides only what happens to it once the
+// operation is over — that is settlePrevious, not this.
+func (s *Service) registerRollback(game library.Game, path string) {
+	policy := s.config().KeepPreviousVersion
 	entry := &Rollback{
 		GameID:     game.ID,
 		Path:       path,
@@ -757,7 +839,7 @@ func (s *Service) rememberPrevious(game library.Game, path string) {
 		SourceID:   game.SourceID,
 		CreatedAt:  time.Now(),
 	}
-	if policy == "24h" {
+	if policy == settings.KeepPreviousDay {
 		until := entry.CreatedAt.Add(previousKeepDuration)
 		entry.KeepUntil = &until
 	} else {
@@ -795,6 +877,16 @@ func (s *Service) rememberPrevious(game library.Game, path string) {
 	}
 	s.clearDegradedLocked()
 	s.mu.Unlock()
+}
+
+// settlePrevious applies KeepPreviousVersion to a copy that had to survive
+// the whole operation, once that operation is over.
+func (s *Service) settlePrevious(gameID, path string) {
+	if s.config().KeepPreviousVersion != settings.KeepPreviousOff {
+		return
+	}
+	s.forgetPrevious(gameID)
+	removeTree(path)
 }
 
 func (s *Service) Rollback(gameID string) error {
