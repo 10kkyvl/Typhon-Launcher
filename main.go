@@ -528,7 +528,7 @@ func main() {
 		URL: "/",
 	})
 
-	autostartService, err := autostart.NewService(wails.Autostart)
+	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
 	}
