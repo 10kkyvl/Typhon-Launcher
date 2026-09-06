@@ -3,6 +3,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 
@@ -17,7 +18,7 @@ import (
 // Буква диска нацеливается на каталог, в котором лежит установка: он же и есть
 // папка игр при обычной раскладке, а при необычной — всё равно корректный
 // корень, потому что каталог установки заведомо лежит внутри него.
-func prepareRuntime(installDir, executable string) error {
+func prepareRuntime(ctx context.Context, installDir, executable string) error {
 	if installDir == "" || !isWindowsExecutable(executable) {
 		return nil
 	}
@@ -34,6 +35,11 @@ func prepareRuntime(installDir, executable string) error {
 	if _, ok := manager.Lookup(installDir); ok {
 		return nil
 	}
-	_, err = manager.Ensure(installDir, filepath.Dir(installDir))
-	return err
+	bottle, err := manager.Ensure(installDir, filepath.Dir(installDir))
+	if err != nil {
+		return err
+	}
+	// Прогрев здесь, а не при первом запуске: инициализация свежего префикса
+	// занимает минуты, и ждать их в момент нажатия «Играть» нельзя.
+	return manager.Boot(ctx, bottle)
 }

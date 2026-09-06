@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCxstartArgs(t *testing.T) {
@@ -87,14 +88,34 @@ func TestRunCancelled(t *testing.T) {
 	}
 }
 
-func TestStartDetachedReportsFailure(t *testing.T) {
+// StartDetached намеренно не ждёт: cxstart подменяет себя winewrapper'ом,
+// который живёт всё время игры. Значит и код возврата ему не виден — ошибкой
+// остаётся только невозможность запустить сам процесс.
+func TestStartDetachedDoesNotWaitForExitCode(t *testing.T) {
 	m, bottles, _ := newTestManager(t)
-	if err := os.WriteFile(m.rt.CxStart, []byte("#!/bin/sh\necho boom >&2\nexit 3\n"), 0o755); err != nil {
+	if err := os.WriteFile(m.rt.CxStart, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t", Games: t.TempDir()}
 
+	done := make(chan error, 1)
+	go func() { done <- m.StartDetached(context.Background(), b, Cmd{Path: `T:\a.exe`}) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("StartDetached: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("StartDetached ждёт завершения запущенного процесса")
+	}
+}
+
+func TestStartDetachedReportsUnstartable(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	m.rt.CxStart = filepath.Join(bottles, "no-such-cxstart")
+	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t", Games: t.TempDir()}
+
 	if err := m.StartDetached(context.Background(), b, Cmd{Path: `T:\a.exe`}); err == nil {
-		t.Fatal("StartDetached when cxstart fails: want error")
+		t.Fatal("StartDetached without cxstart: want error")
 	}
 }

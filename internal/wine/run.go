@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 )
@@ -69,18 +70,45 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 	return 0, nil
 }
 
-// StartDetached запускает и возвращается сразу: pid игры отдаёт не cxstart, а
-// перечисление процессов бутыля, поэтому ждать здесь нечего.
+// StartDetached запускает и возвращается сразу. Ни Run, ни CombinedOutput
+// здесь не годятся, и обе ловушки проверены на живой игре.
 //
-// Вывод намеренно не собирается. CombinedOutput ждёт не завершения cxstart, а
-// закрытия пайпов, а их наследует запущенная игра — с --no-wait это значит
-// ожидание до выхода из игры вместо мгновенного возврата. Диагностика запуска
-// идёт в файл через Cmd.Log (--cx-log), а не через перехват потоков.
+// CombinedOutput ждёт не завершения cxstart, а закрытия пайпов, которые
+// наследует запущенная игра, — то есть до выхода из игры.
+//
+// Run ждёт немногим меньше: cxstart подменяет себя winewrapper'ом, тот
+// остаётся прямым потомком лаунчера и живёт всё время игры. Ожидание вешало
+// PlayGame целиком, вместе с мьютексом библиотеки.
+//
+// Поэтому запускаем и отпускаем, а состояние узнаём из перечисления процессов
+// бутыля: Wait в фоне нужен только чтобы не оставлять зомби. Диагностика идёт
+// в файл через Cmd.Log (--cx-log), а не через перехват потоков.
 func (m *Manager) StartDetached(ctx context.Context, b Bottle, c Cmd) error {
 	//nolint:gosec // G204: путь до cxstart получен из Detect, аргументы собраны cxstartArgs
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, false)...)
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("запуск %s в бутыле %s: %w", c.Path, b.Name, err)
+	}
+	go func() {
+		// Ошибка тут не про запуск игры, а про судьбу обёртки: сам факт
+		// запуска подтверждает появление процесса в бутыле. Записываем её на
+		// debug, чтобы «игра закрылась сама» осталось объяснимым.
+		if err := cmd.Wait(); err != nil {
+			slog.Debug("cxstart wrapper exited", "bottle", b.Name, "path", c.Path, "error", err)
+		}
+	}()
+	return nil
+}
+
+// Boot прогревает свежий бутыль. Первый запуск инициализирует префикс —
+// поднимает services.exe, разворачивает реестр, — и на живой игре это заняло
+// минуты. Делать это в момент, когда пользователь нажал «Играть», нельзя:
+// прогрев уходит туда, где ожидание уместно, то есть в установку.
+func (m *Manager) Boot(ctx context.Context, b Bottle) error {
+	//nolint:gosec // G204: путь до cxstart получен из Detect, имя бутыля из нашей метки
+	cmd := exec.CommandContext(ctx, m.rt.CxStart, "--bottle", b.Name, "--no-gui", "--wait", "--", "wineboot", "-u")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("прогрев бутыля %s: %w: %s", b.Name, err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

@@ -115,7 +115,7 @@ type Service struct {
 	// не прямой вызов: на macOS настоящая реализация заводит бутыль
 	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
 	// прогон тестов создаёт настоящие бутыли на машине разработчика.
-	prepareRuntime func(installDir, executable string) error
+	prepareRuntime func(ctx context.Context, installDir, executable string) error
 
 	items      []*Installation
 	jobs       map[string]*job
@@ -979,7 +979,14 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 	}
 	s.mu.Unlock()
 
-	if err := s.complete(id); err != nil {
+	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
+	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
+	// вместе с ним, а не висело после закрытия лаунчера.
+	confirmCtx, ctxErr := s.baseContext()
+	if ctxErr != nil {
+		return ctxErr
+	}
+	if err := s.complete(confirmCtx, id); err != nil {
 		s.fail(id, err)
 		return err
 	}

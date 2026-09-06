@@ -307,7 +307,7 @@ func mustServiceAt(t testing.TB, dir string) *Service {
 	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
 	// секунды и сотни мегабайт на каждую установку. Тестам этого не нужно, а
 	// оставлять после прогона настоящие бутыли на машине разработчика нельзя.
-	s.prepareRuntime = func(string, string) error { return nil }
+	s.prepareRuntime = func(context.Context, string, string) error { return nil }
 	return s
 }
 

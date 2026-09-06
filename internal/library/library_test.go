@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,7 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
 	// секунды и сотни мегабайт на каждый запуск. Тесты запускают обычные
 	// процессы, и оставлять после прогона настоящие бутыли нельзя.
-	s.prepare = func(string, string) error { return nil }
+	s.prepare = func(context.Context, string, string) error { return nil }
 	// Registered after the t.TempDir() that produced path, so it runs before
 	// that directory is removed: a session goroutine still persisting into it
 	// would otherwise race the cleanup.

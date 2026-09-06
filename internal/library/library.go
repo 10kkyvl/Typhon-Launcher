@@ -160,7 +160,7 @@ type Service struct {
 	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
 	// возможность её подменить, иначе прогон оставляет после себя
 	// настоящие бутыли на машине разработчика.
-	prepare func(installDir, executable string) error
+	prepare func(ctx context.Context, installDir, executable string) error
 }
 
 type SessionWatcher interface {

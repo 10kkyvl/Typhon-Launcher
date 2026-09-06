@@ -3,6 +3,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // нет: там установка это перенос файлов, и до wine дело не доходит. Заводим
 // здесь, а не при первом запуске, чтобы четверть минуты на создание бутыля
 // ушла во время установки, где её видно, а не в момент нажатия «Играть».
-func prepareRuntime(installDir, executable string) error {
+func prepareRuntime(ctx context.Context, installDir, executable string) error {
 	if installDir == "" || !windowsExecutable(executable) {
 		return nil
 	}
@@ -32,8 +33,13 @@ func prepareRuntime(installDir, executable string) error {
 	if _, ok := manager.Lookup(installDir); ok {
 		return nil
 	}
-	_, err = manager.Ensure(installDir, filepath.Dir(installDir))
-	return err
+	bottle, err := manager.Ensure(installDir, filepath.Dir(installDir))
+	if err != nil {
+		return err
+	}
+	// Прогрев здесь, а не при первом запуске: инициализация свежего префикса
+	// занимает минуты, и ждать их в момент нажатия «Играть» нельзя.
+	return manager.Boot(ctx, bottle)
 }
 
 func windowsExecutable(path string) bool {
