@@ -160,6 +160,8 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonLauncherDidNotExit': 'The launcher didn’t close in time, the update was cancelled.',
   'state.selfupdateReasonCorruptDownload': 'The downloaded installer is corrupted. Download the update again.',
   'state.selfupdateReasonInstallerNotFound': 'Installer not found. Download the update again.',
+  'state.selfupdateReasonBundleBroken': 'The update archive is damaged.',
+  'state.selfupdateReasonNotABundle': 'The launcher is not running from the Typhon app — update it by hand.',
   'state.selfupdateReasonInstallerFailed': 'The installer exited with an error.',
   'state.selfupdateReasonServerStalled': 'The update server stopped sending data. Check your connection and try again.',
   'state.selfupdateReasonServerTimeout': 'The update server didn’t respond in time. Check your connection and try again.',
