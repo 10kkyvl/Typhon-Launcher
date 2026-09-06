@@ -34,3 +34,14 @@ type runSpec struct {
 type runner interface {
 	run(ctx context.Context, spec runSpec) (int, error)
 }
+
+// discovery сводит runSpec к discoverySpec (worker.go), чтобы разведкой
+// компонентов Inno пользовались все пути запуска сразу: неэлевированный на
+// Windows, повышенный воркер и запуск в бутыле на macOS (инвариант 28 — один
+// источник правды на понятие).
+func (s runSpec) discovery() discoverySpec {
+	return discoverySpec{
+		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
+		WorkingDir: s.Dir, InfPath: s.InfPath, Options: s.Options,
+	}
+}

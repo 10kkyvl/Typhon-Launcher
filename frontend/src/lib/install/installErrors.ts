@@ -83,6 +83,8 @@ export const REASONS: Record<string, MessageKey> = {
   'download.seeding': 'errInstall.downloadSeeding',
   'download.torrent_read_failed': 'errInstall.downloadTorrentReadFailed',
   'download.unavailable': 'errInstall.downloadUnavailable',
+  'wine.bottle_create_failed': 'errInstall.wineBottleCreateFailed',
+  'wine.not_installed': 'errInstall.wineNotInstalled',
 };
 
 export function installErrorText(err: unknown, fallback: string = msg('errInstall.fallback')): string {
