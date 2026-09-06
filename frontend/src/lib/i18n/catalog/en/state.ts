@@ -81,6 +81,7 @@ export const state: Record<StateKey, Message> = {
   'state.updatesStrategyFullRelease': 'Full reinstall',
   'state.updatesStrategyTorrentReuse': 'Reusing existing files',
   'state.updatesStrategyPatchChain': 'Patches',
+  'state.updatesStepBackup': 'Backing up',
   'state.updatesStepRecheck': 'Verifying files',
   'state.updatesStepApplyPatch': 'Applying patch',
   'state.updatesStepExtract': 'Extracting',
@@ -176,6 +177,8 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateCodeCheckFailed': 'Failed to check for updates.',
   'state.selfupdateCodeDownloadFailed': 'Failed to download the update.',
   'state.selfupdateCodeApplyFailed': 'Failed to install the update.',
+
+  'state.stateSaveFailed': 'Could not save state to disk: {message}',
 
   'state.themeFallbackName': 'Dark',
 };

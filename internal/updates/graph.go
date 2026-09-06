@@ -77,7 +77,10 @@ func (q queue) Less(i, j int) bool {
 }
 
 func (q *queue) Push(x any) {
-	n := x.(*node)
+	n, ok := x.(*node)
+	if !ok {
+		return
+	}
 	n.index = len(*q)
 	*q = append(*q, n)
 }
@@ -119,7 +122,10 @@ func FindPatchPath(patches []Patch, from, to string) (PatchPath, bool) {
 	pending := &queue{}
 	heap.Push(pending, &node{key: start})
 	for pending.Len() > 0 {
-		current := heap.Pop(pending).(*node)
+		current, ok := heap.Pop(pending).(*node)
+		if !ok {
+			return PatchPath{}, false
+		}
 		if visited[current.key] {
 			continue
 		}

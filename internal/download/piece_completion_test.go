@@ -194,3 +194,39 @@ func TestPieceCompletionFlushLoopPersistsWithoutClose(t *testing.T) {
 		return err == nil && strings.Contains(string(data), pk.InfoHash.HexString())
 	})
 }
+
+// TestOpenPieceCompletionTakesFlushIntervalBeforeStartingLoop закрывает
+// гонку, пойманную детектором на CI: flushLoop читал общий
+// completionFlushInterval уже в своей горутине, а тесты, укорачивающие этот
+// интервал, пишут в него из своей. Любая незакрытая загрузочная база (менеджер
+// закрывает свою только в ServiceShutdown, которого большинство тестов не
+// вызывает) держала горутину, ещё не дошедшую до чтения. После фикса интервал
+// снимается синхронно при открытии, и запись в переменную с ним не гоняется.
+func TestOpenPieceCompletionTakesFlushIntervalBeforeStartingLoop(t *testing.T) {
+	previous := completionFlushInterval
+	t.Cleanup(func() { completionFlushInterval = previous })
+
+	completionFlushInterval = time.Hour
+	for i := 0; i < 50; i++ {
+		fc, err := openPieceCompletion(t.TempDir())
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		real, ok := fc.(*fileCompletion)
+		if !ok {
+			t.Fatalf("openPieceCompletion returned %T, want *fileCompletion", fc)
+		}
+		if real.flushInterval != time.Hour {
+			t.Fatalf("flushInterval = %v, want the value in force at open time", real.flushInterval)
+		}
+		t.Cleanup(func() {
+			if err := fc.Close(); err != nil {
+				t.Errorf("close: %v", err)
+			}
+		})
+		// Запись сразу после открытия: раньше она попадала ровно в тот
+		// момент, когда только что запущенная горутина читала переменную.
+		completionFlushInterval = time.Duration(i+1) * time.Millisecond
+		completionFlushInterval = time.Hour
+	}
+}

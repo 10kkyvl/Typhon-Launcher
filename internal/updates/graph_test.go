@@ -1,6 +1,9 @@
 package updates
 
-import "testing"
+import (
+	"container/heap"
+	"testing"
+)
 
 func patch(id, from, to string, size int64) Patch {
 	return Patch{ID: id, FromVersion: from, ToVersion: to, ReleaseID: id, Size: size}
@@ -74,5 +77,23 @@ func TestFindPatchPathAvoidsUnknownSize(t *testing.T) {
 	path, ok := FindPatchPath(patches, "1.0", "1.1")
 	if !ok || path.Steps[0].ID != "known" {
 		t.Fatalf("path = %+v, ok = %v", path, ok)
+	}
+}
+
+// TestQueuePushRejectsWrongTypeWithoutPanicking guards the unchecked type
+// assertion in queue.Push: container/heap.Push takes an untyped any, so a
+// caller (however unlikely in this package today) that passes anything but
+// *node used to panic instead of being rejected. FindPatchPath runs in
+// background goroutines with no recover above it (main.go's recover does not
+// reach here), so a panic here would have taken down the launcher.
+func TestQueuePushRejectsWrongTypeWithoutPanicking(t *testing.T) {
+	q := &queue{}
+	heap.Push(q, "not a node")
+	if q.Len() != 0 {
+		t.Fatalf("queue length = %d, want 0 after rejecting a non-*node value", q.Len())
+	}
+	heap.Push(q, &node{key: "a"})
+	if q.Len() != 1 {
+		t.Fatalf("queue length = %d, want 1 after pushing a real node", q.Len())
 	}
 }

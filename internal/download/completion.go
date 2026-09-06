@@ -96,6 +96,12 @@ type completionFile struct {
 type fileCompletion struct {
 	path string
 
+	// flushInterval снимается с completionFlushInterval при открытии, а не
+	// читается внутри flushLoop: иначе тест, укорачивающий общий интервал,
+	// пишет в переменную, которую ещё не успевшая стартовать горутина
+	// предыдущего теста в этот момент читает.
+	flushInterval time.Duration
+
 	mu       sync.Mutex
 	torrents map[metainfo.Hash]*pieceSet
 	dirty    bool
@@ -119,10 +125,11 @@ func openPieceCompletion(dir string) (tstorage.PieceCompletion, error) {
 		return nil, fmt.Errorf("create piece completion dir: %w", err)
 	}
 	fc := &fileCompletion{
-		path:     filepath.Join(dir, completionFileName),
-		torrents: map[metainfo.Hash]*pieceSet{},
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
+		path:          filepath.Join(dir, completionFileName),
+		flushInterval: completionFlushInterval,
+		torrents:      map[metainfo.Hash]*pieceSet{},
+		stop:          make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 	if err := fc.load(); err != nil {
 		return nil, fmt.Errorf("open piece completion db: %w", err)
@@ -220,7 +227,7 @@ func (fc *fileCompletion) persist() error {
 
 func (fc *fileCompletion) flushLoop() {
 	defer close(fc.done)
-	ticker := time.NewTicker(completionFlushInterval)
+	ticker := time.NewTicker(fc.flushInterval)
 	defer ticker.Stop()
 	for {
 		select {

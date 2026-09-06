@@ -18,10 +18,12 @@ import (
 )
 
 type fakeLibrary struct {
-	mu      sync.Mutex
-	games   []library.Game
-	running []string
-	applied []library.InstalledUpdate
+	mu       sync.Mutex
+	games    []library.Game
+	running  []string
+	applied  []library.InstalledUpdate
+	saves    string
+	savesErr error
 }
 
 func (f *fakeLibrary) GetInstalledGames() []library.Game {
@@ -50,6 +52,15 @@ func (f *fakeLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.G
 		return f.games[i], nil
 	}
 	return library.Game{}, errors.New("not found")
+}
+
+func (f *fakeLibrary) LocateSaves(_ context.Context, _ string) (library.SavesResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.savesErr != nil {
+		return library.SavesResult{}, f.savesErr
+	}
+	return library.SavesResult{Path: f.saves}, nil
 }
 
 type fakeReleases struct{ list []sources.Release }
@@ -237,7 +248,9 @@ func newHarness(t *testing.T) *harness {
 
 func (h *harness) plan(t *testing.T) UpdatePlan {
 	t.Helper()
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	plan, err := h.service.buildPlan(context.Background(), "local-1")
 	if err != nil {
 		t.Fatalf("build plan: %v", err)
@@ -248,22 +261,28 @@ func (h *harness) plan(t *testing.T) UpdatePlan {
 
 func (h *harness) waitState(t *testing.T, want State) Update {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		u, ok := h.service.snapshot("local-1")
-		if ok && u.State == want {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	timeout := time.After(5 * time.Second)
+	for {
+		if u, ok := h.service.snapshot("local-1"); ok && u.State == want {
 			return u
 		}
-		time.Sleep(5 * time.Millisecond)
+		select {
+		case <-ticker.C:
+		case <-timeout:
+			u, _ := h.service.snapshot("local-1")
+			t.Fatalf("state = %q (%s), want %q", u.State, u.Error, want)
+			return Update{}
+		}
 	}
-	u, _ := h.service.snapshot("local-1")
-	t.Fatalf("state = %q (%s), want %q", u.State, u.Error, want)
-	return Update{}
 }
 
 func TestCheckReportsAvailableUpdate(t *testing.T) {
 	h := newHarness(t)
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	u, ok := h.service.snapshot("local-1")
 	if !ok || u.State != StateAvailable {
 		t.Fatalf("update = %+v", u)
@@ -373,14 +392,9 @@ func TestPreviousVersionDroppedAfterSuccessfulLaunch(t *testing.T) {
 		t.Fatal("a short session must not drop the previous version")
 	}
 	h.service.HandleSessionEnded("local-1", 600)
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(h.installDir + previousSuffix); err != nil {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if _, err := os.Stat(h.installDir + previousSuffix); err == nil {
+		t.Fatal("previous version was not removed after a successful launch")
 	}
-	t.Fatal("previous version was not removed after a successful launch")
 }
 
 func TestVerifyUnavailableWithoutIdentity(t *testing.T) {
@@ -389,7 +403,10 @@ func TestVerifyUnavailableWithoutIdentity(t *testing.T) {
 	if err := h.service.VerifyGame("local-1"); !errors.Is(err, errNoIdentity) {
 		t.Fatalf("err = %v, want %v", err, errNoIdentity)
 	}
-	state, _ := h.service.GetVerifyState("local-1")
+	state, err := h.service.GetVerifyState("local-1")
+	if err != nil {
+		t.Fatalf("get verify state: %v", err)
+	}
 	if state.Method != MethodUnavailable {
 		t.Fatalf("method = %q", state.Method)
 	}
@@ -413,14 +430,14 @@ func TestSwapAndRestoreDirectories(t *testing.T) {
 	if err := svc.swapDirectories("g1", current, staging, previous, "2.0"); err != nil {
 		t.Fatal(err)
 	}
-	if data, _ := os.ReadFile(filepath.Join(current, "marker")); string(data) != "new" {
-		t.Fatalf("marker = %q", data)
+	if data, err := os.ReadFile(filepath.Join(current, "marker")); err != nil || string(data) != "new" {
+		t.Fatalf("marker = %q %v", data, err)
 	}
 	if err := restoreDirectories(current, previous); err != nil {
 		t.Fatal(err)
 	}
-	if data, _ := os.ReadFile(filepath.Join(current, "marker")); string(data) != "old" {
-		t.Fatalf("restored marker = %q", data)
+	if data, err := os.ReadFile(filepath.Join(current, "marker")); err != nil || string(data) != "old" {
+		t.Fatalf("restored marker = %q %v", data, err)
 	}
 	if _, err := os.Stat(current + replacedSuffix); err == nil {
 		t.Fatal("the failed installation should be cleaned up")
@@ -442,7 +459,9 @@ func TestPatchesFromReleasesFeedIntoPlan(t *testing.T) {
 		MatchConfidence: 1,
 		Availability:    sources.AvailabilityAvailable,
 	})
-	h.service.check(h.library.games[0])
+	if err := h.service.check(h.library.games[0]); err != nil {
+		t.Fatalf("check: %v", err)
+	}
 	plan, err := h.service.buildPlan(context.Background(), "local-1")
 	if err != nil {
 		t.Fatal(err)

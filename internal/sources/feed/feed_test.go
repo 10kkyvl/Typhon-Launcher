@@ -223,7 +223,10 @@ func TestParseTooLongTitle(t *testing.T) {
 			{"title": string(longTitle), "uri": "magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
 		},
 	}
-	data, _ := json.Marshal(raw)
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	f, err := Parse(data)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
@@ -292,7 +295,10 @@ func TestParseMaxURIsPerEntryTruncation(t *testing.T) {
 			{"title": "Many URIs", "uris": uris},
 		},
 	}
-	data, _ := json.Marshal(raw)
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	f, err := Parse(data)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)

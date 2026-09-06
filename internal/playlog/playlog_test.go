@@ -47,6 +47,52 @@ func TestRecordPersistsAndPrunes(t *testing.T) {
 	}
 }
 
+func TestRecordRollsBackOnPersistFailure(t *testing.T) {
+	root := t.TempDir()
+	blocker := filepath.Join(root, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewServiceAt(filepath.Join(root, "playlog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+
+	s.Record("first", now.Add(-time.Hour), now)
+	before := s.Since(time.Time{})
+
+	s.mu.Lock()
+	s.path = filepath.Join(blocker, "playlog.json")
+	s.mu.Unlock()
+
+	s.Record("second", now.Add(-2*time.Hour), now.Add(-time.Hour))
+
+	after := s.Since(time.Time{})
+	if len(after) != len(before) || after[0].GameID != before[0].GameID {
+		t.Fatalf("sessions = %+v, want rollback to %+v", after, before)
+	}
+
+	s.mu.Lock()
+	status := s.status
+	s.mu.Unlock()
+	if !status.Degraded || status.Message == "" {
+		t.Fatalf("status = %+v, want degraded with a message", status)
+	}
+
+	s.mu.Lock()
+	s.path = filepath.Join(root, "playlog.json")
+	s.mu.Unlock()
+	s.Record("third", now.Add(-3*time.Hour), now.Add(-2*time.Hour))
+	s.mu.Lock()
+	status = s.status
+	s.mu.Unlock()
+	if status.Degraded {
+		t.Fatalf("status = %+v, want cleared after a successful record", status)
+	}
+}
+
 func TestSinceFiltersAndSorts(t *testing.T) {
 	s, err := NewServiceAt(filepath.Join(t.TempDir(), "playlog.json"))
 	if err != nil {

@@ -218,11 +218,8 @@ func (m *Manager) engine() (*client, context.Context, error) {
 	m.mu.Lock()
 	cl, ctx, closing := m.client, m.ctx, m.closing
 	m.mu.Unlock()
-	if cl == nil || closing {
+	if cl == nil || closing || ctx == nil {
 		return nil, nil, errNoClient
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	return cl, ctx, nil
 }
@@ -275,12 +272,17 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 	return &mi, nil
 }
 
-// hashBusy reports whether the torrent is already live in the client. A
-// completed download that no longer seeds holds no engine, so its files can be
-// rechecked against another directory.
-func (m *Manager) hashBusy(infoHash string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// hashBusyLocked reports whether the torrent is already live in the client,
+// already reserved by a concurrent add in progress, or already pending
+// metadata. A completed download that no longer seeds holds no engine, so its
+// files can be rechecked against another directory. The caller must hold
+// m.mu; see reserveHash for the check-and-reserve version that closes the
+// TOCTOU window between this check and actually adding the torrent
+// (invariant 17).
+func (m *Manager) hashBusyLocked(infoHash string) bool {
+	if m.reserved[infoHash] {
+		return true
+	}
 	if _, waiting := m.pending[infoHash]; waiting {
 		return true
 	}
@@ -295,12 +297,14 @@ func (m *Manager) hashBusy(infoHash string) bool {
 	return false
 }
 
-// hashInUse reports whether another download already holds a live torrent with
-// the same infohash. Two of them would share one engine and write to the wrong
-// directory.
-func (m *Manager) hashInUse(infoHash, excludeID string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// hashInUseLocked reports whether another download already holds a live
+// torrent, or a reservation in progress, for the same infohash. Two of them
+// would share one engine and write to the wrong directory. The caller must
+// hold m.mu; see reserveHashExcept.
+func (m *Manager) hashInUseLocked(infoHash, excludeID string) bool {
+	if m.reserved[infoHash] {
+		return true
+	}
 	for _, d := range m.items {
 		if d.ID == excludeID || !strings.EqualFold(d.InfoHash, infoHash) {
 			continue
@@ -312,17 +316,53 @@ func (m *Manager) hashInUse(infoHash, excludeID string) bool {
 	return false
 }
 
+// reserveHash atomically checks hashBusyLocked and, if the hash is free,
+// marks it reserved so a concurrent AddTask/FetchMetadata/InspectReuse for
+// the same infohash fails the busy check instead of racing anacrolix's own
+// dedup in Client.AddTorrentSpec (invariant 17). The caller must release the
+// reservation with releaseHash once the outcome is durably recorded in
+// m.engines/m.pending/m.items, or immediately on failure.
+func (m *Manager) reserveHash(infoHash string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.hashBusyLocked(infoHash) {
+		return false
+	}
+	m.reserved[infoHash] = true
+	return true
+}
+
+// reserveHashExcept is reserveHash for a restore/reattach flow, where the
+// download reattaching to infoHash is itself already in m.items under
+// excludeID and must not be counted as a conflict with itself.
+func (m *Manager) reserveHashExcept(infoHash, excludeID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.hashInUseLocked(infoHash, excludeID) {
+		return false
+	}
+	m.reserved[infoHash] = true
+	return true
+}
+
+func (m *Manager) releaseHashLocked(infoHash string) {
+	delete(m.reserved, infoHash)
+}
+
+func (m *Manager) releaseHash(infoHash string) {
+	m.mu.Lock()
+	m.releaseHashLocked(infoHash)
+	m.mu.Unlock()
+}
+
 // InspectReuse hashes the files already present at a path against a torrent and
 // reports how much of it can be reused.
 //
 //wails:ignore
 func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress func(VerifyProgress)) (ReuseReport, error) {
-	cl, base, err := m.engine()
+	cl, _, err := m.engine()
 	if err != nil {
 		return ReuseReport{}, err
-	}
-	if ctx == nil {
-		ctx = base
 	}
 	root := strings.TrimSpace(req.Path)
 	if root == "" {
@@ -344,9 +384,10 @@ func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress
 		return ReuseReport{}, err
 	}
 	infoHash := mi.HashInfoBytes().HexString()
-	if m.hashBusy(infoHash) {
+	if !m.reserveHash(infoHash) {
 		return ReuseReport{}, errHashBusy
 	}
+	defer m.releaseHash(infoHash)
 
 	chosen := chooseMapping(&info, root)
 	if req.Flat != nil {

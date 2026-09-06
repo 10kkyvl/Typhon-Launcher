@@ -1,6 +1,8 @@
 package sources
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -274,10 +276,14 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 
 	s.mu.Lock()
 	touched := map[string]bool{}
+	before := map[string][]Release{}
 	for sourceID, list := range s.releases {
 		for _, item := range list {
 			if item.ID != releaseID && (item.Locked || item.NormalizedTitle != normalized) {
 				continue
+			}
+			if !touched[sourceID] {
+				before[sourceID] = snapshotReleases(list)
 			}
 			id := gameID
 			item.CanonicalGameID = &id
@@ -291,8 +297,18 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 			touched[sourceID] = true
 		}
 	}
-	s.persistTouchedLocked(touched)
-	s.recountLocked(touched)
+	if err := s.persistTouchedLocked(touched, before); err != nil {
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("save matched releases: %w", err)
+	}
+	s.clearDegradedLocked()
+	if err := s.recountLocked(touched); err != nil {
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("recount sources: %w", err)
+	}
+	s.clearDegradedLocked()
 	snapshots := s.snapshotsLocked(touched)
 	s.mu.Unlock()
 
@@ -311,11 +327,22 @@ func (s *Service) IgnoreRelease(releaseID string, ignored bool) error {
 		s.mu.Unlock()
 		return errReleaseNotFound
 	}
+	before := map[string][]Release{r.SourceID: snapshotReleases(s.releases[r.SourceID])}
 	r.Ignored = ignored
 	r.New = false
 	touched := map[string]bool{r.SourceID: true}
-	s.persistTouchedLocked(touched)
-	s.recountLocked(touched)
+	if err := s.persistTouchedLocked(touched, before); err != nil {
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("save ignored release: %w", err)
+	}
+	s.clearDegradedLocked()
+	if err := s.recountLocked(touched); err != nil {
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("recount sources: %w", err)
+	}
+	s.clearDegradedLocked()
 	snapshots := s.snapshotsLocked(touched)
 	s.mu.Unlock()
 
@@ -328,18 +355,27 @@ func (s *Service) IgnoreRelease(releaseID string, ignored bool) error {
 func (s *Service) AcknowledgeNew(sourceID string) error {
 	s.mu.Lock()
 	touched := map[string]bool{}
+	before := map[string][]Release{}
 	for id, list := range s.releases {
 		if sourceID != "" && id != sourceID {
 			continue
 		}
 		for _, r := range list {
 			if r.New {
+				if !touched[id] {
+					before[id] = snapshotReleases(list)
+				}
 				r.New = false
 				touched[id] = true
 			}
 		}
 	}
-	s.persistTouchedLocked(touched)
+	if err := s.persistTouchedLocked(touched, before); err != nil {
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("save acknowledged releases: %w", err)
+	}
+	s.clearDegradedLocked()
 	snapshots := s.snapshotsLocked(touched)
 	s.mu.Unlock()
 
@@ -415,32 +451,77 @@ func (s *Service) FindRelease(id string) (Release, bool) {
 	return *r, true
 }
 
-func (s *Service) persistTouchedLocked(touched map[string]bool) {
-	for sourceID := range touched {
-		if err := s.store.saveReleases(sourceID, s.releases[sourceID]); err != nil {
-			slog.Error("save releases", "source_id", sourceID, "error", err)
+// snapshotReleases copies the current values of list so a failed persist can
+// restore them: list holds pointers that mutate in place, so the copy must
+// be taken before those mutations, not derived from them afterwards.
+func snapshotReleases(list []*Release) []Release {
+	out := make([]Release, len(list))
+	for i, r := range list {
+		out[i] = *r
+	}
+	return out
+}
+
+// restoreReleasesLocked rewrites sourceID's releases back to before, which
+// must have been captured by snapshotReleases from the same, unreordered
+// list before it was mutated.
+func (s *Service) restoreReleasesLocked(sourceID string, before []Release) {
+	list := s.releases[sourceID]
+	for i, r := range before {
+		if i < len(list) {
+			*list[i] = r
 		}
 	}
 }
 
-func (s *Service) recountLocked(touched map[string]bool) {
+// persistTouchedLocked saves the release list for every touched source.
+// Sources are independent files, so a failure for one does not stop the
+// others from being attempted; each failing source's mutated releases are
+// rolled back to before[sourceID] so its memory never runs ahead of its own
+// file on disk (invariant I.4), while sources that saved successfully keep
+// their change. All failures are combined with errors.Join for the caller.
+func (s *Service) persistTouchedLocked(touched map[string]bool, before map[string][]Release) error {
+	var errs []error
+	for sourceID := range touched {
+		if err := s.store.saveReleases(sourceID, s.releases[sourceID]); err != nil {
+			s.restoreReleasesLocked(sourceID, before[sourceID])
+			errs = append(errs, fmt.Errorf("save releases for source %s: %w", sourceID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// recountLocked recomputes the cached Matched/Review/Unmatched counters on
+// every touched source and persists sources.json. A persist failure rolls
+// those counters back to their previous values instead of leaving sources.json
+// out of sync with what is now in memory (invariant I.4).
+func (s *Service) recountLocked(touched map[string]bool) error {
+	before := map[string]Source{}
 	changed := false
 	for sourceID := range touched {
 		src := s.findLocked(sourceID)
 		if src == nil {
 			continue
 		}
+		before[sourceID] = *src
 		matched, review, unmatched := counts(s.releases[sourceID])
 		src.Matched = matched
 		src.Review = review
 		src.Unmatched = unmatched
 		changed = true
 	}
-	if changed {
-		if err := s.store.saveSources(flatten(s.sources)); err != nil {
-			slog.Error("save sources", "error", err)
-		}
+	if !changed {
+		return nil
 	}
+	if err := s.store.saveSources(flatten(s.sources)); err != nil {
+		for sourceID, snap := range before {
+			if src := s.findLocked(sourceID); src != nil {
+				*src = snap
+			}
+		}
+		return fmt.Errorf("save sources: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) snapshotsLocked(touched map[string]bool) []Source {

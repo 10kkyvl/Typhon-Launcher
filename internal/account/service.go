@@ -258,6 +258,7 @@ func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, erro
 	}
 
 	slog.Error("store session credential", "error", saveErr)
+	//nolint:contextcheck // инвариант 19: отзыв обязан дойти до сервера и тогда, когда ctx входа уже отменён — иначе на бэкенде останется живая сессия, токен которой мы только что не смогли сохранить; requestContext строит контекст от s.ctx со своим таймаутом
 	if err := s.revoke(session.Token); err != nil {
 		slog.Error("revoke session after failed credential write", "error", err)
 	}

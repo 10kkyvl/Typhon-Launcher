@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"math"
 	"os"
@@ -65,6 +66,11 @@ var (
 	errNoLibrary        = uierr.New("install.no_library", "библиотека недоступна")
 	errEmptyDestination = uierr.New("install.empty_destination", "каталог установки не задан")
 	errNeedsUser        = uierr.New("install.needs_user", "этот пакет требует участия пользователя")
+
+	// errNotStarted — вызов до ServiceStartup: контекста жизни сервиса ещё
+	// нет, начинать операцию нельзя (инвариант 20). Отдельная причина, а не
+	// errUnavailable: это не «недоступно для этой установки».
+	errNotStarted = errors.New("install service is not started")
 
 	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
 
@@ -293,11 +299,22 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(); contextcheck не видит связь через поле структуры
 	go func() {
 		defer s.wg.Done()
-		s.sweepPartial(s.baseContext(), staleItems)
+		base, err := s.baseContext()
+		if err != nil {
+			// Недостижимо: s.ctx выставлен несколькими строками выше в этом же
+			// вызове и никогда не сбрасывается обратно в nil. Обрабатываем
+			// честно на случай, если это перестанет быть так.
+			slog.Error("startup sweep: service context unavailable", "error", err)
+			return
+		}
+		s.sweepPartial(base, staleItems)
 		s.sweepRemovals()
 	}()
 
-	base := s.baseContext()
+	base, err := s.baseContext()
+	if err != nil {
+		return err
+	}
 	for _, id := range resume {
 		//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(), тот же приём, что spawnLocked уже использует для job-контекстов; contextcheck не видит связь через поле структуры
 		s.spawnResumeWatcher(base, id)
@@ -576,6 +593,9 @@ func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 		return
 	}
 	if _, err := os.Stat(partial); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("stat partial install", "path", partial, "error", err)
+		}
 		return
 	}
 	if item.Mode == ModeMove && !pathExists(item.ContentRoot) {
@@ -710,7 +730,11 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	base, err := s.baseContext()
+	if err != nil {
+		return PlanInfo{}, err
+	}
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return PlanInfo{}, err
 	}
@@ -748,7 +772,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 	s.mu.Unlock()
 
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	base, err := s.baseContext()
+	if err != nil {
+		return Installation{}, err
+	}
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return Installation{}, err
 	}
@@ -832,7 +860,14 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		return Installation{}, wrapPersistError(err)
 	}
 	snap := snapshotOf(item)
-	s.spawnLocked(item.ID)
+	if err := s.spawnLocked(item.ID); err != nil {
+		// Запись уже записана как Pending: её подхватит Retry или следующий
+		// ServiceStartup — то же состояние, что и после падения процесса
+		// между persistLocked и стартом job.
+		s.mu.Unlock()
+		slog.Error("spawn install job right after starting it", "id", item.ID, "error", err)
+		return Installation{}, err
+	}
 	s.mu.Unlock()
 
 	slog.Info("install started", "id", item.ID, "name", item.Name, "type", item.Type, "mode", item.Mode)
@@ -887,7 +922,14 @@ func (s *Service) Cancel(id string) error {
 	if err != nil {
 		return err
 	}
-	go s.sweepPartialItem(s.baseContext(), snap)
+	// Сам Cancel уже состоялся выше: подметание .partial — это уборка после
+	// него, а не его часть, поэтому недоступный контекст сервиса отменяет
+	// только уборку (инвариант 20), а не результат Cancel.
+	if base, err := s.baseContext(); err != nil {
+		slog.Warn("skip partial sweep after cancel, service not started", "id", snap.ID, "error", err)
+	} else {
+		go s.sweepPartialItem(base, snap)
+	}
 	s.notifyFinished(snap)
 	return nil
 }
@@ -949,6 +991,11 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	base, err := s.baseLocked()
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
 	// Проверка и решение — под одним и тем же захватом (инвариант 17): статус
 	// мог стать retryable по устаревшему прочтению (воркер, о котором
 	// ServiceStartup не успел узнать, ещё пишет по тем же детерминированным
@@ -974,7 +1021,7 @@ func (s *Service) Retry(id string) error {
 		}
 		snap := snapshotOf(item)
 		s.mu.Unlock()
-		s.spawnFinalize(s.baseContext(), id, nil)
+		s.spawnFinalize(base, id, nil)
 		slog.Info("install retried, finalizing already-committed install", "id", id, "name", snap.Name)
 		emit(eventUpdated, snap)
 		return nil
@@ -991,7 +1038,7 @@ func (s *Service) Retry(id string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return err
 	}
@@ -1061,10 +1108,14 @@ func (s *Service) Retry(id string) error {
 	snap := snapshotOf(item)
 	s.mu.Unlock()
 
-	s.sweepPartialItem(s.baseContext(), snap)
+	s.sweepPartialItem(base, snap)
 
 	s.mu.Lock()
-	s.spawnLocked(id)
+	if err := s.spawnLocked(id); err != nil {
+		s.mu.Unlock()
+		slog.Error("spawn install job right after retrying it", "id", id, "error", err)
+		return err
+	}
 	s.mu.Unlock()
 
 	slog.Info("install retried", "id", id, "name", snap.Name)
@@ -1100,7 +1151,13 @@ func (s *Service) Dismiss(id string) error {
 	}
 	s.mu.Unlock()
 
-	go s.sweepPartialItem(s.baseContext(), snap)
+	// Сам Dismiss уже состоялся выше: подметание .partial — уборка после
+	// него, а не его часть (та же логика, что и в Cancel).
+	if base, err := s.baseContext(); err != nil {
+		slog.Warn("skip partial sweep after dismiss, service not started", "id", id, "error", err)
+	} else {
+		go s.sweepPartialItem(base, snap)
+	}
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	return nil
@@ -1123,10 +1180,16 @@ func (s *Service) SetOnFinished(fn func(Installation)) {
 func (s *Service) notifyFinished(item Installation) {
 	s.mu.Lock()
 	notify := s.onFinished
-	s.mu.Unlock()
-	if notify != nil {
-		go notify(item)
+	if notify == nil || s.closing {
+		s.mu.Unlock()
+		return
 	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		notify(item)
+	}()
 }
 
 //wails:ignore
@@ -1173,23 +1236,34 @@ func (s *Service) completedDownload(id string) (download.Download, error) {
 	return d, nil
 }
 
-// baseLocked отдаёт контекст жизни сервиса; до ServiceStartup (и в тестах,
-// которые его не вызывают) сервис живёт столько же, сколько процесс.
-func (s *Service) baseLocked() context.Context {
+// baseLocked отдаёт контекст жизни сервиса. До ServiceStartup (и в тестах,
+// которые его не вызывают) годного контекста нет: вызывающий обязан
+// отказаться от операции или не стартовать горутину, а не подставлять
+// context.Background(), который ServiceShutdown никогда не отменит
+// (инвариант 20). Требует удержания s.mu вызывающим.
+func (s *Service) baseLocked() (context.Context, error) {
 	if s.ctx == nil {
-		return context.Background()
+		return nil, errNotStarted
 	}
-	return s.ctx
+	return s.ctx, nil
 }
 
-func (s *Service) baseContext() context.Context {
+func (s *Service) baseContext() (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.baseLocked()
 }
 
-func (s *Service) spawnLocked(id string) {
-	ctx, cancel := context.WithCancel(s.baseLocked())
+// spawnLocked отказывается стартовать job, если сервис ещё не запущен
+// (инвариант 20): без s.ctx горутина получила бы контекст, который
+// ServiceShutdown не может отменить, и s.wg.Wait() рисковал бы зависнуть
+// в ожидании job'а, живущего дольше самого сервиса.
+func (s *Service) spawnLocked(id string) error {
+	base, err := s.baseLocked()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(base)
 	s.jobs[id] = &job{cancel: cancel}
 	s.wg.Add(1)
 	go func() {
@@ -1197,6 +1271,7 @@ func (s *Service) spawnLocked(id string) {
 		defer s.endJob(id)
 		s.run(ctx, id)
 	}()
+	return nil
 }
 
 func (s *Service) endJob(id string) {

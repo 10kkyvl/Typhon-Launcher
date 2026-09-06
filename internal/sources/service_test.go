@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +19,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	slog.SetDefault(slog.New(slog.DiscardHandler))
 	os.Exit(m.Run())
 }
 
@@ -77,7 +76,9 @@ func newFeedServer(t *testing.T, body string) *feedServer {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		fmt.Fprint(w, body)
+		if _, err := fmt.Fprint(w, body); err != nil {
+			t.Errorf("write feed response: %v", err)
+		}
 	}))
 	t.Cleanup(fs.server.Close)
 	return fs
@@ -133,6 +134,11 @@ func mustServiceAt(t testing.TB, dir string, cat *catalog.Service) *Service {
 	}
 	// The shipped client refuses loopback, which is where httptest listens.
 	s.client = &http.Client{Timeout: feed.FetchTimeout}
+	// context() refuses to run anything until ServiceStartup sets s.ctx
+	// (invariant 20 forbids a context.Background() fallback there), so tests
+	// that call RefreshSource/TestSource/refreshDue directly need one too.
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	return s
 }
 
@@ -811,6 +817,11 @@ func TestURLSourceFetchPathsRejectLocalAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sources service at %s: %v", dir, err)
 	}
+	// Deliberately not mustServiceAt: this test needs the shipped,
+	// loopback-refusing client, only with a context so TestSource/RefreshSource
+	// do not refuse for the unrelated reason of not being started.
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	fs := newFeedServer(t, feedBody(t, "Local", feedEntry{Title: "Game A", URIs: []string{magnetOf("a")}}))
 
 	if _, err := s.TestSource(fs.url()); !errors.Is(err, feed.ErrBlockedAddress) {
@@ -843,6 +854,8 @@ func TestSourceErrorHidesFeedURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sources service at %s: %v", dir, err)
 	}
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	const raw = "http://127.0.0.1:9/feed.json?token=s3cret"
 	if _, err := s.TestSource(raw); err == nil {
 		t.Fatal("expected the fetch to be rejected")

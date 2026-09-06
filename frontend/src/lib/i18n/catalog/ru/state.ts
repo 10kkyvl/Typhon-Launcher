@@ -78,6 +78,7 @@ export const state = {
   'state.updatesStrategyFullRelease': 'Полная переустановка',
   'state.updatesStrategyTorrentReuse': 'Повторное использование файлов',
   'state.updatesStrategyPatchChain': 'Патчи',
+  'state.updatesStepBackup': 'Резервная копия',
   'state.updatesStepRecheck': 'Проверка файлов',
   'state.updatesStepApplyPatch': 'Применение патча',
   'state.updatesStepExtract': 'Распаковка',
@@ -175,6 +176,8 @@ export const state = {
   'state.selfupdateCodeCheckFailed': 'Не удалось проверить обновления.',
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',
+
+  'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
 
   'state.themeFallbackName': 'Тёмная',
 } as const;

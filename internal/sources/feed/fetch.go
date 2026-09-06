@@ -111,7 +111,14 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	if err != nil {
 		return Result{}, fmt.Errorf("ошибка запроса фида: %w", redact.Error(err))
 	}
-	defer resp.Body.Close()
+	// Close error is only logged, not returned: by the time it fires the body
+	// has already been fully read (or we're bailing out before reading it),
+	// so a failed close here doesn't lose any data the caller still needs.
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			slog.Warn("feed response body close failed", "host", redact.URL(normalized), "error", closeErr)
+		}
+	}()
 
 	etag := resp.Header.Get("ETag")
 	lastMod := resp.Header.Get("Last-Modified")

@@ -19,7 +19,11 @@ func writeZip(t *testing.T, path string, entries []zipEntry) {
 	if err != nil {
 		t.Fatalf("create zip: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Fatalf("close zip: %v", err)
+		}
+	}()
 	w := zip.NewWriter(f)
 	for _, e := range entries {
 		out, err := w.Create(e.name)

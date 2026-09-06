@@ -243,14 +243,37 @@ func newTestService(t *testing.T) (*Service, *fakeDownloads, *fakeRegistrar) {
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
+	if cond() {
+		return
 	}
-	t.Fatalf("timed out waiting for %s", what)
+	ticker := time.NewTicker(2 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(15 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if cond() {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+}
+
+// waitJobDone ждёт, пока горутина установки не снимет свою запись из s.jobs.
+// waitStatus для этого недостаточно: терминальный статус публикуется внутри
+// run, а endJob выполняется отложенно уже после его возврата, поэтому тест,
+// который сразу за статусом дёргает Retry или Start, попадает в это окно и
+// получает errUnavailable.
+func (s *Service) waitJobDone(t *testing.T, id string) {
+	t.Helper()
+	waitFor(t, "install job to be released", func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.jobs[id] == nil
+	})
 }
 
 func (s *Service) waitStatus(t *testing.T, id string, want Status) Installation {
@@ -755,7 +778,11 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("startup: %v", err)
 	}
-	defer s.ServiceShutdown()
+	defer func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	}()
 
 	items := s.List()
 	if len(items) != 2 {
@@ -809,7 +836,11 @@ func TestExeInstallerWaitsForConfirmation(t *testing.T) {
 	if len(games) != 1 || games[0].Executable != exe {
 		t.Fatalf("registered = %+v", games)
 	}
-	calls := (s.runner.(*fakeRunner)).calls()
+	runner, ok := s.runner.(*fakeRunner)
+	if !ok {
+		t.Fatalf("runner = %T, want *fakeRunner", s.runner)
+	}
+	calls := runner.calls()
 	if len(calls) != 1 || calls[0].Path != filepath.Join(dir, "setup.exe") {
 		t.Fatalf("runner calls = %+v", calls)
 	}
@@ -876,6 +907,7 @@ func TestRetryAfterFailure(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	s.waitStatus(t, item.ID, StatusCompleted)
+	s.waitJobDone(t, item.ID)
 
 	s.mu.Lock()
 	stored := s.findLocked(item.ID)

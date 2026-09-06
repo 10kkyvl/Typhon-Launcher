@@ -48,7 +48,7 @@ func GetSystemInfo() (SystemInfo, error) {
 
 	var mem memoryStatusEx
 	mem.Length = uint32(unsafe.Sizeof(mem))
-	r1, _, callErr := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&mem)))
+	r1, _, callErr := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&mem))) //nolint:gosec // G103: указатель на локальную структуру mem, живущую весь вызов; конверсия unsafe.Pointer->uintptr внутри самого выражения аргумента Call (единственная форма, разрешённая правилом 4 документации unsafe.Pointer)
 	if r1 == 0 {
 		return info, fmt.Errorf("GlobalMemoryStatusEx: %w", callErr)
 	}
@@ -85,7 +85,7 @@ func cpuName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer key.Close()
+	defer closeKey(key)
 	name, _, err := key.GetStringValue("ProcessorNameString")
 	return name, err
 }
@@ -95,7 +95,7 @@ func windowsProductName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer key.Close()
+	defer closeKey(key)
 	name, _, err := key.GetStringValue("ProductName")
 	if err != nil {
 		return "", err

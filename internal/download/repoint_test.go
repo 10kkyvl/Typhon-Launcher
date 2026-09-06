@@ -25,7 +25,12 @@ func (m *Manager) addRepointItem(id, destination string, status Status, eng *fak
 	if eng != nil {
 		m.engines[id] = eng
 	}
-	m.persistLocked()
+	// Test setup against a fresh t.TempDir() store: a failure here is a bug
+	// worth failing loudly on, not something to discard.
+	if err := m.persistLocked(); err != nil {
+		m.mu.Unlock()
+		panic(err)
+	}
 	m.mu.Unlock()
 	return d
 }
@@ -83,6 +88,7 @@ func TestRepointRewritesDestinations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closePieceCompletionOnCleanup(t, reloaded)
 	withTestContext(t, reloaded)
 	if err := reloaded.loadLocked(); err != nil {
 		t.Fatal(err)

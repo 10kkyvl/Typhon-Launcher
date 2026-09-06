@@ -106,6 +106,7 @@ type UpdateAvailability struct {
 type StepKind string
 
 const (
+	StepBackup     StepKind = "backup"
 	StepDownload   StepKind = "download"
 	StepRecheck    StepKind = "recheck"
 	StepApplyPatch StepKind = "apply_patch"
@@ -143,12 +144,11 @@ type UpdatePlan struct {
 	ReusedBytes       int64 `json:"reusedBytes"`
 	RequiredDiskBytes int64 `json:"requiredDiskBytes"`
 
-	BackupRecommended bool `json:"backupRecommended"`
 	BackupAvailable   bool `json:"backupAvailable"`
-	BackupCreated     bool `json:"backupCreated"`
-	RequiresRestart   bool `json:"requiresRestart"`
 	RollbackAvailable bool `json:"rollbackAvailable"`
 	ReuseFlat         bool `json:"reuseFlat,omitempty"`
+
+	SavesPath string `json:"savesPath,omitempty"`
 
 	Patches []Patch `json:"patches,omitempty"`
 

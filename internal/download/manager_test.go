@@ -174,7 +174,12 @@ func (m *Manager) addTestItem(id string, status Status) *Download {
 	}
 	m.mu.Lock()
 	m.items = append(m.items, d)
-	m.persistLocked()
+	// Test setup against a fresh t.TempDir() store: a failure here is a bug
+	// worth failing loudly on, not something to discard.
+	if err := m.persistLocked(); err != nil {
+		m.mu.Unlock()
+		panic(err)
+	}
 	m.mu.Unlock()
 	return d
 }
@@ -191,14 +196,23 @@ func (m *Manager) addTestDownload(id string) *fakeTorrent {
 
 func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if cond() {
+		return
 	}
-	t.Fatalf("timed out waiting for %s", what)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if cond() {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
 }
 
 func (m *Manager) statusOf(t *testing.T, id string) Status {
@@ -235,18 +249,32 @@ func mustManagerAt(t testing.TB, dir string) *Manager {
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
-	t.Cleanup(func() {
-		// ServiceShutdown already closed it in tests that call it themselves
-		// and nils the field, so this only fires for tests that never start
-		// the manager.
-		if m.pieceCompletion != nil {
-			if err := m.pieceCompletion.Close(); err != nil {
-				t.Logf("close piece completion: %v", err)
-			}
-		}
-	})
+	closePieceCompletionOnCleanup(t, m)
 	withTestContext(t, m)
 	return m
+}
+
+// closePieceCompletionOnCleanup закрывает базу готовности кусков, которую
+// newManagerAt открывает вместе с менеджером. Она держит фоновую горутину, и
+// без этого каждый менеджер, чей тест не звал ServiceShutdown, оставлял её
+// жить до конца тестового бинарника. Общий хелпер, а не копия на каждой точке
+// создания: забытая копия — это молчаливая утечка, а не ошибка сборки.
+func closePieceCompletionOnCleanup(t testing.TB, m *Manager) {
+	t.Helper()
+	t.Cleanup(func() {
+		// ServiceShutdown уже закрыл базу и обнулил поле в тестах, которые его
+		// вызывают, так что здесь остаются только незапущенные менеджеры.
+		m.mu.Lock()
+		pc := m.pieceCompletion
+		m.pieceCompletion = nil
+		m.mu.Unlock()
+		if pc == nil {
+			return
+		}
+		if err := pc.Close(); err != nil {
+			t.Logf("close piece completion: %v", err)
+		}
+	})
 }
 
 func withTestContext(t testing.TB, m *Manager) {
@@ -297,7 +325,10 @@ func TestCompletionPromotesNext(t *testing.T) {
 		"c": StatusDownloading,
 		"d": StatusQueued,
 	})
-	done, _ := m.Get("a")
+	done, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
 	if done.CompletedAt == nil || done.Progress != 1 {
 		t.Fatalf("completed download = %+v", done)
 	}
@@ -368,20 +399,20 @@ func TestPauseCompletedIsRejected(t *testing.T) {
 	m.sample(context.Background(), time.Now())
 	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
 
-	if err := m.Pause("a"); err != errUnavailable {
+	if err := m.Pause("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("pause completed = %v, want %v", err, errUnavailable)
 	}
-	if err := m.Resume("a"); err != errUnavailable {
+	if err := m.Resume("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("resume completed = %v, want %v", err, errUnavailable)
 	}
 }
 
 func TestUnknownDownload(t *testing.T) {
 	m := newTestManager(t, 2)
-	if err := m.Pause("nope"); err != errNotFound {
+	if err := m.Pause("nope"); !errors.Is(err, errNotFound) {
 		t.Fatalf("pause = %v, want %v", err, errNotFound)
 	}
-	if _, err := m.Get("nope"); err != errNotFound {
+	if _, err := m.Get("nope"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get = %v, want %v", err, errNotFound)
 	}
 }
@@ -424,7 +455,7 @@ func TestMoveBounds(t *testing.T) {
 	if got := m.order(); got[2] != "c" {
 		t.Fatalf("order = %v", got)
 	}
-	if err := m.MoveUp("a"); err != errUnavailable {
+	if err := m.MoveUp("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("move active = %v, want %v", err, errUnavailable)
 	}
 }
@@ -439,7 +470,7 @@ func TestCancelDropsAndRemoves(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUntil(t, "torrent to be dropped", engine.wasDropped)
-	if _, err := m.Get("a"); err != errNotFound {
+	if _, err := m.Get("a"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get after cancel = %v", err)
 	}
 	assertStatuses(t, m, map[string]Status{"b": StatusDownloading, "c": StatusDownloading})
@@ -516,7 +547,7 @@ func TestCancelDuringVerifyDoesNotDeadlock(t *testing.T) {
 	if eng.wasDroppedDuringVerify() {
 		t.Fatal("torrent dropped while verify was still running")
 	}
-	if _, err := m.Get("a"); err != errNotFound {
+	if _, err := m.Get("a"); !errors.Is(err, errNotFound) {
 		t.Fatalf("get after cancel = %v, want %v", err, errNotFound)
 	}
 	if len(m.List()) != 0 {
@@ -577,13 +608,13 @@ func TestResumeWithoutEngineReportsRestoreFailure(t *testing.T) {
 	d.Error = restoreFailedMessage
 	m.mu.Unlock()
 
-	if err := m.Resume("a"); err != errNoRestore {
+	if err := m.Resume("a"); !errors.Is(err, errNoRestore) {
 		t.Fatalf("resume = %v, want %v", err, errNoRestore)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
 		t.Fatalf("status = %s, want %s", got, StatusFailed)
 	}
-	if err := m.ForceStart("a"); err != errNoRestore {
+	if err := m.ForceStart("a"); !errors.Is(err, errNoRestore) {
 		t.Fatalf("force start = %v, want %v", err, errNoRestore)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
@@ -598,7 +629,7 @@ func TestResumeWithoutEngineNeedsClientToReattach(t *testing.T) {
 	d.Source = "magnet:?xt=urn:btih:" + strings.Repeat("a", 40)
 	m.mu.Unlock()
 
-	if err := m.Resume("a"); err != errNoClient {
+	if err := m.Resume("a"); !errors.Is(err, errNoClient) {
 		t.Fatalf("resume = %v, want %v", err, errNoClient)
 	}
 	if got := m.statusOf(t, "a"); got != StatusFailed {
@@ -616,7 +647,11 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	m.sample(context.Background(), time.Now())
 
 	waitUntil(t, "download to complete", func() bool { return m.statusOf(t, "a") == StatusCompleted })
-	if got, _ := m.Get("a"); got.Seeding {
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
+	if got.Seeding {
 		t.Fatal("seeding reported with seed-after-download off")
 	}
 	waitUntil(t, "engine drop", eng.wasDropped)
@@ -628,28 +663,94 @@ func TestCompletionWithoutSeedingDropsEngine(t *testing.T) {
 	}
 }
 
-func TestSeedToggleWithEngine(t *testing.T) {
-	m := newTestManager(t, 2)
-	d := m.addTestItem("a", StatusCompleted)
-	eng := &fakeTorrent{size: 100, done: 100, uploading: true}
+// seedingItem is a completed download that is live in the client, the state
+// the seed toggle actually acts on.
+func seedingItem(t *testing.T, m *Manager, id string, seeding bool) *fakeTorrent {
+	t.Helper()
+	d := m.addTestItem(id, StatusCompleted)
+	eng := &fakeTorrent{size: 100, done: 100, uploading: seeding}
 	m.mu.Lock()
-	d.Seeding = true
-	m.engines["a"] = eng
+	d.Seeding = seeding
+	m.engines[id] = eng
 	m.mu.Unlock()
+	return eng
+}
+
+func seedingOf(t *testing.T, m *Manager, id string) bool {
+	t.Helper()
+	d, err := m.Get(id)
+	if err != nil {
+		t.Fatalf("get %s: %v", id, err)
+	}
+	return d.Seeding
+}
+
+func (m *Manager) engineAttached(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.engines[id]
+	return ok
+}
+
+// Turning seeding off must take the torrent out of the client, not merely
+// choke it: an attached torrent keeps announcing to the tracker, so the user
+// would stay listed in the swarm of something they switched off.
+func TestSeedToggleOffDetachesEngine(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", true)
 
 	cfg := settings.Defaults()
 	cfg.SeedAfterDownload = false
 	m.applySettings(cfg)
-	if got, _ := m.Get("a"); got.Seeding {
+
+	if seedingOf(t, m, "a") {
 		t.Fatal("seeding still reported")
 	}
 	if eng.isUploading() {
 		t.Fatal("upload still allowed")
 	}
+	if m.engineAttached("a") {
+		t.Fatal("engine still attached with seeding off")
+	}
+	waitUntil(t, "engine drop", eng.wasDropped)
+}
 
+// The engine survives the toggle only while a job owns it; settleRestored
+// detaches it when that job lands.
+func TestSeedToggleOffDefersToRunningJob(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", true)
+	if _, started := m.beginJob(m.ctx, "a"); !started {
+		t.Fatal("could not begin job")
+	}
+	t.Cleanup(func() { m.endJob("a") })
+
+	cfg := settings.Defaults()
+	cfg.SeedAfterDownload = false
+	m.applySettings(cfg)
+
+	if eng.isUploading() {
+		t.Fatal("upload still allowed")
+	}
+	if !m.engineAttached("a") {
+		t.Fatal("engine dropped out from under a running job")
+	}
+	if eng.wasDropped() {
+		t.Fatal("engine dropped out from under a running job")
+	}
+}
+
+// Re-enabling while the engine is still attached (the window above) seeds
+// again without a re-add.
+func TestSeedToggleOnUsesAttachedEngine(t *testing.T) {
+	m := newTestManager(t, 2)
+	eng := seedingItem(t, m, "a", false)
+
+	cfg := settings.Defaults()
 	cfg.SeedAfterDownload = true
 	m.applySettings(cfg)
-	if got, _ := m.Get("a"); !got.Seeding {
+
+	if !seedingOf(t, m, "a") {
 		t.Fatal("seeding not enabled")
 	}
 	if !eng.isUploading() {
@@ -669,7 +770,11 @@ func TestSeedToggleWithoutEngineDoesNotClaimSeeding(t *testing.T) {
 	cfg.SeedAfterDownload = true
 	m.applySettings(cfg)
 
-	if got, _ := m.Get("a"); got.Seeding {
+	got, err := m.Get("a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
+	if got.Seeding {
 		t.Fatal("seeding reported without a live torrent")
 	}
 }
@@ -692,10 +797,17 @@ func TestFailWithoutClientSurfacesError(t *testing.T) {
 	if queued.Status != StatusFailed || queued.Error != errNoClient.Error() {
 		t.Fatalf("queued download = %s / %q", queued.Status, queued.Error)
 	}
-	if paused, _ := m.Get("b"); paused.Status != StatusPaused {
+	paused, err := m.Get("b")
+	if err != nil {
+		t.Fatalf("get b: %v", err)
+	}
+	if paused.Status != StatusPaused {
 		t.Fatalf("paused download = %s, want %s", paused.Status, StatusPaused)
 	}
-	got, _ := m.Get("c")
+	got, err := m.Get("c")
+	if err != nil {
+		t.Fatalf("get c: %v", err)
+	}
 	if got.Status != StatusCompleted || got.Seeding {
 		t.Fatalf("completed download = %s seeding=%v", got.Status, got.Seeding)
 	}
@@ -813,7 +925,7 @@ func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
 	m.findLocked("a").Seeding = true
 	m.mu.Unlock()
 
-	if err := m.DeleteData("a"); err != errSeeding {
+	if err := m.DeleteData("a"); !errors.Is(err, errSeeding) {
 		t.Fatalf("error = %v, want %v", err, errSeeding)
 	}
 	if _, err := m.Get("a"); err != nil {
@@ -824,10 +936,10 @@ func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
 func TestDeleteDataRefusesUnfinishedDownload(t *testing.T) {
 	m := newTestManager(t, 2)
 	m.addTestItem("a", StatusQueued)
-	if err := m.DeleteData("a"); err != errUnavailable {
+	if err := m.DeleteData("a"); !errors.Is(err, errUnavailable) {
 		t.Fatalf("error = %v, want %v", err, errUnavailable)
 	}
-	if err := m.DeleteData("missing"); err != errNotFound {
+	if err := m.DeleteData("missing"); !errors.Is(err, errNotFound) {
 		t.Fatalf("error = %v, want %v", err, errNotFound)
 	}
 }
@@ -930,6 +1042,7 @@ func newManagerWithSettings(t *testing.T, cfg settings.Settings) (*Manager, *set
 	if err != nil {
 		t.Fatalf("new download manager at %s: %v", dir, err)
 	}
+	closePieceCompletionOnCleanup(t, m)
 	withTestContext(t, m)
 	m.max = 2
 	return m, svc
@@ -1040,6 +1153,46 @@ func TestUploadSettingAppliesToActiveDownload(t *testing.T) {
 	m.applySettings(cfg)
 	if eng.isUploading() {
 		t.Fatal("upload still allowed after disabling the setting")
+	}
+}
+
+// A download that is not running is not covered by upload-while-downloading,
+// and it keeps its engine attached, so both the stop itself and a later flip
+// of the setting have to gate upload off.
+func TestStoppedDownloadStopsUploading(t *testing.T) {
+	cases := []struct {
+		name string
+		stop func(t *testing.T, m *Manager)
+	}{
+		{"failed", func(t *testing.T, m *Manager) { m.markFailed("a", "boom", nil) }},
+		{"paused", func(t *testing.T, m *Manager) {
+			if err := m.Pause("a"); err != nil {
+				t.Fatalf("pause: %v", err)
+			}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := settings.Defaults()
+			cfg.UploadWhileDownloading = true
+			m, _ := newManagerWithSettings(t, cfg)
+
+			eng := m.addTestDownload("a")
+			if !eng.isUploading() {
+				t.Fatal("upload not allowed with the setting on")
+			}
+
+			c.stop(t, m)
+			if eng.isUploading() {
+				t.Fatal("stopped download keeps uploading")
+			}
+
+			cfg.UploadWhileDownloading = false
+			m.applySettings(cfg)
+			if eng.isUploading() {
+				t.Fatal("stopped download uploads after the setting was turned off")
+			}
+		})
 	}
 }
 

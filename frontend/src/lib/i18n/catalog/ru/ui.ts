@@ -115,6 +115,7 @@ export const ui = {
   'ui.newVersion': 'Новая версия',
   'ui.spaceNeeded': 'Нужно места',
   'ui.saveBackup': 'Резервная копия сохранений',
+  'ui.saveBackupPath': 'Снимок сохранений',
   'ui.backupWillBeCreated': 'Будет создана',
   'ui.backupUnavailable': 'Недоступна',
   'ui.rollback': 'Откат',
