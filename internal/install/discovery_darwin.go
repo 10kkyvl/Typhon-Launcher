@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -56,8 +57,13 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 	go func() {
 		defer close(done)
 		// Код возврата разведки не важен: прогон обрывается намеренно, как
-		// только появится INF.
-		_, _ = manager.Run(runCtx, bottle, wine.Cmd{Path: winInstaller, Args: plan.Args, WaitChildren: true})
+		// только появится INF. А вот ошибка запуска — важна: без неё падение
+		// разведки выглядело бы как «установщик просто не создал файл».
+		if _, runErr := manager.Run(runCtx, bottle, wine.Cmd{
+			Path: winInstaller, Args: plan.Args, WaitChildren: true,
+		}); runErr != nil && !errors.Is(runErr, context.Canceled) {
+			slog.Debug("discovery run", "installer", winInstaller, "error", runErr)
+		}
 	}()
 
 	reason := awaitDiscoveryFile(ctx, in.InfPath, done)

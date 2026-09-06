@@ -49,7 +49,7 @@ func (s *Service) PlayGame(id string) error {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
 
-	proc, err := s.start(game.Executable, game.LaunchArgs, workDir)
+	proc, err := s.start(s.ctx, game.Executable, game.LaunchArgs, workDir)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))

@@ -2,7 +2,11 @@
 
 package library
 
-import "typhon/internal/devmock"
+import (
+	"context"
+
+	"typhon/internal/devmock"
+)
 
 type devmockProcess struct {
 	proc *devmock.Process
@@ -15,7 +19,7 @@ func (p *devmockProcess) wait() error { return p.proc.Wait() }
 func (p *devmockProcess) kill() error { return p.proc.Kill() }
 
 func newGameStarter() gameStarter {
-	return func(executable string, args []string, dir string) (gameProcess, error) {
+	return func(_ context.Context, executable string, args []string, dir string) (gameProcess, error) {
 		proc, err := devmock.Start(executable, args, dir)
 		if err != nil {
 			return nil, err

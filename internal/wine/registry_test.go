@@ -63,6 +63,7 @@ func TestUninstallEntriesReadsBottle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
+	//nolint:gosec // G703: путь целиком из t.TempDir(), внешнего ввода в нём нет
 	if err := os.WriteFile(filepath.Join(path, "system.reg"), data, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

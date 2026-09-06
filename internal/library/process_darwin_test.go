@@ -3,6 +3,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func demoBottle() wine.Bottle {
 func TestWineStarterFailsWithoutBottle(t *testing.T) {
 	starter := wineStarter{lookup: func(string) (wine.Bottle, bool) { return wine.Bottle{}, false }}
 
-	if _, err := starter.start("/Users/x/Games/Demo/game.exe", nil, "/Users/x/Games/Demo"); err == nil {
+	if _, err := starter.start(t.Context(), "/Users/x/Games/Demo/game.exe", nil, "/Users/x/Games/Demo"); err == nil {
 		t.Fatal("start without a bottle: want error")
 	}
 }
@@ -27,8 +28,8 @@ func TestWineStarterWaitsForAppearance(t *testing.T) {
 	var launched wine.Cmd
 	starter := wineStarter{
 		lookup: func(string) (wine.Bottle, bool) { return demoBottle(), true },
-		launch: func(_ wine.Bottle, c wine.Cmd) error { launched = c; return nil },
-		poll: func(wine.Bottle) ([]wine.Process, error) {
+		launch: func(_ context.Context, _ wine.Bottle, c wine.Cmd) error { launched = c; return nil },
+		poll: func(context.Context, wine.Bottle) ([]wine.Process, error) {
 			calls++
 			if calls < 2 {
 				return nil, nil
@@ -40,7 +41,7 @@ func TestWineStarterWaitsForAppearance(t *testing.T) {
 		timeout: time.Second,
 	}
 
-	proc, err := starter.start("/Users/x/Games/Demo/game.exe", []string{"-windowed"}, "/Users/x/Games/Demo")
+	proc, err := starter.start(t.Context(), "/Users/x/Games/Demo/game.exe", []string{"-windowed"}, "/Users/x/Games/Demo")
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -61,14 +62,14 @@ func TestWineStarterWaitsForAppearance(t *testing.T) {
 func TestWineStarterTimesOut(t *testing.T) {
 	starter := wineStarter{
 		lookup:  func(string) (wine.Bottle, bool) { return demoBottle(), true },
-		launch:  func(wine.Bottle, wine.Cmd) error { return nil },
-		poll:    func(wine.Bottle) ([]wine.Process, error) { return nil, nil },
+		launch:  func(context.Context, wine.Bottle, wine.Cmd) error { return nil },
+		poll:    func(context.Context, wine.Bottle) ([]wine.Process, error) { return nil, nil },
 		stop:    func(wine.Bottle) error { return nil },
 		settle:  time.Millisecond,
 		timeout: 20 * time.Millisecond,
 	}
 
-	_, err := starter.start("/Users/x/Games/Demo/game.exe", nil, "/Users/x/Games/Demo")
+	_, err := starter.start(t.Context(), "/Users/x/Games/Demo/game.exe", nil, "/Users/x/Games/Demo")
 	if !errors.Is(err, errGameNotSeen) {
 		t.Fatalf("err = %v, want errGameNotSeen", err)
 	}
@@ -78,14 +79,14 @@ func TestWineStarterReportsLaunchFailure(t *testing.T) {
 	boom := errors.New("cxstart failed")
 	starter := wineStarter{
 		lookup:  func(string) (wine.Bottle, bool) { return demoBottle(), true },
-		launch:  func(wine.Bottle, wine.Cmd) error { return boom },
-		poll:    func(wine.Bottle) ([]wine.Process, error) { return nil, nil },
+		launch:  func(context.Context, wine.Bottle, wine.Cmd) error { return boom },
+		poll:    func(context.Context, wine.Bottle) ([]wine.Process, error) { return nil, nil },
 		stop:    func(wine.Bottle) error { return nil },
 		settle:  time.Millisecond,
 		timeout: time.Second,
 	}
 
-	if _, err := starter.start("/Users/x/Games/Demo/game.exe", nil, ""); !errors.Is(err, boom) {
+	if _, err := starter.start(t.Context(), "/Users/x/Games/Demo/game.exe", nil, ""); !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want the launch error", err)
 	}
 }
@@ -95,7 +96,8 @@ func TestWineProcessKillStopsBottle(t *testing.T) {
 	proc := &wineGameProcess{
 		bottle: demoBottle(),
 		id:     4242,
-		poll:   func(wine.Bottle) ([]wine.Process, error) { return nil, nil },
+		ctx:    t.Context(),
+		poll:   func(context.Context, wine.Bottle) ([]wine.Process, error) { return nil, nil },
 		stop:   func(wine.Bottle) error { stopped = true; return nil },
 		settle: time.Millisecond,
 	}
@@ -112,7 +114,8 @@ func TestWineProcessWaitReturnsWhenGone(t *testing.T) {
 	proc := &wineGameProcess{
 		bottle: demoBottle(),
 		id:     4242,
-		poll:   func(wine.Bottle) ([]wine.Process, error) { return nil, nil },
+		ctx:    t.Context(),
+		poll:   func(context.Context, wine.Bottle) ([]wine.Process, error) { return nil, nil },
 		stop:   func(wine.Bottle) error { return nil },
 		settle: time.Millisecond,
 	}
@@ -139,7 +142,7 @@ func TestWineStarterRunsNativeExecutableDirectly(t *testing.T) {
 		timeout: time.Second,
 	}
 
-	proc, err := starter.start("/usr/bin/true", nil, "")
+	proc, err := starter.start(t.Context(), "/usr/bin/true", nil, "")
 	if err != nil {
 		t.Fatalf("start native executable: %v", err)
 	}

@@ -3,6 +3,7 @@
 package install
 
 import (
+	"errors"
 	"log/slog"
 
 	"typhon/internal/wine"
@@ -16,8 +17,13 @@ import (
 func readUninstallEntries() (map[string]uninstallEntry, error) {
 	out := map[string]uninstallEntry{}
 	rt, err := wine.Detect()
-	if err != nil {
+	if errors.Is(err, wine.ErrNotInstalled) {
+		// Без CrossOver бутылей нет, а значит нет и записей. Это не сбой:
+		// вызывающий сравнивает снимки «до» и «после», и пустой корректен.
 		return out, nil
+	}
+	if err != nil {
+		return out, err
 	}
 	bottles, err := wine.NewManager(rt).List()
 	if err != nil {
