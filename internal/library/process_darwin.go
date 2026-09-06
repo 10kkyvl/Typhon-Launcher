@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"typhon/internal/wine"
@@ -58,6 +60,12 @@ func newGameStarter() gameStarter {
 // после старта, а личность сессии подтверждается парой pid + время старта,
 // поэтому вернуть handle без настоящего pid нельзя.
 func (s wineStarter) start(executable string, args []string, dir string) (gameProcess, error) {
+	// Не всё в библиотеке приходит из каталога: пользователь может добавить
+	// уже стоящую игру, и на macOS она бывает нативной. Windows-программе
+	// нужен бутыль, нативной — обычный запуск.
+	if !isWindowsExecutable(executable) {
+		return execStarter(executable, args, dir)
+	}
 	bottle, ok := s.lookup(executable)
 	if !ok {
 		return nil, errNoBottle
@@ -133,3 +141,12 @@ func (p *wineGameProcess) wait() error {
 // kill валит бутыль целиком: он заведён под одну игру, поэтому чужого в нём
 // нет, а репаки нередко запускают игру не тем процессом, который стартовал.
 func (p *wineGameProcess) kill() error { return p.stop(p.bottle) }
+
+func isWindowsExecutable(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".exe", ".bat", ".cmd", ".com", ".msi":
+		return true
+	default:
+		return false
+	}
+}

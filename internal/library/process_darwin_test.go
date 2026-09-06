@@ -128,3 +128,38 @@ func TestWineProcessWaitReturnsWhenGone(t *testing.T) {
 		t.Fatal("wait did not return once the process was gone")
 	}
 }
+
+// Нативный исполняемый файл бутыля не требует: на macOS в библиотеке может
+// лежать и обычная маковая программа, добавленная руками.
+func TestWineStarterRunsNativeExecutableDirectly(t *testing.T) {
+	looked := false
+	starter := wineStarter{
+		lookup:  func(string) (wine.Bottle, bool) { looked = true; return wine.Bottle{}, false },
+		settle:  time.Millisecond,
+		timeout: time.Second,
+	}
+
+	proc, err := starter.start("/usr/bin/true", nil, "")
+	if err != nil {
+		t.Fatalf("start native executable: %v", err)
+	}
+	if looked {
+		t.Fatal("native executable must not be looked up among bottles")
+	}
+	if err := proc.wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+}
+
+func TestIsWindowsExecutable(t *testing.T) {
+	for _, path := range []string{"/games/Demo/game.exe", "/games/Demo/Setup.EXE", "/games/Demo/run.bat"} {
+		if !isWindowsExecutable(path) {
+			t.Fatalf("isWindowsExecutable(%q) = false, want true", path)
+		}
+	}
+	for _, path := range []string{"/usr/bin/yes", "/Applications/Game.app/Contents/MacOS/Game"} {
+		if isWindowsExecutable(path) {
+			t.Fatalf("isWindowsExecutable(%q) = true, want false", path)
+		}
+	}
+}
