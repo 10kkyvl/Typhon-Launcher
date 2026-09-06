@@ -14,6 +14,7 @@ func ExeVersion(path string) (VersionInfo, bool) {
 		return VersionInfo{}, false
 	}
 	block := make([]byte, size)
+	//nolint:gosec // G103: block is a freshly allocated slice of size (checked > 0 above), never reused after this call; &block[0] just hands its first byte to the Win32 API as required
 	if err := windows.GetFileVersionInfo(path, 0, size, unsafe.Pointer(&block[0])); err != nil {
 		return VersionInfo{}, false
 	}
@@ -40,6 +41,7 @@ func ExeVersion(path string) (VersionInfo, bool) {
 func translationID(block []byte) string {
 	var ptr unsafe.Pointer
 	var size uint32
+	//nolint:gosec // G103: block is only ever the non-empty slice ExeVersion allocated (size checked > 0 before this call chain), so &block[0] is always in bounds
 	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\VarFileInfo\Translation`, unsafe.Pointer(&ptr), &size); err != nil || size < 4 {
 		return ""
 	}
@@ -51,6 +53,7 @@ func queryString(block []byte, lang, key string) string {
 	var ptr unsafe.Pointer
 	var size uint32
 	sub := `\StringFileInfo\` + lang + `\` + key
+	//nolint:gosec // G103: block is only ever the non-empty slice ExeVersion allocated (size checked > 0 before this call chain), so &block[0] is always in bounds
 	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), sub, unsafe.Pointer(&ptr), &size); err != nil || size == 0 {
 		return ""
 	}
@@ -68,6 +71,7 @@ func fixedVersionSizeOK(size uint32) bool {
 func fixedVersion(block []byte) (string, bool) {
 	var ptr unsafe.Pointer
 	var size uint32
+	//nolint:gosec // G103: block is only ever the non-empty slice ExeVersion allocated (size checked > 0 before this call chain), so &block[0] is always in bounds
 	if err := windows.VerQueryValue(unsafe.Pointer(&block[0]), `\`, unsafe.Pointer(&ptr), &size); err != nil || !fixedVersionSizeOK(size) {
 		return "", false
 	}

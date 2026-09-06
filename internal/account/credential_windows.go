@@ -10,6 +10,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// storeTarget живёт здесь, а не в credential.go: единственный, кто им
+// пользуется, — Windows-хранилище учётных данных.
+const storeTarget = "Typhon Launcher"
+
 const (
 	credTypeGeneric         = 1
 	credPersistLocalMachine = 2

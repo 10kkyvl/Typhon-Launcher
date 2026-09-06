@@ -92,6 +92,7 @@ func (s *Service) PreparePlan(gameID string) error {
 			s.config().UpdateAutoDownload && plan.Strategy != StrategyTorrentReuse
 		s.endJob(gameID)
 		if prefetch {
+			//nolint:contextcheck // инвариант 19: префетч живёт собственной job-горутиной под s.wg и отменяется по s.ctx, а не по ctx плана — тот закрыт вызовом s.endJob строкой выше; PrefetchUpdate к тому же биндится в UI, ctx-параметр изменил бы сгенерированные bindings
 			if err := s.PrefetchUpdate(gameID); err != nil {
 				slog.Warn("prefetch update", "game", gameID, "error", err)
 			}

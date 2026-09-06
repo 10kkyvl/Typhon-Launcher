@@ -1223,7 +1223,7 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 		if eng == nil {
 			continue
 		}
-		if d.Status != StatusDownloading && !(d.Status == StatusCompleted && d.Seeding) {
+		if d.Status != StatusDownloading && !seedingCompleted(d) {
 			continue
 		}
 		before := *d
@@ -1253,6 +1253,10 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 			slog.Error("persist download progress", "error", err)
 		}
 	}
+}
+
+func seedingCompleted(d *Download) bool {
+	return d.Status == StatusCompleted && d.Seeding
 }
 
 func selectedHashed(d *Download, eng engineTorrent) bool {
@@ -1521,6 +1525,10 @@ type restoreJob struct {
 	force    bool
 }
 
+func keepsSeeding(j restoreJob, seed bool) bool {
+	return j.seeding && seed
+}
+
 func (m *Manager) restore() {
 	defer m.wg.Done()
 
@@ -1552,7 +1560,7 @@ func (m *Manager) restore() {
 		if ctx.Err() != nil {
 			return
 		}
-		if j.complete && !(j.seeding && seed) {
+		if j.complete && !keepsSeeding(j, seed) {
 			m.setSeeding(j.id, false)
 			continue
 		}

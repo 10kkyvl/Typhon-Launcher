@@ -360,12 +360,9 @@ func (m *Manager) releaseHash(infoHash string) {
 //
 //wails:ignore
 func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress func(VerifyProgress)) (ReuseReport, error) {
-	cl, base, err := m.engine()
+	cl, _, err := m.engine()
 	if err != nil {
 		return ReuseReport{}, err
-	}
-	if ctx == nil {
-		ctx = base
 	}
 	root := strings.TrimSpace(req.Path)
 	if root == "" {

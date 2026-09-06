@@ -7,8 +7,6 @@ import (
 
 var ErrNoCredential = errors.New("no stored credential")
 
-const storeTarget = "Typhon Launcher"
-
 type Credential struct {
 	Token    string
 	Username string
@@ -24,6 +22,7 @@ type envCredentialStore struct {
 	inner CredentialStore
 }
 
+//nolint:staticcheck // SA4023: на платформах без системного хранилища (credential_other.go) конструктор всегда возвращает ошибку, поэтому проверка err «всегда истинна»; под windows и devmock та же ветка берётся по-настоящему, и убирать её нельзя
 func NewCredentialStore() (CredentialStore, error) {
 	inner, err := newSystemCredentialStore()
 	if err != nil {

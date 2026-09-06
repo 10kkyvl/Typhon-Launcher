@@ -30,12 +30,9 @@ type AddRequest struct {
 //
 //wails:ignore
 func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error) {
-	cl, base, err := m.engine()
+	cl, _, err := m.engine()
 	if err != nil {
 		return Download{}, err
-	}
-	if ctx == nil {
-		ctx = base
 	}
 	destination := strings.TrimSpace(req.Destination)
 	if destination == "" {
@@ -143,7 +140,7 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	})
 	snap := snapshot(d)
 	if req.Verify {
-		if err := m.spawnSettleLocked(d.ID, infoHash, lt); err != nil {
+		if err := m.spawnSettleLocked(d.ID, infoHash, lt); err != nil { //nolint:contextcheck // инвариант 19: verify-джоба живёт под wg/ctx владельца-Manager, а не под ctx запроса AddTask, который может завершиться раньше неё
 			m.items = m.items[:len(m.items)-1]
 			if perr := m.persistLocked(); perr != nil {
 				slog.Error("persist download rollback", "download_id", d.ID, "error", perr)

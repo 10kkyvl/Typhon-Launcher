@@ -16,7 +16,7 @@ func openFolderWindows(path string) error {
 	if err != nil {
 		return err
 	}
-	return exec.Command(exe, path).Start()
+	return exec.Command(exe, path).Start() //nolint:gosec // G204: путь до бинаря абсолютный и проверен (инвариант 33), path — существующий каталог, проверенный вызывающим OpenFolder через os.Stat+IsDir
 }
 
 // explorerPath резолвит абсолютный путь до explorer.exe (инвариант 33):

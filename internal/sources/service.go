@@ -150,11 +150,12 @@ func (s *Service) totalReleases() int {
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	startupCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.ctx, s.cancel = startupCtx, cancel
 	s.mu.Unlock()
 	s.wg.Add(1)
-	go s.schedule()
+	go s.scheduleLoop(startupCtx)
 	return nil
 }
 
@@ -764,12 +765,24 @@ func (s *Service) notifyChanged() {
 	}()
 }
 
+// schedule stays for tests that exercise the no-op-without-started-service
+// invariant (TestScheduleAndRefreshDueNoOpWithoutStartedService): it still
+// reads s.ctx via s.context() and refuses to run before ServiceStartup, the
+// same way the goroutine used to. ServiceStartup itself now launches
+// scheduleLoop directly with the ctx it just derived, so the real goroutine
+// chain threads ctx as an explicit parameter (invariant 21, contextcheck)
+// instead of re-fetching it from the receiver under s.mu.
 func (s *Service) schedule() {
-	defer s.wg.Done()
 	ctx, ok := s.context()
 	if !ok {
+		s.wg.Done()
 		return
 	}
+	s.scheduleLoop(ctx)
+}
+
+func (s *Service) scheduleLoop(ctx context.Context) {
+	defer s.wg.Done()
 	ticker := time.NewTicker(scheduleTick)
 	defer ticker.Stop()
 	for {
@@ -777,18 +790,26 @@ func (s *Service) schedule() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.refreshDue()
+			s.runRefreshDue(ctx)
 		}
 	}
 }
 
+// refreshDue mirrors schedule above: kept for tests that call it directly on
+// a service whose ctx was set without going through ServiceStartup, still
+// refusing via s.context(). scheduleLoop calls runRefreshDue with its own
+// ctx directly instead of going through this fetch-from-receiver path.
 func (s *Service) refreshDue() {
-	interval := refreshInterval(s.config())
-	if interval <= 0 {
-		return
-	}
 	ctx, ok := s.context()
 	if !ok {
+		return
+	}
+	s.runRefreshDue(ctx)
+}
+
+func (s *Service) runRefreshDue(ctx context.Context) {
+	interval := refreshInterval(s.config())
+	if interval <= 0 {
 		return
 	}
 	now := time.Now()
