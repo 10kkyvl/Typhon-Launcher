@@ -71,11 +71,16 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 
 // StartDetached запускает и возвращается сразу: pid игры отдаёт не cxstart, а
 // перечисление процессов бутыля, поэтому ждать здесь нечего.
+//
+// Вывод намеренно не собирается. CombinedOutput ждёт не завершения cxstart, а
+// закрытия пайпов, а их наследует запущенная игра — с --no-wait это значит
+// ожидание до выхода из игры вместо мгновенного возврата. Диагностика запуска
+// идёт в файл через Cmd.Log (--cx-log), а не через перехват потоков.
 func (m *Manager) StartDetached(ctx context.Context, b Bottle, c Cmd) error {
 	//nolint:gosec // G204: путь до cxstart получен из Detect, аргументы собраны cxstartArgs
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, false)...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("запуск %s в бутыле %s: %w: %s", c.Path, b.Name, err, strings.TrimSpace(string(out)))
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("запуск %s в бутыле %s: %w", c.Path, b.Name, err)
 	}
 	return nil
 }
