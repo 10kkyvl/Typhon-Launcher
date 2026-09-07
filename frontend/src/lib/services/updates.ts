@@ -99,6 +99,7 @@ export interface VerifyState {
   running: boolean;
   repairing: boolean;
   progress: number;
+  processedBytes: number;
   currentFile?: string;
   ratio: number;
   totalBytes: number;

@@ -1,12 +1,15 @@
 import { derived } from 'svelte/store';
 import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation } from '../services/install';
+import type { VerifyState } from '../services/updates';
 import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format';
 import { msg } from '../i18n';
 import { downloads, statusLabels } from './downloads';
 import { installActive, installStatusLabels, installations } from './install';
+import { libraryGames } from './library';
+import { verifications } from './updates';
 
-export type ActivityKind = 'download' | 'install';
+export type ActivityKind = 'download' | 'install' | 'verify';
 export type ActivityTone = 'accent' | 'muted' | 'warning' | 'danger';
 
 export interface ActivityItem {
@@ -43,6 +46,12 @@ function installDetail(item: Installation) {
   return '';
 }
 
+function verifyDetail(item: VerifyState) {
+  if (item.currentFile) return truncateMiddle(item.currentFile, 44);
+  if (item.totalBytes > 0) return `${bytesSize(item.processedBytes)} / ${bytesSize(item.totalBytes)}`;
+  return '';
+}
+
 function fromDownload(item: Download): ActivityItem {
   return {
     key: `download:${item.id}`,
@@ -76,18 +85,42 @@ function fromInstall(item: Installation): ActivityItem {
   };
 }
 
-export const activity = derived([downloads, installations], ([$downloads, $installations]) => {
-  const installItems = $installations
-    .filter((i) => installActive(i.status) || i.status === 'waiting_for_user')
-    .map(fromInstall);
-  const installedDownloads = new Set(installItems.map((i) => i.downloadId));
-  const downloadItems = $downloads
-    .filter((d) => dockStatuses.includes(d.status) && !installedDownloads.has(d.id))
-    .map(fromDownload);
-  return [...installItems, ...downloadItems].sort(
-    (a, b) => Number(b.attention) - Number(a.attention),
-  );
-});
+function fromVerify(item: VerifyState, title: string): ActivityItem {
+  return {
+    key: `verify:${item.gameId}`,
+    kind: 'verify',
+    downloadId: item.gameId,
+    name: title,
+    status: msg('state.activityVerifying'),
+    detail: verifyDetail(item),
+    progress: item.progress,
+    tone: 'accent',
+    attention: false,
+    pausable: false,
+    resumable: false,
+  };
+}
+
+export const activity = derived(
+  [downloads, installations, verifications, libraryGames],
+  ([$downloads, $installations, $verifications, $libraryGames]) => {
+    const installItems = $installations
+      .filter((i) => installActive(i.status) || i.status === 'waiting_for_user')
+      .map(fromInstall);
+    const installedDownloads = new Set(installItems.map((i) => i.downloadId));
+    const downloadItems = $downloads
+      .filter((d) => dockStatuses.includes(d.status) && !installedDownloads.has(d.id))
+      .map(fromDownload);
+    const verifyItems = Object.values($verifications)
+      .filter((v) => v.running)
+      .map((v) =>
+        fromVerify(v, $libraryGames.find((g) => g.id === v.gameId)?.title || msg('ui.game')),
+      );
+    return [...installItems, ...verifyItems, ...downloadItems].sort(
+      (a, b) => Number(b.attention) - Number(a.attention),
+    );
+  },
+);
 
 export const activitySummary = derived(activity, ($items) => ({
   count: $items.length,
