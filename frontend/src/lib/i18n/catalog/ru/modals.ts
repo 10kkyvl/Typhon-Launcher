@@ -46,8 +46,12 @@ export const modals = {
   'modals.addSourceFileLabel': 'Файл',
   'modals.addSourceFeedVersion': 'Версия фида',
   'modals.addSourceEntries': 'Записей',
+  'modals.addSourceGames': 'Игр в фиде',
+  'modals.addSourceKnown': 'Уже есть в каталоге',
+  'modals.addSourceUnknown': 'Новых для каталога',
   'modals.addSourceInvalidEntries': 'Некорректных записей',
   'modals.addSourceDuplicate': 'Такой источник уже добавлен',
+  'modals.addSourceInsecure': 'Источник отдаётся по http: соединение не защищено, содержимое фида можно подменить по дороге',
   'modals.addSourceCheck': 'Проверить источник',
   'modals.addSourceAdding': 'Добавление…',
 

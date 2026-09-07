@@ -147,6 +147,24 @@
         <span class="key">{msg('modals.addSourceInvalidEntries')}</span>
         <span class="value">{preview.invalid}</span>
       </div>
+      <div class="preview-row">
+        <span class="key">{msg('modals.addSourceGames')}</span>
+        <span class="value">{preview.games}</span>
+      </div>
+      <div class="preview-row">
+        <span class="key">{msg('modals.addSourceKnown')}</span>
+        <span class="value">{preview.known}</span>
+      </div>
+      <div class="preview-row">
+        <span class="key">{msg('modals.addSourceUnknown')}</span>
+        <span class="value">{preview.unknown}</span>
+      </div>
+      {#if preview.insecure}
+        <p class="warn">
+          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
+          {msg('modals.addSourceInsecure')}
+        </p>
+      {/if}
       {#if preview.duplicate}
         <p class="warn">
           <TriangleAlert size="1.5rem" strokeWidth={1.8} />

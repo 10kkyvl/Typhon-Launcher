@@ -49,8 +49,12 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addSourceFileLabel': 'File',
   'modals.addSourceFeedVersion': 'Feed version',
   'modals.addSourceEntries': 'Entries',
+  'modals.addSourceGames': 'Games in the feed',
+  'modals.addSourceKnown': 'Already in the catalog',
+  'modals.addSourceUnknown': 'New to the catalog',
   'modals.addSourceInvalidEntries': 'Invalid entries',
   'modals.addSourceDuplicate': 'This source is already added',
+  'modals.addSourceInsecure': 'This source is served over http: the connection is not protected and the feed can be tampered with on the way',
   'modals.addSourceCheck': 'Check source',
   'modals.addSourceAdding': 'Adding…',
 
