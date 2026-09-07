@@ -1,4 +1,6 @@
 export const install = {
+  'release.buildPortable': 'Портативная',
+  'release.buildRepack': 'Репак',
   'release.duplicateSources': { one: 'источник', few: 'источника', many: 'источников' },
   'release.loading': 'Загрузка релизов…',
   'release.new': 'Новое',

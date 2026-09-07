@@ -89,6 +89,7 @@ var releasePhraseTags = map[string]string{
 // which never happens for a multi-word phrase in Russian.
 var bracketPhraseTags = map[string]string{
 	"папка игры": "portable",
+	"portable":   "portable",
 }
 
 type phraseTok struct {
@@ -149,7 +150,10 @@ var (
 	reLangSingle = regexp.MustCompile(`(?i)\b(?:` + buildLangAlternation() + `)\b`)
 	reMulti      = regexp.MustCompile(`(?i)\bmulti[\-]?\d{0,3}\b`)
 	reSteamRip   = regexp.MustCompile(`(?i)\bsteam[\-\s._]?rip\b`)
-	reRepackBy   = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+by[\s._-]+[A-Za-z0-9_]+)?\b`)
+	// Only after a separator: bare trailing "Portable" belongs to game names
+	// such as Persona 3 Portable.
+	rePortable = regexp.MustCompile(`(?i)[|/]\s*portable\b`)
+	reRepackBy = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+by[\s._-]+[A-Za-z0-9_]+)?\b`)
 
 	reDecimalDot   = regexp.MustCompile(`(\d)\.(\d)`)
 	reSepRun       = regexp.MustCompile(`[._\-]+`)

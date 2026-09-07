@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { releaseBadge, releaseOrigin } from './releases';
+import { buildKind, releaseBadge, releaseOrigin } from './releases';
 
 describe('releaseOrigin', () => {
   it('carries the release version so the install records it', () => {
@@ -48,5 +48,28 @@ describe('releaseBadge', () => {
 
   it('falls back to the new-in-feed mark', () => {
     expect(releaseBadge({ ...base, releaseId: 'r3', updateKind: 'update', isNew: true })).toBe('new');
+  });
+});
+
+describe('buildKind', () => {
+  it('marks a release delivered as a ready folder', () => {
+    expect(buildKind({ tags: ['portable'], repacker: '' })).toBe('portable');
+  });
+
+  it('marks a repack the feed did not attribute to anyone', () => {
+    expect(buildKind({ tags: ['repack'], repacker: '' })).toBe('repack');
+  });
+
+  it('leaves the repack mark to the repacker badge', () => {
+    expect(buildKind({ tags: ['repack'], repacker: 'xatab' })).toBe('none');
+  });
+
+  it('prefers the delivered form over the packing method', () => {
+    expect(buildKind({ tags: ['repack', 'portable'], repacker: 'xatab' })).toBe('portable');
+  });
+
+  it('says nothing about a release it cannot classify', () => {
+    expect(buildKind({ tags: ['gog'], repacker: '' })).toBe('none');
+    expect(buildKind({})).toBe('none');
   });
 });

@@ -86,6 +86,22 @@ func TestParsePositive(t *testing.T) {
 			},
 		},
 		{
+			name: "portable after pipe",
+			raw:  "Ex Voto — (Build 23638420) | Portable",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Normalized", p.Normalized, "ex voto")
+				mustContainStr(t, "Tags", p.Tags, "portable")
+			},
+		},
+		{
+			name: "portable in brackets",
+			raw:  "Celeste [Portable] (2019)",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Celeste")
+				mustContainStr(t, "Tags", p.Tags, "portable")
+			},
+		},
+		{
 			name: "russian folder bracket",
 			raw:  "Warhammer 40000 Space Marine 2 [Папка игры]",
 			check: func(t *testing.T, p Parsed) {
@@ -123,6 +139,7 @@ func TestParseNegative(t *testing.T) {
 		{"deluxe ski jump", "Deluxe Ski Jump 4", "Deluxe Ski Jump 4", true},
 		{"need for speed", "Need for Speed Most Wanted", "Need for Speed Most Wanted", true},
 		{"dirt rally dotted version", "DiRT Rally 2.0", "DiRT Rally 2.0", true},
+		{"persona portable", "Persona 3 Portable", "Persona 3 Portable", true},
 	}
 
 	for _, tc := range cases {

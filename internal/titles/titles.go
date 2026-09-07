@@ -208,6 +208,10 @@ func extractLangAndDashTags(s string) (string, []string, []string) {
 		langs = append(langs, strings.ToUpper(m))
 		return " "
 	})
+	s = rePortable.ReplaceAllStringFunc(s, func(m string) string {
+		tags = append(tags, "portable")
+		return " "
+	})
 	s = reSteamRip.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "steam-rip")
 		return " "
