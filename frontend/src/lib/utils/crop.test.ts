@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centerOffset, clampOffset, clampZoom, coverScale, cropSource, zoomAround, type CropView } from './crop';
+import { centerOffset, clampOffset, clampZoom, coverScale, cropRect, cropSource, zoomAround, type CropView } from './crop';
 
 function view(patch: Partial<CropView> = {}): CropView {
   return { viewport: 300, width: 600, height: 300, zoom: 1, offsetX: -150, offsetY: 0, ...patch };
@@ -97,5 +97,29 @@ describe('cropSource', () => {
 
   it('reports nothing for a degenerate view', () => {
     expect(cropSource(view({ height: 0 }))).toEqual({ sx: 0, sy: 0, size: 0 });
+  });
+});
+
+describe('cropRect', () => {
+  it('rounds the source square to whole pixels', () => {
+    const view = { viewport: 300, width: 401, height: 401, zoom: 1.3, offsetX: -12.4, offsetY: -8.6 };
+    const rect = cropRect(view);
+    expect(Number.isInteger(rect.x)).toBe(true);
+    expect(Number.isInteger(rect.y)).toBe(true);
+    expect(Number.isInteger(rect.size)).toBe(true);
+  });
+
+  it('describes the centered square of an unzoomed image', () => {
+    expect(cropRect({ viewport: 300, width: 1200, height: 600, zoom: 1, offsetX: -150, offsetY: 0 })).toEqual({
+      x: 300,
+      y: 0,
+      size: 600,
+    });
+  });
+
+  it('never reaches outside the image', () => {
+    const rect = cropRect({ viewport: 300, width: 400, height: 400, zoom: 1, offsetX: -9999, offsetY: -9999 });
+    expect(rect.x + rect.size).toBeLessThanOrEqual(400);
+    expect(rect.y + rect.size).toBeLessThanOrEqual(400);
   });
 });

@@ -12,6 +12,7 @@
     uploadingAvatar,
   } from '../stores/user';
   import { toast } from '../stores/toasts';
+  import type { CropRect } from '../utils/crop';
   import { msg } from '../i18n';
 
   let { size = 'md', disabled = false }: { size?: 'md' | 'sm'; disabled?: boolean } = $props();
@@ -34,10 +35,10 @@
     }
   }
 
-  async function save(encoded: string) {
+  async function save(encoded: string, crop: CropRect) {
     failure = '';
     try {
-      await saveAvatar(encoded);
+      await saveAvatar(encoded, crop);
       cropOpen = false;
       cropSrc = '';
       toast(msg('ui.avatarUpdated'), 'success');

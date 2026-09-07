@@ -16,6 +16,7 @@ import {
   type ProfilePatch,
   type RegisterInput,
 } from '../services/account';
+import type { CropRect } from '../utils/crop';
 
 export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest' | 'offline';
 export type AuthView = 'login' | 'register';
@@ -227,12 +228,12 @@ export async function chooseAvatar(): Promise<string> {
   }
 }
 
-export async function saveAvatar(encoded: string): Promise<void> {
+export async function saveAvatar(encoded: string, crop: CropRect): Promise<void> {
   if (!encoded) throw new AccountError('invalid_avatar');
   if (get(uploadingAvatar)) return;
   uploadingAvatar.set(true);
   try {
-    currentUser.set(await uploadAvatar(encoded));
+    currentUser.set(await uploadAvatar(encoded, crop));
   } catch (err) {
     onUnauthenticated(err);
     throw err;

@@ -346,7 +346,7 @@ func (s *Service) PickAvatar() (AvatarImage, error) {
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle("Выберите аватар").
 		CanChooseFiles(true).
-		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp)", "*.png;*.jpg;*.jpeg;*.webp").
+		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)", "*.png;*.jpg;*.jpeg;*.webp;*.gif").
 		AddFilter("Все файлы", "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
@@ -359,7 +359,7 @@ func (s *Service) PickAvatar() (AvatarImage, error) {
 	return readAvatarImage(path)
 }
 
-func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
+func (s *Service) UploadAvatar(encoded string, crop AvatarCrop) (CurrentUser, error) {
 	data, err := decodeAvatar(encoded)
 	if err != nil {
 		return CurrentUser{}, err
@@ -370,7 +370,7 @@ func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	defer cancel()
-	user, err := s.client.UploadAvatar(ctx, data)
+	user, err := s.client.UploadAvatar(ctx, data, crop)
 	if err != nil {
 		return CurrentUser{}, err
 	}

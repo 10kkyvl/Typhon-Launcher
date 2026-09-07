@@ -13,6 +13,12 @@ type AvatarImage struct {
 	MIME string `json:"mime"`
 }
 
+type AvatarCrop struct {
+	X    int `json:"x"`
+	Y    int `json:"y"`
+	Size int `json:"size"`
+}
+
 func avatarMIME(data []byte) (string, bool) {
 	switch {
 	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
@@ -21,6 +27,8 @@ func avatarMIME(data []byte) (string, bool) {
 		return "image/jpeg", true
 	case len(data) >= 12 && bytes.HasPrefix(data, []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")):
 		return "image/webp", true
+	case len(data) >= 6 && bytes.HasPrefix(data, []byte("GIF8")) && (data[4] == '7' || data[4] == '9') && data[5] == 'a':
+		return "image/gif", true
 	}
 	return "", false
 }
