@@ -10,7 +10,9 @@
     type DownloadOrigin,
     type TorrentInfo,
   } from '../services/downloads';
+  import { offerElevateAhead } from '../services/install';
   import { selectFolder } from '../services/settings';
+  import { appInfo, elevationSupported, type AppInfo } from '../services/system';
   import { installErrorText } from '../install/installErrors';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
@@ -32,6 +34,9 @@
   let destination = $state('');
   let selected = $state<boolean[]>([]);
   let starting = $state(false);
+  let autoInstall = $state(false);
+  let elevateAhead = $state(false);
+  let platform = $state<AppInfo | null>(null);
   let pendingHash = '';
   let token = 0;
 
@@ -40,6 +45,14 @@
   const selectedCount = $derived(selected.filter(Boolean).length);
   const selectedSize = $derived(
     (info?.files ?? []).reduce((sum, file, i) => (selected[i] ? sum + file.size : sum), 0),
+  );
+  const selectedPaths = $derived((info?.files ?? []).filter((_, i) => selected[i]).map((file) => file.path));
+  const canElevateAhead = $derived(
+    offerElevateAhead({
+      elevationSupported: platform !== null && elevationSupported(platform),
+      autoInstall,
+      paths: selectedPaths,
+    }),
   );
 
   function reset() {
@@ -62,7 +75,11 @@
     untrack(() => {
       reset();
       if (isOpen && ready) {
-        destination = get(settings)?.downloadsPath ?? '';
+        const current = get(settings);
+        destination = current?.downloadsPath ?? '';
+        autoInstall = current?.autoInstall ?? false;
+        elevateAhead = current?.elevateAhead ?? false;
+        loadPlatform();
         if (preset) {
           source = preset;
           proceed(preset);
@@ -70,6 +87,17 @@
       }
     });
   });
+
+  // A failed lookup hides the pre-elevation checkbox instead of guessing:
+  // without it the install waits for the user, which is the safe side.
+  async function loadPlatform() {
+    try {
+      platform = await appInfo();
+    } catch (err) {
+      platform = null;
+      toast(installErrorText(err), 'danger');
+    }
+  }
 
   async function proceed(value: string) {
     const current = ++token;
@@ -116,7 +144,11 @@
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
     starting = true;
     try {
-      await startDownloadFrom(info.infoHash, destination, indices, origin ?? {});
+      await startDownloadFrom(info.infoHash, destination, indices, {
+        ...(origin ?? {}),
+        autoInstall,
+        elevateAhead: autoInstall && canElevateAhead && elevateAhead,
+      });
       pendingHash = '';
       open = false;
     } catch (err) {
@@ -180,6 +212,33 @@
             <span class="file-size">{bytesSize(file.size)}</span>
           </button>
         {/each}
+      </div>
+      <div class="options">
+        <button class="option" role="checkbox" aria-checked={autoInstall} onclick={() => (autoInstall = !autoInstall)}>
+          <span class="box" class:on={autoInstall}>
+            {#if autoInstall}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+          </span>
+          <span class="option-text">
+            <span class="option-label">{msg('modals.addDownloadAutoInstallLabel')}</span>
+            <span class="option-sub">{msg('modals.addDownloadAutoInstallSub')}</span>
+          </span>
+        </button>
+        {#if canElevateAhead}
+          <button
+            class="option nested"
+            role="checkbox"
+            aria-checked={elevateAhead}
+            onclick={() => (elevateAhead = !elevateAhead)}
+          >
+            <span class="box" class:on={elevateAhead}>
+              {#if elevateAhead}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+            </span>
+            <span class="option-text">
+              <span class="option-label">{msg('modals.addDownloadElevateAheadLabel')}</span>
+              <span class="option-sub">{msg('modals.addDownloadElevateAheadSub')}</span>
+            </span>
+          </button>
+        {/if}
       </div>
     </div>
   {/if}
@@ -367,6 +426,51 @@
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease);
+  }
+
+  .option:hover {
+    background: var(--hover);
+  }
+
+  .option.nested {
+    margin-left: var(--space-5);
+  }
+
+  .option .box {
+    margin-top: 0.1rem;
+  }
+
+  .option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .option-label {
+    font-size: var(--font-sm);
+  }
+
+  .option-sub {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .summary {

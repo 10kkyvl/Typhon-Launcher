@@ -52,6 +52,7 @@ export const games = {
 
   'games.markFavoritesLimit': 'Не больше 6 любимых игр',
 
+  'games.primaryDownload': 'Скачать',
   'games.primaryInstall': 'Установить',
   'games.primaryResolving': 'Проверяем загрузки…',
   'games.primaryUnavailable': 'Нет доступных загрузок',
@@ -96,7 +97,8 @@ export const games = {
   'games.detailBadgeUninstalled': 'Удалена с компьютера',
   'games.detailBadgeUpdateAvailable': 'Доступно обновление',
   'games.detailAddToLibraryButton': 'Добавить в библиотеку',
-  'games.detailUninstalledNote': 'Игра удалена с компьютера — установите её снова из доступных загрузок.',
+  'games.detailUninstalledNote': 'Игра удалена с компьютера — скачайте её снова из доступных загрузок.',
+  'games.detailUninstalledDownloadedNote': 'Игра удалена с компьютера — установите её из уже скачанной загрузки.',
   'games.detailOpenScreenshotLabel': 'Открыть скриншот',
   'games.detailMetaSearchingTitle': 'Ищем описание и обложку',
   'games.detailFallbackGameWord': 'игру',

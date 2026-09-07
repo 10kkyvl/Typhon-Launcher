@@ -8,6 +8,8 @@ func startElevated(runSpec) (workerHandle, error) {
 	return nil, errWindowsOnly
 }
 
+func elevationSupported() bool { return false }
+
 func workerStartError(path string, err error) error {
 	return fmt.Errorf("запуск воркера установки %s: %w", path, err)
 }

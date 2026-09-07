@@ -14,6 +14,8 @@ var errElevationUnsupported = errors.New("повышение прав на macOS
 
 func startElevated(runSpec) (workerHandle, error) { return nil, errElevationUnsupported }
 
+func elevationSupported() bool { return false }
+
 func workerStartError(path string, err error) error {
 	return fmt.Errorf("запуск воркера установки %s: %w", path, err)
 }

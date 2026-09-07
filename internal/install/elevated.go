@@ -58,8 +58,10 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 	if err := clearWorkerCancel(spec.CancelPath); err != nil {
 		return 0, fmt.Errorf("подготовка воркера установки: %w", err)
 	}
+	run := newID()
 	ws := workerSpec{
 		ID:            spec.ID,
+		Run:           run,
 		InstallerPath: spec.InstallerPath,
 		Engine:        spec.Engine,
 		Destination:   spec.Destination,
@@ -72,25 +74,11 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		Background:    spec.Background,
 		Hidden:        true,
 	}
-	if err := writeWorkerSpec(specFile, ws); err != nil {
-		return 0, fmt.Errorf("подготовка воркера установки: %w", err)
-	}
-
-	exe, err := os.Executable()
+	exited, cleanup, err := handOffToWorker(spec, ws, specFile)
 	if err != nil {
-		return 0, fmt.Errorf("путь к лаунчеру: %w", err)
+		return 0, err
 	}
-	proc, err := startElevatedWorker(runSpec{Path: exe, Args: []string{installWorkerFlag, specFile}, Hidden: true})
-	if err != nil {
-		return 0, workerStartError(spec.Path, err)
-	}
-	defer proc.close()
-
-	exited := make(chan elevatedResult, 1)
-	go func() {
-		code, waitErr := proc.wait()
-		exited <- elevatedResult{code: code, err: waitErr}
-	}()
+	defer cleanup()
 
 	ticker := time.NewTicker(workerPollInterval)
 	defer ticker.Stop()
@@ -104,7 +92,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			if res.err != nil {
 				return 0, res.err
 			}
-			return readFinalWorkerState(spec.StatePath)
+			return readFinalWorkerState(spec.StatePath, run)
 		case <-ctx.Done():
 			if !cancelRequested {
 				cancelRequested = true
@@ -133,19 +121,62 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 				continue
 			}
 			stateReadFailures = 0
-			if found && state.Done {
+			if found && state.Done && state.Run == run {
 				return finishElevatedState(state)
 			}
 		}
 	}
 }
 
-func readFinalWorkerState(statePath string) (int, error) {
+// handOffToWorker отдаёт задание либо уже поднятому брокеру, либо свежему
+// воркеру. Канал в обоих случаях значит одно: процесс, которому отдали
+// установку, больше не работает, и финальное состояние надо читать с диска.
+func handOffToWorker(spec runSpec, ws workerSpec, specFile string) (<-chan elevatedResult, func(), error) {
+	if spec.Broker != nil {
+		if err := writeWorkerSpec(brokerSpecPath(spec.Broker.Dir), ws); err != nil {
+			return nil, nil, fmt.Errorf("передача задания брокеру установки: %w", err)
+		}
+		gone := spec.Broker.Gone
+		exited := make(chan elevatedResult, 1)
+		// stop нужен потому, что брокер переживает одну установку: цепочка
+		// установщиков идёт через него же, и без выхода по cleanup эта
+		// горутина оставалась бы висеть до его смерти (инвариант 19).
+		stop := make(chan struct{})
+		go func() {
+			select {
+			case <-gone:
+				exited <- elevatedResult{}
+			case <-stop:
+			}
+		}()
+		return exited, func() { close(stop) }, nil
+	}
+
+	if err := writeWorkerSpec(specFile, ws); err != nil {
+		return nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, nil, fmt.Errorf("путь к лаунчеру: %w", err)
+	}
+	proc, err := startElevatedWorker(runSpec{Path: exe, Args: []string{installWorkerFlag, specFile}, Hidden: true})
+	if err != nil {
+		return nil, nil, workerStartError(spec.Path, err)
+	}
+	exited := make(chan elevatedResult, 1)
+	go func() {
+		code, waitErr := proc.wait()
+		exited <- elevatedResult{code: code, err: waitErr}
+	}()
+	return exited, proc.close, nil
+}
+
+func readFinalWorkerState(statePath, run string) (int, error) {
 	state, found, err := readWorkerState(statePath)
 	if err != nil {
 		return 0, fmt.Errorf("состояние установки: %w", err)
 	}
-	if !found || !state.Done {
+	if !found || !state.Done || state.Run != run {
 		return 0, errWorkerNotFinished
 	}
 	return finishElevatedState(state)

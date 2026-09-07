@@ -122,6 +122,7 @@ type Service struct {
 
 	items      []*Installation
 	jobs       map[string]*job
+	brokers    map[string]*broker
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
@@ -166,6 +167,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		store:     newStore(dir),
 		removals:  newRemovalStore(dir),
 		jobs:      map[string]*job{},
+		brokers:   map[string]*broker{},
 		freeSpace: platform.GetStorageInfo,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
@@ -1239,7 +1241,16 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 	if d.Origin.Purpose != download.PurposeRelease {
 		return
 	}
-	if !s.config().AutoInstall {
+	// Всё, что не дошло до Start, обязано снять брокера здесь: установка,
+	// ради которой его поднимали, уже не начнётся, а держать ради неё процесс
+	// с правами администратора до выхода из лаунчера нельзя.
+	started := false
+	defer func() {
+		if !started {
+			s.DropBroker(d.ID)
+		}
+	}()
+	if !autoInstallFor(d, s.config().AutoInstall) {
 		return
 	}
 	info, err := s.InspectDownload(d.ID)
@@ -1261,6 +1272,7 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Warn("auto install", "id", d.ID, "error", err)
 		return
 	}
+	started = true
 	slog.Info("auto install started", "id", item.ID, "download", d.ID, "name", item.Name)
 }
 

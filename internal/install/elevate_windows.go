@@ -126,6 +126,8 @@ func workerStartError(path string, err error) error {
 	return elevationError(path, err)
 }
 
+func elevationSupported() bool { return true }
+
 func elevationParams(spec runSpec) string {
 	if spec.Tail != "" {
 		return spec.Tail

@@ -27,6 +27,8 @@ export interface DownloadOrigin {
   purpose?: DownloadPurpose;
   updatePlanId?: string;
   libraryId?: string;
+  autoInstall?: boolean;
+  elevateAhead?: boolean;
 }
 
 export interface Download {

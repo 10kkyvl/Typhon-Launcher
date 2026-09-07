@@ -15,19 +15,26 @@ var workerCancelPollInterval = 250 * time.Millisecond
 // лаунчер поднимает его один раз через startElevated и дальше общается с ним
 // только через файлы spec/state/cancel, потому что процесс с высоким уровнем
 // целостности лаунчеру не принадлежит и других каналов связи для него нет.
-//
-//nolint:forbidigo // RunWorker — точка входа отдельного процесса, эквивалент main для воркера: вызывающего ctx нет (инвариант 20 разрешает Background только в main)
 func RunWorker(specPath string) error {
 	spec, specErr := readWorkerSpec(specPath)
 	if specErr != nil {
 		if spec.StatePath != "" {
-			if err := writeWorkerState(spec.StatePath, workerState{Done: true, Error: specErr.Error()}); err != nil {
+			if err := writeWorkerState(spec.StatePath, workerState{Run: spec.Run, Done: true, Error: specErr.Error()}); err != nil {
 				return fmt.Errorf("%w (не удалось записать состояние воркера: %w)", specErr, err)
 			}
 		}
 		return specErr
 	}
 
+	return runWorkerSpec(spec)
+}
+
+// runWorkerSpec отделён от чтения файла ради брокера (broker.go): тот
+// проверяет спеку против согласованных границ, и перечитывание файла после
+// проверки вернуло бы окно для подмены задания непривилегированным процессом.
+//
+//nolint:forbidigo // продолжение точки входа воркера: вызывающего ctx нет (инвариант 20 разрешает Background только в main)
+func runWorkerSpec(spec workerSpec) error {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
@@ -41,7 +48,7 @@ func RunWorker(specPath string) error {
 		wg.Wait()
 	}()
 
-	state := workerState{PID: os.Getpid(), Phase: string(workerPhaseDiscovering)}
+	state := workerState{PID: os.Getpid(), Run: spec.Run, Phase: string(workerPhaseDiscovering)}
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
 		return err
 	}

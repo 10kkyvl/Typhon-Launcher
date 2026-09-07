@@ -34,8 +34,60 @@ func TestFinishElevatedStateCancelled(t *testing.T) {
 	}
 }
 
+// Файл состояния один на всю цепочку установщиков, поэтому оставшийся от
+// предыдущего прогона Done: true обязан быть отвергнут: без токена прогона
+// лаунчер прочитал бы его как результат следующей установки — тем более через
+// брокера, который перезаписывает файл заметно позже старта опроса.
+func TestReadFinalWorkerStateRejectsThePreviousRun(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := writeWorkerState(path, workerState{Run: "run-1", Done: true, Code: 0}); err != nil {
+		t.Fatalf("writeWorkerState: %v", err)
+	}
+	if _, err := readFinalWorkerState(path, "run-2"); !errors.Is(err, errWorkerNotFinished) {
+		t.Fatalf("readFinalWorkerState = %v, ожидался errWorkerNotFinished для чужого прогона", err)
+	}
+	if _, err := readFinalWorkerState(path, "run-1"); err != nil {
+		t.Fatalf("readFinalWorkerState для своего прогона = %v", err)
+	}
+}
+
+func TestRunElevatedIgnoresTheStateOfThePreviousRun(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := writeWorkerState(statePath, workerState{Run: "stale", Done: true, Code: 7}); err != nil {
+		t.Fatalf("seed stale state: %v", err)
+	}
+	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+
+	withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {
+		if len(launch.Args) < 2 {
+			t.Fatalf("воркер запущен без пути спеки: %v", launch.Args)
+		}
+		ws, err := readWorkerSpec(launch.Args[1])
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			<-time.After(80 * time.Millisecond)
+			if err := writeWorkerState(statePath, workerState{Run: ws.Run, Done: true, Code: 3}); err != nil {
+				t.Errorf("writeWorkerState: %v", err)
+			}
+		}()
+		return longRunningProcess(t, 10), nil
+	})
+
+	code, err := runElevated(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("runElevated: %v", err)
+	}
+	if code != 3 {
+		t.Fatalf("code = %d, ожидался 3: прочитан результат предыдущего прогона", code)
+	}
+}
+
 func TestReadFinalWorkerStateNotFound(t *testing.T) {
-	_, err := readFinalWorkerState(filepath.Join(t.TempDir(), "missing.json"))
+	_, err := readFinalWorkerState(filepath.Join(t.TempDir(), "missing.json"), "")
 	if !errors.Is(err, errWorkerNotFinished) {
 		t.Fatalf("readFinalWorkerState = %v, want errWorkerNotFinished", err)
 	}
@@ -47,7 +99,7 @@ func TestReadFinalWorkerStateNotDone(t *testing.T) {
 	if err := writeWorkerState(path, workerState{Done: false}); err != nil {
 		t.Fatalf("writeWorkerState: %v", err)
 	}
-	_, err := readFinalWorkerState(path)
+	_, err := readFinalWorkerState(path, "")
 	if !errors.Is(err, errWorkerNotFinished) {
 		t.Fatalf("readFinalWorkerState = %v, want errWorkerNotFinished", err)
 	}
@@ -59,7 +111,7 @@ func TestReadFinalWorkerStateCorruptDoesNotMasqueradeAsNotFinished(t *testing.T)
 	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
 		t.Fatalf("write raw state: %v", err)
 	}
-	_, err := readFinalWorkerState(path)
+	_, err := readFinalWorkerState(path, "")
 	if err == nil {
 		t.Fatal("readFinalWorkerState on corrupt json returned nil error")
 	}
@@ -142,6 +194,20 @@ func withWorkerSeams(t *testing.T, launcher func(runSpec) (workerHandle, error))
 	})
 }
 
+// echoRun повторяет то, что делает настоящий воркер: состояние помечается
+// токеном прогона из полученной спеки. Без него подделанное состояние
+// принадлежит чужому прогону и по контракту игнорируется.
+func echoRun(t *testing.T, dir, id string, state workerState) workerState {
+	t.Helper()
+	ws, err := readWorkerSpec(workerSpecFilePath(dir, id))
+	if err != nil {
+		t.Errorf("readWorkerSpec: %v", err)
+		return state
+	}
+	state.Run = ws.Run
+	return state
+}
+
 func TestRunElevatedReturnsErrorWhenStateStaysUnfinished(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
@@ -183,7 +249,7 @@ func TestRunElevatedPicksUpStateThroughPolling(t *testing.T) {
 
 	go func() {
 		<-time.After(60 * time.Millisecond)
-		if err := writeWorkerState(statePath, workerState{Done: true, Code: 42}); err != nil {
+		if err := writeWorkerState(statePath, echoRun(t, dir, spec.ID, workerState{Done: true, Code: 42})); err != nil {
 			t.Errorf("writeWorkerState: %v", err)
 		}
 	}()
@@ -212,7 +278,7 @@ func TestRunElevatedPropagatesWorkerError(t *testing.T) {
 
 	go func() {
 		<-time.After(60 * time.Millisecond)
-		if err := writeWorkerState(statePath, workerState{Done: true, Code: 7, Error: "установщик упал"}); err != nil {
+		if err := writeWorkerState(statePath, echoRun(t, dir, spec.ID, workerState{Done: true, Code: 7, Error: "установщик упал"})); err != nil {
 			t.Errorf("writeWorkerState: %v", err)
 		}
 	}()
@@ -248,7 +314,7 @@ func TestRunElevatedCancellationWritesMarkerAndWaitsForWorker(t *testing.T) {
 		deadline := time.Now().Add(3 * time.Second)
 		for time.Now().Before(deadline) {
 			if workerCancelRequested(cancelPath) {
-				if err := writeWorkerState(statePath, workerState{Done: true, Error: context.Canceled.Error(), Cancelled: true}); err != nil {
+				if err := writeWorkerState(statePath, echoRun(t, dir, spec.ID, workerState{Done: true, Error: context.Canceled.Error(), Cancelled: true})); err != nil {
 					t.Errorf("writeWorkerState: %v", err)
 				}
 				return
@@ -333,7 +399,7 @@ func TestRunElevatedSurvivesTransientStateReadFailure(t *testing.T) {
 			t.Errorf("remove blocking directory: %v", err)
 			return
 		}
-		if err := writeWorkerState(statePath, workerState{Done: true, Code: 3}); err != nil {
+		if err := writeWorkerState(statePath, echoRun(t, dir, spec.ID, workerState{Done: true, Code: 3})); err != nil {
 			t.Errorf("writeWorkerState: %v", err)
 		}
 	}()

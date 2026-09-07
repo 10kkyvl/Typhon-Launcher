@@ -55,6 +55,7 @@ export const games: Record<GamesKey, Message> = {
 
   'games.markFavoritesLimit': 'Up to 6 favorite games',
 
+  'games.primaryDownload': 'Download',
   'games.primaryInstall': 'Install',
   'games.primaryResolving': 'Checking downloads…',
   'games.primaryUnavailable': 'No downloads available',
@@ -99,7 +100,8 @@ export const games: Record<GamesKey, Message> = {
   'games.detailBadgeUninstalled': 'Uninstalled',
   'games.detailBadgeUpdateAvailable': 'Update available',
   'games.detailAddToLibraryButton': 'Add to library',
-  'games.detailUninstalledNote': 'The game has been uninstalled — install it again from the available downloads.',
+  'games.detailUninstalledNote': 'The game has been uninstalled — download it again from the available downloads.',
+  'games.detailUninstalledDownloadedNote': 'The game has been uninstalled — install it from the download you already have.',
   'games.detailOpenScreenshotLabel': 'Open screenshot',
   'games.detailMetaSearchingTitle': 'Looking up description and artwork',
   'games.detailFallbackGameWord': 'the game',

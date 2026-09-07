@@ -177,6 +177,8 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
+	handoff := s.brokerFor(item.DownloadID)
+	defer s.DropBroker(item.DownloadID)
 	specs := make([]runSpec, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)
@@ -186,6 +188,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		spec.StatePath = statePath
 		spec.InfPath = infPath
 		spec.CancelPath = cancelPath
+		spec.Broker = handoff
 		specs = append(specs, spec)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {

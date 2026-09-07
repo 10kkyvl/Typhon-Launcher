@@ -91,6 +91,7 @@ type Settings struct {
 	SeedAfterDownload      bool    `json:"seedAfterDownload"`
 	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
 	AutoInstall            bool    `json:"autoInstall"`
+	ElevateAhead           bool    `json:"elevateAhead"`
 	SourceRefreshInterval  string  `json:"sourceRefreshInterval"`
 	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
 	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
@@ -158,6 +159,7 @@ func Defaults() Settings {
 		SeedAfterDownload:      false,
 		InstallCleanupPolicy:   CleanupDelete,
 		AutoInstall:            false,
+		ElevateAhead:           false,
 		SourceRefreshInterval:  RefreshSixHours,
 		VerifyAfterInstall:     true,
 		InstallSkipShortcuts:   true,

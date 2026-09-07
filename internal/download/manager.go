@@ -111,6 +111,8 @@ type Manager struct {
 	client          *client
 	max             int
 	onCompleted     func(Download)
+	onStarted       func(Download)
+	onGone          func(string)
 	usageRecorder   func(usagestats.Event)
 	historyRecorder func(history.Record) error
 
@@ -662,6 +664,10 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	delete(m.reserved, infoHash)
 	slog.Info("download added", "download_id", d.ID, "name", d.Name)
 	emit(eventAdded, snapshot(d))
+	if m.onStarted != nil {
+		notify, started := m.onStarted, snapshot(d)
+		m.spawnTrackedLocked(func() { notify(started) })
+	}
 	m.recordUsage(usagestats.Event{
 		Type:      usagestats.TypeDownloadStarted,
 		Timestamp: time.Now(),
@@ -848,6 +854,33 @@ func (m *Manager) SetOnCompleted(fn func(Download)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onCompleted = fn
+}
+
+//wails:ignore
+func (m *Manager) SetOnStarted(fn func(Download)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onStarted = fn
+}
+
+// SetOnGone reports a download that will never complete — removed, cancelled
+// or failed. Whatever was set up for its completion has to be torn down, and
+// onCompleted never fires for it.
+//
+//wails:ignore
+func (m *Manager) SetOnGone(fn func(string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onGone = fn
+}
+
+// notifyGoneLocked требует удержания m.mu вызывающим.
+func (m *Manager) notifyGoneLocked(id string) {
+	if m.onGone == nil {
+		return
+	}
+	notify := m.onGone
+	m.spawnTrackedLocked(func() { notify(id) })
 }
 
 //wails:ignore
@@ -1059,6 +1092,7 @@ func (m *Manager) dropLocked(id string) error {
 		m.items = restored
 		return err
 	}
+	m.notifyGoneLocked(id)
 	return nil
 }
 
@@ -1171,6 +1205,7 @@ func (m *Manager) markFailed(id, message string, cause error) {
 	}
 	m.idleLocked(d, StatusFailed)
 	d.Error = message
+	m.notifyGoneLocked(id)
 	if err := m.persistLocked(); err != nil {
 		// Failed is itself the durable, user-actionable landing state (both
 		// Resume and ForceStart accept it); markFailed is reached from

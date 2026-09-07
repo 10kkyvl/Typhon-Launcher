@@ -28,6 +28,7 @@
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
+    elevationSupported,
     getAppInfo,
     getSystemInfo,
     getWineStatus,
@@ -604,6 +605,19 @@
             onchange={(v) => set({ autoInstall: v })}
           />
         </div>
+        {#if appInfo && elevationSupported(appInfo)}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.elevateAhead ?? false}
+              label={msg('settings.downloadsElevateAheadToggle')}
+              onchange={(v) => set({ elevateAhead: v })}
+            />
+          </div>
+        {/if}
         <div class="row">
           <div class="row-text">
             <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>

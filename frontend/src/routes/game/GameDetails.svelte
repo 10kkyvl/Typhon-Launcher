@@ -5,6 +5,7 @@
     Download,
     EllipsisVertical,
     FolderOpen,
+    HardDriveDownload,
     Heart,
     Play,
     Square,
@@ -587,7 +588,7 @@
     }
   }
 
-  function startInstall() {
+  function startDownload() {
     if (availableGroups.length === 0) return;
     if (availableGroups.length === 1) {
       downloadRelease(availableGroups[0]);
@@ -641,7 +642,7 @@
   function runPrimary() {
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
-    else if (primary.kind === 'install') startInstall();
+    else if (primary.kind === 'download') startDownload();
     else if (primary.kind === 'update') updateCard?.start();
     else if (primary.kind === 'retry-download') retryTerminalDownload();
     else if (primary.kind === 'install-download') installFromTerminalDownload();
@@ -738,8 +739,10 @@
                 <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
               {:else if primary.kind === 'stop'}
                 <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'install' || primary.kind === 'install-download'}
+              {:else if primary.kind === 'download'}
                 <Download size="1.6rem" strokeWidth={1.8} />
+              {:else if primary.kind === 'install-download'}
+                <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
               {/if}
               {primary.label}
             </Button>
@@ -787,7 +790,11 @@
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
           <p class="note danger">{terminalDownload.error}</p>
         {:else if localGame && !installed}
-          <p class="note">{msg('games.detailUninstalledNote')}</p>
+          <p class="note">
+            {primary.kind === 'install-download'
+              ? msg('games.detailUninstalledDownloadedNote')
+              : msg('games.detailUninstalledNote')}
+          </p>
         {/if}
       </div>
     </div>

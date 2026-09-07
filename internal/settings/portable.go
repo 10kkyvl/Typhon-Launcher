@@ -11,6 +11,7 @@ type Portable struct {
 	UploadWhileDownloading   *bool    `json:"uploadWhileDownloading,omitempty"`
 	InstallCleanupPolicy     *string  `json:"installCleanupPolicy,omitempty"`
 	AutoInstall              *bool    `json:"autoInstall,omitempty"`
+	ElevateAhead             *bool    `json:"elevateAhead,omitempty"`
 	SourceRefreshInterval    *string  `json:"sourceRefreshInterval,omitempty"`
 	VerifyAfterInstall       *bool    `json:"verifyAfterInstall,omitempty"`
 	InstallSkipShortcuts     *bool    `json:"installSkipShortcuts,omitempty"`
@@ -36,6 +37,7 @@ func PortableOf(s Settings) Portable {
 		UploadWhileDownloading:   &s.UploadWhileDownloading,
 		InstallCleanupPolicy:     &s.InstallCleanupPolicy,
 		AutoInstall:              &s.AutoInstall,
+		ElevateAhead:             &s.ElevateAhead,
 		SourceRefreshInterval:    &s.SourceRefreshInterval,
 		VerifyAfterInstall:       &s.VerifyAfterInstall,
 		InstallSkipShortcuts:     &s.InstallSkipShortcuts,
@@ -61,6 +63,7 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.UploadWhileDownloading, p.UploadWhileDownloading)
 	applyString(&s.InstallCleanupPolicy, p.InstallCleanupPolicy)
 	applyBool(&s.AutoInstall, p.AutoInstall)
+	applyBool(&s.ElevateAhead, p.ElevateAhead)
 	applyString(&s.SourceRefreshInterval, p.SourceRefreshInterval)
 	applyBool(&s.VerifyAfterInstall, p.VerifyAfterInstall)
 	applyBool(&s.InstallSkipShortcuts, p.InstallSkipShortcuts)

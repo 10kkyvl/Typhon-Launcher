@@ -35,6 +35,10 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadFetchingNote': 'This can take up to a minute and a half.',
   'modals.addDownloadDestinationLabel': 'Destination folder',
   'modals.addDownloadBrowse': 'Browse',
+  'modals.addDownloadAutoInstallLabel': 'Install after the download',
+  'modals.addDownloadAutoInstallSub': 'The default comes from settings; here it applies to this download only',
+  'modals.addDownloadElevateAheadLabel': 'Confirm administrator rights now',
+  'modals.addDownloadElevateAheadSub': 'This download holds an installer that needs rights. Confirm now and the install runs without you; otherwise it waits for your confirmation',
   'modals.addDownloadStart': 'Start download',
 
   // AddSourceModal.svelte

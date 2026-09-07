@@ -315,8 +315,8 @@ describe("primaryAction", () => {
     ).toBe("update");
   });
 
-  it("offers Install for a game with releases", () => {
-    expect(primaryAction(status({ releaseCount: 3 })).kind).toBe("install");
+  it("offers Download for a game with releases and nothing on disk", () => {
+    expect(primaryAction(status({ releaseCount: 3 })).kind).toBe("download");
   });
 
   it("waits instead of guessing while releases load", () => {
@@ -382,6 +382,15 @@ describe("hubAction", () => {
       label: "Установить",
       disabled: false,
     });
+  });
+
+  it("keeps Download and Install apart for the same game", () => {
+    expect(hubAction(status({ releaseCount: 1 })).kind).toBe("download");
+    expect(
+      hubAction(
+        status({ releaseCount: 1, terminalDownload: { status: "completed" } }),
+      ).kind,
+    ).toBe("install-download");
   });
 
   it("prefers installing the completed download over fresh releases", () => {
