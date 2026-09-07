@@ -243,3 +243,59 @@ func TestConsentIsNotCarriedBetweenDevices(t *testing.T) {
 		}
 	}
 }
+
+// Согласие второй версии — единственное, под которым можно слать отчёты о
+// совместимости: они везут чип и версию macOS, а первая версия обещала
+// обратное. Растянуть старый ответ на новые данные значит собрать их без спроса.
+func TestCompatReportsNeedCurrentConsent(t *testing.T) {
+	cases := []struct {
+		name    string
+		version int
+		usage   bool
+		want    bool
+	}{
+		{"не спрашивали", 0, true, false},
+		{"старое согласие", 1, true, false},
+		{"текущее согласие, статистика включена", CurrentTelemetryConsent, true, true},
+		{"текущее согласие, статистика выключена", CurrentTelemetryConsent, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := Settings{TelemetryConsentVersion: c.version, AnonymousUsageStats: c.usage}
+			if got := s.CompatReportsAllowed(); got != c.want {
+				t.Fatalf("CompatReportsAllowed = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// Старое согласие остаётся действительным для того, на что его давали: подъём
+// версии не должен молча выключать телеметрию, которая уже шла.
+func TestOldConsentStillAllowsUsageStats(t *testing.T) {
+	s := Settings{TelemetryConsentVersion: 1, AnonymousUsageStats: true}
+	if !s.UsageStatsAllowed() {
+		t.Fatal("UsageStatsAllowed = false, старое согласие должно продолжать действовать")
+	}
+	if !s.TelemetryConsentRecorded() {
+		t.Fatal("TelemetryConsentRecorded = false")
+	}
+}
+
+// Тумблер, включённый руками до появления вопроса, — это согласие первой
+// версии, а не текущей. Записать ему текущую значило бы вместе со старым
+// ответом выдать разрешение на чип и версию системы, которых тот текст обещал
+// не собирать.
+func TestConsentPredatingThePromptRecordsTheVersionItAnswered(t *testing.T) {
+	path := writeConfig(t, `{"anonymousUsageStats":true,"anonymousDiagnostics":false}`)
+
+	got := mustServiceAt(t, path).GetSettings()
+	if !got.UsageStatsAllowed() {
+		t.Fatal("UsageStatsAllowed = false, ответ первой версии должен действовать")
+	}
+	if got.CompatReportsAllowed() {
+		t.Fatal("отчёты о совместимости разрешены ответом, который их не покрывал")
+	}
+	if got.TelemetryConsentVersion != legacyTelemetryConsent {
+		t.Fatalf("TelemetryConsentVersion = %d, want %d", got.TelemetryConsentVersion, legacyTelemetryConsent)
+	}
+}

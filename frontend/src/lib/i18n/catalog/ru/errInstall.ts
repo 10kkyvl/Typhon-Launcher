@@ -84,6 +84,9 @@ export const errInstall = {
   'errInstall.downloadSeeding': 'файлы сейчас раздаются — сначала остановите раздачу',
   'errInstall.downloadTorrentReadFailed': 'не удалось прочитать torrent-файл',
   'errInstall.downloadUnavailable': 'недоступно для этой загрузки',
+
+  'errInstall.wineBottleCreateFailed': 'не удалось подготовить окружение CrossOver для этой игры',
+  'errInstall.wineNotInstalled': 'для установки и запуска игр на macOS нужен CrossOver',
 } as const;
 
 export type ErrInstallKey = keyof typeof errInstall;

@@ -256,3 +256,50 @@ func TestIsNewer(t *testing.T) {
 		})
 	}
 }
+
+// Универсальный бандл macOS публикуется одним файлом, но заявлен в манифесте
+// дважды — под arm64 и под amd64. Проверяем, что это законный манифест и что
+// обе архитектуры находят свой артефакт.
+func TestManifestAcceptsOneBundleForBothMacArchitectures(t *testing.T) {
+	bundle := Artifact{
+		OS: "darwin", Kind: KindBundle,
+		Name: "typhon-darwin-universal.zip",
+		URL:  "https://example.com/launcher/0.4.1/typhon-darwin-universal.zip",
+		Size: 27341876, SHA256: strings.Repeat("ab", 32),
+	}
+	arm := bundle
+	arm.Arch = "arm64"
+	intel := bundle
+	intel.Arch = "amd64"
+	m := Manifest{
+		Version:     "0.4.1",
+		PublishedAt: time.Now().UTC(),
+		Artifacts:   []Artifact{arm, intel},
+	}
+
+	if err := m.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	for _, arch := range []string{"arm64", "amd64"} {
+		got, err := m.ArtifactFor("darwin", arch)
+		if err != nil {
+			t.Fatalf("ArtifactFor(darwin, %s): %v", arch, err)
+		}
+		if got.Name != bundle.Name {
+			t.Fatalf("для %s выбран %q", arch, got.Name)
+		}
+	}
+}
+
+// Вид артефакта — часть контракта: неизвестный лаунчер обязан отвергать, а не
+// пытаться применить.
+func TestArtifactRejectsUnknownKind(t *testing.T) {
+	a := Artifact{
+		OS: "darwin", Arch: "arm64", Kind: Kind("dmg"),
+		Name: "typhon.dmg", URL: "https://example.com/launcher/0.4.1/typhon.dmg",
+		Size: 10, SHA256: strings.Repeat("ab", 32),
+	}
+	if err := a.Validate(); !errors.Is(err, ErrUnsupportedKind) {
+		t.Fatalf("err = %v, want ErrUnsupportedKind", err)
+	}
+}

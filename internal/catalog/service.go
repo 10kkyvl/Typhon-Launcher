@@ -41,6 +41,7 @@ type Service struct {
 	overrides     []MatchOverride
 	overrideMap   map[string]string
 	idx           *index
+	compat        func(igdbID string) (works, total int, ok bool)
 }
 
 func NewService() (*Service, error) {
@@ -405,11 +406,15 @@ func (s *Service) TitleOf(id string) string {
 
 //wails:ignore
 func (s *Service) IGDBIDOf(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.igdbIDLocked(id)
+}
+
+func (s *Service) igdbIDLocked(id string) string {
 	if id == "" {
 		return ""
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	game, ok := s.idx.game(id)
 	if !ok {
 		return ""

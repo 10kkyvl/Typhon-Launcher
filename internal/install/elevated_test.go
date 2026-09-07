@@ -325,7 +325,11 @@ func TestRunElevatedSurvivesTransientStateReadFailure(t *testing.T) {
 
 	go func() {
 		<-time.After(60 * time.Millisecond)
-		if err := os.Remove(statePath); err != nil {
+		// Снятие блокировки повторяется: цикл опроса читает этот же путь, и
+		// Windows отказывает в удалении, пока держит хэндл от неудавшегося
+		// чтения. Одна попытка здесь роняла тест не по существу проверки —
+		// сама блокировка снимается, просто не с первого раза.
+		if err := removeWithRetry(statePath); err != nil {
 			t.Errorf("remove blocking directory: %v", err)
 			return
 		}
@@ -360,4 +364,17 @@ func TestRunElevatedReportsPersistentStateReadFailure(t *testing.T) {
 	if _, err := runElevated(context.Background(), spec); err == nil {
 		t.Fatal("runElevated returned nil for a state file that never became readable")
 	}
+}
+
+// removeWithRetry снимает блокирующий каталог, не сдаваясь на первой ошибке:
+// на Windows удаление конкурирует с читателем того же пути.
+func removeWithRetry(path string) error {
+	var err error
+	for range 100 {
+		if err = os.Remove(path); err == nil {
+			return nil
+		}
+		<-time.After(10 * time.Millisecond)
+	}
+	return err
 }

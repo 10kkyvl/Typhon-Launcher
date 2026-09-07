@@ -100,11 +100,12 @@ export const modals = {
     'Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и сетевые адреса удаляются перед отправкой.',
   'modals.telemetryConsentUsageTitle': 'Ещё и статистика использования',
   'modals.telemetryConsentUsageNote':
-    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
+    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
   'modals.telemetryConsentUsageToggleLabel': 'Анонимная статистика использования',
   'modals.telemetryConsentDisclosureSummary': 'Что именно отправляется',
   'modals.telemetryConsentErrorReportLabel': 'Отчёт об ошибке',
   'modals.telemetryConsentUsageEventLabel': 'Событие статистики использования',
+  'modals.telemetryConsentCompatReportLabel': 'Отчёт о совместимости игры',
   'modals.telemetryConsentSaving': 'Сохранение…',
   'modals.telemetryConsentDecline': 'Не отправлять',
   'modals.telemetryConsentAccept': 'Да, отправлять',
@@ -112,6 +113,7 @@ export const modals = {
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Диагностика',
   'modals.sentDataKindUsageStats': 'Статистика использования',
+  'modals.sentDataKindCompat': 'Совместимость игр',
   'modals.sentDataCopied': 'Скопировано',
   'modals.sentDataCopyFailed': 'Не удалось скопировать',
   'modals.sentDataTitle': 'Отправленные данные',

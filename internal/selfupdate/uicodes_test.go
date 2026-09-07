@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -38,10 +39,20 @@ func selfupdateCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []
 // Файлы читаются как текст, а не собираются, поэтому windows- и
 // devmock-only варианты попадают в сравнение вместе с общими.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := selfupdateCodesIn(t, selfupdateGoCodePattern,
-		"errors.go", "paths.go", "client.go", "download.go",
-		"apply.go", "apply_installer.go", "apply_windows.go", "apply_devmock.go",
-		"worker.go", "worker_windows.go", "worker_devmock.go", "service.go")
+	// Список файлов раньше вёлся руками, и новый платформенный файл в него
+	// просто не попадал: коды из него не проверялись вовсе. Берём весь пакет.
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("не найдены файлы пакета: %v", err)
+	}
+	sources := make([]string, 0, len(files))
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		sources = append(sources, f)
+	}
+	goCodes := selfupdateCodesIn(t, selfupdateGoCodePattern, sources...)
 	if len(goCodes) < 40 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 40", len(goCodes))
 	}

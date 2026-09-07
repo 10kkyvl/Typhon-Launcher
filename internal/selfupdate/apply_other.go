@@ -1,4 +1,4 @@
-//go:build !windows && !devmock
+//go:build !windows && !devmock && !darwin
 
 package selfupdate
 

@@ -13,7 +13,15 @@
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
-  import { getGenreFacets, queryCatalogGames, type CatalogGame, type GenreFacet } from '../../lib/services/sources';
+  import {
+    compatOnlyWorking,
+    getGenreFacets,
+    queryCatalogGames,
+    type CatalogGame,
+    type CompatInfo,
+    type GenreFacet,
+  } from '../../lib/services/sources';
+  import { getAppInfo } from '../../lib/services/system';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo, loadArt, requestArt } from '../../lib/stores/metadata';
@@ -37,6 +45,7 @@
     search: string;
     genre: string;
     sort: Sort;
+    compatOnly: boolean;
     items: CatalogGame[];
     total: number;
     page: number;
@@ -49,6 +58,11 @@
   let search = $state(restored?.search ?? '');
   let genre = $state(restored?.genre ?? '');
   let sort = $state<Sort>(restored?.sort ?? 'title');
+  let compatOnly = $state(restored?.compatOnly ?? false);
+  // Бейдж и фильтр имеют смысл только там, где игры идут через CrossOver: на
+  // Windows они запускаются нативно, и цифра «94% запускается» там ни о чём.
+  let compatRelevant = $state(false);
+  let compatByGame = $state<Record<string, CompatInfo>>({});
   let items = $state<CatalogGame[]>(restored?.items ?? []);
   let total = $state(restored?.total ?? 0);
   let page = $state(restored?.page ?? 0);
@@ -72,6 +86,7 @@
       search,
       genre,
       sort,
+      compatOnly,
       items: [...items],
       total,
       page,
@@ -116,9 +131,17 @@
     loading = true;
     appending = next > 1;
     try {
-      const result = await queryCatalogGames({ search, genre, sort, page: next, pageSize });
+      const result = await queryCatalogGames({
+        search,
+        genre,
+        sort,
+        compat: compatOnly ? compatOnlyWorking : '',
+        page: next,
+        pageSize,
+      });
       if (current !== token) return;
       items = next === 1 ? result.items : [...items, ...result.items];
+      compatByGame = next === 1 ? (result.compat ?? {}) : { ...compatByGame, ...(result.compat ?? {}) };
       total = result.total;
       page = result.page;
       failed = false;
@@ -162,10 +185,23 @@
     reload();
   }
 
+  function onCompatOnly() {
+    compatOnly = !compatOnly;
+    reload();
+  }
+
   onMount(() => {
     loadFacets();
     if (restored) requestArt(items.map((game) => game.id));
     else reload();
+  });
+
+  onMount(async () => {
+    try {
+      compatRelevant = (await getAppInfo()).platform === 'darwin';
+    } catch {
+      compatRelevant = false;
+    }
   });
 
   onMount(() => {
@@ -215,6 +251,16 @@
           {label}
         </Chip>
       {/each}
+      {#if compatRelevant}
+        <Chip
+          variant="outline"
+          selected={compatOnly}
+          title={msg('games.compatFilterHint')}
+          onclick={onCompatOnly}
+        >
+          {msg('games.compatFilterLabel')}
+        </Chip>
+      {/if}
     </div>
     <div class="controls">
       <DropdownMenu
@@ -282,6 +328,7 @@
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={shown.developer ?? ''}
+            compat={compatRelevant ? compatByGame[game.id] : undefined}
             onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
           >
             {#snippet footer()}

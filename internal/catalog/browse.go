@@ -28,15 +28,31 @@ type GameQuery struct {
 	Search   string `json:"search"`
 	Genre    string `json:"genre"`
 	Sort     string `json:"sort"`
+	Compat   string `json:"compat"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 }
 
+// CompatOnlyWorking — значение GameQuery.Compat, оставляющее только игры,
+// которые у людей запускаются. Фильтр применяется до нарезки на страницы:
+// отсеивать на фронте значит отдавать страницы разной длины.
+const CompatOnlyWorking = "works"
+
 type GamePage struct {
-	Items    []Game `json:"items"`
-	Total    int    `json:"total"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
+	Items []Game `json:"items"`
+	// Compat отдаётся отдельной картой, а не полем Game: общая статистика
+	// приходит с сервера и меняется сама по себе, а Game лежит на диске.
+	Compat   map[string]CompatInfo `json:"compat,omitempty"`
+	Total    int                   `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"pageSize"`
+}
+
+// CompatInfo — сколько машин из скольких запустили эту игру. Доля считается на
+// фронте: показывать её и «мало данных» — решение интерфейса.
+type CompatInfo struct {
+	Works int `json:"works"`
+	Total int `json:"total"`
 }
 
 type GenreFacet struct {
@@ -70,6 +86,9 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 		if genre != "" && !genreMatches(e.game.Genres, genre) {
 			continue
 		}
+		if q.Compat == CompatOnlyWorking && !s.compatWorksLocked(e.game.ID) {
+			continue
+		}
 		filtered = append(filtered, e.game)
 	}
 	sortGames(filtered, q.Sort)
@@ -77,7 +96,63 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	total := len(filtered)
 	start := min((q.Page-1)*q.PageSize, total)
 	end := min(start+q.PageSize, total)
-	return GamePage{Items: filtered[start:end], Total: total, Page: q.Page, PageSize: q.PageSize}
+	items := filtered[start:end]
+	return GamePage{
+		Items:    items,
+		Compat:   s.compatForLocked(items),
+		Total:    total,
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	}
+}
+
+// SetCompatLookup связывает каталог с общей статистикой. Каталог о ней ничего
+// не знает и без неё работает так же, только молчит про чужие машины.
+//
+// Колбэк спрашивают по идентификатору IGDB, а не по каноническому: перевод
+// одного в другой — работа каталога, и делать её обязан он сам. Колбэк,
+// которому пришлось бы дёргать каталог обратно, звался бы под его же
+// мьютексом и вешал бы запрос намертво.
+//
+//wails:ignore
+func (s *Service) SetCompatLookup(fn func(igdbID string) (works, total int, ok bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compat = fn
+}
+
+// compatWorksLocked отвечает на вопрос фильтра. Игра без наблюдений в «поедет»
+// не попадает: молчание — не то же самое, что подтверждённая работоспособность.
+func (s *Service) compatWorksLocked(gameID string) bool {
+	works, total, ok := s.compatLocked(gameID)
+	return ok && total > 0 && works*2 > total
+}
+
+func (s *Service) compatLocked(gameID string) (works, total int, ok bool) {
+	if s.compat == nil {
+		return 0, 0, false
+	}
+	igdbID := s.igdbIDLocked(gameID)
+	if igdbID == "" {
+		return 0, 0, false
+	}
+	return s.compat(igdbID)
+}
+
+func (s *Service) compatForLocked(items []Game) map[string]CompatInfo {
+	if s.compat == nil {
+		return nil
+	}
+	out := make(map[string]CompatInfo, len(items))
+	for i := range items {
+		if works, total, ok := s.compatLocked(items[i].ID); ok {
+			out[items[i].ID] = CompatInfo{Works: works, Total: total}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *Service) GenreFacets() []GenreFacet {

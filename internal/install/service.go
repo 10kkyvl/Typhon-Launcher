@@ -111,12 +111,21 @@ type Service struct {
 	store     *store
 	removals  *removalStore
 	runner    runner
+	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
+	// не прямой вызов: на macOS настоящая реализация заводит бутыль
+	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
+	// прогон тестов создаёт настоящие бутыли на машине разработчика.
+	prepareRuntime func(ctx context.Context, installDir, executable string) error
+	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
+	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
+	releaseRuntime func(installDir string) error
 
 	items      []*Installation
 	jobs       map[string]*job
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
+	repacker   func(releaseID string) string
 	usage      func(usagestats.Event)
 
 	historyRecorder func(history.Record) error
@@ -160,6 +169,8 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		freeSpace: platform.GetStorageInfo,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
+	s.prepareRuntime = prepareRuntime
+	s.releaseRuntime = releaseRuntime
 	return s, nil
 }
 
@@ -175,6 +186,17 @@ func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.title = fn
+}
+
+// SetRepackerResolver сообщает установке, чьей сборкой поставлена игра. Держать
+// это в библиотеке, а не смотреть в источники позже, приходится потому, что
+// релиз из фида пропадает при чистке, а игра остаётся.
+//
+//wails:ignore
+func (s *Service) SetRepackerResolver(fn func(releaseID string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repacker = fn
 }
 
 //wails:ignore
@@ -221,6 +243,19 @@ func (s *Service) titleOf(origin download.Origin) string {
 		return ""
 	}
 	return strings.TrimSpace(resolve(origin))
+}
+
+func (s *Service) repackerOf(releaseID string) string {
+	if releaseID == "" {
+		return ""
+	}
+	s.mu.Lock()
+	resolve := s.repacker
+	s.mu.Unlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(releaseID))
 }
 
 func (s *Service) nameFor(d download.Download) string {
@@ -973,7 +1008,14 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 	}
 	s.mu.Unlock()
 
-	if err := s.complete(id); err != nil {
+	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
+	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
+	// вместе с ним, а не висело после закрытия лаунчера.
+	confirmCtx, ctxErr := s.baseContext()
+	if ctxErr != nil {
+		return ctxErr
+	}
+	if err := s.complete(confirmCtx, id); err != nil {
 		s.fail(id, err)
 		return err
 	}

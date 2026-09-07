@@ -4,17 +4,19 @@
   let {
     selected = false,
     variant = 'outline',
+    title,
     onclick,
     children,
   }: {
     selected?: boolean;
     variant?: 'filled' | 'outline' | 'quiet';
+    title?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button type="button" class="chip {variant}" class:selected {onclick}>
+<button type="button" class="chip {variant}" class:selected {title} {onclick}>
   {@render children?.()}
 </button>
 

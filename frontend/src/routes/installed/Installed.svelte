@@ -47,6 +47,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
+  import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { bytesSize, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
@@ -60,6 +61,26 @@
 
   let search = $state('');
   let sort = $state<Sort>('recent');
+
+  // Журнал совместимости набирается сам из исходов запусков. Перечитываем его
+  // при каждой смене состава запущенных игр: сессия только что закончилась —
+  // значит вывод про игру мог измениться.
+  let compat = $state<Map<string, CompatStatus>>(new Map());
+  $effect(() => {
+    void $runningGames;
+    void $installedGames;
+    compatStatuses().then((next) => {
+      compat = next;
+    });
+  });
+
+  function brokenNote(game: LibraryGame): string {
+    const status = compat.get(game.id);
+    if (!status || status.state !== 'broken') return '';
+    return status.lastError
+      ? msg('games.compatBrokenWithReason', { reason: status.lastError })
+      : msg('games.compatBroken');
+  }
 
   function timeOf(value: string | null) {
     if (!value) return 0;
@@ -416,6 +437,11 @@
         <div class="status">
           <span class="status-label">{msg('games.lastPlayedLabel')}</span>
           <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
+          {#if brokenNote(game)}
+            <span class="compat" title={brokenNote(game)}>
+              <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} plain />
+            </span>
+          {/if}
         </div>
         <div class="actions">
           {#if running}

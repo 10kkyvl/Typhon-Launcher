@@ -730,3 +730,58 @@ func TestRemovalPlanFallsBackWhenUninstallerGone(t *testing.T) {
 		t.Fatalf("record still in library: %v", err)
 	}
 }
+
+// Бутыль CrossOver заводится под каталог установки, поэтому и умирать обязан
+// вместе с ним: иначе каждая удалённая игра оставляет сотни мегабайт мусора,
+// про который пользователь никогда не узнает.
+func TestRemoveGameReleasesRuntimeWithTheFiles(t *testing.T) {
+	s, _, registrar := newTestService(t)
+	dir := gameDir(t, "Game")
+	released := []string{}
+	s.releaseRuntime = func(installDir string) error {
+		released = append(released, installDir)
+		return nil
+	}
+	registrar.put(library.Game{
+		ID: "g1", Title: "Game", InstallDir: dir,
+		Executable: filepath.Join(dir, "Game.exe"), Owned: true,
+		InstallType: string(TypePortable),
+	})
+	s.mu.Lock()
+	s.items = append(s.items, &Installation{ID: "i1", GameID: "g1", Status: StatusCompleted, Destination: dir})
+	s.mu.Unlock()
+
+	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if len(released) != 1 || released[0] != dir {
+		t.Fatalf("released = %v, want [%s]", released, dir)
+	}
+}
+
+// Файлы остались на диске — значит и окружение запуска ещё нужно: игру можно
+// вернуть в библиотеку, и бутыль должен её дождаться.
+func TestRemoveGameKeepsRuntimeWhenFilesStay(t *testing.T) {
+	s, _, registrar := newTestService(t)
+	dir := gameDir(t, "Kept")
+	released := []string{}
+	s.releaseRuntime = func(installDir string) error {
+		released = append(released, installDir)
+		return nil
+	}
+	registrar.put(library.Game{
+		ID: "g1", Title: "Kept", InstallDir: dir,
+		Executable: filepath.Join(dir, "Kept.exe"), Owned: false,
+		InstallType: string(TypePortable),
+	})
+	s.mu.Lock()
+	s.items = append(s.items, &Installation{ID: "i1", GameID: "g1", Status: StatusCompleted, Destination: dir})
+	s.mu.Unlock()
+
+	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: false}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if len(released) != 0 {
+		t.Fatalf("released = %v, want none: файлы остались на месте", released)
+	}
+}

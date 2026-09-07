@@ -168,6 +168,12 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		if err := s.removeInstallDir(game.InstallDir); err != nil {
 			return err
 		}
+		// Окружение запуска живёт вместе с файлами: пережившее их бутыль —
+		// мусор, про который пользователь никогда не узнает. Но провал сноса
+		// не отменяет удаления игры, поэтому предупреждение, а не ошибка.
+		if err := s.releaseRuntime(game.InstallDir); err != nil {
+			slog.Warn("release game runtime", "id", gameID, "installDir", game.InstallDir, "error", err)
+		}
 	}
 
 	if err := s.forgetInstallations(gameID); err != nil {

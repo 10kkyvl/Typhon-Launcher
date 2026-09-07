@@ -6,7 +6,7 @@
   import { pause, resume } from '../stores/downloads';
   import { activeMove } from '../stores/relocate';
   import { navigate } from '../stores/router';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
@@ -60,10 +60,6 @@
     if (tone === 'danger') return 'var(--danger)';
     if (tone === 'muted') return 'var(--text-3)';
     return 'var(--accent)';
-  }
-
-  function pct(value: number) {
-    return Math.floor(Math.min(1, Math.max(0, value)) * 100);
   }
 
   function toggle() {
@@ -158,9 +154,9 @@
               <span class="row-body">
                 <span class="row-head">
                   <span class="row-name">{item.name}</span>
-                  <span class="row-pct">{pct(item.progress)}%</span>
+                  <span class="row-pct">{progressPercent(item.progress)}%</span>
                 </span>
-                <ProgressBar value={pct(item.progress)} color={toneColor(item.tone)} height={3} />
+                <ProgressBar value={progressPercent(item.progress)} color={toneColor(item.tone)} height={3} />
                 <span class="row-foot">
                   <span class="row-status">{item.status}</span>
                   {#if item.detail}
@@ -223,7 +219,7 @@
       {#if items.length > 1}
         <span class="pill-more">+{items.length - 1}</span>
       {/if}
-      <span class="pill-pct">{pct(summary.progress)}%</span>
+      <span class="pill-pct">{progressPercent(summary.progress)}%</span>
       <span class="pill-chevron" class:down={expanded}>
         <ChevronUp size="1.6rem" strokeWidth={1.8} />
       </span>

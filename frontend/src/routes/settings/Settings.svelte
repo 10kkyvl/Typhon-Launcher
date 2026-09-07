@@ -30,9 +30,11 @@
     exportLogs,
     getAppInfo,
     getSystemInfo,
+    getWineStatus,
     type AppInfo,
     type LogBundle,
     type SystemInfo,
+    type WineStatus,
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
@@ -67,6 +69,7 @@
 
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
+  let wineStatus = $state<WineStatus | null>(null);
 
   let legalDocs = $state<LegalMeta[]>([]);
   let legalError = $state('');
@@ -86,6 +89,7 @@
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
+    wineStatus = await getWineStatus();
     try {
       legalDocs = await listLegalDocuments();
     } catch {
@@ -738,6 +742,20 @@
             <div class="row-text">
               <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
               <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+            </div>
+          </div>
+        {/if}
+        {#if wineStatus?.required}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
+              <span class="row-sub">
+                {#if wineStatus.installed}
+                  CrossOver {wineStatus.version}
+                {:else}
+                  {msg('settings.aboutRuntimeMissing')}
+                {/if}
+              </span>
             </div>
           </div>
         {/if}

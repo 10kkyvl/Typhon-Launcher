@@ -580,10 +580,10 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 			return s.waitForUser(id, candidates)
 		}
 	}
-	return s.complete(id)
+	return s.complete(ctx, id)
 }
 
-func (s *Service) complete(id string) error {
+func (s *Service) complete(ctx context.Context, id string) error {
 	item, ok := s.snapshot(id)
 	if !ok {
 		return errNotFound
@@ -602,6 +602,12 @@ func (s *Service) complete(id string) error {
 			return err
 		}
 		game = registered
+		// Окружение запуска — то же удобство поверх установки, что и ярлык:
+		// если бутыль не завёлся, игра всё равно установлена, а попытка
+		// повторится при первом запуске.
+		if err := s.prepareRuntime(ctx, item.Destination, game.Executable); err != nil {
+			slog.Warn("prepare game runtime", "id", game.ID, "error", err)
+		}
 		if cfg.DesktopShortcuts {
 			// Ярлык — удобство поверх установки, а не её часть: рабочий
 			// стол может быть недоступен, и объявлять из-за этого
@@ -697,6 +703,8 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		ReleaseID:        item.Origin.ReleaseID,
 		SourceID:         item.Origin.SourceID,
 		CanonicalGameID:  item.Origin.GameID,
+		Repacker:         s.repackerOf(item.Origin.ReleaseID),
+		ReleaseVersion:   item.Origin.Version,
 		InstallType:      string(item.Type),
 		Owned:            item.Owned,
 		Uninstall:        item.Uninstall,

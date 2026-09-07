@@ -28,7 +28,7 @@
   } from '../stores/install';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -374,7 +374,7 @@
         <ProgressBar value={installation.progress * 100} />
         <div class="progress-foot">
           <span class="size">{bytesSize(installation.bytesDone)} / {bytesSize(installation.bytesTotal)}</span>
-          <span class="pct">{Math.floor(installation.progress * 100)}%</span>
+          <span class="pct">{progressPercent(installation.progress)}%</span>
         </div>
         {#if installation.currentFile}
           <span class="current-file">{truncateMiddle(installation.currentFile, 56)}</span>

@@ -45,6 +45,12 @@ func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {
 	return info, nil
 }
 
+// GetWineStatus говорит интерфейсу, нужен ли на этой платформе CrossOver и
+// установлен ли он: на macOS игры ставятся и запускаются только через него.
+func (s *Service) GetWineStatus() platform.WineStatus {
+	return platform.Wine()
+}
+
 func (s *Service) GetStorageInfo() (platform.StorageInfo, error) {
 	library := s.settings.GetSettings().LibraryPath
 	if library == "" {

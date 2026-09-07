@@ -35,6 +35,7 @@
   function kindLabel(kind: string): string {
     if (kind === 'diagnostics') return msg('modals.sentDataKindDiagnostics');
     if (kind === 'usagestats') return msg('modals.sentDataKindUsageStats');
+    if (kind === 'compat') return msg('modals.sentDataKindCompat');
     return kind || '—';
   }
 

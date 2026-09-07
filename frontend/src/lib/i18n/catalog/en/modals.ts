@@ -103,11 +103,12 @@ export const modals: Record<ModalsKey, Message> = {
     'This helps fix bugs faster. Only what broke goes into the report: paths, device name, and network addresses are removed before sending.',
   'modals.telemetryConsentUsageTitle': 'Also send usage statistics',
   'modals.telemetryConsentUsageNote':
-    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. Screens, clicks, and UI behavior are not tracked.',
+    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. Screens, clicks, and UI behavior are not tracked.',
   'modals.telemetryConsentUsageToggleLabel': 'Anonymous usage statistics',
   'modals.telemetryConsentDisclosureSummary': 'What exactly is sent',
   'modals.telemetryConsentErrorReportLabel': 'Error report',
   'modals.telemetryConsentUsageEventLabel': 'Usage statistics event',
+  'modals.telemetryConsentCompatReportLabel': 'Game compatibility report',
   'modals.telemetryConsentSaving': 'Saving…',
   'modals.telemetryConsentDecline': 'Do not send',
   'modals.telemetryConsentAccept': 'Yes, send',
@@ -115,6 +116,7 @@ export const modals: Record<ModalsKey, Message> = {
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Diagnostics',
   'modals.sentDataKindUsageStats': 'Usage statistics',
+  'modals.sentDataKindCompat': 'Game compatibility',
   'modals.sentDataCopied': 'Copied',
   'modals.sentDataCopyFailed': 'Failed to copy',
   'modals.sentDataTitle': 'Sent data',

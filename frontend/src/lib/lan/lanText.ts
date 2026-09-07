@@ -1,5 +1,5 @@
 import { msg } from '../i18n';
-import { bytesSize } from '../utils/format';
+import { bytesSize, progressPercent } from '../utils/format';
 import type { Offer, Stats, Transfer } from '../services/lan';
 import type { MessageKey } from '../i18n';
 
@@ -33,7 +33,7 @@ export function transferLabel(transfer: Transfer): string {
   switch (transfer.status) {
     case 'receiving': {
       if (transfer.total <= 0) return msg('transfers.lanReceiving');
-      const pct = Math.round((transfer.downloaded / transfer.total) * 100);
+      const pct = progressPercent(transfer.downloaded / transfer.total);
       return msg('transfers.lanReceivingPercent', { percent: pct });
     }
     case 'completed':

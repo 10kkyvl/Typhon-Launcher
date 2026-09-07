@@ -666,3 +666,115 @@ func TestFinishSessionCallsPlayRecorder(t *testing.T) {
 		t.Fatalf("record = %+v, want orphan %s..%s", got[0], startedAt, clock)
 	}
 }
+
+// Журнал совместимости должен отличать «игру закрыли» от «игра упала»: по
+// одной длительности это не различить, а вывод получается противоположный.
+func TestSessionOutcomeMarksUserStop(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	type outcome struct {
+		played        time.Duration
+		stoppedByUser bool
+	}
+	got := make(chan outcome, 1)
+	s.SetOutcomeRecorder(func(_ string, played time.Duration, stoppedByUser bool) {
+		got <- outcome{played: played, stoppedByUser: stoppedByUser}
+	})
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	s.mu.Lock()
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(30)
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("play: %v", err)
+	}
+	if err := s.StopGame(game.ID); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+
+	select {
+	case o := <-got:
+		if !o.stoppedByUser {
+			t.Fatal("stoppedByUser = false после StopGame")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("исход сессии не записан")
+	}
+}
+
+// Неудачный запуск обязан попадать в журнал: именно из таких записей и
+// набирается список игр, которые не работают.
+func TestLaunchFailureIsRecorded(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	reasons := make(chan string, 1)
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, reason string) {
+		codes <- code
+		reasons <- reason
+	})
+	s.start = func(context.Context, string, []string, string) (gameProcess, error) {
+		return nil, errors.New("окружение не готово")
+	}
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("PlayGame: ожидалась ошибка")
+	}
+
+	select {
+	case reason := <-reasons:
+		if reason == "" {
+			t.Fatal("причина пустая")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("неудачный запуск не записан")
+	}
+
+	// Код нужен общей статистике: по тексту причины отказы не различить.
+	select {
+	case code := <-codes:
+		if code != "library.launch_failed" {
+			t.Fatalf("код отказа = %q, want library.launch_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("код отказа не записан")
+	}
+}
+
+// Не поднявшееся окружение запуска — тоже несостоявшийся запуск. На macOS это
+// самая частая причина, по которой игра не идёт: бутыль CrossOver не завёлся.
+// Журнал, молчащий об этом, оставляет пользователя без подсказки.
+func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, _ string) { codes <- code })
+	s.prepare = func(context.Context, string, string) error {
+		return errors.New("бутыль не завёлся")
+	}
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("PlayGame: ожидалась ошибка")
+	}
+
+	select {
+	case code := <-codes:
+		if code != "library.runtime_failed" {
+			t.Fatalf("код отказа = %q, want library.runtime_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("отказ окружения не попал в журнал")
+	}
+}
