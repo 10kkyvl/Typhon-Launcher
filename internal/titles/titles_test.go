@@ -75,6 +75,24 @@ func TestParsePositive(t *testing.T) {
 			},
 		},
 		{
+			name: "dotted v prefix",
+			raw:  "Hollow Knight: Silksong v.1.0.29315 [Папка игры] (2025)",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Hollow Knight: Silksong")
+				want(t, "Version", p.Version, "1.0.29315")
+				if p.Year != 2025 {
+					t.Errorf("Year = %d, want 2025", p.Year)
+				}
+			},
+		},
+		{
+			name: "russian folder bracket",
+			raw:  "Warhammer 40000 Space Marine 2 [Папка игры]",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Warhammer 40000 Space Marine 2")
+			},
+		},
+		{
 			name: "prey year",
 			raw:  "Prey (2017) [MULTi9] v1.0",
 			check: func(t *testing.T, p Parsed) {

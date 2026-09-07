@@ -125,6 +125,10 @@ func extractBrackets(s string) (string, int, []string, []string) {
 		if inner == "" {
 			return " "
 		}
+		if tag, ok := bracketPhraseTags[Normalize(inner)]; ok {
+			tags = append(tags, tag)
+			return " "
+		}
 		words := reBracketSplit.Split(inner, -1)
 		var cleaned []string
 		for _, w := range words {

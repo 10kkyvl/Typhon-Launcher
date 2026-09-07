@@ -85,6 +85,12 @@ var releasePhraseTags = map[string]string{
 	"Selective Download": "selective-download",
 }
 
+// Bracket contents are only dropped when every word inside is a known token,
+// which never happens for a multi-word phrase in Russian.
+var bracketPhraseTags = map[string]string{
+	"папка игры": "portable",
+}
+
 type phraseTok struct {
 	norm []string
 	kind string
@@ -129,7 +135,7 @@ var (
 	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
-	reVVer      = regexp.MustCompile(`(?i)\bv(\d+(?:\.\d+){0,4})\b`)
+	reVVer      = regexp.MustCompile(`(?i)\bv\.?(\d+(?:\.\d+){0,4})\b`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
 	reDLCCount  = regexp.MustCompile(`(?i)\+\s*(\d+)\s*(?:dlc(?:'s|s)?|дополнени\p{L}*)`)
 
