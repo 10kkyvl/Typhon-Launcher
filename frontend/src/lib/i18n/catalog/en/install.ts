@@ -5,6 +5,7 @@ export const install: Record<InstallKey, Message> = {
   'release.duplicateSources': { one: 'source', other: 'sources' },
   'release.loading': 'Loading releases…',
   'release.new': 'New',
+  'release.newRelease': 'New release',
   'release.unavailable': 'Unavailable',
   'verify.missingFiles': { one: '{count} file', other: '{count} files' },
   'verify.corruptedBlocks': { one: '{count} block', other: '{count} blocks' },

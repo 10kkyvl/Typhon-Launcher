@@ -32,6 +32,7 @@
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
@@ -581,7 +582,7 @@
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = { releaseId: request.releaseId, sourceId: request.sourceId, gameId: request.gameId };
+      downloadOrigin = releaseOrigin(request);
       downloadModalOpen = true;
     } catch (err) {
       toast(err instanceof Error && err.message ? err.message : msg('games.detailPrepareDownloadError'), 'danger');
@@ -916,7 +917,8 @@
               groups={releaseGroups}
               loading={releasesLoading}
               currentReleaseId={localGame?.releaseId ?? ''}
-              updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
               ondownload={downloadRelease}
             />
           </section>
