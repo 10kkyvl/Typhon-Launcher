@@ -17,10 +17,20 @@ func entry(title, magnet string, size int64) feed.Entry {
 type stubMatcher struct {
 	resolve   func([]catalog.Query) []catalog.Match
 	provision func([]catalog.Query) (map[string]catalog.Game, error)
+	epoch     uint64
+	resolved  int
 }
 
 func (m *stubMatcher) ResolveAll(queries []catalog.Query) []catalog.Match {
+	m.resolved += len(queries)
 	return m.resolve(queries)
+}
+
+func (m *stubMatcher) Epoch() uint64 {
+	if m.epoch == 0 {
+		return 1
+	}
+	return m.epoch
 }
 
 func (m *stubMatcher) Provision(queries []catalog.Query) (map[string]catalog.Game, error) {

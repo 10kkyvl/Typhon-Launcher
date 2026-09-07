@@ -273,8 +273,9 @@ func Builtin() (Spec, error) {
 }
 
 var (
-	active  atomic.Pointer[Dict]
-	initErr error
+	active     atomic.Pointer[Dict]
+	generation atomic.Uint64
+	initErr    error
 )
 
 // Вшитый словарь разбирается один раз при загрузке пакета. Ошибка здесь
@@ -320,7 +321,13 @@ func SetActive(d *Dict) {
 		return
 	}
 	active.Store(d)
+	generation.Add(1)
 }
+
+// Generation растёт при каждой замене словаря. По нему потребители понимают,
+// что разбор названий изменился и прошлые результаты матчинга больше не
+// действительны.
+func Generation() uint64 { return generation.Load() }
 
 func Parse(raw string) Parsed { return Active().Parse(raw) }
 

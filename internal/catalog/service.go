@@ -35,6 +35,7 @@ var (
 
 type Service struct {
 	mu            sync.Mutex
+	epoch         uint64
 	gamesPath     string
 	overridesPath string
 	games         []Game
@@ -93,7 +94,11 @@ func loadList(path string, version int, out any) error {
 	return err
 }
 
+// rebuildLocked двигает эпоху: любое изменение каталога или переопределений
+// может изменить исход матчинга, и по эпохе потребители понимают, что прошлый
+// результат больше не действителен.
 func (s *Service) rebuildLocked() {
+	s.epoch++
 	s.idx = buildIndex(s.games)
 	s.overrideMap = make(map[string]string, len(s.overrides))
 	for _, o := range s.overrides {
@@ -122,6 +127,43 @@ func (s *Service) persistOverridesLocked() error {
 		return uierr.Wrap("catalog.save_failed", err)
 	}
 	return nil
+}
+
+// addToIndexLocked добавляет игру в индекс, не пересобирая его целиком, и
+// двигает эпоху: новая запись меняет исход матчинга ровно так же, как её
+// правка через rebuildLocked.
+func (s *Service) addToIndexLocked(game Game) {
+	s.idx.add(game)
+	s.epoch++
+}
+
+// Epoch — версия того, от чего зависит матчинг: содержимого каталога и
+// активного словаря названий. Числа сворачиваются в одно через FNV-1a, чтобы
+// в релизе хранилось одно поле, а не два: сравнивается оно только на
+// равенство, порядок и разница значений смысла не имеют.
+//
+//wails:ignore
+func (s *Service) Epoch() uint64 {
+	s.mu.Lock()
+	catalogEpoch := s.epoch
+	s.mu.Unlock()
+
+	const (
+		offset = 14695981039346656037
+		prime  = 1099511628211
+	)
+	h := uint64(offset)
+	for _, part := range [2]uint64{catalogEpoch, titles.Generation()} {
+		for i := 0; i < 8; i++ {
+			h ^= (part >> (8 * i)) & 0xff
+			h *= prime
+		}
+	}
+	if h == 0 {
+		// Ноль в релизе означает «не матчилось», поэтому эпоха его не занимает.
+		return 1
+	}
+	return h
 }
 
 func (s *Service) ListGames() []Game {
@@ -194,7 +236,7 @@ func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 		}
 		game := newGame(q)
 		s.games = append(s.games, game)
-		s.idx.add(game)
+		s.addToIndexLocked(game)
 		out[q.Normalized] = game
 		created++
 	}
@@ -230,7 +272,7 @@ func (s *Service) AddGame(game Game) (Game, error) {
 		return Game{}, errDuplicateID
 	}
 	s.games = append(s.games, game)
-	s.idx.add(game)
+	s.addToIndexLocked(game)
 	if err := s.persistGamesLocked(); err != nil {
 		return Game{}, err
 	}

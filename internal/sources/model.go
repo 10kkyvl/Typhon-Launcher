@@ -95,6 +95,7 @@ type Release struct {
 	MatchStatus     catalog.Status `json:"matchStatus"`
 	MatchConfidence float64        `json:"matchConfidence"`
 	MatchMethod     string         `json:"matchMethod"`
+	MatchEpoch      uint64         `json:"matchEpoch,omitempty"`
 	Availability    Availability   `json:"availability"`
 	Locked          bool           `json:"locked,omitempty"`
 	Ignored         bool           `json:"ignored,omitempty"`
