@@ -52,6 +52,7 @@ type Source struct {
 	ETag          string     `json:"etag,omitempty"`
 	LastModified  string     `json:"lastModified,omitempty"`
 	FeedVersion   int        `json:"feedVersion"`
+	Insecure      bool       `json:"insecure,omitempty"`
 	Entries       int        `json:"entries"`
 	Invalid       int        `json:"invalid"`
 	Matched       int        `json:"matched"`
@@ -170,6 +171,10 @@ type Preview struct {
 	FeedVersion int      `json:"feedVersion"`
 	Entries     int      `json:"entries"`
 	Invalid     int      `json:"invalid"`
+	Games       int      `json:"games"`
+	Known       int      `json:"known"`
+	Unknown     int      `json:"unknown"`
+	Insecure    bool     `json:"insecure,omitempty"`
 	Warnings    []string `json:"warnings,omitempty"`
 	Fingerprint string   `json:"fingerprint"`
 	Duplicate   bool     `json:"duplicate"`

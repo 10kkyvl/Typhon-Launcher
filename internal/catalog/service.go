@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ import (
 )
 
 const (
+	// Ниже этого числа запросов накладные расходы на воркеров съедают выигрыш.
+	parallelResolveFloor = 256
+
 	gamesVersion     = 1
 	overridesVersion = 1
 	maxAliasLen      = 120
@@ -34,7 +38,7 @@ var (
 )
 
 type Service struct {
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	epoch         uint64
 	gamesPath     string
 	overridesPath string
@@ -144,9 +148,9 @@ func (s *Service) addToIndexLocked(game Game) {
 //
 //wails:ignore
 func (s *Service) Epoch() uint64 {
-	s.mu.Lock()
+	s.mu.RLock()
 	catalogEpoch := s.epoch
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	const (
 		offset = 14695981039346656037
@@ -167,14 +171,14 @@ func (s *Service) Epoch() uint64 {
 }
 
 func (s *Service) ListGames() []Game {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return append([]Game(nil), s.games...)
 }
 
 func (s *Service) GetGame(id string) (Game, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	game, ok := s.idx.game(id)
 	if !ok {
 		return Game{}, errNotFound
@@ -186,8 +190,8 @@ func (s *Service) SearchGames(query string, limit int) []Game {
 	if limit <= 0 {
 		limit = defaultSearchCap
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.idx.search(query, limit)
 }
 
@@ -199,19 +203,65 @@ func (s *Service) ListOverrides() []MatchOverride {
 
 //wails:ignore
 func (s *Service) Resolve(q Query) Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.idx.resolve(normalizeQuery(q), s.overrideMap)
 }
 
+// ResolveAll — самая тяжёлая операция каталога: пачка на 20 тысяч названий
+// против каталога на 50 тысяч игр считается около двух с половиной секунд в
+// один поток. Резолв идёт воркерами по числу ядер, результат кладётся в
+// заранее выделенный слайс по индексу запроса — порядок не зависит от
+// планировщика.
+//
+// Читательский лок держится всё это время, а не снимается после снимка
+// указателя: индекс дописывается на месте (AddGame, Provision), поэтому
+// снимок не защищает от одновременной записи — это ловил
+// TestResolveAllRacesWithCatalogWrites. Записи в каталог редки и коротки, а
+// чтения из UI друг друга больше не блокируют.
+//
 //wails:ignore
 func (s *Service) ResolveAll(queries []Query) []Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	out := make([]Match, len(queries))
-	for i, q := range queries {
-		out[i] = s.idx.resolve(normalizeQuery(q), s.overrideMap)
+	if len(queries) == 0 {
+		return out
 	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	idx, overrides := s.idx, s.overrideMap
+
+	workers := runtime.NumCPU()
+	if workers > len(queries) {
+		workers = len(queries)
+	}
+	if workers <= 1 || len(queries) < parallelResolveFloor {
+		for i, q := range queries {
+			out[i] = idx.resolve(normalizeQuery(q), overrides)
+		}
+		return out
+	}
+
+	// Воркеров ровно workers, и каждый забирает свой непрерывный кусок — это
+	// и есть ограничение параллелизма. errgroup здесь не нужен: resolve только
+	// читает индекс и не может дать ошибку, а его Wait возвращал бы значение,
+	// которое некуда девать.
+	var wg sync.WaitGroup
+	chunk := (len(queries) + workers - 1) / workers
+	for start := 0; start < len(queries); start += chunk {
+		end := start + chunk
+		if end > len(queries) {
+			end = len(queries)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := start; i < end; i++ {
+				out[i] = idx.resolve(normalizeQuery(queries[i]), overrides)
+			}
+		}()
+	}
+	wg.Wait()
 	return out
 }
 
