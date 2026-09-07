@@ -9,9 +9,11 @@ import (
 func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	if !q.ExternalIDs.empty() {
 		for _, key := range externalKeys(q.ExternalIDs) {
-			if pos, ok := idx.byExternal[key]; ok {
-				return single(idx.entries[pos].game, scoreExternalID, MethodExternalID)
+			pos, ok := idx.byExternal[key]
+			if !ok || !idx.entries[pos].matchable {
+				continue
 			}
+			return single(idx.entries[pos].game, scoreExternalID, MethodExternalID)
 		}
 	}
 	if q.Normalized == "" {
@@ -26,6 +28,9 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	best := map[int]Candidate{}
 	consider := func(pos int, score float64, method Method) {
 		e := idx.entries[pos]
+		if !e.matchable {
+			return
+		}
 		score = adjust(score, q, e.game)
 		if current, ok := best[pos]; ok && current.Score >= score {
 			return
@@ -47,6 +52,9 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	}
 	for _, pos := range idx.candidates(q.Normalized) {
 		e := idx.entries[pos]
+		if !e.matchable {
+			continue
+		}
 		score := titles.Similarity(q.Normalized, e.normalized)
 		for _, alias := range e.aliases {
 			score = maxFloat(score, titles.Similarity(q.Normalized, alias))

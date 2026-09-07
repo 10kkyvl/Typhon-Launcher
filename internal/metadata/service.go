@@ -732,6 +732,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		Genres:       meta.Genres,
 		Themes:       meta.Themes,
 		Platforms:    meta.Platforms,
+		GameType:     meta.GameType,
 		CoverAssetID: batch.cover,
 		HeroAssetID:  batch.hero,
 		UpdatedAt:    time.Now(),

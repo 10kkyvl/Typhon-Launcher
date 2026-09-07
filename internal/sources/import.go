@@ -49,7 +49,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			Languages:       parsed.Languages,
 			Year:            parsed.Year,
 			Tags:            parsed.Tags,
-			Repacker:        repackerOf(parsed.Tags),
+			Repacker:        titles.Repacker(parsed.Tags),
 			DLCCount:        parsed.DLCCount,
 			Size:            e.Size,
 			SizeUnknown:     e.SizeUnknown,
@@ -75,21 +75,6 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		out = append(out, r)
 	}
 	return out
-}
-
-var repackerPriority = []string{"fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade"}
-
-func repackerOf(tags []string) string {
-	set := make(map[string]bool, len(tags))
-	for _, t := range tags {
-		set[t] = true
-	}
-	for _, p := range repackerPriority {
-		if set[p] {
-			return p
-		}
-	}
-	return ""
 }
 
 func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {

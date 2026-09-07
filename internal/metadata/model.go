@@ -47,6 +47,7 @@ type GameMetadata struct {
 	Genres      []string   `json:"genres,omitempty"`
 	Themes      []string   `json:"themes,omitempty"`
 	Platforms   []string   `json:"platforms,omitempty"`
+	GameType    string     `json:"gameType,omitempty"`
 	Cover       *ImageRef  `json:"cover,omitempty"`
 	Screenshots []ImageRef `json:"screenshots,omitempty"`
 }

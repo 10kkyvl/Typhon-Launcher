@@ -24,6 +24,7 @@ type Game struct {
 	Genres            []string    `json:"genres,omitempty"`
 	Themes            []string    `json:"themes,omitempty"`
 	Platforms         []string    `json:"platforms,omitempty"`
+	GameType          string      `json:"gameType,omitempty"`
 	ExternalIDs       ExternalIDs `json:"externalIds"`
 	Aliases           []string    `json:"aliases,omitempty"`
 	CoverAssetID      string      `json:"coverAssetId,omitempty"`

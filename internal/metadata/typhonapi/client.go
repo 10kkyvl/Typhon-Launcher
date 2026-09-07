@@ -183,6 +183,7 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 		Genres:      payload.Genres,
 		Themes:      payload.Themes,
 		Platforms:   payload.Platforms,
+		GameType:    strings.TrimSpace(payload.GameType),
 	}
 	if payload.Cover != nil && payload.Cover.URL != "" {
 		meta.Cover = &metadata.ImageRef{URL: payload.Cover.URL, Width: payload.Cover.Width, Height: payload.Cover.Height}

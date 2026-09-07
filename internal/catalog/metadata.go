@@ -24,6 +24,7 @@ type MetadataPatch struct {
 	Genres       []string
 	Themes       []string
 	Platforms    []string
+	GameType     string
 	CoverAssetID string
 	HeroAssetID  string
 	UpdatedAt    time.Time
@@ -84,6 +85,7 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 	game.Genres = copyStrings(patch.Genres)
 	game.Themes = copyStrings(patch.Themes)
 	game.Platforms = copyStrings(patch.Platforms)
+	game.GameType = strings.TrimSpace(patch.GameType)
 	if patch.ReleaseDate != nil {
 		released := *patch.ReleaseDate
 		game.ReleaseDate = &released

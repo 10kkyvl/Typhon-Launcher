@@ -44,6 +44,8 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
+	"typhon/internal/titles"
+	"typhon/internal/titlesdict"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
@@ -214,6 +216,10 @@ func main() {
 		playRequested = false
 	}
 
+	if err := titles.Ready(); err != nil {
+		fatal("load title dictionary", err)
+	}
+
 	settingsService, err := settings.NewService()
 	if err != nil {
 		fatal("start settings service", err)
@@ -246,6 +252,10 @@ func main() {
 	installService, err := install.NewService(settingsService, downloadManager, libraryService)
 	if err != nil {
 		fatal("start install service", err)
+	}
+	titlesDictService, err := titlesdict.NewService()
+	if err != nil {
+		fatal("start title dictionary service", err)
 	}
 	catalogService, err := catalog.NewService()
 	if err != nil {
@@ -451,6 +461,7 @@ func main() {
 		application.NewService(profileService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
+		application.NewService(titlesDictService),
 		application.NewService(catalogService),
 		application.NewService(sourcesService),
 		application.NewService(searchService),
