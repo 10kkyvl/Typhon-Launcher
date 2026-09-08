@@ -26,7 +26,8 @@ Typhon ships with no games, carries no preinstalled sources and offers no list o
 It does not host or supply game files. Sources are added by the user, at the user's own
 responsibility.
 
-The Windows build is the one that ships. A macOS build exists and runs games through
+The Windows build is the one that ships. A macOS build exists for **Apple silicon only**
+(Intel Macs are not supported) and runs games through
 [CrossOver](https://www.codeweavers.com/crossover), which you install yourself — without it
 the launcher still downloads, but cannot install or start a game. That build carries no Apple
 Developer signature and is not going to get one, so Gatekeeper blocks it after a download:

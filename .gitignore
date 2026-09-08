@@ -30,3 +30,6 @@ Thumbs.db
 typhon.exe
 docs/
 notices.exe
+
+# Скиллы проекта для Claude Code — в репозитории
+!.claude/skills/

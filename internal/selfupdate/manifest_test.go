@@ -257,37 +257,34 @@ func TestIsNewer(t *testing.T) {
 	}
 }
 
-// Универсальный бандл macOS публикуется одним файлом, но заявлен в манифесте
-// дважды — под arm64 и под amd64. Проверяем, что это законный манифест и что
-// обе архитектуры находят свой артефакт.
-func TestManifestAcceptsOneBundleForBothMacArchitectures(t *testing.T) {
-	bundle := Artifact{
-		OS: "darwin", Kind: KindBundle,
-		Name: "typhon-darwin-universal.zip",
-		URL:  "https://example.com/launcher/0.4.1/typhon-darwin-universal.zip",
-		Size: 27341876, SHA256: strings.Repeat("ab", 32),
-	}
-	arm := bundle
-	arm.Arch = "arm64"
-	intel := bundle
-	intel.Arch = "amd64"
+// Под macOS публикуется только arm64: универсальный бандл macOS 26 встречает
+// окном про Intel, а Tahoe — последняя система для интеловых маков. Проверяем,
+// что манифест с одним маковским артефактом законен и что amd64 получает
+// внятный отказ, а не чужой бандл.
+func TestManifestShipsOnlyArm64ForMac(t *testing.T) {
 	m := Manifest{
 		Version:     "0.4.1",
 		PublishedAt: time.Now().UTC(),
-		Artifacts:   []Artifact{arm, intel},
+		Artifacts: []Artifact{{
+			OS: "darwin", Arch: "arm64", Kind: KindBundle,
+			Name: "typhon-darwin-arm64.zip",
+			URL:  "https://example.com/launcher/0.4.1/typhon-darwin-arm64.zip",
+			Size: 27341876, SHA256: strings.Repeat("ab", 32),
+		}},
 	}
 
 	if err := m.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	for _, arch := range []string{"arm64", "amd64"} {
-		got, err := m.ArtifactFor("darwin", arch)
-		if err != nil {
-			t.Fatalf("ArtifactFor(darwin, %s): %v", arch, err)
-		}
-		if got.Name != bundle.Name {
-			t.Fatalf("для %s выбран %q", arch, got.Name)
-		}
+	got, err := m.ArtifactFor("darwin", "arm64")
+	if err != nil {
+		t.Fatalf("ArtifactFor(darwin, arm64): %v", err)
+	}
+	if got.Name != "typhon-darwin-arm64.zip" {
+		t.Fatalf("для arm64 выбран %q", got.Name)
+	}
+	if _, err := m.ArtifactFor("darwin", "amd64"); !errors.Is(err, ErrNoArtifact) {
+		t.Fatalf("ArtifactFor(darwin, amd64) = %v, want ErrNoArtifact", err)
 	}
 }
 

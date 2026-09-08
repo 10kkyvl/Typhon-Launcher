@@ -84,14 +84,17 @@ jobs:
             exit 1
           fi
 
-      # Один универсальный бандл вместо двух сборок: он покрывает и Apple
-      # Silicon, и Intel, а манифест ссылается на него обеими архитектурами.
-      - name: Package the universal bundle
+      # Только arm64. Универсальный бандл macOS 26 встречает окном «Support
+      # Ending for Intel-Based Apps»: система ругается на x86_64-слайс даже
+      # тогда, когда приложение стартует нативно. Tahoe — последняя macOS для
+      # интеловых маков, поэтому слайс убран, а не спрятан. Раннер macos-latest
+      # сам arm64, так что задача собирает нативно.
+      - name: Package the arm64 bundle
         env:
           CGO_ENABLED: "1"
-        run: wails3 task darwin:package:zip:universal
+        run: wails3 task darwin:package:zip
 
-      - name: Verify the bundle carries no devmock code
+      - name: Verify the bundle is arm64 and carries no devmock code
         run: |
           set -euo pipefail
           exe="bin/typhon.app/Contents/MacOS/typhon"
@@ -100,10 +103,10 @@ jobs:
             exit 1
           fi
           archs="$(lipo -archs "$exe")"
-          case "$archs" in
-            *x86_64*arm64*|*arm64*x86_64*) ;;
-            *) echo "bundle is not universal: $archs" >&2; exit 1 ;;
-          esac
+          if [ "$archs" != "arm64" ]; then
+            echo "bundle must be arm64 only, got: $archs" >&2
+            exit 1
+          fi
           if LC_ALL=C grep -q "TYPHON_DEVMOCK_ENABLED" "$exe"; then
             echo "devmock marker found in the release bundle" >&2
             exit 1
@@ -112,8 +115,8 @@ jobs:
       - name: Upload the bundle for the release job
         uses: actions/upload-artifact@v4
         with:
-          name: typhon-darwin-universal
-          path: bin/typhon-darwin-universal.zip
+          name: typhon-darwin-arm64
+          path: bin/typhon-darwin-arm64.zip
           if-no-files-found: error
           retention-days: 1
 
@@ -239,14 +242,14 @@ jobs:
       - name: Download the macOS bundle
         uses: actions/download-artifact@v4
         with:
-          name: typhon-darwin-universal
+          name: typhon-darwin-arm64
           path: bin
 
       - name: Verify the macOS artifact
         shell: bash
         run: |
           set -euo pipefail
-          bundle="bin/typhon-darwin-universal.zip"
+          bundle="bin/typhon-darwin-arm64.zip"
           if [ ! -s "$bundle" ]; then
             echo "$bundle is missing or empty" >&2
             exit 1
@@ -265,8 +268,7 @@ jobs:
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe" \
-            -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-universal.zip" \
-            -artifact "os=darwin,arch=amd64,kind=bundle,path=bin/typhon-darwin-universal.zip"
+            -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
 
       - name: Publish installer and manifest to Garage over SSH
         shell: bash
@@ -311,8 +313,8 @@ jobs:
             "s3://$bucket/launcher/releases/$version/typhon-amd64-installer.exe" \
             --endpoint-url http://127.0.0.1:3900
 
-          run_aws s3 cp /data/typhon-darwin-universal.zip \
-            "s3://$bucket/launcher/releases/$version/typhon-darwin-universal.zip" \
+          run_aws s3 cp /data/typhon-darwin-arm64.zip \
+            "s3://$bucket/launcher/releases/$version/typhon-darwin-arm64.zip" \
             --endpoint-url http://127.0.0.1:3900
 
           run_aws s3 cp /data/manifest.json \
@@ -326,7 +328,7 @@ jobs:
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
-            bin/typhon-darwin-universal.zip \
+            bin/typhon-darwin-arm64.zip \
             manifest.json \
             publish-remote.sh \
             "$VPS_USER@$VPS_HOST:$remote_dir/"
