@@ -34,59 +34,71 @@ export function releaseBadge(input: ReleaseBadgeInput): ReleaseBadge {
 
 export type BuildKind =
   | 'portable'
-  | 'repack'
+  | 'archive'
   | 'steam-rip'
   | 'gog'
   | 'license'
   | 'early-access'
   | 'demo'
   | 'p2p'
-  | 'archive'
   | 'none';
 
-// Порядок отвечает на вопрос «чем эта раздача отличается от соседней»: форма
-// поставки важнее способа упаковки, способ упаковки важнее происхождения файлов.
+// Порядок отвечает на вопрос «в каком виде это приедет»: форма поставки важнее
+// происхождения файлов, а происхождение — важнее того, кто их выложил.
 const buildOrder = [
   'portable',
-  'repack',
+  'archive',
   'steam-rip',
   'gog',
   'license',
   'early-access',
   'demo',
   'p2p',
-  'archive',
 ] as const;
 
 const buildLabels: Record<Exclude<BuildKind, 'none'>, MessageKey> = {
   portable: 'release.buildPortable',
-  repack: 'release.buildRepack',
+  archive: 'release.buildArchive',
   'steam-rip': 'release.buildSteamRip',
   gog: 'release.buildGog',
   license: 'release.buildLicense',
   'early-access': 'release.buildEarlyAccess',
   demo: 'release.buildDemo',
   p2p: 'release.buildP2P',
-  archive: 'release.buildArchive',
 };
 
 // Слаг уезжает на сервер общей статистики и потому латинский, а подписаны
-// сборщики так, как их знают в раздачах. Остальным хватает слага в верхнем
-// регистре.
+// сборщики так, как их знают в раздачах.
 const repackerLabels: Record<string, string> = {
-  mechanics: 'МЕХАНИКИ',
-  elementarts: 'ELEMENT ARTS',
-  rggames: 'R.G. GAMES',
-  blackbeard: 'BLACK BEARD',
+  fitgirl: 'FitGirl',
+  elamigos: 'ElAmigos',
+  dodi: 'DODI',
+  kaoskrew: 'KaosKrew',
+  mechanics: 'Механики',
+  elementarts: 'Element Arts',
+  rggames: 'R.G. Games',
+  blackbeard: 'Black Beard',
+  masterdarkness: 'MasterDarkness',
+  mop030b: 'MOP030B',
+  spacex: 'SpaceX',
+  xlaser: 'XLASER',
+  seyter: 'SEYTER',
+  vicknet: 'VickNet',
+  recoding: 'ReCoding',
+  unigamers: 'UniGamers',
+  revolution: 'REVOLUTiON',
+  armeniac: 'ARMENIAC',
+  others: "Other's",
+  nemos: 'nemos',
+  qoob: 'qoob',
+  z10yded: 'z10yded',
+  dixen18: 'dixen18',
 };
 
-export function buildKind(release: Pick<Release, 'tags' | 'repacker'>): BuildKind {
+export function buildKind(release: Pick<Release, 'tags'>): BuildKind {
   const tags = release.tags ?? [];
   for (const kind of buildOrder) {
-    if (!tags.includes(kind)) continue;
-    // Имя сборщика говорит то же самое и точнее, рядом с ним общий «Репак» лишний.
-    if (kind === 'repack' && release.repacker) return 'none';
-    return kind;
+    if (tags.includes(kind)) return kind;
   }
   return 'none';
 }
@@ -96,5 +108,14 @@ export function buildLabel(kind: BuildKind): MessageKey | null {
 }
 
 export function repackerLabel(slug: string): string {
-  return repackerLabels[slug] ?? slug.toUpperCase();
+  return repackerLabels[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+// Приписка к источнику: кто собрал раздачу. Отдельно от формы поставки, потому
+// что «репак от Xatab» отвечает на другой вопрос, чем «портативная» — и, в
+// отличие от неё, привязан к тому, откуда раздача взялась.
+export function repackNote(release: Pick<Release, 'tags' | 'repacker'>, repackWord: string): string {
+  const name = release.repacker ? repackerLabel(release.repacker) : '';
+  if ((release.tags ?? []).includes('repack')) return name ? `${repackWord} ${name}` : repackWord;
+  return name;
 }

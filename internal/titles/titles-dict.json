@@ -68,7 +68,12 @@
   "markerTags": {
     "portable": "portable",
     "папка игры": "portable",
+    "папка игры steam": "portable",
+    "папка игры egs": "portable",
+    "папка игры microsoft store": "portable",
     "архив": "archive",
+    "архив steam": "archive",
+    "l": "license",
     "archive": "archive",
     "p2p": "p2p",
     "gog": "gog",

@@ -186,8 +186,8 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 		if inner == "" {
 			return " "
 		}
-		if tag, ok := d.bracketPhrase(Normalize(inner)); ok {
-			tags = append(tags, tag)
+		if found, ok := d.bracketMarker(inner); ok {
+			tags = append(tags, found...)
 			return " "
 		}
 		words := reBracketSplit.Split(inner, -1)

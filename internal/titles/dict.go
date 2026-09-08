@@ -401,16 +401,16 @@ func (d *Dict) isFiller(lower string) bool {
 	return ok
 }
 
-// bracketPhrase отвечает за скобку, целиком занятую известной фразой:
+// bracketMarker отвечает за скобку, целиком занятую известной фразой:
 // «[Папка игры]» не разбирается по словам, потому что скобка выбрасывается
-// только тогда, когда каждое слово внутри — известный токен. Маркеры раздачи
-// читаются и отсюда: один источник пишет «| Архив» в хвосте, другой — «[Архив]»
-// посреди названия, и это одна и та же пометка.
-func (d *Dict) bracketPhrase(norm string) (string, bool) {
-	if tag, ok := d.bracketPhraseTags[norm]; ok {
-		return tag, true
+// только тогда, когда каждое слово внутри — известный токен. Маркер раздачи
+// читается и отсюда: один источник пишет «| Архив» в хвосте, другой — «[Архив]»
+// и «[RePack Decepticon]» посреди названия, а пометка одна и та же.
+func (d *Dict) bracketMarker(inner string) ([]string, bool) {
+	if tag, ok := d.bracketPhraseTags[Normalize(inner)]; ok {
+		return []string{tag}, true
 	}
-	return d.markerPhrase(norm)
+	return d.markerSegment(inner)
 }
 
 // markerPhrase отвечает за маркер раздачи — «Архив», «P2P», «GOG», «Portable».
