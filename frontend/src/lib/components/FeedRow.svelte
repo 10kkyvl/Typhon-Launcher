@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FeedEvent } from '../services/social';
+  import { wideArt } from '../social/art';
   import { eventLine, kindLabel } from '../social/feed';
   import { openGameByIGDB } from '../social/openGame';
   import { feedPending } from '../stores/feed';
@@ -63,7 +64,7 @@
         <span class="line">{line}</span>
       {:else}
         <span class="cover">
-          <Artwork src={event.game.coverUrl} alt={event.game.title} ratio="16 / 9" radius="var(--radius-md)" />
+          <Artwork src={wideArt(event.game)} alt={event.game.title} ratio="16 / 9" radius="var(--radius-md)" />
           <span class="fade"></span>
         </span>
         <span class="caption">{event.game.title}</span>

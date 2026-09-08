@@ -18,6 +18,7 @@
     sendRequest,
     unfriend,
   } from '../../lib/services/social';
+  import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
@@ -54,12 +55,16 @@
     if (!data || closed) return null;
     const gameId = data.presence?.gameId;
     if (gameId == null) return null;
-    const cover =
-      data.recentlyPlayed.find((g) => g.igdbId === gameId)?.coverUrl ??
-      data.favorites.find((g) => g.igdbId === gameId)?.coverUrl ??
-      data.common?.games.find((g) => g.igdbId === gameId)?.coverUrl ??
-      '';
-    return { igdbId: gameId, title: data.presence?.gameTitle ?? '', coverUrl: cover };
+    const known =
+      data.recentlyPlayed.find((g) => g.igdbId === gameId) ??
+      data.favorites.find((g) => g.igdbId === gameId) ??
+      data.common?.games.find((g) => g.igdbId === gameId);
+    return {
+      igdbId: gameId,
+      title: data.presence?.gameTitle ?? '',
+      coverUrl: known?.coverUrl ?? '',
+      heroUrl: known?.heroUrl ?? '',
+    };
   });
 
   async function load(target: string, quiet = false) {
@@ -228,7 +233,7 @@
             <Card title={msg('social.nowPlayingTitle')}>
               <button class="playing" type="button" onclick={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}>
                 <span class="cover">
-                  <Artwork src={presenceGame.coverUrl} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
+                  <Artwork src={wideArt(presenceGame)} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
                 </span>
                 <span class="title">{presenceGame.title}</span>
                 <StatusBadge kind="success" label={msg('social.playing')} plain />
