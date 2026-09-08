@@ -270,6 +270,20 @@ jobs:
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe" \
             -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
 
+          # A launcher older than 0.5.0 validates every artifact in the
+          # manifest and knows only kind=installer, so the macOS bundle makes
+          # it reject the whole document as corrupt and no update is offered
+          # at all. Those clients get their own signed manifest carrying just
+          # the installer; the backend picks between the two by the version
+          # the client sends in X-Typhon-Version.
+          go run ./cmd/signrelease \
+            -version "$RELEASE_VERSION" \
+            -notes "$RELEASE_NOTES" \
+            -changelog CHANGELOG.md \
+            -base-url "$MANIFEST_BASE_URL" \
+            -out manifest-legacy.json \
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
+
       - name: Publish installer and manifest to Garage over SSH
         shell: bash
         env:
@@ -322,6 +336,11 @@ jobs:
             --endpoint-url http://127.0.0.1:3900 \
             --cache-control "no-cache, no-store, must-revalidate"
 
+          run_aws s3 cp /data/manifest-legacy.json \
+            "s3://$bucket/launcher/manifest-legacy.json" \
+            --endpoint-url http://127.0.0.1:3900 \
+            --cache-control "no-cache, no-store, must-revalidate"
+
           rm -rf "$remote_dir"
           REMOTE
 
@@ -330,6 +349,7 @@ jobs:
             bin/typhon-amd64-installer.exe \
             bin/typhon-darwin-arm64.zip \
             manifest.json \
+            manifest-legacy.json \
             publish-remote.sh \
             "$VPS_USER@$VPS_HOST:$remote_dir/"
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" \
