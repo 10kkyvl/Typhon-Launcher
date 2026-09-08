@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronRight, Pause, Play, X } from '@lucide/svelte';
   import type { Download } from '../services/downloads';
+  import { cancelDownloadPrompt } from '../confirm/prompts';
   import { cancel, pause, resume, statusLabels } from '../stores/downloads';
   import { gameArt, requestArt } from '../stores/metadata';
   import { sources } from '../stores/sources';
@@ -8,8 +9,8 @@
   import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
   import IconButton from './IconButton.svelte';
-  import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
@@ -143,23 +144,13 @@
   </IconButton>
 </div>
 
-<Modal bind:open={confirmOpen} title={msg('ui.cancelDownloadTitle')}>
-  <p class="modal-text">
-    {msg('ui.cancelDownloadWarning', { name: download.name })}
-  </p>
-  {#snippet footer()}
-    <Button onclick={() => (confirmOpen = false)}>{msg('ui.dontCancel')}</Button>
-    <Button
-      variant="danger"
-      onclick={() => {
-        confirmOpen = false;
-        cancel(download.id);
-      }}
-    >
-      {msg('ui.cancelDownload')}
-    </Button>
-  {/snippet}
-</Modal>
+{#if confirmOpen}
+  <ConfirmModal
+    prompt={cancelDownloadPrompt(download.name)}
+    onconfirm={() => cancel(download.id)}
+    onclose={() => (confirmOpen = false)}
+  />
+{/if}
 
 <style>
   .item {
@@ -263,11 +254,5 @@
     display: flex;
     gap: 0.6rem;
     flex-shrink: 0;
-  }
-
-  .modal-text {
-    font-size: var(--font-md);
-    line-height: 1.55;
-    color: var(--text-2);
   }
 </style>

@@ -1,3 +1,7 @@
+<script module lang="ts">
+  const stack: symbol[] = [];
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
@@ -20,13 +24,24 @@
     footer?: Snippet;
   } = $props();
 
+  const id = Symbol();
+
+  $effect(() => {
+    if (!open) return;
+    stack.push(id);
+    return () => {
+      const at = stack.indexOf(id);
+      if (at >= 0) stack.splice(at, 1);
+    };
+  });
+
   function close() {
     open = false;
     onclose?.();
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && stack[stack.length - 1] === id) close();
   }
 </script>
 

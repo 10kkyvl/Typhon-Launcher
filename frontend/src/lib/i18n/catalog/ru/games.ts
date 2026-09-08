@@ -79,6 +79,10 @@ export const games = {
   'games.detailMetaFindLabel': 'Найти метаданные',
   'games.detailRemoveDownloadLabel': 'Удалить загрузку',
   'games.detailDiscardDownloadLabel': 'Удалить загрузку и файлы',
+  'games.detailRemoveDownloadConfirm':
+    'Убрать загрузку «{name}» из списка? Скачанные файлы останутся на диске, но лаунчер перестанет их отслеживать.',
+  'games.detailDiscardDownloadConfirm':
+    'Удалить загрузку «{name}» вместе со скачанными файлами? Файлы будут стёрты с диска, и скачивать придётся заново.',
   'games.detailShortcutCreateError': 'Не удалось создать ярлык',
   'games.detailShortcutRemoveError': 'Не удалось удалить ярлык',
   'games.detailMetaRefreshedToast': 'Метаданные обновлены',

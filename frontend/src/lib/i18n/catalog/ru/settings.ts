@@ -165,6 +165,8 @@ export const settings = {
   'settings.appearanceResetButton': 'Сбросить',
   'settings.appearanceSavedToast': 'Тема «{name}» сохранена',
   'settings.appearanceDeleteConfirm': 'Удалить тему «{name}»?',
+  'settings.appearanceDeleteTitle': 'Удалить тему',
+  'settings.appearanceResetConfirm': 'Вернуть встроенную тёмную тему? Пользовательское оформление будет отключено.',
   'settings.appearanceDeletedToast': 'Тема «{name}» удалена',
   'settings.appearanceImportedToast': 'Тема «{name}» импортирована',
   'settings.appearanceExportedToast': 'Тема «{name}» экспортирована',

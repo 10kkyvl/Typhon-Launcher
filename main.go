@@ -540,8 +540,8 @@ func main() {
 		Title:            windowTitle(),
 		Width:            1440,
 		Height:           900,
-		MinWidth:         1000,
-		MinHeight:        680,
+		MinWidth:         1100,
+		MinHeight:        750,
 		Frameless:        true,
 		BackgroundColour: application.NewRGB(11, 16, 22),
 		// Started from a game shortcut the launcher stays out of the way, but
@@ -549,7 +549,7 @@ func main() {
 		// nobody can reopen leaves a process the user cannot reach.
 		Hidden: playRequested && current.MinimizeToTray,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
+			InvisibleTitleBarHeight: 55,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
