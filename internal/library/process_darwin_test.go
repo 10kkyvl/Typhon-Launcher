@@ -5,6 +5,8 @@ package library
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -178,6 +180,44 @@ func TestIsWindowsExecutable(t *testing.T) {
 		if isWindowsExecutable(path) {
 			t.Fatalf("isWindowsExecutable(%q) = true, want false", path)
 		}
+	}
+}
+
+func TestProxyDLLOverrides(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "WINMM.DLL"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "winhttp.dll"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "version.dll"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	got := proxyDLLOverrides(filepath.Join(dir, "game.exe"), "")
+	if got != "winmm=n,b;winhttp=n,b" {
+		t.Fatalf("proxyDLLOverrides = %q, want winmm and winhttp", got)
+	}
+}
+
+func TestProxyDLLOverridesChecksWorkDir(t *testing.T) {
+	exeDir := t.TempDir()
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "version.dll"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := proxyDLLOverrides(filepath.Join(exeDir, "bin", "game.exe"), workDir)
+	if got != "version=n,b" {
+		t.Fatalf("proxyDLLOverrides = %q, want version=n,b", got)
+	}
+}
+
+func TestProxyDLLOverridesEmptyWithoutProxy(t *testing.T) {
+	dir := t.TempDir()
+	if got := proxyDLLOverrides(filepath.Join(dir, "game.exe"), dir); got != "" {
+		t.Fatalf("proxyDLLOverrides = %q, want empty", got)
 	}
 }
 

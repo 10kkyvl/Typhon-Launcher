@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -84,7 +85,11 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 	if err != nil {
 		return nil, fmt.Errorf("путь игры: %w", err)
 	}
-	cmd := wine.Cmd{Path: winExe, Args: req.args}
+	cmd := wine.Cmd{
+		Path:         winExe,
+		Args:         req.args,
+		DLLOverrides: proxyDLLOverrides(req.executable, req.workDir),
+	}
 	if req.workDir != "" {
 		if winDir, dirErr := bottle.ToWindows(req.workDir); dirErr == nil {
 			cmd.WorkDir = winDir
@@ -92,7 +97,8 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 	}
 	slog.Info("launching game in bottle",
 		"bottle", bottle.Name, "shared", bottle.Shared,
-		"executable", req.executable, "winPath", winExe, "winWorkDir", cmd.WorkDir)
+		"executable", req.executable, "winPath", winExe, "winWorkDir", cmd.WorkDir,
+		"dllOverrides", cmd.DLLOverrides)
 	if bottle.Shared {
 		// Steam поднимается до игры, а не после: игра со Steam API
 		// проверяет живого клиента в первые же секунды и без него молча
@@ -106,6 +112,45 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 		return nil, err
 	}
 	return s.await(ctx, bottle, req.executable)
+}
+
+// proxyDLLOverrides включает app-local proxy DLL раньше встроенной Wine DLL.
+// Без override Wine предпочитает builtin даже когда игра положила рядом с EXE
+// winmm.dll/version.dll/winhttp.dll для загрузки модулей или Steam-fix. Правило
+// действует только на один запуск: реестр общего Steam-бутыля не меняется.
+func proxyDLLOverrides(executable, workDir string) string {
+	candidates := []string{"winmm.dll", "version.dll", "winhttp.dll"}
+	dirs := []string{filepath.Dir(executable)}
+	if workDir != "" && !strings.EqualFold(filepath.Clean(workDir), filepath.Clean(dirs[0])) {
+		dirs = append(dirs, workDir)
+	}
+
+	found := make(map[string]bool, len(candidates))
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			for _, candidate := range candidates {
+				if strings.EqualFold(entry.Name(), candidate) {
+					found[strings.TrimSuffix(candidate, filepath.Ext(candidate))] = true
+				}
+			}
+		}
+	}
+
+	var overrides []string
+	for _, candidate := range candidates {
+		name := strings.TrimSuffix(candidate, filepath.Ext(candidate))
+		if found[name] {
+			overrides = append(overrides, name+"=n,b")
+		}
+	}
+	return strings.Join(overrides, ";")
 }
 
 // bottleFor выбирает, где игре жить. Общий бутыль предпочтительнее: рядом с
