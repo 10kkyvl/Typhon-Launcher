@@ -4,6 +4,13 @@ import type { InstallKey } from '../ru/install';
 export const install: Record<InstallKey, Message> = {
   'release.buildPortable': 'Portable',
   'release.buildRepack': 'Repack',
+  'release.buildSteamRip': 'Steam-Rip',
+  'release.buildGog': 'GOG',
+  'release.buildLicense': 'Licensed',
+  'release.buildEarlyAccess': 'Early access',
+  'release.buildDemo': 'Demo',
+  'release.buildP2P': 'P2P',
+  'release.buildArchive': 'Archive',
   'release.duplicateSources': { one: 'source', other: 'sources' },
   'release.loading': 'Loading releases…',
   'release.new': 'New',

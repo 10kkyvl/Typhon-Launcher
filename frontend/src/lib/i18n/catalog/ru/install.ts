@@ -1,6 +1,13 @@
 export const install = {
   'release.buildPortable': 'Портативная',
   'release.buildRepack': 'Репак',
+  'release.buildSteamRip': 'Steam-Rip',
+  'release.buildGog': 'GOG',
+  'release.buildLicense': 'Лицензия',
+  'release.buildEarlyAccess': 'Ранний доступ',
+  'release.buildDemo': 'Демо',
+  'release.buildP2P': 'P2P',
+  'release.buildArchive': 'Архив',
   'release.duplicateSources': { one: 'источник', few: 'источника', many: 'источников' },
   'release.loading': 'Загрузка релизов…',
   'release.new': 'Новое',

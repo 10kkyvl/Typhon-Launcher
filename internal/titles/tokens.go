@@ -32,6 +32,9 @@ var (
 	// игры, как в Persona 3 Portable.
 	rePortable = regexp.MustCompile(`(?i)[|/]\s*portable\b`)
 	reRepackBy = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+by[\s._-]+[A-Za-z0-9_]+)?\b`)
+	// Маркер раздачи целиком: «RePack от R.G. Механики», «Steam-Rip от Chovka».
+	// Якорь на начало сегмента — «repack» посреди названия маркером не считается.
+	reMarkerRepack = regexp.MustCompile(`(?i)^(re-?pack|steam[\s._-]?rip)\b[\s.:,_-]*(?:от|by|from)?[\s.:,_-]*(.*)$`)
 
 	reDecimalDot   = regexp.MustCompile(`(\d)\.(\d)`)
 	reSepRun       = regexp.MustCompile(`[._\-]+`)

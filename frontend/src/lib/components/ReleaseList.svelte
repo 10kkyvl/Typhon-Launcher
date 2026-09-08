@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
-  import { buildKind, releaseBadge } from '../game/releases';
+  import { buildKind, buildLabel, releaseBadge, repackNote } from '../game/releases';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
   import type { AvailabilityKind } from '../services/updates';
@@ -43,7 +43,8 @@
         isNew: Boolean(release.new),
       })}
       {@const current = badge === 'installed'}
-      {@const build = buildKind(release)}
+      {@const build = buildLabel(buildKind(release))}
+      {@const repack = repackNote(release, msg('release.buildRepack'))}
       <div class="release-row" class:current>
         <div class="release-main">
           <span class="release-version">{release.version || '—'}</span>
@@ -59,6 +60,9 @@
         {/if}
         <span class="release-source">
           {group.sourceName}
+          {#if repack}
+            <span class="release-repack">({repack})</span>
+          {/if}
           {#if group.duplicates && group.duplicates.length > 0}
             <span
               class="release-dup"
@@ -71,13 +75,8 @@
         </span>
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>
         <div class="release-badges">
-          {#if build === 'portable'}
-            <StatusBadge kind="neutral" label={msg('release.buildPortable')} plain />
-          {:else if build === 'repack'}
-            <StatusBadge kind="neutral" label={msg('release.buildRepack')} plain />
-          {/if}
-          {#if release.repacker}
-            <StatusBadge kind="neutral" label={release.repacker.toUpperCase()} plain />
+          {#if build}
+            <StatusBadge kind="neutral" label={msg(build)} plain />
           {/if}
           {#if badge === 'installed'}
             <StatusBadge kind="success" label={msg('ui.installed')} plain />
@@ -190,6 +189,10 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .release-repack {
+    color: var(--text-2);
   }
 
   .release-dup {
