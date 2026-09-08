@@ -6,7 +6,7 @@
   import StatusBadge from './StatusBadge.svelte';
   import type { VerifyState } from '../services/updates';
   import { createManifest, repair, verify } from '../stores/updates';
-  import { bytesSize, relativeDate, truncateMiddle } from '../utils/format';
+  import { bytesSize, progressPercent, relativeDate, truncateMiddle } from '../utils/format';
   import { msg } from '../i18n';
 
   let { gameId, state, running }: { gameId: string; state: VerifyState | undefined; running: boolean } =
@@ -59,7 +59,7 @@
   {:else if busy}
     <div class="progress">
       <ProgressBar value={(state?.progress ?? 0) * 100} />
-      <span class="muted">{Math.round((state?.progress ?? 0) * 100)}%</span>
+      <span class="muted">{progressPercent(state?.progress ?? 0)}%</span>
     </div>
     {#if state?.currentFile}
       <p class="muted mono">{truncateMiddle(state.currentFile, 64)}</p>

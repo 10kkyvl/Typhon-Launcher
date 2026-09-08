@@ -21,6 +21,12 @@ const (
 	defaultInterval  = 30 * time.Second
 	defaultClearWait = 2 * time.Second
 	rateLimitBackoff = 2 * defaultInterval
+	// unsupportedBackoff: 404 может быть мимолётным (деплой бэкенда, рестарт прокси),
+	// а не постоянной неспособностью сервера отдать presence. Флаг unsupported поэтому
+	// не выключает отчёты навсегда, а лишь снижает их частоту — так же, как retryAfter
+	// снижает её при 429. Если сервер и правда старой версии без этого эндпоинта,
+	// лаунчер продолжит спрашивать, но заметно реже, чем раз в defaultInterval.
+	unsupportedBackoff = 10 * defaultInterval
 )
 
 var ErrInvalidStatus = errors.New("online: unknown presence status")
@@ -54,10 +60,14 @@ type Service struct {
 	healthy      bool
 	healthyKnown bool
 	unsupported  bool
-	syncOn       bool
-	retryAfter   time.Time
-	unsubscribe  func()
-	cancel       context.CancelFunc
+	// unsupportedRetryAt — до какого момента копим 404 без новой попытки; unsupported
+	// сам по себе остаётся навсегда только для логики «предупредить один раз», а не
+	// как ворота на отправку (см. unsupportedBackoff).
+	unsupportedRetryAt time.Time
+	syncOn             bool
+	retryAfter         time.Time
+	unsubscribe        func()
+	cancel             context.CancelFunc
 
 	wg   sync.WaitGroup
 	kick chan struct{}
@@ -215,6 +225,7 @@ func (s *Service) poke() {
 func (s *Service) Kick() {
 	s.mu.Lock()
 	s.unsupported = false
+	s.unsupportedRetryAt = time.Time{}
 	s.mu.Unlock()
 	s.poke()
 }
@@ -268,7 +279,9 @@ func (s *Service) send(ctx context.Context, forced bool) {
 
 	s.mu.Lock()
 	if !forced {
-		if s.unsupported {
+		// Ворота по времени, а не навсегда: временный 404 не должен держать
+		// присутствие выключенным до Kick()/перезапуска — см. unsupportedBackoff.
+		if s.unsupported && s.now().Before(s.unsupportedRetryAt) {
 			s.mu.Unlock()
 			return
 		}
@@ -291,6 +304,7 @@ func (s *Service) send(ctx context.Context, forced bool) {
 		s.mu.Lock()
 		alreadyUnsupported := s.unsupported
 		s.unsupported = true
+		s.unsupportedRetryAt = s.now().Add(unsupportedBackoff)
 		s.mu.Unlock()
 		if !alreadyUnsupported {
 			slog.Warn("presence not supported by this server")
@@ -303,6 +317,7 @@ func (s *Service) send(ctx context.Context, forced bool) {
 
 	s.mu.Lock()
 	s.unsupported = false
+	s.unsupportedRetryAt = time.Time{}
 	if rateLimited {
 		s.retryAfter = s.now().Add(rateLimitBackoff)
 	} else {

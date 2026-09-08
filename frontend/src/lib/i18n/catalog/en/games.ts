@@ -22,6 +22,13 @@ export const games: Record<GamesKey, Message> = {
   'games.filterInstalled': 'Installed',
   'games.allGamesTitle': 'All games',
   'games.nothingFoundTitle': 'Nothing found',
+  'games.compatBrokenBadge': 'does not start',
+  'games.compatBroken': 'The game does not start: several attempts in a row went nowhere.',
+  'games.compatBrokenWithReason': 'The game does not start: {reason}',
+  'games.compatBadgeWorks': 'starts for {works} of {total}',
+  'games.compatBadgeBroken': 'starts for {works} of {total}',
+  'games.compatFilterLabel': 'Only games that start',
+  'games.compatFilterHint': 'From reports by people running the game on macOS',
   'games.lastPlayedLabel': 'Last played',
   'games.executableLabel': 'Executable',
   'games.libraryWord': 'Library',
@@ -48,6 +55,7 @@ export const games: Record<GamesKey, Message> = {
 
   'games.markFavoritesLimit': 'Up to 6 favorite games',
 
+  'games.primaryDownload': 'Download',
   'games.primaryInstall': 'Install',
   'games.primaryResolving': 'Checking downloads…',
   'games.primaryUnavailable': 'No downloads available',
@@ -74,6 +82,10 @@ export const games: Record<GamesKey, Message> = {
   'games.detailMetaFindLabel': 'Find metadata',
   'games.detailRemoveDownloadLabel': 'Remove download',
   'games.detailDiscardDownloadLabel': 'Remove download and files',
+  'games.detailRemoveDownloadConfirm':
+    'Remove the “{name}” download from the list? The downloaded files stay on disk, but the launcher stops tracking them.',
+  'games.detailDiscardDownloadConfirm':
+    'Remove the “{name}” download together with its files? They are erased from disk and would have to be downloaded again.',
   'games.detailShortcutCreateError': 'Failed to create shortcut',
   'games.detailShortcutRemoveError': 'Failed to remove shortcut',
   'games.detailMetaRefreshedToast': 'Metadata updated',
@@ -92,7 +104,8 @@ export const games: Record<GamesKey, Message> = {
   'games.detailBadgeUninstalled': 'Uninstalled',
   'games.detailBadgeUpdateAvailable': 'Update available',
   'games.detailAddToLibraryButton': 'Add to library',
-  'games.detailUninstalledNote': 'The game has been uninstalled — install it again from the available downloads.',
+  'games.detailUninstalledNote': 'The game has been uninstalled — download it again from the available downloads.',
+  'games.detailUninstalledDownloadedNote': 'The game has been uninstalled — install it from the download you already have.',
   'games.detailOpenScreenshotLabel': 'Open screenshot',
   'games.detailMetaSearchingTitle': 'Looking up description and artwork',
   'games.detailFallbackGameWord': 'the game',

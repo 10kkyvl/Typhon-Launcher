@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -632,6 +633,75 @@ func TestRestoreMergeBackupIsIdempotent(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(dst, "replaced.txt")); err != nil || string(data) != "old content" {
 		t.Fatalf("replaced.txt = %q, err = %v", data, err)
+	}
+}
+
+// TestForEachAddedLineStreamsWithoutLoadingWholeFile закрывает находку:
+// RestoreMergeBackup читал mergeAddedList целиком через os.ReadFile, а
+// затем конвертировал []byte в string — вторая полная копия списка,
+// живущая одновременно с первой, пока идёт откат. На патче с десятками
+// тысяч новых файлов это заметный пик памяти на один откат без всякой
+// пользы: список читается по одному пути за раз.
+//
+// Тест меряет прирост живой (после runtime.GC()) кучи в момент, когда
+// колбэк вызван на середине списка, относительно кучи до вызова. У
+// потокового чтения этот прирост ограничен размером буфера сканера
+// (килобайты), а не размером всего файла: старая реализация держит живыми
+// и []byte из os.ReadFile, и получившуюся строку, и слайс подстрок
+// strings.Split — все они остаются в области видимости на протяжении
+// всего цикла, то есть прирост кучи в середине цикла обязан быть порядка
+// размера файла. Абсолютный порог (fileSize/4) достаточно далёк от обоих
+// значений, чтобы не зависеть от шума GC.
+func TestForEachAddedLineStreamsWithoutLoadingWholeFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, mergeAddedList)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	const lineCount = 100000
+	line := []byte(strings.Repeat("a", 60) + "\n")
+	for i := 0; i < lineCount; i++ {
+		if _, err := f.Write(line); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	fileSize := info.Size()
+
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	var peakDelta uint64
+	seen := 0
+	err = forEachAddedLine(path, func(rel string) error {
+		seen++
+		if seen == lineCount/2 {
+			runtime.GC()
+			var mid runtime.MemStats
+			runtime.ReadMemStats(&mid)
+			if mid.HeapAlloc > before.HeapAlloc {
+				peakDelta = mid.HeapAlloc - before.HeapAlloc
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("forEachAddedLine: %v", err)
+	}
+	if seen != lineCount {
+		t.Fatalf("seen = %d, want %d", seen, lineCount)
+	}
+	if threshold := float64(fileSize) / 4; float64(peakDelta) > threshold {
+		t.Fatalf("heap growth mid-scan = %d bytes (file size %d), want under %.0f: the whole file (or a full copy of it) looks still live, want streaming that only ever holds a small window",
+			peakDelta, fileSize, threshold)
 	}
 }
 

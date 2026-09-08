@@ -11,7 +11,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var Version = "0.4.1"
+var Version = "0.5.0"
 
 type AppInfo struct {
 	Version  string `json:"version"`
@@ -43,6 +43,12 @@ func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {
 		slog.Warn("system info", "error", err)
 	}
 	return info, nil
+}
+
+// GetWineStatus говорит интерфейсу, нужен ли на этой платформе CrossOver и
+// установлен ли он: на macOS игры ставятся и запускаются только через него.
+func (s *Service) GetWineStatus() platform.WineStatus {
+	return platform.Wine()
 }
 
 func (s *Service) GetStorageInfo() (platform.StorageInfo, error) {

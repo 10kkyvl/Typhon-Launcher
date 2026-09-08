@@ -19,6 +19,7 @@ import { errMetadata } from './errMetadata';
 import { errUpdates } from './errUpdates';
 import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
+import { errLogs } from './errLogs';
 
 export const ru = {
   ...common,
@@ -41,8 +42,9 @@ export const ru = {
   ...errUpdates,
   ...errSources,
   ...errLibrary,
+  ...errLogs,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary };
+export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };

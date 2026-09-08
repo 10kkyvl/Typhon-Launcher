@@ -20,7 +20,7 @@ type Parsed struct {
 	DLCCount   int
 }
 
-func Parse(raw string) Parsed {
+func (d *Dict) Parse(raw string) Parsed {
 	s := strings.TrimSpace(raw)
 	if s == "" {
 		return Parsed{}
@@ -30,10 +30,11 @@ func Parse(raw string) Parsed {
 	s = reURL.ReplaceAllString(s, " ")
 	s = reWWW.ReplaceAllString(s, " ")
 
+	s, markerTags := d.extractMarkers(s)
 	s, rawVersion, version := extractVersion(s)
 	s, dlcCount := extractDLCCount(s)
-	s, year, bracketLangs, bracketTags := extractBrackets(s)
-	s, dashLangs, dashTags := extractLangAndDashTags(s)
+	s, year, bracketLangs, bracketTags := d.extractBrackets(s)
+	s, dashLangs, dashTags := d.extractLangAndDashTags(s)
 
 	s = reDecimalDot.ReplaceAllString(s, "${1}\x00${2}")
 	s = reSepRun.ReplaceAllString(s, " ")
@@ -46,10 +47,10 @@ func Parse(raw string) Parsed {
 		words = strings.Fields(s)
 	}
 
-	words, edition, scanTags := trailingScan(words)
+	words, edition, scanTags := d.trailingScan(words)
 
 	base := strings.Join(words, " ")
-	base = strings.Trim(base, " -,:;")
+	base = strings.Trim(base, " -,:;|\u2014\u2013")
 
 	var languages []string
 	languages = append(languages, bracketLangs...)
@@ -59,6 +60,7 @@ func Parse(raw string) Parsed {
 	}
 
 	var tags []string
+	tags = append(tags, markerTags...)
 	tags = append(tags, bracketTags...)
 	tags = append(tags, dashTags...)
 	tags = append(tags, scanTags...)
@@ -75,6 +77,65 @@ func Parse(raw string) Parsed {
 		Tags:       tags,
 		DLCCount:   dlcCount,
 	}
+}
+
+// extractMarkers снимает маркеры раздачи: то, что источник дописывает за «|»
+// или за последним длинным тире — «Portable», «Архив», «P2P», «GOG»,
+// «RePack от xatab». Сегмент выбрасывается только целиком опознанным: «| Season
+// 1» в «A Rat's Quest | Season 1 — v1.0 | GOG» остаётся частью названия.
+func (d *Dict) extractMarkers(s string) (string, []string) {
+	var tags []string
+
+	parts := strings.Split(s, "|")
+	kept := parts[:1:1]
+	for _, seg := range parts[1:] {
+		found, ok := d.markerSegment(seg)
+		if !ok {
+			kept = append(kept, seg)
+			continue
+		}
+		tags = append(tags, found...)
+	}
+	s = strings.Join(kept, "|")
+
+	for _, dash := range []string{"\u2014", "\u2013"} {
+		i := strings.LastIndex(s, dash)
+		if i < 0 {
+			continue
+		}
+		found, ok := d.markerSegment(s[i+len(dash):])
+		if !ok {
+			continue
+		}
+		tags = append(tags, found...)
+		s = s[:i] + " "
+	}
+
+	return s, tags
+}
+
+// markerSegment опознаёт один сегмент маркера. Пустой сегмент — это висящий
+// разделитель, и он тоже выбрасывается.
+func (d *Dict) markerSegment(seg string) ([]string, bool) {
+	seg = strings.TrimSpace(seg)
+	if seg == "" {
+		return nil, true
+	}
+	if m := reMarkerRepack.FindStringSubmatch(seg); m != nil {
+		kind := "repack"
+		if strings.Contains(strings.ToLower(m[1]), "rip") {
+			kind = "steam-rip"
+		}
+		tags := []string{kind}
+		if slug := d.repackerSlug(m[2]); slug != "" {
+			tags = append(tags, slug)
+		}
+		return tags, true
+	}
+	if tag, ok := d.markerPhrase(Normalize(seg)); ok {
+		return []string{tag}, true
+	}
+	return nil, false
 }
 
 func extractDLCCount(s string) (string, int) {
@@ -115,7 +176,7 @@ func extractVersion(s string) (string, string, string) {
 	return newS, strings.TrimSpace(raw), ver
 }
 
-func extractBrackets(s string) (string, int, []string, []string) {
+func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 	year := 0
 	var langs []string
 	var tags []string
@@ -123,6 +184,10 @@ func extractBrackets(s string) (string, int, []string, []string) {
 	result := reBracket.ReplaceAllStringFunc(s, func(m string) string {
 		inner := strings.TrimSpace(m[1 : len(m)-1])
 		if inner == "" {
+			return " "
+		}
+		if found, ok := d.bracketMarker(inner); ok {
+			tags = append(tags, found...)
 			return " "
 		}
 		words := reBracketSplit.Split(inner, -1)
@@ -156,14 +221,15 @@ func extractBrackets(s string) (string, int, []string, []string) {
 				}
 			case lw == "by":
 				skipNext = true
+			case d.isFiller(lw):
 			case reMulti.MatchString(w) && reMulti.FindString(w) == w:
 				localLangs = append(localLangs, w)
-			case isLangCode(lw):
+			case d.isLangCode(lw):
 				localLangs = append(localLangs, strings.ToUpper(w))
-			case archTokens[lw] != "":
-				localTags = append(localTags, archTokens[lw])
-			case releaseSingleTags[lw] != "":
-				localTags = append(localTags, releaseSingleTags[lw])
+			case d.archTokens[lw] != "":
+				localTags = append(localTags, d.archTokens[lw])
+			case d.releaseSingleTags[lw] != "":
+				localTags = append(localTags, d.releaseSingleTags[lw])
 			case lw == "rip" || lw == "steam":
 				localTags = append(localTags, "steam-rip")
 			default:
@@ -185,11 +251,11 @@ func extractBrackets(s string) (string, int, []string, []string) {
 	return result, year, langs, tags
 }
 
-func extractLangAndDashTags(s string) (string, []string, []string) {
+func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 	var langs []string
 	var tags []string
 
-	s = reLangCombo.ReplaceAllStringFunc(s, func(m string) string {
+	s = d.reLangCombo.ReplaceAllStringFunc(s, func(m string) string {
 		parts := splitLangCombo(m)
 		for _, p := range parts {
 			langs = append(langs, strings.ToUpper(p))
@@ -200,8 +266,12 @@ func extractLangAndDashTags(s string) (string, []string, []string) {
 		langs = append(langs, m)
 		return " "
 	})
-	s = reLangSingle.ReplaceAllStringFunc(s, func(m string) string {
+	s = d.reLangSingle.ReplaceAllStringFunc(s, func(m string) string {
 		langs = append(langs, strings.ToUpper(m))
+		return " "
+	})
+	s = rePortable.ReplaceAllStringFunc(s, func(m string) string {
+		tags = append(tags, "portable")
 		return " "
 	})
 	s = reSteamRip.ReplaceAllStringFunc(s, func(m string) string {
@@ -235,7 +305,7 @@ func splitLangCombo(m string) []string {
 	return out
 }
 
-func trailingScan(words []string) ([]string, string, []string) {
+func (d *Dict) trailingScan(words []string) ([]string, string, []string) {
 	var edition string
 	var tags []string
 
@@ -252,9 +322,9 @@ func trailingScan(words []string) ([]string, string, []string) {
 				normTail[i] = normKey(w)
 			}
 
-			kind, ok := matchPhrase(normTail)
+			kind, ok := d.matchPhrase(normTail)
 			if !ok && L == 1 {
-				kind, ok = matchSingle(normTail[0])
+				kind, ok = d.matchSingle(normTail[0])
 			}
 			if !ok {
 				continue
@@ -284,8 +354,8 @@ func trailingScan(words []string) ([]string, string, []string) {
 	return words, edition, tags
 }
 
-func matchPhrase(normTail []string) (string, bool) {
-	for _, p := range phraseTable {
+func (d *Dict) matchPhrase(normTail []string) (string, bool) {
+	for _, p := range d.phraseTable {
 		if len(p.norm) != len(normTail) {
 			continue
 		}
@@ -296,11 +366,11 @@ func matchPhrase(normTail []string) (string, bool) {
 	return "", false
 }
 
-func matchSingle(w string) (string, bool) {
-	if v, ok := archTokens[w]; ok {
+func (d *Dict) matchSingle(w string) (string, bool) {
+	if v, ok := d.archTokens[w]; ok {
 		return "tag:" + v, true
 	}
-	if v, ok := releaseSingleTags[w]; ok {
+	if v, ok := d.releaseSingleTags[w]; ok {
 		return "tag:" + v, true
 	}
 	return "", false

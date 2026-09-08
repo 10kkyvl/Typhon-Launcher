@@ -794,3 +794,33 @@ func TestPresenceView_Decode(t *testing.T) {
 		t.Fatalf("lastSeenAt = %v", view.LastSeenAt)
 	}
 }
+
+// TestClient_FeedKeepsTheWideShot закрывает регрессию, которую поймала только
+// живая проверка: карточка игры пересобирается в GameCard, и поле, которого нет
+// в структуре, молча теряется по дороге к фронту.
+func TestClient_FeedKeepsTheWideShot(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		body := `{"events":[{"id":1,"user":{"id":"u1","username":"alex","displayName":"Alex","avatarUrl":""},` +
+			`"kind":"completed","game":{"igdbId":1942,"title":"The Witcher 3",` +
+			`"coverUrl":"https://c/cover.jpg","heroUrl":"https://c/hero.jpg"},` +
+			`"createdAt":"2026-01-02T03:04:05Z","reactions":[],"mine":[],"note":""}],"next":0}`
+		if _, err := io.WriteString(w, body); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+
+	page, err := c.feed(t.Context(), 0, 20)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	if len(page.Events) != 1 {
+		t.Fatalf("events = %+v, want 1", page.Events)
+	}
+	game := page.Events[0].Game
+	if game.HeroURL != "https://c/hero.jpg" {
+		t.Errorf("HeroURL = %q, want the wide shot to survive the decode", game.HeroURL)
+	}
+	if game.CoverURL != "https://c/cover.jpg" {
+		t.Errorf("CoverURL = %q, want the cover kept alongside it", game.CoverURL)
+	}
+}

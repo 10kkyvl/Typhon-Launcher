@@ -316,7 +316,7 @@ func TestClientUploadAvatarSendsRawBytes(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL, tokenOK("upload-token"))
-	user, err := c.UploadAvatar(context.Background(), payload)
+	user, err := c.UploadAvatar(context.Background(), payload, AvatarCrop{})
 	if err != nil {
 		t.Fatalf("UploadAvatar() error = %v", err)
 	}
@@ -341,7 +341,7 @@ func TestClientUploadAvatarOversizedRejectedLocally(t *testing.T) {
 
 	c := newTestClient(t, srv.URL, tokenOK("t"))
 	oversized := make([]byte, maxAvatarSize+1)
-	_, err := c.UploadAvatar(context.Background(), oversized)
+	_, err := c.UploadAvatar(context.Background(), oversized, AvatarCrop{})
 	var accErr *Error
 	if !errors.As(err, &accErr) {
 		t.Fatalf("expected *Error, got %v", err)
@@ -363,7 +363,7 @@ func TestClientUploadAvatarEmptyRejectedLocally(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL, tokenOK("t"))
-	_, err := c.UploadAvatar(context.Background(), nil)
+	_, err := c.UploadAvatar(context.Background(), nil, AvatarCrop{})
 	var accErr *Error
 	if !errors.As(err, &accErr) {
 		t.Fatalf("expected *Error, got %v", err)
@@ -436,7 +436,7 @@ func TestClientEndpointsUseVersionedPathAndHeaders(t *testing.T) {
 			name:       "UploadAvatar",
 			wantMethod: http.MethodPut,
 			call: func(c *Client) (CurrentUser, error) {
-				return c.UploadAvatar(context.Background(), []byte{1, 2, 3})
+				return c.UploadAvatar(context.Background(), []byte{1, 2, 3}, AvatarCrop{})
 			},
 		},
 		{

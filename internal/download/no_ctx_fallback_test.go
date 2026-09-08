@@ -21,8 +21,14 @@ func TestNoContextFallbackReturnsNoClientError(t *testing.T) {
 	}
 	closePieceCompletionOnCleanup(t, m)
 
+	// offlineClient пропускает тест, если torrent-клиент не поднялся, а
+	// пропуск — это runtime.Goexit: под мьютексом он не дал бы выполниться
+	// Unlock, и cleanup на этой же горутине встал бы на нём навсегда.
+	// Мьютексы в Go не рекурсивные, так что клиент создаётся до захвата.
+	cl := offlineClient(t)
+
 	m.mu.Lock()
-	m.client = offlineClient(t)
+	m.client = cl
 	// m.ctx is intentionally left nil: ServiceStartup was never called.
 	m.mu.Unlock()
 

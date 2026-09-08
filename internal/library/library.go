@@ -45,6 +45,8 @@ type Game struct {
 	ReleaseID         string     `json:"releaseId,omitempty"`
 	SourceID          string     `json:"sourceId,omitempty"`
 	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
+	Repacker          string     `json:"repacker,omitempty"`
+	ReleaseVersion    string     `json:"releaseVersion,omitempty"`
 	Source            string     `json:"source,omitempty"`
 	InstallType       string     `json:"installType,omitempty"`
 	Owned             bool       `json:"owned,omitempty"`
@@ -85,6 +87,8 @@ type InstalledGame struct {
 	ReleaseID        string    `json:"releaseId"`
 	SourceID         string    `json:"sourceId"`
 	CanonicalGameID  string    `json:"canonicalGameId"`
+	Repacker         string    `json:"repacker"`
+	ReleaseVersion   string    `json:"releaseVersion"`
 	InstallType      string    `json:"installType"`
 	Owned            bool      `json:"owned"`
 	Uninstall        Uninstall `json:"uninstall,omitzero"`
@@ -132,20 +136,25 @@ var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites lim
 var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
-	mu            sync.Mutex
-	path          string
-	excludedPath  string
-	games         []Game
-	excluded      []string
-	running       map[string]*session
-	onSession     func(gameID string, seconds int64)
+	mu           sync.Mutex
+	path         string
+	excludedPath string
+	games        []Game
+	excluded     []string
+	running      map[string]*session
+	onSession    func(gameID string, seconds int64)
+	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
+	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
+	// наигранного времени.
+	onOutcome     func(gameID string, played time.Duration, stoppedByUser bool)
+	onLaunchFail  func(gameID, code, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
 	sessionWG     sync.WaitGroup
-	scan          func(context.Context) ([]procs.Process, error)
+	scan          func(context.Context) ([]procs.Process, bool, error)
 	watchInterval time.Duration
 	now           func() time.Time
 	ctx           context.Context
@@ -156,6 +165,11 @@ type Service struct {
 	launcherPath  func() (string, error)
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
+	// prepare готовит окружение запуска. Поле, а не прямой вызов: на macOS
+	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
+	// возможность её подменить, иначе прогон оставляет после себя
+	// настоящие бутыли на машине разработчика.
+	prepare func(ctx context.Context, installDir, executable string) error
 }
 
 type SessionWatcher interface {
@@ -170,6 +184,10 @@ type session struct {
 	startedAt time.Time // с этого момента считается наигранное время
 	lastSeen  time.Time
 	external  bool
+	// stoppedByUser отделяет «игру закрыли» от «игра умерла сама»: для
+	// журнала совместимости это разные события, а по одной длительности их
+	// не различить.
+	stoppedByUser bool
 }
 
 func NewService() (*Service, error) {
@@ -203,6 +221,7 @@ func NewServiceAt(path string) (*Service, error) {
 		launcherPath:  os.Executable,
 		saveRoots:     platform.SaveRoots,
 		start:         newGameStarter(),
+		prepare:       prepareRuntime,
 	}
 	games, err := s.load()
 	if err != nil {
@@ -437,6 +456,12 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		if g.CanonicalGameID != "" {
 			s.games[i].CanonicalGameID = g.CanonicalGameID
 		}
+		// Переустановка может принести другую сборку, и тогда прошлая больше
+		// не описывает то, что лежит на диске.
+		if g.ReleaseID != "" {
+			s.games[i].Repacker = g.Repacker
+			s.games[i].ReleaseVersion = g.ReleaseVersion
+		}
 		s.games[i].Source = SourceManaged
 		s.games[i].InstallType = g.InstallType
 		s.games[i].Owned = g.Owned
@@ -470,6 +495,8 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		ReleaseID:        g.ReleaseID,
 		SourceID:         g.SourceID,
 		CanonicalGameID:  g.CanonicalGameID,
+		Repacker:         g.Repacker,
+		ReleaseVersion:   g.ReleaseVersion,
 		Source:           SourceManaged,
 		InstallType:      g.InstallType,
 		Owned:            g.Owned,
@@ -492,6 +519,20 @@ func (s *Service) SetOnSessionEnded(fn func(gameID string, seconds int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSession = fn
+}
+
+//wails:ignore
+func (s *Service) SetOutcomeRecorder(fn func(gameID string, played time.Duration, stoppedByUser bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onOutcome = fn
+}
+
+//wails:ignore
+func (s *Service) SetLaunchFailureRecorder(fn func(gameID, code, reason string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onLaunchFail = fn
 }
 
 //wails:ignore

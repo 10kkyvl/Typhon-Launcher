@@ -48,7 +48,11 @@ export interface SendResult {
 export interface GameCard {
   igdbId: number;
   title: string;
+  /** Портретная обложка: узкие плитки. */
   coverUrl: string;
+  /** Горизонтальный кадр (артворк или скриншот) под широкие слоты. Пуст, если
+   * у игры такого кадра нет или бэкенд старый — тогда падаем на обложку. */
+  heroUrl?: string;
 }
 
 export interface PlayedGame extends GameCard {

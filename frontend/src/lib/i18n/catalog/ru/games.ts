@@ -19,6 +19,13 @@ export const games = {
   'games.filterInstalled': 'Установленные',
   'games.allGamesTitle': 'Все игры',
   'games.nothingFoundTitle': 'Ничего не найдено',
+  'games.compatBrokenBadge': 'не запускается',
+  'games.compatBroken': 'Игра не запускается: несколько попыток подряд закончились ничем.',
+  'games.compatBrokenWithReason': 'Игра не запускается: {reason}',
+  'games.compatBadgeWorks': 'запускается у {works} из {total}',
+  'games.compatBadgeBroken': 'запускается у {works} из {total}',
+  'games.compatFilterLabel': 'Только те, что запускаются',
+  'games.compatFilterHint': 'По отчётам людей, у которых игра стоит на macOS',
   'games.lastPlayedLabel': 'Последний запуск',
   'games.executableLabel': 'Исполняемый файл',
   'games.libraryWord': 'Библиотека',
@@ -45,6 +52,7 @@ export const games = {
 
   'games.markFavoritesLimit': 'Не больше 6 любимых игр',
 
+  'games.primaryDownload': 'Скачать',
   'games.primaryInstall': 'Установить',
   'games.primaryResolving': 'Проверяем загрузки…',
   'games.primaryUnavailable': 'Нет доступных загрузок',
@@ -71,6 +79,10 @@ export const games = {
   'games.detailMetaFindLabel': 'Найти метаданные',
   'games.detailRemoveDownloadLabel': 'Удалить загрузку',
   'games.detailDiscardDownloadLabel': 'Удалить загрузку и файлы',
+  'games.detailRemoveDownloadConfirm':
+    'Убрать загрузку «{name}» из списка? Скачанные файлы останутся на диске, но лаунчер перестанет их отслеживать.',
+  'games.detailDiscardDownloadConfirm':
+    'Удалить загрузку «{name}» вместе со скачанными файлами? Файлы будут стёрты с диска, и скачивать придётся заново.',
   'games.detailShortcutCreateError': 'Не удалось создать ярлык',
   'games.detailShortcutRemoveError': 'Не удалось удалить ярлык',
   'games.detailMetaRefreshedToast': 'Метаданные обновлены',
@@ -89,7 +101,8 @@ export const games = {
   'games.detailBadgeUninstalled': 'Удалена с компьютера',
   'games.detailBadgeUpdateAvailable': 'Доступно обновление',
   'games.detailAddToLibraryButton': 'Добавить в библиотеку',
-  'games.detailUninstalledNote': 'Игра удалена с компьютера — установите её снова из доступных загрузок.',
+  'games.detailUninstalledNote': 'Игра удалена с компьютера — скачайте её снова из доступных загрузок.',
+  'games.detailUninstalledDownloadedNote': 'Игра удалена с компьютера — установите её из уже скачанной загрузки.',
   'games.detailOpenScreenshotLabel': 'Открыть скриншот',
   'games.detailMetaSearchingTitle': 'Ищем описание и обложку',
   'games.detailFallbackGameWord': 'игру',

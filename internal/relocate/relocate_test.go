@@ -11,6 +11,7 @@ import (
 
 	"typhon/internal/download"
 	"typhon/internal/library"
+	"typhon/internal/platform"
 	"typhon/internal/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -438,6 +439,14 @@ func TestMoveGameRefusesOverlappingTarget(t *testing.T) {
 // actual tracked session, so this launches a real, harmless process and
 // kills it via the exported StopGame when done.
 func TestMoveGameRefusesWhileRunning(t *testing.T) {
+	// На macOS игры запускаются только через CrossOver, и без него библиотека
+	// не может завести настоящую сессию — а именно она этому тесту и нужна.
+	// Условие узкое намеренно: там, где CrossOver есть, тест по-прежнему
+	// выполняется, а на Windows Required вообще ложно.
+	if st := platform.Wine(); st.Required && !st.Installed {
+		t.Skip("запуск игры требует CrossOver, на этой машине его нет")
+	}
+
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 

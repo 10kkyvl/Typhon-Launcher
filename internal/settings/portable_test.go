@@ -18,6 +18,7 @@ var portableNames = []string{
 	"uploadWhileDownloading",
 	"installCleanupPolicy",
 	"autoInstall",
+	"elevateAhead",
 	"sourceRefreshInterval",
 	"verifyAfterInstall",
 	"installSkipShortcuts",

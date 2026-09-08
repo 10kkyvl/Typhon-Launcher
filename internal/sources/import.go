@@ -2,6 +2,7 @@ package sources
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -11,9 +12,15 @@ import (
 	"typhon/internal/titles"
 )
 
+// maxRemovedReleases bounds how many vanished-from-the-feed releases a
+// source keeps around in s.releases. See evictStaleRemoved for why they
+// cannot simply be dropped on removal.
+const maxRemovedReleases = 5000
+
 type matcher interface {
 	ResolveAll(queries []catalog.Query) []catalog.Match
 	Provision(queries []catalog.Query) (map[string]catalog.Game, error)
+	Epoch() uint64
 }
 
 func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Release {
@@ -49,7 +56,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			Languages:       parsed.Languages,
 			Year:            parsed.Year,
 			Tags:            parsed.Tags,
-			Repacker:        repackerOf(parsed.Tags),
+			Repacker:        titles.Repacker(parsed.Tags),
 			DLCCount:        parsed.DLCCount,
 			Size:            e.Size,
 			SizeUnknown:     e.SizeUnknown,
@@ -75,21 +82,6 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		out = append(out, r)
 	}
 	return out
-}
-
-var repackerPriority = []string{"fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade"}
-
-func repackerOf(tags []string) string {
-	set := make(map[string]bool, len(tags))
-	for _, t := range tags {
-		set[t] = true
-	}
-	for _, p := range repackerPriority {
-		if set[p] {
-			return p
-		}
-	}
-	return ""
 }
 
 func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {
@@ -121,6 +113,9 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		}
 		if changed(current, next) {
 			summary.Updated++
+			// Изменившийся заголовок или версия — другой запрос к каталогу,
+			// поэтому прошлый результат матчинга больше не действителен.
+			current.MatchEpoch = 0
 		}
 		current.RawTitle = next.RawTitle
 		current.Kind = next.Kind
@@ -153,7 +148,45 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		r.Availability = AvailabilityRemoved
 		summary.Removed++
 	}
-	return merged, summary
+	return evictStaleRemoved(merged), summary
+}
+
+// evictStaleRemoved bounds how many AvailabilityRemoved releases a source
+// keeps once they pass maxRemovedReleases. They cannot be dropped the
+// moment a release goes missing from the feed: GetSourceDetails counts them
+// separately and SourceDetailsModal has a "removed" tab so a user can see
+// what disappeared from a source. But nothing ever deleted them either, and
+// feed.MaxEntries only caps a single parse pass — a source with churn
+// (releases leaving and returning over months) grew this list without any
+// upper bound. Evicting the oldest-by-LastSeenAt removed releases first
+// keeps the useful case (recent disappearances stay visible) while putting
+// a ceiling on memory; releases still available in the feed are never
+// touched by this, no matter how many removed ones pile up around them.
+func evictStaleRemoved(list []*Release) []*Release {
+	var removedIdx []int
+	for i, r := range list {
+		if r.Availability == AvailabilityRemoved {
+			removedIdx = append(removedIdx, i)
+		}
+	}
+	if len(removedIdx) <= maxRemovedReleases {
+		return list
+	}
+	sort.Slice(removedIdx, func(a, b int) bool {
+		return list[removedIdx[a]].LastSeenAt.Before(list[removedIdx[b]].LastSeenAt)
+	})
+	evict := make(map[int]bool, len(removedIdx)-maxRemovedReleases)
+	for _, idx := range removedIdx[:len(removedIdx)-maxRemovedReleases] {
+		evict[idx] = true
+	}
+	out := make([]*Release, 0, len(list)-len(evict))
+	for i, r := range list {
+		if evict[i] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func changed(current, next *Release) bool {
@@ -183,16 +216,25 @@ func sameTime(a, b *time.Time) bool {
 	}
 }
 
+// applyMatches пропускает релиз, который уже матчился на текущей эпохе и с
+// тех пор не менялся: каталог и словарь те же, значит и ответ будет тот же.
+// Без этого каждый рефетч прогонял через fuzzy все нераспознанные записи —
+// на большом фиде это десятки тысяч сравнений впустую.
 func applyMatches(m matcher, list []*Release) error {
 	if m == nil {
 		return nil
 	}
+	epoch := m.Epoch()
 	targets := make([]*Release, 0, len(list))
 	for _, r := range list {
 		if r.Locked || r.Ignored {
 			continue
 		}
+		if r.MatchEpoch == epoch {
+			continue
+		}
 		if r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil && stableMatch(r.MatchMethod) {
+			r.MatchEpoch = epoch
 			continue
 		}
 		targets = append(targets, r)
@@ -218,6 +260,7 @@ func applyMatches(m matcher, list []*Release) error {
 	for i, r := range targets {
 		match := matches[position[keys[i]]]
 		assign(r, match)
+		r.MatchEpoch = epoch
 	}
 
 	pending := make([]catalog.Query, 0)
@@ -252,6 +295,9 @@ func applyMatches(m matcher, list []*Release) error {
 		r.MatchStatus = catalog.StatusMatched
 		r.MatchConfidence = 1
 		r.MatchMethod = string(catalog.MethodProvisional)
+		// Provision добавляет игры в каталог, то есть двигает эпоху: без
+		// пересчёта эти релизы матчились бы заново на следующем же рефетче.
+		r.MatchEpoch = m.Epoch()
 	}
 	return nil
 }

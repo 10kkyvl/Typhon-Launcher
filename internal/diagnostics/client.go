@@ -40,6 +40,14 @@ func newTransport() *http.Transport {
 }
 
 func newClient(baseURL string) (*client, error) {
+	return newClientWithTimeout(baseURL, requestTimeout)
+}
+
+// newClientWithTimeout is newClient with an overridable http.Client.Timeout.
+// The manual log upload in logsupload.go sends a body many times larger
+// than an error batch and needs more room on a slow connection than the
+// errors endpoint's fixed requestTimeout allows.
+func newClientWithTimeout(baseURL string, timeout time.Duration) (*client, error) {
 	base, err := account.ValidateBaseURL(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("validate diagnostics base url: %w", err)
@@ -47,7 +55,7 @@ func newClient(baseURL string) (*client, error) {
 	return &client{
 		baseURL: base,
 		httpClient: &http.Client{
-			Timeout:       requestTimeout,
+			Timeout:       timeout,
 			Transport:     newTransport(),
 			CheckRedirect: account.CheckRedirect,
 		},

@@ -6,6 +6,51 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.5.0 — 2026-09-08
+The launcher runs on macOS, downloading is told apart from installing, and games stop splitting across the catalogue or offering each other the wrong update.
+
+### Added
+- Typhon runs on macOS (Apple Silicon Macs): Windows games are installed and launched through CrossOver, and the launcher builds a separate environment for each game. CrossOver itself is installed separately — About shows its version, or warns that it is missing
+- On macOS a game can go to the desktop as a shortcut, and the launcher can start at login
+- A compatibility journal keeps itself: after a game fails to start twice in a row it is marked "does not start" in Installed, and a minute of play clears the mark
+- On macOS the catalogue shows how many people the game starts for, and a "Only ones that start" filter. The number appears once at least five different machines have reported on the game
+- A compatibility report is sent by consent only: the game, the build version and repacker, the macOS version, the CrossOver version and the chip family — no free-form text, no release names, no paths. Consent is asked again, because the previous prompt promised nothing about hardware would be collected
+- A "Download" button separate from "Install": with nothing on disk the game page offers to download, and install appears once there is nothing left to fetch
+- An "Install after download" checkbox in the download window: it starts from the setting but applies to that one download
+- Administrator rights can be confirmed up front, before the download starts, when the torrent carries an installer: the install then runs overnight on its own instead of waiting for a Windows prompt
+- The source preview says how many games a feed describes, how many of them the catalogue already has, and how many are new
+- A source served over plain http is flagged with a shield in the list and a warning in the preview: its contents can be swapped on the way
+- File verification shows up in the activity dock — its progress used to live on the game page only, so leaving the page hid a scan that keeps running
+- The release list carries the build form — "Portable", "Repack", "Archive" — and the repacker is written next to the source the release came from
+- A "Send to us" button in About: the log archive goes to support and is kept there for three days, and the launcher shows the ticket number. Before sending, the window says what is inside — your system user name, folder paths, and the names of games and torrents
+- Unfriending, blocking and discarding a downloaded file ask for confirmation: they used to fire straight from the context menu
+
+### Changed
+- The interface is a tenth larger: what the 110% scale used to draw is now what 100% draws, and the other steps moved with it
+- Built-in theme names follow the interface language instead of staying Russian in English
+- The repacker and edition lists moved into a dictionary that refreshes from the server once a day: a new repacker is recognised without a new launcher version, and your own list can go into a file in the config folder
+- Sources refresh faster: releases the feed did not touch are not matched again, and saving a source no longer downloads the feed a second time after the preview
+- A running game is noticed, and its session closed, within a second — it used to take up to ten
+- The avatar goes to the server as the file you picked, and the square is cut there: the picture is no longer resampled twice on the way
+- The activity feed and the profile show a game as a wide shot instead of a cropped portrait cover
+- The launcher uses less memory on large catalogues and sources: the game list is not held twice, and releases that vanished from a feed no longer pile up without a ceiling
+
+### Fixed
+- A game removed from the library on one device came back from another on the next sync: the removal now travels to the server and reaches the other devices, even if there was no network at the moment it was removed
+- One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Папка игры]" the version and the brackets stayed in the name, so every entry counted as its own game
+- A 1.8 GB repack was offered as an update to a 9.8 GB installation when both were published on the same day and neither version could be read
+- An install started from a release row lost its version, and updates for that game were never found afterwards
+- The release list labelled "Update" even a release the launcher does not treat as one: those read "New release"
+- A torrent is no longer matched automatically to a DLC instead of the game itself; picking a DLC by hand still works
+- Confirmations for deleting a theme, clearing history and cancelling a download never appeared at all on macOS, and the action silently did nothing
+- Closing the add-download window while it says "Fetching details" no longer holds the torrent busy: it can be added again right away instead of a minute and a half later
+- Online status disappeared until the launcher was restarted if the server stopped answering the presence request for a minute
+- Errors are shown in the interface language: a technical server reply could turn up where readable text belongs — in search, in the library folder setup, and when updating or removing a game
+- Percentages disagreed: 4% on the game card, 3% in the activity dock. One rounding rule for the whole interface, rounding down — 100% is not shown until the work is done
+- Auto-install started even when the disk had no free space left at all
+- An install the installer finished while the launcher was closed could be marked interrupted: one failed read of the state file, at the moment the installer was replacing it, was enough to decide
+- The local network transfer list never cleared finished transfers, and a failing offer poll repeated the same error message every ten seconds
+
 ## 0.4.1 — 2026-09-06
 Update and download reliability: a snapshot of saves before an update, a way back after a patch chain, and state that used to be lost without a word.
 

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,10 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	// fake process. Only process_devmock_test.go exercises the devmock
 	// starter, and it sets s.start itself.
 	s.start = execStarter
+	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
+	// секунды и сотни мегабайт на каждый запуск. Тесты запускают обычные
+	// процессы, и оставлять после прогона настоящие бутыли нельзя.
+	s.prepare = func(context.Context, string, string) error { return nil }
 	// Registered after the t.TempDir() that produced path, so it runs before
 	// that directory is removed: a session goroutine still persisting into it
 	// would otherwise race the cleanup.
@@ -158,5 +163,51 @@ func TestRegisterInstalledRejectsMissingExecutable(t *testing.T) {
 	s := mustServiceAt(t, path)
 	if _, err := s.RegisterInstalled(InstalledGame{Executable: filepath.Join(t.TempDir(), "nope.exe")}); err == nil {
 		t.Fatal("expected error for missing executable")
+	}
+}
+
+// Сборка нужна общей статистике: репаки разных сборщиков ведут себя по-разному,
+// и сложить их в одну цифру значит соврать.
+func TestRegisterInstalledKeepsTheBuild(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+
+	game, err := s.RegisterInstalled(InstalledGame{
+		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
+		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
+		Repacker: "fitgirl", ReleaseVersion: "1.0.28518",
+	})
+	if err != nil {
+		t.Fatalf("RegisterInstalled: %v", err)
+	}
+	if game.Repacker != "fitgirl" || game.ReleaseVersion != "1.0.28518" {
+		t.Fatalf("сборка потеряна: %+v", game)
+	}
+}
+
+// Переустановка другой сборкой обязана переписать прошлую: иначе статистика
+// припишет исход не тому репаку.
+func TestReinstallReplacesTheBuild(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	base := InstalledGame{
+		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
+		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
+		Repacker: "fitgirl", ReleaseVersion: "1.0",
+	}
+	if _, err := s.RegisterInstalled(base); err != nil {
+		t.Fatalf("первая установка: %v", err)
+	}
+
+	next := base
+	next.ReleaseID = "rel-2"
+	next.Repacker = "dodi"
+	next.ReleaseVersion = "1.2"
+	game, err := s.RegisterInstalled(next)
+	if err != nil {
+		t.Fatalf("переустановка: %v", err)
+	}
+	if game.Repacker != "dodi" || game.ReleaseVersion != "1.2" {
+		t.Fatalf("сборка не обновилась: %+v", game)
 	}
 }

@@ -47,8 +47,15 @@
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
+  import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { bytesSize, relativeDate } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   type Sort = 'recent' | 'alpha' | 'size';
 
@@ -60,6 +67,26 @@
 
   let search = $state('');
   let sort = $state<Sort>('recent');
+
+  // Журнал совместимости набирается сам из исходов запусков. Перечитываем его
+  // при каждой смене состава запущенных игр: сессия только что закончилась —
+  // значит вывод про игру мог измениться.
+  let compat = $state<Map<string, CompatStatus>>(new Map());
+  $effect(() => {
+    void $runningGames;
+    void $installedGames;
+    compatStatuses().then((next) => {
+      compat = next;
+    });
+  });
+
+  function brokenNote(game: LibraryGame): string {
+    const status = compat.get(game.id);
+    if (!status || status.state !== 'broken') return '';
+    return status.lastError
+      ? msg('games.compatBrokenWithReason', { reason: status.lastError })
+      : msg('games.compatBroken');
+  }
 
   function timeOf(value: string | null) {
     if (!value) return 0;
@@ -147,7 +174,7 @@
       toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
       addOpen = false;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedAddGameError'), 'danger');
+      toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');
     } finally {
       adding = false;
     }
@@ -157,7 +184,7 @@
     try {
       await playGame(game.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -220,7 +247,7 @@
       }
       toast(scanSummary(result), result.errors > 0 ? 'danger' : 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedScanError'), 'danger');
+      toast(sourceErrorText(err, msg('games.installedScanError')), 'danger');
     }
   }
 
@@ -231,7 +258,7 @@
       await setExecutable(game.id, path);
       toast(msg('games.installedExeSavedToast', { title: game.title }), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedChooseExeError'), 'danger');
+      toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');
     }
   }
 
@@ -416,6 +443,11 @@
         <div class="status">
           <span class="status-label">{msg('games.lastPlayedLabel')}</span>
           <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
+          {#if brokenNote(game)}
+            <span class="compat" title={brokenNote(game)}>
+              <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} plain />
+            </span>
+          {/if}
         </div>
         <div class="actions">
           {#if running}

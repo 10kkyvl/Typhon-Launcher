@@ -903,11 +903,15 @@ func TestPersistedStateReloads(t *testing.T) {
 	m.pieceCompletion = nil
 
 	reloaded := mustManagerAt(t, m.store.dir)
+	// Провал под мьютексом — это Goexit без Unlock, а cleanup менеджера берёт
+	// тот же мьютекс: тест не упал бы с внятной ошибкой, а повис бы до
+	// таймаута и спрятал её.
 	reloaded.mu.Lock()
-	if err := reloaded.loadLocked(); err != nil {
-		t.Fatalf("reload: %v", err)
-	}
+	loadErr := reloaded.loadLocked()
 	reloaded.mu.Unlock()
+	if loadErr != nil {
+		t.Fatalf("reload: %v", loadErr)
+	}
 
 	items := reloaded.List()
 	if len(items) != 2 {

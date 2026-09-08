@@ -26,9 +26,13 @@ Typhon ships with no games, carries no preinstalled sources and offers no list o
 It does not host or supply game files. Sources are added by the user, at the user's own
 responsibility.
 
-There is one build, for Windows. There are no macOS or Linux versions, and none will
-appear until a working build does — the launcher is *developed* on macOS (see
-[below](#developing-on-macos-or-linux)), but that is not a build anyone can use.
+The Windows build is the one that ships. A macOS build exists for **Apple silicon only**
+(Intel Macs are not supported) and runs games through
+[CrossOver](https://www.codeweavers.com/crossover), which you install yourself — without it
+the launcher still downloads, but cannot install or start a game. That build carries no Apple
+Developer signature and is not going to get one, so Gatekeeper blocks it after a download:
+allow it once in System Settings → Privacy & Security, or clear the quarantine attribute
+with `xattr -dr com.apple.quarantine /Applications/Typhon.app`. There is no Linux version.
 
 ## What it does
 
@@ -93,7 +97,7 @@ Everything below is for working on the launcher, not for using it.
 |---|---|
 | Go | 1.25.0 |
 | Node | 22 |
-| Wails CLI | `v3.0.0-beta.10` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10` |
+| Wails CLI | `v3.0.0-beta.17` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17` |
 
 Go + [Wails 3](https://v3.wails.io) on the backend, Svelte 5 on the front, current
 version 0.3.1.

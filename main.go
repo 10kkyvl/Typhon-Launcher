@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
@@ -29,6 +31,7 @@ import (
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
+	"typhon/internal/platform"
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
 	"typhon/internal/profile"
@@ -41,9 +44,12 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
+	"typhon/internal/titles"
+	"typhon/internal/titlesdict"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/wine"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -60,6 +66,7 @@ const discordClientID = "1541194395964014623"
 const singleInstanceID = "com.typhon.launcher"
 
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
+var errNoBrokerDir = errors.New("--install-broker требует путь к каталогу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 var errNoPlayTarget = errors.New("--play требует идентификатор игры")
 
@@ -157,6 +164,11 @@ func main() {
 	if devmock.Enabled {
 		slog.Warn("devmock build: Windows-only subsystems are mocked", "marker", devmock.Banner())
 	}
+	// Отсутствие CrossOver — не повод не стартовать: каталог и загрузки
+	// работают и без него, а установка и запуск отдадут понятную ошибку.
+	if status := platform.Wine(); status.Required {
+		slog.Info("wine runtime", "installed", status.Installed, "version", status.Version)
+	}
 
 	// diagService is assigned once the identity/telemetry block below
 	// constructs it; the defer reads the variable itself at panic time, not
@@ -184,6 +196,20 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "--install-broker" {
+		if len(os.Args) < 3 {
+			slog.Error("install broker failed", "error", errNoBrokerDir)
+			os.Exit(1)
+		}
+		outcome, err := install.RunBroker(os.Args[2])
+		if err != nil {
+			slog.Error("install broker failed", "outcome", string(outcome), "error", err)
+			os.Exit(1)
+		}
+		slog.Info("install broker finished", "outcome", string(outcome))
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "--selfupdate-worker" {
 		if len(os.Args) < 3 {
 			slog.Error("selfupdate worker failed", "error", errNoSelfupdateWorkerSpec)
@@ -203,6 +229,10 @@ func main() {
 	if err != nil {
 		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
 		playRequested = false
+	}
+
+	if err := titles.Ready(); err != nil {
+		fatal("load title dictionary", err)
 	}
 
 	settingsService, err := settings.NewService()
@@ -237,6 +267,10 @@ func main() {
 	installService, err := install.NewService(settingsService, downloadManager, libraryService)
 	if err != nil {
 		fatal("start install service", err)
+	}
+	titlesDictService, err := titlesdict.NewService()
+	if err != nil {
+		fatal("start title dictionary service", err)
 	}
 	catalogService, err := catalog.NewService()
 	if err != nil {
@@ -315,11 +349,55 @@ func main() {
 	lanService.SetHistoryRecorder(historyService.Record)
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
+	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
+	downloadManager.SetOnGone(installService.DropBroker)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
+
+	var extraCompatServices []application.Service
+
+	// Журнал совместимости набирается сам из исходов запусков: без него
+	// каждый пользователь заново выясняет, какие игры на его машине не идут.
+	compatService, err := compat.NewService()
+	if err != nil {
+		fatal("start compat service", err)
+	}
+	libraryService.SetOutcomeRecorder(compatService.RecordSession)
+	libraryService.SetLaunchFailureRecorder(compatService.RecordLaunchFailure)
+	installService.SetRepackerResolver(func(releaseID string) string {
+		release, ok := sourcesService.FindRelease(releaseID)
+		if !ok {
+			return ""
+		}
+		return release.Repacker
+	})
+	// Общая статистика совместимости живёт рядом с журналом, но отдельно от
+	// него: журнал ведётся всегда, отчёты уходят только по согласию.
+	compatStats := compat.NewStatsAt(compatStatsPath(configDir))
+	compatSharer, err := newCompatSharer(compatService, compatStats, configDir,
+		settingsService, libraryService, catalogService)
+	if err != nil {
+		// Без общей статистики лаунчер полностью работоспособен: локальный
+		// журнал ведётся, каталог просто молчит про чужие машины.
+		slog.Error("start compat sharing", "error", err)
+	} else {
+		extraCompatServices = append(extraCompatServices, application.NewService(compatSharer))
+	}
+
+	// Каталог сам переводит свой идентификатор в идентификатор IGDB и спрашивает
+	// уже по нему: этот колбэк зовётся под мьютексом каталога, и обращение к
+	// каталогу изнутри повесило бы запрос намертво.
+	catalogService.SetCompatLookup(func(igdbID string) (int, int, bool) {
+		shared, ok := compatStats.Game(igdbID)
+		if !ok {
+			return 0, 0, false
+		}
+		return shared.Works, shared.Total, true
+	})
+
 	profileService := profile.NewService(libraryService, playlogService, func() []string {
 		return accountService.CurrentProfileSettings().Showcase
 	})
@@ -400,6 +478,7 @@ func main() {
 		application.NewService(profileService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
+		application.NewService(titlesDictService),
 		application.NewService(catalogService),
 		application.NewService(sourcesService),
 		application.NewService(searchService),
@@ -409,6 +488,7 @@ func main() {
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),
+		application.NewService(compatService),
 		application.NewService(themeService),
 		application.NewService(lanService),
 		application.NewService(relocateService),
@@ -418,6 +498,7 @@ func main() {
 		application.NewService(selfupdateService),
 	}
 	services = append(services, extraServices...)
+	services = append(services, extraCompatServices...)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -448,7 +529,10 @@ func main() {
 			Middleware: metadataService.Middleware,
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// С включённым сворачиванием в трей приложение обязано пережить
+			// закрытие окна: иначе крестик убивает лаунчер вместе с
+			// загрузками, а иконка в строке меню возвращать уже нечего.
+			ApplicationShouldTerminateAfterLastWindowClosed: !current.MinimizeToTray,
 		},
 	})
 
@@ -456,8 +540,8 @@ func main() {
 		Title:            windowTitle(),
 		Width:            1440,
 		Height:           900,
-		MinWidth:         1000,
-		MinHeight:        680,
+		MinWidth:         1100,
+		MinHeight:        750,
 		Frameless:        true,
 		BackgroundColour: application.NewRGB(11, 16, 22),
 		// Started from a game shortcut the launcher stays out of the way, but
@@ -465,14 +549,14 @@ func main() {
 		// nobody can reopen leaves a process the user cannot reach.
 		Hidden: playRequested && current.MinimizeToTray,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
+			InvisibleTitleBarHeight: 55,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
 		URL: "/",
 	})
 
-	autostartService, err := autostart.NewService(wails.Autostart)
+	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
 	}
@@ -512,7 +596,12 @@ func main() {
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if trayController.CloseRequested() {
 			event.Cancel()
+			return
 		}
+		// Трея нет — значит возвращать окно будет нечем. На macOS выход по
+		// закрытию последнего окна отключён ради трея, поэтому без этого
+		// вызова остался бы процесс без окна и без иконки.
+		wails.Quit()
 	})
 
 	if playRequested {
@@ -593,6 +682,71 @@ func metadataProvider(accountService *account.Service) metadata.Provider {
 		return nil
 	}
 	return client
+}
+
+// newCompatSharer собирает отправку статистики совместимости. Псевдоним для неё
+// заводится свой, а не берётся из installation.json: отчёт везёт список
+// установленных игр, версию системы и чип, и склеенный по общему
+// идентификатору с обычной телеметрией он давал бы профиль заметно жирнее, чем
+// каждая из них по отдельности.
+func newCompatSharer(
+	journal *compat.Service,
+	stats *compat.Stats,
+	configDir string,
+	settingsService *settings.Service,
+	libraryService *library.Service,
+	catalogService *catalog.Service,
+) (*compat.Sharer, error) {
+	identity, err := clientid.LoadAt(filepath.Join(configDir, "compat-client.json"))
+	if err != nil {
+		return nil, fmt.Errorf("compat client id: %w", err)
+	}
+	return compat.NewSharer(journal, stats, account.BaseURL(),
+		identity.InstallationID, app.Version,
+		func() bool { return settingsService.GetSettings().CompatReportsAllowed() },
+		compatEnv,
+		func(localID string) (compat.Build, bool) {
+			for _, g := range libraryService.GetGames() {
+				if g.ID != localID {
+					continue
+				}
+				return compat.Build{
+					GameID:   catalogService.IGDBIDOf(g.CanonicalGameID),
+					Repacker: g.Repacker,
+					Version:  g.ReleaseVersion,
+				}, true
+			}
+			return compat.Build{}, false
+		})
+}
+
+// compatStatsPath обычно указывает в каталог конфигурации. В devmock-сборке
+// TYPHON_DEVMOCK_COMPAT_STATS подменяет его готовым снимком: бейджи в каталоге
+// иначе нечем показать, пока агрегат не набрал порог наблюдений на живом
+// сервере.
+func compatStatsPath(configDir string) string {
+	if devmock.Enabled {
+		if path := os.Getenv("TYPHON_DEVMOCK_COMPAT_STATS"); path != "" {
+			slog.Info("devmock compat stats", "path", path)
+			return path
+		}
+	}
+	return filepath.Join(configDir, "compat-stats.json")
+}
+
+// compatEnv собирает окружение запуска. Сведение к тому, что можно отправлять,
+// делает сам compat: сюда попадают сырые значения, и это намеренно — так
+// вызывающему негде забыть их обезличить.
+func compatEnv() compat.Env {
+	env := compat.Env{}
+	if info, err := platform.GetSystemInfo(); err == nil {
+		env.OSVersion = info.OS
+		env.Chip = info.CPU
+	}
+	if rt, err := wine.Detect(); err == nil {
+		env.CrossOver = rt.Version
+	}
+	return env
 }
 
 func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, releaseID string) string {

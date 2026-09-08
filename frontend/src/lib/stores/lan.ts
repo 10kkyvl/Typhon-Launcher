@@ -39,6 +39,7 @@ export const lanStats = writable<Stats>(emptyStats);
 
 function upsertTransfer(item: Transfer) {
   transfers.update((list) => {
+    if (item.status !== 'receiving') return list.filter((t) => t.id !== item.id);
     const index = list.findIndex((t) => t.id === item.id);
     if (index < 0) return [...list, item];
     const next = [...list];
@@ -109,12 +110,17 @@ export async function initLan() {
     lanStats.set(event.data as Stats);
   });
 
+  let offersPollFailing = false;
   setInterval(async () => {
     try {
       const offersList = await getOffers();
       offers.set(offersList);
+      offersPollFailing = false;
     } catch (err) {
-      toast(sourceErrorText(err), 'danger');
+      if (!offersPollFailing) {
+        offersPollFailing = true;
+        toast(sourceErrorText(err), 'danger');
+      }
     }
   }, 10000);
 }
@@ -127,7 +133,16 @@ async function run(action: () => Promise<void>) {
   }
 }
 
+const shareGeneration = new Map<string, number>();
+
+function nextShareGeneration(gameId: string): number {
+  const next = (shareGeneration.get(gameId) ?? 0) + 1;
+  shareGeneration.set(gameId, next);
+  return next;
+}
+
 export function share(gameId: string) {
+  const generation = nextShareGeneration(gameId);
   hashing.update((map) => {
     const next = new Map(map);
     next.set(gameId, { gameId, processedBytes: 0, totalBytes: 0, currentFile: '', done: false });
@@ -135,18 +150,22 @@ export function share(gameId: string) {
   });
   shareRequest(gameId)
     .then((result) => {
-      upsertShare(result);
       clearHashing(gameId);
+      if (shareGeneration.get(gameId) !== generation) return;
+      upsertShare(result);
     })
     .catch((err) => {
-      toast(sourceErrorText(err), 'danger');
       clearHashing(gameId);
+      if (shareGeneration.get(gameId) !== generation) return;
+      toast(sourceErrorText(err), 'danger');
     });
 }
 
 export function unshare(gameId: string) {
+  const generation = nextShareGeneration(gameId);
   return run(async () => {
     await unshareRequest(gameId);
+    if (shareGeneration.get(gameId) !== generation) return;
     shares.update((list) => list.filter((s) => s.gameId !== gameId));
   });
 }

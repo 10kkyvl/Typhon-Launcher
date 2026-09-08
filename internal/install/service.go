@@ -111,12 +111,22 @@ type Service struct {
 	store     *store
 	removals  *removalStore
 	runner    runner
+	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
+	// не прямой вызов: на macOS настоящая реализация заводит бутыль
+	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
+	// прогон тестов создаёт настоящие бутыли на машине разработчика.
+	prepareRuntime func(ctx context.Context, installDir, executable string) error
+	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
+	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
+	releaseRuntime func(installDir string) error
 
 	items      []*Installation
 	jobs       map[string]*job
+	brokers    map[string]*broker
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
+	repacker   func(releaseID string) string
 	usage      func(usagestats.Event)
 
 	historyRecorder func(history.Record) error
@@ -157,9 +167,12 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		store:     newStore(dir),
 		removals:  newRemovalStore(dir),
 		jobs:      map[string]*job{},
+		brokers:   map[string]*broker{},
 		freeSpace: platform.GetStorageInfo,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
+	s.prepareRuntime = prepareRuntime
+	s.releaseRuntime = releaseRuntime
 	return s, nil
 }
 
@@ -175,6 +188,17 @@ func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.title = fn
+}
+
+// SetRepackerResolver сообщает установке, чьей сборкой поставлена игра. Держать
+// это в библиотеке, а не смотреть в источники позже, приходится потому, что
+// релиз из фида пропадает при чистке, а игра остаётся.
+//
+//wails:ignore
+func (s *Service) SetRepackerResolver(fn func(releaseID string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repacker = fn
 }
 
 //wails:ignore
@@ -221,6 +245,19 @@ func (s *Service) titleOf(origin download.Origin) string {
 		return ""
 	}
 	return strings.TrimSpace(resolve(origin))
+}
+
+func (s *Service) repackerOf(releaseID string) string {
+	if releaseID == "" {
+		return ""
+	}
+	s.mu.Lock()
+	resolve := s.repacker
+	s.mu.Unlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(releaseID))
 }
 
 func (s *Service) nameFor(d download.Download) string {
@@ -407,6 +444,11 @@ func (s *Service) transientWorkerStatus(id string) (alive, done bool) {
 // var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
 var resumeWatchPollInterval = 2 * time.Second
 
+// readWorkerStateForResume — шов для тестов: подделать транзиентный сбой
+// чтения state.json другого способа нет, а переживание такого сбоя и есть
+// проверяемое поведение watchResumedInstall.
+var readWorkerStateForResume = readWorkerState
+
 // spawnResumeWatcher принимает ctx от жизни сервиса: s.cancel() при
 // ServiceShutdown останавливает и наблюдателя, без чего s.wg.Wait() ждал бы
 // его вечно (инвариант 19).
@@ -426,17 +468,33 @@ func (s *Service) spawnResumeWatcher(ctx context.Context, id string) {
 func (s *Service) watchResumedInstall(ctx context.Context, id, statePath string) {
 	ticker := time.NewTicker(resumeWatchPollInterval)
 	defer ticker.Stop()
+	stateReadFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			state, found, err := readWorkerState(statePath)
+			state, found, err := readWorkerStateForResume(statePath)
 			if err != nil {
+				// Воркер подменяет state.json переименованием, и на Windows
+				// чтение ровно в этот момент транзиентно падает — то же, что
+				// runElevated уже переживает через workerStateReadRetries.
+				// Здесь цена одной такой ошибки выше: единственное чтение
+				// решало судьбу установки, которую воркер на самом деле довёл
+				// до конца, и пользователь видел «прервана» вместо готовой
+				// игры. Сдаёмся только если чтение не проходит столько тиков
+				// подряд, сколько уже признано не транзиентным сбоем.
+				stateReadFailures++
+				if stateReadFailures < workerStateReadRetries {
+					slog.Warn("read worker state while resuming install, retrying",
+						"id", id, "attempt", stateReadFailures, "error", err)
+					continue
+				}
 				slog.Error("read worker state while resuming install", "id", id, "error", err)
 				s.interruptResumed(id)
 				return
 			}
+			stateReadFailures = 0
 			if found && state.Done {
 				s.finishResumed(ctx, id, state)
 				return
@@ -973,7 +1031,14 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 	}
 	s.mu.Unlock()
 
-	if err := s.complete(id); err != nil {
+	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
+	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
+	// вместе с ним, а не висело после закрытия лаунчера.
+	confirmCtx, ctxErr := s.baseContext()
+	if ctxErr != nil {
+		return ctxErr
+	}
+	if err := s.complete(confirmCtx, id); err != nil {
 		s.fail(id, err)
 		return err
 	}
@@ -1197,7 +1262,16 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 	if d.Origin.Purpose != download.PurposeRelease {
 		return
 	}
-	if !s.config().AutoInstall {
+	// Всё, что не дошло до Start, обязано снять брокера здесь: установка,
+	// ради которой его поднимали, уже не начнётся, а держать ради неё процесс
+	// с правами администратора до выхода из лаунчера нельзя.
+	started := false
+	defer func() {
+		if !started {
+			s.DropBroker(d.ID)
+		}
+	}()
+	if !autoInstallFor(d, s.config().AutoInstall) {
 		return
 	}
 	info, err := s.InspectDownload(d.ID)
@@ -1209,7 +1283,12 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Info("auto install skipped", "id", d.ID, "type", info.Plan.Type)
 		return
 	}
-	if info.RequiredBytes > 0 && info.FreeBytes > 0 && info.FreeBytes < info.RequiredBytes {
+	// FreeBytes == 0 не отличается от любого другого значения ниже
+	// RequiredBytes: freeBytes (ниже по файлу) пробрасывает ошибку получения
+	// свободного места отдельно и никогда не подменяет её нулём, поэтому
+	// нулевой результат здесь всегда означает "том забит под ноль", а не
+	// "неизвестно". Проверка на FreeBytes > 0 глушила именно этот случай.
+	if info.RequiredBytes > 0 && info.FreeBytes < info.RequiredBytes {
 		slog.Warn("auto install skipped, not enough space", "id", d.ID,
 			"required", info.RequiredBytes, "free", info.FreeBytes)
 		return
@@ -1219,6 +1298,7 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Warn("auto install", "id", d.ID, "error", err)
 		return
 	}
+	started = true
 	slog.Info("auto install started", "id", item.ID, "download", d.ID, "name", item.Name)
 }
 

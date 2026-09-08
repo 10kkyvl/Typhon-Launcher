@@ -1,9 +1,10 @@
 <script lang="ts">
   import { msg } from '../../lib/i18n';
-  import { themeVars } from '../../lib/theme/apply';
+  import { themeDisplayName, themeVars } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import {
     deleteTheme,
     exportTheme,
@@ -13,6 +14,7 @@
     selectThemeFile,
     type Theme,
   } from '../../lib/services/theme';
+  import { deleteThemePrompt, resetAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { activeTheme, refreshThemes, resetAppearance, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
   import { toast } from '../../lib/stores/toasts';
   import { themeErrorText } from '../../lib/theme/themeErrors';
@@ -32,10 +34,11 @@
   let importing = $state(false);
   let exporting = $state(false);
   let errors = $state<string[]>([]);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   function startEditing(theme: Theme) {
     draft = { ...theme, tokens: { ...theme.tokens } };
-    draftName = theme.name;
+    draftName = themeDisplayName(theme);
     cssDraft = theme.css ?? '';
     advancedOpen = false;
     errors = [];
@@ -95,13 +98,17 @@
     }
   }
 
-  async function removeDraft() {
-    if (!draft || draft.builtIn) return;
-    if (!window.confirm(msg('settings.appearanceDeleteConfirm', { name: draft.name }))) return;
+  function removeDraft() {
+    const target = draft;
+    if (!target || target.builtIn) return;
+    pending = { prompt: deleteThemePrompt(target.name), run: () => runRemove(target) };
+  }
+
+  async function runRemove(target: Theme) {
     deleting = true;
     try {
-      await deleteTheme(draft.id);
-      toast(msg('settings.appearanceDeletedToast', { name: draft.name }), 'success');
+      await deleteTheme(target.id);
+      toast(msg('settings.appearanceDeletedToast', { name: target.name }), 'success');
       draft = null;
       await refreshThemes();
     } catch (err) {
@@ -109,6 +116,10 @@
     } finally {
       deleting = false;
     }
+  }
+
+  function askReset() {
+    pending = { prompt: resetAppearancePrompt(), run: resetAppearance };
   }
 
   async function runImport() {
@@ -161,7 +172,7 @@
             class="preset-swatch"
             style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
           ></span>
-          <span class="preset-name">{theme.name}</span>
+          <span class="preset-name">{themeDisplayName(theme)}</span>
           {#if !theme.builtIn}
             <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
           {/if}
@@ -180,7 +191,7 @@
   </Card>
 
   {#if draft}
-    <Card title={msg('settings.appearanceEditingCardTitle', { name: draft.name })}>
+    <Card title={msg('settings.appearanceEditingCardTitle', { name: themeDisplayName(draft) })}>
       {#if draft.builtIn}
         <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
       {/if}
@@ -265,10 +276,14 @@
         <span class="row-label">{msg('settings.appearanceResetLabel')}</span>
         <span class="row-sub">{msg('settings.appearanceResetSub')}</span>
       </div>
-      <Button size="sm" variant="danger" onclick={resetAppearance}>{msg('settings.appearanceResetButton')}</Button>
+      <Button size="sm" variant="danger" onclick={askReset}>{msg('settings.appearanceResetButton')}</Button>
     </div>
   </Card>
 </div>
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .single-column {

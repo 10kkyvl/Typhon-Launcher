@@ -22,6 +22,7 @@ export interface Settings {
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
   autoInstall: boolean;
+  elevateAhead: boolean;
   sourceRefreshInterval: string;
   verifyAfterInstall: boolean;
   installSkipShortcuts: boolean;
@@ -64,6 +65,7 @@ const fallbackDefaults: Settings = {
   seedAfterDownload: false,
   installCleanupPolicy: 'delete',
   autoInstall: false,
+  elevateAhead: false,
   sourceRefreshInterval: '6h',
   verifyAfterInstall: true,
   installSkipShortcuts: true,

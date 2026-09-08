@@ -411,16 +411,16 @@ describe('saveAvatar', () => {
     const { accountMock, userStore } = await loadModules();
     vi.mocked(accountMock.uploadAvatar).mockResolvedValue(makeUser({ avatarUrl: 'https://cdn/avatar.webp' }));
 
-    await userStore.saveAvatar('QUJD');
+    await userStore.saveAvatar('QUJD', { x: 8, y: 16, size: 240 });
 
-    expect(accountMock.uploadAvatar).toHaveBeenCalledWith('QUJD');
+    expect(accountMock.uploadAvatar).toHaveBeenCalledWith('QUJD', { x: 8, y: 16, size: 240 });
     expect(get(userStore.currentUser)?.avatarUrl).toBe('https://cdn/avatar.webp');
   });
 
   it('refuses an empty payload', async () => {
     const { accountMock, userStore } = await loadModules();
 
-    await expect(userStore.saveAvatar('')).rejects.toMatchObject({ code: 'invalid_avatar' });
+    await expect(userStore.saveAvatar('', { x: 0, y: 0, size: 0 })).rejects.toMatchObject({ code: 'invalid_avatar' });
     expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
   });
 
@@ -430,7 +430,7 @@ describe('saveAvatar', () => {
     userStore.currentUser.set(original);
     vi.mocked(accountMock.uploadAvatar).mockRejectedValue(new accountMock.AccountError('unsupported_avatar'));
 
-    await expect(userStore.saveAvatar('QUJD')).rejects.toMatchObject({ code: 'unsupported_avatar' });
+    await expect(userStore.saveAvatar('QUJD', { x: 0, y: 0, size: 240 })).rejects.toMatchObject({ code: 'unsupported_avatar' });
     expect(get(userStore.currentUser)).toEqual(original);
     expect(get(userStore.uploadingAvatar)).toBe(false);
   });

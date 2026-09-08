@@ -15,7 +15,7 @@
     stepLabels,
     strategyLabels,
   } from '../stores/updates';
-  import { bytesSize, relativeDate } from '../utils/format';
+  import { bytesSize, progressPercent, relativeDate } from '../utils/format';
   import { msg } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
@@ -86,7 +86,7 @@
   {:else if busy}
     <div class="progress">
       <ProgressBar value={update.progress * 100} />
-      <span class="muted">{Math.round(update.progress * 100)}%</span>
+      <span class="muted">{progressPercent(update.progress)}%</span>
     </div>
   {:else}
     <dl class="summary">

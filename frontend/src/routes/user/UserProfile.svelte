@@ -3,6 +3,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -18,6 +19,8 @@
     sendRequest,
     unfriend,
   } from '../../lib/services/social';
+  import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
@@ -38,6 +41,7 @@
   let failure = $state('');
   let missing = $state(false);
   let busy = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   const isGuest = $derived($authState === 'guest');
   const name = $derived(data ? data.displayName || data.username : '');
@@ -54,12 +58,16 @@
     if (!data || closed) return null;
     const gameId = data.presence?.gameId;
     if (gameId == null) return null;
-    const cover =
-      data.recentlyPlayed.find((g) => g.igdbId === gameId)?.coverUrl ??
-      data.favorites.find((g) => g.igdbId === gameId)?.coverUrl ??
-      data.common?.games.find((g) => g.igdbId === gameId)?.coverUrl ??
-      '';
-    return { igdbId: gameId, title: data.presence?.gameTitle ?? '', coverUrl: cover };
+    const known =
+      data.recentlyPlayed.find((g) => g.igdbId === gameId) ??
+      data.favorites.find((g) => g.igdbId === gameId) ??
+      data.common?.games.find((g) => g.igdbId === gameId);
+    return {
+      igdbId: gameId,
+      title: data.presence?.gameTitle ?? '',
+      coverUrl: known?.coverUrl ?? '',
+      heroUrl: known?.heroUrl ?? '',
+    };
   });
 
   async function load(target: string, quiet = false) {
@@ -97,7 +105,21 @@
     }
   }
 
-  async function act(id: string) {
+  function act(id: string) {
+    const current = data;
+    if (!current || busy) return;
+    if (id !== 'unfriend' && id !== 'block') {
+      void run(id);
+      return;
+    }
+    const label = current.displayName || current.username;
+    pending = {
+      prompt: id === 'unfriend' ? unfriendPrompt(label) : blockPrompt(label, current.relation === 'friend'),
+      run: () => run(id),
+    };
+  }
+
+  async function run(id: string) {
     const current = data;
     if (!current || busy) return;
     busy = true;
@@ -228,7 +250,7 @@
             <Card title={msg('social.nowPlayingTitle')}>
               <button class="playing" type="button" onclick={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}>
                 <span class="cover">
-                  <Artwork src={presenceGame.coverUrl} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
+                  <Artwork src={wideArt(presenceGame)} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
                 </span>
                 <span class="title">{presenceGame.title}</span>
                 <StatusBadge kind="success" label={msg('social.playing')} plain />
@@ -247,6 +269,10 @@
       </div>
     {/if}
   </div>
+{/if}
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
 
 <style>

@@ -13,11 +13,12 @@
   } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import Modal from '../../lib/components/Modal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import { clearHistoryPrompt } from '../../lib/confirm/prompts';
   import { filterHistory } from '../../lib/history/historyFilter';
   import { historyLabel } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
@@ -41,7 +42,6 @@
   let segment = $state('all');
   let query = $state('');
   let clearOpen = $state(false);
-  let clearing = $state(false);
 
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
   const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query }));
@@ -77,15 +77,11 @@
   }
 
   async function confirmClear() {
-    clearing = true;
     try {
       await clearHistory();
       toast(msg('transfers.historyCleared'), 'success');
-      clearOpen = false;
     } catch (err) {
       toast(historyErrorText(err), 'danger');
-    } finally {
-      clearing = false;
     }
   }
 </script>
@@ -143,17 +139,9 @@
   {/if}
 </Card>
 
-<Modal bind:open={clearOpen} title={msg('transfers.historyClearAction')}>
-  <p class="confirm-text">
-    {msg('transfers.historyConfirmClearText')}
-  </p>
-  {#snippet footer()}
-    <Button onclick={() => (clearOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="danger" disabled={clearing} onclick={confirmClear}>
-      {clearing ? msg('transfers.historyClearing') : msg('transfers.historyClearAction')}
-    </Button>
-  {/snippet}
-</Modal>
+{#if clearOpen}
+  <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} onclose={() => (clearOpen = false)} />
+{/if}
 
 <style>
   .banner {
@@ -248,11 +236,6 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
-  }
-
-  .confirm-text {
-    color: var(--text-2);
-    line-height: 1.55;
   }
 
   @media (max-width: 1200px) {

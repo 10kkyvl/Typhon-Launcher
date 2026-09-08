@@ -54,6 +54,7 @@ type Service struct {
 	rateWindowStart time.Time
 	rateCount       int
 	seen            map[string]time.Time
+	ctx             context.Context
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -103,6 +104,7 @@ func newServiceAt(configDir string, id clientid.Identity, enabled func() bool) (
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
+	s.ctx = runCtx
 	s.cancel = cancel
 	s.mu.Unlock()
 

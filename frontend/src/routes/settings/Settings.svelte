@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
@@ -20,19 +21,26 @@
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
+  import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
+  import { sendLogsPrompt } from '../../lib/confirm/prompts';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
+  import { sendLogs, type SendLogsResult } from '../../lib/services/logsUpload';
+  import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
+    elevationSupported,
     getAppInfo,
     getSystemInfo,
+    getWineStatus,
     type AppInfo,
     type LogBundle,
     type SystemInfo,
+    type WineStatus,
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { settings, updateSettings } from '../../lib/stores/settings';
@@ -67,6 +75,7 @@
 
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
+  let wineStatus = $state<WineStatus | null>(null);
 
   let legalDocs = $state<LegalMeta[]>([]);
   let legalError = $state('');
@@ -78,14 +87,19 @@
 
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
+  let logsSending = $state(false);
+  let logsSendResult = $state<SendLogsResult | null>(null);
+  let logsSendFailure = $state('');
 
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
   let forgettingRemote = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   onMount(async () => {
     appInfo = await getAppInfo();
     systemInfo = await getSystemInfo();
+    wineStatus = await getWineStatus();
     try {
       legalDocs = await listLegalDocuments();
     } catch {
@@ -116,6 +130,39 @@
     }
   }
 
+  function openSendLogsConfirm() {
+    if (!inWails) {
+      toast(msg('settings.aboutLogsDesktopOnly'));
+      return;
+    }
+    logsSendFailure = '';
+    pending = { prompt: sendLogsPrompt(), run: confirmSendLogs };
+  }
+
+  async function confirmSendLogs() {
+    logsSending = true;
+    logsSendFailure = '';
+    try {
+      const result = await sendLogs();
+      logsSendResult = result;
+    } catch (err) {
+      logsSendResult = null;
+      logsSendFailure = logsUploadErrorText(err);
+    } finally {
+      logsSending = false;
+    }
+  }
+
+  async function copySendLogsId() {
+    if (!logsSendResult) return;
+    try {
+      await navigator.clipboard.writeText(logsSendResult.id);
+      toast(msg('settings.aboutLogsSendIdCopiedToast'), 'info');
+    } catch {
+      toast(msg('settings.aboutLogsSendIdCopyFailedToast'), 'danger');
+    }
+  }
+
   async function runSyncNow() {
     if (syncingNow) return;
     syncingNow = true;
@@ -129,9 +176,13 @@
     }
   }
 
+  function askForgetRemote() {
+    if (forgettingRemote) return;
+    pending = { prompt: forgetSyncPrompt(), run: runForgetRemote };
+  }
+
   async function runForgetRemote() {
     if (forgettingRemote) return;
-    if (!window.confirm(msg('settings.generalSyncForgetConfirm'))) return;
     forgettingRemote = true;
     try {
       await forgetRemote();
@@ -490,7 +541,7 @@
               size="sm"
               variant="danger"
               disabled={!accountReady || forgettingRemote}
-              onclick={runForgetRemote}
+              onclick={askForgetRemote}
             >
               <Trash2 size="1.5rem" strokeWidth={1.8} />
               {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
@@ -600,6 +651,19 @@
             onchange={(v) => set({ autoInstall: v })}
           />
         </div>
+        {#if appInfo && elevationSupported(appInfo)}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.elevateAhead ?? false}
+              label={msg('settings.downloadsElevateAheadToggle')}
+              onchange={(v) => set({ elevateAhead: v })}
+            />
+          </div>
+        {/if}
         <div class="row">
           <div class="row-text">
             <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
@@ -741,6 +805,20 @@
             </div>
           </div>
         {/if}
+        {#if wineStatus?.required}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
+              <span class="row-sub">
+                {#if wineStatus.installed}
+                  CrossOver {wineStatus.version}
+                {:else}
+                  {msg('settings.aboutRuntimeMissing')}
+                {/if}
+              </span>
+            </div>
+          </div>
+        {/if}
         <div class="row">
           <div class="row-text">
             <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
@@ -798,6 +876,41 @@
             {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
           </Button>
         </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
+            <span class="row-sub">
+              {#if logsSendFailure}
+                {logsSendFailure}
+              {:else if logsSendResult}
+                {msg('settings.aboutLogsSendResultLabel')}
+              {:else}
+                {msg('settings.aboutLogsSendConfirmNote')}
+              {/if}
+            </span>
+          </div>
+          <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
+            <Send size="1.5rem" strokeWidth={1.8} />
+            {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
+          </Button>
+        </div>
+        {#if logsSendResult}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
+              <span class="row-sub logs-send-id">{logsSendResult.id}</span>
+            </div>
+            <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
+              <Copy size="1.5rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+          {#if logsSendResult.dropped.length > 0}
+            <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
+          {/if}
+        {/if}
+        {#if logsSendFailure}
+          <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
+        {/if}
       </div>
     </Card>
 
@@ -838,6 +951,9 @@
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 <SentDataModal bind:open={sentDataOpen} />
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 <Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="52rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>

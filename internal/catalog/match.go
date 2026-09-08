@@ -9,9 +9,11 @@ import (
 func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	if !q.ExternalIDs.empty() {
 		for _, key := range externalKeys(q.ExternalIDs) {
-			if pos, ok := idx.byExternal[key]; ok {
-				return single(idx.entries[pos].game, scoreExternalID, MethodExternalID)
+			pos, ok := idx.byExternal[key]
+			if !ok || !idx.entries[pos].matchable {
+				continue
 			}
+			return single(idx.games[pos], scoreExternalID, MethodExternalID)
 		}
 	}
 	if q.Normalized == "" {
@@ -26,14 +28,18 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	best := map[int]Candidate{}
 	consider := func(pos int, score float64, method Method) {
 		e := idx.entries[pos]
-		score = adjust(score, q, e.game)
+		if !e.matchable {
+			return
+		}
+		g := idx.games[pos]
+		score = adjust(score, q, g)
 		if current, ok := best[pos]; ok && current.Score >= score {
 			return
 		}
 		best[pos] = Candidate{
-			GameID: e.game.ID,
-			Title:  e.game.Title,
-			Year:   e.game.ReleaseYear,
+			GameID: g.ID,
+			Title:  g.Title,
+			Year:   g.ReleaseYear,
 			Score:  score,
 			Method: method,
 		}
@@ -47,6 +53,9 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	}
 	for _, pos := range idx.candidates(q.Normalized) {
 		e := idx.entries[pos]
+		if !e.matchable {
+			continue
+		}
 		score := titles.Similarity(q.Normalized, e.normalized)
 		for _, alias := range e.aliases {
 			score = maxFloat(score, titles.Similarity(q.Normalized, alias))
@@ -78,7 +87,21 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	}
 
 	top := candidates[0]
-	ambiguous := len(candidates) > 1 && top.Score-candidates[1].Score < AmbiguityDelta
+	// Ambiguity is judged only against rivals that matched the same way as
+	// top. scoreExactTitle (0.98) and scoreFuzzyCap (0.95) are only
+	// AmbiguityDelta (0.04) apart, so a sequel whose title hits the catalog
+	// literally (exact_title) would otherwise always look "ambiguous" next
+	// to its prequel, which is a near-guaranteed decent fuzzy neighbor. A
+	// literal title/alias hit does not lose to an approximate one; it can
+	// only be contested by another literal hit that scored just as well
+	// (e.g. two catalog entries sharing the exact same title).
+	rival := -1.0
+	for _, c := range candidates[1:] {
+		if c.Method == top.Method && c.Score > rival {
+			rival = c.Score
+		}
+	}
+	ambiguous := rival >= 0 && top.Score-rival < AmbiguityDelta
 	switch {
 	case top.Score >= AutoThreshold && !ambiguous:
 		return Match{Status: StatusMatched, GameID: top.GameID, Confidence: top.Score, Method: top.Method, Candidates: candidates}

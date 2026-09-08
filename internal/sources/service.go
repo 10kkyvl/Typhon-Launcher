@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/sources/feed"
+	"typhon/internal/titles"
 	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -32,6 +34,7 @@ const (
 	eventReleaseReview  = "release:needs-review"
 
 	maxWarnings        = 10
+	previewCacheTTL    = 10 * time.Minute
 	refreshConcurrency = 2
 	refreshTimeout     = 3 * time.Minute
 	scheduleTick       = time.Minute
@@ -77,6 +80,7 @@ type Service struct {
 	sem        chan struct{}
 	onChanged  func()
 	status     degradedStatus
+	cached     *cachedFeed
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -124,14 +128,9 @@ func (s *Service) load() error {
 			item.Type = TypeURL
 		}
 		s.sources = append(s.sources, &item)
-		stored, err := s.store.loadReleases(item.ID)
+		list, err := s.store.loadReleases(item.ID)
 		if err != nil {
 			return err
-		}
-		list := make([]*Release, 0, len(stored))
-		for i := range stored {
-			r := stored[i]
-			list = append(list, &r)
 		}
 		s.releases[item.ID] = list
 	}
@@ -194,6 +193,53 @@ func (s *Service) clearDegradedLocked() {
 	}
 	s.status = degradedStatus{}
 	emit(eventDegraded, s.status)
+}
+
+// cachedFeed держит фид, который только что разобрали для превью, чтобы
+// «Сохранить» не качало те же десятки мегабайт второй раз. Запись одна:
+// превью — это шаг мастера добавления, а не фон.
+type cachedFeed struct {
+	kind     Type
+	location string
+	result   feed.Result
+	at       time.Time
+}
+
+func (s *Service) rememberFeedLocked(kind Type, location string, result feed.Result) {
+	s.cached = &cachedFeed{kind: kind, location: location, result: result, at: time.Now()}
+}
+
+// takeCachedFeed отдаёт разобранный фид ровно один раз: повторное обновление
+// источника обязано сходить в сеть, иначе оно показывало бы старое содержимое.
+func (s *Service) takeCachedFeed(kind Type, location string) (feed.Result, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cached := s.cached
+	if cached == nil {
+		return feed.Result{}, false
+	}
+	if cached.kind != kind || !sameLocationValue(kind, cached.location, location) {
+		return feed.Result{}, false
+	}
+	s.cached = nil
+	if time.Since(cached.at) > previewCacheTTL {
+		return feed.Result{}, false
+	}
+	return cached.result, true
+}
+
+// pruneExpiredPreview drops the cached preview once it is older than
+// previewCacheTTL, even if nothing ever calls takeCachedFeed again. It runs
+// off scheduleLoop's existing once-a-minute ticker instead of a dedicated
+// timer per preview: the cache holds at most one entry, so there is nothing
+// to iterate, and reusing the ticker that is already there means TestSource
+// never has to spin up a goroutine just to expire its own cache slot later.
+func (s *Service) pruneExpiredPreview(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cached != nil && now.Sub(s.cached.at) > previewCacheTTL {
+		s.cached = nil
+	}
 }
 
 func (s *Service) findLocked(id string) *Source {
@@ -323,9 +369,15 @@ func (s *Service) preview(kind Type, location string, result feed.Result) Previe
 	if preview.Name == "" {
 		preview.Name = displayName(kind, location)
 	}
+	if kind == TypeURL {
+		preview.Insecure = insecureURL(location)
+	}
+	preview.Games, preview.Known = s.catalogCoverage(result.Feed.Entries)
+	preview.Unknown = preview.Games - preview.Known
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.rememberFeedLocked(kind, location, result)
 	for _, src := range s.sources {
 		if sameLocation(src, kind, location) || (src.Fingerprint != "" && src.Fingerprint == preview.Fingerprint) {
 			preview.Duplicate = true
@@ -333,6 +385,49 @@ func (s *Service) preview(kind Type, location string, result feed.Result) Previe
 		}
 	}
 	return preview
+}
+
+// catalogCoverage считает, сколько разных игр в фиде и сколько из них уже есть
+// в каталоге. Считается по уникальным нормализованным названиям: фид на 20
+// тысяч записей обычно описывает вчетверо меньше игр, и «1200 игр, 340 у вас
+// уже есть» — это ответ про игры, а не про строки.
+func (s *Service) catalogCoverage(entries []feed.Entry) (games, known int) {
+	if len(entries) == 0 {
+		return 0, 0
+	}
+	queries := make([]catalog.Query, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		parsed := titles.Parse(e.Title)
+		if e.Game != "" {
+			parsed = titles.Parse(e.Game)
+		}
+		if parsed.Normalized == "" {
+			continue
+		}
+		key := parsed.Normalized
+		if parsed.Year > 0 {
+			key += "|" + strconv.Itoa(parsed.Year)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		queries = append(queries, catalog.Query{Title: parsed.Base, Normalized: parsed.Normalized, Year: parsed.Year})
+	}
+	if len(queries) == 0 || s.catalog == nil {
+		return len(queries), 0
+	}
+	for _, match := range s.catalog.ResolveAll(queries) {
+		if match.Status == catalog.StatusMatched {
+			known++
+		}
+	}
+	return len(queries), known
+}
+
+func insecureURL(raw string) bool {
+	return strings.HasPrefix(strings.ToLower(raw), "http://")
 }
 
 func (s *Service) AddSource(rawURL string) (Source, error) {
@@ -372,6 +467,7 @@ func (s *Service) addSource(kind Type, location string) (Source, error) {
 		src.Path = location
 	} else {
 		src.URL = location
+		src.Insecure = insecureURL(location)
 	}
 	s.sources = append(s.sources, src)
 	s.releases[src.ID] = nil
@@ -544,6 +640,10 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
+	if result, ok := s.takeCachedFeed(kind, location); ok {
+		slog.Info("source feed served from the preview cache", "type", string(kind))
+		return result, nil
+	}
 	if kind == TypeFile {
 		return feed.ReadFile(ctx, location)
 	}
@@ -790,6 +890,7 @@ func (s *Service) scheduleLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			s.pruneExpiredPreview(time.Now())
 			s.runRefreshDue(ctx)
 		}
 	}
@@ -907,10 +1008,14 @@ func sameLocation(src *Source, kind Type, location string) bool {
 	if src.Type != kind {
 		return false
 	}
+	return sameLocationValue(kind, locationOf(src), location)
+}
+
+func sameLocationValue(kind Type, a, b string) bool {
 	if kind == TypeFile {
-		return samePath(src.Path, location)
+		return samePath(a, b)
 	}
-	return strings.EqualFold(src.URL, location)
+	return strings.EqualFold(a, b)
 }
 
 func samePath(a, b string) bool {

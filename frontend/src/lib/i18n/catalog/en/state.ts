@@ -32,6 +32,7 @@ export const state: Record<StateKey, Message> = {
 
   'state.activityDownloadDetail': '{speed} · {eta} left',
   'state.activityWaitingForUser': 'Click to continue',
+  'state.activityVerifying': 'Verifying files',
 
   'state.discoveryFound': 'Found {count}',
   'state.discoveryAdded': 'added {count}',
@@ -160,6 +161,8 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonLauncherDidNotExit': 'The launcher didn’t close in time, the update was cancelled.',
   'state.selfupdateReasonCorruptDownload': 'The downloaded installer is corrupted. Download the update again.',
   'state.selfupdateReasonInstallerNotFound': 'Installer not found. Download the update again.',
+  'state.selfupdateReasonBundleBroken': 'The update archive is damaged.',
+  'state.selfupdateReasonNotABundle': 'The launcher is not running from the Typhon app — update it by hand.',
   'state.selfupdateReasonInstallerFailed': 'The installer exited with an error.',
   'state.selfupdateReasonServerStalled': 'The update server stopped sending data. Check your connection and try again.',
   'state.selfupdateReasonServerTimeout': 'The update server didn’t respond in time. Check your connection and try again.',
@@ -174,6 +177,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonCheckFirst': 'Check for updates first.',
   'state.selfupdateReasonNoSpace': 'Not enough disk space for the update.',
   'state.selfupdateReasonAccessDenied': 'No permission to write to the updates folder.',
+  'state.selfupdateReasonUnknown': 'Something went wrong during the update.',
   'state.selfupdateCodeCheckFailed': 'Failed to check for updates.',
   'state.selfupdateCodeDownloadFailed': 'Failed to download the update.',
   'state.selfupdateCodeApplyFailed': 'Failed to install the update.',

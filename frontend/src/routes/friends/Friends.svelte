@@ -13,6 +13,7 @@
   } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -35,6 +36,7 @@
     type RequestView,
     type UserCard,
   } from '../../lib/services/social';
+  import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
   import { commonLine, sentAt } from '../../lib/social/view';
   import { friendsView } from '../../lib/stores/ui';
@@ -55,6 +57,7 @@
   let codeOpen = $state(false);
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let busy = $state('');
   let myCode = $state('');
   let search = $state('');
@@ -189,11 +192,24 @@
       navigate('user', { username: user.username });
       return;
     }
+    const name = user.displayName || user.username;
     if (item === 'unfriend') {
-      run(`unfriend:${user.id}`, () => unfriend(user.id), msg('social.friendsUnfriendFailed'), msg('social.friendsUnfriended'));
+      pending = {
+        prompt: unfriendPrompt(name),
+        run: () =>
+          run(
+            `unfriend:${user.id}`,
+            () => unfriend(user.id),
+            msg('social.friendsUnfriendFailed'),
+            msg('social.friendsUnfriended'),
+          ),
+      };
       return;
     }
-    run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked'));
+    pending = {
+      prompt: blockPrompt(name, true),
+      run: () => run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked')),
+    };
   }
 
   function signIn(view: 'login' | 'register') {
@@ -457,6 +473,9 @@
   <AddFriendModal bind:open={addOpen} onsent={reload} />
 {/if}
 <SocialConsentScreen bind:open={consentOpen} />
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .code {

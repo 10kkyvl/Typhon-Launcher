@@ -165,7 +165,7 @@ export type PrimaryKind =
   | 'play'
   | 'stop'
   | 'update'
-  | 'install'
+  | 'download'
   | 'progress'
   | 'resolving'
   | 'unavailable'
@@ -202,7 +202,7 @@ export function primaryAction(status: GameStatus): PrimaryAction {
     if (status.updateAvailable) return { kind: 'update', label: msg('common.refresh'), disabled: false };
     return { kind: 'play', label: msg('games.play'), disabled: false };
   }
-  if (status.releaseCount > 0) return { kind: 'install', label: msg('games.primaryInstall'), disabled: false };
+  if (status.releaseCount > 0) return { kind: 'download', label: msg('games.primaryDownload'), disabled: false };
   if (status.releasesLoading) return { kind: 'resolving', label: msg('games.primaryResolving'), disabled: true };
   return { kind: 'unavailable', label: msg('games.primaryUnavailable'), disabled: true };
 }

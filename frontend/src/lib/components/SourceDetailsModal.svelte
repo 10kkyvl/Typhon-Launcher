@@ -9,9 +9,11 @@
     type ReleaseView,
     type SourceDetails,
   } from '../services/sources';
+  import { removeSourcePrompt, type ConfirmPrompt } from '../confirm/prompts';
   import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
   import Button from './Button.svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
   import ReleaseMatchModal from './ReleaseMatchModal.svelte';
   import SearchInput from './SearchInput.svelte';
@@ -63,6 +65,7 @@
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   let matchOpen = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let matchRelease = $state<ReleaseView | null>(null);
 
   $effect(() => {
@@ -153,11 +156,16 @@
     await toggleSource(source.id, !source.enabled);
   }
 
-  async function doRemove() {
-    if (!source) return;
-    if (!window.confirm(msg('modals.sourceDetailsRemoveConfirm', { name: source.name }))) return;
-    await removeSource(source.id);
-    open = false;
+  function doRemove() {
+    const current = source;
+    if (!current) return;
+    pending = {
+      prompt: removeSourcePrompt(current.name),
+      run: async () => {
+        await removeSource(current.id);
+        open = false;
+      },
+    };
   }
 
   function openMatch(view: ReleaseView) {
@@ -272,6 +280,9 @@
 </Modal>
 
 <ReleaseMatchModal bind:open={matchOpen} release={matchRelease} onchanged={reloadAll} />
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .sections {

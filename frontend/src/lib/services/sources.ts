@@ -21,6 +21,7 @@ export interface Source {
   lastError: string;
   fingerprint: string;
   feedVersion: number;
+  insecure?: boolean;
   entries: number;
   invalid: number;
   matched: number;
@@ -108,6 +109,10 @@ export interface SourcePreview {
   feedVersion: number;
   entries: number;
   invalid: number;
+  games: number;
+  known: number;
+  unknown: number;
+  insecure?: boolean;
   warnings?: string[];
   fingerprint: string;
   duplicate: boolean;
@@ -167,16 +172,30 @@ export interface CatalogGame {
   metadataUpdatedAt?: string;
 }
 
+// Доля машин, на которых игра запустилась. Считается на сервере по одному
+// голосу с машины; долю выводит интерфейс, он же решает, показывать её или
+// сказать, что данных мало.
+export interface CompatInfo {
+  works: number;
+  total: number;
+}
+
+// CompatOnlyWorking повторяет значение из internal/catalog: фильтр применяется
+// в Go, до нарезки на страницы.
+export const compatOnlyWorking = 'works';
+
 export interface CatalogQuery {
   search?: string;
   genre?: string;
   sort?: string;
+  compat?: string;
   page?: number;
   pageSize?: number;
 }
 
 export interface CatalogPage {
   items: CatalogGame[];
+  compat?: Record<string, CompatInfo>;
   total: number;
   page: number;
   pageSize: number;
@@ -339,9 +358,16 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
-  const payload = { search: query.search ?? '', genre: query.genre ?? '', sort: query.sort ?? '', page, pageSize };
+  const payload = {
+    search: query.search ?? '',
+    genre: query.genre ?? '',
+    sort: query.sort ?? '',
+    compat: query.compat ?? '',
+    page,
+    pageSize,
+  };
   const result = (await CatalogService.QueryGames(payload as never)) as unknown as CatalogPage;
-  return { ...result, items: result.items ?? [] };
+  return { ...result, items: result.items ?? [], compat: result.compat ?? {} };
 }
 
 export async function getGenreFacets(): Promise<GenreFacet[]> {

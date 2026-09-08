@@ -7,6 +7,15 @@ const TB_BYTES = 1024 ** 4;
 
 const DASH = '—';
 
+// progressPercent — единственный способ показать долю выполнения числом.
+// Раньше каждое место округляло по-своему, и одно и то же значение выглядело
+// как 4% на карточке игры и 3% в панели активности. Округляем вниз: показать
+// 100% раньше, чем работа кончилась, — это обещание, которого никто не давал.
+export function progressPercent(value: number) {
+  const clamped = Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+  return Math.floor(clamped * 100);
+}
+
 export function bytesToGb(bytes: number) {
   return bytes / GB_BYTES;
 }
@@ -21,8 +30,16 @@ export function truncateMiddle(text: string, max = 56) {
 export type Format = ReturnType<typeof makeFormat>;
 
 export function makeFormat(loc: Locale, t: Translate) {
-  const num = (value: number, min = 0, max = min) =>
-    new Intl.NumberFormat(loc, { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
+  const numFormatters = new Map<string, Intl.NumberFormat>();
+  const num = (value: number, min = 0, max = min) => {
+    const key = `${min}:${max}`;
+    let formatter = numFormatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(loc, { minimumFractionDigits: min, maximumFractionDigits: max });
+      numFormatters.set(key, formatter);
+    }
+    return formatter.format(value);
+  };
 
   const date = new Intl.DateTimeFormat(loc);
   const longDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' });

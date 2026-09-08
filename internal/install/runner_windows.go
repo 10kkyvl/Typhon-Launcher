@@ -226,14 +226,3 @@ func closeGroup(job windows.Handle, path string) {
 		slog.Warn("close job object", "path", path, "error", err)
 	}
 }
-
-// discovery сводит runSpec к discoverySpec (worker.go), чтобы неэлевированный
-// путь запуска (processRunner.run, runner_windows.go) мог пользоваться той же
-// attemptDiscovery, что и повышенный воркер: разведка компонентов Inno не
-// должна была работать только под UAC (инвариант 28).
-func (s runSpec) discovery() discoverySpec {
-	return discoverySpec{
-		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.Dir, InfPath: s.InfPath, Options: s.Options,
-	}
-}

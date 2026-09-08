@@ -1,4 +1,4 @@
-//go:build !windows && !devmock
+//go:build !windows && !devmock && !darwin
 
 package procs
 
@@ -11,6 +11,6 @@ var errUnsupported = errors.New("procs: process enumeration is only supported on
 
 func Supported() bool { return false }
 
-func List(_ context.Context) ([]Process, error) {
-	return nil, errUnsupported
+func List(_ context.Context) ([]Process, bool, error) {
+	return nil, false, errUnsupported
 }

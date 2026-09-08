@@ -99,6 +99,14 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 }
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
+	// Брокер поднимается заранее (HandleDownloadStarted), пока лаунчер ещё не
+	// знает, какой веткой пойдёт эта установка: только runSilent реально
+	// отдаёт ему задание (brokerFor), а интерактивная ветка вообще к нему не
+	// обращается. Освобождать его нужно на любом выходе из этой функции, а
+	// не только из silent-ветки — иначе интерактивный репак, для которого
+	// брокер подняли заранее, держит процесс с правами администратора до
+	// закрытия лаунчера.
+	defer s.DropBroker(item.DownloadID)
 	if err := s.setStatus(id, StatusPreparing); err != nil {
 		return err
 	}
@@ -177,6 +185,9 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
+	// DropBroker освобождается один раз для всей установки в runInstaller —
+	// дальше по цепочке установщиков этот же брокер ещё нужен.
+	handoff := s.brokerFor(item.DownloadID)
 	specs := make([]runSpec, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)
@@ -186,6 +197,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		spec.StatePath = statePath
 		spec.InfPath = infPath
 		spec.CancelPath = cancelPath
+		spec.Broker = handoff
 		specs = append(specs, spec)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
@@ -580,10 +592,10 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 			return s.waitForUser(id, candidates)
 		}
 	}
-	return s.complete(id)
+	return s.complete(ctx, id)
 }
 
-func (s *Service) complete(id string) error {
+func (s *Service) complete(ctx context.Context, id string) error {
 	item, ok := s.snapshot(id)
 	if !ok {
 		return errNotFound
@@ -602,6 +614,12 @@ func (s *Service) complete(id string) error {
 			return err
 		}
 		game = registered
+		// Окружение запуска — то же удобство поверх установки, что и ярлык:
+		// если бутыль не завёлся, игра всё равно установлена, а попытка
+		// повторится при первом запуске.
+		if err := s.prepareRuntime(ctx, item.Destination, game.Executable); err != nil {
+			slog.Warn("prepare game runtime", "id", game.ID, "error", err)
+		}
 		if cfg.DesktopShortcuts {
 			// Ярлык — удобство поверх установки, а не её часть: рабочий
 			// стол может быть недоступен, и объявлять из-за этого
@@ -697,6 +715,8 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		ReleaseID:        item.Origin.ReleaseID,
 		SourceID:         item.Origin.SourceID,
 		CanonicalGameID:  item.Origin.GameID,
+		Repacker:         s.repackerOf(item.Origin.ReleaseID),
+		ReleaseVersion:   item.Origin.Version,
 		InstallType:      string(item.Type),
 		Owned:            item.Owned,
 		Uninstall:        item.Uninstall,

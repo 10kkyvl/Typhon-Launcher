@@ -133,19 +133,3 @@ wait:
 	}
 	return reason, nil
 }
-
-func readDiscoveredComponents(infPath string, opts installOptions) ([]string, string, error) {
-	data, err := os.ReadFile(infPath)
-	if err != nil {
-		return nil, fmt.Sprintf("чтение файла разведки: %v", err), nil
-	}
-	list, ok := infComponents(data)
-	if !ok {
-		return nil, "секция Components не найдена в файле разведки", nil
-	}
-	filtered, changed := filterComponents(list, opts)
-	if !changed {
-		return nil, "", nil
-	}
-	return filtered, "", nil
-}

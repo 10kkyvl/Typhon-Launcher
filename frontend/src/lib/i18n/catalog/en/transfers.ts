@@ -49,6 +49,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesHealthOk': 'Everything is fine',
   'transfers.sourcesHealthWarning': 'Has warnings',
   'transfers.sourcesHealthError': 'Source error',
+  'transfers.sourcesInsecureTooltip': 'This source is served over http: the connection is not protected',
   'transfers.sourcesUpdatingEllipsis': 'Updating…',
   'transfers.sourcesRefreshNow': 'Refresh now',
   'transfers.sourcesRefreshAll': 'Refresh all',

@@ -28,15 +28,31 @@ type GameQuery struct {
 	Search   string `json:"search"`
 	Genre    string `json:"genre"`
 	Sort     string `json:"sort"`
+	Compat   string `json:"compat"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 }
 
+// CompatOnlyWorking — значение GameQuery.Compat, оставляющее только игры,
+// которые у людей запускаются. Фильтр применяется до нарезки на страницы:
+// отсеивать на фронте значит отдавать страницы разной длины.
+const CompatOnlyWorking = "works"
+
 type GamePage struct {
-	Items    []Game `json:"items"`
-	Total    int    `json:"total"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
+	Items []Game `json:"items"`
+	// Compat отдаётся отдельной картой, а не полем Game: общая статистика
+	// приходит с сервера и меняется сама по себе, а Game лежит на диске.
+	Compat   map[string]CompatInfo `json:"compat,omitempty"`
+	Total    int                   `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"pageSize"`
+}
+
+// CompatInfo — сколько машин из скольких запустили эту игру. Доля считается на
+// фронте: показывать её и «мало данных» — решение интерфейса.
+type CompatInfo struct {
+	Works int `json:"works"`
+	Total int `json:"total"`
 }
 
 type GenreFacet struct {
@@ -64,20 +80,80 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	filtered := make([]Game, 0, len(s.idx.entries))
 	for i := range s.idx.entries {
 		e := &s.idx.entries[i]
-		if search != "" && !entryMatches(e, search, normalized) {
+		g := s.idx.games[i]
+		if search != "" && !entryMatches(e, g, search, normalized) {
 			continue
 		}
-		if genre != "" && !genreMatches(e.game.Genres, genre) {
+		if genre != "" && !genreMatches(g.Genres, genre) {
 			continue
 		}
-		filtered = append(filtered, e.game)
+		if q.Compat == CompatOnlyWorking && !s.compatWorksLocked(g.ID) {
+			continue
+		}
+		filtered = append(filtered, g)
 	}
 	sortGames(filtered, q.Sort)
 
 	total := len(filtered)
 	start := min((q.Page-1)*q.PageSize, total)
 	end := min(start+q.PageSize, total)
-	return GamePage{Items: filtered[start:end], Total: total, Page: q.Page, PageSize: q.PageSize}
+	items := filtered[start:end]
+	return GamePage{
+		Items:    items,
+		Compat:   s.compatForLocked(items),
+		Total:    total,
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	}
+}
+
+// SetCompatLookup связывает каталог с общей статистикой. Каталог о ней ничего
+// не знает и без неё работает так же, только молчит про чужие машины.
+//
+// Колбэк спрашивают по идентификатору IGDB, а не по каноническому: перевод
+// одного в другой — работа каталога, и делать её обязан он сам. Колбэк,
+// которому пришлось бы дёргать каталог обратно, звался бы под его же
+// мьютексом и вешал бы запрос намертво.
+//
+//wails:ignore
+func (s *Service) SetCompatLookup(fn func(igdbID string) (works, total int, ok bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compat = fn
+}
+
+// compatWorksLocked отвечает на вопрос фильтра. Игра без наблюдений в «поедет»
+// не попадает: молчание — не то же самое, что подтверждённая работоспособность.
+func (s *Service) compatWorksLocked(gameID string) bool {
+	works, total, ok := s.compatLocked(gameID)
+	return ok && total > 0 && works*2 > total
+}
+
+func (s *Service) compatLocked(gameID string) (works, total int, ok bool) {
+	if s.compat == nil {
+		return 0, 0, false
+	}
+	igdbID := s.igdbIDLocked(gameID)
+	if igdbID == "" {
+		return 0, 0, false
+	}
+	return s.compat(igdbID)
+}
+
+func (s *Service) compatForLocked(items []Game) map[string]CompatInfo {
+	if s.compat == nil {
+		return nil
+	}
+	out := make(map[string]CompatInfo, len(items))
+	for i := range items {
+		if works, total, ok := s.compatLocked(items[i].ID); ok {
+			out[items[i].ID] = CompatInfo{Works: works, Total: total}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *Service) GenreFacets() []GenreFacet {
@@ -86,7 +162,7 @@ func (s *Service) GenreFacets() []GenreFacet {
 
 	counts := make([]int, len(genreGroups))
 	for i := range s.idx.entries {
-		genres := s.idx.entries[i].game.Genres
+		genres := s.idx.games[i].Genres
 		for gi, group := range genreGroups {
 			if genresMatchAny(genres, group.sources) {
 				counts[gi]++
@@ -143,8 +219,8 @@ func (s *Service) GetGames(ids []string) []Game {
 	return out
 }
 
-func entryMatches(e *entry, search, normalized string) bool {
-	if strings.Contains(strings.ToLower(e.game.Title), search) {
+func entryMatches(e *entry, g Game, search, normalized string) bool {
+	if strings.Contains(strings.ToLower(g.Title), search) {
 		return true
 	}
 	if normalized != "" && strings.Contains(e.normalized, normalized) {
@@ -155,7 +231,7 @@ func entryMatches(e *entry, search, normalized string) bool {
 			return true
 		}
 	}
-	for _, alias := range e.game.Aliases {
+	for _, alias := range g.Aliases {
 		if strings.Contains(strings.ToLower(alias), search) {
 			return true
 		}

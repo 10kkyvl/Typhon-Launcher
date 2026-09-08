@@ -30,6 +30,7 @@ type gameResponse struct {
 	Genres      []string       `json:"genres"`
 	Themes      []string       `json:"themes"`
 	Platforms   []string       `json:"platforms"`
+	GameType    string         `json:"gameType"`
 	Cover       *imagePayload  `json:"cover"`
 	Screenshots []imagePayload `json:"screenshots"`
 }

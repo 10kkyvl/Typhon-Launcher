@@ -1,5 +1,6 @@
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
 import { inWails } from './backend';
+import type { CropRect } from '../utils/crop';
 
 export const SHOWCASE_KINDS = ['favorites', 'recently_completed', 'most_played'] as const;
 export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
@@ -236,10 +237,10 @@ export async function pickAvatar(): Promise<AvatarImage> {
   }
 }
 
-export async function uploadAvatar(encoded: string): Promise<CurrentUser> {
+export async function uploadAvatar(encoded: string, crop: CropRect = { x: 0, y: 0, size: 0 }): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UploadAvatar(encoded)) as CurrentUser;
+    return (await AccountService.UploadAvatar(encoded, crop)) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }

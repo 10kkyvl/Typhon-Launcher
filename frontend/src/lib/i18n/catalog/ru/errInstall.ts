@@ -6,6 +6,8 @@ export const errInstall = {
   'errInstall.installCopyVerifyFailed': 'копирование завершилось с ошибкой проверки',
   'errInstall.installDestExists': 'путь назначения уже существует',
   'errInstall.installDestNotEmpty': 'папка установки уже существует и не пуста',
+  'errInstall.installBrokerOutsidePin':
+    'задание установки вышло за границы, согласованные при запросе прав администратора',
   'errInstall.installElevationDeclined':
     'нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос',
   'errInstall.installEmptyDestination': 'каталог установки не задан',
@@ -84,6 +86,9 @@ export const errInstall = {
   'errInstall.downloadSeeding': 'файлы сейчас раздаются — сначала остановите раздачу',
   'errInstall.downloadTorrentReadFailed': 'не удалось прочитать torrent-файл',
   'errInstall.downloadUnavailable': 'недоступно для этой загрузки',
+
+  'errInstall.wineBottleCreateFailed': 'не удалось подготовить окружение CrossOver для этой игры',
+  'errInstall.wineNotInstalled': 'для установки и запуска игр на macOS нужен CrossOver',
 } as const;
 
 export type ErrInstallKey = keyof typeof errInstall;

@@ -32,6 +32,10 @@ export const modals = {
   'modals.addDownloadFetchingNote': 'Это может занять до полутора минут.',
   'modals.addDownloadDestinationLabel': 'Папка назначения',
   'modals.addDownloadBrowse': 'Обзор',
+  'modals.addDownloadAutoInstallLabel': 'Установить после загрузки',
+  'modals.addDownloadAutoInstallSub': 'Значение по умолчанию берётся из настроек, здесь оно действует только на эту загрузку',
+  'modals.addDownloadElevateAheadLabel': 'Подтвердить права администратора сейчас',
+  'modals.addDownloadElevateAheadSub': 'В загрузке установщик — ему нужны права. Подтвердите сейчас, и установка пройдёт без вас; иначе она дождётся вашего подтверждения',
   'modals.addDownloadStart': 'Начать загрузку',
 
   // AddSourceModal.svelte
@@ -46,8 +50,12 @@ export const modals = {
   'modals.addSourceFileLabel': 'Файл',
   'modals.addSourceFeedVersion': 'Версия фида',
   'modals.addSourceEntries': 'Записей',
+  'modals.addSourceGames': 'Игр в фиде',
+  'modals.addSourceKnown': 'Уже есть в каталоге',
+  'modals.addSourceUnknown': 'Новых для каталога',
   'modals.addSourceInvalidEntries': 'Некорректных записей',
   'modals.addSourceDuplicate': 'Такой источник уже добавлен',
+  'modals.addSourceInsecure': 'Источник отдаётся по http: соединение не защищено, содержимое фида можно подменить по дороге',
   'modals.addSourceCheck': 'Проверить источник',
   'modals.addSourceAdding': 'Добавление…',
 
@@ -100,11 +108,12 @@ export const modals = {
     'Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и сетевые адреса удаляются перед отправкой.',
   'modals.telemetryConsentUsageTitle': 'Ещё и статистика использования',
   'modals.telemetryConsentUsageNote':
-    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
+    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
   'modals.telemetryConsentUsageToggleLabel': 'Анонимная статистика использования',
   'modals.telemetryConsentDisclosureSummary': 'Что именно отправляется',
   'modals.telemetryConsentErrorReportLabel': 'Отчёт об ошибке',
   'modals.telemetryConsentUsageEventLabel': 'Событие статистики использования',
+  'modals.telemetryConsentCompatReportLabel': 'Отчёт о совместимости игры',
   'modals.telemetryConsentSaving': 'Сохранение…',
   'modals.telemetryConsentDecline': 'Не отправлять',
   'modals.telemetryConsentAccept': 'Да, отправлять',
@@ -112,6 +121,7 @@ export const modals = {
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Диагностика',
   'modals.sentDataKindUsageStats': 'Статистика использования',
+  'modals.sentDataKindCompat': 'Совместимость игр',
   'modals.sentDataCopied': 'Скопировано',
   'modals.sentDataCopyFailed': 'Не удалось скопировать',
   'modals.sentDataTitle': 'Отправленные данные',
@@ -250,7 +260,6 @@ export const modals = {
   'modals.sourceDetailsStatusActive': 'Активен',
   'modals.sourceDetailsStatusDisabled': 'Отключен',
   'modals.sourceDetailsStatusUpdating': 'Обновление',
-  'modals.sourceDetailsRemoveConfirm': 'Удалить источник «{name}»?',
   'modals.sourceDetailsTitle': 'Источник',
   'modals.sourceDetailsUpdatedAt': 'Обновлено: {date}',
   'modals.sourceDetailsRefreshing': 'Обновление…',

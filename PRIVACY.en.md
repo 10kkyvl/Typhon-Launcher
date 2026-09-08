@@ -23,12 +23,17 @@ The following data is stored locally only and is not sent to the Typhon services
 - **App settings**, including BitTorrent parameters. With sync enabled, some settings are sent to the service (section 2.3); directory paths, speed limits and data-collection consents are not.
 - **The activity log** `typhon.log` and its previous copies `typhon.log.1` … `typhon.log.5` — these stay on the device and are never sent anywhere automatically in full. The log is size-limited: 10 MB per file and no more than six files, with the oldest overwritten.
 - **The play session log** — which game was launched and finished and when, for the last 90 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
+- **The compatibility log** — which games start on this computer and which do not: the number of attempts, the number of failures, the longest session, and the code and text of the last error. It is kept always and is never sent anywhere on its own; with usage statistics enabled, an anonymized record derived from it is sent, as described in section 8.5. The error text is never sent.
 
 These lists, paths and contents do not leave the device. If the user has enabled anonymous usage statistics (section 8.2), only anonymized information about the outcome of an operation is sent — for example, that an installation succeeded and how many seconds it took — but nothing of the above. If the user has enabled anonymous diagnostics (section 8.3), an anonymized error report is sent — but not the log itself and not fragments of it.
 
-Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
+Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
 
 `installation.json` holds only the installation identifier — a random UUIDv4 created the first time the app is started. It is not derived from any device characteristics and is not personal data in itself; where it is sent is described in section 8.
+
+`compat-client.json` holds a separate identifier — also a random UUIDv4, and deliberately not the same one. A compatibility report carries the OS version, the processor family and the list of games there is a verdict for; sharing an identifier with ordinary usage statistics would allow the two sets to be joined into one profile considerably more detailed than either on its own. Separate identifiers do not allow that.
+
+`compat-stats.json` holds the downloaded shared statistics — the same numbers everyone else sees. It is incoming data and says nothing about the owner of the device.
 
 Deleting that directory deletes all of the local data listed above.
 
@@ -100,11 +105,15 @@ Beyond the above, the app sends the Typhon service the state of the current sess
 
 There are two toggles and they are independent: anonymous usage statistics and anonymous diagnostics are turned on and off separately. On first launch the app asks about this directly and sends nothing until the user has answered. In that prompt only error diagnostics is pre-checked; usage statistics is not. The answer — including a refusal — is saved, and the question is not asked again.
 
+The prompt is versioned. When the set of collected data grows, the version is raised and the question is asked again, with the previous answer pre-checked. Until a new answer is given the new data is not collected, while the previous answer stays in force for what it was given for. That is what happened with game compatibility statistics (section 8.5): they fall under the anonymous usage statistics toggle, but for anyone who answered the previous version of the prompt they are not collected until that person answers the current one.
+
 ### 2.7. What the Typhon services do not receive
 
 The addresses of sources added by the user, the contents of source feeds, magnet links, torrent infohashes, tracker and peer addresses, release download addresses, the contents of downloaded files, file names, local installation paths and the local download history are **not** sent to the Typhon services. This holds with cross-device sync enabled as well (section 2.3).
 
 It also holds with anonymous usage statistics enabled. Its events carry only the outcome of an operation, the game identifier from the catalog and anonymized numeric characteristics — duration, size, average speed — with a normalized error code. In other words, the service may learn that a download failed after so many seconds with such-and-such an error, but not where it was downloading from, what exactly was being downloaded, or where on disk it was being written (section 8.2).
+
+It also holds for compatibility reports (section 8.5). They carry the repacker's nickname — one word from a closed list built into the app — and the build version number, but not the raw release name, not the address of the source it came from, and not the torrent infohash.
 
 ### 2.8. Friends and profile
 
@@ -164,6 +173,8 @@ Synced settings and the game list (section 2.3) are stored for as long as the ac
 Records of friends, friend requests and blocks (section 2.8) are stored for as long as the account exists, or until the user removes them: declines or cancels a request, removes a friend, or unblocks someone.
 
 Anonymous usage statistics events (section 8.2) are stored on the server for 30 days — the period is a service setting — and are then deleted.
+
+Game compatibility reports (section 8.5) are stored on the server for 180 days — the period is a service setting. The period runs from the last update of a record rather than from its creation: the app periodically sends the verdict again, and while the game remains on the device its record is refreshed and not deleted. Once the app stops sending a verdict — because the game was removed, the toggle was turned off, or the device stopped being used — the record lives out its 180 days and is deleted. The period is longer than for usage statistics because a share of successful launches is only meaningful once accumulated: in 30 days most games would not gather enough observations even to show a number.
 
 Anonymous diagnostics reports (section 8.3) are stored on the server for 30 days — the period is a service setting — and are then deleted. Identical errors are stored as a group rather than individually: a group has a fingerprint, a counter, first- and last-seen times and the set of affected app versions.
 
@@ -253,11 +264,13 @@ When the toggle is on, the app sends events about operation outcomes in batches,
 
 An event contains only: the type, a timestamp, the installation identifier, the session identifier, the app version, the operating system, the architecture, and a limited set of properties — the game identifier from the catalog, duration in seconds, size in bytes, average speed, installer type and a **normalized error code** (for example `timeout`, `permission_denied`, `disk_full`, `unknown`). The text of the error message is not sent.
 
-Events do **not** carry: magnet links, infohashes, source and tracker addresses, release download addresses, original release names, file names, local paths or peer IP addresses. The structure of an event makes it technically impossible for them to get in.
+Events do **not** carry: magnet links, infohashes, source and tracker addresses, release download addresses, original release names, file names, local paths or peer IP addresses. The structure of an event makes it technically impossible for them to get in. The same holds for compatibility reports (section 8.5), which this same toggle enables.
 
 The event queue exists only in memory and is bounded in size; it is not written to disk. If the user turns the toggle off, the accumulated queue is cleared and not sent.
 
 On the server these events are stored for 30 days — the period is a service setting — and are then deleted.
+
+This same toggle enables game compatibility reports; they are described separately, in section 8.5, because the data they carry is different.
 
 Calling it anything else would be wrong: this is product usage analytics. It is needed to see how often downloads, installations and updates run to completion, and which operations the app fails on most often.
 
@@ -292,11 +305,42 @@ Neither session state, nor usage statistics, nor error diagnostics contains — 
 - **crash dumps** — process memory dumps are not collected and not sent; the diagnostics of section 8.3 is limited to a structured report with an anonymized call stack;
 - **logs** — `typhon.log` stays on the device and is never sent anywhere automatically, whole or in fragments (section 1). The user can export it manually from the settings and send it themselves — that is a separate action requiring an explicit decision;
 - **performance telemetry** — frame rate, response times, processor load and similar measurements are not collected;
-- **hardware information** — processor model, graphics card, amount of memory and device serial numbers are not collected; of the device's properties, only the operating system name and the architecture are sent;
+- **hardware information** — the exact processor model, the graphics card, the amount of memory and device serial numbers are not collected. Of the device's properties, the operating system name and the architecture are sent, and in a compatibility report on macOS also the OS version to two components (`15.6`, without the build number), the CrossOver version and the processor **family** as a single word from a closed list: `apple_m1` … `apple_m5`, `intel` or `unknown`. The processor brand string the system reports never leaves the device: on Intel machines it names a specific model. Why those three values are needed is explained in section 8.5;
 - **interface behavior** — clicks, screen navigation and time spent on a screen are not tracked;
 - **advertising analytics** — the app contains no third-party counters, advertising pixels or analytics kits.
 
 The `typhon-launcher.com` website uses no counters, advertising pixels or third-party fonts, sets no cookies and stores nothing in the browser.
+
+### 8.5. Game compatibility statistics
+
+**Enabled by the same toggle as anonymous usage statistics (section 8.2), and off by default.** It cannot be enabled on its own, nor disabled on its own: it is part of the same statistics, just with different data, which is why it is described separately.
+
+An answer given to a previous version of the data-collection prompt does not extend to these reports. The previous version promised that hardware information was not collected, and a compatibility report carries the processor family and the OS version. So for anyone who has already answered the prompt, reports are not collected until the app asks again — with their previous answer pre-checked — and until they answer. A refusal is saved the same way and is not asked again either.
+
+**Why this exists.** On macOS, Windows games run through CrossOver, and not all of them run. With no data, every user finds this out alone: they download tens of gigabytes, install, and only then learn the game does not start. Shared statistics make it possible to show this in the catalog before downloading.
+
+**The local log is kept always and regardless of the toggle.** The app notices by itself whether a game started, and shows that in the list of installed games. That log does not leave the device: the toggle being off means nothing is sent, not that the app stops remembering which games do not run on this computer.
+
+When the toggle is on, roughly every ten minutes — and only if the verdict has changed since last time — the app sends a snapshot of that log. The snapshot contains only:
+
+- **a device identifier** — a separate random UUIDv4, not the one used for the rest of the statistics (section 1);
+- **the app version**;
+- **the macOS version** to two components (`15.6`), **the CrossOver version** and **the processor family** as a single word from a closed list;
+- **the list of games with a verdict**, each carrying: the numeric game identifier in the external IGDB catalog, the repacker's nickname as a single word from a closed list, the build version number, the verdict `works` or `broken` and, for failures, a normalized reason code (`launch_failed`, `runtime_failed`, `executable_missing`, `self_exit`, `unknown`).
+
+That is all. Free-form fields do not exist in the report at all: every value is either a word from a list built into the app or a number that passed a pattern. The error text, local paths, the device name, the OS account name, the raw release name, the source address, a magnet link and an infohash cannot get in — not because they are scrubbed out, but because there is nowhere for them to go. The server checks the report it receives against the same rules again and does not rely on the app having done so: a value outside the list causes the whole report to be refused, not quietly trimmed.
+
+Games without a verdict are not included. A game that was installed but never launched says nothing about compatibility — while saying that the person has it.
+
+**What happens to a report on the server.** Reports are reduced to one number per game: the share of devices on which the game starts. It is counted per device, not per launch — each device has exactly one vote per game, and someone who launched a game five hundred times does not outweigh ten other people. Within one device, success cancels earlier failures: a game that did run in the end counts as working. A snapshot sent again overwrites the previous one rather than adding to it.
+
+Until at least five different devices have spoken about a game, the number is not shown and is not served to apps at all. Not "zero percent", but nothing: a share computed from one or two devices is one stranger's bad luck presented as a general rule.
+
+Only that aggregate comes back to the app — the same numbers for everyone who asks for them. Downloading the aggregate is not governed by the toggle and requires no consent: it is incoming data, and it contains nothing about who requested it.
+
+Sent reports can be inspected in the same place as the rest: in the settings, under "Privacy", via the "Show sent data" button — exactly as they went to the server.
+
+On the server, reports are stored for 180 days from their last update (section 4). The account is not part of a report and a report is not linked to it in any way.
 
 ## 9. Changes
 

@@ -4,6 +4,7 @@ import { inWails } from '../services/backend';
 import { ensureArt, getGameArt, isMetadataAvailable, type GameArt, type MetadataView } from '../services/metadata';
 import type { CatalogGame } from '../services/sources';
 import { msg } from '../i18n';
+import { metadataErrorText } from '../metadata/metadataErrors';
 import { toast } from './toasts';
 
 export const metadataAvailable = writable(false);
@@ -89,7 +90,7 @@ async function pump() {
     }
   } catch (err) {
     pending.clear();
-    toast(err instanceof Error && err.message ? err.message : msg('state.metadataLoadFailed'), 'danger');
+    toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
   } finally {
     pumping = false;
   }

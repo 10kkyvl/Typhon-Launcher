@@ -1,7 +1,9 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
+  import { buildKind, buildLabel, releaseBadge, repackNote } from '../game/releases';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
+  import type { AvailabilityKind } from '../services/updates';
   import { bytesSize, relativeDate } from '../utils/format';
   import { msg } from '../i18n';
   import Button from './Button.svelte';
@@ -11,13 +13,15 @@
     groups,
     loading = false,
     currentReleaseId = '',
-    updateReleaseId = '',
+    targetReleaseId = '',
+    updateKind = 'none',
     ondownload,
   }: {
     groups: ReleaseGroup[];
     loading?: boolean;
     currentReleaseId?: string;
-    updateReleaseId?: string;
+    targetReleaseId?: string;
+    updateKind?: AvailabilityKind;
     ondownload: (group: ReleaseGroup) => void;
   } = $props();
 
@@ -31,7 +35,16 @@
     {#each groups as group (group.release.id)}
       {@const release = group.release}
       {@const removed = release.availability === 'removed'}
-      {@const current = Boolean(currentReleaseId) && release.id === currentReleaseId}
+      {@const badge = releaseBadge({
+        releaseId: release.id,
+        currentReleaseId,
+        targetReleaseId,
+        updateKind,
+        isNew: Boolean(release.new),
+      })}
+      {@const current = badge === 'installed'}
+      {@const build = buildLabel(buildKind(release))}
+      {@const repack = repackNote(release, msg('release.buildRepack'))}
       <div class="release-row" class:current>
         <div class="release-main">
           <span class="release-version">{release.version || '—'}</span>
@@ -47,6 +60,9 @@
         {/if}
         <span class="release-source">
           {group.sourceName}
+          {#if repack}
+            <span class="release-repack">({repack})</span>
+          {/if}
           {#if group.duplicates && group.duplicates.length > 0}
             <span
               class="release-dup"
@@ -59,14 +75,16 @@
         </span>
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>
         <div class="release-badges">
-          {#if release.repacker}
-            <StatusBadge kind="neutral" label={release.repacker.toUpperCase()} plain />
+          {#if build}
+            <StatusBadge kind="neutral" label={msg(build)} plain />
           {/if}
-          {#if current}
+          {#if badge === 'installed'}
             <StatusBadge kind="success" label={msg('ui.installed')} plain />
-          {:else if updateReleaseId && release.id === updateReleaseId}
+          {:else if badge === 'update'}
             <StatusBadge kind="accent" label={msg('ui.update')} plain />
-          {:else if release.new}
+          {:else if badge === 'new-release'}
+            <StatusBadge kind="neutral" label={msg('release.newRelease')} plain />
+          {:else if badge === 'new'}
             <StatusBadge kind="accent" label={msg('release.new')} plain />
           {/if}
           {#if removed}
@@ -171,6 +189,10 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .release-repack {
+    color: var(--text-2);
   }
 
   .release-dup {

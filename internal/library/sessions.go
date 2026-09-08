@@ -48,10 +48,20 @@ func (s *Service) PlayGame(id string) error {
 	if err != nil {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
+	if err := s.prepare(s.ctx, game.InstallDir, game.Executable); err != nil {
+		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
+		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
+		// стартовавший процесс. На macOS это вообще самая частая причина, по
+		// которой игра не идёт, и журнал, молчащий о ней, оставляет
+		// пользователя без единственной подсказки, которая у него была.
+		s.noteLaunchFailureLocked(id, "library.runtime_failed", err.Error())
+		return uierr.Wrap("library.runtime_failed", fmt.Errorf("не удалось подготовить окружение запуска: %w", err))
+	}
 
-	proc, err := s.start(game.Executable, game.LaunchArgs, workDir)
+	proc, err := s.start(s.ctx, game.Executable, game.LaunchArgs, workDir)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
+		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
 
@@ -115,6 +125,11 @@ func (s *Service) StopGame(id string) error {
 	s.mu.Lock()
 	current, ok := s.running[id]
 	ctx := s.ctx
+	if ok {
+		// Ставим до убийства: сессию закроет чужая горутина, и к тому
+		// моменту отличить закрытие пользователем от падения будет нечем.
+		current.stoppedByUser = true
+	}
 	s.mu.Unlock()
 	if !ok {
 		return errSessionNotRunning
@@ -132,7 +147,7 @@ func (s *Service) StopGame(id string) error {
 	if ctx == nil {
 		return fmt.Errorf("%w: сервис ещё не запущен", errSessionCannotConfirm)
 	}
-	list, err := s.scan(ctx)
+	list, _, err := s.scan(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errSessionCannotConfirm, err)
 	}
@@ -174,12 +189,25 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		return
 	}
 
+	stoppedByUser := false
+	if current, ok := s.running[id]; ok {
+		stoppedByUser = current.stoppedByUser
+	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
 		w.SessionStopped(id)
 	}
 	endedAt := s.now()
 	seconds := int64(endedAt.Sub(startedAt).Seconds())
+	if s.onOutcome != nil {
+		note := s.onOutcome
+		played := endedAt.Sub(startedAt)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			note(id, played, stoppedByUser)
+		}()
+	}
 	if s.onSession != nil {
 		notify := s.onSession
 		s.wg.Add(1)
@@ -239,4 +267,18 @@ func (s *Service) findLocked(id string) *Game {
 		}
 	}
 	return nil
+}
+
+// noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
+// на всё время запуска, а журнал совместимости пишется в своей горутине.
+func (s *Service) noteLaunchFailureLocked(gameID, code, reason string) {
+	if s.onLaunchFail == nil {
+		return
+	}
+	note := s.onLaunchFail
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		note(gameID, code, reason)
+	}()
 }

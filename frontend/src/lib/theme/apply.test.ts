@@ -77,6 +77,42 @@ describe('themeVars', () => {
   });
 });
 
+describe('themeDisplayName', () => {
+  it('shows a built-in theme label in the interface language, not the stored Russian name', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Тёмная', builtIn: true }))).toBe('Dark');
+  });
+
+  it('shows the russian label for the same built-in theme in the russian locale', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('ru');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Тёмная', builtIn: true }))).toBe('Тёмная');
+  });
+
+  it('translates every built-in preset id, not just dark', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'light', name: 'Светлая', builtIn: true }))).toBe('Light');
+    expect(themeDisplayName(baseTheme({ id: 'contrast', name: 'Высокий контраст', builtIn: true }))).toBe(
+      'High contrast',
+    );
+  });
+
+  it('leaves an imported theme name untouched in any locale, even one shaped like a preset id', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'my-import', name: 'Моя тема', builtIn: false }))).toBe('Моя тема');
+    // builtIn: false must win over an id that happens to match a preset —
+    // the check has to gate on builtIn first, not look up the id blindly.
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Моя тёмная', builtIn: false }))).toBe('Моя тёмная');
+  });
+});
+
 describe('applyTheme / clearTheme', () => {
   it('creates the style element once and reuses it on repeated applies', async () => {
     const { fakeDocument, elements } = createFakeDocument();

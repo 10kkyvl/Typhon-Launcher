@@ -12,7 +12,16 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const defaultWatchInterval = 5 * time.Second
+// defaultWatchInterval bounds new-session detection latency and, together
+// with detectTick's immediate close on a reliable scan, session-close
+// latency too. A tick used to mean hundreds of OpenProcess+
+// QueryFullProcessImageName pairs on Windows, so shortening the interval
+// used to cost load in direct proportion; procs' per-pid image cache
+// (procs_windows.go) now skips that path-resolution call for any pid whose
+// creation time still matches what was cached, so a pid set that is not
+// churning keeps that cost flat regardless of how often List is called.
+// 1s matches the refresh rate users already expect from Task Manager.
+const defaultWatchInterval = 1 * time.Second
 
 // ServiceStartup starts the OS process detector that keeps a game's session
 // alive as long as its process runs, independently of who launched it or
@@ -66,7 +75,7 @@ type matchTarget struct {
 // that nobody is playing, and treating it as an empty list would open or
 // close sessions on bad information.
 func (s *Service) detectTick(ctx context.Context) {
-	list, err := s.scan(ctx)
+	list, complete, err := s.scan(ctx)
 	if err != nil {
 		slog.Warn("scan running processes", "error", err)
 		return
@@ -134,6 +143,16 @@ func (s *Service) detectTick(ctx context.Context) {
 			if sess.createdAt.IsZero() && !proc.CreatedAtUnknown {
 				sess.createdAt = proc.CreatedAt
 			}
+			continue
+		}
+		// A complete scan is an authoritative answer: the session's pid is
+		// definitely gone (absent, or confirmed replaced by a different
+		// process above), so there is nothing to wait for. The grace period
+		// exists only for the case the scan itself did not produce a
+		// trustworthy full answer — an interrupted enumeration whose
+		// silence about this pid proves nothing.
+		if complete {
+			toClose = append(toClose, id)
 			continue
 		}
 		if now.Sub(sess.lastSeen) > 2*s.watchInterval {

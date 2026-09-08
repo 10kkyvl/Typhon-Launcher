@@ -2,6 +2,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Card from '../../lib/components/Card.svelte';
   import type { PlayedGame } from '../../lib/services/social';
+  import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { playtime, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
@@ -20,7 +21,7 @@
     {#each games as game (game.igdbId)}
       <button class="capsule" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
         <span class="cover">
-          <Artwork src={game.coverUrl} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
+          <Artwork src={wideArt(game)} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
         </span>
         <span class="title">{game.title}</span>
         <span class="meta">

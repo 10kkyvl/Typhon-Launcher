@@ -5,6 +5,7 @@
     Download,
     EllipsisVertical,
     FolderOpen,
+    HardDriveDownload,
     Heart,
     Play,
     Square,
@@ -15,6 +16,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
@@ -31,6 +33,8 @@
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
@@ -92,8 +96,16 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, numericDate, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   let { id }: { id: string } = $props();
 
@@ -373,7 +385,7 @@
     }),
   );
 
-  const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
+  const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
   const menuItems = $derived([
     ...($metadataAvailable && canonicalId
@@ -425,9 +437,13 @@
     } else if (actionId === 'meta-refresh') {
       refreshMeta();
     } else if (actionId === 'remove-download') {
-      removeTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: removeDownloadPrompt(terminalDownload.name), run: removeTerminalDownload };
+      }
     } else if (actionId === 'discard-download') {
-      discardTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: discardDownloadPrompt(terminalDownload.name), run: discardTerminalDownload };
+      }
     } else if (actionId === 'shortcut-create') {
       createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
@@ -454,7 +470,7 @@
     try {
       await createShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutCreateError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutCreateError')), 'danger');
     }
   }
 
@@ -463,7 +479,7 @@
     try {
       await removeShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutRemoveError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutRemoveError')), 'danger');
     }
   }
 
@@ -474,7 +490,7 @@
       metaView = await refreshMetadata(canonicalId);
       toast(msg('games.detailMetaRefreshedToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaRefreshError'), 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
     } finally {
       metaRefreshing = false;
     }
@@ -486,7 +502,7 @@
     try {
       metaView = await dismissMetadataMatch(canonicalId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaSkipError'), 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
     } finally {
       metaSkipping = false;
     }
@@ -526,6 +542,7 @@
   });
 
   let downloadModalOpen = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let downloadSource = $state('');
   let downloadOrigin = $state<DownloadOrigin | undefined>(undefined);
 
@@ -537,7 +554,7 @@
     try {
       await resumeDownload(terminalDownload.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailRetryDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailRetryDownloadError')), 'danger');
     }
   }
 
@@ -557,7 +574,7 @@
       await removeDownload(terminalDownload.id);
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailRemoveDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailRemoveDownloadError')), 'danger');
     }
   }
 
@@ -572,7 +589,7 @@
       await (freesDisk ? cancelDownload(id) : deleteDownloadData(id));
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailDiscardDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailDiscardDownloadError')), 'danger');
     }
   }
 
@@ -580,14 +597,14 @@
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = { releaseId: request.releaseId, sourceId: request.sourceId, gameId: request.gameId };
+      downloadOrigin = releaseOrigin(request);
       downloadModalOpen = true;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailPrepareDownloadError'), 'danger');
+      toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');
     }
   }
 
-  function startInstall() {
+  function startDownload() {
     if (availableGroups.length === 0) return;
     if (availableGroups.length === 1) {
       downloadRelease(availableGroups[0]);
@@ -601,7 +618,7 @@
     try {
       await playGame(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -632,7 +649,7 @@
       await addCatalogGame(canonicalId, title, coverSrc);
       toast(msg('games.detailAddedToLibraryToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailAddToLibraryError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailAddToLibraryError')), 'danger');
     } finally {
       addingToLibrary = false;
     }
@@ -641,7 +658,7 @@
   function runPrimary() {
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
-    else if (primary.kind === 'install') startInstall();
+    else if (primary.kind === 'download') startDownload();
     else if (primary.kind === 'update') updateCard?.start();
     else if (primary.kind === 'retry-download') retryTerminalDownload();
     else if (primary.kind === 'install-download') installFromTerminalDownload();
@@ -738,8 +755,10 @@
                 <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
               {:else if primary.kind === 'stop'}
                 <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'install' || primary.kind === 'install-download'}
+              {:else if primary.kind === 'download'}
                 <Download size="1.6rem" strokeWidth={1.8} />
+              {:else if primary.kind === 'install-download'}
+                <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
               {/if}
               {primary.label}
             </Button>
@@ -787,7 +806,11 @@
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
           <p class="note danger">{terminalDownload.error}</p>
         {:else if localGame && !installed}
-          <p class="note">{msg('games.detailUninstalledNote')}</p>
+          <p class="note">
+            {primary.kind === 'install-download'
+              ? msg('games.detailUninstalledDownloadedNote')
+              : msg('games.detailUninstalledNote')}
+          </p>
         {/if}
       </div>
     </div>
@@ -909,7 +932,8 @@
               groups={releaseGroups}
               loading={releasesLoading}
               currentReleaseId={localGame?.releaseId ?? ''}
-              updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
               ondownload={downloadRelease}
             />
           </section>
@@ -977,6 +1001,10 @@
 
   <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
   <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
+{/if}
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
 
 <style>

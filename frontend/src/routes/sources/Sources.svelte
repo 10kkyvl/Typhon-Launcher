@@ -10,9 +10,11 @@
     Info,
     Plus,
     RefreshCw,
+    ShieldAlert,
     TriangleAlert,
   } from '@lucide/svelte';
   import AddSourceModal from '../../lib/components/AddSourceModal.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -25,6 +27,7 @@
   import Tabs from '../../lib/components/Tabs.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
+  import { removeSourcePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
   import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
@@ -34,6 +37,7 @@
   let addOpen = $state(false);
   let noticeOpen = $state(false);
   let detailsOpen = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
   let statusFilter = $state('all');
@@ -132,8 +136,7 @@
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
-      if (!window.confirm(msg('transfers.sourcesConfirmRemove', { name: source.name }))) return;
-      await remove(source.id);
+      pending = { prompt: removeSourcePrompt(source.name), run: () => remove(source.id) };
     }
   }
 </script>
@@ -202,7 +205,14 @@
                 {/if}
               </span>
               <span class="source-text">
-                <span class="source-name">{source.name}</span>
+                <span class="source-name">
+                  {source.name}
+                  {#if source.insecure}
+                    <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>
+                      <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
+                    </Tooltip>
+                  {/if}
+                </span>
                 <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
               </span>
             </button>
@@ -257,6 +267,9 @@
 <AddSourceModal bind:open={addOpen} />
 <SourcesNoticeModal bind:open={noticeOpen} onaccepted={() => (addOpen = true)} />
 <SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .notice {
@@ -357,6 +370,12 @@
     flex-direction: column;
     gap: 0.2rem;
     min-width: 0;
+  }
+
+  .insecure {
+    display: inline-flex;
+    align-items: center;
+    color: var(--warning);
   }
 
   .source-name {

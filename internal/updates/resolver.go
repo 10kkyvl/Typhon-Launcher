@@ -1,6 +1,8 @@
 package updates
 
 import (
+	"time"
+
 	"typhon/internal/sources"
 	"typhon/internal/version"
 )
@@ -110,6 +112,7 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 
 	ordered := OrderReleases(compatible)
 	baseConfidence := versionConfidence(installed)
+	installedUpload := uploadedAtOf(releases, installed.ReleaseID)
 
 	var fallback *sources.Release
 	for i := range ordered {
@@ -125,7 +128,7 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 		if ok {
 			continue
 		}
-		if fallback == nil {
+		if fallback == nil && publishedLater(installedUpload, r.UploadedAt) {
 			copied := r
 			fallback = &copied
 		}
@@ -136,6 +139,33 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 	}
 	target := version.Parse(releaseVersion(*fallback))
 	return build(installed, *fallback, current, target, compat[fallback.ID], baseConfidence, patches, KindNewRelease)
+}
+
+// The installed release is looked up in the full list rather than in the
+// compatible subset: it can have been pulled from the feed since.
+func uploadedAtOf(releases []sources.Release, releaseID string) *time.Time {
+	if releaseID == "" {
+		return nil
+	}
+	for i := range releases {
+		if releases[i].ID == releaseID {
+			return releases[i].UploadedAt
+		}
+	}
+	return nil
+}
+
+// With versions incomparable, recency is the only argument left for calling a
+// release newer, so an equal date is no argument at all: two builds uploaded the
+// same day are alternatives, not successors.
+func publishedLater(installed, candidate *time.Time) bool {
+	if installed == nil {
+		return true
+	}
+	if candidate == nil {
+		return false
+	}
+	return candidate.After(*installed)
 }
 
 func build(

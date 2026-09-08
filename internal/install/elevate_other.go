@@ -1,4 +1,4 @@
-//go:build !windows && !devmock
+//go:build !windows && !devmock && !darwin
 
 package install
 
@@ -7,6 +7,8 @@ import "fmt"
 func startElevated(runSpec) (workerHandle, error) {
 	return nil, errWindowsOnly
 }
+
+func elevationSupported() bool { return false }
 
 func workerStartError(path string, err error) error {
 	return fmt.Errorf("запуск воркера установки %s: %w", path, err)

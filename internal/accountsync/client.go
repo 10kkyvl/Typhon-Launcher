@@ -62,6 +62,8 @@ type wireGame struct {
 	StatusAt        *time.Time `json:"statusAt"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`
 	PlaytimeSeconds int64      `json:"playtimeSeconds"`
+	Removed         bool       `json:"removed,omitempty"`
+	RemovedAt       *time.Time `json:"removedAt,omitempty"`
 }
 
 type snapshotBody struct {

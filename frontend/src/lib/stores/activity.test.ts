@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation, InstallStatus } from '../services/install';
+import type { LibraryGame } from '../services/library';
+import type { VerifyState } from '../services/updates';
 
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/downloads', () => ({
@@ -76,12 +78,51 @@ function makeInstall(overrides: Partial<Installation> = {}): Installation {
   };
 }
 
+function makeVerify(overrides: Partial<VerifyState> = {}): VerifyState {
+  return {
+    gameId: 'g1',
+    method: 'manifest',
+    running: true,
+    repairing: false,
+    progress: 0.27,
+    processedBytes: 256,
+    currentFile: 'Hollow Knight/fontsmenu_assets_all.bundle',
+    ratio: 0,
+    totalBytes: 1024,
+    okBytes: 0,
+    missingFiles: 0,
+    corruptedPieces: 0,
+    unreadableFiles: 0,
+    repairable: false,
+    checkedAt: null,
+    ...overrides,
+  };
+}
+
+function makeGame(overrides: Partial<LibraryGame> = {}): LibraryGame {
+  return {
+    id: 'g1',
+    title: 'Hollow Knight',
+    executable: '',
+    installDir: 'D:/games/hk',
+    cover: '',
+    version: '1.0',
+    sizeBytes: 0,
+    lastPlayed: null,
+    playtimeSeconds: 0,
+    installedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
 async function load() {
   vi.resetModules();
   const downloadsStore = await import('./downloads');
   const installStore = await import('./install');
+  const updatesStore = await import('./updates');
+  const libraryStore = await import('./library');
   const activityStore = await import('./activity');
-  return { downloadsStore, installStore, activityStore };
+  return { downloadsStore, installStore, updatesStore, libraryStore, activityStore };
 }
 
 beforeEach(() => {
@@ -141,6 +182,37 @@ describe('activity', () => {
     expect(summary.count).toBe(2);
     expect(summary.progress).toBeCloseTo(0.5);
     expect(summary.primary?.kind).toBe('install');
+  });
+
+  it('shows a running verification with the game title', async () => {
+    const { updatesStore, libraryStore, activityStore } = await load();
+    libraryStore.libraryGames.set([makeGame()]);
+    updatesStore.verifications.set({ g1: makeVerify() });
+    const items = get(activityStore.activity);
+    expect(items).toHaveLength(1);
+    expect(items[0].key).toBe('verify:g1');
+    expect(items[0].kind).toBe('verify');
+    expect(items[0].name).toBe('Hollow Knight');
+    expect(items[0].status).toBe('Проверка файлов');
+    expect(items[0].detail).toBe('Hollow Knight/fontsmenu_assets_all.bundle');
+    expect(items[0].progress).toBeCloseTo(0.27);
+  });
+
+  it('falls back to bytes and a generic name for an unknown game', async () => {
+    const { updatesStore, activityStore } = await load();
+    updatesStore.verifications.set({ g1: makeVerify({ currentFile: '' }) });
+    const items = get(activityStore.activity);
+    expect(items[0].name).toBe('Игра');
+    expect(items[0].detail).toBe('256 Б / 1 КБ');
+  });
+
+  it('drops verifications that are not running', async () => {
+    const { updatesStore, activityStore } = await load();
+    updatesStore.verifications.set({
+      g1: makeVerify({ running: false, checkedAt: '2026-01-01T00:00:00Z' }),
+      g2: makeVerify({ gameId: 'g2', running: false, repairing: true }),
+    });
+    expect(get(activityStore.activity)).toEqual([]);
   });
 
   it('ignores installations that already finished', async () => {

@@ -11,7 +11,11 @@ import (
 
 var (
 	installGoCodePattern = regexp.MustCompile(`uierr\.(?:New|Wrap)\(\s*"([^"]+)"`)
-	installTSCodePattern = regexp.MustCompile(`'(install\.[a-z0-9_]+)':`)
+	// Пакет отдаёт коды двух пространств: install — про саму установку, wine —
+	// про окружение CrossOver на macOS. Переводятся оба в одной таблице,
+	// поэтому и сверяются одинаково. Префикс download. приходит из другого
+	// пакета и здесь не проверяется.
+	installTSCodePattern = regexp.MustCompile(`'((?:install|wine)\.[a-z0-9_]+)':`)
 )
 
 func installCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []string {

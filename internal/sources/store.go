@@ -62,12 +62,17 @@ func (s *store) saveSources(list []Source) error {
 	return storage.Save(path, sourcesVersion, list)
 }
 
-func (s *store) loadReleases(sourceID string) ([]Release, error) {
+// loadReleases unmarshals straight into []*Release so the JSON decoder
+// allocates each Release once. A []Release intermediate would force a
+// second, separate copy of every element into the pointer slice callers
+// actually keep (s.releases), doubling live memory for as long as both
+// slices exist.
+func (s *store) loadReleases(sourceID string) ([]*Release, error) {
 	path := s.releasesPath(sourceID)
 	if path == "" {
 		return nil, errors.New("releases path unavailable")
 	}
-	var list []Release
+	var list []*Release
 	err := storage.Load(path, releasesVersion, nil, &list)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil

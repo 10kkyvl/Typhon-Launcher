@@ -176,3 +176,42 @@ func TestPatchesFromReleases(t *testing.T) {
 		t.Fatalf("patches = %+v", patches)
 	}
 }
+
+// A source ships a compressed repack next to the portable build on the same day
+// and neither carries a comparable version. The ids matter: sorted by id the
+// repack lands before the installed build, which is how it was ever reached.
+func TestResolveUpdateIgnoresSameDayReleaseWithoutVersion(t *testing.T) {
+	stamp := time.Date(2026, 3, 25, 11, 9, 14, 0, time.UTC)
+	installedRelease := release("r2-portable", "", 9790000000)
+	installedRelease.UploadedAt = &stamp
+	repack := release("r1-repack", "", 1820000000)
+	repack.UploadedAt = &stamp
+
+	installed := installedAt("r2-portable", "")
+	installed.VersionSource = VersionSourceUnknown
+	got := ResolveUpdate(installed, []sources.Release{installedRelease, repack}, nil)
+
+	if got.Available || got.Kind != KindNone {
+		t.Fatalf("same-day release must not be offered: %+v", got)
+	}
+}
+
+func TestResolveUpdateOffersStrictlyNewerReleaseWithoutVersion(t *testing.T) {
+	older := time.Date(2026, 3, 25, 11, 9, 14, 0, time.UTC)
+	newer := older.Add(48 * time.Hour)
+	installedRelease := release("r-old", "", 9790000000)
+	installedRelease.UploadedAt = &older
+	candidate := release("r-new", "", 9800000000)
+	candidate.UploadedAt = &newer
+
+	installed := installedAt("r-old", "")
+	installed.VersionSource = VersionSourceUnknown
+	got := ResolveUpdate(installed, []sources.Release{installedRelease, candidate}, nil)
+
+	if !got.Available || got.Kind != KindNewRelease {
+		t.Fatalf("a strictly newer release must still be offered: %+v", got)
+	}
+	if got.TargetReleaseID != "r-new" {
+		t.Fatalf("target = %q, want r-new", got.TargetReleaseID)
+	}
+}

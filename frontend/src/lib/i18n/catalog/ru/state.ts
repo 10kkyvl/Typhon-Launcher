@@ -29,6 +29,7 @@ export const state = {
 
   'state.activityDownloadDetail': '{speed} · осталось {eta}',
   'state.activityWaitingForUser': 'Нажмите, чтобы продолжить',
+  'state.activityVerifying': 'Проверка файлов',
 
   'state.discoveryFound': 'Найдено {count}',
   'state.discoveryAdded': 'добавлено {count}',
@@ -157,6 +158,8 @@ export const state = {
   'state.selfupdateReasonLauncherDidNotExit': 'Лаунчер не закрылся вовремя, обновление отменено.',
   'state.selfupdateReasonCorruptDownload': 'Загруженный установщик повреждён. Скачайте обновление заново.',
   'state.selfupdateReasonInstallerNotFound': 'Установщик не найден. Скачайте обновление заново.',
+  'state.selfupdateReasonBundleBroken': 'Архив обновления повреждён.',
+  'state.selfupdateReasonNotABundle': 'Лаунчер запущен не из приложения Typhon — обновите его вручную.',
   'state.selfupdateReasonInstallerFailed': 'Установщик завершился с ошибкой.',
   'state.selfupdateReasonServerStalled':
     'Сервер обновлений перестал отдавать данные. Проверьте соединение и попробуйте ещё раз.',
@@ -173,6 +176,7 @@ export const state = {
   'state.selfupdateReasonCheckFirst': 'Сначала проверьте обновления.',
   'state.selfupdateReasonNoSpace': 'На диске не хватает места для обновления.',
   'state.selfupdateReasonAccessDenied': 'Нет прав на запись в папку обновлений.',
+  'state.selfupdateReasonUnknown': 'При обновлении что-то пошло не так.',
   'state.selfupdateCodeCheckFailed': 'Не удалось проверить обновления.',
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',

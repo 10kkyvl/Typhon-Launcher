@@ -35,6 +35,10 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadFetchingNote': 'This can take up to a minute and a half.',
   'modals.addDownloadDestinationLabel': 'Destination folder',
   'modals.addDownloadBrowse': 'Browse',
+  'modals.addDownloadAutoInstallLabel': 'Install after the download',
+  'modals.addDownloadAutoInstallSub': 'The default comes from settings; here it applies to this download only',
+  'modals.addDownloadElevateAheadLabel': 'Confirm administrator rights now',
+  'modals.addDownloadElevateAheadSub': 'This download holds an installer that needs rights. Confirm now and the install runs without you; otherwise it waits for your confirmation',
   'modals.addDownloadStart': 'Start download',
 
   // AddSourceModal.svelte
@@ -49,8 +53,12 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addSourceFileLabel': 'File',
   'modals.addSourceFeedVersion': 'Feed version',
   'modals.addSourceEntries': 'Entries',
+  'modals.addSourceGames': 'Games in the feed',
+  'modals.addSourceKnown': 'Already in the catalog',
+  'modals.addSourceUnknown': 'New to the catalog',
   'modals.addSourceInvalidEntries': 'Invalid entries',
   'modals.addSourceDuplicate': 'This source is already added',
+  'modals.addSourceInsecure': 'This source is served over http: the connection is not protected and the feed can be tampered with on the way',
   'modals.addSourceCheck': 'Check source',
   'modals.addSourceAdding': 'Adding…',
 
@@ -103,11 +111,12 @@ export const modals: Record<ModalsKey, Message> = {
     'This helps fix bugs faster. Only what broke goes into the report: paths, device name, and network addresses are removed before sending.',
   'modals.telemetryConsentUsageTitle': 'Also send usage statistics',
   'modals.telemetryConsentUsageNote':
-    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. Screens, clicks, and UI behavior are not tracked.',
+    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. Screens, clicks, and UI behavior are not tracked.',
   'modals.telemetryConsentUsageToggleLabel': 'Anonymous usage statistics',
   'modals.telemetryConsentDisclosureSummary': 'What exactly is sent',
   'modals.telemetryConsentErrorReportLabel': 'Error report',
   'modals.telemetryConsentUsageEventLabel': 'Usage statistics event',
+  'modals.telemetryConsentCompatReportLabel': 'Game compatibility report',
   'modals.telemetryConsentSaving': 'Saving…',
   'modals.telemetryConsentDecline': 'Do not send',
   'modals.telemetryConsentAccept': 'Yes, send',
@@ -115,6 +124,7 @@ export const modals: Record<ModalsKey, Message> = {
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Diagnostics',
   'modals.sentDataKindUsageStats': 'Usage statistics',
+  'modals.sentDataKindCompat': 'Game compatibility',
   'modals.sentDataCopied': 'Copied',
   'modals.sentDataCopyFailed': 'Failed to copy',
   'modals.sentDataTitle': 'Sent data',
@@ -253,7 +263,6 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsStatusActive': 'Active',
   'modals.sourceDetailsStatusDisabled': 'Disabled',
   'modals.sourceDetailsStatusUpdating': 'Updating',
-  'modals.sourceDetailsRemoveConfirm': 'Remove source "{name}"?',
   'modals.sourceDetailsTitle': 'Source',
   'modals.sourceDetailsUpdatedAt': 'Updated: {date}',
   'modals.sourceDetailsRefreshing': 'Refreshing…',

@@ -14,6 +14,7 @@ type Kind string
 const (
 	KindDiagnostics Kind = "diagnostics"
 	KindUsageStats  Kind = "usagestats"
+	KindCompat      Kind = "compat"
 )
 
 const (

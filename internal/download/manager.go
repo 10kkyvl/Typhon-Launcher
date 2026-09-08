@@ -35,6 +35,7 @@ import (
 const (
 	eventAdded     = "download:added"
 	eventUpdated   = "download:updated"
+	eventProgress  = "download:progress"
 	eventCompleted = "download:completed"
 	eventFailed    = "download:failed"
 	eventRemoved   = "download:removed"
@@ -94,6 +95,17 @@ type jobState struct {
 	done   chan struct{}
 }
 
+// fetchEntry tracks the cancel func for one in-flight FetchMetadata call,
+// keyed by the source string the frontend already has (see fetching on
+// Manager). id disambiguates two overlapping calls for the same exact source
+// string, since context.CancelFunc values cannot be compared for equality:
+// a call's own cleanup must remove only its own entry, never a newer one
+// that a second, unrelated call for the same source has since registered.
+type fetchEntry struct {
+	id     int64
+	cancel context.CancelFunc
+}
+
 type Manager struct {
 	mu              sync.Mutex
 	settings        *settings.Service
@@ -107,10 +119,14 @@ type Manager struct {
 	pending  map[string]*pending
 	jobs     map[string]*jobState
 	reserved map[string]bool
+	fetching map[string]fetchEntry
+	fetchSeq int64
 
 	client          *client
 	max             int
 	onCompleted     func(Download)
+	onStarted       func(Download)
+	onGone          func(string)
 	usageRecorder   func(usagestats.Event)
 	historyRecorder func(history.Record) error
 
@@ -143,6 +159,7 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		pending:  map[string]*pending{},
 		jobs:     map[string]*jobState{},
 		reserved: map[string]bool{},
+		fetching: map[string]fetchEntry{},
 	}
 	m.metaDir = filepath.Join(dir, "meta")
 	completion, err := openPieceCompletion(m.metaDir)
@@ -324,7 +341,12 @@ func (m *Manager) persistLocked() error {
 	return nil
 }
 
-func emit(name string, data any) {
+// emit is a var, not a plain func, so tests can swap it for a recorder:
+// application.Get() returns nil outside a live wails app, which would
+// otherwise make every payload the manager sends to the window
+// unobservable from a unit test (in particular, that a periodic tick
+// never carries Files).
+var emit = func(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
 	}
@@ -390,11 +412,32 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 
 	m.mu.Lock()
 	cl := m.client
-	ctx := m.ctx
+	parent := m.ctx
 	m.mu.Unlock()
-	if cl == nil || ctx == nil {
+	if cl == nil || parent == nil {
 		return TorrentInfo{}, errNoClient
 	}
+
+	// ctx is derived per call, not m.ctx (the manager's whole-lifetime
+	// context), so CancelFetchMetadata can end this one fetch without
+	// touching any other in-flight call or waiting for the app to shut down.
+	// See CancelFetchMetadata: the frontend calls it when the add-download
+	// window closes before metadata arrives, which otherwise left the
+	// torrent added and the infohash reserved for the full metadataTimeout.
+	ctx, cancel := context.WithCancel(parent)
+	m.mu.Lock()
+	m.fetchSeq++
+	fetchID := m.fetchSeq
+	m.fetching[source] = fetchEntry{id: fetchID, cancel: cancel}
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		if e, ok := m.fetching[source]; ok && e.id == fetchID {
+			delete(m.fetching, source)
+		}
+		m.mu.Unlock()
+		cancel()
+	}()
 
 	spec, err := buildSpec(source)
 	if err != nil {
@@ -518,6 +561,24 @@ func fileStates(info *metainfo.Info, selected []int) []FileState {
 		})
 	}
 	return states
+}
+
+// CancelFetchMetadata abandons an in-flight FetchMetadata call for source,
+// so the frontend can call it when the add-download window closes before
+// metadata has arrived instead of leaving the call to run until
+// metadataTimeout. FetchMetadata's own deferred cleanup — not this method —
+// releases the infohash reservation and drops the added torrent under m.mu,
+// once the cancelled select actually returns (invariant 17: the same lock
+// that made the reservation also releases it, no unlocked gap in between).
+// A source with nothing in flight is a no-op.
+func (m *Manager) CancelFetchMetadata(source string) {
+	source = strings.TrimSpace(source)
+	m.mu.Lock()
+	e, ok := m.fetching[source]
+	m.mu.Unlock()
+	if ok {
+		e.cancel()
+	}
 }
 
 func (m *Manager) DiscardMetadata(infoHash string) {
@@ -662,6 +723,10 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	delete(m.reserved, infoHash)
 	slog.Info("download added", "download_id", d.ID, "name", d.Name)
 	emit(eventAdded, snapshot(d))
+	if m.onStarted != nil {
+		notify, started := m.onStarted, snapshot(d)
+		m.spawnTrackedLocked(func() { notify(started) })
+	}
 	m.recordUsage(usagestats.Event{
 		Type:      usagestats.TypeDownloadStarted,
 		Timestamp: time.Now(),
@@ -848,6 +913,33 @@ func (m *Manager) SetOnCompleted(fn func(Download)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onCompleted = fn
+}
+
+//wails:ignore
+func (m *Manager) SetOnStarted(fn func(Download)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onStarted = fn
+}
+
+// SetOnGone reports a download that will never complete — removed, cancelled
+// or failed. Whatever was set up for its completion has to be torn down, and
+// onCompleted never fires for it.
+//
+//wails:ignore
+func (m *Manager) SetOnGone(fn func(string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onGone = fn
+}
+
+// notifyGoneLocked требует удержания m.mu вызывающим.
+func (m *Manager) notifyGoneLocked(id string) {
+	if m.onGone == nil {
+		return
+	}
+	notify := m.onGone
+	m.spawnTrackedLocked(func() { notify(id) })
 }
 
 //wails:ignore
@@ -1059,6 +1151,7 @@ func (m *Manager) dropLocked(id string) error {
 		m.items = restored
 		return err
 	}
+	m.notifyGoneLocked(id)
 	return nil
 }
 
@@ -1171,6 +1264,7 @@ func (m *Manager) markFailed(id, message string, cause error) {
 	}
 	m.idleLocked(d, StatusFailed)
 	d.Error = message
+	m.notifyGoneLocked(id)
 	if err := m.persistLocked(); err != nil {
 		// Failed is itself the durable, user-actionable landing state (both
 		// Resume and ForceStart accept it); markFailed is reached from
@@ -1238,7 +1332,7 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 			continue
 		}
 		if differs(&before, d) {
-			emit(eventUpdated, snapshot(d))
+			emit(eventProgress, progressOf(d))
 			changed = true
 		}
 	}
@@ -1417,7 +1511,7 @@ func (m *Manager) completeLocked(d *Download) {
 	}
 	if m.onCompleted != nil {
 		notify, done := m.onCompleted, snapshot(d)
-		go notify(done)
+		m.spawnTrackedLocked(func() { notify(done) })
 	}
 	m.schedule()
 }

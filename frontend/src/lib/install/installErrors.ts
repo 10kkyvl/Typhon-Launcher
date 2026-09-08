@@ -7,6 +7,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',
   'install.dest_exists': 'errInstall.installDestExists',
   'install.dest_not_empty': 'errInstall.installDestNotEmpty',
+  'install.broker_outside_pin': 'errInstall.installBrokerOutsidePin',
   'install.elevation_declined': 'errInstall.installElevationDeclined',
   'install.empty_destination': 'errInstall.installEmptyDestination',
   'install.empty_install': 'errInstall.installEmptyInstall',
@@ -83,6 +84,8 @@ export const REASONS: Record<string, MessageKey> = {
   'download.seeding': 'errInstall.downloadSeeding',
   'download.torrent_read_failed': 'errInstall.downloadTorrentReadFailed',
   'download.unavailable': 'errInstall.downloadUnavailable',
+  'wine.bottle_create_failed': 'errInstall.wineBottleCreateFailed',
+  'wine.not_installed': 'errInstall.wineNotInstalled',
 };
 
 export function installErrorText(err: unknown, fallback: string = msg('errInstall.fallback')): string {

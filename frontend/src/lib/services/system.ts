@@ -16,6 +16,12 @@ export interface SystemInfo {
   ramBytes: number;
 }
 
+export interface WineStatus {
+  required: boolean;
+  installed: boolean;
+  version: string;
+}
+
 export interface LogBundle {
   path: string;
   name: string;
@@ -48,9 +54,32 @@ export async function getAppInfo(): Promise<AppInfo> {
   return { version: '0.1.0', platform: 'browser', arch: 'dev', devMock: false };
 }
 
+let pendingAppInfo: Promise<AppInfo> | null = null;
+
+// A rejected promise is dropped rather than cached: a one-off binding failure
+// must not pin every later caller to the same error.
+export function appInfo(): Promise<AppInfo> {
+  if (!pendingAppInfo) {
+    pendingAppInfo = getAppInfo().catch((err) => {
+      pendingAppInfo = null;
+      throw err;
+    });
+  }
+  return pendingAppInfo;
+}
+
+export function elevationSupported(info: AppInfo): boolean {
+  return info.platform === 'windows' || info.devMock;
+}
+
 export async function getSystemInfo(): Promise<SystemInfo> {
   if (inWails) return (await AppService.GetSystemInfo()) as SystemInfo;
   return { os: 'Browser preview', arch: 'dev', cpu: 'Dev CPU', cores: 8, ramBytes: 16 * GB };
+}
+
+export async function getWineStatus(): Promise<WineStatus> {
+  if (inWails) return (await AppService.GetWineStatus()) as WineStatus;
+  return { required: false, installed: false, version: '' };
 }
 
 export async function getStorageInfo(): Promise<StorageInfo> {

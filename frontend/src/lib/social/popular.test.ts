@@ -89,6 +89,20 @@ describe('popularGames', () => {
     expect(top[0].playing).toBe(1);
   });
 
+  it('дополняет широкий кадр из ленты для игры из присутствия', () => {
+    const friends = [friend({ presence: { status: 'online', gameId: 7, gameTitle: '' } })];
+    const events = [
+      event({
+        user: { id: 'u2', username: 'nikita.afk', displayName: 'Никита', avatarUrl: '' },
+        game: game({ heroUrl: 'elden-wide.jpg' }),
+      }),
+    ];
+
+    const top = popularGames(events, friends);
+
+    expect(top[0].game.heroUrl).toBe('elden-wide.jpg');
+  });
+
   it('не считает играющим друга, который офлайн', () => {
     const friends = [friend({ presence: { status: 'offline', gameId: 7, gameTitle: 'Elden Ring' } })];
 

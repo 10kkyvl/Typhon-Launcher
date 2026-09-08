@@ -38,6 +38,10 @@ const REASONS: Record<string, MessageKey> = {
   'selfupdate.read_only': 'errUpdates.selfupdateReadOnly',
   'selfupdate.manifest_outdated': 'errUpdates.selfupdateManifestOutdated',
   'selfupdate.installer_failed': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.bundle_escaping_path': 'state.selfupdateReasonBundleBroken',
+  'selfupdate.bundle_no_app': 'state.selfupdateReasonBundleBroken',
+  'selfupdate.bundle_too_large': 'state.selfupdateReasonBundleBroken',
+  'selfupdate.not_a_bundle': 'state.selfupdateReasonNotABundle',
   'selfupdate.install_dir_empty': 'state.selfupdateReasonInstallerFailed',
   'selfupdate.install_dir_not_absolute': 'state.selfupdateReasonInstallerFailed',
   'selfupdate.install_dir_not_clean': 'state.selfupdateReasonInstallerFailed',
@@ -92,16 +96,18 @@ function translate(raw: string): string {
 
 export function outcomeReason(outcome: SelfUpdateOutcome): string {
   const raw = outcome.error ?? '';
-  return translate(raw) || raw;
+  if (!raw) return '';
+  return translate(raw) || msg('state.selfupdateReasonUnknown');
 }
 
 export function updateReason(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
-  return translate(raw) || raw;
+  if (!raw) return '';
+  return translate(raw) || msg('state.selfupdateReasonUnknown');
 }
 
 export function statusReason(status: SelfUpdateStatus): string {
   const raw = status.error ?? '';
   if (!raw) return '';
-  return translate(raw) || codeReasons()[status.errorCode ?? ''] || raw;
+  return translate(raw) || codeReasons()[status.errorCode ?? ''] || msg('state.selfupdateReasonUnknown');
 }

@@ -9,11 +9,12 @@ import { mergeNotifications } from '../notifications/merge';
 import { navigate, type RouteName } from './router';
 import { selfUpdateStatus } from './selfupdate';
 import type { SelfUpdateStatus } from '../services/selfupdate';
+import { progressPercent } from '../utils/format';
 import { sources } from './sources';
 import { updates } from './updates';
 
 function pct(value: number) {
-  return `${Math.round(value * 100)}%`;
+  return `${progressPercent(value)}%`;
 }
 
 export interface Notification {

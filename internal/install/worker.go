@@ -25,7 +25,12 @@ var errWorkerStatePathUnavailable = errors.New("путь состояния во
 // тихий прогон установщика: воркер получает только эти данные, остальное
 // состояние сервиса ему недоступно и не нужно.
 type workerSpec struct {
-	ID            string         `json:"id"`
+	ID string `json:"id"`
+	// Run отличает прогоны одного установочного задания. Файл состояния один
+	// на всю цепочку установщиков, и без него оставшийся от предыдущего
+	// Done: true был бы прочитан как результат следующего прогона: воркер
+	// перезаписывает файл не мгновенно, а лаунчер начинает опрос сразу.
+	Run           string         `json:"run,omitempty"`
 	InstallerPath string         `json:"installerPath"`
 	Engine        Engine         `json:"engine"`
 	Destination   string         `json:"destination"`
@@ -69,6 +74,7 @@ func (s workerSpec) discovery() discoverySpec {
 // отмена и провал не одна и та же причина).
 type workerState struct {
 	PID              int      `json:"pid"`
+	Run              string   `json:"run,omitempty"`
 	Phase            string   `json:"phase"`
 	Code             int      `json:"code"`
 	Done             bool     `json:"done"`

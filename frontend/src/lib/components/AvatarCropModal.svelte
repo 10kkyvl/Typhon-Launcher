@@ -9,11 +9,11 @@
     clampOffset,
     clampZoom,
     coverScale,
-    cropSource,
+    cropRect,
     maxZoom,
     minZoom,
-    outputSize,
     zoomAround,
+    type CropRect,
     type CropView,
   } from '../utils/crop';
 
@@ -28,7 +28,7 @@
     src: string;
     saving?: boolean;
     error?: string;
-    onsave: (encoded: string) => void;
+    onsave: (encoded: string, crop: CropRect) => void;
   } = $props();
 
   let image = $state<HTMLImageElement | undefined>(undefined);
@@ -114,20 +114,10 @@
 
   function save() {
     if (!image || !ready || saving) return;
-    const source = cropSource(view());
-    if (source.size <= 0) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      failed = true;
-      return;
-    }
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(image, source.sx, source.sy, source.size, source.size, 0, 0, outputSize, outputSize);
-    onsave(canvas.toDataURL('image/png').split(',')[1] ?? '');
+    const rect = cropRect(view());
+    const payload = src.split(',')[1] ?? '';
+    if (rect.size <= 0 || !payload) return;
+    onsave(payload, rect);
   }
 </script>
 

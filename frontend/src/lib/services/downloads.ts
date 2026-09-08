@@ -27,6 +27,8 @@ export interface DownloadOrigin {
   purpose?: DownloadPurpose;
   updatePlanId?: string;
   libraryId?: string;
+  autoInstall?: boolean;
+  elevateAhead?: boolean;
 }
 
 export interface Download {
@@ -82,6 +84,11 @@ export async function fetchMetadata(source: string): Promise<TorrentInfo> {
 export async function discardMetadata(infoHash: string): Promise<void> {
   if (!inWails) return;
   await Manager.DiscardMetadata(infoHash);
+}
+
+export async function cancelFetchMetadata(source: string): Promise<void> {
+  if (!inWails) return;
+  await Manager.CancelFetchMetadata(source);
 }
 
 export async function startDownload(

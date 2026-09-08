@@ -2,6 +2,7 @@ import type { Message } from '../../types';
 import type { ErrUpdatesKey } from '../ru/errUpdates';
 
 export const errUpdates: Record<ErrUpdatesKey, Message> = {
+  'errUpdates.fallback': 'Could not complete the update',
   'errUpdates.updatesNotTracked': 'No update data for this game',
   'errUpdates.updatesNoInstallDir': 'The game has no install directory set',
   'errUpdates.updatesNoPlan': 'Prepare an update plan first',

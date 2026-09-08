@@ -1,4 +1,5 @@
 export const errUpdates = {
+  'errUpdates.fallback': 'не удалось выполнить обновление',
   'errUpdates.updatesNotTracked': 'для этой игры нет данных об обновлении',
   'errUpdates.updatesNoInstallDir': 'каталог установки не задан',
   'errUpdates.updatesNoPlan': 'сначала подготовьте план обновления',

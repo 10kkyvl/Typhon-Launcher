@@ -304,6 +304,11 @@ func mustServiceAt(t testing.TB, dir string) *Service {
 	if err != nil {
 		t.Fatalf("new install service at %s: %v", dir, err)
 	}
+	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
+	// секунды и сотни мегабайт на каждую установку. Тестам этого не нужно, а
+	// оставлять после прогона настоящие бутыли на машине разработчика нельзя.
+	s.prepareRuntime = func(context.Context, string, string) error { return nil }
+	s.releaseRuntime = func(string) error { return nil }
 	return s
 }
 
@@ -992,5 +997,18 @@ func TestProposeDestinationAvoidsCollision(t *testing.T) {
 	got := s.proposeDestination(games, "Game")
 	if got != filepath.Join(games, "Game (2)") {
 		t.Fatalf("destination = %q", got)
+	}
+}
+
+// Подготовка окружения обязана быть подменяемой: иначе прогон тестов на
+// macOS создаёт настоящие бутыли CrossOver. Проверяем, что поле вообще есть
+// и по умолчанию заполнено.
+func TestNewServiceAtWiresRuntimePreparation(t *testing.T) {
+	s, err := newServiceAt(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("new install service: %v", err)
+	}
+	if s.prepareRuntime == nil {
+		t.Fatal("prepareRuntime = nil, want a wired preparation step")
 	}
 }

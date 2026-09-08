@@ -8,7 +8,7 @@
   import { bytesLabel } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
-  import { msg } from '../i18n';
+  import { errorCode, hasMessage, msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -36,8 +36,8 @@
   });
 
   function message(err: unknown, fallback: string): string {
-    if (err instanceof Error && err.message) return err.message;
-    return fallback;
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
   }
 
   async function pickFolder() {
