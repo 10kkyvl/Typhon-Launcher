@@ -147,7 +147,12 @@ func TestKillTimesOutInsteadOfHanging(t *testing.T) {
 		if err == nil {
 			t.Fatal("Kill against a hung wineserver: want error")
 		}
-	case <-time.After(3 * time.Second):
+	// Утверждение здесь — «таймаут соблюдается», а не «машина быстрая»:
+	// 100 мс против 30 секунд зависания различает любой запас. На раннере
+	// macOS в CI этот тест падал по трёхсекундному потолку, а воспроизвести
+	// падение на машине разработчика не удалось, поэтому потолок поднят до
+	// величины, которую одна только загрузка раннера не выберет.
+	case <-time.After(20 * time.Second):
 		t.Fatal("Kill hung instead of respecting its timeout")
 	}
 }

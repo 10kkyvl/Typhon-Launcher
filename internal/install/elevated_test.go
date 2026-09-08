@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -207,13 +208,34 @@ func withWorkerSeams(t *testing.T, launcher func(runSpec) (workerHandle, error))
 // принадлежит чужому прогону и по контракту игнорируется.
 func echoRun(t *testing.T, dir, id string, state workerState) workerState {
 	t.Helper()
-	ws, err := readWorkerSpec(workerSpecFilePath(dir, id))
-	if err != nil {
-		t.Errorf("readWorkerSpec: %v", err)
-		return state
+	// Спеку пишет сам runElevated, а вызывающие ниже стартуют эту горутину
+	// раньше него, так что файла в момент первого чтения может ещё не быть.
+	// Ждём его появления вместо фиксированной паузы: на Windows-раннере CI
+	// 60 мс не хватало, и readWorkerSpec падал на "The system cannot find
+	// the file specified". Спека пишется через WriteAtomic, поэтому видимый
+	// файл всегда целый, и повторяем только по ErrNotExist.
+	path := workerSpecFilePath(dir, id)
+	ticker := time.NewTicker(2 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.NewTimer(15 * time.Second)
+	defer deadline.Stop()
+	for {
+		ws, err := readWorkerSpec(path)
+		if err == nil {
+			state.Run = ws.Run
+			return state
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("readWorkerSpec: %v", err)
+			return state
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Errorf("worker spec %s never appeared", path)
+			return state
+		}
 	}
-	state.Run = ws.Run
-	return state
 }
 
 func TestRunElevatedReturnsErrorWhenStateStaysUnfinished(t *testing.T) {
