@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,14 +115,23 @@ func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, e
 	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient)
 }
 
-func (c *Client) UploadAvatar(ctx context.Context, data []byte) (CurrentUser, error) {
+func (c *Client) UploadAvatar(ctx context.Context, data []byte, crop AvatarCrop) (CurrentUser, error) {
 	if len(data) == 0 {
 		return CurrentUser{}, &Error{Code: CodeInvalidAvatar}
 	}
 	if len(data) > maxAvatarSize {
 		return CurrentUser{}, &Error{Code: CodeAvatarTooLarge}
 	}
-	return c.doUser(ctx, http.MethodPut, APIPrefix+"/me/avatar", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+
+	path := APIPrefix + "/me/avatar"
+	if crop.Size > 0 {
+		query := url.Values{}
+		query.Set("x", strconv.Itoa(crop.X))
+		query.Set("y", strconv.Itoa(crop.Y))
+		query.Set("size", strconv.Itoa(crop.Size))
+		path += "?" + query.Encode()
+	}
+	return c.doUser(ctx, http.MethodPut, path, bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
 }
 
 func (c *Client) RemoveAvatar(ctx context.Context) (CurrentUser, error) {
