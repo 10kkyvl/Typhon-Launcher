@@ -81,6 +81,12 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 	if err != nil {
 		return nil, err
 	}
+	steamFix, hasSteamFix := detectSteamFix(req.executable, req.workDir)
+	if hasSteamFix {
+		slog.Info("steam fix detected",
+			"kind", steamFix.Kind, "config", steamFix.Path,
+			"realAppID", steamFix.RealAppID, "fakeAppID", steamFix.FakeAppID)
+	}
 	winExe, err := bottle.ToWindows(req.executable)
 	if err != nil {
 		return nil, fmt.Errorf("путь игры: %w", err)
@@ -108,10 +114,21 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 			slog.Warn("ensure steam", "bottle", bottle.Name, "started", started, "error", steamErr)
 		}
 	}
+	var logCursor steamLogCursor
+	if hasSteamFix {
+		logCursor = steamGameProcessLogCursor(bottle)
+	}
 	if err := s.launch(ctx, bottle, cmd); err != nil {
 		return nil, err
 	}
-	return s.await(ctx, bottle, req.executable)
+	proc, err := s.await(ctx, bottle, req.executable)
+	if err != nil {
+		return nil, err
+	}
+	if hasSteamFix {
+		go monitorSteamAppID(ctx, bottle, winExe, steamFix, logCursor)
+	}
+	return proc, nil
 }
 
 // proxyDLLOverrides включает app-local proxy DLL раньше встроенной Wine DLL.
