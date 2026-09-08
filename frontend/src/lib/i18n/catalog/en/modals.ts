@@ -263,7 +263,6 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsStatusActive': 'Active',
   'modals.sourceDetailsStatusDisabled': 'Disabled',
   'modals.sourceDetailsStatusUpdating': 'Updating',
-  'modals.sourceDetailsRemoveConfirm': 'Remove source "{name}"?',
   'modals.sourceDetailsTitle': 'Source',
   'modals.sourceDetailsUpdatedAt': 'Updated: {date}',
   'modals.sourceDetailsRefreshing': 'Refreshing…',

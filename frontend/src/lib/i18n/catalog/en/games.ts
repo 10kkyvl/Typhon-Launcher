@@ -82,6 +82,10 @@ export const games: Record<GamesKey, Message> = {
   'games.detailMetaFindLabel': 'Find metadata',
   'games.detailRemoveDownloadLabel': 'Remove download',
   'games.detailDiscardDownloadLabel': 'Remove download and files',
+  'games.detailRemoveDownloadConfirm':
+    'Remove the “{name}” download from the list? The downloaded files stay on disk, but the launcher stops tracking them.',
+  'games.detailDiscardDownloadConfirm':
+    'Remove the “{name}” download together with its files? They are erased from disk and would have to be downloaded again.',
   'games.detailShortcutCreateError': 'Failed to create shortcut',
   'games.detailShortcutRemoveError': 'Failed to remove shortcut',
   'games.detailMetaRefreshedToast': 'Metadata updated',

@@ -3,6 +3,7 @@
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
@@ -20,6 +21,7 @@
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
+  import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
@@ -86,6 +88,7 @@
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
   let forgettingRemote = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   onMount(async () => {
     appInfo = await getAppInfo();
@@ -134,9 +137,13 @@
     }
   }
 
+  function askForgetRemote() {
+    if (forgettingRemote) return;
+    pending = { prompt: forgetSyncPrompt(), run: runForgetRemote };
+  }
+
   async function runForgetRemote() {
     if (forgettingRemote) return;
-    if (!window.confirm(msg('settings.generalSyncForgetConfirm'))) return;
     forgettingRemote = true;
     try {
       await forgetRemote();
@@ -495,7 +502,7 @@
               size="sm"
               variant="danger"
               disabled={!accountReady || forgettingRemote}
-              onclick={runForgetRemote}
+              onclick={askForgetRemote}
             >
               <Trash2 size="1.5rem" strokeWidth={1.8} />
               {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
@@ -870,6 +877,9 @@
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 <SentDataModal bind:open={sentDataOpen} />
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 <Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="52rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>

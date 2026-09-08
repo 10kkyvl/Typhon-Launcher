@@ -168,6 +168,8 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.appearanceResetButton': 'Reset',
   'settings.appearanceSavedToast': 'Theme “{name}” saved',
   'settings.appearanceDeleteConfirm': 'Delete theme “{name}”?',
+  'settings.appearanceDeleteTitle': 'Delete theme',
+  'settings.appearanceResetConfirm': 'Restore the built-in dark theme? Your custom appearance will be switched off.',
   'settings.appearanceDeletedToast': 'Theme “{name}” deleted',
   'settings.appearanceImportedToast': 'Theme “{name}” imported',
   'settings.appearanceExportedToast': 'Theme “{name}” exported',

@@ -260,7 +260,6 @@ export const modals = {
   'modals.sourceDetailsStatusActive': 'Активен',
   'modals.sourceDetailsStatusDisabled': 'Отключен',
   'modals.sourceDetailsStatusUpdating': 'Обновление',
-  'modals.sourceDetailsRemoveConfirm': 'Удалить источник «{name}»?',
   'modals.sourceDetailsTitle': 'Источник',
   'modals.sourceDetailsUpdatedAt': 'Обновлено: {date}',
   'modals.sourceDetailsRefreshing': 'Обновление…',

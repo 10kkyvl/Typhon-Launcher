@@ -16,6 +16,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
@@ -32,6 +33,7 @@
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
@@ -427,9 +429,13 @@
     } else if (actionId === 'meta-refresh') {
       refreshMeta();
     } else if (actionId === 'remove-download') {
-      removeTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: removeDownloadPrompt(terminalDownload.name), run: removeTerminalDownload };
+      }
     } else if (actionId === 'discard-download') {
-      discardTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: discardDownloadPrompt(terminalDownload.name), run: discardTerminalDownload };
+      }
     } else if (actionId === 'shortcut-create') {
       createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
@@ -528,6 +534,7 @@
   });
 
   let downloadModalOpen = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let downloadSource = $state('');
   let downloadOrigin = $state<DownloadOrigin | undefined>(undefined);
 
@@ -986,6 +993,10 @@
 
   <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
   <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
+{/if}
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
 
 <style>
