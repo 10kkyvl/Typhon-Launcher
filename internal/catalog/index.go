@@ -12,6 +12,7 @@ type entry struct {
 	normalized string
 	aliases    []string
 	tokens     []string
+	matchable  bool
 }
 
 type index struct {
@@ -38,12 +39,19 @@ func buildIndex(games []Game) *index {
 	return idx
 }
 
+// matchable отделяет игры от DLC, бандлов и паков. Записи всех типов лежат в
+// индексах целиком: каталог, поиск по нему и ручной выбор игры показывают всё,
+// что пришло с бэкенда. Тип смотрит только автоматический матчинг (resolve) —
+// иначе репак прицепляется к дополнению, которое делит с игрой название.
+// Пустой тип считается игрой: у записей, которых бэкенд ещё не переливал, его
+// просто нет.
 func (idx *index) add(g Game) int {
 	normalized := titles.Normalize(g.Title)
 	e := entry{
 		game:       g,
 		normalized: normalized,
 		tokens:     titles.TokenSet(normalized),
+		matchable:  titles.IsGameType(g.GameType),
 	}
 	for _, alias := range g.Aliases {
 		normalizedAlias := titles.Normalize(alias)

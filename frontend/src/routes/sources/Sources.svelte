@@ -10,6 +10,7 @@
     Info,
     Plus,
     RefreshCw,
+    ShieldAlert,
     TriangleAlert,
   } from '@lucide/svelte';
   import AddSourceModal from '../../lib/components/AddSourceModal.svelte';
@@ -202,7 +203,14 @@
                 {/if}
               </span>
               <span class="source-text">
-                <span class="source-name">{source.name}</span>
+                <span class="source-name">
+                  {source.name}
+                  {#if source.insecure}
+                    <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>
+                      <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
+                    </Tooltip>
+                  {/if}
+                </span>
                 <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
               </span>
             </button>
@@ -357,6 +365,12 @@
     flex-direction: column;
     gap: 0.2rem;
     min-width: 0;
+  }
+
+  .insecure {
+    display: inline-flex;
+    align-items: center;
+    color: var(--warning);
   }
 
   .source-name {

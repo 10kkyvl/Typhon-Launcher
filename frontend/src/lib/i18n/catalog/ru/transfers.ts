@@ -46,6 +46,7 @@ export const transfers = {
   'transfers.sourcesHealthOk': 'Всё в порядке',
   'transfers.sourcesHealthWarning': 'Есть предупреждения',
   'transfers.sourcesHealthError': 'Ошибка источника',
+  'transfers.sourcesInsecureTooltip': 'Источник отдаётся по http: соединение не защищено',
   'transfers.sourcesUpdatingEllipsis': 'Обновление…',
   'transfers.sourcesRefreshNow': 'Обновить сейчас',
   'transfers.sourcesRefreshAll': 'Обновить все',

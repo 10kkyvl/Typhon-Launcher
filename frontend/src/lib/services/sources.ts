@@ -21,6 +21,7 @@ export interface Source {
   lastError: string;
   fingerprint: string;
   feedVersion: number;
+  insecure?: boolean;
   entries: number;
   invalid: number;
   matched: number;
@@ -108,6 +109,10 @@ export interface SourcePreview {
   feedVersion: number;
   entries: number;
   invalid: number;
+  games: number;
+  known: number;
+  unknown: number;
+  insecure?: boolean;
   warnings?: string[];
   fingerprint: string;
   duplicate: boolean;

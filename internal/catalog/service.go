@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ import (
 )
 
 const (
+	// Ниже этого числа запросов накладные расходы на воркеров съедают выигрыш.
+	parallelResolveFloor = 256
+
 	gamesVersion     = 1
 	overridesVersion = 1
 	maxAliasLen      = 120
@@ -34,7 +38,8 @@ var (
 )
 
 type Service struct {
-	mu            sync.Mutex
+	mu            sync.RWMutex
+	epoch         uint64
 	gamesPath     string
 	overridesPath string
 	games         []Game
@@ -93,7 +98,11 @@ func loadList(path string, version int, out any) error {
 	return err
 }
 
+// rebuildLocked двигает эпоху: любое изменение каталога или переопределений
+// может изменить исход матчинга, и по эпохе потребители понимают, что прошлый
+// результат больше не действителен.
 func (s *Service) rebuildLocked() {
+	s.epoch++
 	s.idx = buildIndex(s.games)
 	s.overrideMap = make(map[string]string, len(s.overrides))
 	for _, o := range s.overrides {
@@ -124,15 +133,52 @@ func (s *Service) persistOverridesLocked() error {
 	return nil
 }
 
+// addToIndexLocked добавляет игру в индекс, не пересобирая его целиком, и
+// двигает эпоху: новая запись меняет исход матчинга ровно так же, как её
+// правка через rebuildLocked.
+func (s *Service) addToIndexLocked(game Game) {
+	s.idx.add(game)
+	s.epoch++
+}
+
+// Epoch — версия того, от чего зависит матчинг: содержимого каталога и
+// активного словаря названий. Числа сворачиваются в одно через FNV-1a, чтобы
+// в релизе хранилось одно поле, а не два: сравнивается оно только на
+// равенство, порядок и разница значений смысла не имеют.
+//
+//wails:ignore
+func (s *Service) Epoch() uint64 {
+	s.mu.RLock()
+	catalogEpoch := s.epoch
+	s.mu.RUnlock()
+
+	const (
+		offset = 14695981039346656037
+		prime  = 1099511628211
+	)
+	h := uint64(offset)
+	for _, part := range [2]uint64{catalogEpoch, titles.Generation()} {
+		for i := 0; i < 8; i++ {
+			h ^= (part >> (8 * i)) & 0xff
+			h *= prime
+		}
+	}
+	if h == 0 {
+		// Ноль в релизе означает «не матчилось», поэтому эпоха его не занимает.
+		return 1
+	}
+	return h
+}
+
 func (s *Service) ListGames() []Game {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return append([]Game(nil), s.games...)
 }
 
 func (s *Service) GetGame(id string) (Game, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	game, ok := s.idx.game(id)
 	if !ok {
 		return Game{}, errNotFound
@@ -144,8 +190,8 @@ func (s *Service) SearchGames(query string, limit int) []Game {
 	if limit <= 0 {
 		limit = defaultSearchCap
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.idx.search(query, limit)
 }
 
@@ -157,19 +203,65 @@ func (s *Service) ListOverrides() []MatchOverride {
 
 //wails:ignore
 func (s *Service) Resolve(q Query) Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.idx.resolve(normalizeQuery(q), s.overrideMap)
 }
 
+// ResolveAll — самая тяжёлая операция каталога: пачка на 20 тысяч названий
+// против каталога на 50 тысяч игр считается около двух с половиной секунд в
+// один поток. Резолв идёт воркерами по числу ядер, результат кладётся в
+// заранее выделенный слайс по индексу запроса — порядок не зависит от
+// планировщика.
+//
+// Читательский лок держится всё это время, а не снимается после снимка
+// указателя: индекс дописывается на месте (AddGame, Provision), поэтому
+// снимок не защищает от одновременной записи — это ловил
+// TestResolveAllRacesWithCatalogWrites. Записи в каталог редки и коротки, а
+// чтения из UI друг друга больше не блокируют.
+//
 //wails:ignore
 func (s *Service) ResolveAll(queries []Query) []Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	out := make([]Match, len(queries))
-	for i, q := range queries {
-		out[i] = s.idx.resolve(normalizeQuery(q), s.overrideMap)
+	if len(queries) == 0 {
+		return out
 	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	idx, overrides := s.idx, s.overrideMap
+
+	workers := runtime.NumCPU()
+	if workers > len(queries) {
+		workers = len(queries)
+	}
+	if workers <= 1 || len(queries) < parallelResolveFloor {
+		for i, q := range queries {
+			out[i] = idx.resolve(normalizeQuery(q), overrides)
+		}
+		return out
+	}
+
+	// Воркеров ровно workers, и каждый забирает свой непрерывный кусок — это
+	// и есть ограничение параллелизма. errgroup здесь не нужен: resolve только
+	// читает индекс и не может дать ошибку, а его Wait возвращал бы значение,
+	// которое некуда девать.
+	var wg sync.WaitGroup
+	chunk := (len(queries) + workers - 1) / workers
+	for start := 0; start < len(queries); start += chunk {
+		end := start + chunk
+		if end > len(queries) {
+			end = len(queries)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := start; i < end; i++ {
+				out[i] = idx.resolve(normalizeQuery(queries[i]), overrides)
+			}
+		}()
+	}
+	wg.Wait()
 	return out
 }
 
@@ -194,7 +286,7 @@ func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 		}
 		game := newGame(q)
 		s.games = append(s.games, game)
-		s.idx.add(game)
+		s.addToIndexLocked(game)
 		out[q.Normalized] = game
 		created++
 	}
@@ -230,7 +322,7 @@ func (s *Service) AddGame(game Game) (Game, error) {
 		return Game{}, errDuplicateID
 	}
 	s.games = append(s.games, game)
-	s.idx.add(game)
+	s.addToIndexLocked(game)
 	if err := s.persistGamesLocked(); err != nil {
 		return Game{}, err
 	}

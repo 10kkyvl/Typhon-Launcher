@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "langCodes": [
+    "RUS", "ENG", "GER", "DEU", "FRA", "FRE", "ITA", "SPA", "ESP", "POL",
+    "POR", "JPN", "CHI", "ZHO", "KOR", "CZE", "TUR", "UKR", "ARA", "SWE",
+    "DAN", "NOR", "FIN", "HUN", "GRE", "NLD", "DUT"
+  ],
+  "archTokens": {
+    "x64": "x64",
+    "x86": "x86",
+    "win64": "win64",
+    "win32": "win32",
+    "64bit": "64bit",
+    "32bit": "32bit",
+    "pc": "pc"
+  },
+  "releaseTags": {
+    "dlc": "dlc",
+    "dlcs": "dlc",
+    "update": "update",
+    "updates": "update",
+    "patch": "patch",
+    "hotfix": "hotfix",
+    "repack": "repack",
+    "codex": "codex",
+    "fitgirl": "fitgirl",
+    "dodi": "dodi",
+    "elamigos": "elamigos",
+    "xatab": "xatab",
+    "kaoskrew": "kaoskrew",
+    "masquerade": "masquerade",
+    "crack": "crack",
+    "proper": "proper",
+    "incl": "incl",
+    "gog": "gog"
+  },
+  "editionPhrases": [
+    "Deluxe Edition",
+    "Ultimate Edition",
+    "Complete Edition",
+    "Definitive Edition",
+    "Standard Edition",
+    "Gold Edition",
+    "Enhanced Edition",
+    "Anniversary Edition",
+    "Legendary Edition",
+    "Platinum Edition",
+    "Premium Edition",
+    "Special Edition",
+    "Extended Edition",
+    "Director's Cut",
+    "GOTY",
+    "Game of the Year Edition",
+    "Game of the Year",
+    "Collector's Edition",
+    "Digital Deluxe Edition",
+    "Digital Deluxe",
+    "Remastered"
+  ],
+  "releasePhraseTags": {
+    "All DLCs": "dlc",
+    "Selective Download": "selective-download"
+  },
+  "bracketFiller": [
+    "+",
+    "all",
+    "incl",
+    "including",
+    "with",
+    "и"
+  ],
+  "repackerPriority": [
+    "fitgirl",
+    "dodi",
+    "elamigos",
+    "xatab",
+    "kaoskrew",
+    "masquerade"
+  ],
+  "gameTypes": [
+    "Main Game",
+    "Standalone Expansion",
+    "Remake",
+    "Remaster",
+    "Expanded Game",
+    "Port",
+    "Fork"
+  ]
+}
