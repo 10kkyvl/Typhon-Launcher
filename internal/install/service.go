@@ -444,6 +444,11 @@ func (s *Service) transientWorkerStatus(id string) (alive, done bool) {
 // var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
 var resumeWatchPollInterval = 2 * time.Second
 
+// readWorkerStateForResume — шов для тестов: подделать транзиентный сбой
+// чтения state.json другого способа нет, а переживание такого сбоя и есть
+// проверяемое поведение watchResumedInstall.
+var readWorkerStateForResume = readWorkerState
+
 // spawnResumeWatcher принимает ctx от жизни сервиса: s.cancel() при
 // ServiceShutdown останавливает и наблюдателя, без чего s.wg.Wait() ждал бы
 // его вечно (инвариант 19).
@@ -463,17 +468,33 @@ func (s *Service) spawnResumeWatcher(ctx context.Context, id string) {
 func (s *Service) watchResumedInstall(ctx context.Context, id, statePath string) {
 	ticker := time.NewTicker(resumeWatchPollInterval)
 	defer ticker.Stop()
+	stateReadFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			state, found, err := readWorkerState(statePath)
+			state, found, err := readWorkerStateForResume(statePath)
 			if err != nil {
+				// Воркер подменяет state.json переименованием, и на Windows
+				// чтение ровно в этот момент транзиентно падает — то же, что
+				// runElevated уже переживает через workerStateReadRetries.
+				// Здесь цена одной такой ошибки выше: единственное чтение
+				// решало судьбу установки, которую воркер на самом деле довёл
+				// до конца, и пользователь видел «прервана» вместо готовой
+				// игры. Сдаёмся только если чтение не проходит столько тиков
+				// подряд, сколько уже признано не транзиентным сбоем.
+				stateReadFailures++
+				if stateReadFailures < workerStateReadRetries {
+					slog.Warn("read worker state while resuming install, retrying",
+						"id", id, "attempt", stateReadFailures, "error", err)
+					continue
+				}
 				slog.Error("read worker state while resuming install", "id", id, "error", err)
 				s.interruptResumed(id)
 				return
 			}
+			stateReadFailures = 0
 			if found && state.Done {
 				s.finishResumed(ctx, id, state)
 				return

@@ -5,6 +5,8 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -177,5 +179,75 @@ func TestCancelResumedInstallWritesMarkerAndWaitsForWorker(t *testing.T) {
 	done := s.waitStatus(t, id, StatusCancelled)
 	if done.Error != "" {
 		t.Fatalf("cancelled record carries error = %q, want empty", done.Error)
+	}
+}
+
+// TestServiceStartupResumeSurvivesTransientStateRead закрывает то, на чём
+// падал Windows-раннер: воркер подменяет state.json переименованием, чтение
+// ровно в этот момент возвращает ошибку доступа, и единственная такая ошибка
+// объявляла прерванной установку, которую воркер довёл до конца. Пользователь
+// после перезапуска лаунчера видел «установка прервана» на игре, которая уже
+// стоит. runElevated этот класс сбоя переживает давно; путь возобновления —
+// нет.
+func TestServiceStartupResumeSurvivesTransientStateRead(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	s.settings = newTestSettings(t)
+	downloads := newFakeDownloads()
+	registrar := &fakeRegistrar{}
+	s.downloads = downloads
+	s.library = registrar
+
+	dest := filepath.Join(t.TempDir(), "Game")
+	exe := filepath.Join(dest, "Game.exe")
+	mkFile(t, exe, 4096)
+
+	const id = "resume-transient"
+	item := Installation{
+		ID: id, DownloadID: "d1", Name: "Game", Type: TypeExeInstaller,
+		Status: StatusInstalling, Destination: dest, Executable: exe,
+		Engine: EngineInno, Silent: true, StartedAt: time.Now(),
+	}
+	if err := s.store.save([]Installation{item}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	statePath := s.workerStatePath(id)
+	if err := writeWorkerState(statePath, workerState{PID: os.Getpid(), Done: true, Code: 0}); err != nil {
+		t.Fatalf("write worker state: %v", err)
+	}
+
+	// Первые два чтения падают так же, как падает открытие файла, который
+	// прямо сейчас подменяют: не ErrNotExist, а отказ доступа.
+	var failures int
+	restoreRead := readWorkerStateForResume
+	readWorkerStateForResume = func(path string) (workerState, bool, error) {
+		if failures < 2 {
+			failures++
+			return workerState{}, false, fmt.Errorf("read worker state %s: %w", path, fs.ErrPermission)
+		}
+		return restoreRead(path)
+	}
+	t.Cleanup(func() { readWorkerStateForResume = restoreRead })
+
+	restore := resumeWatchPollInterval
+	resumeWatchPollInterval = 20 * time.Millisecond
+	t.Cleanup(func() { resumeWatchPollInterval = restore })
+
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+
+	done := s.waitStatus(t, id, StatusCompleted)
+	if done.Status != StatusCompleted {
+		t.Fatalf("status = %s, want completed: two transient read failures must not decide the install", done.Status)
+	}
+	if failures != 2 {
+		t.Fatalf("simulated read failures = %d, want 2", failures)
 	}
 }

@@ -48,6 +48,7 @@ The launcher runs on macOS, downloading is told apart from installing, and games
 - Errors are shown in the interface language: a technical server reply could turn up where readable text belongs — in search, in the library folder setup, and when updating or removing a game
 - Percentages disagreed: 4% on the game card, 3% in the activity dock. One rounding rule for the whole interface, rounding down — 100% is not shown until the work is done
 - Auto-install started even when the disk had no free space left at all
+- An install the installer finished while the launcher was closed could be marked interrupted: one failed read of the state file, at the moment the installer was replacing it, was enough to decide
 - The local network transfer list never cleared finished transfers, and a failing offer poll repeated the same error message every ten seconds
 
 ## 0.4.1 — 2026-09-06
