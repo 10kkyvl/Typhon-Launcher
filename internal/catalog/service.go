@@ -136,7 +136,14 @@ func (s *Service) persistOverridesLocked() error {
 // addToIndexLocked добавляет игру в индекс, не пересобирая его целиком, и
 // двигает эпоху: новая запись меняет исход матчинга ровно так же, как её
 // правка через rebuildLocked.
+//
+// Индекс не хранит вторую копию Game на запись — idx.games ссылается на тот
+// же бэкинг-массив, что и s.games. Append в s.games (вызывающей стороной, до
+// этого вызова) мог его перевыделить, поэтому ссылку внутри индекса нужно
+// обновлять здесь же: иначе idx.games останется смотреть на СТАРЫЙ массив, а
+// позиции, которые idx.add только что завёл, окажутся вне его длины.
 func (s *Service) addToIndexLocked(game Game) {
+	s.idx.games = s.games
 	s.idx.add(game)
 	s.epoch++
 }
@@ -281,7 +288,7 @@ func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 			continue
 		}
 		if positions := s.idx.byTitle[q.Normalized]; len(positions) > 0 {
-			out[q.Normalized] = s.idx.entries[positions[0]].game
+			out[q.Normalized] = s.idx.games[positions[0]]
 			continue
 		}
 		game := newGame(q)
@@ -356,7 +363,7 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 	if !ok {
 		return errNotFound
 	}
-	game := s.idx.entries[pos].game
+	game := s.idx.games[pos]
 
 	previousOverrides := append([]MatchOverride(nil), s.overrides...)
 
@@ -532,7 +539,7 @@ func (s *Service) gameByIGDBLocked(igdbID string) (Game, bool) {
 	if !ok {
 		return Game{}, false
 	}
-	return s.idx.entries[pos].game, true
+	return s.idx.games[pos], true
 }
 
 //wails:ignore
@@ -595,5 +602,5 @@ func (s *Service) LookupByTitle(title string) (Game, bool) {
 	if len(positions) == 0 {
 		return Game{}, false
 	}
-	return s.idx.entries[positions[0]].game, true
+	return s.idx.games[positions[0]], true
 }

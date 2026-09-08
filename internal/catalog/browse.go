@@ -80,16 +80,17 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	filtered := make([]Game, 0, len(s.idx.entries))
 	for i := range s.idx.entries {
 		e := &s.idx.entries[i]
-		if search != "" && !entryMatches(e, search, normalized) {
+		g := s.idx.games[i]
+		if search != "" && !entryMatches(e, g, search, normalized) {
 			continue
 		}
-		if genre != "" && !genreMatches(e.game.Genres, genre) {
+		if genre != "" && !genreMatches(g.Genres, genre) {
 			continue
 		}
-		if q.Compat == CompatOnlyWorking && !s.compatWorksLocked(e.game.ID) {
+		if q.Compat == CompatOnlyWorking && !s.compatWorksLocked(g.ID) {
 			continue
 		}
-		filtered = append(filtered, e.game)
+		filtered = append(filtered, g)
 	}
 	sortGames(filtered, q.Sort)
 
@@ -161,7 +162,7 @@ func (s *Service) GenreFacets() []GenreFacet {
 
 	counts := make([]int, len(genreGroups))
 	for i := range s.idx.entries {
-		genres := s.idx.entries[i].game.Genres
+		genres := s.idx.games[i].Genres
 		for gi, group := range genreGroups {
 			if genresMatchAny(genres, group.sources) {
 				counts[gi]++
@@ -218,8 +219,8 @@ func (s *Service) GetGames(ids []string) []Game {
 	return out
 }
 
-func entryMatches(e *entry, search, normalized string) bool {
-	if strings.Contains(strings.ToLower(e.game.Title), search) {
+func entryMatches(e *entry, g Game, search, normalized string) bool {
+	if strings.Contains(strings.ToLower(g.Title), search) {
 		return true
 	}
 	if normalized != "" && strings.Contains(e.normalized, normalized) {
@@ -230,7 +231,7 @@ func entryMatches(e *entry, search, normalized string) bool {
 			return true
 		}
 	}
-	for _, alias := range e.game.Aliases {
+	for _, alias := range g.Aliases {
 		if strings.Contains(strings.ToLower(alias), search) {
 			return true
 		}

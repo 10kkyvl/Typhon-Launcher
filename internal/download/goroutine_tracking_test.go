@@ -106,6 +106,60 @@ func TestServiceShutdownWaitsForPendingTeardown(t *testing.T) {
 	}
 }
 
+// TestServiceShutdownWaitsForOnCompleted reproduces bug #3's onCompleted
+// half: completeLocked fired the onCompleted callback in a bare
+// `go notify(done)`, untracked by m.wg, so ServiceShutdown could return (and
+// zero out m.client/m.pieceCompletion right after) while the callback was
+// still mid-flight — dangerous because onCompleted reaches back into
+// installService.HandleDownloadCompleted, which touches the manager. The
+// fake callback here only finishes once this test releases gate, proving
+// ServiceShutdown really waits rather than merely happening to finish first.
+func TestServiceShutdownWaitsForOnCompleted(t *testing.T) {
+	m := mustManagerAt(t, t.TempDir())
+	if err := m.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	d := m.addTestItem("a", StatusVerifying)
+
+	gate := make(chan struct{})
+	called := make(chan struct{})
+	m.SetOnCompleted(func(Download) {
+		<-gate
+		close(called)
+	})
+
+	m.mu.Lock()
+	m.completeLocked(d)
+	m.mu.Unlock()
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- m.ServiceShutdown()
+	}()
+
+	select {
+	case err := <-shutdownDone:
+		t.Fatalf("ServiceShutdown returned (%v) before the onCompleted callback finished", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(gate)
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("ServiceShutdown: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ServiceShutdown never returned after the onCompleted callback finished (deadlock or lost wg tracking)")
+	}
+	select {
+	case <-called:
+	default:
+		t.Fatal("onCompleted callback never ran")
+	}
+}
+
 // TestDeleteDataSkipsTeardownWhileClosing shows the other half of the fix:
 // once the manager is closing, DeleteData/discard must not start a new
 // teardown goroutine at all. A bare, untracked `go func(){...}()` would

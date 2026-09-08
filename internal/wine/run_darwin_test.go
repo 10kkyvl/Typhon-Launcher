@@ -2,6 +2,7 @@ package wine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,6 +86,64 @@ func TestRunCancelled(t *testing.T) {
 	cancel()
 	if _, err := m.Run(ctx, b, Cmd{Path: `T:\a.exe`}); err == nil {
 		t.Fatal("Run with a cancelled context: want error")
+	}
+}
+
+// TestRunCancelledKillsBottle закрывает КРИТ-находку: cxstart подменяет себя
+// winewrapper'ом, и убийство прямого потомка (единственное, что делает голый
+// exec.CommandContext) не гасит установщик внутри бутыля. Run обязан сам
+// свалить бутыль через Kill (wineserver -k), а не оставлять живого писателя.
+func TestRunCancelledKillsBottle(t *testing.T) {
+	m, bottles, log := newTestManager(t)
+	if err := os.WriteFile(m.rt.CxStart, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	wineServerScript := "#!/bin/sh\necho \"wineserver $@ prefix=$WINEPREFIX\" >> " + log + "\nexit 0\n"
+	if err := os.WriteFile(m.rt.WineServer, []byte(wineServerScript), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t", Games: t.TempDir()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := m.Run(ctx, b, Cmd{Path: `T:\a.exe`}); err == nil {
+		t.Fatal("Run with a cancelled context: want error")
+	}
+
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("ReadFile log: %v", err)
+	}
+	if !contains(string(data), "wineserver -k") {
+		t.Fatalf("cancelled Run did not kill the bottle, log = %q", string(data))
+	}
+	if !contains(string(data), "prefix="+b.Path) {
+		t.Fatalf("log %q missing WINEPREFIX=%s", string(data), b.Path)
+	}
+}
+
+// TestRunCancelledReportsUnstoppedTree закрывает вторую половину той же
+// находки: если Kill не смог подтвердить остановку бутыля, Run обязан
+// вернуть ошибку, которую вызывающий отличит от обычной отмены — иначе
+// discardSilent не узнает, что писатель мог остаться жив.
+func TestRunCancelledReportsUnstoppedTree(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	if err := os.WriteFile(m.rt.CxStart, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(m.rt.WineServer, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t", Games: t.TempDir()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := m.Run(ctx, b, Cmd{Path: `T:\a.exe`})
+	if err == nil {
+		t.Fatal("Run with a cancelled context and a failing Kill: want error")
+	}
+	if !errors.Is(err, ErrTreeNotStopped) {
+		t.Fatalf("err = %v, want it to wrap ErrTreeNotStopped", err)
 	}
 }
 

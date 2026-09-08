@@ -17,9 +17,12 @@ func TestSupportedOnDarwin(t *testing.T) {
 // ошибку: «игр не запущено» и «рантайма нет» для цикла детекта одно и то же,
 // а ошибка каждые несколько секунд залила бы лог.
 func TestListWithoutRuntimeIsEmpty(t *testing.T) {
-	got, err := listWith(context.Background(), nil)
+	got, complete, err := listWith(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("listWith(nil): %v", err)
+	}
+	if !complete {
+		t.Fatal("listWith(nil) complete = false, want true: no runtime is a reliable answer of zero processes")
 	}
 	if len(got) != 0 {
 		t.Fatalf("got %+v, want none", got)
@@ -29,7 +32,7 @@ func TestListWithoutRuntimeIsEmpty(t *testing.T) {
 func TestListCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := List(ctx); err == nil {
+	if _, _, err := List(ctx); err == nil {
 		t.Fatal("List with a cancelled context: want error")
 	}
 }

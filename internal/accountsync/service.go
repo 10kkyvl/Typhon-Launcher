@@ -242,7 +242,7 @@ func (s *Service) ForgetRemote() error {
 		return fmt.Errorf("delete account sync data: %w", err)
 	}
 
-	empty := syncState{Games: map[string]gameState{}}
+	empty := emptyState()
 	if err := s.store.save(empty); err != nil {
 		return fmt.Errorf("reset accountsync state: %w", err)
 	}
@@ -296,14 +296,36 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		return err
 	}
 
+	s.mu.Lock()
+	st := s.state
+	s.mu.Unlock()
+
+	localGames, err := s.library.Snapshot()
+	if err != nil {
+		return fmt.Errorf("snapshot local library: %w", err)
+	}
+	localByIGDB := s.indexLocalByIGDB(localGames)
+
+	// A game this device removed from the local library disappears from
+	// localByIGDB before we ever reach the network. Detecting it here,
+	// against the games this device last confirmed as its own (st.Games),
+	// and persisting the tombstone immediately means the deletion survives
+	// even if the GET below fails or there is no network at all.
+	pendingRemoved, removalsChanged := detectLocalRemovals(st, localByIGDB)
+	if removalsChanged {
+		st.Removed = pendingRemoved
+		if err := s.store.save(st); err != nil {
+			return fmt.Errorf("save accountsync state: %w", err)
+		}
+		s.mu.Lock()
+		s.state = st
+		s.mu.Unlock()
+	}
+
 	snap, err := s.client.get(ctx)
 	if err != nil {
 		return fmt.Errorf("fetch account sync snapshot: %w", err)
 	}
-
-	s.mu.Lock()
-	st := s.state
-	s.mu.Unlock()
 
 	if snap.SettingsRevision != st.SettingsRevision {
 		if err := s.applyRemoteSettings(snap.Settings); err != nil {
@@ -311,23 +333,27 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		}
 	}
 
-	localGames, err := s.library.Snapshot()
-	if err != nil {
-		return fmt.Errorf("snapshot local library: %w", err)
+	remoteRemovedIDs := s.applyRemoteRemovals(localByIGDB, snap.Games)
+	if len(remoteRemovedIDs) > 0 {
+		localGames, err = s.library.Snapshot()
+		if err != nil {
+			return fmt.Errorf("snapshot local library after applying remote removals: %w", err)
+		}
+		localByIGDB = s.indexLocalByIGDB(localGames)
 	}
 
-	hydrated, deferred := s.hydrate(ctx, localGames, snap.Games)
+	hydrated, deferred := s.hydrate(ctx, localByIGDB, snap.Games, pendingRemoved)
 	if hydrated > 0 {
 		localGames, err = s.library.Snapshot()
 		if err != nil {
 			return fmt.Errorf("snapshot local library after hydration: %w", err)
 		}
+		localByIGDB = s.indexLocalByIGDB(localGames)
 	}
 	if deferred > 0 {
 		slog.Info("account sync deferred new games to a later cycle", "count", deferred)
 	}
 
-	localByIGDB := s.indexLocalByIGDB(localGames)
 	remoteByIGDB := indexRemoteByIGDB(snap.Games)
 
 	results := make(map[string]gameCompute, len(localByIGDB))
@@ -384,7 +410,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		return err
 	}
 
-	pushGames := make([]wireGame, 0, len(results))
+	pushGames := make([]wireGame, 0, len(results)+len(pendingRemoved))
 	for igdbID, r := range results {
 		id, err := strconv.ParseInt(igdbID, 10, 64)
 		if err != nil {
@@ -401,6 +427,14 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			PlaytimeSeconds: r.device,
 		})
 	}
+	for igdbID, removedAt := range pendingRemoved {
+		id, err := strconv.ParseInt(igdbID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("parse igdb id %q: %w", igdbID, err)
+		}
+		at := removedAt
+		pushGames = append(pushGames, wireGame{IGDBID: id, Removed: true, RemovedAt: &at})
+	}
 	sort.Slice(pushGames, func(i, j int) bool { return pushGames[i].IGDBID < pushGames[j].IGDBID })
 
 	pushSettings := settings.PortableOf(s.settings.Get())
@@ -411,7 +445,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	if err != nil {
 		return err
 	}
-	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB)
+	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB) && len(pendingRemoved) == 0
 
 	for i, chunk := range chunkGames(pushGames, maxGamesPerRequest) {
 		if idle {
@@ -444,8 +478,15 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		DeviceID:         deviceID,
 		SettingsRevision: revision,
 		Games:            make(map[string]gameState, len(st.Games)+len(results)),
+		Removed:          map[string]time.Time{},
 	}
 	for id, g := range st.Games {
+		if _, gone := pendingRemoved[id]; gone {
+			continue
+		}
+		if _, gone := remoteRemovedIDs[id]; gone {
+			continue
+		}
 		newState.Games[id] = g
 	}
 	for igdbID, r := range results {
@@ -524,17 +565,73 @@ func (s *Service) applyRemoteSettings(remote settings.Portable) error {
 	return nil
 }
 
-func (s *Service) hydrate(ctx context.Context, local []Game, remote []wireGame) (hydrated, deferred int) {
-	known := make(map[string]struct{}, len(local))
-	for _, g := range local {
-		if igdbID := s.catalog.IGDBIDOf(g.CanonicalGameID); igdbID != "" {
-			known[igdbID] = struct{}{}
+// detectLocalRemovals compares the games this device last confirmed as its
+// own (st.Games) against what is locally present now. A game that dropped
+// out of the local library since the last sync, and is not already a
+// pending tombstone, was removed by the user on this device: it is added
+// to the returned map with the current time. Already-pending removals keep
+// their original timestamp so retries do not look like repeated deletions.
+func detectLocalRemovals(st syncState, localByIGDB map[string]Game) (removed map[string]time.Time, changed bool) {
+	removed = make(map[string]time.Time, len(st.Removed))
+	for igdbID, at := range st.Removed {
+		removed[igdbID] = at
+	}
+	now := time.Now()
+	for igdbID := range st.Games {
+		if _, stillLocal := localByIGDB[igdbID]; stillLocal {
+			continue
 		}
+		if _, alreadyPending := removed[igdbID]; alreadyPending {
+			continue
+		}
+		removed[igdbID] = now
+		changed = true
+	}
+	return removed, changed
+}
+
+// applyRemoteRemovals removes, from the local library, every game the
+// server reports as removed that this device still has locally. It must
+// run before the local snapshot used to build the push, otherwise a
+// routine sync would echo the still-present local copy back to the server
+// and resurrect a deletion made from another device. Per-game failures are
+// logged and skipped rather than aborting the whole sync, matching how
+// hydrate treats per-game failures below.
+func (s *Service) applyRemoteRemovals(localByIGDB map[string]Game, remote []wireGame) map[string]struct{} {
+	removedIDs := make(map[string]struct{})
+	for _, rg := range remote {
+		if !rg.Removed {
+			continue
+		}
+		igdbID := strconv.FormatInt(rg.IGDBID, 10)
+		local, ok := localByIGDB[igdbID]
+		if !ok {
+			continue
+		}
+		if err := s.library.Remove(local.CanonicalGameID); err != nil {
+			slog.Warn("account sync apply remote removal failed", "igdb_id", igdbID, "error", err)
+			continue
+		}
+		removedIDs[igdbID] = struct{}{}
+	}
+	return removedIDs
+}
+
+func (s *Service) hydrate(ctx context.Context, localByIGDB map[string]Game, remote []wireGame, pendingRemoved map[string]time.Time) (hydrated, deferred int) {
+	known := make(map[string]struct{}, len(localByIGDB))
+	for igdbID := range localByIGDB {
+		known[igdbID] = struct{}{}
 	}
 
 	for _, rg := range remote {
 		igdbID := strconv.FormatInt(rg.IGDBID, 10)
+		if rg.Removed {
+			continue
+		}
 		if _, ok := known[igdbID]; ok {
+			continue
+		}
+		if _, ok := pendingRemoved[igdbID]; ok {
 			continue
 		}
 		if hydrated >= maxHydratePerSync || ctx.Err() != nil {

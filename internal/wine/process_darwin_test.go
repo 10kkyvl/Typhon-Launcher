@@ -1,9 +1,11 @@
 package wine
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestParsePS(t *testing.T) {
@@ -122,5 +124,56 @@ func TestKillUsesBottlePrefix(t *testing.T) {
 	}
 	if !contains(string(data), "prefix="+b.Path) {
 		t.Fatalf("log %q missing WINEPREFIX=%s", string(data), b.Path)
+	}
+}
+
+// TestKillTimesOutInsteadOfHanging закрывает КРИТ-находку: Kill не принимал
+// ctx и не имел таймаута, в отличие от Run/Boot/StartDetached в этом же
+// пакете. Подвисший wineserver (известный класс проблем wine) вешал вызов
+// навсегда — горутина Wails-биндинга не возвращалась, и «Стоп» переставал
+// работать для игры до перезапуска лаунчера.
+func TestKillTimesOutInsteadOfHanging(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	if err := os.WriteFile(m.rt.WineServer, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	m.killTimeout = 100 * time.Millisecond
+	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t"}
+
+	done := make(chan error, 1)
+	go func() { done <- m.Kill(b) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Kill against a hung wineserver: want error")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Kill hung instead of respecting its timeout")
+	}
+}
+
+// TestKillContextRespectsCancellation закрывает вторую половину той же
+// находки: вызывающие с собственным ctx (внутри пакета, например Run из
+// run.go) должны получить настоящую отмену, а не ждать таймаута по
+// умолчанию.
+func TestKillContextRespectsCancellation(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	if err := os.WriteFile(m.rt.WineServer, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	b := Bottle{Name: "B", Path: filepath.Join(bottles, "B"), Drive: "t"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- m.KillContext(ctx, b) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("KillContext with a cancelled context: want error")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("KillContext ignored the cancelled context and hung")
 	}
 }

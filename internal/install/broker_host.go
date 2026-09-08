@@ -23,6 +23,14 @@ var (
 	// платформы, на которой идёт прогон.
 	elevationAvailable = elevationSupported
 	brokerStopWait     = 10 * time.Second
+
+	// askBrokerToExit пробует записать маркер выхода в течение
+	// brokerAskRetryWindow, повторяя каждые brokerAskRetryInterval: одиночный
+	// транзиентный отказ (антивирус держит хэндл, EACCES) не должен навсегда
+	// оставить брокера с правами администратора не узнавшим, что его просили
+	// выйти.
+	brokerAskRetryInterval = 200 * time.Millisecond
+	brokerAskRetryWindow   = 3 * time.Second
 )
 
 type broker struct {
@@ -124,7 +132,9 @@ func (s *Service) startBroker(d download.Download) error {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
-		askBrokerToExit(dir)
+		if err := askBrokerToExit(dir); err != nil {
+			slog.Warn("pre-elevation broker exit request never got through", "download", d.ID, "dir", dir, "error", err)
+		}
 		proc.close()
 		return errBrokerClosing
 	}
@@ -138,7 +148,9 @@ func (s *Service) startBroker(d download.Download) error {
 	if baseErr != nil {
 		delete(s.brokers, d.ID)
 		s.mu.Unlock()
-		askBrokerToExit(dir)
+		if err := askBrokerToExit(dir); err != nil {
+			slog.Warn("pre-elevation broker exit request never got through", "download", d.ID, "dir", dir, "error", err)
+		}
 		proc.close()
 		return baseErr
 	}
@@ -150,7 +162,9 @@ func (s *Service) startBroker(d download.Download) error {
 	s.mu.Unlock()
 
 	if replaced != nil {
-		askBrokerToExit(replaced.dir)
+		if err := askBrokerToExit(replaced.dir); err != nil {
+			slog.Warn("pre-elevation broker exit request never got through", "download", d.ID, "dir", replaced.dir, "error", err)
+		}
 	}
 	slog.Info("pre-elevation broker started", "download", d.ID, "dir", dir)
 	return nil
@@ -160,7 +174,13 @@ func (s *Service) startBroker(d download.Download) error {
 // Мёртвый брокер помечается сразу: runElevated обязан узнать об этом до того,
 // как решит отдать ему установку, иначе задание уйдёт в никуда.
 func (s *Service) tendBroker(ctx context.Context, downloadID string, b *broker) {
+	// Учтена в том же s.wg, что и сама tendBroker: без этого внешняя
+	// горутина снимала свой wg.Done() по таймауту brokerStopWait независимо
+	// от того, вышел ли настоящий процесс, и эта горутина оставалась висеть
+	// на wait() невидимой для ServiceShutdown (инвариант 19).
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer close(b.gone)
 		// Хэндл закрывает только тот, кто его ждёт: CloseHandle под висящим
 		// WaitForSingleObject — это ожидание на переиспользованном значении,
@@ -179,7 +199,9 @@ func (s *Service) tendBroker(ctx context.Context, downloadID string, b *broker) 
 			s.markBrokerDead(downloadID)
 			return
 		case <-ctx.Done():
-			askBrokerToExit(b.dir)
+			if err := askBrokerToExit(b.dir); err != nil {
+				slog.Warn("pre-elevation broker exit request never got through", "download", downloadID, "dir", b.dir, "error", err)
+			}
 			// Ждём выхода ограниченно: заклинивший процесс с правами
 			// администратора не должен держать выключение лаунчера. Он всё
 			// равно уйдёт сам — хартбит перестал обновляться в этот момент.
@@ -234,14 +256,31 @@ func (s *Service) DropBroker(downloadID string) {
 	if b == nil {
 		return
 	}
-	askBrokerToExit(b.dir)
+	if err := askBrokerToExit(b.dir); err != nil {
+		slog.Warn("pre-elevation broker exit request never got through", "download", downloadID, "dir", b.dir, "error", err)
+	}
 }
 
 // askBrokerToExit только выставляет метку: хэндл процесса принадлежит
-// горутине ожидания в tendBroker, и закрывать его здесь нельзя.
-func askBrokerToExit(dir string) {
-	if err := writeWorkerFile(brokerAbortPath(dir), []byte{}); err != nil {
-		slog.Warn("ask pre-elevation broker to exit", "dir", dir, "error", err)
+// горутине ожидания в tendBroker, и закрывать его здесь нельзя. Раньше
+// единственная неудачная запись (антивирус держит хэндл, EACCES) молча
+// считалась успехом всеми четырьмя вызывающими в этом файле — брокер с
+// правами администратора никогда не узнавал, что его просили выйти, и жил
+// до brokerMaxLifetime (12 часов). Теперь запись повторяется, пока есть
+// время (brokerAskRetryWindow), и вызывающий может узнать об окончательной
+// неудаче через возвращённую ошибку.
+func askBrokerToExit(dir string) error {
+	deadline := time.Now().Add(brokerAskRetryWindow)
+	for {
+		err := writeWorkerFile(brokerAbortPath(dir), []byte{})
+		if err == nil {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("ask pre-elevation broker to exit %s: %w", dir, err)
+		}
+		slog.Warn("ask pre-elevation broker to exit, retrying", "dir", dir, "error", err)
+		<-time.After(brokerAskRetryInterval)
 	}
 }
 

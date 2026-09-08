@@ -23,6 +23,7 @@ type LibraryPort interface {
 	Snapshot() ([]Game, error)
 	Apply(items []Game) error
 	Add(canonicalGameID, title string) error
+	Remove(canonicalGameID string) error
 }
 
 type CatalogPort interface {

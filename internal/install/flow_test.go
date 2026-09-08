@@ -72,3 +72,49 @@ func TestVerifyInstallDistinguishesReadErrorFromEmpty(t *testing.T) {
 		}
 	})
 }
+
+// TestExeInstallerDropsBrokerOnTheInteractivePath закрывает находку 3: только
+// item.Silent && item.Destination != "" уходит в runSilent, а единственный
+// defer s.DropBroker жил внутри неё. Интерактивная ветка (waitForUser) не
+// звала DropBroker ни на одном пути, и брокер — процесс с правами
+// администратора плюс горутина tendBroker с тикером — жил до закрытия
+// лаунчера на каждый не-silent репак, для которого его подняли заранее.
+func TestExeInstallerDropsBrokerOnTheInteractivePath(t *testing.T) {
+	s, downloads, _ := newTestService(t)
+	root := t.TempDir()
+	dir := filepath.Join(root, "Game")
+	mkFile(t, filepath.Join(dir, "setup.exe"), 4096)
+	downloads.add("d1", "Game", root)
+
+	programs := t.TempDir()
+	installed := filepath.Join(programs, "MyGame")
+	s.roots = []string{programs}
+	s.runner = &fakeRunner{act: func(runSpec) {
+		mkFile(t, filepath.Join(installed, "MyGame.exe"), 512<<10)
+	}}
+
+	brokerDir := t.TempDir()
+	s.mu.Lock()
+	s.brokers = map[string]*broker{"d1": {dir: brokerDir, gone: make(chan struct{})}}
+	s.mu.Unlock()
+
+	item, err := s.Start("d1", StartOptions{})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	s.waitStatus(t, item.ID, StatusWaitingForUser)
+
+	// StatusWaitingForUser публикуется внутри waitForUser, а defer
+	// s.DropBroker в runInstaller срабатывает только когда она вернётся и
+	// стек развернётся до самого runInstaller — статус и снятие брокера не
+	// один и тот же момент, поэтому снятие ждём отдельно, а не проверяем
+	// синхронно сразу за статусом.
+	waitFor(t, "broker dropped after interactive install", func() bool { return s.brokerFor("d1") == nil })
+	// askBrokerToExit пишет маркер уже после того, как брокер снят с карты
+	// (DropBroker), поэтому ждём отдельно и его — оба шага происходят в
+	// одной горутине, но не одним атомарным действием.
+	waitFor(t, "broker exit marker written", func() bool {
+		_, statErr := os.Stat(brokerAbortPath(brokerDir))
+		return statErr == nil
+	})
+}

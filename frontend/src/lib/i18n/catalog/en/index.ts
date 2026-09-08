@@ -20,6 +20,7 @@ import { errMetadata } from './errMetadata';
 import { errUpdates } from './errUpdates';
 import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
+import { errLogs } from './errLogs';
 
 export const en: Record<MessageKey, Message> = {
   ...common,
@@ -42,6 +43,7 @@ export const en: Record<MessageKey, Message> = {
   ...errUpdates,
   ...errSources,
   ...errLibrary,
+  ...errLogs,
 };
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary };
+export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };

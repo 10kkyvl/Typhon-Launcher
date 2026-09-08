@@ -785,3 +785,42 @@ func TestRemoveGameKeepsRuntimeWhenFilesStay(t *testing.T) {
 		t.Fatalf("released = %v, want none: файлы остались на месте", released)
 	}
 }
+
+// TestRemoveGameKeepsLibraryConsistentWhenBookkeepingPersistFails закрывает
+// находку 2: RemoveGame стирал каталог установки, и только потом звал
+// forgetInstallations, чей persistNowLocked мог упасть (диск полон, нет прав
+// на ConfigDir). Ошибка возвращалась раньше library.RemoveGame/MarkUninstalled,
+// оставляя запись библиотеки указывающей на уже несуществующий InstallDir.
+// s.store подменён на отдельный каталог без прав записи, а s.removals
+// (staging при удалении) остаётся на обычном каталоге теста — так падает
+// только persist из forgetInstallations, а не сам снос файлов.
+func TestRemoveGameKeepsLibraryConsistentWhenBookkeepingPersistFails(t *testing.T) {
+	s, _, registrar := newTestService(t)
+	dir := gameDir(t, "Game")
+	registrar.put(library.Game{
+		ID:          "g1",
+		Title:       "Game",
+		InstallDir:  dir,
+		Executable:  filepath.Join(dir, "Game.exe"),
+		Owned:       true,
+		InstallType: string(TypePortable),
+	})
+	s.mu.Lock()
+	s.items = append(s.items, &Installation{ID: "i1", GameID: "g1", Status: StatusCompleted, Destination: dir})
+	s.mu.Unlock()
+
+	badStoreDir := t.TempDir()
+	requireUnwritableDir(t, badStoreDir)
+	s.store = newStore(badStoreDir)
+
+	err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true})
+	if err == nil {
+		t.Fatal("RemoveGame error = nil, want the bookkeeping persist failure to reach the caller")
+	}
+	if !missing(t, dir) {
+		t.Fatal("install dir still present: expected the files to be gone (the persist failure happens after the point of no return)")
+	}
+	if _, findErr := registrar.Find("g1"); !errors.Is(findErr, errFakeNoGame) {
+		t.Fatalf("library record kept = %v, want it gone: files are already deleted from disk, the library must not keep pointing at %s", findErr, dir)
+	}
+}

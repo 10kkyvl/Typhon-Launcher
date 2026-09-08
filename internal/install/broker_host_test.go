@@ -1,12 +1,15 @@
 package install
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"typhon/internal/download"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type fakeProc struct {
@@ -30,6 +33,11 @@ func (p *fakeProc) close() {
 		close(p.done)
 		close(p.exit)
 	}
+}
+
+func (p *fakeProc) terminate() error {
+	p.close()
+	return nil
 }
 
 func fakeElevation(t *testing.T) (started chan runSpec, procs chan *fakeProc) {
@@ -223,7 +231,7 @@ func TestHandOffPrefersTheLiveBroker(t *testing.T) {
 	}
 	t.Cleanup(func() { startElevatedWorker = old })
 
-	exited, cleanup, err := handOffToWorker(spec, ws, filepath.Join(dir, "worker-spec.json"))
+	exited, cleanup, _, err := handOffToWorker(spec, ws, filepath.Join(dir, "worker-spec.json"))
 	if err != nil {
 		t.Fatalf("handOffToWorker: %v", err)
 	}
@@ -245,5 +253,106 @@ func TestHandOffPrefersTheLiveBroker(t *testing.T) {
 	case <-exited:
 	case <-time.After(5 * time.Second):
 		t.Fatal("смерть брокера не дошла до цикла ожидания")
+	}
+}
+
+// TestAskBrokerToExitRetriesOnTransientFailure закрывает находку 2 (вторая
+// половина): до фикса askBrokerToExit ничего не возвращал, и одиночный отказ
+// записи (антивирус держит хэндл, EACCES) молча оставлял брокера с правами
+// администратора не узнавшим, что его просили выйти — все четыре вызывающих
+// в этом файле считали неудачную запись успехом.
+func TestAskBrokerToExitRetriesOnTransientFailure(t *testing.T) {
+	dir := t.TempDir()
+	restoreInterval, restoreWindow := brokerAskRetryInterval, brokerAskRetryWindow
+	brokerAskRetryInterval = 5 * time.Millisecond
+	brokerAskRetryWindow = 2 * time.Second
+	t.Cleanup(func() { brokerAskRetryInterval, brokerAskRetryWindow = restoreInterval, restoreWindow })
+
+	abortPath := brokerAbortPath(dir)
+	if err := os.MkdirAll(abortPath, 0o755); err != nil {
+		t.Fatalf("seed blocking directory: %v", err)
+	}
+	go func() {
+		<-time.After(30 * time.Millisecond)
+		if err := os.Remove(abortPath); err != nil {
+			t.Errorf("remove blocking directory: %v", err)
+		}
+	}()
+
+	if err := askBrokerToExit(dir); err != nil {
+		t.Fatalf("askBrokerToExit = %v, want the transient failure to be retried away", err)
+	}
+	if _, err := os.Stat(abortPath); err != nil {
+		t.Fatalf("abort marker not written after retry: %v", err)
+	}
+}
+
+// TestAskBrokerToExitReportsPersistentFailure — вторая половина: отказ,
+// который не проходит за отведённое время, остаётся ошибкой и доходит до
+// вызывающего, а не тонет молча.
+func TestAskBrokerToExitReportsPersistentFailure(t *testing.T) {
+	dir := t.TempDir()
+	restoreInterval, restoreWindow := brokerAskRetryInterval, brokerAskRetryWindow
+	brokerAskRetryInterval = 5 * time.Millisecond
+	brokerAskRetryWindow = 30 * time.Millisecond
+	t.Cleanup(func() { brokerAskRetryInterval, brokerAskRetryWindow = restoreInterval, restoreWindow })
+
+	abortPath := brokerAbortPath(dir)
+	if err := os.MkdirAll(abortPath, 0o755); err != nil {
+		t.Fatalf("seed blocking directory: %v", err)
+	}
+	// Никогда не снимается: запись остаётся заблокированной всё окно ретрая.
+
+	if err := askBrokerToExit(dir); err == nil {
+		t.Fatal("askBrokerToExit вернул nil для записи, которая ни разу не удалась")
+	}
+}
+
+// TestServiceShutdownWaitsForBrokerProcessToActuallyExit закрывает находку 5:
+// go func(){ defer close(b.gone); defer b.proc.close(); b.proc.wait() }() в
+// tendBroker не проходила через s.wg. Внешняя tendBroker снимает свой
+// wg.Done() по таймауту brokerStopWait независимо от того, вышел ли
+// настоящий процесс брокера, и до фикса ServiceShutdown возвращался сразу за
+// ней, даже если внутренняя горутина всё ещё висела на wait() — процесс с
+// правами администратора оставался никем не отслеживаемым.
+func TestServiceShutdownWaitsForBrokerProcessToActuallyExit(t *testing.T) {
+	s := mustServiceAt(t, t.TempDir())
+	s.settings = newTestSettings(t)
+	s.downloads = newFakeDownloads()
+	s.library = &fakeRegistrar{}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	_, procs := fakeElevation(t)
+
+	s.HandleDownloadStarted(startedDownload(t, s))
+	var proc *fakeProc
+	select {
+	case proc = <-procs:
+	case <-time.After(5 * time.Second):
+		t.Fatal("брокер не поднялся")
+	}
+	if s.brokerFor("d1") == nil {
+		t.Fatal("брокер не зарегистрирован")
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.ServiceShutdown() }()
+
+	select {
+	case <-done:
+		t.Fatal("ServiceShutdown вернулся, хотя процесс брокера ещё жив и никем не отслеживается")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	proc.close()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServiceShutdown: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ServiceShutdown не вернулся после закрытия процесса брокера")
 	}
 }

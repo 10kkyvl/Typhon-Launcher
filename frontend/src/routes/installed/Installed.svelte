@@ -49,7 +49,13 @@
   import { updatesByGame } from '../../lib/stores/updates';
   import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { bytesSize, relativeDate } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   type Sort = 'recent' | 'alpha' | 'size';
 
@@ -168,7 +174,7 @@
       toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
       addOpen = false;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedAddGameError'), 'danger');
+      toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');
     } finally {
       adding = false;
     }
@@ -178,7 +184,7 @@
     try {
       await playGame(game.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -241,7 +247,7 @@
       }
       toast(scanSummary(result), result.errors > 0 ? 'danger' : 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedScanError'), 'danger');
+      toast(sourceErrorText(err, msg('games.installedScanError')), 'danger');
     }
   }
 
@@ -252,7 +258,7 @@
       await setExecutable(game.id, path);
       toast(msg('games.installedExeSavedToast', { title: game.title }), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.installedChooseExeError'), 'danger');
+      toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');
     }
   }
 

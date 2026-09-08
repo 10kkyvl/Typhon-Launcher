@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // bottleTemplate — шаблон CrossOver, из которого заводятся все наши бутыли.
@@ -24,6 +25,10 @@ type Manager struct {
 	// psOutput подменяет чтение таблицы процессов в тестах: настоящий ps на
 	// машине сборки покажет что угодно, кроме нужного.
 	psOutput func() (string, error)
+
+	// killTimeout переопределяет killTimeout по умолчанию в тестах: там нужен
+	// короткий таймаут, чтобы не ждать настоящих секунд на зависшем скрипте.
+	killTimeout time.Duration
 }
 
 func NewManager(rt Runtime) *Manager {
@@ -75,16 +80,30 @@ func (m *Manager) Ensure(destDir, gamesPath string) (Bottle, error) {
 
 	letter, err := freeDrive(filepath.Join(path, "dosdevices"))
 	if err != nil {
-		return Bottle{}, err
+		return Bottle{}, cleanupFailedBottle(path, err)
 	}
 	if err := ensureDrive(path, letter, games); err != nil {
-		return Bottle{}, err
+		return Bottle{}, cleanupFailedBottle(path, err)
 	}
 	b := Bottle{Key: dest, Name: name, Path: path, Drive: letter, Games: games}
 	if err := writeMarker(path, b); err != nil {
-		return Bottle{}, err
+		return Bottle{}, cleanupFailedBottle(path, err)
 	}
 	return b, nil
+}
+
+// cleanupFailedBottle убирает каталог, который этот же вызов Ensure только
+// что материализовал через cxbottle --create (~300 МБ), если что-то после
+// этого не задалось: без typhon-bottle.json (её пишет writeMarker — самый
+// последний шаг) List и Lookup такой каталог никогда не увидят, и он
+// останется сиротой до ручной уборки в Finder. Уже существующий бутыль
+// (найденный через Lookup, см. ветку выше) сюда не попадает: у него другой
+// путь возврата, до первого cxbottle --create этого вызова.
+func cleanupFailedBottle(path string, cause error) error {
+	if rmErr := os.RemoveAll(path); rmErr != nil {
+		return fmt.Errorf("%w (уборка каталога бутыля %s: %w)", cause, path, rmErr)
+	}
+	return cause
 }
 
 // List перечисляет только наши бутыли: чужие, заведённые пользователем в

@@ -128,14 +128,9 @@ func (s *Service) load() error {
 			item.Type = TypeURL
 		}
 		s.sources = append(s.sources, &item)
-		stored, err := s.store.loadReleases(item.ID)
+		list, err := s.store.loadReleases(item.ID)
 		if err != nil {
 			return err
-		}
-		list := make([]*Release, 0, len(stored))
-		for i := range stored {
-			r := stored[i]
-			list = append(list, &r)
 		}
 		s.releases[item.ID] = list
 	}
@@ -231,6 +226,20 @@ func (s *Service) takeCachedFeed(kind Type, location string) (feed.Result, bool)
 		return feed.Result{}, false
 	}
 	return cached.result, true
+}
+
+// pruneExpiredPreview drops the cached preview once it is older than
+// previewCacheTTL, even if nothing ever calls takeCachedFeed again. It runs
+// off scheduleLoop's existing once-a-minute ticker instead of a dedicated
+// timer per preview: the cache holds at most one entry, so there is nothing
+// to iterate, and reusing the ticker that is already there means TestSource
+// never has to spin up a goroutine just to expire its own cache slot later.
+func (s *Service) pruneExpiredPreview(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cached != nil && now.Sub(s.cached.at) > previewCacheTTL {
+		s.cached = nil
+	}
 }
 
 func (s *Service) findLocked(id string) *Source {
@@ -881,6 +890,7 @@ func (s *Service) scheduleLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			s.pruneExpiredPreview(time.Now())
 			s.runRefreshDue(ctx)
 		}
 	}

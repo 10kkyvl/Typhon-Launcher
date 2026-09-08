@@ -26,6 +26,33 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 	if !shouldDiscoverComponents(in) {
 		return discoveryOutcome{}, nil
 	}
+	rt, err := wine.Detect()
+	if errors.Is(err, wine.ErrNotInstalled) {
+		return discoveryOutcome{reason: "CrossOver не найден"}, nil
+	}
+	if err != nil {
+		return discoveryOutcome{}, err
+	}
+	manager := wine.NewManager(rt)
+	bottle, ok := manager.Lookup(in.Destination)
+	if !ok {
+		return discoveryOutcome{reason: "бутыль установки ещё не заведён"}, nil
+	}
+	return discoverWithBottle(ctx, in, bottle, manager.Run)
+}
+
+// discoverWithBottle делает ту же работу, что и attemptDiscovery, но берёт
+// бутыль параметром вместо собственного wine.Detect()+Lookup: раннер
+// (wineRunner.run, runner_darwin.go) к этому моменту уже завёл бутыль через
+// Ensure, и повторный Lookup — это ещё один полный os.ReadDir по каталогу
+// бутылей CrossOver на каждую установку без всякой пользы. attemptDiscovery
+// выше остаётся отдельной функцией ради worker_run.go (повышенный воркер на
+// Windows и в devmock), у которого своей бутыли нет и взять её неоткуда,
+// кроме как сканированием.
+func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottle, run func(context.Context, wine.Bottle, wine.Cmd) (int, error)) (discoveryOutcome, error) {
+	if !shouldDiscoverComponents(in) {
+		return discoveryOutcome{}, nil
+	}
 	plan, ok, err := discoverPlan(in.Engine, in.InstallerPath, in.Destination, in.InfPath)
 	if err != nil {
 		return discoveryOutcome{}, fmt.Errorf("построение плана разведки: %w", err)
@@ -37,15 +64,6 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		return discoveryOutcome{}, fmt.Errorf("удаление старого файла разведки: %w", err)
 	}
 
-	rt, err := wine.Detect()
-	if err != nil {
-		return discoveryOutcome{reason: "CrossOver не найден"}, nil
-	}
-	manager := wine.NewManager(rt)
-	bottle, ok := manager.Lookup(in.Destination)
-	if !ok {
-		return discoveryOutcome{reason: "бутыль установки ещё не заведён"}, nil
-	}
 	winInstaller, err := bottle.ToWindows(in.InstallerPath)
 	if err != nil {
 		return discoveryOutcome{reason: fmt.Sprintf("путь установщика: %v", err)}, nil
@@ -59,7 +77,7 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		// Код возврата разведки не важен: прогон обрывается намеренно, как
 		// только появится INF. А вот ошибка запуска — важна: без неё падение
 		// разведки выглядело бы как «установщик просто не создал файл».
-		if _, runErr := manager.Run(runCtx, bottle, wine.Cmd{
+		if _, runErr := run(runCtx, bottle, wine.Cmd{
 			Path: winInstaller, Args: plan.Args, WaitChildren: true,
 		}); runErr != nil && !errors.Is(runErr, context.Canceled) {
 			slog.Debug("discovery run", "installer", winInstaller, "error", runErr)

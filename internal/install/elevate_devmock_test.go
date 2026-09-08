@@ -49,6 +49,31 @@ func TestStartElevatedRunsShellScriptAndReportsExitCode(t *testing.T) {
 	}
 }
 
+// TestDevmockProcTerminateKillsTheProcess проверяет devmockProc.terminate,
+// добавленный вместе с находкой 1 (elevated.go зовёт его, когда воркер не
+// подтвердил остановку к дедлайну).
+func TestDevmockProcTerminateKillsTheProcess(t *testing.T) {
+	dir := t.TempDir()
+	spec := runSpec{
+		Path:      "/bin/sh",
+		Args:      []string{"-c", "sleep 30"},
+		StatePath: filepath.Join(dir, "state.json"),
+		ID:        "t2",
+	}
+	handle, err := startElevated(spec)
+	if err != nil {
+		t.Fatalf("startElevated: %v", err)
+	}
+	defer handle.close()
+
+	if err := handle.terminate(); err != nil {
+		t.Fatalf("terminate: %v", err)
+	}
+	if _, err := handle.wait(); err != nil {
+		t.Fatalf("wait after terminate: %v", err)
+	}
+}
+
 func TestWorkerProcessAliveOwnPidIsAlive(t *testing.T) {
 	alive, err := workerProcessAlive(os.Getpid())
 	if err != nil {

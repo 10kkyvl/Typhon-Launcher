@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SearchOverlay } from './overlay';
 import type { OverlayState } from './overlay';
 import type { GameHit, ReleaseHit, SearchResult } from '../services/search';
+import { locale } from '../i18n';
 
 function makeResult(games: GameHit[], releases: ReleaseHit[], moreGames = 0, moreReleases = 0): SearchResult {
   return { query: '', games, releases, moreGames, moreReleases };
@@ -239,8 +240,13 @@ describe('SearchOverlay keyboard navigation', () => {
 });
 
 describe('SearchOverlay error path', () => {
-  it('surfaces the error message and clears result lists', async () => {
-    const search = vi.fn().mockRejectedValue(new Error('network down'));
+  afterEach(() => {
+    locale.set('ru');
+  });
+
+  it('translates a known backend error code into the active locale instead of showing the raw message', async () => {
+    locale.set('en');
+    const search = vi.fn().mockRejectedValue(new Error('typhon:library.not_installed: игра не установлена'));
     const tracker = track();
     const { onState } = tracker;
     const overlay = new SearchOverlay({ search, onState, delay: 50 });
@@ -250,12 +256,24 @@ describe('SearchOverlay error path', () => {
 
     expect(tracker.state.loading).toBe(false);
     expect(tracker.state.searched).toBe(true);
-    expect(tracker.state.error).toBe('network down');
+    expect(tracker.state.error).toBe('The game is not installed');
     expect(tracker.state.games).toEqual([]);
     expect(tracker.state.releases).toEqual([]);
   });
 
-  it('falls back to errorText when the rejection carries no message', async () => {
+  it('falls back to errorText instead of the raw backend message when the error carries no known code', async () => {
+    const search = vi.fn().mockRejectedValue(new Error('network down'));
+    const tracker = track();
+    const { onState } = tracker;
+    const overlay = new SearchOverlay({ search, onState, delay: 50, errorText: 'Search unavailable' });
+
+    overlay.setQuery('portal');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(tracker.state.error).toBe('Search unavailable');
+  });
+
+  it('falls back to errorText when the rejection carries no message at all', async () => {
     const search = vi.fn().mockRejectedValue(new Error());
     const tracker = track();
     const { onState } = tracker;

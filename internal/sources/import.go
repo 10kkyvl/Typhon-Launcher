@@ -2,6 +2,7 @@ package sources
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,11 @@ import (
 	"typhon/internal/sources/feed"
 	"typhon/internal/titles"
 )
+
+// maxRemovedReleases bounds how many vanished-from-the-feed releases a
+// source keeps around in s.releases. See evictStaleRemoved for why they
+// cannot simply be dropped on removal.
+const maxRemovedReleases = 5000
 
 type matcher interface {
 	ResolveAll(queries []catalog.Query) []catalog.Match
@@ -142,7 +148,45 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		r.Availability = AvailabilityRemoved
 		summary.Removed++
 	}
-	return merged, summary
+	return evictStaleRemoved(merged), summary
+}
+
+// evictStaleRemoved bounds how many AvailabilityRemoved releases a source
+// keeps once they pass maxRemovedReleases. They cannot be dropped the
+// moment a release goes missing from the feed: GetSourceDetails counts them
+// separately and SourceDetailsModal has a "removed" tab so a user can see
+// what disappeared from a source. But nothing ever deleted them either, and
+// feed.MaxEntries only caps a single parse pass — a source with churn
+// (releases leaving and returning over months) grew this list without any
+// upper bound. Evicting the oldest-by-LastSeenAt removed releases first
+// keeps the useful case (recent disappearances stay visible) while putting
+// a ceiling on memory; releases still available in the feed are never
+// touched by this, no matter how many removed ones pile up around them.
+func evictStaleRemoved(list []*Release) []*Release {
+	var removedIdx []int
+	for i, r := range list {
+		if r.Availability == AvailabilityRemoved {
+			removedIdx = append(removedIdx, i)
+		}
+	}
+	if len(removedIdx) <= maxRemovedReleases {
+		return list
+	}
+	sort.Slice(removedIdx, func(a, b int) bool {
+		return list[removedIdx[a]].LastSeenAt.Before(list[removedIdx[b]].LastSeenAt)
+	})
+	evict := make(map[int]bool, len(removedIdx)-maxRemovedReleases)
+	for _, idx := range removedIdx[:len(removedIdx)-maxRemovedReleases] {
+		evict[idx] = true
+	}
+	out := make([]*Release, 0, len(list)-len(evict))
+	for i, r := range list {
+		if evict[i] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func changed(current, next *Release) bool {

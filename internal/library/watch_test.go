@@ -50,8 +50,8 @@ func TestDetectOpensSessionForProcessInsideInstallDir(t *testing.T) {
 
 	created := time.Now().Add(-5 * time.Minute)
 	procPath := filepath.Join(dir, "bin", "launcher.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 111, Path: procPath, CreatedAt: created}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 111, Path: procPath, CreatedAt: created}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -94,8 +94,8 @@ func TestDetectComponentWisePathMismatch(t *testing.T) {
 	}
 
 	procPath := filepath.Join(root, "Foo2", "game.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 222, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 222, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -117,8 +117,8 @@ func TestDetectCaseInsensitivePathMatch(t *testing.T) {
 	}
 
 	procPath := strings.ToUpper(filepath.Join(dir, "game.exe"))
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 333, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 333, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -146,8 +146,8 @@ func TestDetectLongestInstallDirWins(t *testing.T) {
 	}
 
 	procPath := filepath.Join(innerDir, "game.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 444, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 444, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -171,8 +171,8 @@ func TestDetectPathUnknownProcessIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 555, PathUnknown: true, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 555, PathUnknown: true, CreatedAt: time.Now()}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -194,8 +194,8 @@ func TestDetectUninstallerExcluded(t *testing.T) {
 	}
 
 	procPath := filepath.Join(dir, "unins000.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 666, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 666, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 
 	s.detectTick(context.Background())
@@ -223,8 +223,8 @@ func TestDetectScanErrorLeavesRunningUntouched(t *testing.T) {
 	}
 
 	procPath := filepath.Join(dir, "game.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 777, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 777, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 	s.detectTick(context.Background())
 	if !s.IsRunning(running.ID) {
@@ -232,7 +232,7 @@ func TestDetectScanErrorLeavesRunningUntouched(t *testing.T) {
 	}
 
 	scanErr := errors.New("enumerate failed")
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, scanErr }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, false, scanErr }
 
 	s.detectTick(context.Background())
 
@@ -244,7 +244,17 @@ func TestDetectScanErrorLeavesRunningUntouched(t *testing.T) {
 	}
 }
 
-func TestDetectSessionClosesAfterGracePeriodNotBefore(t *testing.T) {
+// TestDetectSessionClosesImmediatelyOnReliableScan replaces what used to be
+// TestDetectSessionClosesAfterGracePeriodNotBefore. That test locked in a
+// 2*watchInterval grace period even for a scan that came back clean (no
+// error, pid genuinely absent) — but the stronger check right above the
+// grace period in detectTick already proves the pid is alive whenever it is
+// merely unverifiable by path (permission failure, anti-cheat), so the
+// grace period only ever needed to cover the case where the scan itself
+// could not be trusted. A scan that completed normally and simply does not
+// list the pid anymore is a reliable "the process exited": closing must not
+// wait for a second grace-period check that adds nothing here.
+func TestDetectSessionClosesImmediatelyOnReliableScan(t *testing.T) {
 	root := t.TempDir()
 	dir := mustDir(t, filepath.Join(root, "Game"))
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
@@ -262,29 +272,24 @@ func TestDetectSessionClosesAfterGracePeriodNotBefore(t *testing.T) {
 
 	procPath := filepath.Join(dir, "game.exe")
 	created := base.Add(-time.Minute)
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 888, Path: procPath, CreatedAt: created}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 888, Path: procPath, CreatedAt: created}}, true, nil
 	}
 	s.detectTick(context.Background())
 	if !s.IsRunning(game.ID) {
 		t.Fatal("setup: session did not open")
 	}
 
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
-
-	clock = base.Add(1500 * time.Millisecond)
-	s.detectTick(context.Background())
-	if !s.IsRunning(game.ID) {
-		t.Fatal("session closed before 2*watchInterval elapsed since last seen")
-	}
-
 	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
 	s.AddSessionWatcher(watcher)
 
-	clock = base.Add(2500 * time.Millisecond)
+	// The process is gone and the scan is a reliable (complete) answer:
+	// a single tick, barely past the previous one, must close the session.
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, true, nil }
+	clock = base.Add(100 * time.Millisecond)
 	s.detectTick(context.Background())
 	if s.IsRunning(game.ID) {
-		t.Fatal("session still running past the 2*watchInterval grace period")
+		t.Fatal("session still running one tick after a reliable scan stopped reporting its pid")
 	}
 	select {
 	case stopped := <-watcher.stopped:
@@ -308,6 +313,64 @@ func TestDetectSessionClosesAfterGracePeriodNotBefore(t *testing.T) {
 	}
 }
 
+// TestDetectSessionCloseDelayedWhenScanIncomplete covers the case the grace
+// period actually protects: the enumeration itself did not produce a
+// trustworthy full answer (interrupted mid-walk, say), so the pid's absence
+// from what it did return is not proof the process exited.
+func TestDetectSessionCloseDelayedWhenScanIncomplete(t *testing.T) {
+	root := t.TempDir()
+	dir := mustDir(t, filepath.Join(root, "Game"))
+	exe := mustExe(t, filepath.Join(dir, "game.exe"))
+
+	s := mustServiceAt(t, filepath.Join(root, "library.json"))
+	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Incomplete"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	clock := base
+	s.now = func() time.Time { return clock }
+	s.watchInterval = time.Second
+
+	procPath := filepath.Join(dir, "game.exe")
+	created := base.Add(-time.Minute)
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 890, Path: procPath, CreatedAt: created}}, true, nil
+	}
+	s.detectTick(context.Background())
+	if !s.IsRunning(game.ID) {
+		t.Fatal("setup: session did not open")
+	}
+
+	// The pid stops appearing, but the scan reports itself as incomplete:
+	// this must not be read as proof the process exited.
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, false, nil }
+
+	clock = base.Add(1500 * time.Millisecond)
+	s.detectTick(context.Background())
+	if !s.IsRunning(game.ID) {
+		t.Fatal("session closed before 2*watchInterval elapsed on an incomplete scan")
+	}
+
+	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+	s.AddSessionWatcher(watcher)
+
+	clock = base.Add(2500 * time.Millisecond)
+	s.detectTick(context.Background())
+	if s.IsRunning(game.ID) {
+		t.Fatal("session still running past the 2*watchInterval grace period on an incomplete scan")
+	}
+	select {
+	case stopped := <-watcher.stopped:
+		if stopped != game.ID {
+			t.Fatalf("stopped id = %q, want %q", stopped, game.ID)
+		}
+	default:
+		t.Fatal("watcher did not observe SessionStopped")
+	}
+}
+
 func TestServiceStartupRunsImmediateScanBeforeFirstTick(t *testing.T) {
 	root := t.TempDir()
 	dir := mustDir(t, filepath.Join(root, "Game"))
@@ -321,8 +384,8 @@ func TestServiceStartupRunsImmediateScanBeforeFirstTick(t *testing.T) {
 
 	s.watchInterval = time.Hour
 	procPath := filepath.Join(dir, "game.exe")
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 999, Path: procPath, CreatedAt: time.Now()}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 999, Path: procPath, CreatedAt: time.Now()}}, true, nil
 	}
 	// SessionStarted fires only after detectTick has already inserted the
 	// session into s.running, so waiting on it (rather than on scan being
@@ -400,8 +463,8 @@ func TestDetectKeepsLaunchedSessionAliveWhilePathUnverifiable(t *testing.T) {
 	// inspectProcess sets both PathUnknown and CreatedAtUnknown when
 	// OpenProcess fails). Path-based matching can never succeed for this
 	// process, yet the game genuinely never stopped.
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: pid, PathUnknown: true, CreatedAtUnknown: true}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: pid, PathUnknown: true, CreatedAtUnknown: true}}, true, nil
 	}
 
 	for i := 0; i < 5; i++ {
@@ -414,7 +477,7 @@ func TestDetectKeepsLaunchedSessionAliveWhilePathUnverifiable(t *testing.T) {
 
 	// Once the OS genuinely stops reporting the pid, the session must still
 	// close via the grace-period path.
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, true, nil }
 	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
 	s.AddSessionWatcher(watcher)
 
@@ -451,8 +514,8 @@ func TestDetectRejectsHeartbeatWhenCreatedAtMismatches(t *testing.T) {
 
 	procPath := filepath.Join(dir, "game.exe")
 	created := base.Add(-time.Minute)
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 1010, Path: procPath, CreatedAt: created}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 1010, Path: procPath, CreatedAt: created}}, true, nil
 	}
 	s.detectTick(context.Background())
 	if !s.IsRunning(game.ID) {
@@ -462,17 +525,14 @@ func TestDetectRejectsHeartbeatWhenCreatedAtMismatches(t *testing.T) {
 	// Same pid reappears with an unmatchable path (so it cannot heartbeat via
 	// matches) and a different CreatedAt: the OS reused the pid for an
 	// unrelated process, so the recorded session must not be kept alive by
-	// raw pid presence alone.
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 1010, PathUnknown: true, CreatedAt: created.Add(time.Hour)}}, nil
+	// raw pid presence alone. A confirmed mismatch on a reliable scan is
+	// stronger proof the original process is gone than a mere absent pid —
+	// there is nothing to wait for, so this closes on the very next tick,
+	// not after a grace period.
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 1010, PathUnknown: true, CreatedAt: created.Add(time.Hour)}}, true, nil
 	}
-	clock = clock.Add(1500 * time.Millisecond)
-	s.detectTick(context.Background())
-	if !s.IsRunning(game.ID) {
-		t.Fatal("session closed before the grace period elapsed")
-	}
-
-	clock = clock.Add(2 * time.Second)
+	clock = clock.Add(100 * time.Millisecond)
 	s.detectTick(context.Background())
 	if s.IsRunning(game.ID) {
 		t.Fatal("session kept alive by a pid whose recorded CreatedAt no longer matches (recycled pid)")
@@ -483,7 +543,7 @@ func TestDetectRaceWithPlayGameAndGetRunningGames(t *testing.T) {
 	root := t.TempDir()
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
 
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, true, nil }
 	s.watchInterval = 10 * time.Millisecond
 
 	exe, exitArgs := testExecutable(t)

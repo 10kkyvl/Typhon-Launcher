@@ -86,6 +86,11 @@ export async function discardMetadata(infoHash: string): Promise<void> {
   await Manager.DiscardMetadata(infoHash);
 }
 
+export async function cancelFetchMetadata(source: string): Promise<void> {
+  if (!inWails) return;
+  await Manager.CancelFetchMetadata(source);
+}
+
 export async function startDownload(
   infoHash: string,
   destination: string,

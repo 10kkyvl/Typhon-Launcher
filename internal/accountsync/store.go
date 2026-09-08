@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"time"
 
 	"typhon/internal/storage"
 )
@@ -24,10 +25,15 @@ type syncState struct {
 	DeviceID         string               `json:"deviceId"`
 	SettingsRevision int64                `json:"settingsRevision"`
 	Games            map[string]gameState `json:"games"`
+	// Removed holds this device's unconfirmed deletions, keyed by IGDB id.
+	// An entry stays here from the moment the game disappears from the
+	// local library until the server accepts a push carrying it, so an
+	// offline removal survives a restart and is retried on the next sync.
+	Removed map[string]time.Time `json:"removed"`
 }
 
 func emptyState() syncState {
-	return syncState{Games: map[string]gameState{}}
+	return syncState{Games: map[string]gameState{}, Removed: map[string]time.Time{}}
 }
 
 type store struct {
@@ -60,6 +66,9 @@ func (s *store) load() (syncState, error) {
 	}
 	if st.Games == nil {
 		st.Games = map[string]gameState{}
+	}
+	if st.Removed == nil {
+		st.Removed = map[string]time.Time{}
 	}
 	return st, nil
 }

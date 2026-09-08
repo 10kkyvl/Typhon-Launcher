@@ -96,16 +96,18 @@ function translate(raw: string): string {
 
 export function outcomeReason(outcome: SelfUpdateOutcome): string {
   const raw = outcome.error ?? '';
-  return translate(raw) || raw;
+  if (!raw) return '';
+  return translate(raw) || msg('state.selfupdateReasonUnknown');
 }
 
 export function updateReason(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
-  return translate(raw) || raw;
+  if (!raw) return '';
+  return translate(raw) || msg('state.selfupdateReasonUnknown');
 }
 
 export function statusReason(status: SelfUpdateStatus): string {
   const raw = status.error ?? '';
   if (!raw) return '';
-  return translate(raw) || codeReasons()[status.errorCode ?? ''] || raw;
+  return translate(raw) || codeReasons()[status.errorCode ?? ''] || msg('state.selfupdateReasonUnknown');
 }

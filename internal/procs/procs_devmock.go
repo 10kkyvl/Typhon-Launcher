@@ -10,17 +10,17 @@ import (
 
 func Supported() bool { return true }
 
-func List(ctx context.Context) ([]Process, error) {
+func List(ctx context.Context) ([]Process, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	entries, err := devmock.List()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	out := make([]Process, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, Process{PID: e.PID, Path: e.Path, CreatedAt: e.CreatedAt})
 	}
-	return out, nil
+	return out, true, nil
 }

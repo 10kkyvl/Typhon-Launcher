@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -491,6 +492,111 @@ func TestRestartReenablesAfterUnsupported(t *testing.T) {
 	h.awaitSend()
 	if req := h.nextRequest(); req.method != http.MethodPut {
 		t.Fatalf("got %s, want PUT after restart", req.method)
+	}
+}
+
+func newFlakyHarness(t *testing.T, status *atomic.Int32, resolve func(string) string) *harness {
+	t.Helper()
+	h := &harness{
+		t:     t,
+		clock: &fakeClock{at: time.Date(2025, 3, 10, 12, 0, 0, 0, time.UTC)},
+		tick:  make(chan time.Time),
+		sent:  make(chan struct{}),
+		reqs:  make(chan request, 64),
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		select {
+		case h.reqs <- request{method: r.Method, path: r.URL.EscapedPath(), body: body, headers: r.Header.Clone()}:
+		default:
+		}
+		w.WriteHeader(int(status.Load()))
+	}))
+	t.Cleanup(srv.Close)
+
+	set, err := settings.NewServiceAt(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("settings service: %v", err)
+	}
+	h.settings = set
+	h.setSync(true)
+
+	if resolve == nil {
+		resolve = func(string) string { return "" }
+	}
+	svc, err := NewService(srv.URL, staticToken("tok"), resolve, set)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.newTicker = func(time.Duration) (<-chan time.Time, func()) { return h.tick, func() {} }
+	svc.now = h.clock.now
+	svc.sent = h.sent
+	h.svc = svc
+	return h
+}
+
+// Ветка бага: временный 404 (деплой бэкенда, перезапуск прокси) не должен гасить
+// presence до перезапуска лаунчера — сервис обязан сам вернуться к обычной работе,
+// когда сервер снова отвечает.
+func TestUnsupportedRecoversWhenServerRespondsAgain(t *testing.T) {
+	var status atomic.Int32
+	status.Store(http.StatusNotFound)
+	h := newFlakyHarness(t, &status, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.tickNow()
+	h.awaitSend()
+	h.noRequest()
+
+	status.Store(http.StatusNoContent)
+	h.clock.advance(unsupportedBackoff)
+	h.tickNow()
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want PUT once the unsupported backoff elapses and the server recovers", req.method)
+	}
+
+	h.tickNow()
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want a regular PUT on the next tick after recovery, not another backoff wait", req.method)
+	}
+}
+
+// Если сервер и правда не умеет presence (старая версия), лаунчер не должен
+// долбить его каждые 30 секунд, и предупреждение не должно сыпаться в лог заново
+// при каждой повторной неудаче.
+func TestUnsupportedRetriesLessOftenAndLogsOnce(t *testing.T) {
+	var sink logSink
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	h := newHarness(t, staticToken("tok"), http.StatusNotFound, nil)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	for range 5 {
+		h.tickNow()
+		h.awaitSend()
+		h.noRequest()
+	}
+
+	h.clock.advance(unsupportedBackoff)
+	h.tickNow()
+	h.awaitSend()
+	if req := h.nextRequest(); req.method != http.MethodPut {
+		t.Fatalf("got %s, want PUT once the backoff elapses", req.method)
+	}
+
+	if got := sink.count("presence not supported by this server"); got != 1 {
+		t.Fatalf("logged %d times, want exactly once", got)
 	}
 }
 
