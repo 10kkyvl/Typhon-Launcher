@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildKind, releaseBadge, releaseOrigin } from './releases';
+import { buildKind, buildLabel, releaseBadge, releaseOrigin, repackerLabel } from './releases';
 
 describe('releaseOrigin', () => {
   it('carries the release version so the install records it', () => {
@@ -68,8 +68,50 @@ describe('buildKind', () => {
     expect(buildKind({ tags: ['repack', 'portable'], repacker: 'xatab' })).toBe('portable');
   });
 
+  it('names where the files came from when nobody repacked them', () => {
+    expect(buildKind({ tags: ['gog'], repacker: '' })).toBe('gog');
+    expect(buildKind({ tags: ['archive'], repacker: '' })).toBe('archive');
+    expect(buildKind({ tags: ['p2p'], repacker: '' })).toBe('p2p');
+  });
+
+  it('prefers what the build is over where it came from', () => {
+    expect(buildKind({ tags: ['archive', 'portable'], repacker: '' })).toBe('portable');
+    expect(buildKind({ tags: ['p2p', 'license'], repacker: '' })).toBe('license');
+  });
+
   it('says nothing about a release it cannot classify', () => {
-    expect(buildKind({ tags: ['gog'], repacker: '' })).toBe('none');
+    expect(buildKind({ tags: ['x64'], repacker: '' })).toBe('none');
     expect(buildKind({})).toBe('none');
+  });
+});
+
+describe('buildLabel', () => {
+  it('gives every build kind a caption', () => {
+    const kinds = [
+      'portable',
+      'repack',
+      'steam-rip',
+      'gog',
+      'license',
+      'early-access',
+      'demo',
+      'p2p',
+      'archive',
+    ] as const;
+    for (const kind of kinds) expect(buildLabel(kind)).toBeTruthy();
+  });
+
+  it('leaves an unclassified release without a badge', () => {
+    expect(buildLabel('none')).toBeNull();
+  });
+});
+
+describe('repackerLabel', () => {
+  it('signs a repacker the way the feed names them', () => {
+    expect(repackerLabel('mechanics')).toBe('МЕХАНИКИ');
+  });
+
+  it('falls back to the slug itself', () => {
+    expect(repackerLabel('xatab')).toBe('XATAB');
   });
 });

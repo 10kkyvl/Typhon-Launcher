@@ -39,6 +39,8 @@ type Spec struct {
 	EditionPhrases    []string          `json:"editionPhrases,omitempty"`
 	ReleasePhraseTags map[string]string `json:"releasePhraseTags,omitempty"`
 	BracketPhraseTags map[string]string `json:"bracketPhraseTags,omitempty"`
+	MarkerTags        map[string]string `json:"markerTags,omitempty"`
+	RepackerNames     map[string]string `json:"repackerNames,omitempty"`
 	BracketFiller     []string          `json:"bracketFiller,omitempty"`
 	RepackerPriority  []string          `json:"repackerPriority,omitempty"`
 	GameTypes         []string          `json:"gameTypes,omitempty"`
@@ -50,6 +52,8 @@ type Dict struct {
 	archTokens        map[string]string
 	releaseSingleTags map[string]string
 	bracketPhraseTags map[string]string
+	markerTags        map[string]string
+	repackerNames     map[string]string
 	phraseTable       []phraseTok
 	bracketFiller     map[string]struct{}
 	repackerPriority  []string
@@ -105,6 +109,8 @@ func (s Spec) validate() error {
 		"releaseTags":       s.ReleaseTags,
 		"releasePhraseTags": s.ReleasePhraseTags,
 		"bracketPhraseTags": s.BracketPhraseTags,
+		"markerTags":        s.MarkerTags,
+		"repackerNames":     s.RepackerNames,
 	}
 	for name, table := range maps {
 		if len(table) > MaxDictEntries {
@@ -162,6 +168,8 @@ func (s Spec) Merge(layer Spec) Spec {
 	out.ReleaseTags = mergeTable(out.ReleaseTags, layer.ReleaseTags)
 	out.ReleasePhraseTags = mergeTable(out.ReleasePhraseTags, layer.ReleasePhraseTags)
 	out.BracketPhraseTags = mergeTable(out.BracketPhraseTags, layer.BracketPhraseTags)
+	out.MarkerTags = mergeTable(out.MarkerTags, layer.MarkerTags)
+	out.RepackerNames = mergeTable(out.RepackerNames, layer.RepackerNames)
 	return out
 }
 
@@ -191,6 +199,8 @@ func NewDict(spec Spec) (*Dict, error) {
 		archTokens:        make(map[string]string, len(spec.ArchTokens)),
 		releaseSingleTags: make(map[string]string, len(spec.ReleaseTags)),
 		bracketPhraseTags: make(map[string]string, len(spec.BracketPhraseTags)),
+		markerTags:        make(map[string]string, len(spec.MarkerTags)),
+		repackerNames:     make(map[string]string, len(spec.RepackerNames)),
 		gameTypes:         make(map[string]struct{}, len(spec.GameTypes)),
 		bracketFiller:     make(map[string]struct{}, len(spec.BracketFiller)),
 	}
@@ -217,6 +227,12 @@ func NewDict(spec Spec) (*Dict, error) {
 	}
 	for key, value := range spec.BracketPhraseTags {
 		d.bracketPhraseTags[Normalize(key)] = value
+	}
+	for key, value := range spec.MarkerTags {
+		d.markerTags[Normalize(key)] = value
+	}
+	for key, value := range spec.RepackerNames {
+		d.repackerNames[Normalize(key)] = value
 	}
 	for _, kind := range spec.GameTypes {
 		d.gameTypes[gameTypeKey(kind)] = struct{}{}
@@ -387,10 +403,41 @@ func (d *Dict) isFiller(lower string) bool {
 
 // bracketPhrase отвечает за скобку, целиком занятую известной фразой:
 // «[Папка игры]» не разбирается по словам, потому что скобка выбрасывается
-// только тогда, когда каждое слово внутри — известный токен.
+// только тогда, когда каждое слово внутри — известный токен. Маркеры раздачи
+// читаются и отсюда: один источник пишет «| Архив» в хвосте, другой — «[Архив]»
+// посреди названия, и это одна и та же пометка.
 func (d *Dict) bracketPhrase(norm string) (string, bool) {
-	tag, ok := d.bracketPhraseTags[norm]
+	if tag, ok := d.bracketPhraseTags[norm]; ok {
+		return tag, true
+	}
+	return d.markerPhrase(norm)
+}
+
+// markerPhrase отвечает за маркер раздачи — «Архив», «P2P», «GOG», «Portable».
+// Словарь отдельный от releaseTags: те же слова посреди названия принадлежат
+// игре, маркером они становятся только за «|» или за последним тире.
+func (d *Dict) markerPhrase(norm string) (string, bool) {
+	tag, ok := d.markerTags[norm]
 	return tag, ok
+}
+
+// repackerSlug сводит подпись сборщика к слагу из закрытого списка. В раздачах
+// одного и того же пишут по-разному — «R.G. Механики», «Механики»,
+// «R.G. Mechanics», — поэтому пробуем подпись целиком, потом её хвосты, потом
+// отдельные слова: приставка «R.G.» сама по себе никого не называет.
+func (d *Dict) repackerSlug(name string) string {
+	words := strings.Fields(Normalize(name))
+	for i := range words {
+		if slug, ok := d.repackerNames[strings.Join(words[i:], " ")]; ok {
+			return slug
+		}
+	}
+	for _, w := range words {
+		if slug, ok := d.repackerNames[w]; ok {
+			return slug
+		}
+	}
+	return ""
 }
 
 func (d *Dict) isLangCode(lower string) bool {

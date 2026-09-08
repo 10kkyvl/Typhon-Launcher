@@ -30,6 +30,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reURL.ReplaceAllString(s, " ")
 	s = reWWW.ReplaceAllString(s, " ")
 
+	s, markerTags := d.extractMarkers(s)
 	s, rawVersion, version := extractVersion(s)
 	s, dlcCount := extractDLCCount(s)
 	s, year, bracketLangs, bracketTags := d.extractBrackets(s)
@@ -49,7 +50,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	words, edition, scanTags := d.trailingScan(words)
 
 	base := strings.Join(words, " ")
-	base = strings.Trim(base, " -,:;")
+	base = strings.Trim(base, " -,:;|\u2014\u2013")
 
 	var languages []string
 	languages = append(languages, bracketLangs...)
@@ -59,6 +60,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	}
 
 	var tags []string
+	tags = append(tags, markerTags...)
 	tags = append(tags, bracketTags...)
 	tags = append(tags, dashTags...)
 	tags = append(tags, scanTags...)
@@ -75,6 +77,65 @@ func (d *Dict) Parse(raw string) Parsed {
 		Tags:       tags,
 		DLCCount:   dlcCount,
 	}
+}
+
+// extractMarkers снимает маркеры раздачи: то, что источник дописывает за «|»
+// или за последним длинным тире — «Portable», «Архив», «P2P», «GOG»,
+// «RePack от xatab». Сегмент выбрасывается только целиком опознанным: «| Season
+// 1» в «A Rat's Quest | Season 1 — v1.0 | GOG» остаётся частью названия.
+func (d *Dict) extractMarkers(s string) (string, []string) {
+	var tags []string
+
+	parts := strings.Split(s, "|")
+	kept := parts[:1:1]
+	for _, seg := range parts[1:] {
+		found, ok := d.markerSegment(seg)
+		if !ok {
+			kept = append(kept, seg)
+			continue
+		}
+		tags = append(tags, found...)
+	}
+	s = strings.Join(kept, "|")
+
+	for _, dash := range []string{"\u2014", "\u2013"} {
+		i := strings.LastIndex(s, dash)
+		if i < 0 {
+			continue
+		}
+		found, ok := d.markerSegment(s[i+len(dash):])
+		if !ok {
+			continue
+		}
+		tags = append(tags, found...)
+		s = s[:i] + " "
+	}
+
+	return s, tags
+}
+
+// markerSegment опознаёт один сегмент маркера. Пустой сегмент — это висящий
+// разделитель, и он тоже выбрасывается.
+func (d *Dict) markerSegment(seg string) ([]string, bool) {
+	seg = strings.TrimSpace(seg)
+	if seg == "" {
+		return nil, true
+	}
+	if m := reMarkerRepack.FindStringSubmatch(seg); m != nil {
+		kind := "repack"
+		if strings.Contains(strings.ToLower(m[1]), "rip") {
+			kind = "steam-rip"
+		}
+		tags := []string{kind}
+		if slug := d.repackerSlug(m[2]); slug != "" {
+			tags = append(tags, slug)
+		}
+		return tags, true
+	}
+	if tag, ok := d.markerPhrase(Normalize(seg)); ok {
+		return []string{tag}, true
+	}
+	return nil, false
 }
 
 func extractDLCCount(s string) (string, int) {
