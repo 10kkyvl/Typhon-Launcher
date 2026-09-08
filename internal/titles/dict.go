@@ -38,6 +38,7 @@ type Spec struct {
 	ReleaseTags       map[string]string `json:"releaseTags,omitempty"`
 	EditionPhrases    []string          `json:"editionPhrases,omitempty"`
 	ReleasePhraseTags map[string]string `json:"releasePhraseTags,omitempty"`
+	BracketPhraseTags map[string]string `json:"bracketPhraseTags,omitempty"`
 	BracketFiller     []string          `json:"bracketFiller,omitempty"`
 	RepackerPriority  []string          `json:"repackerPriority,omitempty"`
 	GameTypes         []string          `json:"gameTypes,omitempty"`
@@ -48,6 +49,7 @@ type Dict struct {
 	langSet           map[string]struct{}
 	archTokens        map[string]string
 	releaseSingleTags map[string]string
+	bracketPhraseTags map[string]string
 	phraseTable       []phraseTok
 	bracketFiller     map[string]struct{}
 	repackerPriority  []string
@@ -102,6 +104,7 @@ func (s Spec) validate() error {
 		"archTokens":        s.ArchTokens,
 		"releaseTags":       s.ReleaseTags,
 		"releasePhraseTags": s.ReleasePhraseTags,
+		"bracketPhraseTags": s.BracketPhraseTags,
 	}
 	for name, table := range maps {
 		if len(table) > MaxDictEntries {
@@ -158,6 +161,7 @@ func (s Spec) Merge(layer Spec) Spec {
 	out.ArchTokens = mergeTable(out.ArchTokens, layer.ArchTokens)
 	out.ReleaseTags = mergeTable(out.ReleaseTags, layer.ReleaseTags)
 	out.ReleasePhraseTags = mergeTable(out.ReleasePhraseTags, layer.ReleasePhraseTags)
+	out.BracketPhraseTags = mergeTable(out.BracketPhraseTags, layer.BracketPhraseTags)
 	return out
 }
 
@@ -186,6 +190,7 @@ func NewDict(spec Spec) (*Dict, error) {
 		langSet:           make(map[string]struct{}, len(spec.LangCodes)),
 		archTokens:        make(map[string]string, len(spec.ArchTokens)),
 		releaseSingleTags: make(map[string]string, len(spec.ReleaseTags)),
+		bracketPhraseTags: make(map[string]string, len(spec.BracketPhraseTags)),
 		gameTypes:         make(map[string]struct{}, len(spec.GameTypes)),
 		bracketFiller:     make(map[string]struct{}, len(spec.BracketFiller)),
 	}
@@ -209,6 +214,9 @@ func NewDict(spec Spec) (*Dict, error) {
 	}
 	for key, value := range spec.ReleaseTags {
 		d.releaseSingleTags[strings.ToLower(strings.TrimSpace(key))] = value
+	}
+	for key, value := range spec.BracketPhraseTags {
+		d.bracketPhraseTags[Normalize(key)] = value
 	}
 	for _, kind := range spec.GameTypes {
 		d.gameTypes[gameTypeKey(kind)] = struct{}{}
@@ -375,6 +383,14 @@ func (d *Dict) Repacker(tags []string) string {
 func (d *Dict) isFiller(lower string) bool {
 	_, ok := d.bracketFiller[lower]
 	return ok
+}
+
+// bracketPhrase отвечает за скобку, целиком занятую известной фразой:
+// «[Папка игры]» не разбирается по словам, потому что скобка выбрасывается
+// только тогда, когда каждое слово внутри — известный токен.
+func (d *Dict) bracketPhrase(norm string) (string, bool) {
+	tag, ok := d.bracketPhraseTags[norm]
+	return tag, ok
 }
 
 func (d *Dict) isLangCode(lower string) bool {

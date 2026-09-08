@@ -125,6 +125,10 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 		if inner == "" {
 			return " "
 		}
+		if tag, ok := d.bracketPhrase(Normalize(inner)); ok {
+			tags = append(tags, tag)
+			return " "
+		}
 		words := reBracketSplit.Split(inner, -1)
 		var cleaned []string
 		for _, w := range words {
@@ -203,6 +207,10 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 	})
 	s = d.reLangSingle.ReplaceAllStringFunc(s, func(m string) string {
 		langs = append(langs, strings.ToUpper(m))
+		return " "
+	})
+	s = rePortable.ReplaceAllStringFunc(s, func(m string) string {
+		tags = append(tags, "portable")
 		return " "
 	})
 	s = reSteamRip.ReplaceAllStringFunc(s, func(m string) string {

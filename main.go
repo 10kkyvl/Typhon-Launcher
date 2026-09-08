@@ -66,6 +66,7 @@ const discordClientID = "1541194395964014623"
 const singleInstanceID = "com.typhon.launcher"
 
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
+var errNoBrokerDir = errors.New("--install-broker требует путь к каталогу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 var errNoPlayTarget = errors.New("--play требует идентификатор игры")
 
@@ -192,6 +193,20 @@ func main() {
 			slog.Error("install worker failed", "error", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--install-broker" {
+		if len(os.Args) < 3 {
+			slog.Error("install broker failed", "error", errNoBrokerDir)
+			os.Exit(1)
+		}
+		outcome, err := install.RunBroker(os.Args[2])
+		if err != nil {
+			slog.Error("install broker failed", "outcome", string(outcome), "error", err)
+			os.Exit(1)
+		}
+		slog.Info("install broker finished", "outcome", string(outcome))
 		return
 	}
 
@@ -334,6 +349,8 @@ func main() {
 	lanService.SetHistoryRecorder(historyService.Record)
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
+	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
+	downloadManager.SetOnGone(installService.DropBroker)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)

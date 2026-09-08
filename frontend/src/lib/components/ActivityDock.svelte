@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronUp, Download, Pause, Play, Wrench } from '@lucide/svelte';
+  import { ChevronUp, Download, FileCheck, Pause, Play, Wrench } from '@lucide/svelte';
   import { stageLabel, movePercent } from '../relocate/moveText';
   import type { MoveJob } from '../services/relocate';
   import { activity, type ActivityItem } from '../stores/activity';
@@ -85,6 +85,10 @@
   function open(item: ActivityItem) {
     pinned = false;
     dismissed = false;
+    if (item.kind === 'verify') {
+      navigate('game', { id: item.downloadId });
+      return;
+    }
     // Переносы не показываются на странице загрузок: их прогресс живёт в
     // настройках библиотеки, и отправлять туда клик — единственный переход,
     // который не заканчивается пустой страницей.
@@ -147,6 +151,8 @@
               <span class="row-icon" class:attention={item.attention}>
                 {#if item.kind === 'install'}
                   <Wrench size="1.6rem" strokeWidth={1.8} />
+                {:else if item.kind === 'verify'}
+                  <FileCheck size="1.6rem" strokeWidth={1.8} />
                 {:else}
                   <Download size="1.6rem" strokeWidth={1.8} />
                 {/if}

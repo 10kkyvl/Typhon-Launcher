@@ -1,7 +1,10 @@
 export const install = {
+  'release.buildPortable': 'Портативная',
+  'release.buildRepack': 'Репак',
   'release.duplicateSources': { one: 'источник', few: 'источника', many: 'источников' },
   'release.loading': 'Загрузка релизов…',
   'release.new': 'Новое',
+  'release.newRelease': 'Новый релиз',
   'release.unavailable': 'Недоступно',
   'verify.missingFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'verify.corruptedBlocks': { one: '{count} блок', few: '{count} блока', many: '{count} блоков' },

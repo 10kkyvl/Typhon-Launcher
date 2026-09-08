@@ -2,9 +2,12 @@ import type { Message } from '../../types';
 import type { InstallKey } from '../ru/install';
 
 export const install: Record<InstallKey, Message> = {
+  'release.buildPortable': 'Portable',
+  'release.buildRepack': 'Repack',
   'release.duplicateSources': { one: 'source', other: 'sources' },
   'release.loading': 'Loading releases…',
   'release.new': 'New',
+  'release.newRelease': 'New release',
   'release.unavailable': 'Unavailable',
   'verify.missingFiles': { one: '{count} file', other: '{count} files' },
   'verify.corruptedBlocks': { one: '{count} block', other: '{count} blocks' },

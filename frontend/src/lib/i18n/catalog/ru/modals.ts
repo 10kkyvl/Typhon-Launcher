@@ -32,6 +32,10 @@ export const modals = {
   'modals.addDownloadFetchingNote': 'Это может занять до полутора минут.',
   'modals.addDownloadDestinationLabel': 'Папка назначения',
   'modals.addDownloadBrowse': 'Обзор',
+  'modals.addDownloadAutoInstallLabel': 'Установить после загрузки',
+  'modals.addDownloadAutoInstallSub': 'Значение по умолчанию берётся из настроек, здесь оно действует только на эту загрузку',
+  'modals.addDownloadElevateAheadLabel': 'Подтвердить права администратора сейчас',
+  'modals.addDownloadElevateAheadSub': 'В загрузке установщик — ему нужны права. Подтвердите сейчас, и установка пройдёт без вас; иначе она дождётся вашего подтверждения',
   'modals.addDownloadStart': 'Начать загрузку',
 
   // AddSourceModal.svelte

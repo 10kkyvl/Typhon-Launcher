@@ -9,6 +9,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installCopyVerifyFailed': 'Copying finished but verification failed',
   'errInstall.installDestExists': 'The destination path already exists',
   'errInstall.installDestNotEmpty': 'The install folder already exists and is not empty',
+  'errInstall.installBrokerOutsidePin':
+    'The install job stepped outside the bounds agreed when administrator rights were requested',
   'errInstall.installElevationDeclined':
     'Administrator rights are required: the Windows prompt was declined. Try again and approve the prompt',
   'errInstall.installEmptyDestination': 'The install folder is not set',

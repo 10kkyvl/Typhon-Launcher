@@ -11,6 +11,12 @@ const (
 	confidenceExactEdition   = 1.0
 	confidenceUnknownEdition = 0.85
 	confidenceLanguageMiss   = 0.9
+	confidenceSmallerRelease = 0.5
+
+	// A download this much smaller than the installed game is a different kind of
+	// build, not the same game one version on. Repacks compress hard, so the
+	// ratio stays well clear of what an honest repack achieves.
+	smallReleaseRatio = 4
 )
 
 func Compatible(installed InstalledGame, r sources.Release) CompatibilityResult {
@@ -33,7 +39,19 @@ func Compatible(installed InstalledGame, r sources.Release) CompatibilityResult 
 		result.Confidence *= confidenceLanguageMiss
 		result.Reasons = append(result.Reasons, "language: "+strings.Join(r.Languages, ", "))
 	}
+
+	if muchSmaller(installed.SizeBytes, r.Size) {
+		result.Confidence *= confidenceSmallerRelease
+		result.Reasons = append(result.Reasons, "размер раздачи сильно меньше установленной игры")
+	}
 	return result
+}
+
+func muchSmaller(installedBytes, releaseBytes int64) bool {
+	if installedBytes <= 0 || releaseBytes <= 0 {
+		return false
+	}
+	return releaseBytes*smallReleaseRatio < installedBytes
 }
 
 func sharesLanguage(a, b []string) bool {

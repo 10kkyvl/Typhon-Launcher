@@ -29,6 +29,17 @@ type runSpec struct {
 	StatePath     string
 	InfPath       string
 	CancelPath    string
+
+	// Broker — уже поднятый повышенный процесс этой загрузки, если права
+	// запрашивали заранее. Есть он или нет, дальше всё одинаково: лаунчер
+	// кладёт задание и читает состояние из файлов, потому что процессом с
+	// правами администратора он не владеет ни в том, ни в другом случае.
+	Broker *brokerHandoff
+}
+
+type brokerHandoff struct {
+	Dir  string
+	Gone <-chan struct{}
 }
 
 type runner interface {

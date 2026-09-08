@@ -16,7 +16,7 @@ var (
 	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
-	reVVer      = regexp.MustCompile(`(?i)\bv(\d+(?:\.\d+){0,4})\b`)
+	reVVer      = regexp.MustCompile(`(?i)\bv\.?(\d+(?:\.\d+){0,4})\b`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
 	reDLCCount  = regexp.MustCompile(`(?i)\+\s*(\d+)\s*(?:dlc(?:'s|s)?|дополнени\p{L}*)`)
 
@@ -28,6 +28,9 @@ var (
 
 	reMulti    = regexp.MustCompile(`(?i)\bmulti[\-]?\d{0,3}\b`)
 	reSteamRip = regexp.MustCompile(`(?i)\bsteam[\-\s._]?rip\b`)
+	// Только после разделителя: голое «Portable» в хвосте принадлежит названию
+	// игры, как в Persona 3 Portable.
+	rePortable = regexp.MustCompile(`(?i)[|/]\s*portable\b`)
 	reRepackBy = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+by[\s._-]+[A-Za-z0-9_]+)?\b`)
 
 	reDecimalDot   = regexp.MustCompile(`(\d)\.(\d)`)

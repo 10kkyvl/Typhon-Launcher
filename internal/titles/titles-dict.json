@@ -61,6 +61,10 @@
     "All DLCs": "dlc",
     "Selective Download": "selective-download"
   },
+  "bracketPhraseTags": {
+    "папка игры": "portable",
+    "portable": "portable"
+  },
   "bracketFiller": [
     "+",
     "all",

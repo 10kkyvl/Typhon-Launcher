@@ -7,6 +7,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',
   'install.dest_exists': 'errInstall.installDestExists',
   'install.dest_not_empty': 'errInstall.installDestNotEmpty',
+  'install.broker_outside_pin': 'errInstall.installBrokerOutsidePin',
   'install.elevation_declined': 'errInstall.installElevationDeclined',
   'install.empty_destination': 'errInstall.installEmptyDestination',
   'install.empty_install': 'errInstall.installEmptyInstall',

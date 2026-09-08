@@ -29,6 +29,7 @@ export const state = {
 
   'state.activityDownloadDetail': '{speed} · осталось {eta}',
   'state.activityWaitingForUser': 'Нажмите, чтобы продолжить',
+  'state.activityVerifying': 'Проверка файлов',
 
   'state.discoveryFound': 'Найдено {count}',
   'state.discoveryAdded': 'добавлено {count}',

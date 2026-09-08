@@ -34,6 +34,15 @@ type Origin struct {
 	Purpose      Purpose `json:"purpose,omitempty"`
 	UpdatePlanID string  `json:"updatePlanId,omitempty"`
 	LibraryID    string  `json:"libraryId,omitempty"`
+
+	// AutoInstall is a pointer because it has to outlive the global setting:
+	// the download starts now and finishes hours later, and the choice made in
+	// the dialog must survive the user flipping the setting in between. Nil
+	// means the setting decides.
+	AutoInstall *bool `json:"autoInstall,omitempty"`
+	// ElevateAhead is consumed the moment the download starts, so it needs no
+	// third state.
+	ElevateAhead bool `json:"elevateAhead,omitempty"`
 }
 
 type FileState struct {

@@ -236,7 +236,7 @@ func TestMockRunnerRunElevateEnabledUsesWorkerProtocol(t *testing.T) {
 
 	go func() {
 		<-time.After(60 * time.Millisecond)
-		if err := writeWorkerState(statePath, workerState{Done: true, Code: 0}); err != nil {
+		if err := writeWorkerState(statePath, echoRun(t, dir, spec.ID, workerState{Done: true, Code: 0})); err != nil {
 			t.Errorf("writeWorkerState: %v", err)
 		}
 	}()

@@ -6,6 +6,8 @@ export const errInstall = {
   'errInstall.installCopyVerifyFailed': 'копирование завершилось с ошибкой проверки',
   'errInstall.installDestExists': 'путь назначения уже существует',
   'errInstall.installDestNotEmpty': 'папка установки уже существует и не пуста',
+  'errInstall.installBrokerOutsidePin':
+    'задание установки вышло за границы, согласованные при запросе прав администратора',
   'errInstall.installElevationDeclined':
     'нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос',
   'errInstall.installEmptyDestination': 'каталог установки не задан',

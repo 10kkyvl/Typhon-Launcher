@@ -42,6 +42,10 @@ func workerStartError(path string, err error) error {
 	return fmt.Errorf("запуск воркера установки %s: %w", path, err)
 }
 
+// Настоящего повышения здесь нет, но весь протокол spec/state/cancel живой,
+// поэтому и предварительный запрос прав должен быть проходим на маке.
+func elevationSupported() bool { return true }
+
 func startElevated(spec runSpec) (workerHandle, error) {
 	logPath, err := devmockWorkerLogPath(spec)
 	if err != nil {

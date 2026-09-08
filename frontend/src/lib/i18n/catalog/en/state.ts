@@ -32,6 +32,7 @@ export const state: Record<StateKey, Message> = {
 
   'state.activityDownloadDetail': '{speed} · {eta} left',
   'state.activityWaitingForUser': 'Click to continue',
+  'state.activityVerifying': 'Verifying files',
 
   'state.discoveryFound': 'Found {count}',
   'state.discoveryAdded': 'added {count}',
