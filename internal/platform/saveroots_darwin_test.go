@@ -64,3 +64,16 @@ func TestSaveRootsFromWithoutBottles(t *testing.T) {
 		t.Fatalf("got %+v, want only the two shared Documents roots", got)
 	}
 }
+
+// Игры из общего бутыля со Steam пишут сейвы в его drive_c: без этого корня
+// библиотека искала бы их только в собственных бутылях Typhon.
+func TestSaveRootsCoversSharedBottle(t *testing.T) {
+	roots := saveRootsFrom("/Users/x", []wine.Bottle{{Path: "/bottles/Steam", Shared: true}})
+	want := filepath.Join("/bottles/Steam", "drive_c", "users", "crossover", "Saved Games")
+	for _, root := range roots {
+		if root.Path == want {
+			return
+		}
+	}
+	t.Fatalf("в корнях нет %q: %+v", want, roots)
+}

@@ -21,8 +21,15 @@ func SaveRoots() ([]SaveRoot, error) {
 	}
 	var bottles []wine.Bottle
 	if rt, detectErr := wine.Detect(); detectErr == nil {
-		if list, listErr := wine.NewManager(rt).List(); listErr == nil {
+		manager := wine.NewManager(rt)
+		if list, listErr := manager.List(); listErr == nil {
 			bottles = list
+		}
+		// Общий бутыль со Steam в List не входит — он пользовательский и
+		// нашей метки не имеет, — но игры, запущенные в нём, пишут сейвы
+		// именно туда, и без него они бы не нашлись.
+		if path, ok := manager.SharedBottlePath(); ok {
+			bottles = append(bottles, wine.Bottle{Path: path, Shared: true})
 		}
 	}
 	return saveRootsFrom(home, bottles), nil

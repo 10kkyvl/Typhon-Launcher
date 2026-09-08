@@ -5,6 +5,7 @@ package install
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -30,6 +31,17 @@ func prepareRuntime(ctx context.Context, installDir, executable string) error {
 		return err
 	}
 	manager := wine.NewManager(rt)
+
+	// Общий бутыль занимать не наше дело: пользователь давно прогрел его
+	// сам, а завести рядом пустой собственный бутыль — потратить впустую
+	// ~300 МБ, которые игре, живущей в общем префиксе, не нужны вовсе.
+	sharedBottle, sharedErr := manager.SharedBottle(installDir)
+	if sharedErr == nil {
+		slog.Info("shared bottle covers install, skipping own bottle", "bottle", sharedBottle.Name, "installDir", installDir)
+		return nil
+	}
+	slog.Debug("shared bottle unavailable, preparing own bottle", "installDir", installDir, "error", sharedErr)
+
 	if _, ok := manager.Lookup(installDir); ok {
 		return nil
 	}

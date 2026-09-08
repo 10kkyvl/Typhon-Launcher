@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -101,6 +102,11 @@ func (m *Manager) Processes(ctx context.Context, b Bottle) ([]Process, error) {
 
 // AllProcesses перечисляет процессы всех наших бутылей: цикл детекта игр
 // спрашивает про систему целиком, а не про конкретную игру.
+//
+// Общий бутыль (тот, где стоит Steam) добавляется сюда отдельной веткой, и
+// это не роскошь: без неё игра, запущенная в нём, не попадает ни в один
+// снимок, а цикл детекта закрывает её сессию на первом же тике — то есть
+// через секунду после старта.
 func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -113,17 +119,49 @@ func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err != nil {
 		return nil, err
 	}
+	shared := m.sharedDrives()
 	entries := parsePS(out)
 	result := make([]Process, 0, len(entries))
 	for _, entry := range entries {
-		for _, b := range bottles {
-			if p, ok := match(entry, b); ok {
-				result = append(result, p)
-				break
-			}
+		if p, ok := matchAny(entry, bottles); ok {
+			result = append(result, p)
+			continue
+		}
+		// Ключа установки у общего бутыля здесь нет: какие каталоги
+		// принадлежат играм, знает библиотека, и она же сверит путь. Наше
+		// дело — перевести путь в native, чтобы ей было что сверять.
+		//
+		// Диск c: пропускается: за ним внутренности самого бутыля — Steam,
+		// системные службы, explorer, — а игры в общем бутыле лежат
+		// снаружи. Без этого каждый снимок приносил бы десяток чужих строк.
+		if strings.HasPrefix(strings.ToLower(entry.winPath), `c:\`) {
+			continue
+		}
+		if native, ok := shared.toNative(entry.winPath); ok {
+			result = append(result, Process{
+				PID: entry.pid, WinPath: entry.winPath, Path: native, CreatedAt: entry.createdAt,
+			})
 		}
 	}
 	return result, nil
+}
+
+// sharedDrives отдаёт буквы общего бутыля. Отсутствие бутыля не ошибка: на
+// машине без Steam общих игр просто нет.
+func (m *Manager) sharedDrives() driveMap {
+	if m.BottlesDir == "" {
+		return nil
+	}
+	return drives(filepath.Join(m.BottlesDir, SharedBottleName()))
+}
+
+func matchAny(entry psEntry, bottles []Bottle) (Process, bool) {
+	for _, b := range bottles {
+		if p, ok := match(entry, b); ok {
+			return p, true
+		}
+	}
+	return Process{}, false
 }
 
 func match(entry psEntry, b Bottle) (Process, bool) {

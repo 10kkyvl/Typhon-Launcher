@@ -15,10 +15,11 @@ import (
 )
 
 var (
-	errNoBottle    = errors.New("для этой игры нет бутыля CrossOver")
-	errNoRuntime   = errors.New("для запуска игр на macOS нужен CrossOver")
-	errGameNotSeen = errors.New("процесс игры не появился в бутыле")
-	errNoContext   = errors.New("сервис библиотеки ещё не запущен")
+	errNoBottle     = errors.New("для этой игры нет бутыля CrossOver")
+	errNoRuntime    = errors.New("для запуска игр на macOS нужен CrossOver")
+	errGameNotSeen  = errors.New("процесс игры не появился в бутыле")
+	errNoContext    = errors.New("сервис библиотеки ещё не запущен")
+	errNoSharedStop = errors.New("остановка игры в общем бутыле недоступна")
 )
 
 const (
@@ -30,27 +31,34 @@ const (
 // подставить каждую по отдельности: настоящий CrossOver на машине сборки
 // может отсутствовать.
 type wineStarter struct {
-	lookup  func(path string) (wine.Bottle, bool)
-	launch  func(ctx context.Context, b wine.Bottle, c wine.Cmd) error
-	poll    func(ctx context.Context, b wine.Bottle) ([]wine.Process, error)
-	stop    func(b wine.Bottle) error
-	settle  time.Duration
-	timeout time.Duration
+	lookup func(path string) (wine.Bottle, bool)
+	// shared отдаёт общий бутыль со Steam, нацеленный на каталог установки.
+	shared     func(destDir string) (wine.Bottle, error)
+	steam      func(ctx context.Context, b wine.Bottle) (bool, error)
+	launch     func(ctx context.Context, b wine.Bottle, c wine.Cmd) error
+	poll       func(ctx context.Context, b wine.Bottle) ([]wine.Process, error)
+	stop       func(b wine.Bottle) error
+	stopShared func(ctx context.Context, b wine.Bottle) error
+	settle     time.Duration
+	timeout    time.Duration
 }
 
 func newGameStarter() gameStarter {
 	rt, err := wine.Detect()
 	if err != nil {
-		return func(context.Context, string, []string, string) (gameProcess, error) { return nil, errNoRuntime }
+		return func(context.Context, launch) (gameProcess, error) { return nil, errNoRuntime }
 	}
 	manager := wine.NewManager(rt)
 	s := wineStarter{
-		lookup:  manager.Lookup,
-		launch:  manager.StartDetached,
-		poll:    manager.Processes,
-		stop:    manager.Kill,
-		settle:  gameSettleInterval,
-		timeout: gameAppearTimeout,
+		lookup:     manager.Lookup,
+		shared:     manager.SharedBottle,
+		steam:      manager.EnsureSteam,
+		launch:     manager.StartDetached,
+		poll:       manager.Processes,
+		stop:       manager.Kill,
+		stopShared: manager.KillProcesses,
+		settle:     gameSettleInterval,
+		timeout:    gameAppearTimeout,
 	}
 	return s.start
 }
@@ -58,34 +66,72 @@ func newGameStarter() gameStarter {
 // start блокируется до появления процесса в бутыле: PlayGame читает pid сразу
 // после старта, а личность сессии подтверждается парой pid + время старта,
 // поэтому вернуть handle без настоящего pid нельзя.
-func (s wineStarter) start(ctx context.Context, executable string, args []string, dir string) (gameProcess, error) {
+func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error) {
 	// Не всё в библиотеке приходит из каталога: пользователь может добавить
 	// уже стоящую игру, и на macOS она бывает нативной. Windows-программе
 	// нужен бутыль, нативной — обычный запуск.
-	if !isWindowsExecutable(executable) {
-		return execStarter(ctx, executable, args, dir)
+	if !isWindowsExecutable(req.executable) {
+		return execStarter(ctx, req)
 	}
 	if ctx == nil {
 		return nil, errNoContext
 	}
-	bottle, ok := s.lookup(executable)
-	if !ok {
-		return nil, errNoBottle
+	bottle, err := s.bottleFor(req)
+	if err != nil {
+		return nil, err
 	}
-	winExe, err := bottle.ToWindows(executable)
+	winExe, err := bottle.ToWindows(req.executable)
 	if err != nil {
 		return nil, fmt.Errorf("путь игры: %w", err)
 	}
-	cmd := wine.Cmd{Path: winExe, Args: args}
-	if dir != "" {
-		if winDir, dirErr := bottle.ToWindows(dir); dirErr == nil {
+	cmd := wine.Cmd{Path: winExe, Args: req.args}
+	if req.workDir != "" {
+		if winDir, dirErr := bottle.ToWindows(req.workDir); dirErr == nil {
 			cmd.WorkDir = winDir
+		}
+	}
+	slog.Info("launching game in bottle",
+		"bottle", bottle.Name, "shared", bottle.Shared,
+		"executable", req.executable, "winPath", winExe, "winWorkDir", cmd.WorkDir)
+	if bottle.Shared {
+		// Steam поднимается до игры, а не после: игра со Steam API
+		// проверяет живого клиента в первые же секунды и без него молча
+		// закрывается. Неудача при этом не отменяет запуск — пользователю
+		// полезнее увидеть ошибку самой игры, чем отказ лаунчера.
+		if started, steamErr := s.steam(ctx, bottle); steamErr != nil {
+			slog.Warn("ensure steam", "bottle", bottle.Name, "started", started, "error", steamErr)
 		}
 	}
 	if err := s.launch(ctx, bottle, cmd); err != nil {
 		return nil, err
 	}
-	return s.await(ctx, bottle, executable)
+	return s.await(ctx, bottle, req.executable)
+}
+
+// bottleFor выбирает, где игре жить. Общий бутыль предпочтительнее: рядом с
+// ним крутится windows Steam, и только в одном с ним префиксе у игры
+// работают Steam API, оверлей и достижения. Собственный бутыль остаётся
+// запасным путём — для игр, которым Steam запретили явно, и для машин, где
+// общего бутыля просто нет.
+func (s wineStarter) bottleFor(req launch) (wine.Bottle, error) {
+	key := req.installDir
+	if key == "" {
+		key = filepath.Dir(req.executable)
+	}
+	if req.shared && s.shared != nil {
+		bottle, err := s.shared(key)
+		if err == nil {
+			return bottle, nil
+		}
+		// Общего бутыля нет или он не видит путь игры — это ожидаемое
+		// состояние машины, а не поломка: откатываемся на свой бутыль.
+		slog.Info("shared bottle unavailable, falling back", "installDir", key, "error", err)
+	}
+	bottle, ok := s.lookup(req.executable)
+	if !ok {
+		return wine.Bottle{}, errNoBottle
+	}
+	return bottle, nil
 }
 
 func (s wineStarter) await(ctx context.Context, bottle wine.Bottle, executable string) (gameProcess, error) {
@@ -101,7 +147,8 @@ func (s wineStarter) await(ctx context.Context, bottle wine.Bottle, executable s
 			if p.Path == executable {
 				return &wineGameProcess{
 					bottle: bottle, id: p.PID, ctx: ctx,
-					poll: s.poll, stop: s.stop, settle: s.settle,
+					poll: s.poll, stop: s.stop, stopShared: s.stopShared,
+					settle: s.settle,
 				}, nil
 			}
 		}
@@ -119,12 +166,13 @@ func (s wineStarter) await(ctx context.Context, bottle wine.Bottle, executable s
 // вернулся сразу после старта, а игра живёт внутри бутыля. Поэтому и
 // ожидание, и остановка идут через бутыль, а не через os/exec.
 type wineGameProcess struct {
-	bottle wine.Bottle
-	id     int
-	ctx    context.Context
-	poll   func(ctx context.Context, b wine.Bottle) ([]wine.Process, error)
-	stop   func(b wine.Bottle) error
-	settle time.Duration
+	bottle     wine.Bottle
+	id         int
+	ctx        context.Context
+	poll       func(ctx context.Context, b wine.Bottle) ([]wine.Process, error)
+	stop       func(b wine.Bottle) error
+	stopShared func(ctx context.Context, b wine.Bottle) error
+	settle     time.Duration
 }
 
 func (p *wineGameProcess) pid() int { return p.id }
@@ -155,9 +203,22 @@ func (p *wineGameProcess) wait() error {
 	}
 }
 
-// kill валит бутыль целиком: он заведён под одну игру, поэтому чужого в нём
-// нет, а репаки нередко запускают игру не тем процессом, который стартовал.
-func (p *wineGameProcess) kill() error { return p.stop(p.bottle) }
+// kill валит собственный бутыль игры целиком: он заведён под одну игру,
+// поэтому чужого в нём нет, а репаки нередко запускают игру не тем
+// процессом, который стартовал.
+//
+// Общий бутыль так валить нельзя: вместе с игрой умерли бы Steam и все
+// остальные игры того же префикса. Там гасятся только процессы, чей путь
+// лежит внутри каталога этой установки.
+func (p *wineGameProcess) kill() error {
+	if p.bottle.Shared {
+		if p.stopShared == nil {
+			return errNoSharedStop
+		}
+		return p.stopShared(p.ctx, p.bottle)
+	}
+	return p.stop(p.bottle)
+}
 
 func isWindowsExecutable(path string) bool {
 	switch strings.ToLower(filepath.Ext(path)) {

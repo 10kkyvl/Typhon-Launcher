@@ -12,6 +12,115 @@ import (
 	"typhon/internal/wine"
 )
 
+// crossOverInstalled сообщает, стоит ли на машине настоящий CrossOver.
+// attemptDiscovery берёт wine.Detect() напрямую и не подменяет его в
+// тестах (в отличие от wineRunner.detect в runner_darwin.go), поэтому без
+// реального CrossOver проверка ветки с общим бутылём до неё не доедет: она
+// отвалится раньше, на "CrossOver не найден".
+func crossOverInstalled(t *testing.T) bool {
+	t.Helper()
+	_, err := wine.Detect()
+	return err == nil
+}
+
+// TestAttemptDiscoveryUsesSharedBottle закрывает находку "разведка молча
+// отключается навсегда для игры в общем бутыле": Lookup по метке
+// typhon-bottle.json общий бутыль не находит никогда — метки в нём нет, —
+// и без fallback на SharedBottle attemptDiscovery всегда возвращала бы
+// reason «бутыль установки ещё не заведён».
+//
+// Установщик лежит вне games специально: ToWindows внутри общего бутыля
+// откажет на первом шаге discoverWithBottle, и настоящий cxstart так и не
+// запустится, а по тексту причины видно, что вызов всё же дошёл до бутыля.
+func TestAttemptDiscoveryUsesSharedBottle(t *testing.T) {
+	if !crossOverInstalled(t) {
+		t.Skip("CrossOver не установлен: attemptDiscovery не подменяет wine.Detect() в тестах")
+	}
+	bottlesDir := fakeBottlesDir(t)
+	games := t.TempDir()
+	dest := filepath.Join(games, "Kebab Chefs! Restaurant Simulator")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	makeSharedBottleDir(t, bottlesDir, wine.SharedBottleName(), games)
+
+	installer := filepath.Join(t.TempDir(), "setup.exe")
+	if err := os.WriteFile(installer, []byte("MZ"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := attemptDiscovery(context.Background(), discoverySpec{
+		Engine: EngineInno, InstallerPath: installer, Destination: dest,
+		InfPath: filepath.Join(dest, "discovery.inf"),
+		Options: installOptions{SkipExtras: true},
+	})
+	if err != nil {
+		t.Fatalf("attemptDiscovery: %v", err)
+	}
+	if got.reason == "бутыль установки ещё не заведён" {
+		t.Fatal("attemptDiscovery не попробовала общий бутыль перед тем, как сдаться")
+	}
+	if !strings.Contains(got.reason, "путь установщика") {
+		t.Fatalf("reason = %q, want an installer-path failure proving the shared bottle was used", got.reason)
+	}
+}
+
+// TestAttemptDiscoveryFallsBackToLookupWithoutSharedBottle проверяет, что
+// поведение без общего бутыля не изменилось: Lookup всё так же промахивается
+// по свежему каталогу без метки, и reason остаётся прежним.
+func TestAttemptDiscoveryFallsBackToLookupWithoutSharedBottle(t *testing.T) {
+	if !crossOverInstalled(t) {
+		t.Skip("CrossOver не установлен: attemptDiscovery не подменяет wine.Detect() в тестах")
+	}
+	fakeBottlesDir(t)
+	dest := t.TempDir()
+
+	got, err := attemptDiscovery(context.Background(), discoverySpec{
+		Engine: EngineInno, InstallerPath: filepath.Join(dest, "setup.exe"), Destination: dest,
+		InfPath: filepath.Join(dest, "discovery.inf"),
+		Options: installOptions{SkipExtras: true},
+	})
+	if err != nil {
+		t.Fatalf("attemptDiscovery: %v", err)
+	}
+	if got.reason != "бутыль установки ещё не заведён" {
+		t.Fatalf("reason = %q, want the old lookup-miss reason when there is no shared bottle either", got.reason)
+	}
+}
+
+// TestAttemptDiscoverySharedBottleNameFromEnv проверяет, что fallback на
+// SharedBottle учитывает переопределённое имя общего бутыля.
+func TestAttemptDiscoverySharedBottleNameFromEnv(t *testing.T) {
+	if !crossOverInstalled(t) {
+		t.Skip("CrossOver не установлен: attemptDiscovery не подменяет wine.Detect() в тестах")
+	}
+	bottlesDir := fakeBottlesDir(t)
+	t.Setenv(wine.SharedBottleEnv, "MyPlayStore")
+	games := t.TempDir()
+	dest := filepath.Join(games, "Demo")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	makeSharedBottleDir(t, bottlesDir, "MyPlayStore", games)
+
+	installer := filepath.Join(t.TempDir(), "setup.exe")
+	if err := os.WriteFile(installer, []byte("MZ"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := attemptDiscovery(context.Background(), discoverySpec{
+		Engine: EngineInno, InstallerPath: installer, Destination: dest,
+		InfPath: filepath.Join(dest, "discovery.inf"),
+		Options: installOptions{SkipExtras: true},
+	})
+	if err != nil {
+		t.Fatalf("attemptDiscovery: %v", err)
+	}
+	if !strings.Contains(got.reason, "путь установщика") {
+		t.Fatalf("reason = %q, want an installer-path failure proving the renamed shared bottle was used", got.reason)
+	}
+}
+
 func TestDiscoverySkippedWhenNotNeeded(t *testing.T) {
 	got, err := attemptDiscovery(context.Background(), discoverySpec{})
 	if err != nil {

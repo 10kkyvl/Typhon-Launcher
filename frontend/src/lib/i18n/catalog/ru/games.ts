@@ -62,6 +62,7 @@ export const games = {
   'games.errorStopFailed': 'Не удалось остановить игру',
   'games.errorFolderUnavailable': 'Папка недоступна',
   'games.errorFavoriteFailed': 'Не удалось изменить любимые',
+  'games.errorRequiresSteamFailed': 'Не удалось изменить бутыль запуска',
 
   'games.detailFactReleaseDate': 'Дата выхода',
   'games.detailFactDeveloper': 'Разработчик',
@@ -118,6 +119,9 @@ export const games = {
   'games.detailCollapseSummary': 'Свернуть',
   'games.detailExpandSummary': 'Показать полностью',
   'games.detailInstallHeading': 'Установка',
+  'games.detailSteamBottleLabel': 'Запускать вместе со Steam',
+  'games.detailSteamBottleHint':
+    'Игра пойдёт в общем бутыле CrossOver со Steam — иначе не работают Steam Overlay и достижения',
   'games.detailAvailableDownloadsHeading': 'Доступные загрузки',
   'games.detailAboutTitle': 'Об игре',
   'games.detailChooseDownloadTitle': 'Выберите загрузку',

@@ -30,6 +30,7 @@
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
@@ -70,6 +71,7 @@
     playGame,
     removeShortcut,
     setFavorite,
+    setRequiresSteam,
     stopGame,
   } from '../../lib/services/library';
   import {
@@ -88,6 +90,7 @@
     type CatalogGame,
     type ReleaseGroup,
   } from '../../lib/services/sources';
+  import { getWineStatus, type WineStatus } from '../../lib/services/system';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
@@ -118,6 +121,7 @@
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
+  let wineStatus = $state<WineStatus | null>(null);
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -223,6 +227,10 @@
       }
       loadMetaView(metaGameId);
     });
+  });
+
+  onMount(async () => {
+    wineStatus = await getWineStatus();
   });
 
   onMount(() => {
@@ -463,6 +471,12 @@
     const current = localGame;
     if (!current) return;
     void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
+  }
+
+  function toggleRequiresSteam(on: boolean) {
+    const current = localGame;
+    if (!current) return;
+    void mark(() => setRequiresSteam(current.id, on), msg('games.errorRequiresSteamFailed'));
   }
 
   async function createDesktopShortcut() {
@@ -922,6 +936,19 @@
                 </div>
               {/each}
             </dl>
+            {#if wineStatus?.required}
+              <div class="steam-row">
+                <div class="steam-row-text">
+                  <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
+                  <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
+                </div>
+                <Toggle
+                  checked={localGame.requiresSteam !== false}
+                  label={msg('games.detailSteamBottleLabel')}
+                  onchange={toggleRequiresSteam}
+                />
+              </div>
+            {/if}
           </section>
         {/if}
 
@@ -1402,6 +1429,32 @@
     gap: var(--space-4);
     padding: 0.9rem 0;
     border-top: 1px solid var(--border);
+  }
+
+  .steam-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .steam-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .steam-row-label {
+    font-size: var(--font-sm);
+    color: var(--text);
+  }
+
+  .steam-row-hint {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   dt {

@@ -18,8 +18,8 @@ import (
 // Буква диска нацеливается на каталог, в котором лежит установка: он же и есть
 // папка игр при обычной раскладке, а при необычной — всё равно корректный
 // корень, потому что каталог установки заведомо лежит внутри него.
-func prepareRuntime(ctx context.Context, installDir, executable string) error {
-	if installDir == "" || !isWindowsExecutable(executable) {
+func prepareRuntime(ctx context.Context, req launch) error {
+	if req.installDir == "" || !isWindowsExecutable(req.executable) {
 		return nil
 	}
 	rt, err := wine.Detect()
@@ -32,10 +32,19 @@ func prepareRuntime(ctx context.Context, installDir, executable string) error {
 		return err
 	}
 	manager := wine.NewManager(rt)
-	if _, ok := manager.Lookup(installDir); ok {
+	// Порядок тот же, что и при запуске (см. wineStarter.bottleFor): если
+	// игра поедет в общий бутыль, готовить нечего — он пользовательский,
+	// давно прогрет, и заводить рядом с ним пустой собственный бутыль
+	// значило бы занять 300 МБ под то, что никогда не запустится.
+	if req.shared {
+		if _, sharedErr := manager.SharedBottle(req.installDir); sharedErr == nil {
+			return nil
+		}
+	}
+	if _, ok := manager.Lookup(req.installDir); ok {
 		return nil
 	}
-	bottle, err := manager.Ensure(installDir, filepath.Dir(installDir))
+	bottle, err := manager.Ensure(req.installDir, filepath.Dir(req.installDir))
 	if err != nil {
 		return err
 	}
