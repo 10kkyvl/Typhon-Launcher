@@ -19,6 +19,27 @@ import { toast } from './toasts';
 
 export const downloads = writable<Download[]>([]);
 
+// DownloadProgress mirrors internal/download.ProgressUpdate: the fields a
+// running download changes every 250ms tick, without Files or anything else
+// that only changes on add, on a file-list change, or on completion — those
+// still arrive as a full Download through download:added/download:updated/
+// download:completed. Declared here rather than in bindings/ because the
+// generated bindings only know about wails-bound methods, not plain event
+// payload shapes.
+export interface DownloadProgress {
+  id: string;
+  status: DownloadStatus;
+  progress: number;
+  downloaded: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  etaSeconds: number;
+  seeders: number;
+  peers: number;
+  stalled: boolean;
+  stalledSince?: string | null;
+}
+
 export const downloadsById = derived(downloads, ($downloads) => {
   const map = new Map<string, Download>();
   for (const d of $downloads) map.set(d.id, d);
@@ -70,6 +91,31 @@ function upsert(item: Download) {
   });
 }
 
+// mergeProgress folds a lightweight tick into the existing full record. An
+// id the store has no record for yet (webview reload, a race at startup
+// before the initial listDownloads() resolves) is dropped rather than
+// turned into a half-filled card: every field but the ones below would be
+// missing, and there is nothing here to fill them with.
+function mergeProgress(list: Download[], patch: DownloadProgress): Download[] {
+  const index = list.findIndex((d) => d.id === patch.id);
+  if (index < 0) return list;
+  const next = [...list];
+  next[index] = {
+    ...next[index],
+    status: patch.status,
+    progress: patch.progress,
+    downloaded: patch.downloaded,
+    downloadSpeed: patch.downloadSpeed,
+    uploadSpeed: patch.uploadSpeed,
+    etaSeconds: patch.etaSeconds,
+    seeders: patch.seeders,
+    peers: patch.peers,
+    stalled: patch.stalled,
+    stalledSince: patch.stalledSince ?? null,
+  };
+  return next;
+}
+
 async function refresh() {
   downloads.set(await listDownloads());
 }
@@ -85,6 +131,10 @@ export async function initDownloads() {
   });
   Events.On('download:updated', (event) => {
     upsert(event.data as Download);
+  });
+  Events.On('download:progress', (event) => {
+    const patch = event.data as DownloadProgress;
+    downloads.update((list) => mergeProgress(list, patch));
   });
   Events.On('download:completed', (event) => {
     const item = event.data as Download;

@@ -32,6 +32,15 @@ func (h *inProcessWorkerHandle) wait() (int, error) {
 
 func (*inProcessWorkerHandle) close() {}
 
+// terminate has nothing real to kill: RunWorker runs as a goroutine inside
+// this test binary, not as a separate process, so there is no way to force
+// it to stop from here. Reporting failure keeps runElevated on the
+// conservative errInstallerNotConfirmedStopped path instead of wrongly
+// claiming the writer is confirmed dead.
+func (*inProcessWorkerHandle) terminate() error {
+	return errors.New("in-process worker fake cannot be terminated")
+}
+
 // startInProcessWorker builds the startElevatedWorker seam for the two tests
 // below and registers a cleanup that blocks until RunWorker has actually
 // returned. runElevated can pick up a completed install through the

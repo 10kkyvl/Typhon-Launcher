@@ -30,8 +30,16 @@ export function truncateMiddle(text: string, max = 56) {
 export type Format = ReturnType<typeof makeFormat>;
 
 export function makeFormat(loc: Locale, t: Translate) {
-  const num = (value: number, min = 0, max = min) =>
-    new Intl.NumberFormat(loc, { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
+  const numFormatters = new Map<string, Intl.NumberFormat>();
+  const num = (value: number, min = 0, max = min) => {
+    const key = `${min}:${max}`;
+    let formatter = numFormatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(loc, { minimumFractionDigits: min, maximumFractionDigits: max });
+      numFormatters.set(key, formatter);
+    }
+    return formatter.format(value);
+  };
 
   const date = new Intl.DateTimeFormat(loc);
   const longDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' });

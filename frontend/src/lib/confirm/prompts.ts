@@ -92,3 +92,13 @@ export function clearHistoryPrompt(): ConfirmPrompt {
     busy: msg('transfers.historyClearing'),
   };
 }
+
+export function sendLogsPrompt(): ConfirmPrompt {
+  return {
+    title: msg('settings.aboutLogsSendConfirmTitle'),
+    text: msg('settings.aboutLogsSendConfirmText'),
+    note: msg('settings.aboutLogsSendConfirmNote'),
+    confirm: msg('settings.aboutLogsSendConfirmButton'),
+    busy: msg('settings.aboutLogsSendingEllipsis'),
+  };
+}

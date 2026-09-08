@@ -1,6 +1,7 @@
 package wine
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -201,5 +202,98 @@ func TestRemoveUnknownIsNoError(t *testing.T) {
 	m, _, _ := newTestManager(t)
 	if err := m.Remove(filepath.Join(t.TempDir(), "Nope")); err != nil {
 		t.Fatalf("Remove unknown: %v", err)
+	}
+}
+
+// cxbottleTakingEveryDrive пишет фейковый cxbottle, который заводит бутыль
+// как обычно, но занимает под фиктивные тома все буквы из driveOrder: как на
+// почти полном диске, только детерминированно, а не через настоящий ENOSPC.
+func cxbottleTakingEveryDrive(t *testing.T, cxbottle, bottles string) {
+	t.Helper()
+	body := `#!/bin/sh
+name=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --bottle) name="$2"; shift 2;;
+    *) shift;;
+  esac
+done
+b="` + bottles + `/$name"
+mkdir -p "$b/dosdevices" "$b/drive_c/users/crossover/AppData/Roaming"
+ln -sfn ../drive_c "$b/dosdevices/c:"
+for l in t u v w x l m n o p q r s; do
+  ln -sfn /Volumes/Taken "$b/dosdevices/$l:"
+done
+exit 0
+`
+	if err := os.WriteFile(cxbottle, []byte(body), 0o755); err != nil {
+		t.Fatalf("WriteFile cxbottle: %v", err)
+	}
+}
+
+// TestEnsureRemovesOrphanOnDriveFailure закрывает ВАЖНО-находку: cxbottle
+// --create успевает материализовать каталог бутыля (~300 МБ), а freeDrive
+// после него падал без какой-либо уборки. Без метки typhon-bottle.json (её
+// пишет writeMarker, который в этой ветке ещё не выполнялся) List и Lookup
+// такой каталог никогда не увидят — он остаётся сиротой до ручной уборки в
+// Finder. На почти полном диске пользователь получает по такому сироте на
+// каждую повторную попытку установки.
+func TestEnsureRemovesOrphanOnDriveFailure(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	games := t.TempDir()
+	dest := filepath.Join(games, "Demo")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	cxbottleTakingEveryDrive(t, m.rt.CxBottle, bottles)
+
+	if _, err := m.Ensure(dest, games); !errors.Is(err, ErrNoFreeDrive) {
+		t.Fatalf("Ensure with every drive letter taken: err = %v, want ErrNoFreeDrive", err)
+	}
+
+	name := bottleName(dest)
+	if _, statErr := os.Stat(filepath.Join(bottles, name)); !os.IsNotExist(statErr) {
+		t.Fatalf("Ensure left an orphaned bottle dir at %s: %v", filepath.Join(bottles, name), statErr)
+	}
+}
+
+// TestEnsureKeepsExistingBottleOnDriveFailure — обратная сторона того же
+// фикса: если ensureDrive падает для УЖЕ существующего бутыля (найденного
+// через Lookup), его каталог — чужие данные, и Ensure не имеет права его
+// сносить, сколько бы букв дисков ни было занято.
+func TestEnsureKeepsExistingBottleOnDriveFailure(t *testing.T) {
+	m, _, _ := newTestManager(t)
+	games := t.TempDir()
+	dest := filepath.Join(games, "Demo")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	created, err := m.Ensure(dest, games)
+	if err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	// Ломаем именно букву самого бутыля так, чтобы ensureDrive не смог её
+	// переставить: непустой каталог на месте симлинка не убирается Remove'ом.
+	link := filepath.Join(created.Path, "dosdevices", created.Drive+":")
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("Remove drive symlink: %v", err)
+	}
+	if err := os.MkdirAll(link, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(link, "keep"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := m.Ensure(dest, games); err == nil {
+		t.Fatal("Ensure on an existing bottle with a broken drive letter: want error")
+	}
+
+	if _, statErr := os.Stat(created.Path); statErr != nil {
+		t.Fatalf("Ensure removed an existing bottle: %v", statErr)
+	}
+	if _, ok := m.Lookup(dest); !ok {
+		t.Fatal("existing bottle disappeared from Lookup after a failed Ensure")
 	}
 }

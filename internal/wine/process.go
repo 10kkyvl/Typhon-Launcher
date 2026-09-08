@@ -1,6 +1,7 @@
 package wine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -133,13 +134,71 @@ func match(entry psEntry, b Bottle) (Process, bool) {
 	return Process{PID: entry.pid, WinPath: entry.winPath, Path: native, CreatedAt: entry.createdAt}, true
 }
 
+// defaultKillTimeout ограничивает Kill(b Bottle) error — сигнатуру без ctx,
+// оставленную ради вызывающих вне пакета (internal/library, а после недавней
+// правки и internal/wine/run.go), которым сигнатуру менять нельзя. Без этого
+// таймаута подвисший wineserver (известный класс проблем wine) вешал вызов
+// навсегда: горутина Wails-биндинга не возвращалась, и «Стоп» переставал
+// работать для этой игры до перезапуска лаунчера.
+const defaultKillTimeout = 10 * time.Second
+
 // Kill валит бутыль целиком. Это безопасно ровно потому, что бутыль заведён
 // под одну установку: чужого в нём нет.
+//
+// Сигнатура намеренно без ctx: её меняют вызывающие вне этого пакета
+// (internal/library, run.go), а их трогать нельзя. Таймаут собран вручную, а
+// не через context.WithTimeout(context.Background(), ...): последнее завело
+// бы внутри пакета корневой контекст без родителя, а contextcheck справедливо
+// считает это поводом требовать проброса ctx от вызывающих — которым, в
+// отличие от KillContext, взять ctx неоткуда по своей сигнатуре.
 func (m *Manager) Kill(b Bottle) error {
+	timeout := m.killTimeout
+	if timeout <= 0 {
+		timeout = defaultKillTimeout
+	}
 	//nolint:gosec // G204: путь до wineserver получен из Detect
 	cmd := exec.Command(m.rt.WineServer, "-k")
 	cmd.Env = append(os.Environ(), "WINEPREFIX="+b.Path, "CX_BOTTLE="+b.Name)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("остановка бутыля %s: %w", b.Name, err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("остановка бутыля %s: %w: %s", b.Name, err, strings.TrimSpace(out.String()))
+		}
+		return nil
+	case <-timer.C:
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			return fmt.Errorf("остановка бутыля %s: не уложился в %s, и не удалось прибить wineserver: %w",
+				b.Name, timeout, killErr)
+		}
+		<-done
+		return fmt.Errorf("остановка бутыля %s: wineserver не уложился в %s", b.Name, timeout)
+	}
+}
+
+// KillContext — как Kill, но с настоящей отменой: вызывающий с собственным
+// ctx не обязан ждать таймаут по умолчанию.
+func (m *Manager) KillContext(ctx context.Context, b Bottle) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	//nolint:gosec // G204: путь до wineserver получен из Detect
+	cmd := exec.CommandContext(ctx, m.rt.WineServer, "-k")
+	cmd.Env = append(os.Environ(), "WINEPREFIX="+b.Path, "CX_BOTTLE="+b.Name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("остановка бутыля %s: %w", b.Name, ctxErr)
+		}
 		return fmt.Errorf("остановка бутыля %s: %w: %s", b.Name, err, strings.TrimSpace(string(out)))
 	}
 	return nil

@@ -99,6 +99,14 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 }
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
+	// Брокер поднимается заранее (HandleDownloadStarted), пока лаунчер ещё не
+	// знает, какой веткой пойдёт эта установка: только runSilent реально
+	// отдаёт ему задание (brokerFor), а интерактивная ветка вообще к нему не
+	// обращается. Освобождать его нужно на любом выходе из этой функции, а
+	// не только из silent-ветки — иначе интерактивный репак, для которого
+	// брокер подняли заранее, держит процесс с правами администратора до
+	// закрытия лаунчера.
+	defer s.DropBroker(item.DownloadID)
 	if err := s.setStatus(id, StatusPreparing); err != nil {
 		return err
 	}
@@ -177,8 +185,9 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
+	// DropBroker освобождается один раз для всей установки в runInstaller —
+	// дальше по цепочке установщиков этот же брокер ещё нужен.
 	handoff := s.brokerFor(item.DownloadID)
-	defer s.DropBroker(item.DownloadID)
 	specs := make([]runSpec, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)

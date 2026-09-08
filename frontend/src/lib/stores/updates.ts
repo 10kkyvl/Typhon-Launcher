@@ -45,10 +45,9 @@ const REASONS: Record<string, MessageKey> = {
   'updates.repair_unavailable': 'errUpdates.updatesRepairUnavailable',
 };
 
-function updateErrorText(raw: unknown): string {
+function updateErrorText(raw: unknown, fallback: string = msg('errUpdates.fallback')): string {
   const key = REASONS[errorCode(raw)];
-  if (key) return msg(key);
-  return raw instanceof Error ? raw.message : String(raw ?? '');
+  return key ? msg(key) : fallback;
 }
 
 export const updates = writable<Update[]>([]);
@@ -112,8 +111,20 @@ function upsert(item: Update) {
   });
 }
 
+const MAX_VERIFY_ENTRIES = 50;
+
 function upsertVerify(state: VerifyState) {
-  verifications.update((map) => ({ ...map, [state.gameId]: state }));
+  verifications.update((map) => {
+    const next = { ...map, [state.gameId]: state };
+    for (const key of Object.keys(next)) {
+      if (Object.keys(next).length <= MAX_VERIFY_ENTRIES) break;
+      if (key === state.gameId) continue;
+      const entry = next[key];
+      if (entry.running || entry.repairing) continue;
+      delete next[key];
+    }
+    return next;
+  });
 }
 
 export async function initUpdates() {

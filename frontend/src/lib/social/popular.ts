@@ -32,6 +32,7 @@ function entryFor(entries: Map<number, Entry>, game: GameCard): Entry {
   }
   if (!found.game.title) found.game.title = game.title;
   if (!found.game.coverUrl) found.game.coverUrl = game.coverUrl;
+  if (!found.game.heroUrl) found.game.heroUrl = game.heroUrl;
   return found;
 }
 

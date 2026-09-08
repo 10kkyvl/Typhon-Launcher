@@ -4,6 +4,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -35,7 +36,10 @@ func (r wineRunner) run(ctx context.Context, spec runSpec) (int, error) {
 		return 0, err
 	}
 
-	outcome, err := attemptDiscovery(ctx, spec.discovery())
+	// Бутыль уже получена строкой выше через Ensure — discoverWithBottle
+	// переиспользует именно её вместо attemptDiscovery, которая сама снова
+	// сканирует каталог бутылей CrossOver (находка "двойной скан").
+	outcome, err := discoverWithBottle(ctx, spec.discovery(), bottle, r.doRun)
 	if err != nil {
 		return 0, err
 	}
@@ -87,6 +91,11 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 			cmd.WorkDir = dir
 		}
 	}
+	code, err := r.doRun(ctx, bottle, cmd)
+	return code, classifyRunErr(err)
+}
+
+func (r wineRunner) doRun(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd) (int, error) {
 	if r.runCmd != nil {
 		return r.runCmd(ctx, bottle, cmd)
 	}
@@ -95,4 +104,16 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 		return 0, errWineMissing
 	}
 	return wine.NewManager(rt).Run(ctx, bottle, cmd)
+}
+
+// classifyRunErr переводит отказ Kill подтвердить остановку бутыля в
+// errInstallerNotConfirmedStopped — тот же класс ошибки, что и у повышенного
+// воркера на Windows (elevated.go), на который уже реагирует discardSilent:
+// без этого RemoveAll на macOS шёл бы по каталогу, в который ещё может
+// писать не убитый установщик (инвариант 9).
+func classifyRunErr(err error) error {
+	if err == nil || !errors.Is(err, wine.ErrTreeNotStopped) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, err)
 }

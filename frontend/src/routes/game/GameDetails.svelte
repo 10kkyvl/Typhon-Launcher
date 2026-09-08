@@ -97,7 +97,15 @@
   import { toast } from '../../lib/stores/toasts';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   let { id }: { id: string } = $props();
 
@@ -462,7 +470,7 @@
     try {
       await createShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutCreateError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutCreateError')), 'danger');
     }
   }
 
@@ -471,7 +479,7 @@
     try {
       await removeShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailShortcutRemoveError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutRemoveError')), 'danger');
     }
   }
 
@@ -482,7 +490,7 @@
       metaView = await refreshMetadata(canonicalId);
       toast(msg('games.detailMetaRefreshedToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaRefreshError'), 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
     } finally {
       metaRefreshing = false;
     }
@@ -494,7 +502,7 @@
     try {
       metaView = await dismissMetadataMatch(canonicalId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailMetaSkipError'), 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
     } finally {
       metaSkipping = false;
     }
@@ -546,7 +554,7 @@
     try {
       await resumeDownload(terminalDownload.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailRetryDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailRetryDownloadError')), 'danger');
     }
   }
 
@@ -566,7 +574,7 @@
       await removeDownload(terminalDownload.id);
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailRemoveDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailRemoveDownloadError')), 'danger');
     }
   }
 
@@ -581,7 +589,7 @@
       await (freesDisk ? cancelDownload(id) : deleteDownloadData(id));
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailDiscardDownloadError'), 'danger');
+      toast(installErrorText(err, msg('games.detailDiscardDownloadError')), 'danger');
     }
   }
 
@@ -592,7 +600,7 @@
       downloadOrigin = releaseOrigin(request);
       downloadModalOpen = true;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailPrepareDownloadError'), 'danger');
+      toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');
     }
   }
 
@@ -610,7 +618,7 @@
     try {
       await playGame(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -641,7 +649,7 @@
       await addCatalogGame(canonicalId, title, coverSrc);
       toast(msg('games.detailAddedToLibraryToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.detailAddToLibraryError'), 'danger');
+      toast(libraryErrorText(err, msg('games.detailAddToLibraryError')), 'danger');
     } finally {
       addingToLibrary = false;
     }

@@ -3,6 +3,7 @@
   import { get } from 'svelte/store';
   import { Check, FileUp } from '@lucide/svelte';
   import {
+    cancelFetchMetadata,
     discardMetadata,
     fetchMetadata,
     selectTorrentFile,
@@ -57,6 +58,9 @@
 
   function reset() {
     token++;
+    if (step === 'loading') {
+      cancelFetchMetadata(source);
+    }
     if (pendingHash) {
       discardMetadata(pendingHash);
       pendingHash = '';

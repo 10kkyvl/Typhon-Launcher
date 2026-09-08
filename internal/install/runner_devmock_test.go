@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -201,13 +202,18 @@ type fakeWorkerHandle struct {
 	exit chan struct{}
 	code int
 	err  error
+	once sync.Once
 }
 
 func newFakeWorkerHandle(t *testing.T) *fakeWorkerHandle {
 	t.Helper()
 	h := &fakeWorkerHandle{exit: make(chan struct{})}
-	t.Cleanup(func() { close(h.exit) })
+	t.Cleanup(h.stop)
 	return h
+}
+
+func (h *fakeWorkerHandle) stop() {
+	h.once.Do(func() { close(h.exit) })
 }
 
 func (h *fakeWorkerHandle) wait() (int, error) {
@@ -216,6 +222,14 @@ func (h *fakeWorkerHandle) wait() (int, error) {
 }
 
 func (*fakeWorkerHandle) close() {}
+
+// terminate stands in for a real kill: it unblocks wait() exactly like a
+// successfully terminated process would, and is safe to call alongside the
+// t.Cleanup teardown thanks to the shared sync.Once.
+func (h *fakeWorkerHandle) terminate() error {
+	h.stop()
+	return nil
+}
 
 // TestMockRunnerRunElevateEnabledUsesWorkerProtocol проверяет реальный
 // маршрут через runElevated из mockRunner.run: spec-файл действительно

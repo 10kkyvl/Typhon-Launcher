@@ -154,7 +154,7 @@ type Service struct {
 	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
 	sessionWG     sync.WaitGroup
-	scan          func(context.Context) ([]procs.Process, error)
+	scan          func(context.Context) ([]procs.Process, bool, error)
 	watchInterval time.Duration
 	now           func() time.Time
 	ctx           context.Context

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeFormat, progressPercent, truncateMiddle } from './format';
 import { translator } from '../i18n';
 import type { Locale } from '../i18n';
@@ -160,5 +160,30 @@ describe('progressPercent', () => {
     // потому что показать 100% на сломанном значении хуже, чем показать ноль.
     expect(progressPercent(Number.NaN)).toBe(0);
     expect(progressPercent(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe('num caching inside makeFormat', () => {
+  it('reuses one Intl.NumberFormat per min/max pair instead of building it on every call', () => {
+    const spy = vi.spyOn(Intl, 'NumberFormat');
+    const format = f('ru');
+    spy.mockClear();
+
+    format.bytesSize(5 * MB);
+    format.bytesSize(6 * MB);
+    format.bytesSize(7 * MB);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a separate cached formatter per distinct min/max pair', () => {
+    const spy = vi.spyOn(Intl, 'NumberFormat');
+    const format = f('ru');
+    spy.mockClear();
+
+    format.bytesSize(5 * MB); // 0 fraction digits
+    format.speed(2.5); // 1 fraction digit
+
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 });

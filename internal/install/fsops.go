@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -204,6 +205,38 @@ func appendAddedList(backup, rel string) error {
 	return f.Close()
 }
 
+// forEachAddedLine читает mergeAddedList по одной строке вместо того, чтобы
+// грузить его в память целиком: os.ReadFile плюс конвертация []byte→string
+// держали живыми две полные копии списка одновременно (сам буфер чтения и
+// копию под string(data), от которой strings.Split берёт подстроки) — на
+// патче с десятками тысяч новых файлов это заметный пик памяти на один
+// откат ради списка, который в любом случае обрабатывается по одному пути.
+func forEachAddedLine(path string, fn func(rel string) error) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("close added list", "path", path, "error", cerr)
+		}
+	}()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		rel := scanner.Text()
+		if rel == "" {
+			continue
+		}
+		if err := fn(rel); err != nil {
+			return err
+		}
+	}
+	return scanner.Err()
+}
+
 // RestoreMergeBackup undoes a MergeDirWithBackup call, whether it finished,
 // failed partway, or the process crashed mid-copy. It is idempotent: a
 // second call on an already-restored (or half-restored) backup completes
@@ -216,21 +249,14 @@ func RestoreMergeBackup(dst, backup string) error {
 		return err
 	}
 	addedPath := filepath.Join(backup, mergeAddedList)
-	data, err := os.ReadFile(addedPath)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	for _, rel := range strings.Split(string(data), "\n") {
-		if rel == "" {
-			continue
-		}
+	if err := forEachAddedLine(addedPath, func(rel string) error {
 		target := filepath.Join(dst, rel)
 		if err := removeExisting(target); err != nil {
 			return err
 		}
-		if err := removeExisting(target + mergeTmpSuffix); err != nil {
-			return err
-		}
+		return removeExisting(target + mergeTmpSuffix)
+	}); err != nil {
+		return err
 	}
 
 	walkErr := filepath.WalkDir(backup, func(path string, d fs.DirEntry, err error) error {

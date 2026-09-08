@@ -176,15 +176,30 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		}
 	}
 
-	if err := s.forgetInstallations(gameID); err != nil {
-		return err
+	// forgetInstallations хранит только внутреннюю бухгалтерию сервиса
+	// (историю записей Installation), а не источник правды о самой игре —
+	// им остаётся library. Если файлы уже стёрты (deleteFiles=true), это
+	// точка невозврата: RemoveAll не откатить, и падение здесь не должно
+	// оставить запись библиотеки указывающей на удалённый каталог. Поэтому
+	// ошибку откладываем и всё равно доводим library.RemoveGame/MarkUninstalled
+	// до конца, а возвращаем её вызывающему уже после них — тот узнает о
+	// сбое, но библиотека не разойдётся с диском. Пока точка невозврата не
+	// пройдена (файлы не трогали), поведение прежнее: ошибка возвращается
+	// сразу, до всякой мутации библиотеки, и пользователь может просто
+	// повторить попытку.
+	forgetErr := s.forgetInstallations(gameID)
+	if forgetErr != nil && !deleteFiles {
+		return forgetErr
 	}
 	if opts.KeepInLibrary {
 		if err := s.library.MarkUninstalled(gameID); err != nil {
-			return err
+			return errors.Join(forgetErr, err)
 		}
 	} else if err := s.library.RemoveGame(gameID); err != nil {
-		return err
+		return errors.Join(forgetErr, err)
+	}
+	if forgetErr != nil {
+		return forgetErr
 	}
 	slog.Info("game removed", "id", gameID, "title", game.Title, "method", plan.method,
 		"files", deleteFiles, "kept", opts.KeepInLibrary)

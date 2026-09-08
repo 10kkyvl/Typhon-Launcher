@@ -1,6 +1,6 @@
 <script lang="ts">
   import { msg } from '../../lib/i18n';
-  import { themeVars } from '../../lib/theme/apply';
+  import { themeDisplayName, themeVars } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -38,7 +38,7 @@
 
   function startEditing(theme: Theme) {
     draft = { ...theme, tokens: { ...theme.tokens } };
-    draftName = theme.name;
+    draftName = themeDisplayName(theme);
     cssDraft = theme.css ?? '';
     advancedOpen = false;
     errors = [];
@@ -172,7 +172,7 @@
             class="preset-swatch"
             style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
           ></span>
-          <span class="preset-name">{theme.name}</span>
+          <span class="preset-name">{themeDisplayName(theme)}</span>
           {#if !theme.builtIn}
             <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
           {/if}
@@ -191,7 +191,7 @@
   </Card>
 
   {#if draft}
-    <Card title={msg('settings.appearanceEditingCardTitle', { name: draft.name })}>
+    <Card title={msg('settings.appearanceEditingCardTitle', { name: themeDisplayName(draft) })}>
       {#if draft.builtIn}
         <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
       {/if}

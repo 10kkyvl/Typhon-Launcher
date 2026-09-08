@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -25,8 +25,11 @@
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
+  import { sendLogsPrompt } from '../../lib/confirm/prompts';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
+  import { sendLogs, type SendLogsResult } from '../../lib/services/logsUpload';
+  import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
@@ -84,6 +87,9 @@
 
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
+  let logsSending = $state(false);
+  let logsSendResult = $state<SendLogsResult | null>(null);
+  let logsSendFailure = $state('');
 
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
@@ -121,6 +127,39 @@
       toast(logsReason(err), 'danger');
     } finally {
       logsSaving = false;
+    }
+  }
+
+  function openSendLogsConfirm() {
+    if (!inWails) {
+      toast(msg('settings.aboutLogsDesktopOnly'));
+      return;
+    }
+    logsSendFailure = '';
+    pending = { prompt: sendLogsPrompt(), run: confirmSendLogs };
+  }
+
+  async function confirmSendLogs() {
+    logsSending = true;
+    logsSendFailure = '';
+    try {
+      const result = await sendLogs();
+      logsSendResult = result;
+    } catch (err) {
+      logsSendResult = null;
+      logsSendFailure = logsUploadErrorText(err);
+    } finally {
+      logsSending = false;
+    }
+  }
+
+  async function copySendLogsId() {
+    if (!logsSendResult) return;
+    try {
+      await navigator.clipboard.writeText(logsSendResult.id);
+      toast(msg('settings.aboutLogsSendIdCopiedToast'), 'info');
+    } catch {
+      toast(msg('settings.aboutLogsSendIdCopyFailedToast'), 'danger');
     }
   }
 
@@ -837,6 +876,41 @@
             {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
           </Button>
         </div>
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
+            <span class="row-sub">
+              {#if logsSendFailure}
+                {logsSendFailure}
+              {:else if logsSendResult}
+                {msg('settings.aboutLogsSendResultLabel')}
+              {:else}
+                {msg('settings.aboutLogsSendConfirmNote')}
+              {/if}
+            </span>
+          </div>
+          <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
+            <Send size="1.5rem" strokeWidth={1.8} />
+            {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
+          </Button>
+        </div>
+        {#if logsSendResult}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
+              <span class="row-sub logs-send-id">{logsSendResult.id}</span>
+            </div>
+            <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
+              <Copy size="1.5rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+          {#if logsSendResult.dropped.length > 0}
+            <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
+          {/if}
+        {/if}
+        {#if logsSendFailure}
+          <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
+        {/if}
       </div>
     </Card>
 

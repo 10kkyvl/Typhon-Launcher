@@ -95,6 +95,48 @@ func occupiesSlot(s Status) bool {
 	return s == StatusDownloading || s == StatusVerifying || s == StatusMetadata
 }
 
+// ProgressUpdate carries only the fields a running download changes on every
+// tick — never Files, which stays fixed from the moment a download starts
+// until it is re-added or its selection changes. sample() emits this instead
+// of a full snapshot on every ordinary tick so that a torrent with tens of
+// thousands of files does not re-serialize its whole file list four times a
+// second; the full snapshot (with Files) still goes out on add, on file-list
+// changes and on completion through the existing eventUpdated/eventAdded/
+// eventCompleted events.
+type ProgressUpdate struct {
+	ID            string     `json:"id"`
+	Status        Status     `json:"status"`
+	Progress      float64    `json:"progress"`
+	Downloaded    int64      `json:"downloaded"`
+	DownloadSpeed int64      `json:"downloadSpeed"`
+	UploadSpeed   int64      `json:"uploadSpeed"`
+	ETASeconds    int64      `json:"etaSeconds"`
+	Seeders       int        `json:"seeders"`
+	Peers         int        `json:"peers"`
+	Stalled       bool       `json:"stalled"`
+	StalledSince  *time.Time `json:"stalledSince,omitempty"`
+}
+
+func progressOf(d *Download) ProgressUpdate {
+	p := ProgressUpdate{
+		ID:            d.ID,
+		Status:        d.Status,
+		Progress:      d.Progress,
+		Downloaded:    d.Downloaded,
+		DownloadSpeed: d.DownloadSpeed,
+		UploadSpeed:   d.UploadSpeed,
+		ETASeconds:    d.ETASeconds,
+		Seeders:       d.Seeders,
+		Peers:         d.Peers,
+		Stalled:       d.Stalled,
+	}
+	if d.StalledSince != nil {
+		at := *d.StalledSince
+		p.StalledSince = &at
+	}
+	return p
+}
+
 func snapshot(d *Download) Download {
 	out := *d
 	out.Files = append([]FileState(nil), d.Files...)

@@ -480,8 +480,8 @@ func TestStopGameExternalSessionRejectsMismatchedCreatedAt(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 4242, Path: exe, CreatedAt: created.Add(3 * time.Second)}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 4242, Path: exe, CreatedAt: created.Add(3 * time.Second)}}, true, nil
 	}
 	s.mu.Unlock()
 
@@ -503,7 +503,7 @@ func TestStopGameExternalSessionRejectsScanError(t *testing.T) {
 	scanErr := errors.New("enumerate failed")
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, scanErr }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, false, scanErr }
 	s.mu.Unlock()
 
 	err = s.StopGame(game.ID)
@@ -523,7 +523,7 @@ func TestStopGameExternalSessionRejectsMissingPID(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, true, nil }
 	s.mu.Unlock()
 
 	err = s.StopGame(game.ID)
@@ -560,8 +560,8 @@ func TestStopGameExternalSessionRejectsUnknownCreatedAt(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 4246, Path: exe, CreatedAtUnknown: true}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 4246, Path: exe, CreatedAtUnknown: true}}, true, nil
 	}
 	s.mu.Unlock()
 

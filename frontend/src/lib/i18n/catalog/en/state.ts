@@ -177,6 +177,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonCheckFirst': 'Check for updates first.',
   'state.selfupdateReasonNoSpace': 'Not enough disk space for the update.',
   'state.selfupdateReasonAccessDenied': 'No permission to write to the updates folder.',
+  'state.selfupdateReasonUnknown': 'Something went wrong during the update.',
   'state.selfupdateCodeCheckFailed': 'Failed to check for updates.',
   'state.selfupdateCodeDownloadFailed': 'Failed to download the update.',
   'state.selfupdateCodeApplyFailed': 'Failed to install the update.',

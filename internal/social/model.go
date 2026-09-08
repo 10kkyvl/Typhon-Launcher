@@ -10,9 +10,12 @@ type UserCard struct {
 }
 
 type GameCard struct {
-	IGDBID   int64  `json:"igdbId"`
-	Title    string `json:"title"`
+	IGDBID int64  `json:"igdbId"`
+	Title  string `json:"title"`
+	// CoverURL — портретная обложка, HeroURL — горизонтальный кадр под широкий
+	// слот. HeroURL пуст, если у игры такого кадра нет или бэкенд старый.
 	CoverURL string `json:"coverUrl"`
+	HeroURL  string `json:"heroUrl"`
 }
 
 type PlayedGame struct {

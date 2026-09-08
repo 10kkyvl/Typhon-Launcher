@@ -176,6 +176,7 @@ export const state = {
   'state.selfupdateReasonCheckFirst': 'Сначала проверьте обновления.',
   'state.selfupdateReasonNoSpace': 'На диске не хватает места для обновления.',
   'state.selfupdateReasonAccessDenied': 'Нет прав на запись в папку обновлений.',
+  'state.selfupdateReasonUnknown': 'При обновлении что-то пошло не так.',
   'state.selfupdateCodeCheckFailed': 'Не удалось проверить обновления.',
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',

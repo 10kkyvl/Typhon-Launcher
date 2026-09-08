@@ -3,6 +3,7 @@
   import Modal from './Modal.svelte';
   import Toggle from './Toggle.svelte';
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
+  import { installErrorText } from '../install/installErrors';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
@@ -66,7 +67,7 @@
   }
 
   function message(err: unknown, fallback: string) {
-    return err instanceof Error && err.message ? err.message : fallback;
+    return installErrorText(err, fallback);
   }
 
   async function confirm() {

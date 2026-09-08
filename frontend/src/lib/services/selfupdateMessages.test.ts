@@ -17,11 +17,11 @@ describe('outcomeReason', () => {
     expect(outcomeReason({ version: '1.2.0', ok: false, error: raw, finishedAt: '' })).toContain(expected);
   });
 
-  it('falls back to the raw error it does not know', async () => {
+  it('falls back to a translated generic reason, not the raw error, when the cause is unknown', async () => {
     const { outcomeReason } = await import('./selfupdateMessages');
 
     expect(outcomeReason({ version: '1.2.0', ok: false, error: 'something else', finishedAt: '' })).toBe(
-      'something else',
+      'При обновлении что-то пошло не так.',
     );
   });
 
@@ -57,10 +57,12 @@ describe('statusReason', () => {
     );
   });
 
-  it('keeps the raw error when neither the cause nor the stage is known', async () => {
+  it('falls back to a translated generic reason, not the raw error, when neither the cause nor the stage is known', async () => {
     const { statusReason } = await import('./selfupdateMessages');
 
-    expect(statusReason({ state: 'failed', currentVersion: '1.0.0', error: 'boom', errorCode: 'weird' })).toBe('boom');
+    expect(statusReason({ state: 'failed', currentVersion: '1.0.0', error: 'boom', errorCode: 'weird' })).toBe(
+      'При обновлении что-то пошло не так.',
+    );
   });
 
   it('returns an empty string when the status carries no error', async () => {
@@ -81,16 +83,16 @@ describe('updateReason', () => {
     );
   });
 
-  it('falls back to the raw message', async () => {
+  it('falls back to a translated generic reason, not the raw message', async () => {
     const { updateReason } = await import('./selfupdateMessages');
 
-    expect(updateReason(new Error('boom'))).toBe('boom');
+    expect(updateReason(new Error('boom'))).toBe('При обновлении что-то пошло не так.');
   });
 
-  it('no longer recognises the bare backend text without a code', async () => {
+  it('falls back to a translated generic reason for bare backend text without a code', async () => {
     const { updateReason } = await import('./selfupdateMessages');
 
     const bare = 'selfupdate: another update operation is in progress';
-    expect(updateReason(new Error(bare))).toBe(bare);
+    expect(updateReason(new Error(bare))).toBe('При обновлении что-то пошло не так.');
   });
 });

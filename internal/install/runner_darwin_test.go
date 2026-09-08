@@ -4,6 +4,8 @@ package install
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +83,40 @@ func TestWineRunnerInstallerArgs(t *testing.T) {
 	}
 	if recorded.Log != "/tmp/x.log" {
 		t.Fatalf("Log = %q", recorded.Log)
+	}
+}
+
+// TestRunPreparedReportsInstallerNotConfirmedStopped закрывает КРИТ-находку:
+// отмена во время установки должна приводить к тому же классу ошибки, что и
+// на Windows (errInstallerNotConfirmedStopped), иначе discardSilent не
+// узнает, что писатель мог остаться жив, и удалит каталог назначения гонкой.
+func TestRunPreparedReportsInstallerNotConfirmedStopped(t *testing.T) {
+	games := t.TempDir()
+	dest := filepath.Join(games, "Demo")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	installer := filepath.Join(dest, "setup.exe")
+	if err := os.WriteFile(installer, []byte("MZ"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	r := wineRunner{
+		gamesPath: func() string { return games },
+		detect:    failingDetect,
+		runCmd: func(_ context.Context, _ wine.Bottle, _ wine.Cmd) (int, error) {
+			return 0, fmt.Errorf("cxstart: %w", wine.ErrTreeNotStopped)
+		},
+	}
+
+	_, err := r.runPrepared(context.Background(), runSpec{
+		Path: installer, Destination: dest, Dir: dest,
+	}, testBottle(games, dest))
+	if err == nil {
+		t.Fatal("runPrepared with an unstopped tree: want error")
+	}
+	if !errors.Is(err, errInstallerNotConfirmedStopped) {
+		t.Fatalf("err = %v, want it to wrap errInstallerNotConfirmedStopped", err)
 	}
 }
 

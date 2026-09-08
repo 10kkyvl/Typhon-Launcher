@@ -1262,7 +1262,12 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Info("auto install skipped", "id", d.ID, "type", info.Plan.Type)
 		return
 	}
-	if info.RequiredBytes > 0 && info.FreeBytes > 0 && info.FreeBytes < info.RequiredBytes {
+	// FreeBytes == 0 не отличается от любого другого значения ниже
+	// RequiredBytes: freeBytes (ниже по файлу) пробрасывает ошибку получения
+	// свободного места отдельно и никогда не подменяет её нулём, поэтому
+	// нулевой результат здесь всегда означает "том забит под ноль", а не
+	// "неизвестно". Проверка на FreeBytes > 0 глушила именно этот случай.
+	if info.RequiredBytes > 0 && info.FreeBytes < info.RequiredBytes {
 		slog.Warn("auto install skipped, not enough space", "id", d.ID,
 			"required", info.RequiredBytes, "free", info.FreeBytes)
 		return

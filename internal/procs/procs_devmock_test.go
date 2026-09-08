@@ -22,9 +22,12 @@ func TestListReturnsDevmockEntries(t *testing.T) {
 		}
 	})
 
-	got, err := List(context.Background())
+	got, complete, err := List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
+	}
+	if !complete {
+		t.Fatal("List complete = false, want true")
 	}
 
 	var found *Process
@@ -52,9 +55,12 @@ func TestListCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	got, err := List(ctx)
+	got, complete, err := List(ctx)
 	if err == nil {
 		t.Fatal("List with cancelled context: expected error")
+	}
+	if complete {
+		t.Fatal("List with cancelled context: complete = true, want false")
 	}
 	if got != nil {
 		t.Fatalf("List with cancelled context = %v, want nil", got)

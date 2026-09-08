@@ -38,6 +38,13 @@ func (p *devmockProc) wait() (int, error) {
 // Windows process handle there is nothing left for the parent to release.
 func (*devmockProc) close() {}
 
+func (p *devmockProc) terminate() error {
+	if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return fmt.Errorf("прерывание воркера установки: %w", err)
+	}
+	return nil
+}
+
 func workerStartError(path string, err error) error {
 	return fmt.Errorf("запуск воркера установки %s: %w", path, err)
 }

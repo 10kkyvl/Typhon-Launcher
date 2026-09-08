@@ -33,7 +33,13 @@
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   type Filter = 'all' | 'installed' | 'recent';
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
@@ -81,7 +87,7 @@
       if (games.length === 0) return;
       catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.libraryLoadGamesError'), 'danger');
+      toast(metadataErrorText(err, msg('games.libraryLoadGamesError')), 'danger');
     }
   }
 
@@ -224,7 +230,7 @@
       if ($runningGames.has(id)) await stopGame(id);
       else await playGame(id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 </script>

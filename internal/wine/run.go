@@ -51,6 +51,13 @@ func cxstartArgs(b Bottle, c Cmd, wait bool) []string {
 	return append(args, c.Args...)
 }
 
+// ErrTreeNotStopped значит: ctx отменён, но Kill не смог подтвердить, что
+// все процессы бутыля остановлены. cxstart подменяет себя winewrapper'ом —
+// прямым потомком лаунчера, — и завершение только его не гасит установщик,
+// который тот запустил внутри wine; вызывающий не может считать писателя
+// мёртвым, пока Kill не подтвердил остановку бутыля целиком.
+var ErrTreeNotStopped = errors.New("wine: не удалось остановить процессы в бутыле")
+
 // Run ждёт завершения и отдаёт код возврата установщика. Ненулевой код — не
 // ошибка Go: разбирать его умеет вызывающий, у которого есть движок и лог.
 func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
@@ -58,6 +65,12 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, true)...)
 	out, err := cmd.CombinedOutput()
 	if ctxErr := ctx.Err(); ctxErr != nil {
+		// exec.CommandContext убивает только прямого потомка (cxstart, он же
+		// winewrapper): установщик внутри бутыля остаётся жив, поэтому
+		// требуется свалить бутыль целиком.
+		if killErr := m.Kill(b); killErr != nil {
+			return 0, fmt.Errorf("%w: %w: %w", ErrTreeNotStopped, ctxErr, killErr)
+		}
 		return 0, ctxErr
 	}
 	var exit *exec.ExitError

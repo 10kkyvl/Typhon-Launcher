@@ -29,7 +29,12 @@
   import { toast } from '../../lib/stores/toasts';
   import { catalogView } from '../../lib/stores/ui';
   import { inview } from '../../lib/utils/inview';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   type Sort = 'title' | 'year' | 'added';
 
@@ -224,7 +229,7 @@
       if ($runningGames.has(libraryId)) await stopGame(libraryId);
       else await playGame(libraryId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorPlayFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -232,7 +237,7 @@
     try {
       await setFavorite(libraryId, !current);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : msg('games.errorFavoriteFailed'), 'danger');
+      toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
     }
   }
 </script>

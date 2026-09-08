@@ -67,6 +67,10 @@ func (a syncLibrary) Add(canonicalGameID, title string) error {
 	return err
 }
 
+func (a syncLibrary) Remove(canonicalGameID string) error {
+	return a.svc.RemoveGame(canonicalGameID)
+}
+
 type syncCatalog struct{ svc *catalog.Service }
 
 func (a syncCatalog) IGDBIDOf(canonicalGameID string) string {

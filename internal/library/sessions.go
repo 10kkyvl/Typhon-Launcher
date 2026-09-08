@@ -147,7 +147,7 @@ func (s *Service) StopGame(id string) error {
 	if ctx == nil {
 		return fmt.Errorf("%w: сервис ещё не запущен", errSessionCannotConfirm)
 	}
-	list, err := s.scan(ctx)
+	list, _, err := s.scan(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errSessionCannotConfirm, err)
 	}

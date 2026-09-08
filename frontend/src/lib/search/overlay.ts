@@ -1,5 +1,5 @@
 import type { GameHit, ReleaseHit, SearchResult } from '../services/search';
-import { msg } from '../i18n';
+import { errorCode, hasMessage, msg } from '../i18n';
 
 export const debounceMs = 220;
 
@@ -152,10 +152,11 @@ export class SearchOverlay {
       });
     } catch (err) {
       if (token !== this.token) return;
+      const code = errorCode(err);
       this.patch({
         loading: false,
         searched: true,
-        error: err instanceof Error && err.message ? err.message : this.errorText,
+        error: hasMessage(code) ? msg(code) : this.errorText,
         games: [],
         releases: [],
         moreGames: 0,
