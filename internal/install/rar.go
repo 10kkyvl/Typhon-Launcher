@@ -29,6 +29,7 @@ func extractRar(ctx context.Context, archivePath, dest string, rep *reporter) er
 			return errUnsupportedArchive
 		}
 		if !header.IsDir && !header.Mode().IsRegular() {
+			skipIrregular(archivePath, header.Name)
 			continue
 		}
 		target, err := safeJoin(dest, header.Name)

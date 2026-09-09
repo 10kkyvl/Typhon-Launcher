@@ -223,6 +223,32 @@ func TestFindExecutablesFailsWhenEverythingIsUnreadable(t *testing.T) {
 	}
 }
 
+// Раскладка Retro Gadgets: игра в корне, рядом служебный агент на том же
+// движке и с тем же именем файла, плюс вспомогательное приложение, чьё имя
+// похоже на название игры. До разведения одинаковых имён верх списка
+// занимало RetroPlayground.exe, лаунчер подставлял его по умолчанию, и
+// пользователь запускал не игру.
+func TestFindExecutablesPicksTheGameNotItsAgent(t *testing.T) {
+	root := t.TempDir()
+	mkFile(t, filepath.Join(root, "RG.exe"), 640<<10)
+	mkFile(t, filepath.Join(root, "RG_Data", "data.unity3d"), 8<<20)
+	mkFile(t, filepath.Join(root, "UnityCrashHandler64.exe"), 1<<20)
+	mkFile(t, filepath.Join(root, "PlaygroundAgent", "RG.exe"), 640<<10)
+	mkFile(t, filepath.Join(root, "PlaygroundAgent", "RG_Data", "data.unity3d"), 8<<20)
+	mkFile(t, filepath.Join(root, "RetroPlayground", "RetroPlayground.exe"), 3<<20)
+	mkFile(t, filepath.Join(root, "RetroPlayground", "CefSharp.BrowserSubprocess.exe"), 1<<20)
+	mkFile(t, filepath.Join(root, "RetroPlayground", "steamcmd", "steamcmd.exe"), 4<<20)
+	mkFile(t, filepath.Join(root, "RetroProtocolHandler", "RetroProtocolHandler.exe"), 1<<20)
+
+	got := mustFind(t, root, "Retro Gadgets")
+	if filepath.Base(got[0].Path) != "RG.exe" || filepath.Dir(got[0].Path) != root {
+		t.Fatalf("top = %s, want the RG.exe next to RG_Data in the root", got[0].Path)
+	}
+	if !HighConfidence(got) {
+		t.Fatalf("выбор должен быть уверенным, иначе лаунчер снова спросит: %+v", got)
+	}
+}
+
 func TestTrimArch(t *testing.T) {
 	cases := map[string]string{
 		"shooterwin64shipping": "shooter",

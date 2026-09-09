@@ -149,11 +149,12 @@ var assetDirs = map[string]bool{
 }
 
 type exeFile struct {
-	path string
-	rel  string
-	base string
-	dir  string
-	size int64
+	path  string
+	rel   string
+	base  string
+	dir   string
+	size  int64
+	depth int
 }
 
 // paired — базовые имена, для которых в каталоге лежит данные движка:
@@ -240,7 +241,14 @@ func FindExecutables(ctx context.Context, root, title string) ([]Candidate, erro
 		if err != nil {
 			return fmt.Errorf("relative path %s: %w", path, err)
 		}
-		files = append(files, exeFile{path: path, rel: rel, base: base, dir: filepath.Dir(path), size: info.Size()})
+		files = append(files, exeFile{
+			path:  path,
+			rel:   rel,
+			base:  base,
+			dir:   filepath.Dir(path),
+			size:  info.Size(),
+			depth: strings.Count(filepath.ToSlash(rel), "/"),
+		})
 		return nil
 	})
 	if walkErr != nil {
@@ -252,9 +260,10 @@ func FindExecutables(ctx context.Context, root, title string) ([]Candidate, erro
 		return nil, fmt.Errorf("scan executables %s: %d directories unreadable: %w", root, unreadable, firstErr)
 	}
 
+	shallowest := shallowestByName(files)
 	out := make([]Candidate, 0, len(files))
 	for _, f := range files {
-		out = append(out, Candidate{Path: f.path, Score: scoreExe(f, wanted, pairs)})
+		out = append(out, Candidate{Path: f.path, Score: scoreExe(f, wanted, pairs, shallowest)})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Score == out[j].Score {
@@ -311,7 +320,23 @@ func HighConfidence(c []Candidate) bool {
 	return c[0].Score-c[1].Score >= highConfidenceGap
 }
 
-func scoreExe(f exeFile, wanted string, pairs paired) float64 {
+// shallowestByName запоминает, на какой глубине лежит самый верхний файл с
+// таким именем. Второй экземпляр той же программы глубже в дереве — это
+// приложенный к игре служебный агент, а не сама игра: у Retro Gadgets рядом
+// с RG.exe лежит PlaygroundAgent/RG.exe со своими данными движка, и по всем
+// остальным признакам они неразличимы.
+func shallowestByName(files []exeFile) map[string]int {
+	out := make(map[string]int, len(files))
+	for _, f := range files {
+		name := strings.ToLower(f.base)
+		if depth, ok := out[name]; !ok || f.depth < depth {
+			out[name] = f.depth
+		}
+	}
+	return out
+}
+
+func scoreExe(f exeFile, wanted string, pairs paired, shallowest map[string]int) float64 {
 	parts := strings.Split(filepath.ToSlash(f.rel), "/")
 	depth := len(parts) - 1
 
@@ -340,6 +365,9 @@ func scoreExe(f exeFile, wanted string, pairs paired) float64 {
 	}
 	if strings.HasSuffix(flat, "shipping") {
 		score += 20
+	}
+	if top, ok := shallowest[strings.ToLower(f.base)]; ok && depth > top {
+		score -= 12
 	}
 	if f.size > 0 {
 		score += math.Min(30, math.Log10(float64(f.size)/1024+1)*8)

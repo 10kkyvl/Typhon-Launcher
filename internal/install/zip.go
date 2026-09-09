@@ -21,6 +21,7 @@ func extractZip(ctx context.Context, archivePath, dest string, rep *reporter) er
 		}
 		info := entry.FileInfo()
 		if !info.IsDir() && !info.Mode().IsRegular() {
+			skipIrregular(archivePath, entry.Name)
 			continue
 		}
 		target, err := safeJoin(dest, entry.Name)
