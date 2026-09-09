@@ -8,6 +8,7 @@ export const games: Record<GamesKey, Message> = {
   'games.statusBacklog': 'Backlog',
   'games.statusPaused': 'Paused',
   'games.statusNone': 'No status',
+  'games.statusPlayingOther': 'In progress',
 
   'games.play': 'Play',
   'games.stop': 'Stop',
@@ -131,7 +132,7 @@ export const games: Record<GamesKey, Message> = {
   'games.detailChooseDownloadTitle': 'Choose a download',
 
   'games.friendsPanelTitle': 'Friends',
-  'games.friendsPanelPlayingNow': 'Playing now',
+  'games.friendsPanelInGame': 'Playing now',
   'games.friendsPanelSeeAll': 'See all friends',
 
   'games.installedAddDesktopOnly': 'Adding games is only available in the desktop build',

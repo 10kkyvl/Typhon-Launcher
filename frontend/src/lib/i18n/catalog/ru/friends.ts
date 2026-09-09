@@ -15,10 +15,10 @@ export const friends = {
     few: '{count} общие игры',
     many: '{count} общих игр',
   },
-  'friends.played': {
-    one: '{count} друг играл',
-    few: '{count} друга играли',
-    many: '{count} друзей играли',
+  'friends.inLibrary': {
+    one: 'В библиотеке у {count} друга',
+    few: 'В библиотеке у {count} друзей',
+    many: 'В библиотеке у {count} друзей',
   },
   'friends.sentAt': 'Отправлена {when}',
   'friends.receivedAt': 'Получена {when}',

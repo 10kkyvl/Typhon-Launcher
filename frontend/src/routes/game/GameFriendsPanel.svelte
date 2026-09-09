@@ -4,7 +4,8 @@
   import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
-  import { statusBadgeKind, statusLabel } from '../../lib/game/status';
+  import { gameFriendRows } from '../../lib/game/friends';
+  import { friendStatusLabel, statusBadgeKind } from '../../lib/game/status';
   import { gameFriends, type GameFriends } from '../../lib/services/social';
   import { friendsPage } from '../../lib/stores/social';
   import { navigate } from '../../lib/stores/router';
@@ -45,54 +46,48 @@
     };
   });
 
-  const played = $derived(page?.played ?? []);
-  const playingNow = $derived(page?.playingNow ?? []);
-  const playedLine = $derived(
-    msg('friends.played', { count: played.length }),
-  );
+  const rows = $derived(gameFriendRows(page));
+  const countLine = $derived(msg('friends.inLibrary', { count: rows.length }));
 </script>
 
-{#if played.length > 0 || playingNow.length > 0}
+{#if rows.length > 0}
   <Card title={msg('games.friendsPanelTitle')}>
-    {#if played.length > 0}
-      <p class="line">{playedLine}</p>
-      <ul class="people">
-        {#each played as friend (friend.id)}
-          <li class="person">
-            <button class="who" type="button" onclick={() => navigate('user', { username: friend.username })}>
-              <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} />
-              <span class="names">
-                <span class="name">{friend.displayName || friend.username}</span>
-                <span class="meta">
-                  {#if friend.playtimeSeconds}
-                    <span class="time">{playtime(friend.playtimeSeconds)}</span>
-                  {/if}
-                  {#if friend.status}
-                    <StatusBadge plain kind={statusBadgeKind(friend.status)} label={statusLabel(friend.status)} />
-                  {/if}
-                </span>
+    <p class="line">{countLine}</p>
+    <ul class="people">
+      {#each rows as row (row.friend.id)}
+        <li class="person">
+          <button
+            class="who"
+            type="button"
+            onclick={() => navigate('user', { username: row.friend.username })}
+          >
+            <Avatar
+              size="sm"
+              name={row.friend.displayName || row.friend.username}
+              src={row.friend.avatarUrl}
+              status={row.playing ? 'online' : undefined}
+            />
+            <span class="names">
+              <span class="name">{row.friend.displayName || row.friend.username}</span>
+              <span class="meta">
+                {#if row.friend.playtimeSeconds}
+                  <span class="time">{playtime(row.friend.playtimeSeconds)}</span>
+                {/if}
+                {#if row.playing}
+                  <StatusBadge plain kind="success" label={msg('games.friendsPanelInGame')} />
+                {:else if friendStatusLabel(row.friend.status)}
+                  <StatusBadge
+                    plain
+                    kind={statusBadgeKind(row.friend.status)}
+                    label={friendStatusLabel(row.friend.status)}
+                  />
+                {/if}
               </span>
-            </button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-
-    {#if playingNow.length > 0}
-      <p class="line sub">{msg('games.friendsPanelPlayingNow')}</p>
-      <ul class="people">
-        {#each playingNow as friend (friend.id)}
-          <li class="person">
-            <button class="who" type="button" onclick={() => navigate('user', { username: friend.username })}>
-              <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} status="online" />
-              <span class="names">
-                <span class="name">{friend.displayName || friend.username}</span>
-              </span>
-            </button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+            </span>
+          </button>
+        </li>
+      {/each}
+    </ul>
 
     <button class="show-all" type="button" onclick={() => navigate('friends')}>
       {msg('games.friendsPanelSeeAll')}
@@ -106,10 +101,6 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     margin-bottom: var(--space-2);
-  }
-
-  .line.sub {
-    margin-top: var(--space-4);
   }
 
   .people {

@@ -5,6 +5,7 @@ export const games = {
   'games.statusBacklog': 'В планах',
   'games.statusPaused': 'На паузе',
   'games.statusNone': 'Без статуса',
+  'games.statusPlayingOther': 'Проходит',
 
   'games.play': 'Играть',
   'games.stop': 'Остановить',
@@ -128,7 +129,7 @@ export const games = {
   'games.detailChooseDownloadTitle': 'Выберите загрузку',
 
   'games.friendsPanelTitle': 'Друзья',
-  'games.friendsPanelPlayingNow': 'Играют сейчас',
+  'games.friendsPanelInGame': 'Играет сейчас',
   'games.friendsPanelSeeAll': 'Смотреть всех друзей',
 
   'games.installedAddDesktopOnly': 'Добавление игр доступно только в desktop-сборке',
