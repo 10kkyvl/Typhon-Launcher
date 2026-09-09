@@ -105,6 +105,7 @@ func newSyncedHarness(t *testing.T, token func() (string, error), status int, re
 	svc.now = h.clock.now
 	svc.sent = h.sent
 	h.svc = svc
+	h.idleFor(0)
 	return h
 }
 
@@ -572,6 +573,7 @@ func newFlakyHarness(t *testing.T, status *atomic.Int32, resolve func(string) st
 	svc.now = h.clock.now
 	svc.sent = h.sent
 	h.svc = svc
+	h.idleFor(0)
 	return h
 }
 
@@ -681,6 +683,7 @@ func newRateLimitedHarness(t *testing.T, resolve func(string) string) *harness {
 	svc.now = h.clock.now
 	svc.sent = h.sent
 	h.svc = svc
+	h.idleFor(0)
 	return h
 }
 

@@ -19,6 +19,7 @@ Easier game launching on Mac, clearer friend activity, and more reliable library
 - Log upload errors explain whether to try again later, reduce the archive size or wait for a rate limit to expire
 
 ### Fixed
+- Saving settings and installation state on Windows retries brief file locks from another reader, keeping the previous complete copy until replacement succeeds
 - Typhon picks a game's launch file more accurately after installation, avoiding helper programs with similar names
 - Improved launching and tracking games through CrossOver on macOS, handling the shared Steam environment and loading DLLs from the game folder
 - A game added back to the library could disappear again after sync. Also fixed syncing large libraries and carrying pending actions across different accounts

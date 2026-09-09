@@ -188,25 +188,19 @@ func TestSaveConsentRecordsAnswerAndVersionTogether(t *testing.T) {
 // there is shown to the user verbatim unless it carries a code the frontend
 // can translate.
 func TestSaveConsentFailureCarriesAUICode(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root writes into a read-only directory")
-	}
 	dir := t.TempDir()
 	svc := mustServiceAt(t, filepath.Join(dir, "settings.json"))
-	//nolint:gosec // G302: the test needs a directory the process cannot write to, which is what makes SaveConsent fail.
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatalf("chmod config dir: %v", err)
+	// A regular file in the parent path fails on Windows as well as Unix,
+	// including when the tests run as root. Chmod is not a Windows ACL.
+	blocked := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("occupied"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		//nolint:gosec // G302: restoring the directory to the mode t.TempDir gave it, so the cleanup can delete it.
-		if err := os.Chmod(dir, 0o700); err != nil {
-			t.Errorf("restore config dir mode: %v", err)
-		}
-	})
+	svc.path = filepath.Join(blocked, "settings.json")
 
 	_, err := svc.SaveConsent(true, true)
 	if err == nil {
-		t.Fatal("SaveConsent into a read-only directory = nil, want an error")
+		t.Fatal("SaveConsent with an invalid parent path = nil, want an error")
 	}
 	if code := uierr.Code(err); code != ErrCodeConsentSaveFailed {
 		t.Fatalf("uierr.Code(err) = %q, want %q (raw text: %v)", code, ErrCodeConsentSaveFailed, err)

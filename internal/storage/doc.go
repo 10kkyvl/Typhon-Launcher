@@ -310,7 +310,7 @@ func WriteAtomic(path string, data []byte) error {
 		discardTemp(f)
 		return fmt.Errorf("close %s: %w", tmp, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := replaceFile(tmp, path); err != nil {
 		discardTemp(f)
 		return fmt.Errorf("replace %s: %w", path, err)
 	}

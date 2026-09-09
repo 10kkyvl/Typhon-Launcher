@@ -627,17 +627,9 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 	if err := os.MkdirAll(gamesPath, 0o755); err != nil {
 		return Transfer{}, err
 	}
-	base := filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID))
-	dest := base
-	for suffix := 0; ; suffix++ {
-		if suffix > 0 {
-			dest = fmt.Sprintf("%s-%s-%d", base, offer.InfoHash[:8], suffix)
-		}
-		if err := os.Mkdir(dest, 0o755); err == nil {
-			break
-		} else if !errors.Is(err, fs.ErrExist) {
-			return Transfer{}, fmt.Errorf("lan: create destination: %w", err)
-		}
+	dest, err := reserveReceiveDirectory(filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID)), offer.InfoHash)
+	if err != nil {
+		return Transfer{}, err
 	}
 
 	t, err := run.cl.addForReceiving(hash, offer.Title, dest)
@@ -678,6 +670,22 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 
 	s.emit("lan:transfer", tr)
 	return tr, nil
+}
+
+func reserveReceiveDirectory(base, infoHash string) (string, error) {
+	dest := base
+	for suffix := 0; ; suffix++ {
+		if suffix > 0 {
+			dest = fmt.Sprintf("%s-%s-%d", base, infoHash[:8], suffix)
+		}
+		if err := os.Mkdir(dest, 0o755); err == nil {
+			break
+		} else if !errors.Is(err, fs.ErrExist) {
+			return "", fmt.Errorf("lan: create destination: %w", err)
+		}
+	}
+
+	return dest, nil
 }
 
 func (s *Service) Cancel(id string) error {
