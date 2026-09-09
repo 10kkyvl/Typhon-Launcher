@@ -40,6 +40,11 @@ ps -eo pid,command | grep '[b]in/typhon' && pkill -9 -f 'bin/typhon'   # не у
 Лаунчер single-instance: если старый жив, новый бинарь молча передаёт ему фокус и выходит,
 и ты смотришь на старую сборку. Проверять до каждого запуска, не только в первый раз.
 
+`pkill -f 'bin/typhon'` ловит не всех: запущенный из Finder бандл идёт из карантинной копии
+(`/private/var/folders/.../AppTranslocation/.../typhon.app/Contents/MacOS/typhon`), и по
+`bin/typhon` не находится. Признак — новый процесс исчез сразу после старта, а лог при этом
+свежий. Искать по имени, а не по пути: `pgrep -f 'MacOS/typhon'`.
+
 ### 2. Собрать и запустить
 
 ```bash
