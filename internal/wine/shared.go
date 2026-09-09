@@ -28,6 +28,12 @@ var ErrNoSharedBottle = errors.New("wine: общий бутыль Steam не н�
 // ErrNoDriveForPath — ни одна буква бутыля не покрывает путь игры.
 var ErrNoDriveForPath = errors.New("wine: в бутыле нет буквы, покрывающей путь")
 
+// SharedBottleUnavailable distinguishes an absent or unsuitable shared bottle
+// from an I/O failure that must reach the caller.
+func SharedBottleUnavailable(err error) bool {
+	return errors.Is(err, ErrNoSharedBottle) || errors.Is(err, ErrNoDriveForPath)
+}
+
 // SharedBottleName отдаёт имя общего бутыля.
 func SharedBottleName() string {
 	if name := strings.TrimSpace(os.Getenv(SharedBottleEnv)); name != "" {
@@ -56,10 +62,22 @@ func (m *Manager) SharedBottle(destDir string) (Bottle, error) {
 	}
 	name := SharedBottleName()
 	path := filepath.Join(m.BottlesDir, name)
-	if info, statErr := os.Stat(filepath.Join(path, "dosdevices")); statErr != nil || !info.IsDir() {
+	dosdevices := filepath.Join(path, "dosdevices")
+	info, err := os.Stat(dosdevices)
+	if errors.Is(err, os.ErrNotExist) {
 		return Bottle{}, fmt.Errorf("%w: %s", ErrNoSharedBottle, path)
 	}
-	letter, target, ok := drives(path).drive(dest)
+	if err != nil {
+		return Bottle{}, fmt.Errorf("проверка %s: %w", dosdevices, err)
+	}
+	if !info.IsDir() {
+		return Bottle{}, fmt.Errorf("таблица дисков %s не является каталогом", dosdevices)
+	}
+	driveTable, err := drives(path)
+	if err != nil {
+		return Bottle{}, err
+	}
+	letter, target, ok := driveTable.drive(dest)
 	if !ok {
 		return Bottle{}, fmt.Errorf("%w: %s в бутыле %s", ErrNoDriveForPath, dest, name)
 	}
@@ -95,14 +113,14 @@ func (m *Manager) SharedBottlePath() (string, bool) {
 // driveMap — буквы бутыля и их native-цели.
 type driveMap map[string]string
 
-// drives читает dosdevices бутыля. Ошибки чтения не отличаются от пустой
-// таблицы: и то и другое значит «через этот бутыль путь не выражается», а
-// вызывающему в обоих случаях делать одно и то же.
-func drives(bottlePath string) driveMap {
+// drives читает dosdevices бутыля. Отсутствующая буква — обычное состояние,
+// но повреждённая или недоступная таблица возвращается как ошибка: молча
+// переключать игру в другой prefix в этом случае нельзя.
+func drives(bottlePath string) (driveMap, error) {
 	dosdevices := filepath.Join(bottlePath, "dosdevices")
 	entries, err := os.ReadDir(dosdevices)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("чтение дисков бутыля %s: %w", bottlePath, err)
 	}
 	out := make(driveMap, len(entries))
 	for _, entry := range entries {
@@ -114,7 +132,7 @@ func drives(bottlePath string) driveMap {
 		}
 		target, err := os.Readlink(filepath.Join(dosdevices, name))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("чтение диска %s бутыля: %w", name, err)
 		}
 		if !filepath.IsAbs(target) {
 			// c: указывает на ../drive_c относительно самого dosdevices.
@@ -122,7 +140,7 @@ func drives(bottlePath string) driveMap {
 		}
 		out[strings.ToLower(name[:1])] = filepath.Clean(target)
 	}
-	return out
+	return out, nil
 }
 
 // drive выбирает букву, под которой бутыль видит native-путь. Побеждает
@@ -184,22 +202,27 @@ func (b Bottle) SteamExe() (string, error) {
 	return "", fmt.Errorf("steam.exe не найден в бутыле %s", b.Name)
 }
 
-// steamProcess опознаёт Steam в таблице процессов. Бутыль по строке ps
-// не определить — там только windows-путь, одинаковый во всех префиксах, —
-// поэтому запущенный в соседнем бутыле Steam мы посчитаем своим. Цена
-// ошибки мала: лишний Steam не поднимется, а игра всё равно стартует.
+// steamProcess отбирает кандидатов по windows-пути. Принадлежность бутылю
+// SteamRunning проверяет отдельно по окружению процесса.
 func steamProcess(winPath string) bool {
 	return strings.HasSuffix(strings.ToLower(winPath), `\steam.exe`)
 }
 
-// SteamRunning отвечает, крутится ли уже windows Steam.
-func (m *Manager) SteamRunning() (bool, error) {
+// SteamRunning отвечает, крутится ли windows Steam именно в указанном бутыле.
+func (m *Manager) SteamRunning(b Bottle) (bool, error) {
 	out, err := m.processList()
 	if err != nil {
 		return false, err
 	}
 	for _, entry := range parsePS(out) {
-		if steamProcess(entry.winPath) {
+		if !steamProcess(entry.winPath) {
+			continue
+		}
+		env, envErr := m.processEnvironment(entry.pid)
+		if envErr != nil {
+			return false, fmt.Errorf("окружение процесса Steam %d: %w", entry.pid, envErr)
+		}
+		if processRunsInBottle(env, b.Name) {
 			return true, nil
 		}
 	}
@@ -220,7 +243,7 @@ const steamPollInterval = 500 * time.Millisecond
 //
 // Возвращает true, если Steam пришлось запускать.
 func (m *Manager) EnsureSteam(ctx context.Context, b Bottle) (bool, error) {
-	running, err := m.SteamRunning()
+	running, err := m.SteamRunning(b)
 	if err != nil {
 		return false, err
 	}
@@ -238,13 +261,13 @@ func (m *Manager) EnsureSteam(ctx context.Context, b Bottle) (bool, error) {
 	if err := m.StartDetached(ctx, b, Cmd{Path: exe, Args: []string{"-silent"}}); err != nil {
 		return false, fmt.Errorf("запуск Steam в бутыле %s: %w", b.Name, err)
 	}
-	if err := m.awaitSteam(ctx); err != nil {
+	if err := m.awaitSteam(ctx, b); err != nil {
 		return true, err
 	}
 	return true, nil
 }
 
-func (m *Manager) awaitSteam(ctx context.Context) error {
+func (m *Manager) awaitSteam(ctx context.Context, b Bottle) error {
 	ticker := time.NewTicker(steamPollInterval)
 	defer ticker.Stop()
 	deadline := time.After(steamAppearTimeout)
@@ -259,7 +282,7 @@ func (m *Manager) awaitSteam(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 		}
-		running, err := m.SteamRunning()
+		running, err := m.SteamRunning(b)
 		if err != nil {
 			return err
 		}

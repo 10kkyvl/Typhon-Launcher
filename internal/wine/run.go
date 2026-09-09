@@ -101,10 +101,10 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 func (m *Manager) StartDetached(ctx context.Context, b Bottle, c Cmd) error {
 	//nolint:gosec // G204: путь до cxstart получен из Detect, аргументы собраны cxstartArgs
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, false)...)
-	// Полная командная строка в журнале — единственный способ разобрать
-	// «игра не пошла» постфактум: вывод cxstart сюда не попадает (см. выше),
-	// а argv показывает и выбранный бутыль, и путь, каким его увидел wine.
-	slog.Info("cxstart", "bottle", b.Name, "argv", cmd.Args)
+	// Путь и launch options нужны для диагностики, но сами аргументы игры
+	// могут содержать токены или пароль и в журнал попадать не должны.
+	slog.Info("cxstart", "bottle", b.Name, "path", c.Path, "workDir", c.WorkDir,
+		"dllOverrides", c.DLLOverrides, "argCount", len(c.Args))
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("запуск %s в бутыле %s: %w", c.Path, b.Name, err)
 	}

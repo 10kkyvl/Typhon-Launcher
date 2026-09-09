@@ -128,6 +128,22 @@ func TestSharedBottleWithoutCoveringDrive(t *testing.T) {
 	}
 }
 
+func TestSharedBottleReportsBrokenDriveEntry(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	path := filepath.Join(bottles, "Steam", "dosdevices")
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "z:"), nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := m.SharedBottle(t.TempDir())
+	if err == nil || errors.Is(err, ErrNoDriveForPath) || errors.Is(err, ErrNoSharedBottle) {
+		t.Fatalf("SharedBottle with a broken drive entry = %v, want the read error", err)
+	}
+}
+
 // TestSharedBottleStaysInvisibleToOwnAPI — самая важная гарантия задачи:
 // пользовательский бутыль не должен попадать ни в перечисление наших, ни под
 // удаление. Иначе снос игры унёс бы вместе с ней Steam.
@@ -193,7 +209,9 @@ func TestSteamRunning(t *testing.T) {
 		return "  PID                  STARTED COMMAND\n" +
 			`87451 Sun Sep  6 07:31:35 2026 C:\windows\system32\notepad.exe` + "\n", nil
 	}
-	running, err := m.SteamRunning()
+	m.processEnv = func(int) (string, error) { return "CX_BOTTLE=Steam ", nil }
+	b := Bottle{Name: "Steam"}
+	running, err := m.SteamRunning(b)
 	if err != nil {
 		t.Fatalf("SteamRunning: %v", err)
 	}
@@ -205,12 +223,44 @@ func TestSteamRunning(t *testing.T) {
 		return "  PID                  STARTED COMMAND\n" +
 			`87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe -silent` + "\n", nil
 	}
-	running, err = m.SteamRunning()
+	running, err = m.SteamRunning(b)
 	if err != nil {
 		t.Fatalf("SteamRunning: %v", err)
 	}
 	if !running {
 		t.Fatal("SteamRunning = false при живом Steam")
+	}
+}
+
+func TestSteamRunningIgnoresAnotherBottle(t *testing.T) {
+	m, _, _ := newTestManager(t)
+	m.psOutput = func() (string, error) {
+		return "  PID                  STARTED COMMAND\n" +
+			`87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe` + "\n", nil
+	}
+	m.processEnv = func(pid int) (string, error) {
+		if pid != 87451 {
+			t.Fatalf("processEnv pid = %d, want 87451", pid)
+		}
+		return "CX_BOTTLE=Other WINEPREFIX=/bottles/Other ", nil
+	}
+
+	running, err := m.SteamRunning(Bottle{Name: "Steam"})
+	if err != nil {
+		t.Fatalf("SteamRunning: %v", err)
+	}
+	if running {
+		t.Fatal("SteamRunning accepted Steam from another bottle")
+	}
+}
+
+func TestProcessRunsInBottleSupportsSpaces(t *testing.T) {
+	env := "PATH=/bin CX_BOTTLE=Steam Games WINEPREFIX=/bottles/Steam Games"
+	if !processRunsInBottle(env, "Steam Games") {
+		t.Fatal("processRunsInBottle did not match a bottle name containing spaces")
+	}
+	if processRunsInBottle(env, "Steam") {
+		t.Fatal("processRunsInBottle matched a bottle-name prefix")
 	}
 }
 
@@ -222,6 +272,7 @@ func TestEnsureSteamSkipsRunning(t *testing.T) {
 		return "  PID                  STARTED COMMAND\n" +
 			`87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe` + "\n", nil
 	}
+	m.processEnv = func(int) (string, error) { return "CX_BOTTLE=Steam ", nil }
 	b, err := m.SharedBottle(filepath.Join(home, "Demo"))
 	if err != nil {
 		t.Fatalf("SharedBottle: %v", err)
@@ -259,6 +310,7 @@ func TestEnsureSteamStartsAndWaits(t *testing.T) {
 		}
 		return head + `87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe -silent` + "\n", nil
 	}
+	m.processEnv = func(int) (string, error) { return "CX_BOTTLE=Steam ", nil }
 
 	b, err := m.SharedBottle(filepath.Join(home, "Demo"))
 	if err != nil {

@@ -66,6 +66,7 @@ export const games: Record<GamesKey, Message> = {
   'games.errorFolderUnavailable': 'Folder unavailable',
   'games.errorFavoriteFailed': 'Failed to update favorites',
   'games.errorRequiresSteamFailed': 'Failed to update the launch bottle',
+  'games.errorWineStatusFailed': 'Failed to check CrossOver status',
 
   'games.detailFactReleaseDate': 'Release date',
   'games.detailFactDeveloper': 'Developer',

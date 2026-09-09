@@ -195,7 +195,10 @@ func TestProxyDLLOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := proxyDLLOverrides(filepath.Join(dir, "game.exe"), "")
+	got, err := proxyDLLOverrides(filepath.Join(dir, "game.exe"), "")
+	if err != nil {
+		t.Fatalf("proxyDLLOverrides: %v", err)
+	}
 	if got != "winmm=n,b;winhttp=n,b" {
 		t.Fatalf("proxyDLLOverrides = %q, want winmm and winhttp", got)
 	}
@@ -208,7 +211,13 @@ func TestProxyDLLOverridesChecksWorkDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := proxyDLLOverrides(filepath.Join(exeDir, "bin", "game.exe"), workDir)
+	if err := os.Mkdir(filepath.Join(exeDir, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, err := proxyDLLOverrides(filepath.Join(exeDir, "bin", "game.exe"), workDir)
+	if err != nil {
+		t.Fatalf("proxyDLLOverrides: %v", err)
+	}
 	if got != "version=n,b" {
 		t.Fatalf("proxyDLLOverrides = %q, want version=n,b", got)
 	}
@@ -216,8 +225,31 @@ func TestProxyDLLOverridesChecksWorkDir(t *testing.T) {
 
 func TestProxyDLLOverridesEmptyWithoutProxy(t *testing.T) {
 	dir := t.TempDir()
-	if got := proxyDLLOverrides(filepath.Join(dir, "game.exe"), dir); got != "" {
+	got, err := proxyDLLOverrides(filepath.Join(dir, "game.exe"), dir)
+	if err != nil {
+		t.Fatalf("proxyDLLOverrides: %v", err)
+	}
+	if got != "" {
 		t.Fatalf("proxyDLLOverrides = %q, want empty", got)
+	}
+}
+
+func TestWineStarterReportsProxyDirectoryFailure(t *testing.T) {
+	starter := wineStarter{
+		lookup:    func(string) (wine.Bottle, bool) { return demoBottle(), true },
+		overrides: proxyDLLOverrides,
+		launch: func(context.Context, wine.Bottle, wine.Cmd) error {
+			t.Fatal("launch called after proxy scan failed")
+			return nil
+		},
+		poll:    func(context.Context, wine.Bottle) ([]wine.Process, error) { return nil, nil },
+		stop:    func(wine.Bottle) error { return nil },
+		settle:  time.Millisecond,
+		timeout: time.Second,
+	}
+	req := demoLaunch(func(r *launch) { r.workDir = filepath.Join(t.TempDir(), "missing") })
+	if _, err := starter.start(t.Context(), req); err == nil {
+		t.Fatal("start with an unreadable proxy directory: want error")
 	}
 }
 
@@ -332,6 +364,20 @@ func TestWineStarterFallsBackToOwnBottle(t *testing.T) {
 	}
 	if launchedIn.Shared || launchedIn.Name != "B" {
 		t.Fatalf("игра ушла в %+v, want собственный бутыль", launchedIn)
+	}
+}
+
+func TestWineStarterDoesNotHideSharedBottleFailure(t *testing.T) {
+	starter := wineStarter{
+		lookup: func(string) (wine.Bottle, bool) {
+			t.Fatal("own bottle lookup called after an unexpected shared bottle failure")
+			return wine.Bottle{}, false
+		},
+		shared: func(string) (wine.Bottle, error) { return wine.Bottle{}, os.ErrPermission },
+	}
+	req := demoLaunch(func(r *launch) { r.shared = true })
+	if _, err := starter.bottleFor(req); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("bottleFor = %v, want permission error", err)
 	}
 }
 

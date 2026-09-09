@@ -40,6 +40,9 @@ func prepareRuntime(ctx context.Context, installDir, executable string) error {
 		slog.Info("shared bottle covers install, skipping own bottle", "bottle", sharedBottle.Name, "installDir", installDir)
 		return nil
 	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return sharedErr
+	}
 	slog.Debug("shared bottle unavailable, preparing own bottle", "installDir", installDir, "error", sharedErr)
 
 	if _, ok := manager.Lookup(installDir); ok {

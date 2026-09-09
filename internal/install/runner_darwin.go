@@ -80,6 +80,9 @@ func (r wineRunner) bottle(spec runSpec) (wine.Bottle, error) {
 		slog.Info("installing into shared bottle", "bottle", sharedBottle.Name, "shared", sharedBottle.Shared, "destination", dest)
 		return sharedBottle, nil
 	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return wine.Bottle{}, uierr.Wrap("wine.bottle_create_failed", sharedErr)
+	}
 	// Общего бутыля нет или он не покрывает путь установки — обычное
 	// состояние машины без общего Steam, а не поломка.
 	slog.Info("shared bottle unavailable, using own bottle", "destination", dest, "error", sharedErr)

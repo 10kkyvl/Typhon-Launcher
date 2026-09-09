@@ -180,10 +180,11 @@ func TestLiveSharedBottleRunsExternalExe(t *testing.T) {
 		t.Fatalf("UserHomeDir: %v", err)
 	}
 	// Каталог в домашней папке, а не в t.TempDir(): именно домашние пути
-	// CrossOver переводит на отдельную букву, и проверять надо этот случай.
-	dest := filepath.Join(home, "Kebab Chefs! Restaurant Simulator")
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
+	// CrossOver переводит на отдельную букву. Имя уникальное: live-тест
+	// не должен затронуть настоящую установку игры с похожим именем.
+	dest, err := os.MkdirTemp(home, "Typhon Live Kebab Chefs! ")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := os.RemoveAll(dest); err != nil {
@@ -219,6 +220,8 @@ func TestLiveSharedBottleRunsExternalExe(t *testing.T) {
 
 	var seen []Process
 	deadline := time.Now().Add(30 * time.Second)
+	poll := time.NewTicker(100 * time.Millisecond)
+	defer poll.Stop()
 	for time.Now().Before(deadline) {
 		found, err := m.Processes(t.Context(), b)
 		if err != nil {
@@ -227,6 +230,11 @@ func TestLiveSharedBottleRunsExternalExe(t *testing.T) {
 		if len(found) > 0 {
 			seen = found
 			break
+		}
+		select {
+		case <-t.Context().Done():
+			t.Fatal(t.Context().Err())
+		case <-poll.C:
 		}
 	}
 	if len(seen) == 0 {

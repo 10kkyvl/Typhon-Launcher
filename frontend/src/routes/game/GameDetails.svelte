@@ -122,6 +122,12 @@
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
+  let requiresSteam = $state(true);
+  let requiresSteamSaving = $state(false);
+
+  $effect(() => {
+    if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
+  });
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -230,7 +236,11 @@
   });
 
   onMount(async () => {
-    wineStatus = await getWineStatus();
+    try {
+      wineStatus = await getWineStatus();
+    } catch (err) {
+      toast(markError(err, msg('games.errorWineStatusFailed')), 'danger');
+    }
   });
 
   onMount(() => {
@@ -473,10 +483,20 @@
     void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
   }
 
-  function toggleRequiresSteam(on: boolean) {
+  async function toggleRequiresSteam(on: boolean) {
     const current = localGame;
-    if (!current) return;
-    void mark(() => setRequiresSteam(current.id, on), msg('games.errorRequiresSteamFailed'));
+    if (!current || requiresSteamSaving) return;
+    const previous = current.requiresSteam !== false;
+    requiresSteamSaving = true;
+    try {
+      const updated = await setRequiresSteam(current.id, on);
+      if (localGame?.id === current.id) requiresSteam = updated.requiresSteam !== false;
+    } catch (err) {
+      if (localGame?.id === current.id) requiresSteam = previous;
+      toast(markError(err, msg('games.errorRequiresSteamFailed')), 'danger');
+    } finally {
+      if (localGame?.id === current.id) requiresSteamSaving = false;
+    }
   }
 
   async function createDesktopShortcut() {
@@ -943,9 +963,10 @@
                   <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
                 </div>
                 <Toggle
-                  checked={localGame.requiresSteam !== false}
+                  bind:checked={requiresSteam}
                   label={msg('games.detailSteamBottleLabel')}
-                  onchange={toggleRequiresSteam}
+                  disabled={requiresSteamSaving}
+                  onchange={(on) => void toggleRequiresSteam(on)}
                 />
               </div>
             {/if}

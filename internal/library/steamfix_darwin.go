@@ -133,7 +133,21 @@ func readSteamFix(path string) (steamFixInfo, error) {
 }
 
 func steamGameProcessLogPath(bottle wine.Bottle) string {
-	return filepath.Join(bottle.Path, "drive_c", "Program Files (x86)", "Steam", "logs", "gameprocess_log.txt")
+	root := filepath.Join(bottle.Path, "drive_c")
+	programFiles := []string{"Program Files (x86)", "Program Files"}
+	for _, dir := range programFiles {
+		path := filepath.Join(root, dir, "Steam", "logs", "gameprocess_log.txt")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	for _, dir := range programFiles {
+		steamRoot := filepath.Join(root, dir, "Steam")
+		if _, err := os.Stat(filepath.Join(steamRoot, "steam.exe")); err == nil {
+			return filepath.Join(steamRoot, "logs", "gameprocess_log.txt")
+		}
+	}
+	return filepath.Join(root, "Program Files (x86)", "Steam", "logs", "gameprocess_log.txt")
 }
 
 func steamGameProcessLogCursor(bottle wine.Bottle) steamLogCursor {

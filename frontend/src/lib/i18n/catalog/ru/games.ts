@@ -63,6 +63,7 @@ export const games = {
   'games.errorFolderUnavailable': 'Папка недоступна',
   'games.errorFavoriteFailed': 'Не удалось изменить любимые',
   'games.errorRequiresSteamFailed': 'Не удалось изменить бутыль запуска',
+  'games.errorWineStatusFailed': 'Не удалось проверить состояние CrossOver',
 
   'games.detailFactReleaseDate': 'Дата выхода',
   'games.detailFactDeveloper': 'Разработчик',

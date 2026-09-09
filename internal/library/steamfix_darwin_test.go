@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/wine"
 )
 
 func TestDetectSteamFix(t *testing.T) {
@@ -90,5 +92,34 @@ func TestObserveSteamLogStartsAtLaunchCursorAndKeepsPartialLine(t *testing.T) {
 	}
 	if got.AppID != 1001270 || got.WinePID != 42 {
 		t.Fatalf("second observe = %+v", got)
+	}
+}
+
+func TestSteamGameProcessLogPathSupportsProgramFiles(t *testing.T) {
+	bottle := wine.Bottle{Path: t.TempDir()}
+	want := filepath.Join(bottle.Path, "drive_c", "Program Files", "Steam", "logs", "gameprocess_log.txt")
+	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(want, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if got := steamGameProcessLogPath(bottle); got != want {
+		t.Fatalf("steamGameProcessLogPath = %q, want %q", got, want)
+	}
+}
+
+func TestSteamGameProcessLogPathUsesSteamInstallBeforeLogExists(t *testing.T) {
+	bottle := wine.Bottle{Path: t.TempDir()}
+	steamExe := filepath.Join(bottle.Path, "drive_c", "Program Files", "Steam", "steam.exe")
+	if err := os.MkdirAll(filepath.Dir(steamExe), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(steamExe, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	want := filepath.Join(filepath.Dir(steamExe), "logs", "gameprocess_log.txt")
+	if got := steamGameProcessLogPath(bottle); got != want {
+		t.Fatalf("steamGameProcessLogPath = %q, want %q", got, want)
 	}
 }

@@ -44,6 +44,9 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		slog.Info("discovery using shared bottle", "bottle", sharedBottle.Name, "destination", in.Destination)
 		return discoverWithBottle(ctx, in, sharedBottle, manager.Run)
 	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return discoveryOutcome{}, sharedErr
+	}
 	slog.Debug("shared bottle unavailable for discovery, falling back to lookup", "destination", in.Destination, "error", sharedErr)
 
 	bottle, ok := manager.Lookup(in.Destination)

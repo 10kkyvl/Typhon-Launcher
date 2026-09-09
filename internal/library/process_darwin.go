@@ -36,6 +36,7 @@ type wineStarter struct {
 	// shared отдаёт общий бутыль со Steam, нацеленный на каталог установки.
 	shared     func(destDir string) (wine.Bottle, error)
 	steam      func(ctx context.Context, b wine.Bottle) (bool, error)
+	overrides  func(executable, workDir string) (string, error)
 	launch     func(ctx context.Context, b wine.Bottle, c wine.Cmd) error
 	poll       func(ctx context.Context, b wine.Bottle) ([]wine.Process, error)
 	stop       func(b wine.Bottle) error
@@ -54,6 +55,7 @@ func newGameStarter() gameStarter {
 		lookup:     manager.Lookup,
 		shared:     manager.SharedBottle,
 		steam:      manager.EnsureSteam,
+		overrides:  proxyDLLOverrides,
 		launch:     manager.StartDetached,
 		poll:       manager.Processes,
 		stop:       manager.Kill,
@@ -91,10 +93,17 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 	if err != nil {
 		return nil, fmt.Errorf("путь игры: %w", err)
 	}
+	dllOverrides := ""
+	if s.overrides != nil {
+		dllOverrides, err = s.overrides(req.executable, req.workDir)
+		if err != nil {
+			return nil, fmt.Errorf("проверка локальных DLL: %w", err)
+		}
+	}
 	cmd := wine.Cmd{
 		Path:         winExe,
 		Args:         req.args,
-		DLLOverrides: proxyDLLOverrides(req.executable, req.workDir),
+		DLLOverrides: dllOverrides,
 	}
 	if req.workDir != "" {
 		if winDir, dirErr := bottle.ToWindows(req.workDir); dirErr == nil {
@@ -135,7 +144,7 @@ func (s wineStarter) start(ctx context.Context, req launch) (gameProcess, error)
 // Без override Wine предпочитает builtin даже когда игра положила рядом с EXE
 // winmm.dll/version.dll/winhttp.dll для загрузки модулей или Steam-fix. Правило
 // действует только на один запуск: реестр общего Steam-бутыля не меняется.
-func proxyDLLOverrides(executable, workDir string) string {
+func proxyDLLOverrides(executable, workDir string) (string, error) {
 	candidates := []string{"winmm.dll", "version.dll", "winhttp.dll"}
 	dirs := []string{filepath.Dir(executable)}
 	if workDir != "" && !strings.EqualFold(filepath.Clean(workDir), filepath.Clean(dirs[0])) {
@@ -146,7 +155,7 @@ func proxyDLLOverrides(executable, workDir string) string {
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue
+			return "", fmt.Errorf("чтение %s: %w", dir, err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -167,7 +176,7 @@ func proxyDLLOverrides(executable, workDir string) string {
 			overrides = append(overrides, name+"=n,b")
 		}
 	}
-	return strings.Join(overrides, ";")
+	return strings.Join(overrides, ";"), nil
 }
 
 // bottleFor выбирает, где игре жить. Общий бутыль предпочтительнее: рядом с
@@ -184,6 +193,9 @@ func (s wineStarter) bottleFor(req launch) (wine.Bottle, error) {
 		bottle, err := s.shared(key)
 		if err == nil {
 			return bottle, nil
+		}
+		if !wine.SharedBottleUnavailable(err) {
+			return wine.Bottle{}, fmt.Errorf("общий бутыль Steam: %w", err)
 		}
 		// Общего бутыля нет или он не видит путь игры — это ожидаемое
 		// состояние машины, а не поломка: откатываемся на свой бутыль.

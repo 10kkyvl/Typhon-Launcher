@@ -39,6 +39,8 @@ func prepareRuntime(ctx context.Context, req launch) error {
 	if req.shared {
 		if _, sharedErr := manager.SharedBottle(req.installDir); sharedErr == nil {
 			return nil
+		} else if !wine.SharedBottleUnavailable(sharedErr) {
+			return sharedErr
 		}
 	}
 	if _, ok := manager.Lookup(req.installDir); ok {

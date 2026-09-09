@@ -3,6 +3,7 @@ package wine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -80,6 +81,42 @@ func (m *Manager) processList() (string, error) {
 	return string(out), nil
 }
 
+func (m *Manager) processEnvironment(pid int) (string, error) {
+	if m.processEnv != nil {
+		return m.processEnv(pid)
+	}
+	//nolint:gosec // G204: pid is converted to base-10 digits before being passed directly to ps
+	out, err := exec.Command("ps", "e", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	if err != nil {
+		return "", fmt.Errorf("ps %d: %w", pid, err)
+	}
+	return string(out), nil
+}
+
+var environmentAssignment = regexp.MustCompile(`\s+[A-Za-z_][A-Za-z0-9_]*=`)
+
+func processRunsInBottle(environment, bottle string) bool {
+	if bottle == "" {
+		return false
+	}
+	value, ok := processEnvironmentValue(environment, "CX_BOTTLE")
+	return ok && value == bottle
+}
+
+func processEnvironmentValue(environment, key string) (string, bool) {
+	text := " " + environment
+	marker := " " + key + "="
+	start := strings.LastIndex(text, marker)
+	if start < 0 {
+		return "", false
+	}
+	value := text[start+len(marker):]
+	if next := environmentAssignment.FindStringIndex(value); next != nil {
+		value = value[:next[0]]
+	}
+	return strings.TrimSpace(value), true
+}
+
 // Processes отбирает процессы, чей путь после перевода в native лежит внутри
 // каталога установки этого бутыля. Буква сама по себе не признак: разные
 // бутыли могут независимо выбрать одну и ту же свободную букву.
@@ -119,7 +156,10 @@ func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	shared := m.sharedDrives()
+	shared, err := m.sharedDrives()
+	if err != nil {
+		return nil, err
+	}
 	entries := parsePS(out)
 	result := make([]Process, 0, len(entries))
 	for _, entry := range entries {
@@ -148,11 +188,15 @@ func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 
 // sharedDrives отдаёт буквы общего бутыля. Отсутствие бутыля не ошибка: на
 // машине без Steam общих игр просто нет.
-func (m *Manager) sharedDrives() driveMap {
+func (m *Manager) sharedDrives() (driveMap, error) {
 	if m.BottlesDir == "" {
-		return nil
+		return nil, nil
 	}
-	return drives(filepath.Join(m.BottlesDir, SharedBottleName()))
+	driveTable, err := drives(filepath.Join(m.BottlesDir, SharedBottleName()))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return driveTable, err
 }
 
 func matchAny(entry psEntry, bottles []Bottle) (Process, bool) {

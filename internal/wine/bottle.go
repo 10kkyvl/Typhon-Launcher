@@ -108,7 +108,11 @@ func (b Bottle) ToWindows(native string) (string, error) {
 // таблице dosdevices, как это делает сам wine.
 func (b Bottle) ToNative(win string) (string, error) {
 	if b.Shared {
-		native, ok := drives(b.Path).toNative(win)
+		driveTable, err := drives(b.Path)
+		if err != nil {
+			return "", err
+		}
+		native, ok := driveTable.toNative(win)
 		if !ok {
 			return "", fmt.Errorf("путь %s не выражается через диски бутыля %s", win, b.Name)
 		}
