@@ -926,3 +926,26 @@ func TestUnknownIdleTimeKeepsTheStatusOnline(t *testing.T) {
 		t.Fatalf("status = %q, want online when the idle time is unknown", p.Status)
 	}
 }
+
+func TestAwayAfterFrom(t *testing.T) {
+	cases := []struct {
+		name   string
+		raw    string
+		mocked bool
+		want   time.Duration
+	}{
+		{name: "production ignores the variable", raw: "5", mocked: false, want: defaultAwayAfter},
+		{name: "devmock shortens the threshold", raw: "5", mocked: true, want: 5 * time.Second},
+		{name: "empty keeps the default", raw: "", mocked: true, want: defaultAwayAfter},
+		{name: "nonsense keeps the default", raw: "soon", mocked: true, want: defaultAwayAfter},
+		{name: "zero keeps the default", raw: "0", mocked: true, want: defaultAwayAfter},
+		{name: "negative keeps the default", raw: "-30", mocked: true, want: defaultAwayAfter},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := awayAfterFrom(tc.raw, tc.mocked); got != tc.want {
+				t.Fatalf("awayAfterFrom(%q, %v) = %v, want %v", tc.raw, tc.mocked, got, tc.want)
+			}
+		})
+	}
+}

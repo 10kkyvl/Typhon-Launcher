@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
 	"typhon/internal/app"
+	"typhon/internal/devmock"
 	"typhon/internal/idle"
 	"typhon/internal/library"
 	"typhon/internal/settings"
@@ -32,6 +35,9 @@ const (
 	// «В сети» превращается в «Отошёл». Проверяется в такте отчёта, так что
 	// возврат за клавиатуру виден друзьям в пределах defaultInterval.
 	defaultAwayAfter = 10 * time.Minute
+	// awaySecondsEnv укорачивает порог в devmock-сборке: иначе «Отошёл» не
+	// проверить в живом окне, не просидев десять минут без мыши.
+	awaySecondsEnv = "TYPHON_DEVMOCK_AWAY_SECONDS"
 )
 
 var ErrInvalidStatus = errors.New("online: unknown presence status")
@@ -46,6 +52,17 @@ type statusEvent struct {
 }
 
 var igdbIDPattern = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+
+func awayAfterFrom(raw string, mocked bool) time.Duration {
+	if !mocked {
+		return defaultAwayAfter
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		return defaultAwayAfter
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 func realTicker(d time.Duration) (<-chan time.Time, func()) {
 	t := time.NewTicker(d)
@@ -110,7 +127,7 @@ func NewService(baseURL string, token func() (string, error), resolveIGDBID func
 		interval:      defaultInterval,
 		newTicker:     realTicker,
 		now:           time.Now,
-		awayAfter:     defaultAwayAfter,
+		awayAfter:     awayAfterFrom(os.Getenv(awaySecondsEnv), devmock.Enabled),
 		idleSince:     idle.Since,
 		running:       map[string]runningGame{},
 		kick:          make(chan struct{}, 1),
@@ -336,7 +353,13 @@ func (s *Service) emitStatus(p payload) {
 	s.mu.Lock()
 	auto := s.auto
 	chosen := s.status
+	after := s.awayAfter
 	s.mu.Unlock()
+	if auto {
+		slog.Info("presence set to away: no input", "after", after)
+	} else {
+		slog.Info("presence restored after idle", "status", p.Status)
+	}
 	if application.Get() == nil {
 		return
 	}
