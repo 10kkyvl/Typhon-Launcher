@@ -1,9 +1,11 @@
 package library
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -76,7 +78,8 @@ func (s *Service) PlayGame(id string) error {
 	pid := uint32(proc.pid())
 	startedAt := s.now()
 	s.running[id] = &session{process: proc, pid: pid, startedAt: startedAt, lastSeen: startedAt}
-	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid())
+	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
+		"executable", game.Executable, "workDir", workDir)
 	for _, w := range s.watchers {
 		w.SessionStarted(*game)
 	}
@@ -89,12 +92,12 @@ func (s *Service) PlayGame(id string) error {
 	})
 	emit("game:started", SessionEvent{GameID: id})
 
+	executable := game.Executable
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
-		if waitErr := proc.wait(); waitErr != nil {
-			slog.Debug("game process exited", "id", id, "error", waitErr)
-		}
+		waitErr := proc.wait()
+		logExit(id, executable, s.now().Sub(startedAt), waitErr)
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
 		// закончилась (см. detectTick); закрывать её здесь при активном
 		// детекте — значит закрывать по смерти лаунчер-обёртки, а не игры.
@@ -183,6 +186,35 @@ func (s *Service) StopGame(id string) error {
 		return fmt.Errorf("остановить игру: %w", err)
 	}
 	return nil
+}
+
+// logExit — единственное место, где ОС говорит, почему игра закрылась. Без
+// кода выхода журнал сообщает только «сессия длилась 2 секунды», и отличить
+// не найденную библиотеку (0xC0000135) от вылета или от лаунчер-обёртки,
+// которая отдала работу другому процессу и вышла сама, нечем.
+func logExit(id, executable string, played time.Duration, err error) {
+	code, known := exitCode(err)
+	after := played.Round(time.Second)
+	switch {
+	case !known:
+		slog.Warn("game process wait failed", "id", id, "executable", executable, "after", after, "error", err)
+	case code != 0:
+		slog.Warn("game process exited with an error", "id", id, "executable", executable,
+			"after", after, "code", code, "codeHex", fmt.Sprintf("0x%08X", int64(code)&0xFFFFFFFF))
+	default:
+		slog.Info("game process exited", "id", id, "executable", executable, "after", after, "code", code)
+	}
+}
+
+func exitCode(err error) (int, bool) {
+	if err == nil {
+		return 0, true
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode(), true
+	}
+	return 0, false
 }
 
 func (s *Service) finishSession(id string, startedAt time.Time) {

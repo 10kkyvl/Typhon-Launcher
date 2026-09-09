@@ -744,6 +744,17 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 	slog.Info("download data removed after install", "id", downloadID)
 }
 
+// candidatePaths — то, что лаунчер предложил на выбор. Один только счётчик в
+// журнале не отвечает на первый вопрос разбора «игра не запускается»: что
+// именно было предложено и что из этого запускается.
+func candidatePaths(candidates []Candidate) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		out = append(out, fmt.Sprintf("%s (%.0f)", c.Path, c.Score))
+	}
+	return out
+}
+
 func (s *Service) setExecutable(id, executable string, candidates []Candidate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -759,6 +770,7 @@ func (s *Service) setExecutable(id, executable string, candidates []Candidate) e
 		item.Candidates = prevCandidates
 		return wrapPersistError(err)
 	}
+	slog.Info("install executable chosen", "id", id, "executable", executable, "candidates", len(candidates))
 	return nil
 }
 
