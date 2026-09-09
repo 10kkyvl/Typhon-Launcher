@@ -716,7 +716,7 @@ func TestLaunchFailureIsRecorded(t *testing.T) {
 		codes <- code
 		reasons <- reason
 	})
-	s.start = func(context.Context, string, []string, string) (gameProcess, error) {
+	s.start = func(context.Context, launch) (gameProcess, error) {
 		return nil, errors.New("окружение не готово")
 	}
 
@@ -756,7 +756,7 @@ func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	codes := make(chan string, 1)
 	s.SetLaunchFailureRecorder(func(_, code, _ string) { codes <- code })
-	s.prepare = func(context.Context, string, string) error {
+	s.prepare = func(context.Context, launch) error {
 		return errors.New("бутыль не завёлся")
 	}
 

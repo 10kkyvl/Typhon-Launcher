@@ -65,6 +65,8 @@ export const games: Record<GamesKey, Message> = {
   'games.errorStopFailed': 'Failed to stop the game',
   'games.errorFolderUnavailable': 'Folder unavailable',
   'games.errorFavoriteFailed': 'Failed to update favorites',
+  'games.errorRequiresSteamFailed': 'Failed to update the launch bottle',
+  'games.errorWineStatusFailed': 'Failed to check CrossOver status',
 
   'games.detailFactReleaseDate': 'Release date',
   'games.detailFactDeveloper': 'Developer',
@@ -121,6 +123,9 @@ export const games: Record<GamesKey, Message> = {
   'games.detailCollapseSummary': 'Collapse',
   'games.detailExpandSummary': 'Show more',
   'games.detailInstallHeading': 'Installation',
+  'games.detailSteamBottleLabel': 'Run together with Steam',
+  'games.detailSteamBottleHint':
+    'The game will run in the shared CrossOver bottle with Steam — otherwise Steam Overlay and achievements do not work',
   'games.detailAvailableDownloadsHeading': 'Available downloads',
   'games.detailAboutTitle': 'About',
   'games.detailChooseDownloadTitle': 'Choose a download',

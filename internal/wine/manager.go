@@ -24,7 +24,8 @@ type Manager struct {
 
 	// psOutput подменяет чтение таблицы процессов в тестах: настоящий ps на
 	// машине сборки покажет что угодно, кроме нужного.
-	psOutput func() (string, error)
+	psOutput   func() (string, error)
+	processEnv func(pid int) (string, error)
 
 	// killTimeout переопределяет killTimeout по умолчанию в тестах: там нужен
 	// короткий таймаут, чтобы не ждать настоящих секунд на зависшем скрипте.

@@ -10,6 +10,7 @@ export interface LibraryGame {
   title: string;
   executable: string;
   launchArgs?: string[];
+  requiresSteam?: boolean | null;
   installDir: string;
   cover: string;
   version: string;
@@ -87,6 +88,11 @@ export async function removeShortcut(id: string): Promise<void> {
 export async function setFavorite(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;
+}
+
+export async function setRequiresSteam(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetRequiresSteam(id, on)) as unknown as LibraryGame;
 }
 
 export async function setStatus(id: string, status: string): Promise<LibraryGame> {

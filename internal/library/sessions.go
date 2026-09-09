@@ -48,7 +48,14 @@ func (s *Service) PlayGame(id string) error {
 	if err != nil {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
-	if err := s.prepare(s.ctx, game.InstallDir, game.Executable); err != nil {
+	req := launch{
+		installDir: game.InstallDir,
+		executable: game.Executable,
+		args:       game.LaunchArgs,
+		workDir:    workDir,
+		shared:     game.UsesSharedBottle(),
+	}
+	if err := s.prepare(s.ctx, req); err != nil {
 		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
 		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
 		// стартовавший процесс. На macOS это вообще самая частая причина, по
@@ -58,7 +65,7 @@ func (s *Service) PlayGame(id string) error {
 		return uierr.Wrap("library.runtime_failed", fmt.Errorf("не удалось подготовить окружение запуска: %w", err))
 	}
 
-	proc, err := s.start(s.ctx, game.Executable, game.LaunchArgs, workDir)
+	proc, err := s.start(s.ctx, req)
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())

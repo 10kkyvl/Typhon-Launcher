@@ -67,8 +67,10 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		// exec.CommandContext убивает только прямого потомка (cxstart, он же
 		// winewrapper): установщик внутри бутыля остаётся жив, поэтому
-		// требуется свалить бутыль целиком.
-		if killErr := m.Kill(b); killErr != nil {
+		// требуется свалить бутыль целиком. Общий бутыль — исключение: там
+		// гасятся только процессы этой установки, иначе отмена установки
+		// уронила бы Steam и все чужие игры того же префикса.
+		if killErr := m.stopBottle(b, c.Path); killErr != nil {
 			return 0, fmt.Errorf("%w: %w: %w", ErrTreeNotStopped, ctxErr, killErr)
 		}
 		return 0, ctxErr
@@ -99,6 +101,10 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 func (m *Manager) StartDetached(ctx context.Context, b Bottle, c Cmd) error {
 	//nolint:gosec // G204: путь до cxstart получен из Detect, аргументы собраны cxstartArgs
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, false)...)
+	// Путь и launch options нужны для диагностики, но сами аргументы игры
+	// могут содержать токены или пароль и в журнал попадать не должны.
+	slog.Info("cxstart", "bottle", b.Name, "path", c.Path, "workDir", c.WorkDir,
+		"dllOverrides", c.DLLOverrides, "argCount", len(c.Args))
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("запуск %s в бутыле %s: %w", c.Path, b.Name, err)
 	}

@@ -34,6 +34,21 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		return discoveryOutcome{}, err
 	}
 	manager := wine.NewManager(rt)
+
+	// Тот же порядок, что при установке (wineRunner.bottle, runner_darwin.go):
+	// сначала общий бутыль. Lookup его никогда не найдёт — у общего бутыля
+	// нет нашей метки typhon-bottle.json, — и без этой ветки разведка для
+	// игр в общем бутыле молча отключалась бы навсегда.
+	sharedBottle, sharedErr := manager.SharedBottle(in.Destination)
+	if sharedErr == nil {
+		slog.Info("discovery using shared bottle", "bottle", sharedBottle.Name, "destination", in.Destination)
+		return discoverWithBottle(ctx, in, sharedBottle, manager.Run)
+	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return discoveryOutcome{}, sharedErr
+	}
+	slog.Debug("shared bottle unavailable for discovery, falling back to lookup", "destination", in.Destination, "error", sharedErr)
+
 	bottle, ok := manager.Lookup(in.Destination)
 	if !ok {
 		return discoveryOutcome{reason: "бутыль установки ещё не заведён"}, nil

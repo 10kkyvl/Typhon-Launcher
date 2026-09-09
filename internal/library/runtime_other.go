@@ -6,4 +6,4 @@ import "context"
 
 // prepareRuntime готовит окружение запуска игры. Везде, кроме macOS, готовить
 // нечего: игра запускается системой напрямую.
-func prepareRuntime(context.Context, string, string) error { return nil }
+func prepareRuntime(context.Context, launch) error { return nil }

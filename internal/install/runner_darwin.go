@@ -55,6 +55,12 @@ func (r wineRunner) run(ctx context.Context, spec runSpec) (int, error) {
 
 // bottle заводит бутыль под каталог установки. Для удаления Destination
 // пустой, и каталогом установки служит папка самого деинсталлятора.
+//
+// Общий бутыль предпочтительнее собственного: если установщик пропишет игру
+// в его реестр, запуск (wineStarter.bottleFor, internal/library/process_darwin.go)
+// найдёт её в том же префиксе, и Steam API, оверлей и достижения будут
+// рабочими. Разные бутыли для установки и запуска развели бы VC-редисты,
+// ассоциации и запись удаления не туда, куда реально легла игра.
 func (r wineRunner) bottle(spec runSpec) (wine.Bottle, error) {
 	dest := spec.Destination
 	if dest == "" {
@@ -67,14 +73,29 @@ func (r wineRunner) bottle(spec runSpec) (wine.Bottle, error) {
 	if err != nil {
 		return wine.Bottle{}, errWineMissing
 	}
+	manager := wine.NewManager(rt)
+
+	sharedBottle, sharedErr := manager.SharedBottle(dest)
+	if sharedErr == nil {
+		slog.Info("installing into shared bottle", "bottle", sharedBottle.Name, "shared", sharedBottle.Shared, "destination", dest)
+		return sharedBottle, nil
+	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return wine.Bottle{}, uierr.Wrap("wine.bottle_create_failed", sharedErr)
+	}
+	// Общего бутыля нет или он не покрывает путь установки — обычное
+	// состояние машины без общего Steam, а не поломка.
+	slog.Info("shared bottle unavailable, using own bottle", "destination", dest, "error", sharedErr)
+
 	games := ""
 	if r.gamesPath != nil {
 		games = r.gamesPath()
 	}
-	bottle, err := wine.NewManager(rt).Ensure(dest, games)
+	bottle, err := manager.Ensure(dest, games)
 	if err != nil {
 		return wine.Bottle{}, uierr.Wrap("wine.bottle_create_failed", err)
 	}
+	slog.Info("installing into own bottle", "bottle", bottle.Name, "shared", bottle.Shared, "destination", dest)
 	return bottle, nil
 }
 

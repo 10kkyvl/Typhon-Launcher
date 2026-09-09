@@ -3,9 +3,11 @@ package wine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -79,6 +81,42 @@ func (m *Manager) processList() (string, error) {
 	return string(out), nil
 }
 
+func (m *Manager) processEnvironment(pid int) (string, error) {
+	if m.processEnv != nil {
+		return m.processEnv(pid)
+	}
+	//nolint:gosec // G204: pid is converted to base-10 digits before being passed directly to ps
+	out, err := exec.Command("ps", "e", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	if err != nil {
+		return "", fmt.Errorf("ps %d: %w", pid, err)
+	}
+	return string(out), nil
+}
+
+var environmentAssignment = regexp.MustCompile(`\s+[A-Za-z_][A-Za-z0-9_]*=`)
+
+func processRunsInBottle(environment, bottle string) bool {
+	if bottle == "" {
+		return false
+	}
+	value, ok := processEnvironmentValue(environment, "CX_BOTTLE")
+	return ok && value == bottle
+}
+
+func processEnvironmentValue(environment, key string) (string, bool) {
+	text := " " + environment
+	marker := " " + key + "="
+	start := strings.LastIndex(text, marker)
+	if start < 0 {
+		return "", false
+	}
+	value := text[start+len(marker):]
+	if next := environmentAssignment.FindStringIndex(value); next != nil {
+		value = value[:next[0]]
+	}
+	return strings.TrimSpace(value), true
+}
+
 // Processes отбирает процессы, чей путь после перевода в native лежит внутри
 // каталога установки этого бутыля. Буква сама по себе не признак: разные
 // бутыли могут независимо выбрать одну и ту же свободную букву.
@@ -101,6 +139,11 @@ func (m *Manager) Processes(ctx context.Context, b Bottle) ([]Process, error) {
 
 // AllProcesses перечисляет процессы всех наших бутылей: цикл детекта игр
 // спрашивает про систему целиком, а не про конкретную игру.
+//
+// Общий бутыль (тот, где стоит Steam) добавляется сюда отдельной веткой, и
+// это не роскошь: без неё игра, запущенная в нём, не попадает ни в один
+// снимок, а цикл детекта закрывает её сессию на первом же тике — то есть
+// через секунду после старта.
 func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -113,17 +156,56 @@ func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err != nil {
 		return nil, err
 	}
+	shared, err := m.sharedDrives()
+	if err != nil {
+		return nil, err
+	}
 	entries := parsePS(out)
 	result := make([]Process, 0, len(entries))
 	for _, entry := range entries {
-		for _, b := range bottles {
-			if p, ok := match(entry, b); ok {
-				result = append(result, p)
-				break
-			}
+		if p, ok := matchAny(entry, bottles); ok {
+			result = append(result, p)
+			continue
+		}
+		// Ключа установки у общего бутыля здесь нет: какие каталоги
+		// принадлежат играм, знает библиотека, и она же сверит путь. Наше
+		// дело — перевести путь в native, чтобы ей было что сверять.
+		//
+		// Диск c: пропускается: за ним внутренности самого бутыля — Steam,
+		// системные службы, explorer, — а игры в общем бутыле лежат
+		// снаружи. Без этого каждый снимок приносил бы десяток чужих строк.
+		if strings.HasPrefix(strings.ToLower(entry.winPath), `c:\`) {
+			continue
+		}
+		if native, ok := shared.toNative(entry.winPath); ok {
+			result = append(result, Process{
+				PID: entry.pid, WinPath: entry.winPath, Path: native, CreatedAt: entry.createdAt,
+			})
 		}
 	}
 	return result, nil
+}
+
+// sharedDrives отдаёт буквы общего бутыля. Отсутствие бутыля не ошибка: на
+// машине без Steam общих игр просто нет.
+func (m *Manager) sharedDrives() (driveMap, error) {
+	if m.BottlesDir == "" {
+		return nil, nil
+	}
+	driveTable, err := drives(filepath.Join(m.BottlesDir, SharedBottleName()))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return driveTable, err
+}
+
+func matchAny(entry psEntry, bottles []Bottle) (Process, bool) {
+	for _, b := range bottles {
+		if p, ok := match(entry, b); ok {
+			return p, true
+		}
+	}
+	return Process{}, false
 }
 
 func match(entry psEntry, b Bottle) (Process, bool) {

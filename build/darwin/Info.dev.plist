@@ -11,9 +11,11 @@
 		<key>CFBundleIconName</key>
 		<string>appicon</string>
 		<key>CFBundleIdentifier</key>
-		<string>app.typhon.launcher</string>
+		<string>app.typhon.launcher.dev</string>
 		<key>CFBundleName</key>
-		<string>Typhon</string>
+		<string>Typhon Dev</string>
+		<key>CFBundleDisplayName</key>
+		<string>Typhon Dev</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
