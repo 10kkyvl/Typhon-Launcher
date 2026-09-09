@@ -50,6 +50,8 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.generalSyncEnableLabel': 'Sync between devices',
   'settings.generalSyncEnableSub': 'Carries some app settings, your catalog game list, last launch date, playtime, the “favorite” mark, completion status, and their change dates between your devices. Sources, release links, their names, disk paths, rate limits, and statistics/diagnostics consent are not transferred. Off by default.',
   'settings.generalSyncNeedsAccountSub': 'Sign-in required — sync isn’t available in guest mode.',
+  'settings.generalAutoAwayLabel': 'Set "Away" when idle',
+  'settings.generalAutoAwaySub': 'After 10 minutes without mouse or keyboard friends see "Away". It goes back on its own once you return; a running game and a status you picked yourself are left alone',
   'settings.generalSyncNowLabel': 'Sync now',
   'settings.generalSyncNowSub': 'Send and receive changes immediately, without waiting for the background cycle',
   'settings.generalSyncNowRunning': 'Syncing…',

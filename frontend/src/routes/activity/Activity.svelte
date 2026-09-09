@@ -18,7 +18,7 @@
   import { isPlaying, presenceDot, sortFriends, statusDot } from '../../lib/social/presence';
   import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, noteEvent, reactToEvent } from '../../lib/stores/feed';
   import { loadArt } from '../../lib/stores/metadata';
-  import { presenceStatus } from '../../lib/stores/presence';
+  import { shownPresence } from '../../lib/stores/presence';
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, needsSocialConsent } from '../../lib/stores/social';
@@ -40,7 +40,7 @@
   const user = $derived($currentUser);
   const displayName = $derived(user?.displayName || user?.username || '');
   const stats = $derived($profileSnapshot.stats);
-  const ownDot = $derived(statusDot($presenceStatus));
+  const ownDot = $derived(statusDot($shownPresence));
 
   const playingFriends = $derived(
     sortFriends($friendsPage.friends).filter((friend) => isPlaying(friend.presence)),

@@ -11,7 +11,7 @@
   import type { GameRef, ProfileStats as ProfileStatsData } from '../../lib/services/profile';
   import { joinDate } from '../../lib/social/view';
   import { statusDot } from '../../lib/social/presence';
-  import { presenceStatus } from '../../lib/stores/presence';
+  import { shownPresence } from '../../lib/stores/presence';
   import { authState, currentUser, isOffline, leaveGuest, saveProfile, savingProfile, signOut } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
@@ -132,7 +132,7 @@
         size="lg"
         name={avatarName}
         src={isGuest ? undefined : $currentUser?.avatarUrl}
-        status={isGuest ? undefined : statusDot($presenceStatus)}
+        status={isGuest ? undefined : statusDot($shownPresence)}
       />
 
       <div class="identity">

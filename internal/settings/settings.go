@@ -107,7 +107,8 @@ type Settings struct {
 
 	LANSharing bool `json:"lanSharing"`
 
-	PresenceStatus string `json:"presenceStatus"`
+	PresenceStatus   string `json:"presenceStatus"`
+	PresenceAutoAway bool   `json:"presenceAutoAway"`
 
 	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
@@ -175,7 +176,8 @@ func Defaults() Settings {
 
 		LANSharing: false,
 
-		PresenceStatus: PresenceOnline,
+		PresenceStatus:   PresenceOnline,
+		PresenceAutoAway: true,
 
 		AccountSync:           false,
 		SourcesNoticeAccepted: false,

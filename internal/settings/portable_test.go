@@ -14,6 +14,7 @@ var portableNames = []string{
 	"animationsEnabled",
 	"minimizeToTray",
 	"discordRichPresence",
+	"presenceAutoAway",
 	"seedAfterDownload",
 	"uploadWhileDownloading",
 	"installCleanupPolicy",

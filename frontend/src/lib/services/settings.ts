@@ -41,6 +41,7 @@ export interface Settings {
   telemetryConsentVersion: number;
   accountSync: boolean;
   presenceStatus: string;
+  presenceAutoAway: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -84,6 +85,7 @@ const fallbackDefaults: Settings = {
   telemetryConsentVersion: 0,
   accountSync: false,
   presenceStatus: 'online',
+  presenceAutoAway: true,
 };
 
 export const maxActiveDownloadOptions = [

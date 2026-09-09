@@ -96,6 +96,48 @@ describe('updatePresenceStatus', () => {
   });
 });
 
+async function emitPresence(data: { status: string; chosen: string; auto: boolean }) {
+  const { Events } = await import('@wailsio/runtime');
+  const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'presence:status')?.[1];
+  if (!handler) throw new Error('нет подписки на presence:status');
+  handler({ data } as never);
+}
+
+describe('автоматический «Отошёл»', () => {
+  it('показывает «Отошёл», не меняя выбранный статус', async () => {
+    const { presenceStatus, shownPresence, autoAway } = await load();
+
+    await emitPresence({ status: 'away', chosen: 'online', auto: true });
+
+    expect(get(shownPresence)).toBe('away');
+    expect(get(presenceStatus)).toBe('online');
+    expect(get(autoAway)).toBe(true);
+  });
+
+  it('возвращает «В сети», когда пользователь вернулся', async () => {
+    const { shownPresence, autoAway } = await load();
+
+    await emitPresence({ status: 'away', chosen: 'online', auto: true });
+    await emitPresence({ status: 'online', chosen: 'online', auto: false });
+
+    expect(get(shownPresence)).toBe('online');
+    expect(get(autoAway)).toBe(false);
+  });
+
+  it('снимается выбором того же статуса вручную', async () => {
+    const { shownPresence, autoAway, updatePresenceStatus } = await load();
+    const { setStatus } = await import('../services/online');
+    vi.mocked(setStatus).mockImplementation(async () => {});
+
+    await emitPresence({ status: 'away', chosen: 'online', auto: true });
+    await updatePresenceStatus('online');
+
+    expect(setStatus).toHaveBeenCalledWith('online');
+    expect(get(shownPresence)).toBe('online');
+    expect(get(autoAway)).toBe(false);
+  });
+});
+
 describe('вход в аккаунт', () => {
   it('просит бэкенд отправить присутствие заново', async () => {
     const { authState } = await load();

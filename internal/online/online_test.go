@@ -108,6 +108,43 @@ func newSyncedHarness(t *testing.T, token func() (string, error), status int, re
 	return h
 }
 
+type fakeIdle struct {
+	mu    sync.Mutex
+	for_  time.Duration
+	known bool
+}
+
+func (f *fakeIdle) since() (time.Duration, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.for_, f.known
+}
+
+func (f *fakeIdle) set(d time.Duration, known bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.for_ = d
+	f.known = known
+}
+
+// idleFor подменяет источник простоя: без него тест зависел бы от того, трогал
+// ли кто-нибудь мышь на машине, где он идёт.
+func (h *harness) idleFor(d time.Duration) *fakeIdle {
+	h.t.Helper()
+	f := &fakeIdle{for_: d, known: true}
+	h.svc.idleSince = f.since
+	return f
+}
+
+func (h *harness) setAutoAway(on bool) {
+	h.t.Helper()
+	next := h.settings.GetSettings()
+	next.PresenceAutoAway = on
+	if err := h.settings.SaveSettings(next); err != nil {
+		h.t.Fatalf("SaveSettings: %v", err)
+	}
+}
+
 func (h *harness) setSync(on bool) {
 	h.t.Helper()
 	next := h.settings.GetSettings()
@@ -786,4 +823,106 @@ func (s *logSink) count(substr string) int {
 		}
 	}
 	return n
+}
+
+func TestIdleMachineGoesAway(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	fake := h.idleFor(time.Minute)
+	h.start()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceOnline {
+		t.Fatalf("status = %q, want online while the machine is in use", p.Status)
+	}
+
+	fake.set(defaultAwayAfter, true)
+	h.tickNow()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceAway {
+		t.Fatalf("status = %q, want away after the idle threshold", p.Status)
+	}
+	if got := h.svc.EffectiveStatus(); got != settings.PresenceAway {
+		t.Fatalf("EffectiveStatus() = %q, want away", got)
+	}
+	if got := h.svc.Status(); got != settings.PresenceOnline {
+		t.Fatalf("Status() = %q, want the chosen status untouched", got)
+	}
+	if got := h.settings.GetSettings().PresenceStatus; got != settings.PresenceOnline {
+		t.Fatalf("stored status = %q, want the chosen status untouched", got)
+	}
+}
+
+func TestInputBringsTheStatusBack(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	fake := h.idleFor(defaultAwayAfter)
+	h.start()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceAway {
+		t.Fatalf("status = %q, want away", p.Status)
+	}
+
+	fake.set(0, true)
+	h.tickNow()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceOnline {
+		t.Fatalf("status = %q, want online once the user is back", p.Status)
+	}
+	if got := h.svc.EffectiveStatus(); got != settings.PresenceOnline {
+		t.Fatalf("EffectiveStatus() = %q, want online", got)
+	}
+}
+
+func TestRunningGameKeepsTheStatusOnline(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, func(string) string { return "1942" })
+	h.idleFor(2 * defaultAwayAfter)
+	h.start()
+	h.awaitSend()
+	h.nextRequest()
+
+	h.svc.SessionStarted(library.Game{ID: "g1", CanonicalGameID: "igdb:1942"})
+	h.awaitSend()
+	p := decodeBody(t, h.nextRequest())
+	if p.Status != settings.PresenceOnline {
+		t.Fatalf("status = %q, want online while a game is running", p.Status)
+	}
+	if p.GameID != "1942" {
+		t.Fatalf("gameId = %q, want 1942", p.GameID)
+	}
+}
+
+func TestChosenStatusIsNotOverriddenByIdle(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	h.idleFor(2 * defaultAwayAfter)
+	if err := h.svc.SetStatus(settings.PresenceBusy); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	h.start()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceBusy {
+		t.Fatalf("status = %q, want the chosen busy kept", p.Status)
+	}
+	if got := h.svc.EffectiveStatus(); got != settings.PresenceBusy {
+		t.Fatalf("EffectiveStatus() = %q, want busy", got)
+	}
+}
+
+func TestAutoAwayOffKeepsTheStatusOnline(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	h.setAutoAway(false)
+	h.idleFor(2 * defaultAwayAfter)
+	h.start()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceOnline {
+		t.Fatalf("status = %q, want online with auto away switched off", p.Status)
+	}
+}
+
+func TestUnknownIdleTimeKeepsTheStatusOnline(t *testing.T) {
+	h := newHarness(t, staticToken("tok"), http.StatusNoContent, nil)
+	fake := h.idleFor(0)
+	fake.set(2*defaultAwayAfter, false)
+	h.start()
+	h.awaitSend()
+	if p := decodeBody(t, h.nextRequest()); p.Status != settings.PresenceOnline {
+		t.Fatalf("status = %q, want online when the idle time is unknown", p.Status)
+	}
 }
