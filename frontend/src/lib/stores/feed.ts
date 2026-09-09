@@ -24,6 +24,8 @@ export const staleAfter = 60_000;
 
 const pending = new Set<string>();
 
+let generation = 0;
+
 let inflight: Promise<void> | null = null;
 
 function report(err: unknown, fallback: string) {
@@ -45,10 +47,11 @@ function fresh(): boolean {
   return get(feedReady) && Date.now() - get(feedLoadedAt) < staleAfter;
 }
 
-async function page(cursor: number, append: boolean): Promise<void> {
+async function page(cursor: number, append: boolean, owner: number): Promise<void> {
   feedLoading.set(true);
   try {
     const loaded = await fetchFeed(cursor > 0 ? String(cursor) : '');
+    if (owner !== generation) return;
     feedEvents.update((events) => {
       if (!append) return loaded.events;
       const known = new Set(events.map((event) => event.id));
@@ -58,17 +61,19 @@ async function page(cursor: number, append: boolean): Promise<void> {
     feedLoadedAt.set(Date.now());
     feedReady.set(true);
   } catch (err) {
+    if (owner !== generation) return;
     report(err, msg('state.feedLoadFailed'));
   } finally {
-    feedLoading.set(false);
+    if (owner === generation) feedLoading.set(false);
   }
 }
 
 function queue(cursor: number, append: boolean): Promise<void> {
+  const owner = generation;
   const previous = inflight;
   const task = (async () => {
     if (previous) await previous;
-    await page(cursor, append);
+    if (owner === generation) await page(cursor, append, owner);
   })();
   inflight = task;
   void task.finally(() => {
@@ -93,6 +98,9 @@ export async function moreFeed(): Promise<void> {
 }
 
 export function resetFeed(): void {
+  generation++;
+  inflight = null;
+  feedLoading.set(false);
   pending.clear();
   publishPending();
   feedEvents.set([]);
@@ -102,6 +110,7 @@ export function resetFeed(): void {
 }
 
 export async function reactToEvent(id: number, emoji: string): Promise<void> {
+  const owner = generation;
   const key = `${id}:${emoji}`;
   if (pending.has(key)) return;
   const current = get(feedEvents).find((event) => event.id === id);
@@ -115,11 +124,14 @@ export async function reactToEvent(id: number, emoji: string): Promise<void> {
   try {
     await (remove ? sendUnreact : sendReact)(String(id), emoji);
   } catch (err) {
+    if (owner !== generation) return;
     replace(id, (event) => (hasReacted(event, emoji) === remove ? event : toggleReaction(event, emoji)));
     report(err, msg('state.feedReactFailed'));
   } finally {
-    pending.delete(key);
-    publishPending();
+    if (owner === generation) {
+      pending.delete(key);
+      publishPending();
+    }
   }
 }
 
@@ -129,6 +141,7 @@ export async function noteEvent(id: number, note: string): Promise<void> {
   const next = [...trimNote(note)].slice(0, NOTE_LIMIT).join('');
   if (next === current.note) return;
   const previous = current.note;
+  const owner = generation;
   const key = `${id}:note`;
   if (pending.has(key)) return;
   pending.add(key);
@@ -137,10 +150,13 @@ export async function noteEvent(id: number, note: string): Promise<void> {
   try {
     await sendNote(String(id), next);
   } catch (err) {
+    if (owner !== generation) return;
     replace(id, (event) => ({ ...event, note: previous }));
     report(err, msg('state.feedNoteFailed'));
   } finally {
-    pending.delete(key);
-    publishPending();
+    if (owner === generation) {
+      pending.delete(key);
+      publishPending();
+    }
   }
 }

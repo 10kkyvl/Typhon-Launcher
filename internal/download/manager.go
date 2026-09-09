@@ -107,6 +107,8 @@ type fetchEntry struct {
 }
 
 type Manager struct {
+	teardowns map[string]chan struct{}
+
 	mu              sync.Mutex
 	settings        *settings.Service
 	store           *store
@@ -978,8 +980,14 @@ func (m *Manager) DeleteData(id string) error {
 		m.mu.Unlock()
 		return errSeeding
 	}
+	if d.InPlace || (d.Flat && len(d.Files) == 0) {
+		m.mu.Unlock()
+		return errUnavailable
+	}
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
+	flat := d.Flat
+	files := append([]FileState(nil), d.Files...)
 
 	// Removing the record is attempted, and can fail and roll back, before
 	// any of the irreversible teardown below (cancelling the job, dropping
@@ -999,7 +1007,30 @@ func (m *Manager) DeleteData(id string) error {
 	slog.Info("download data deleted", "download_id", id, "name", name)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
-	started := m.startTeardownLocked(job, eng, infoHash, func() { removeContent(destination, name) })
+	started := m.startTeardownLocked(id, job, eng, infoHash, func() {
+		if flat {
+			root, err := os.OpenRoot(destination)
+			if err != nil {
+				slog.Warn("open flat download", "error", err)
+				return
+			}
+			defer func() {
+				if err := root.Close(); err != nil {
+					slog.Warn("close flat download", "error", err)
+				}
+			}()
+			for _, file := range files {
+				if !isSafeTorrentPath(file.Path) {
+					continue
+				}
+				if err := root.Remove(filepath.FromSlash(file.Path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+					slog.Warn("remove flat download file", "error", err)
+				}
+			}
+		} else {
+			removeContent(destination, name)
+		}
+	})
 	m.mu.Unlock()
 	if !started {
 		slog.Warn("skipped download data teardown, manager is shutting down", "download_id", id)
@@ -1016,7 +1047,7 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	}
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
-	purge := deleteData && d.Status != StatusCompleted
+	purge := deleteData && d.Status != StatusCompleted && !d.InPlace
 
 	if err := m.dropLocked(id); err != nil {
 		m.mu.Unlock()
@@ -1051,7 +1082,7 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	}
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
-	started := m.startTeardownLocked(job, eng, infoHash, func() {
+	started := m.startTeardownLocked(id, job, eng, infoHash, func() {
 		if purge {
 			removeContent(destination, name)
 		}
@@ -1072,8 +1103,13 @@ func (m *Manager) discard(id string, deleteData bool) error {
 // Skipping it here is safe because dropLocked already removed the record
 // from m.items before this is reached; nothing keeps referring to the
 // engine or the files that would otherwise be cleaned up.
-func (m *Manager) startTeardownLocked(job *jobState, eng engineTorrent, infoHash string, cleanup func()) bool {
+func (m *Manager) startTeardownLocked(id string, job *jobState, eng engineTorrent, infoHash string, cleanup func()) bool {
+	if m.closing {
+		return false
+	}
+	done := m.trackTeardownLocked(id)
 	return m.spawnTrackedLocked(func() {
+		defer m.finishTeardown(id, done)
 		if job != nil {
 			<-job.done
 		}
@@ -1961,4 +1997,61 @@ func newID() string {
 		return fmt.Sprintf("d%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buf)
+}
+
+// StopAndWait stops an in-place writer before its caller restores a backup.
+//
+//wails:ignore
+func (m *Manager) StopAndWait(id string) error {
+	m.mu.Lock()
+	if m.closing {
+		m.mu.Unlock()
+		return errUnavailable
+	}
+	if m.findLocked(id) == nil {
+		done := m.teardowns[id]
+		m.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		return nil
+	}
+	if err := m.dropLocked(id); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	job := m.jobs[id]
+	if job != nil {
+		job.cancel()
+	}
+	eng := m.engines[id]
+	delete(m.engines, id)
+	done := m.trackTeardownLocked(id)
+	m.wg.Add(1)
+	m.mu.Unlock()
+	defer m.wg.Done()
+	defer m.finishTeardown(id, done)
+	if job != nil {
+		<-job.done
+	}
+	if eng != nil {
+		eng.drop()
+	}
+	emit(eventRemoved, RemovedEvent{ID: id})
+	return nil
+}
+
+func (m *Manager) trackTeardownLocked(id string) chan struct{} {
+	if m.teardowns == nil {
+		m.teardowns = map[string]chan struct{}{}
+	}
+	done := make(chan struct{})
+	m.teardowns[id] = done
+	return done
+}
+func (m *Manager) finishTeardown(id string, done chan struct{}) {
+	m.mu.Lock()
+	delete(m.teardowns, id)
+	close(done)
+	m.mu.Unlock()
 }

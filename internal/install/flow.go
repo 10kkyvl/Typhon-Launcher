@@ -57,11 +57,8 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 
 	report := func(p Progress) { s.updateProgress(id, p) }
 	var err error
-	if item.Mode == ModeMove {
-		err = MoveDir(ctx, item.ContentRoot, partial, report)
-	} else {
-		err = CopyDir(ctx, item.ContentRoot, partial, report)
-	}
+	// Keep the source until both the destination and library entry are committed.
+	err = CopyDirVerified(ctx, item.ContentRoot, partial, report)
 	if err == nil {
 		err = s.commit(ctx, partial, item.Destination)
 	}
@@ -69,7 +66,15 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 		s.cleanupPartial(partial)
 		return err
 	}
-	return s.finalize(ctx, id)
+	if err := s.finalize(ctx, id); err != nil {
+		return err
+	}
+	if item.Mode == ModeMove {
+		if err := os.RemoveAll(item.ContentRoot); err != nil {
+			return fmt.Errorf("remove installed source: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) runArchive(ctx context.Context, id string, item Installation) error {

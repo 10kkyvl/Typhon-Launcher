@@ -2,6 +2,7 @@
   import { Copy } from '@lucide/svelte';
   import { dateTime } from '../utils/format';
   import { listSentData, type SentDataEntry } from '../services/telemetryLog';
+  import { createLatest } from '../services/latest';
   import { toast } from '../stores/toasts';
   import EmptyState from './EmptyState.svelte';
   import IconButton from './IconButton.svelte';
@@ -19,16 +20,25 @@
     if (open) load();
   });
 
+  // Closing and reopening starts a second load while the first is still in
+  // flight; without this guard the earlier response can land last and replace
+  // the newer list with a stale one.
+  const latest = createLatest();
+
   async function load() {
+    const isCurrent = latest.start();
     loading = true;
     failed = false;
     try {
-      entries = await listSentData();
+      const next = await listSentData();
+      if (!isCurrent()) return;
+      entries = next;
     } catch {
+      if (!isCurrent()) return;
       entries = [];
       failed = true;
     } finally {
-      loading = false;
+      if (isCurrent()) loading = false;
     }
   }
 

@@ -307,12 +307,68 @@ func TestBuildUploadBundleNoLogs(t *testing.T) {
 	}
 }
 
-func TestLogReportNamesTheDataDir(t *testing.T) {
+// The data directory is under the OS account name on every platform, so the
+// report that ships inside the bundle names the directory only in scrubbed
+// form: the shape stays readable, the account name does not travel.
+func TestLogReportKeepsTheDataDirOutOfTheBundle(t *testing.T) {
 	dir := t.TempDir()
-	report := logReport(dir)
-	for _, want := range []string{"Typhon " + Version, dir} {
-		if !strings.Contains(report, want) {
-			t.Fatalf("report %q does not mention %q", report, want)
+	if err := os.WriteFile(filepath.Join(dir, logFileName), []byte("started\n"), 0o600); err != nil {
+		t.Fatalf("seed log: %v", err)
+	}
+	data, _, err := buildUploadBundle(dir, logReport(dir), 1<<20)
+	if err != nil {
+		t.Fatalf("buildUploadBundle: %v", err)
+	}
+	report := readBundleBytes(t, gunzipBytes(t, data))["info.txt"]
+	if !strings.Contains(report, "Typhon "+Version) {
+		t.Fatalf("report %q does not mention the version", report)
+	}
+	if strings.Contains(report, dir) {
+		t.Fatalf("report %q carries the raw data directory %q", report, dir)
+	}
+}
+
+// Both exits from the config directory -- the zip written to Downloads and
+// the gzip sent to the server -- carry the same scrubbed text, so what a user
+// can read before sending is what a send contains.
+func TestLogBundlesScrubLogText(t *testing.T) {
+	const line = "open C:\\Users\\Egor\\AppData\\Typhon\\state.json: access denied\n" +
+		"refresh accessToken=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dozjgNryP4J3jVm failed\n"
+	leaks := []string{"Egor", "AppData", "eyJhbGciOiJIUzI1NiJ9", "dozjgNryP4J3jVm"}
+
+	t.Run("upload", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, logFileName), []byte(line), 0o600); err != nil {
+			t.Fatalf("seed log: %v", err)
 		}
+		data, _, err := buildUploadBundle(dir, "report", 1<<20)
+		if err != nil {
+			t.Fatalf("buildUploadBundle: %v", err)
+		}
+		assertScrubbed(t, readBundleBytes(t, gunzipBytes(t, data))[logFileName], leaks)
+	})
+
+	t.Run("export", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, logFileName), []byte(line), 0o600); err != nil {
+			t.Fatalf("seed log: %v", err)
+		}
+		out := filepath.Join(t.TempDir(), "bundle.zip")
+		if _, err := writeLogBundle(dir, out, "report"); err != nil {
+			t.Fatalf("writeLogBundle: %v", err)
+		}
+		assertScrubbed(t, readBundle(t, out)[logFileName], leaks)
+	})
+}
+
+func assertScrubbed(t *testing.T, body string, leaks []string) {
+	t.Helper()
+	for _, leak := range leaks {
+		if strings.Contains(body, leak) {
+			t.Fatalf("bundled log leaked %q:\n%s", leak, body)
+		}
+	}
+	if !strings.Contains(body, "access denied") {
+		t.Fatalf("bundled log dropped the diagnostic text:\n%s", body)
 	}
 }

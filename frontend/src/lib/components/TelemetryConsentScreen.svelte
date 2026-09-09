@@ -2,7 +2,7 @@
   import { TriangleAlert } from '@lucide/svelte';
   import { settings } from '../stores/settings';
   import { respondTelemetryConsent } from '../stores/telemetryConsent';
-  import { errorMessage } from '../utils/errors';
+  import { consentErrorText } from '../services/consentErrors';
   import Button from './Button.svelte';
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
@@ -68,7 +68,7 @@
     try {
       await respondTelemetryConsent(usageStats, diagnostics);
     } catch (err) {
-      error = errorMessage(err);
+      error = consentErrorText(err);
     } finally {
       saving = false;
     }

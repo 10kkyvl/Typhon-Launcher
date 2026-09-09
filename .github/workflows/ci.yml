@@ -1,6 +1,6 @@
 # Verification pipeline for every push and pull request.
 #
-# The launcher ships for Windows only, but it is developed on macOS as well:
+# The launcher ships for Windows and Apple Silicon macOS:
 # the `devmock` build tag swaps the Windows-only subsystems for mocks so the
 # whole flow (install, play, session detection, shortcuts, account) can be
 # exercised on a Mac. The mocks must never reach the Windows executable, so
@@ -14,6 +14,10 @@ on:
     branches: [dev, main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -101,8 +105,8 @@ jobs:
       - name: Lint baseline (linux, devmock tag)
         run: go run ./tools/lintbaseline -tags devmock
 
-  test-macos:
-    name: Build and test on macOS (plain and devmock)
+  macos-build:
+    name: macOS builds, plain tests, package and lint
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,20 +128,12 @@ jobs:
       - name: go test
         run: go test ./internal/...
 
-      - name: go test -race
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race ./internal/...
-
-      - name: go test (devmock tag)
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race -tags devmock ./internal/...
-
       # Упаковка бандла ломается отдельно от кода: иконки, Info.plist, ditto.
       # Ловим это здесь, а не в момент релиза.
-      - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -159,6 +155,42 @@ jobs:
 
       - name: Lint baseline (darwin, devmock tag)
         run: go run ./tools/lintbaseline -tags devmock
+
+  macos-race:
+    name: macOS race tests (${{ matrix.mode }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [plain, devmock]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run race tests
+        env:
+          CGO_ENABLED: "1"
+          MODE: ${{ matrix.mode }}
+        run: |
+          if [ "$MODE" = "devmock" ]; then
+            go test -race -tags devmock ./internal/...
+          else
+            go test -race ./internal/...
+          fi
+
+  # Keep the existing required-check name while every macOS lane runs in parallel.
+  test-macos:
+    name: Build and test on macOS (plain and devmock)
+    needs: [macos-build, macos-race]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all macOS checks
+        env:
+          BUILD_RESULT: ${{ needs.macos-build.result }}
+          RACE_RESULT: ${{ needs.macos-race.result }}
+        run: test "$BUILD_RESULT" = success && test "$RACE_RESULT" = success
 
   test-windows:
     name: Test on Windows
@@ -203,8 +235,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
 
       - name: Generate bindings
         run: wails3 task common:generate:bindings

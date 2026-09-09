@@ -93,6 +93,38 @@ func decodeSingleReport(t *testing.T, req capturedRequest) reportPayload {
 	return decoded.Reports[0]
 }
 
+// The server rejects a whole batch that carries a control character, and a
+// message built from a subprocess's output can carry one. Stripping them here
+// costs nothing readable and keeps a real report from being refused at the
+// border.
+func TestSanitizeReportStripsControlCharacters(t *testing.T) {
+	out, err := sanitizeReport(Report{
+		Component: "download",
+		Operation: "fetch",
+		Message:   "reset \x1b[31mred\x1b[0m\x07 done",
+		Stack:     "download.fetch\n\tdownload.retry\x1b[0m",
+	})
+	if err != nil {
+		t.Fatalf("sanitizeReport: %v", err)
+	}
+	for _, field := range []string{out.Message, out.Stack} {
+		for _, r := range field {
+			if r == '\n' || r == '\r' || r == '\t' {
+				continue
+			}
+			if r < 0x20 || r == 0x7f {
+				t.Fatalf("control character %#U survived sanitization: %q", r, field)
+			}
+		}
+	}
+	if !strings.Contains(out.Message, "reset") || !strings.Contains(out.Message, "done") {
+		t.Fatalf("sanitization ate the readable text: %q", out.Message)
+	}
+	if !strings.Contains(out.Stack, "download.fetch\n\tdownload.retry") {
+		t.Fatalf("sanitization broke the stack shape: %q", out.Stack)
+	}
+}
+
 func TestNewServiceRejectsInvalidInputs(t *testing.T) {
 	if _, err := NewService(testIdentity(), nil); err == nil {
 		t.Fatal("expected error for nil enabled callback")
@@ -750,6 +782,147 @@ func TestFlushRemovesCorruptPendingFileWithoutSending(t *testing.T) {
 	case req := <-reqs:
 		t.Fatalf("expected no send attempt for a corrupt pending file, got %s", req.body)
 	default:
+	}
+}
+
+// A pending file that cannot be read is not a corrupt one: an antivirus lock
+// or a failing disk makes ReadFile fail on a perfectly good report, and
+// deleting it there destroys the only copy.
+func TestFlushKeepsUnreadablePendingFileForRetry(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a 0000 file regardless of its mode")
+	}
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer badSrv.Close()
+
+	svc := newTestService(t, badSrv, nil)
+	svc.Capture("download", "start", errors.New("boom"), false)
+	svc.flush(context.Background())
+
+	names, err := listPendingFiles(svc.pendingDir)
+	if err != nil || len(names) != 1 {
+		t.Fatalf("listPendingFiles = %v, %v, want exactly one spilled file", names, err)
+	}
+	path := filepath.Join(svc.pendingDir, names[0])
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("chmod pending file: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(path, 0o600); err != nil {
+			t.Errorf("restore pending file mode: %v", err)
+		}
+	})
+
+	svc.flush(context.Background())
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("unreadable pending file was dropped instead of kept for retry: %v", err)
+	}
+}
+
+// Removing a sent file can fail on its own (a locked directory), and the
+// report inside it has already reached the server. Sending it again on every
+// tick would duplicate one report indefinitely.
+func TestFlushDoesNotResendAPendingFileItCouldNotRemove(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes files from a read-only directory")
+	}
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	svc := newTestService(t, badSrv, nil)
+	svc.Capture("download", "start", errors.New("boom"), false)
+	svc.flush(context.Background())
+	badSrv.Close()
+
+	srv, reqs := newCapturingServer(t, http.StatusNoContent)
+	cl, err := newClient(srv.URL)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	svc.client = cl
+
+	//nolint:gosec // G302: the point of the test is a directory that cannot be written to, so os.Remove fails the way a locked one does.
+	if err := os.Chmod(svc.pendingDir, 0o500); err != nil {
+		t.Fatalf("chmod pending dir: %v", err)
+	}
+	t.Cleanup(func() {
+		//nolint:gosec // G302: restoring the directory to the mode t.TempDir gave it, so the cleanup can delete it.
+		if err := os.Chmod(svc.pendingDir, 0o700); err != nil {
+			t.Errorf("restore pending dir mode: %v", err)
+		}
+	})
+
+	svc.flush(context.Background())
+	svc.flush(context.Background())
+
+	sent := 0
+	for {
+		select {
+		case <-reqs:
+			sent++
+			continue
+		default:
+		}
+		break
+	}
+	if sent != 1 {
+		t.Fatalf("the same pending report was sent %d times, want 1", sent)
+	}
+}
+
+// Opting out while a batch is in flight used to leave the report on disk: the
+// spill ran after RemoveAll and recreated the directory it had just removed.
+func TestOptOutDuringAnInFlightSendLeavesNothingOnDisk(t *testing.T) {
+	release := make(chan struct{})
+	arrived := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+		<-release
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	svc := newTestService(t, srv, nil)
+	svc.Capture("download", "start", errors.New("boom"), false)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		svc.flush(context.Background())
+	}()
+
+	<-arrived
+	svc.SetEnabled(false)
+	close(release)
+	<-done
+
+	if _, err := os.Stat(svc.pendingDir); !errors.Is(err, fs.ErrNotExist) {
+		names, listErr := listPendingFiles(svc.pendingDir)
+		t.Fatalf("a report survived opt-out on disk: %v (stat err %v, list err %v)", names, err, listErr)
+	}
+}
+
+// capture() reads the opt-out flag, then enqueue() takes the lock again to
+// store the report. A user who opts out in between must not end up with a
+// report sitting in the queue, waiting for the next opt-in to send it.
+func TestEnqueueRefusesAfterOptOut(t *testing.T) {
+	srv, _ := newCapturingServer(t, http.StatusNoContent)
+	svc := newTestService(t, srv, nil)
+
+	svc.SetEnabled(false)
+	svc.enqueue(reportPayload{Component: "download", Operation: "start"}, "fingerprint")
+
+	svc.mu.Lock()
+	queued := len(svc.queue)
+	svc.mu.Unlock()
+	if queued != 0 {
+		t.Fatalf("queue holds %d reports after opt-out, want 0", queued)
 	}
 }
 

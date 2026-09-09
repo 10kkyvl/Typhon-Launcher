@@ -47,8 +47,13 @@ on:
         required: false
         default: ""
 
+# Do not interrupt an in-progress publication or let two releases race on latest.
+concurrency:
+  group: launcher-release
+  cancel-in-progress: false
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   macos:
@@ -70,8 +75,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: v3.0.0-beta.17
 
       - name: Verify tag matches VERSION
         if: github.ref_type == 'tag'
@@ -102,6 +109,11 @@ jobs:
             echo "$exe is missing or empty" >&2
             exit 1
           fi
+          expected="$(tr -d ' \t\r\n' < VERSION)"
+          for key in CFBundleShortVersionString CFBundleVersion; do
+            actual=$(/usr/libexec/PlistBuddy -c "Print :$key" bin/typhon.app/Contents/Info.plist)
+            [ "$actual" = "$expected" ] || { echo "$key=$actual, expected $expected" >&2; exit 1; }
+          done
           archs="$(lipo -archs "$exe")"
           if [ "$archs" != "arm64" ]; then
             echo "bundle must be arm64 only, got: $archs" >&2
@@ -119,16 +131,11 @@ jobs:
           path: bin/typhon-darwin-arm64.zip
           if-no-files-found: error
           retention-days: 1
+          compression-level: 0
 
-  release:
-    name: Build, sign and publish the Windows release
-    needs: macos
+  windows:
+    name: Build the Windows installer
     runs-on: windows-latest
-    env:
-      TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
-      S3_RELEASES_BUCKET: ${{ secrets.S3_RELEASES_BUCKET }}
-      MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
-      RELEASE_NOTES: ${{ inputs.notes }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -145,9 +152,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install wails3 CLI
-        shell: bash
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: v3.0.0-beta.17
 
       - name: Install NSIS
         shell: pwsh
@@ -204,9 +212,10 @@ jobs:
             exit 1
           fi
 
-      - name: Build application
+      # Packaging already builds the application. Verify that same binary below.
+      - name: Build and package installer
         shell: bash
-        run: wails3 task build
+        run: wails3 task package
 
       - name: Verify the Windows binary carries no devmock code
         shell: bash
@@ -225,10 +234,6 @@ jobs:
             exit 1
           fi
 
-      - name: Package installer
-        shell: bash
-        run: wails3 task package
-
       - name: Verify installer artifact
         shell: bash
         run: |
@@ -238,6 +243,58 @@ jobs:
             echo "$installer is missing or empty" >&2
             exit 1
           fi
+
+      - name: Upload the installer for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-windows-amd64
+          path: bin/typhon-amd64-installer.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  release:
+    name: Sign and publish both platforms
+    needs: [macos, windows]
+    # signrelease currently imports the Wails desktop backend transitively.
+    # Keep its verified Windows environment without adding Linux GUI dependencies.
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
+      S3_RELEASES_BUCKET: ${{ secrets.S3_RELEASES_BUCKET }}
+      MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
+      RELEASE_NOTES: ${{ inputs.notes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          if [ -z "$version" ]; then
+            echo "VERSION file is empty" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download the Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: typhon-windows-amd64
+          path: bin
+
+      - name: Verify the Windows artifact
+        shell: bash
+        run: test -s bin/typhon-amd64-installer.exe
 
       - name: Download the macOS bundle
         uses: actions/download-artifact@v4
@@ -424,10 +481,13 @@ jobs:
             printf 'Windows 10+ x64. Скачайте `typhon-amd64-installer.exe` ниже.\n'
             printf 'Установленный лаунчер обновится сам.\n\n'
             printf 'Windows 10+ x64. Download `typhon-amd64-installer.exe` below.\n'
-            printf 'An installed launcher updates itself.\n'
+            printf 'An installed launcher updates itself.\n\n'
+            printf 'macOS 13+ Apple Silicon: `typhon-darwin-arm64.zip`. Для Windows-игр нужен CrossOver.\n'
+            printf 'macOS 13+ Apple Silicon: download `typhon-darwin-arm64.zip`. Windows games require CrossOver.\n'
           } > release-body.md
 
           gh release create "$RELEASE_TAG" \
             bin/typhon-amd64-installer.exe \
+            bin/typhon-darwin-arm64.zip \
             --title "Typhon $RELEASE_VERSION" \
             --notes-file release-body.md

@@ -118,18 +118,35 @@ func TestPostLogBundleRateLimited(t *testing.T) {
 	}
 }
 
-func TestPostLogBundleServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	_, err := postLogBundle(context.Background(), srv.Client(), srv.URL, clientid.Identity{}, []byte("x"))
-	if err == nil {
-		t.Fatal("expected an error for a 500 response")
+// "Try again later" and "this archive will never be accepted" are different
+// answers for the user, so a temporary server failure and a rejected request
+// must not arrive under the same code.
+func TestPostLogBundleSeparatesTemporaryFailuresFromRejections(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{"server error", http.StatusInternalServerError, ErrCodeLogUploadUnavailable},
+		{"storage unavailable", http.StatusServiceUnavailable, ErrCodeLogUploadUnavailable},
+		{"bad request", http.StatusBadRequest, ErrCodeLogUploadRejected},
+		{"unauthorized", http.StatusUnauthorized, ErrCodeLogUploadRejected},
 	}
-	if code := uierr.Code(err); code != ErrCodeLogUploadFailed {
-		t.Fatalf("code = %q, want %q", code, ErrCodeLogUploadFailed)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			_, err := postLogBundle(context.Background(), srv.Client(), srv.URL, clientid.Identity{}, []byte("x"))
+			if err == nil {
+				t.Fatalf("expected an error for a %d response", tt.status)
+			}
+			if code := uierr.Code(err); code != tt.want {
+				t.Fatalf("code = %q, want %q", code, tt.want)
+			}
+		})
 	}
 }
 

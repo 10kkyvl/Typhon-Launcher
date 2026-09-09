@@ -151,6 +151,17 @@ func moveTreeIfPresent(ctx context.Context, oldRoot, newRoot string) error {
 		return err
 	}
 	if populated {
+		manifest, err := hashdir.Build(ctx, oldRoot, nil)
+		if err != nil {
+			return err
+		}
+		result, err := hashdir.Verify(ctx, newRoot, manifest, nil)
+		if err != nil {
+			return err
+		}
+		if len(result.Issues) != 0 || len(result.Extra) != 0 {
+			return errRepointVerifyFailed
+		}
 		if rmErr := os.RemoveAll(oldRoot); rmErr != nil {
 			return fmt.Errorf("%w: %s: %w", errRepointOldRootStuck, oldRoot, rmErr)
 		}

@@ -66,6 +66,30 @@ func TestTextRedactsPreviouslyLeakedValues(t *testing.T) {
 			keeps: []string{"adapter", "down"},
 		},
 		{
+			name:  "camelcase token key",
+			in:    "refresh accessToken=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dozjgNryP4J3jVmNHl0w5N failed",
+			leaks: []string{"eyJhbGciOiJIUzI1NiJ9", "dozjgNryP4J3jVmNHl0w5N"},
+			keeps: []string{"accessToken", "failed"},
+		},
+		{
+			name:  "underscore session key",
+			in:    "session_id=abcdef1234567890abcdef1234567890 expired",
+			leaks: []string{"abcdef1234567890"},
+			keeps: []string{"session_id", "expired"},
+		},
+		{
+			name:  "token key in front of a windows path",
+			in:    `password=C:\Users\Egor\My Games\Cyberpunk 2077\save.dat is missing`,
+			leaks: []string{"Cyberpunk", "2077", "save.dat", "Egor", `C:\`},
+			keeps: []string{"password="},
+		},
+		{
+			name:  "posix path with a space in a directory name",
+			in:    "open /Users/egor/Games/Cyberpunk 2077/save.dat: no such file",
+			leaks: []string{"Cyberpunk", "2077", "save.dat", "egor"},
+			keeps: []string{"open", "no such file"},
+		},
+		{
 			name:  "posix library path outside the old whitelist",
 			in:    "/data/steamlibrary/steamapps/common/Game/run.sh: exec format error",
 			leaks: []string{"steamlibrary", "steamapps", "run.sh", "/data/"},
@@ -103,11 +127,13 @@ func TestSanitizeAcceptsAndScrubsTheSameCorpus(t *testing.T) {
 		"peer 2001:db8::1 disconnected",
 		"adapter 00:1A:2B:3C:4D:5E down",
 		"/data/steamlibrary/steamapps/common/Game/run.sh: exec format error",
+		"refresh accessToken=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dozjgNryP4J3jVmNHl0w5N failed",
+		`password=C:\Users\Egor\My Games\Cyberpunk 2077\save.dat is missing`,
 	}
 	forbidden := []string{
 		"Cyberpunk", "TyphonLauncher", "AKIA123", "deadbeefcafe",
 		"DESKTOP-9F3KQ1", "192.168.1.77", "2001:db8", "00:1A:2B",
-		"steamlibrary",
+		"steamlibrary", "eyJhbGciOiJIUzI1NiJ9", "save.dat",
 	}
 	for _, in := range corpus {
 		t.Run(in[:minInt(28, len(in))], func(t *testing.T) {
@@ -166,6 +192,21 @@ func TestPlaceholdersSurviveASecondPass(t *testing.T) {
 	}
 	if strings.Contains(got, IP) {
 		t.Fatalf("Text read a stack location as an address: %q", got)
+	}
+}
+
+// unsafeText is the fail-closed backstop: it must recognise a value that Text
+// substitutes, so a future gap in a Text rule costs a dropped report instead
+// of a leak. The corpus test above is the other half of this contract -- it
+// fails if a rule listed here flags a value Text already scrubbed.
+func TestUnsafeTextCatchesValuesTextSubstitutes(t *testing.T) {
+	for _, s := range []string{
+		"accessToken=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dozjgNryP4J3jVmNHl0w5N",
+		`Get "https://cdn.example.com/b.zip?X-Amz-Signature=deadbeef": i/o timeout`,
+	} {
+		if !unsafeText(s) {
+			t.Fatalf("unsafeText(%q) = false, want true: the fail-closed re-scan does not know a rule Text applies", s)
+		}
 	}
 }
 

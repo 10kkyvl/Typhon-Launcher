@@ -45,6 +45,8 @@ const (
 	ErrCodeLogUploadTooLarge    = "diagnostics.log_upload_too_large"
 	ErrCodeLogUploadRateLimited = "diagnostics.log_upload_rate_limited"
 	ErrCodeLogUploadNetwork     = "diagnostics.log_upload_network"
+	ErrCodeLogUploadUnavailable = "diagnostics.log_upload_unavailable"
+	ErrCodeLogUploadRejected    = "diagnostics.log_upload_rejected"
 	ErrCodeLogUploadFailed      = "diagnostics.log_upload_failed"
 )
 
@@ -147,11 +149,18 @@ func postLogBundle(ctx context.Context, httpClient *http.Client, baseURL string,
 		return "", uierr.Wrap(ErrCodeLogUploadFailed, fmt.Errorf("%s: status %d, read error body: %w", logUploadPath, resp.StatusCode, readErr))
 	}
 
-	switch resp.StatusCode {
-	case http.StatusRequestEntityTooLarge:
+	// The user gets a different sentence for each class, so the classes must
+	// not collapse into one code: a 5xx is worth retrying later, a 4xx never
+	// is, and the two named statuses have advice of their own.
+	switch {
+	case resp.StatusCode == http.StatusRequestEntityTooLarge:
 		return "", uierr.New(ErrCodeLogUploadTooLarge, fmt.Sprintf("%s: %d %s", logUploadPath, resp.StatusCode, string(body)))
-	case http.StatusTooManyRequests:
+	case resp.StatusCode == http.StatusTooManyRequests:
 		return "", uierr.New(ErrCodeLogUploadRateLimited, fmt.Sprintf("%s: %d %s", logUploadPath, resp.StatusCode, string(body)))
+	case resp.StatusCode >= 500:
+		return "", uierr.New(ErrCodeLogUploadUnavailable, fmt.Sprintf("%s: status %d: %s", logUploadPath, resp.StatusCode, string(body)))
+	case resp.StatusCode >= 400:
+		return "", uierr.New(ErrCodeLogUploadRejected, fmt.Sprintf("%s: status %d: %s", logUploadPath, resp.StatusCode, string(body)))
 	default:
 		return "", uierr.New(ErrCodeLogUploadFailed, fmt.Sprintf("%s: unexpected status %d: %s", logUploadPath, resp.StatusCode, string(body)))
 	}

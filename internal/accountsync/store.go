@@ -1,6 +1,7 @@
 package accountsync
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -18,6 +19,8 @@ type gameState struct {
 }
 
 type syncState struct {
+	Owner      string               `json:"owner,omitempty"`
+	Tombstones map[string]time.Time `json:"tombstones,omitempty"`
 	// DeviceID identifies this installation to the account-sync backend only.
 	// It must never come from or be compared with clientid's installation id:
 	// that id is deliberately pseudonymous and unlinked from any account, and
@@ -37,7 +40,8 @@ func emptyState() syncState {
 }
 
 type store struct {
-	dir string
+	dir   string
+	owner string
 }
 
 func newStore(dir string) *store {
@@ -47,6 +51,9 @@ func newStore(dir string) *store {
 func (s *store) path() string {
 	if s.dir == "" {
 		return ""
+	}
+	if s.owner != "" {
+		return filepath.Join(s.dir, fmt.Sprintf("sync-%x.json", sha256.Sum256([]byte(s.owner))))
 	}
 	return filepath.Join(s.dir, "sync.json")
 }

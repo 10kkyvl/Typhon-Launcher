@@ -26,6 +26,15 @@ describe('logsUploadErrorText', () => {
     );
   });
 
+  it('tells a temporary server failure apart from a rejected archive', () => {
+    expect(logsUploadErrorText(new Error('typhon:diagnostics.log_upload_unavailable: status 503'))).toBe(
+      'Сервер сейчас не принимает логи. Попробуйте позже.',
+    );
+    expect(logsUploadErrorText(new Error('typhon:diagnostics.log_upload_rejected: status 400'))).toBe(
+      'Сервер не принял этот архив логов.',
+    );
+  });
+
   it('falls back instead of showing raw go error text', () => {
     expect(logsUploadErrorText(new Error('some unrelated internal error'))).toBe('Не удалось отправить логи.');
     expect(logsUploadErrorText(undefined)).toBe('Не удалось отправить логи.');
