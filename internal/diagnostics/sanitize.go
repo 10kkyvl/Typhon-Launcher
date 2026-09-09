@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"typhon/internal/redact"
@@ -51,11 +52,35 @@ func sanitizeReport(r Report) (out Report, err error) {
 		return Report{}, fmt.Errorf("sanitize stack: %w", err)
 	}
 
-	r.Component = capText(component, maxComponentLen)
-	r.Operation = capText(operation, maxOperationLen)
-	r.Message = redact.Message(message)
-	r.Stack = redact.Stack(stack)
+	r.Component = capText(stripControl(component), maxComponentLen)
+	r.Operation = capText(stripControl(operation), maxOperationLen)
+	r.Message = redact.Message(stripControl(message))
+	r.Stack = redact.Stack(stripControl(stack))
 	return r, nil
+}
+
+// stripControl drops C0 control characters and DEL, keeping the three that
+// carry meaning in a stack trace. A message assembled from a subprocess's
+// output can carry an ANSI escape, and the server refuses a whole batch over
+// one: dropping the byte here costs nothing readable and keeps a real report
+// from being turned away at the border.
+func stripControl(s string) string {
+	if !strings.ContainsFunc(s, isControl) {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if isControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+func isControl(r rune) bool {
+	if r == '\n' || r == '\r' || r == '\t' {
+		return false
+	}
+	return r < 0x20 || r == 0x7f
 }
 
 func capText(s string, max int) string {

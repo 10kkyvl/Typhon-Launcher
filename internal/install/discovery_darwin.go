@@ -84,6 +84,10 @@ func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottl
 		return discoveryOutcome{reason: fmt.Sprintf("путь установщика: %v", err)}, nil
 	}
 
+	args, err := winePathArgs(bottle, plan.Args)
+	if err != nil {
+		return discoveryOutcome{}, err
+	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan struct{})
@@ -93,7 +97,7 @@ func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottl
 		// только появится INF. А вот ошибка запуска — важна: без неё падение
 		// разведки выглядело бы как «установщик просто не создал файл».
 		if _, runErr := run(runCtx, bottle, wine.Cmd{
-			Path: winInstaller, Args: plan.Args, WaitChildren: true,
+			Path: winInstaller, Args: args, WaitChildren: true,
 		}); runErr != nil && !errors.Is(runErr, context.Canceled) {
 			slog.Debug("discovery run", "installer", winInstaller, "error", runErr)
 		}

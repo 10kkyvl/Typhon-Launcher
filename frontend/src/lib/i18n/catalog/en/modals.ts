@@ -2,6 +2,8 @@ import type { Message } from '../../types';
 import type { ModalsKey } from '../ru/modals';
 
 export const modals: Record<ModalsKey, Message> = {
+  'modals.telemetryConsentSaveFailed': 'Could not save your answer: the settings folder is not writable. Check the permissions and try again.',
+  'modals.telemetryConsentSaveFallback': 'Could not save your answer. Try again.',
   // GameStatusModal.svelte
   'modals.gameStatusNone': 'No status',
   'modals.gameStatusUpdateFailed': 'Failed to change status',

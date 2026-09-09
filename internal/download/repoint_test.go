@@ -182,10 +182,10 @@ func TestMoveTreeRetryAfterRenameDoesNotCopyAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := moveTreeIfPresent(context.Background(), oldRoot, newRoot); err != nil {
-		t.Fatalf("moveTreeIfPresent: %v", err)
+	if err := moveTreeIfPresent(context.Background(), oldRoot, newRoot); err == nil {
+		t.Fatal("must reject unverified target")
 	}
-	if _, err := os.Stat(oldRoot); !os.IsNotExist(err) {
+	if _, err := os.Stat(oldRoot); err != nil {
 		t.Fatalf("old root still present: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(newRoot, "moved.bin"))

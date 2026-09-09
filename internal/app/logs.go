@@ -2,6 +2,7 @@ package app
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"typhon/internal/platform"
+	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 )
@@ -81,6 +83,11 @@ func writeLogBundle(dir, path, report string) (LogBundle, error) {
 // writes to disk and BuildLogUpload sends over the network: info.txt plus
 // every named log file, in that order. The two callers never diverge on
 // what counts as "the bundle" — only on what happens to the bytes after.
+//
+// Every entry is scrubbed on the way in (see addEntry), because both exits
+// leave the machine: one over the network, the other as a file the user
+// forwards by hand. Scrubbing here rather than in the upload path is what
+// keeps the promise that a downloaded bundle is exactly what a send contains.
 func buildArchive(dir, report string, names []string) ([]byte, error) {
 	var buf bytes.Buffer
 	archive := zip.NewWriter(&buf)
@@ -200,10 +207,38 @@ func addEntry(archive *zip.Writer, name string, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("create entry %s: %w", name, err)
 	}
-	if _, err := io.Copy(w, src); err != nil {
+	if err := scrubLines(w, src); err != nil {
 		return fmt.Errorf("write entry %s: %w", name, err)
 	}
 	return nil
+}
+
+// scrubLines copies src to dst a line at a time, scrubbing each line on the
+// way. A log runs to megabytes, so it is never held in memory whole; the unit
+// is a line because that is what redact's rules are written against — a
+// pattern split across an arbitrary read boundary would not match. A line
+// without a trailing newline (the last one, or a tail cut mid-line by the
+// size cap) is scrubbed and written just the same.
+func scrubLines(dst io.Writer, src io.Reader) error {
+	r := bufio.NewReader(src)
+	for {
+		line, readErr := r.ReadString('\n')
+		if line != "" {
+			nl := ""
+			if strings.HasSuffix(line, "\n") {
+				line, nl = line[:len(line)-1], "\n"
+			}
+			if _, err := io.WriteString(dst, redact.Text(line)+nl); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return readErr
+		}
+	}
 }
 
 func logReport(dir string) string {

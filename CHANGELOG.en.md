@@ -6,6 +6,29 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.5.1 — 2026-09-09
+Easier game launching on Mac, clearer friend activity, and more reliable library moves, game updates and account sync.
+
+### Added
+- Games on macOS now use a shared Steam environment in CrossOver by default. Choose it in Settings or override it for an individual game on its page; CrossOver is still installed separately
+- Away status lets friends see when you have not used your computer for a while
+
+### Changed
+- Game pages distinguish friends who have the game in their library from friends playing it right now
+- Log archives saved locally or sent to support receive an additional cleanup pass to hide recognized paths, addresses, tokens and other sensitive values. Review the contents before sharing an archive
+- Log upload errors explain whether to try again later, reduce the archive size or wait for a rate limit to expire
+
+### Fixed
+- Typhon picks a game's launch file more accurately after installation, avoiding helper programs with similar names
+- Improved launching and tracking games through CrossOver on macOS, handling the shared Steam environment and loading DLLs from the game folder
+- A game added back to the library could disappear again after sync. Also fixed syncing large libraries and carrying pending actions across different accounts
+- Library moves and local-network transfers preserve existing destination files; retrying a move no longer attempts to move an already transferred game again
+- Deleting downloaded files from a shared folder is limited to that download's files; cancelling a download waits for background work on its files to finish
+- Game repair and verification handle the rollback backup more carefully. Rolling back also restores the displayed game version
+- Rapid changes to multiple settings no longer overwrite one another; delayed feed and sent-data responses no longer replace newer results
+- Disabling error reports prevents old pending reports from reappearing in the queue; a delivered report is no longer repeatedly sent when its local file cannot be deleted
+- The version in macOS application metadata now matches the launcher version
+
 ## 0.5.0 — 2026-09-08
 The launcher runs on macOS, downloading is told apart from installing, and games stop splitting across the catalogue or offering each other the wrong update.
 

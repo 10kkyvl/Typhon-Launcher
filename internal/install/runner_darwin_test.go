@@ -332,3 +332,41 @@ func TestWineRunnerRejectsInstallerOutsideGames(t *testing.T) {
 		t.Fatal("installer outside the games folder: want error")
 	}
 }
+
+func TestWineRunnerInstallerInDownloads(t *testing.T) {
+	root := t.TempDir()
+	games := filepath.Join(root, "Games")
+	downloads := filepath.Join(root, "Downloads", "9-Bit Armies")
+	prefix := filepath.Join(root, "Bottle")
+	dos := filepath.Join(prefix, "dosdevices")
+	for _, dir := range []string{games, downloads, dos} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(root, filepath.Join(dos, "z:")); err != nil {
+		t.Fatal(err)
+	}
+	installer := filepath.Join(downloads, "setup.exe")
+	if err := os.WriteFile(installer, []byte("fixture"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	b := wine.Bottle{Path: prefix, Games: games, Drive: "t"}
+	called := false
+	r := wineRunner{runCmd: func(ctx context.Context, b wine.Bottle, c wine.Cmd) (int, error) {
+		called = true
+		if len(c.Args) != 2 || c.Args[0] != `/DIR=T:\9-Bit Armies` || c.Args[1] != `/LOG=Z:\install.log` {
+			t.Fatalf("native paths leaked into args: %+v", c.Args)
+		}
+		if c.Path != `Z:\Downloads\9-Bit Armies\setup.exe` || c.WorkDir != `Z:\Downloads\9-Bit Armies` {
+			t.Fatalf("wrong mapped command: %+v", c)
+		}
+		return 0, nil
+	}}
+	if _, err := r.runPrepared(context.Background(), runSpec{Path: installer, Dir: downloads, Args: []string{"/DIR=" + filepath.Join(games, "9-Bit Armies"), "/LOG=" + filepath.Join(root, "install.log")}}, b); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("installer not launched")
+	}
+}

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/uierr"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -182,6 +184,35 @@ func TestSaveConsentRecordsAnswerAndVersionTogether(t *testing.T) {
 
 // Declining is an answer and must be recorded as one, or the prompt returns on
 // the next launch and eventually wears the user down into accepting.
+// The consent screen has no other exit than a successful answer, so a failure
+// there is shown to the user verbatim unless it carries a code the frontend
+// can translate.
+func TestSaveConsentFailureCarriesAUICode(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into a read-only directory")
+	}
+	dir := t.TempDir()
+	svc := mustServiceAt(t, filepath.Join(dir, "settings.json"))
+	//nolint:gosec // G302: the test needs a directory the process cannot write to, which is what makes SaveConsent fail.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod config dir: %v", err)
+	}
+	t.Cleanup(func() {
+		//nolint:gosec // G302: restoring the directory to the mode t.TempDir gave it, so the cleanup can delete it.
+		if err := os.Chmod(dir, 0o700); err != nil {
+			t.Errorf("restore config dir mode: %v", err)
+		}
+	})
+
+	_, err := svc.SaveConsent(true, true)
+	if err == nil {
+		t.Fatal("SaveConsent into a read-only directory = nil, want an error")
+	}
+	if code := uierr.Code(err); code != ErrCodeConsentSaveFailed {
+		t.Fatalf("uierr.Code(err) = %q, want %q (raw text: %v)", code, ErrCodeConsentSaveFailed, err)
+	}
+}
+
 func TestSaveConsentRecordsARefusal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if _, err := mustServiceAt(t, path).SaveConsent(false, false); err != nil {

@@ -40,6 +40,8 @@ type Service struct {
 	guest        bool
 	profile      cachedProfile
 	profileEpoch uint64
+	syncToken    string
+	syncUserID   string
 	ctx          context.Context
 	cancel       context.CancelFunc
 
@@ -152,8 +154,11 @@ func (s *Service) Bootstrap() (State, error) {
 	}
 	defer cancel()
 
-	user, err := s.client.Me(ctx)
+	client := *s.client
+	client.token = func() (string, error) { return cred.Token, nil }
+	user, err := client.Me(ctx)
 	if err == nil {
+		s.bindSyncIdentity(cred.Token, user.ID)
 		if rememberErr := s.rememberProfile(ctx, user); rememberErr != nil {
 			return State{}, rememberErr
 		}
@@ -249,6 +254,7 @@ func (s *Service) Login(input LoginInput) (CurrentUser, error) {
 func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, error) {
 	saveErr := s.store.Save(Credential{Token: session.Token, Username: session.User.Username})
 	if saveErr == nil {
+		s.bindSyncIdentity(session.Token, session.User.ID)
 		if err := s.rememberProfile(ctx, session.User); err != nil {
 			// The credential is already stored, so the session is real: a cache failure only
 			// costs offline mode on the next launch and must not read as a failed sign-in.

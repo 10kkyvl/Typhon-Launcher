@@ -95,7 +95,19 @@ func bottleName(destDir string) string {
 func (b Bottle) ToWindows(native string) (string, error) {
 	rel, err := filepath.Rel(b.Games, native)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("путь %s вне папки игр %s", native, b.Games)
+		table, mapErr := drives(b.Path)
+		if mapErr != nil {
+			return "", mapErr
+		}
+		letter, base, ok := table.drive(native)
+		if !ok {
+			return "", fmt.Errorf("%w: %s", ErrNoDriveForPath, native)
+		}
+		rel, err = filepath.Rel(base, native)
+		if err != nil {
+			return "", err
+		}
+		return strings.ToUpper(letter) + `:\` + strings.ReplaceAll(rel, "/", `\`), nil
 	}
 	return strings.ToUpper(b.Drive) + `:\` + strings.ReplaceAll(rel, "/", `\`), nil
 }

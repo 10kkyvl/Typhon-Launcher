@@ -187,6 +187,32 @@ describe('installDiagnostics inside Wails', () => {
     expect(bindings.ReportClientError).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps suppressing a hot error while rarer ones fill the tracking map', async () => {
+    vi.doMock('./backend', () => ({ inWails: true }));
+    bindings.ReportClientError.mockResolvedValue(undefined);
+    const { installDiagnostics } = await import('./diagnostics');
+    installDiagnostics();
+
+    const hot = new Error('render loop failed');
+    win.dispatchEvent(errorEvent(hot, hot.message));
+    expect(bindings.ReportClientError).toHaveBeenCalledTimes(1);
+
+    // 250 one-off errors -- more than the 200 tracked keys -- with the hot one
+    // recurring throughout. Evicting by insertion order drops the hot key even
+    // though it was just used, and its next occurrence is reported again well
+    // inside the dedupe window.
+    for (let i = 0; i < 250; i++) {
+      const once = new Error(`unique failure ${i}`);
+      win.dispatchEvent(errorEvent(once, once.message));
+      win.dispatchEvent(errorEvent(hot, hot.message));
+    }
+
+    const hotReports = bindings.ReportClientError.mock.calls.filter(
+      (call: unknown[]) => String(call[2]).includes('render loop failed'),
+    );
+    expect(hotReports).toHaveLength(1);
+  });
+
   it('does not double-report when installed twice', async () => {
     vi.doMock('./backend', () => ({ inWails: true }));
     bindings.ReportClientError.mockResolvedValueOnce(undefined);

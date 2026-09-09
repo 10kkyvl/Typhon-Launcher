@@ -3,6 +3,7 @@ package updates
 import (
 	"time"
 	"typhon/internal/hashdir"
+	"typhon/internal/library"
 )
 
 type VersionSource string
@@ -195,12 +196,13 @@ const (
 // destructive step, so ServiceStartup can finish or roll it back after a
 // crash instead of leaving the only copy of the install in an ambiguous state.
 type SwapJournal struct {
-	GameID     string    `json:"gameId"`
-	Kind       string    `json:"kind"`
-	InstallDir string    `json:"installDir"`
-	Staging    string    `json:"staging,omitempty"`
-	Previous   string    `json:"previous"`
-	Version    string    `json:"version"`
-	Patch      string    `json:"patch,omitempty"`
-	StartedAt  time.Time `json:"startedAt"`
+	Original   *library.InstalledUpdate `json:"original,omitempty"`
+	GameID     string                   `json:"gameId"`
+	Kind       string                   `json:"kind"`
+	InstallDir string                   `json:"installDir"`
+	Staging    string                   `json:"staging,omitempty"`
+	Previous   string                   `json:"previous"`
+	Version    string                   `json:"version"`
+	Patch      string                   `json:"patch,omitempty"`
+	StartedAt  time.Time                `json:"startedAt"`
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"typhon/internal/uierr"
 	"typhon/internal/wine"
@@ -106,11 +107,21 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 	}
 	// WaitChildren: установщик распаковывает себя во временный каталог и
 	// работает уже оттуда, поэтому ждать надо всё дерево, а не загрузчик.
-	cmd := wine.Cmd{Path: winPath, Args: spec.Args, Log: spec.LogPath, WaitChildren: true}
+	args := spec.Args
+	if spec.Engine == EngineNsis && spec.Destination != "" {
+		args = []string{"/S", "/D=" + spec.Destination}
+	}
+	args, err = winePathArgs(bottle, args)
+	if err != nil {
+		return 0, err
+	}
+	cmd := wine.Cmd{Path: winPath, Args: args, Log: spec.LogPath, WaitChildren: true}
 	if spec.Dir != "" {
-		if dir, dirErr := bottle.ToWindows(spec.Dir); dirErr == nil {
-			cmd.WorkDir = dir
+		dir, dirErr := bottle.ToWindows(spec.Dir)
+		if dirErr != nil {
+			return 0, fmt.Errorf("рабочая папка установщика: %w", dirErr)
 		}
+		cmd.WorkDir = dir
 	}
 	code, err := r.doRun(ctx, bottle, cmd)
 	return code, classifyRunErr(err)
@@ -137,4 +148,24 @@ func classifyRunErr(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, err)
+}
+
+// Convert path-valued installer options as well as the executable itself.
+func winePathArgs(b wine.Bottle, args []string) ([]string, error) {
+	out := append([]string(nil), args...)
+	for i, arg := range out {
+		prefix, value := "", arg
+		if key, v, ok := strings.Cut(arg, "="); ok {
+			prefix, value = key+"=", v
+		}
+		if !filepath.IsAbs(value) || (prefix == "" && strings.Count(value, "/") < 2) {
+			continue
+		}
+		win, err := b.ToWindows(value)
+		if err != nil {
+			return nil, fmt.Errorf("параметр установщика %s: %w", prefix, err)
+		}
+		out[i] = prefix + win
+	}
+	return out, nil
 }

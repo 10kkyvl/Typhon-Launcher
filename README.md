@@ -1,91 +1,68 @@
 # Typhon
 
-*Read this in [Russian / по-русски](README.ru.md).*
+*Читать [по-русски](README.ru.md).*
 
-A game launcher for Windows. Typhon finds the games already on your drives, downloads
-and installs new ones, shows their versions and launches everything from a single
-library.
+**Your games. One launcher.**
 
-**[Download](https://typhon-launcher.com/download/)** · [typhon-launcher.com](https://typhon-launcher.com)
-· Windows 10 1809 or newer, 64-bit, with the Microsoft Edge WebView2 Runtime
+Think of a game, open your library, pick up where you left off. Typhon brings your installed games together with covers and descriptions, helps you download new ones and keeps available updates in view. Spend less time digging through folders and more time playing.
 
-It is a portable application: the downloaded file runs directly, no installer, and it
-keeps its own state in `%AppData%\Typhon`. Verify the SHA-256 printed next to the
-download link before running it.
+[![Latest release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.typhon-launcher.com%2Flauncher%2Fmanifest%3Ffull%3D1&query=%24.manifest.version&prefix=v&label=release&color=7c6aef&cacheSeconds=300)](https://typhon-launcher.com/download/)
 
-![The Typhon library: a game to continue playing, recently played games and the whole library with covers](.github/screenshots/library.webp)
+**[Download Typhon](https://typhon-launcher.com/en/download/)** · [Explore the website](https://typhon-launcher.com/en/) · [What’s new](CHANGELOG.en.md)
 
-| | |
+For Windows and Apple Silicon Macs. No account needed to use your library.
+
+![Your Typhon library: continue playing, recent sessions and a collection with covers](.github/screenshots/library.webp)
+
+## Why try it?
+
+- **See your whole collection.** Find games on your drives and launch them from one library. See what is installed, how much space it takes and what you played recently.
+- **From download to play.** Built-in BitTorrent downloads with a queue and a speed limit. Typhon checks the files and helps you install the game when the download finishes.
+- **Keep track of updates.** When a source you added offers a newer game version, Typhon shows it alongside your installed copy.
+- **Find your next game.** Covers, descriptions, genres and screenshots remind you why a game caught your eye in the first place.
+- **Take your library with you.** Move it to another drive or transfer an installed game to another computer on your local network.
+- **Bring your friends along.** An optional account adds a profile, friends, online status, an activity feed and library and settings sync between computers. Account sync does not transfer game files.
+
+The interface is available in English and Russian, with themes, playtime tracking and Discord Rich Presence.
+
+| Your collection | A closer look |
 |---|---|
-| ![Installed games: how much of the library storage is used, with update badges on the covers](.github/screenshots/installed.webp) | ![The catalogue of all games, with genre filters and search](.github/screenshots/catalog.webp) |
-| ![A game page: description, tags, platform details and an available update](.github/screenshots/game.webp) | |
+| ![Browse games with covers and search](.github/screenshots/catalog.webp) | ![Game details and an available update](.github/screenshots/game.webp) |
 
-## What Typhon is not
+## Get started
 
-Typhon ships with no games, carries no preinstalled sources and offers no list of them.
-It does not host or supply game files. Sources are added by the user, at the user's own
-responsibility.
+1. [Download the build for your system](https://typhon-launcher.com/en/download/). The download page shows the published version and the file’s SHA-256 checksum.
+2. Install Typhon and choose a folder for your library.
+3. Find games already on your drives, or add your own source for downloads.
+4. Pick a game and launch it from your library. You can add an account later.
 
-The Windows build is the one that ships. A macOS build exists for **Apple silicon only**
-(Intel Macs are not supported) and runs games through
-[CrossOver](https://www.codeweavers.com/crossover), which you install yourself — without it
-the launcher still downloads, but cannot install or start a game. That build carries no Apple
-Developer signature and is not going to get one, so Gatekeeper blocks it after a download:
-allow it once in System Settings → Privacy & Security, or clear the quarantine attribute
-with `xattr -dr com.apple.quarantine /Applications/Typhon.app`. There is no Linux version.
+Typhon ships without games or a ready-made list of sources. You choose and add sources yourself and are responsible for having the right to use their content.
 
-## What it does
+## System requirements
 
-**The library builds itself.** Typhon scans your drives and finds installed games;
-anything installed through it lands in the library straight away. Every game shows its
-version, size, install date and playtime. You can remove a game from the library
-without deleting its files.
+| System | What you need |
+|---|---|
+| Windows | Windows 10 1809 or newer, x64, Microsoft Edge WebView2 Runtime. The download is an `.exe` installer. |
+| macOS | macOS 13 or newer, Apple Silicon (M1 and later). Installing and running Windows games requires CrossOver, a separate paid application; compatibility varies by game. |
 
-**Downloads.** A built-in BitTorrent client with a queue, a speed limit and file
-verification. Progress is kept on disk per piece, so closing the launcher mid-download
-resumes where it stopped instead of rehashing everything.
+There are no Intel Mac or Linux builds yet. The macOS app has no Apple Developer signature; see the [download page](https://typhon-launcher.com/en/download/) for first-launch instructions.
 
-**Install and updates.** It unpacks archives, runs installers and remembers which files
-it put where. When a source publishes a release newer than the one you have, the game
-is flagged in the list; from there you can update, launch or remove it. Updates apply
-patch chains one step at a time with a backup of what they replace, and an update
-interrupted by a power cut is finished or rolled back on the next launch rather than
-leaving a half-written game folder.
+## Your library and your data
 
-**Metadata.** Typhon looks the title up and fills in the cover, description, release
-date, genres, developer, publisher and screenshots. Everything it downloads stays in a
-local cache and opens without a connection. Game data provided by IGDB; Typhon is not
-affiliated with or endorsed by IGDB or Twitch.
+Your library, sources and downloads live on your computer. Installed games can be launched without signing in; cached covers and descriptions remain available locally.
 
-**An account, if you want one.** The launcher works fully as a guest. Sign in and you
-get a profile with a showcase and playtime, friends by username or friend code, online
-status, an activity feed, and your library, marks and settings synced across machines.
-Losing the network drops you to a cached profile instead of signing you out.
+Typhon uses a metadata service for new covers and descriptions, and an account enables sync and social features. BitTorrent peers can see your IP address. There is a separate service activity signal; usage statistics and error reports are controlled through privacy settings. See the [privacy policy](PRIVACY.en.md) for details.
 
-**The rest.** Discord Rich Presence, sharing an installed game with another machine on
-the same network, moving the library to another drive with hash verification, a history
-of what the launcher did, themes down to custom CSS, and a signed self-update that
-resumes a broken download.
+Game data provided by IGDB. Typhon is not affiliated with or endorsed by IGDB or Twitch.
 
-**Russian and English.** The whole interface, both languages, following the system by
-default.
+## Feedback and development
 
-## Your data
+Found a bug or have an idea? [Open an issue](https://github.com/10kkyvl/Typhon-Launcher/issues) with what you were trying to do and what happened. Review logs before posting them publicly.
 
-Your library, sources, downloads and installations are stored on your computer. Magnet
-links, infohashes, file lists and download history are never sent to Typhon services.
+The source is available to read. Terms and third-party notices: [TERMS.en.md](TERMS.en.md), [COPYRIGHT.en.md](COPYRIGHT.en.md), [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md).
 
-What leaves the machine: the game title goes to the Typhon metadata service, which looks
-the entry up in IGDB. A source feed is fetched directly from the host you gave it,
-bypassing Typhon's own servers. While downloading over BitTorrent, your IP address is
-visible to other peers in the swarm. Diagnostics and usage statistics are opt-in, and
-what was actually sent is visible in the launcher.
-
-Full text: [`PRIVACY.md`](PRIVACY.md), [`TERMS.md`](TERMS.md), [`COPYRIGHT.md`](COPYRIGHT.md)
-(each with an `.en.md` translation). The Russian text prevails where a translation
-disagrees.
-
----
+<details>
+<summary>Build, development and contribution guide</summary>
 
 # Building it yourself
 
@@ -99,8 +76,7 @@ Everything below is for working on the launcher, not for using it.
 | Node | 22 |
 | Wails CLI | `v3.0.0-beta.17` — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17` |
 
-Go + [Wails 3](https://v3.wails.io) on the backend, Svelte 5 on the front, current
-version 0.3.1.
+Go + [Wails 3](https://v3.wails.io) on the backend, Svelte 5 on the front, checkout version in [`VERSION`](VERSION).
 
 ```
 wails3 task build          # bin/typhon.exe
@@ -255,3 +231,5 @@ The licences of the components Typhon bundles are in
 
 - [`typhon-backend`](https://github.com/10kkyvl/typhon-backend) — accounts, catalog, sync, social and the update feed
 - [`typhon-site`](https://github.com/10kkyvl/typhon-site) — the website and the download page
+
+</details>
