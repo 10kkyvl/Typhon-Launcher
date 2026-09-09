@@ -69,7 +69,10 @@ func TestRegressionRecoveryKeepsNewVersionLabelAfterRollback(t *testing.T) {
 	h.library.games[0].Version = "2.0"
 	j := SwapJournal{GameID: "local-1", Kind: JournalInplace, Original: &library.InstalledUpdate{ID: "local-1", InstallDir: h.installDir, Executable: filepath.Join(h.installDir, "game.exe"), Version: "1.0"}, InstallDir: h.installDir, Previous: old, Version: "2.0"}
 	h.service.recoverInplaceJournal(j)
-	b, _ := os.ReadFile(filepath.Join(h.installDir, "game.exe"))
+	b, err := os.ReadFile(filepath.Join(h.installDir, "game.exe"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(b) != "OLD VERSION" || h.library.games[0].Version != "1.0" {
 		t.Fatal("not reproduced")
 	}

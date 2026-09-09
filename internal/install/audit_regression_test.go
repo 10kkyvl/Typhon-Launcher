@@ -10,11 +10,19 @@ import (
 func TestRegressionPortableMoveCommitFailureLosesSource(t *testing.T) {
 	s, _, _ := newTestService(t)
 	src := filepath.Join(t.TempDir(), "source")
-	os.MkdirAll(src, 0755)
-	os.WriteFile(filepath.Join(src, "game.exe"), []byte("only copy"), 0755)
+	if err := os.MkdirAll(src, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "game.exe"), []byte("only copy"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	dst := filepath.Join(t.TempDir(), "destination")
-	os.MkdirAll(dst, 0755)
-	os.WriteFile(filepath.Join(dst, "concurrent-file"), []byte("occupied"), 0644)
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "concurrent-file"), []byte("occupied"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	item := Installation{ID: "audit-move", Type: TypePortable, Mode: ModeMove, ContentRoot: src, Destination: dst}
 	s.mu.Lock()
 	s.items = append(s.items, &item)

@@ -12,10 +12,18 @@ func TestRegressionRepointOccupiedTargetDeletesSource(t *testing.T) {
 	root := t.TempDir()
 	src := filepath.Join(root, "source")
 	dst := filepath.Join(root, "target")
-	os.MkdirAll(src, 0755)
-	os.MkdirAll(dst, 0755)
-	os.WriteFile(filepath.Join(src, "my-download.bin"), []byte("ONLY COPY"), 0644)
-	os.WriteFile(filepath.Join(dst, "unrelated.txt"), []byte("unrelated"), 0644)
+	if err := os.MkdirAll(src, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "my-download.bin"), []byte("ONLY COPY"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "unrelated.txt"), []byte("unrelated"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := moveTreeIfPresent(context.Background(), src, dst); err == nil {
 		t.Fatal("accepted different target")
 	}

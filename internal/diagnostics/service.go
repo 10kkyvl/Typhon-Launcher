@@ -277,12 +277,6 @@ func (s *Service) pruneSeenLocked(now time.Time) {
 	}
 }
 
-func (s *Service) optedOut() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.disabled
-}
-
 func (s *Service) poke() {
 	select {
 	case s.kick <- struct{}{}:
@@ -348,12 +342,6 @@ func (s *Service) consentCurrent(epoch uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return !s.disabled && s.consentEpoch == epoch
-}
-func (s *Service) drainPending(ctx context.Context, dir string) {
-	s.mu.Lock()
-	epoch := s.consentEpoch
-	s.mu.Unlock()
-	s.drainPendingEpoch(ctx, dir, epoch)
 }
 func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint64) {
 	names, err := listPendingFiles(dir)

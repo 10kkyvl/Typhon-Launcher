@@ -12,8 +12,12 @@ func TestRegressionRecoveryDeletesGoodSourceForBadTarget(t *testing.T) {
 	lib := newTestLibrary(t)
 	game, src := addTestGame(t, lib)
 	dst := filepath.Join(t.TempDir(), "target")
-	os.MkdirAll(dst, 0755)
-	os.WriteFile(filepath.Join(dst, "game.exe"), []byte("CORRUPT"), 0755)
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "game.exe"), []byte("CORRUPT"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	s, err := NewServiceAt(t.TempDir(), nil, lib, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +51,10 @@ func TestRegressionLibraryRetryMovesAlreadyMovedGameAgain(t *testing.T) {
 	if err := s.runGameLibraryItem(context.Background(), j.ID, game.ID, nil, old, root); err != nil {
 		t.Fatal(err)
 	}
-	g, _ := lib.Find(game.ID)
+	g, err := lib.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if g.InstallDir != filepath.Join(root, "Games", "Game") {
 		t.Fatalf("not reproduced: %s", g.InstallDir)
 	}
