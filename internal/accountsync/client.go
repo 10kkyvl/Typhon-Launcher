@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	maxSyncResponseBytes = 1 << 20
+	maxSyncResponseBytes = 16 << 20
 	syncRequestTimeout   = 30 * time.Second
 	syncPath             = account.APIPrefix + "/me/sync"
 )
@@ -140,6 +140,12 @@ func (c *httpClient) remove(ctx context.Context) error {
 
 func (c *httpClient) do(ctx context.Context, method string, reqBody, out any) error {
 	tok, err := c.resolveToken()
+	if pinned, ok := ctx.Value(syncTokenKey{}).(string); ok {
+		if err != nil || tok != pinned {
+			return ErrUnauthorized
+		}
+		tok = pinned
+	}
 	if err != nil {
 		return err
 	}
@@ -233,3 +239,5 @@ func decodeSyncError(status int, body io.Reader) error {
 		return &ValidationError{Code: env.Error.Code, Field: env.Error.Field}
 	}
 }
+
+type syncTokenKey struct{}

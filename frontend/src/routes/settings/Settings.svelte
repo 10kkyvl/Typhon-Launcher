@@ -524,6 +524,18 @@
           </div>
           <div class="row">
             <div class="row-text">
+              <span class="row-label">{msg('settings.generalAutoAwayLabel')}</span>
+              <span class="row-sub">{msg('settings.generalAutoAwaySub')}</span>
+            </div>
+            <Toggle
+              checked={current?.presenceAutoAway ?? true}
+              label={msg('settings.generalAutoAwayLabel')}
+              disabled={!accountReady || !current?.accountSync}
+              onchange={(v) => set({ presenceAutoAway: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
               <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
             </div>

@@ -322,7 +322,7 @@ func (h *harness) reopen() {
 
 func (h *harness) readState() syncState {
 	h.t.Helper()
-	st, err := newStore(h.dir).load()
+	st, err := h.service.store.load()
 	if err != nil {
 		h.t.Fatalf("read state: %v", err)
 	}

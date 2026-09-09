@@ -7,6 +7,7 @@ type Portable struct {
 	AnimationsEnabled        *bool    `json:"animationsEnabled,omitempty"`
 	MinimizeToTray           *bool    `json:"minimizeToTray,omitempty"`
 	DiscordRichPresence      *bool    `json:"discordRichPresence,omitempty"`
+	PresenceAutoAway         *bool    `json:"presenceAutoAway,omitempty"`
 	SeedAfterDownload        *bool    `json:"seedAfterDownload,omitempty"`
 	UploadWhileDownloading   *bool    `json:"uploadWhileDownloading,omitempty"`
 	InstallCleanupPolicy     *string  `json:"installCleanupPolicy,omitempty"`
@@ -33,6 +34,7 @@ func PortableOf(s Settings) Portable {
 		AnimationsEnabled:        &s.AnimationsEnabled,
 		MinimizeToTray:           &s.MinimizeToTray,
 		DiscordRichPresence:      &s.DiscordRichPresence,
+		PresenceAutoAway:         &s.PresenceAutoAway,
 		SeedAfterDownload:        &s.SeedAfterDownload,
 		UploadWhileDownloading:   &s.UploadWhileDownloading,
 		InstallCleanupPolicy:     &s.InstallCleanupPolicy,
@@ -59,6 +61,7 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.AnimationsEnabled, p.AnimationsEnabled)
 	applyBool(&s.MinimizeToTray, p.MinimizeToTray)
 	applyBool(&s.DiscordRichPresence, p.DiscordRichPresence)
+	applyBool(&s.PresenceAutoAway, p.PresenceAutoAway)
 	applyBool(&s.SeedAfterDownload, p.SeedAfterDownload)
 	applyBool(&s.UploadWhileDownloading, p.UploadWhileDownloading)
 	applyString(&s.InstallCleanupPolicy, p.InstallCleanupPolicy)

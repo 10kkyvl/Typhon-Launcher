@@ -30,6 +30,7 @@
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
@@ -70,6 +71,7 @@
     playGame,
     removeShortcut,
     setFavorite,
+    setRequiresSteam,
     stopGame,
   } from '../../lib/services/library';
   import {
@@ -88,6 +90,7 @@
     type CatalogGame,
     type ReleaseGroup,
   } from '../../lib/services/sources';
+  import { getWineStatus, type WineStatus } from '../../lib/services/system';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
@@ -118,6 +121,13 @@
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
+  let wineStatus = $state<WineStatus | null>(null);
+  let requiresSteam = $state(true);
+  let requiresSteamSaving = $state(false);
+
+  $effect(() => {
+    if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
+  });
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -223,6 +233,14 @@
       }
       loadMetaView(metaGameId);
     });
+  });
+
+  onMount(async () => {
+    try {
+      wineStatus = await getWineStatus();
+    } catch (err) {
+      toast(markError(err, msg('games.errorWineStatusFailed')), 'danger');
+    }
   });
 
   onMount(() => {
@@ -463,6 +481,22 @@
     const current = localGame;
     if (!current) return;
     void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
+  }
+
+  async function toggleRequiresSteam(on: boolean) {
+    const current = localGame;
+    if (!current || requiresSteamSaving) return;
+    const previous = current.requiresSteam !== false;
+    requiresSteamSaving = true;
+    try {
+      const updated = await setRequiresSteam(current.id, on);
+      if (localGame?.id === current.id) requiresSteam = updated.requiresSteam !== false;
+    } catch (err) {
+      if (localGame?.id === current.id) requiresSteam = previous;
+      toast(markError(err, msg('games.errorRequiresSteamFailed')), 'danger');
+    } finally {
+      if (localGame?.id === current.id) requiresSteamSaving = false;
+    }
   }
 
   async function createDesktopShortcut() {
@@ -922,6 +956,20 @@
                 </div>
               {/each}
             </dl>
+            {#if wineStatus?.required}
+              <div class="steam-row">
+                <div class="steam-row-text">
+                  <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
+                  <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
+                </div>
+                <Toggle
+                  bind:checked={requiresSteam}
+                  label={msg('games.detailSteamBottleLabel')}
+                  disabled={requiresSteamSaving}
+                  onchange={(on) => void toggleRequiresSteam(on)}
+                />
+              </div>
+            {/if}
           </section>
         {/if}
 
@@ -1402,6 +1450,32 @@
     gap: var(--space-4);
     padding: 0.9rem 0;
     border-top: 1px solid var(--border);
+  }
+
+  .steam-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .steam-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .steam-row-label {
+    font-size: var(--font-sm);
+    color: var(--text);
+  }
+
+  .steam-row-hint {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   dt {

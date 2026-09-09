@@ -41,7 +41,19 @@ var (
 	reHex40  = regexp.MustCompile(`(?i)[a-f0-9]{40,}`)
 	reBearer = regexp.MustCompile(`(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}`)
 
-	reTokenKV = regexp.MustCompile(`(?i)\b(token|access_token|refresh_token|session|sessionid|apikey|api_key|auth|authorization|password|passwd|secret|signature|sig)\b\s*[=:]\s*"?[^\s&"'<>,;]+`)
+	// The sensitive word is often buried inside a longer identifier --
+	// accessToken, session_id, X-Api-Key -- and \b sees that identifier as one
+	// word, so an alternation anchored on the word alone skips every camelCase
+	// and snake_case spelling. The key is therefore matched as "any identifier
+	// containing the word". "auth" and "sig" stay anchored: as substrings they
+	// would fire on "author" and "signal".
+	reTokenKV = regexp.MustCompile(`(?i)(?:\b(?:auth|authorization|sig)\b|\b[a-z0-9_.-]*(?:token|secret|passwd|password|api[_-]?key|session|signature|credential)[a-z0-9_.-]*)["\x27]?\s*[=:]\s*["\x27]?[^\s&"'<>,;]+`)
+
+	// A URL that still carries a query string proves the URL rule above never
+	// fired: Text leaves "scheme://host/<query>" behind, which has no "?".
+	// unsafeText needs this narrow form because reURL itself matches its own
+	// output and would refuse every scrubbed value.
+	reURLQuery = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s"'<>]*\?[^\s"'<>]+`)
 
 	// A URL keeps its scheme and host; everything after them can carry a feed
 	// path, a release name or a query string, and none of that is diagnostic.
@@ -64,7 +76,12 @@ var (
 	// The leading boundary group keeps "and/or" from reading as a path, and
 	// requiring a non-slash character after the slash keeps an already
 	// substituted "host/<query>" from matching again.
-	reUnixPath = regexp.MustCompile(`(^|[\s"'(\[=,])(/[^\s"'<>|\r\n/]+(?:/[^\s"'<>|\r\n]*)?)`)
+	// A directory name may contain a space, so the tail cannot simply stop at
+	// the first one -- that is what left "Cyberpunk 2077/save.dat" on the wire
+	// after "/Users/egor/Games/" was replaced. A space is absorbed only when
+	// another slash follows it in the same run, which keeps a bare "/tmp"
+	// mentioned in prose from swallowing the rest of the sentence.
+	reUnixPath = regexp.MustCompile(`(^|[\s"'(\[=,])(/[^\s"'<>|\r\n/]+(?:[^"'<>|\r\n]*/[^\s"'<>|\r\n/]*)*)`)
 
 	// A trailing "file.go:305 +0x1a4" is put back after the path is replaced:
 	// line numbers carry no identity and are what makes a stack actionable.
@@ -127,6 +144,10 @@ func literalPattern(v string) *regexp.Regexp {
 // URLs collapse before the token rules run, because a token rule that fires
 // first injects "<token>" into the URL and the URL pattern stops at '<',
 // leaving the rest of the query string outside the match and on the wire.
+// Paths run before the token rules for the same reason in reverse: in
+// "password=C:\Users\Egor\My Games\x.dat" the token rule stops at the first
+// space and takes the "C:" anchor with it, and what is left no longer looks
+// like a path to any rule.
 func Text(s string) string {
 	if s == "" {
 		return ""
@@ -146,16 +167,6 @@ func Text(s string) string {
 		}
 		return g[1] + "://" + host + "/" + Query
 	})
-	s = reBearer.ReplaceAllString(s, "bearer "+Token)
-	s = reTokenKV.ReplaceAllStringFunc(s, func(m string) string {
-		i := strings.IndexAny(m, "=:")
-		if i < 0 {
-			return Token
-		}
-		return m[:i+1] + Token
-	})
-	s = reBTIH.ReplaceAllString(s, "btih:"+Hash)
-
 	s = reWinPath.ReplaceAllStringFunc(s, func(m string) string { return trimPath(m, 2) })
 	s = reUNCPath.ReplaceAllStringFunc(s, func(m string) string { return trimPath(m, 2) })
 	s = reUnixPath.ReplaceAllStringFunc(s, func(m string) string {
@@ -165,6 +176,16 @@ func Text(s string) string {
 		}
 		return g[1] + trimPath(g[2], 1)
 	})
+
+	s = reBearer.ReplaceAllString(s, "bearer "+Token)
+	s = reTokenKV.ReplaceAllStringFunc(s, func(m string) string {
+		i := strings.IndexAny(m, "=:")
+		if i < 0 {
+			return Token
+		}
+		return m[:i+1] + Token
+	})
+	s = reBTIH.ReplaceAllString(s, "btih:"+Hash)
 
 	s = reMAC.ReplaceAllString(s, MAC)
 	s = reIPv6Full.ReplaceAllString(s, IP)
@@ -227,7 +248,7 @@ func Sanitize(s string) (string, error) {
 // not added here would weaken the fail-closed contract silently.
 func unsafeText(s string) bool {
 	for _, re := range []*regexp.Regexp{
-		reMagnet, reBTIH, reHex40, reBearer,
+		reMagnet, reBTIH, reHex40, reBearer, reTokenKV, reURLQuery,
 		reWinPath, reUNCPath, reUnixPath,
 		reMAC, reIPv6Full, reIPv6Comp, reIPv4, reGenericHost,
 	} {

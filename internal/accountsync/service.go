@@ -3,6 +3,7 @@ package accountsync
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,8 @@ var (
 )
 
 type Service struct {
+	accountID func(string) string
+
 	store    *store
 	client   *httpClient
 	settings SettingsPort
@@ -238,10 +241,17 @@ func (s *Service) ForgetRemote() error {
 		s.mu.Unlock()
 	}()
 
+	ctx, _, token, err := s.bindSession(ctx)
+	if err != nil {
+		return err
+	}
 	if err := s.client.remove(ctx); err != nil {
 		return fmt.Errorf("delete account sync data: %w", err)
 	}
 
+	if current, err := s.client.resolveToken(); err != nil || current != token {
+		return ErrUnauthorized
+	}
 	empty := emptyState()
 	if err := s.store.save(empty); err != nil {
 		return fmt.Errorf("reset accountsync state: %w", err)
@@ -291,7 +301,22 @@ type gameCompute struct {
 	device   int64
 }
 
+//wails:ignore
+func (s *Service) SetAccountID(fn func(string) string) { s.accountID = fn }
+
 func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
+	ctx, owner, token, err := s.bindSession(ctx)
+	if err != nil {
+		return err
+	}
+	ensureOwner := func() error {
+		current, err := s.client.resolveToken()
+		if err != nil || current != token {
+			return ErrUnauthorized
+		}
+		return ctx.Err()
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -327,12 +352,31 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		return fmt.Errorf("fetch account sync snapshot: %w", err)
 	}
 
+	if err := ensureOwner(); err != nil {
+		return err
+	}
 	if snap.SettingsRevision != st.SettingsRevision {
 		if err := s.applyRemoteSettings(snap.Settings); err != nil {
 			return err
 		}
 	}
 
+	restored := map[int64]*time.Time{}
+	for i := range snap.Games {
+		rg := &snap.Games[i]
+		key := strconv.FormatInt(rg.IGDBID, 10)
+		if _, local := localByIGDB[key]; local && rg.Removed {
+			if _, known := st.Tombstones[key]; known {
+				at := time.Now().UTC()
+				if rg.RemovedAt != nil && !at.After(*rg.RemovedAt) {
+					at = rg.RemovedAt.Add(time.Second)
+				}
+				restored[rg.IGDBID] = &at
+				rg.Removed = false
+				delete(pendingRemoved, key)
+			}
+		}
+	}
 	remoteRemovedIDs := s.applyRemoteRemovals(localByIGDB, snap.Games)
 	if len(remoteRemovedIDs) > 0 {
 		localGames, err = s.library.Snapshot()
@@ -375,7 +419,11 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			combinedSeconds = remoteSeconds
 		}
 
-		delta := local.PlaytimeSeconds - prev.Baseline
+		baseline := prev.Baseline
+		if st.DeviceID == "" {
+			baseline = remoteSeconds
+		}
+		delta := local.PlaytimeSeconds - baseline
 		if delta < 0 {
 			delta = 0
 		}
@@ -418,6 +466,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		}
 		pushGames = append(pushGames, wireGame{
 			IGDBID:          id,
+			RemovedAt:       restored[id],
 			Owned:           r.combined.Owned,
 			Favorite:        r.combined.Favorite,
 			FavoriteAt:      r.combined.FavoriteAt,
@@ -459,6 +508,9 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		if i == 0 {
 			req.Settings = &pushSettings
 		}
+		if err := ensureOwner(); err != nil {
+			return err
+		}
 		resp, err := s.client.put(ctx, req)
 		if err != nil {
 			if errors.Is(err, ErrConflict) && allowRetry {
@@ -474,11 +526,29 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		slog.Info("account sync server skipped games the catalog does not know", "count", totalSkipped)
 	}
 
+	if err := ensureOwner(); err != nil {
+		return err
+	}
 	newState := syncState{
+		Owner: owner, Tombstones: map[string]time.Time{},
 		DeviceID:         deviceID,
 		SettingsRevision: revision,
 		Games:            make(map[string]gameState, len(st.Games)+len(results)),
 		Removed:          map[string]time.Time{},
+	}
+	for id, at := range st.Tombstones {
+		newState.Tombstones[id] = at
+	}
+	for id, at := range pendingRemoved {
+		newState.Tombstones[id] = at
+	}
+	for _, rg := range snap.Games {
+		if rg.Removed && rg.RemovedAt != nil {
+			newState.Tombstones[strconv.FormatInt(rg.IGDBID, 10)] = *rg.RemovedAt
+		}
+	}
+	for id := range restored {
+		delete(newState.Tombstones, strconv.FormatInt(id, 10))
 	}
 	for id, g := range st.Games {
 		if _, gone := pendingRemoved[id]; gone {
@@ -574,6 +644,10 @@ func (s *Service) applyRemoteSettings(remote settings.Portable) error {
 func detectLocalRemovals(st syncState, localByIGDB map[string]Game) (removed map[string]time.Time, changed bool) {
 	removed = make(map[string]time.Time, len(st.Removed))
 	for igdbID, at := range st.Removed {
+		if _, present := localByIGDB[igdbID]; present {
+			changed = true
+			continue
+		}
 		removed[igdbID] = at
 	}
 	now := time.Now()
@@ -644,6 +718,12 @@ func (s *Service) hydrate(ctx context.Context, localByIGDB map[string]Game, remo
 			slog.Warn("account sync metadata lookup failed", "igdb_id", igdbID, "error", err)
 			deferred++
 			continue
+		}
+		if pinned, ok := ctx.Value(syncTokenKey{}).(string); ok {
+			current, err := s.client.resolveToken()
+			if err != nil || current != pinned {
+				return hydrated, deferred + 1
+			}
 		}
 		canonicalID, err := s.catalog.EnsureByIGDB(igdbID, title)
 		if err != nil {
@@ -720,4 +800,34 @@ func chunkGames(games []wireGame, size int) [][]wireGame {
 		chunks = append(chunks, games[i:end])
 	}
 	return chunks
+}
+
+func (s *Service) bindSession(ctx context.Context) (context.Context, string, string, error) {
+	token, err := s.client.resolveToken()
+	if err != nil {
+		return ctx, "", "", err
+	}
+	if pinned, ok := ctx.Value(syncTokenKey{}).(string); ok && pinned != token {
+		return ctx, "", "", ErrUnauthorized
+	}
+	ctx = context.WithValue(ctx, syncTokenKey{}, token)
+	owner := fmt.Sprintf("session-%x", sha256.Sum256([]byte(token)))
+	if s.accountID != nil {
+		owner = s.accountID(token)
+		if owner == "" {
+			return ctx, "", "", ErrUnauthorized
+		}
+	}
+	if s.store.owner != owner {
+		scoped := &store{dir: s.store.dir, owner: owner}
+		loaded, err := scoped.load()
+		if err != nil {
+			return ctx, "", "", err
+		}
+		s.store = scoped
+		s.mu.Lock()
+		s.state = loaded
+		s.mu.Unlock()
+	}
+	return ctx, owner, token, nil
 }

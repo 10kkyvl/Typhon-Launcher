@@ -169,6 +169,9 @@ func decodeCompletionFile(data []byte) (map[metainfo.Hash]*pieceSet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode pieces for %s: %w", hash.HexString(), err)
 		}
+		if entry.Count < 0 || entry.Count/8 > len(bits) || entry.Count/8+boolByte(entry.Count%8 != 0) != len(bits) {
+			return nil, fmt.Errorf("invalid piece count for %s", hash.HexString())
+		}
 		torrents[hash] = &pieceSet{bits: bits, n: entry.Count}
 	}
 	return torrents, nil
@@ -287,4 +290,11 @@ func (fc *fileCompletion) Close() error {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	return fc.takeErrLocked()
+}
+
+func boolByte(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }

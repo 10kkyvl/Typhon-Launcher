@@ -1030,6 +1030,7 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 		return wrapPersistError(err)
 	}
 	s.mu.Unlock()
+	slog.Info("install executable confirmed", "id", id, "executable", executable)
 
 	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
 	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
@@ -1558,7 +1559,8 @@ func (s *Service) waitForUser(id string, candidates []Candidate) error {
 	}
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	slog.Info("install waiting for user", "id", id, "candidates", len(candidates))
+	slog.Info("install waiting for user", "id", id, "candidates", len(candidates),
+		"offered", candidatePaths(candidates))
 	emit(eventUpdated, snap)
 	return nil
 }

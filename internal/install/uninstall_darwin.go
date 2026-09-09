@@ -24,9 +24,17 @@ func readUninstallEntries() (map[string]uninstallEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	bottles, err := wine.NewManager(rt).List()
+	manager := wine.NewManager(rt)
+	bottles, err := manager.List()
 	if err != nil {
 		return nil, err
+	}
+	// Общий бутыль со Steam в List не входит — метки у него нет и быть не
+	// должно, — но установщик игры, ушедшей туда, пишет запись удаления
+	// именно в его реестр. Без этого корня деинсталлятор такой игры не
+	// нашёлся бы никогда.
+	if shared, ok := manager.SharedBottleAny(); ok {
+		bottles = append(bottles, shared)
 	}
 	return collectUninstallEntries(bottles)
 }

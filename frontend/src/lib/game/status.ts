@@ -27,6 +27,12 @@ export function statusLabel(status: string | undefined): string {
   return STATUS_LABELS[status as Exclude<GameStatus, ''>] ?? msg('games.statusNone');
 }
 
+export function friendStatusLabel(status: string | undefined): string {
+  if (!status) return '';
+  if (status === 'playing') return msg('games.statusPlayingOther');
+  return STATUS_LABELS[status as Exclude<GameStatus, ''>] ?? '';
+}
+
 export function statusBadgeKind(status: string | undefined): 'success' | 'accent' | 'neutral' | 'warning' {
   switch (status) {
     case 'completed':

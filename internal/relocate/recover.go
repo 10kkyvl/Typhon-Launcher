@@ -151,6 +151,16 @@ func (s *Service) recoverCommit(ctx context.Context, job Job) {
 }
 
 func (s *Service) recoverRepoint(ctx context.Context, job Job) {
+	if job.GameID != itemSettings && job.GameID != itemDownloads && !job.Renamed && exists(job.Source) {
+		manifest, err := s.st.loadManifest(job.ID)
+		if err == nil {
+			err = verifyManifest(ctx, job.Target, manifest)
+		}
+		if err != nil {
+			s.markRecoveryFailed(job.ID, err)
+			return
+		}
+	}
 	switch job.GameID {
 	case itemSettings:
 		next := s.settings.GetSettings()

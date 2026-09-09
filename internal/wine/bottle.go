@@ -25,6 +25,12 @@ type Bottle struct {
 	Path  string // каталог самого бутыля
 	Drive string // буква, под которой в бутыле видна папка игр
 	Games string // native-путь папки игр
+
+	// Shared — бутыль общий и не наш: в нём живёт windows Steam, рядом с ним
+	// стоят другие игры, и валить его целиком нельзя. Метка на диске этого
+	// поля не хранит: общий бутыль пользовательский, метки в нём нет и быть
+	// не должно, поэтому readMarker всегда отдаёт Shared=false.
+	Shared bool
 }
 
 type marker struct {
@@ -89,14 +95,41 @@ func bottleName(destDir string) string {
 func (b Bottle) ToWindows(native string) (string, error) {
 	rel, err := filepath.Rel(b.Games, native)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("путь %s вне папки игр %s", native, b.Games)
+		table, mapErr := drives(b.Path)
+		if mapErr != nil {
+			return "", mapErr
+		}
+		letter, base, ok := table.drive(native)
+		if !ok {
+			return "", fmt.Errorf("%w: %s", ErrNoDriveForPath, native)
+		}
+		rel, err = filepath.Rel(base, native)
+		if err != nil {
+			return "", err
+		}
+		return strings.ToUpper(letter) + `:\` + strings.ReplaceAll(rel, "/", `\`), nil
 	}
 	return strings.ToUpper(b.Drive) + `:\` + strings.ReplaceAll(rel, "/", `\`), nil
 }
 
 // ToNative — обратный перевод. Пути на других буквах не наши: их вызывающий
 // обязан отличать от своих, а не молча принимать.
+//
+// У общего бутыля буква одна, а путей много: игра лежит на своей, её записи
+// в реестре — на C:, сейвы — на третьей. Поэтому там перевод идёт по всей
+// таблице dosdevices, как это делает сам wine.
 func (b Bottle) ToNative(win string) (string, error) {
+	if b.Shared {
+		driveTable, err := drives(b.Path)
+		if err != nil {
+			return "", err
+		}
+		native, ok := driveTable.toNative(win)
+		if !ok {
+			return "", fmt.Errorf("путь %s не выражается через диски бутыля %s", win, b.Name)
+		}
+		return native, nil
+	}
 	prefix := strings.ToUpper(b.Drive) + `:\`
 	if !strings.HasPrefix(strings.ToUpper(win), prefix) {
 		return "", fmt.Errorf("путь %s не на диске %s", win, prefix)

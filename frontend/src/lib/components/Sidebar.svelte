@@ -4,7 +4,7 @@
   import { accountErrorText } from '../services/accountMessages';
   import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
   import { STATUS_LABELS, statusDot } from '../social/presence';
-  import { presenceStatus, updatePresenceStatus } from '../stores/presence';
+  import { autoAway, presenceStatus, shownPresence, updatePresenceStatus } from '../stores/presence';
   import { incomingCount } from '../stores/social';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
@@ -134,6 +134,7 @@
           class="profile"
           class:active={$route.name === 'profile'}
           class:open
+          title={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : undefined}
           onclick={toggle}
         >
           <span class="avatar">
@@ -141,7 +142,7 @@
               size="sm"
               name={avatarName}
               src={$currentUser?.avatarUrl}
-              status={$currentUser ? statusDot($presenceStatus) : undefined}
+              status={$currentUser ? statusDot($shownPresence) : undefined}
             />
           </span>
           <span class="profile-text">

@@ -90,7 +90,9 @@ func TestApplyLimit(t *testing.T) {
 func offlineClient(t *testing.T) *client {
 	t.Helper()
 	dir := t.TempDir()
-	completion := storage.NewMapPieceCompletion()
+	// Match production ownership: per-torrent storage must not clear the
+	// shared completion map while another torrent is still hashing.
+	completion := nonClosingCompletion{storage.NewMapPieceCompletion()}
 	tc := clientConfig(settings.Defaults(), dir, 0, completion)
 	tc.NoDHT = true
 	tc.DisableTrackers = true

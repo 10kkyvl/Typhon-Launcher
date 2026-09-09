@@ -3,8 +3,10 @@ package library
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -716,7 +718,7 @@ func TestLaunchFailureIsRecorded(t *testing.T) {
 		codes <- code
 		reasons <- reason
 	})
-	s.start = func(context.Context, string, []string, string) (gameProcess, error) {
+	s.start = func(context.Context, launch) (gameProcess, error) {
 		return nil, errors.New("окружение не готово")
 	}
 
@@ -756,7 +758,7 @@ func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	codes := make(chan string, 1)
 	s.SetLaunchFailureRecorder(func(_, code, _ string) { codes <- code })
-	s.prepare = func(context.Context, string, string) error {
+	s.prepare = func(context.Context, launch) error {
 		return errors.New("бутыль не завёлся")
 	}
 
@@ -777,4 +779,88 @@ func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("отказ окружения не попал в журнал")
 	}
+}
+
+// Игра, закрывшаяся сама через секунду, — самая частая жалоба «не
+// запускается», и до этой записи журнал сообщал о ней только длительность
+// сессии: ни какой файл запущен, ни с каким кодом он вышел. Разбирать
+// присланные логи по такой записи нечем.
+func TestExitCodeReachesTheLog(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	s.findLocked(game.ID).LaunchArgs = testExitArgs(3)
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("PlayGame: %v", err)
+	}
+	s.sessionWG.Wait()
+
+	text := logs.String()
+	if !strings.Contains(text, "game process exited with an error") {
+		t.Fatalf("нет записи о ненулевом коде выхода:\n%s", text)
+	}
+	if !strings.Contains(text, "code=3") {
+		t.Fatalf("код выхода не записан:\n%s", text)
+	}
+	if !strings.Contains(text, "executable=") {
+		t.Fatalf("запущенный файл не записан:\n%s", text)
+	}
+}
+
+func TestStartLogsTheExecutable(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("PlayGame: %v", err)
+	}
+	s.sessionWG.Wait()
+
+	text := logs.String()
+	if !strings.Contains(text, `msg="game started"`) || !strings.Contains(text, "workDir=") {
+		t.Fatalf("запуск записан без файла и рабочей папки:\n%s", text)
+	}
+}
+
+func TestExitCodeOfAnUnknownError(t *testing.T) {
+	if code, known := exitCode(errors.New("не процесс")); known || code != 0 {
+		t.Fatalf("exitCode(другая ошибка) = %d, %v; want 0, false", code, known)
+	}
+	if code, known := exitCode(nil); !known || code != 0 {
+		t.Fatalf("exitCode(nil) = %d, %v; want 0, true", code, known)
+	}
+}
+
+type sessionLogSink struct {
+	mu   sync.Mutex
+	text strings.Builder
+}
+
+func (s *sessionLogSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.text.Write(p)
+}
+
+func (s *sessionLogSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.text.String()
+}
+
+func captureSessionLogs(t *testing.T) *sessionLogSink {
+	t.Helper()
+	sink := &sessionLogSink{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return sink
 }

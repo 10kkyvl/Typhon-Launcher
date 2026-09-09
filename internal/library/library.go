@@ -27,10 +27,16 @@ import (
 )
 
 type Game struct {
-	ID                string     `json:"id"`
-	Title             string     `json:"title"`
-	Executable        string     `json:"executable"`
-	LaunchArgs        []string   `json:"launchArgs,omitempty"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Executable string   `json:"executable"`
+	LaunchArgs []string `json:"launchArgs,omitempty"`
+	// RequiresSteam — запускать игру в общем бутыле CrossOver со Steam, а не в
+	// собственном изолированном. nil значит «на усмотрение лаунчера»: общий
+	// бутыль выбирается, когда он есть, потому что Steam Overlay и Steam API
+	// работают только когда игра и Steam живут в одном wine-префиксе. Явный
+	// false — единственный способ потребовать изолированный бутыль.
+	RequiresSteam     *bool      `json:"requiresSteam,omitempty"`
 	InstallDir        string     `json:"installDir"`
 	Cover             string     `json:"cover"`
 	Version           string     `json:"version"`
@@ -71,6 +77,11 @@ type Uninstall struct {
 func (u Uninstall) Empty() bool {
 	return u.Command == "" && u.QuietCommand == "" && u.ProductCode == ""
 }
+
+// UsesSharedBottle отвечает, разрешено ли игре ехать в общий бутыль. По
+// умолчанию разрешено: изоляция — исключение, которое пользователь включает
+// руками.
+func (g Game) UsesSharedBottle() bool { return g.RequiresSteam == nil || *g.RequiresSteam }
 
 const (
 	SourceManaged    = "managed"
@@ -169,7 +180,7 @@ type Service struct {
 	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
 	// возможность её подменить, иначе прогон оставляет после себя
 	// настоящие бутыли на машине разработчика.
-	prepare func(ctx context.Context, installDir, executable string) error
+	prepare func(ctx context.Context, req launch) error
 }
 
 type SessionWatcher interface {
@@ -717,6 +728,26 @@ func (s *Service) SetFavorite(id string, on bool) (Game, error) {
 	game.Favorite = on
 	now := s.now()
 	game.FavoriteAt = &now
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	return *game, nil
+}
+
+func (s *Service) SetRequiresSteam(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if game.RequiresSteam != nil && *game.RequiresSteam == on {
+		return *game, nil
+	}
+	previous := *game
+	game.RequiresSteam = &on
 	if err := s.persist(); err != nil {
 		*game = previous
 		return Game{}, fmt.Errorf("save library: %w", err)

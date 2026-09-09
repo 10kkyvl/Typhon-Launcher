@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/uierr"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -182,6 +184,29 @@ func TestSaveConsentRecordsAnswerAndVersionTogether(t *testing.T) {
 
 // Declining is an answer and must be recorded as one, or the prompt returns on
 // the next launch and eventually wears the user down into accepting.
+// The consent screen has no other exit than a successful answer, so a failure
+// there is shown to the user verbatim unless it carries a code the frontend
+// can translate.
+func TestSaveConsentFailureCarriesAUICode(t *testing.T) {
+	dir := t.TempDir()
+	svc := mustServiceAt(t, filepath.Join(dir, "settings.json"))
+	// A regular file in the parent path fails on Windows as well as Unix,
+	// including when the tests run as root. Chmod is not a Windows ACL.
+	blocked := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("occupied"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc.path = filepath.Join(blocked, "settings.json")
+
+	_, err := svc.SaveConsent(true, true)
+	if err == nil {
+		t.Fatal("SaveConsent with an invalid parent path = nil, want an error")
+	}
+	if code := uierr.Code(err); code != ErrCodeConsentSaveFailed {
+		t.Fatalf("uierr.Code(err) = %q, want %q (raw text: %v)", code, ErrCodeConsentSaveFailed, err)
+	}
+}
+
 func TestSaveConsentRecordsARefusal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if _, err := mustServiceAt(t, path).SaveConsent(false, false); err != nil {

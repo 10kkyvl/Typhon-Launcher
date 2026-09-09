@@ -5,6 +5,7 @@ export const games = {
   'games.statusBacklog': 'В планах',
   'games.statusPaused': 'На паузе',
   'games.statusNone': 'Без статуса',
+  'games.statusPlayingOther': 'Проходит',
 
   'games.play': 'Играть',
   'games.stop': 'Остановить',
@@ -62,6 +63,8 @@ export const games = {
   'games.errorStopFailed': 'Не удалось остановить игру',
   'games.errorFolderUnavailable': 'Папка недоступна',
   'games.errorFavoriteFailed': 'Не удалось изменить любимые',
+  'games.errorRequiresSteamFailed': 'Не удалось изменить бутыль запуска',
+  'games.errorWineStatusFailed': 'Не удалось проверить состояние CrossOver',
 
   'games.detailFactReleaseDate': 'Дата выхода',
   'games.detailFactDeveloper': 'Разработчик',
@@ -118,12 +121,15 @@ export const games = {
   'games.detailCollapseSummary': 'Свернуть',
   'games.detailExpandSummary': 'Показать полностью',
   'games.detailInstallHeading': 'Установка',
+  'games.detailSteamBottleLabel': 'Запускать вместе со Steam',
+  'games.detailSteamBottleHint':
+    'Игра пойдёт в общем бутыле CrossOver со Steam — иначе не работают Steam Overlay и достижения',
   'games.detailAvailableDownloadsHeading': 'Доступные загрузки',
   'games.detailAboutTitle': 'Об игре',
   'games.detailChooseDownloadTitle': 'Выберите загрузку',
 
   'games.friendsPanelTitle': 'Друзья',
-  'games.friendsPanelPlayingNow': 'Играют сейчас',
+  'games.friendsPanelInGame': 'Играет сейчас',
   'games.friendsPanelSeeAll': 'Смотреть всех друзей',
 
   'games.installedAddDesktopOnly': 'Добавление игр доступно только в desktop-сборке',

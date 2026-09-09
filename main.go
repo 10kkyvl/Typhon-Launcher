@@ -301,6 +301,7 @@ func main() {
 	if err != nil {
 		fatal("start account sync service", err)
 	}
+	accountSyncService.SetAccountID(accountService.SyncAccountID)
 	discoveryService, err := discovery.NewService(settingsService, libraryService, catalogService, metadataService)
 	if err != nil {
 		fatal("start discovery service", err)

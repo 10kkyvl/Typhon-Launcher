@@ -8,6 +8,7 @@ export const games: Record<GamesKey, Message> = {
   'games.statusBacklog': 'Backlog',
   'games.statusPaused': 'Paused',
   'games.statusNone': 'No status',
+  'games.statusPlayingOther': 'In progress',
 
   'games.play': 'Play',
   'games.stop': 'Stop',
@@ -65,6 +66,8 @@ export const games: Record<GamesKey, Message> = {
   'games.errorStopFailed': 'Failed to stop the game',
   'games.errorFolderUnavailable': 'Folder unavailable',
   'games.errorFavoriteFailed': 'Failed to update favorites',
+  'games.errorRequiresSteamFailed': 'Failed to update the launch bottle',
+  'games.errorWineStatusFailed': 'Failed to check CrossOver status',
 
   'games.detailFactReleaseDate': 'Release date',
   'games.detailFactDeveloper': 'Developer',
@@ -121,12 +124,15 @@ export const games: Record<GamesKey, Message> = {
   'games.detailCollapseSummary': 'Collapse',
   'games.detailExpandSummary': 'Show more',
   'games.detailInstallHeading': 'Installation',
+  'games.detailSteamBottleLabel': 'Run together with Steam',
+  'games.detailSteamBottleHint':
+    'The game will run in the shared CrossOver bottle with Steam — otherwise Steam Overlay and achievements do not work',
   'games.detailAvailableDownloadsHeading': 'Available downloads',
   'games.detailAboutTitle': 'About',
   'games.detailChooseDownloadTitle': 'Choose a download',
 
   'games.friendsPanelTitle': 'Friends',
-  'games.friendsPanelPlayingNow': 'Playing now',
+  'games.friendsPanelInGame': 'Playing now',
   'games.friendsPanelSeeAll': 'See all friends',
 
   'games.installedAddDesktopOnly': 'Adding games is only available in the desktop build',

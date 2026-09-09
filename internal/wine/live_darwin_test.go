@@ -1,6 +1,7 @@
 package wine
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -157,5 +158,119 @@ func waitForProcess(t *testing.T, m *Manager, bottle Bottle, native string) Proc
 			return Process{}
 		case <-ticker.C:
 		}
+	}
+}
+
+// TestLiveSharedBottleRunsExternalExe — приёмка задачи целиком на настоящем
+// CrossOver: игра лежит вне бутыля, в каталоге с пробелами и восклицательным
+// знаком, запускается в пользовательском бутыле со Steam, видна в таблице
+// процессов под своим настоящим путём и гасится, не трогая бутыль. Нового
+// бутыля Typhon-* при этом появиться не должно.
+//
+// Запуск: TYPHON_WINE_LIVE=1 go test ./internal/wine/ -run TestLiveSharedBottle
+func TestLiveSharedBottleRunsExternalExe(t *testing.T) {
+	m := liveManager(t)
+	before, err := m.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	// Каталог в домашней папке, а не в t.TempDir(): именно домашние пути
+	// CrossOver переводит на отдельную букву. Имя уникальное: live-тест
+	// не должен затронуть настоящую установку игры с похожим именем.
+	dest, err := os.MkdirTemp(home, "Typhon Live Kebab Chefs! ")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dest); err != nil {
+			t.Errorf("уборка %s: %v", dest, err)
+		}
+	})
+
+	b, err := m.SharedBottle(dest)
+	if err != nil {
+		t.Skipf("общего бутыля нет: %v", err)
+	}
+	t.Logf("бутыль %s, диск %s: -> %s", b.Name, b.Drive, b.Games)
+
+	source := filepath.Join(b.Path, "drive_c", "windows", "system32", "notepad.exe")
+	if _, err := os.Stat(source); err != nil {
+		t.Skipf("в бутыле нет %s: %v", source, err)
+	}
+	// Симлинк, а не копия: содержимое exe тесту безразлично, а копировать
+	// его пришлось бы записью в домашний каталог.
+	exe := filepath.Join(dest, "Kebab Chefs.exe")
+	if err := os.Symlink(source, exe); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	win, err := b.ToWindows(exe)
+	if err != nil {
+		t.Fatalf("ToWindows: %v", err)
+	}
+	t.Logf("windows-путь игры: %s", win)
+	if err := m.StartDetached(t.Context(), b, Cmd{Path: win}); err != nil {
+		t.Fatalf("StartDetached: %v", err)
+	}
+
+	var seen []Process
+	deadline := time.Now().Add(30 * time.Second)
+	poll := time.NewTicker(100 * time.Millisecond)
+	defer poll.Stop()
+	for time.Now().Before(deadline) {
+		found, err := m.Processes(t.Context(), b)
+		if err != nil {
+			t.Fatalf("Processes: %v", err)
+		}
+		if len(found) > 0 {
+			seen = found
+			break
+		}
+		select {
+		case <-t.Context().Done():
+			t.Fatal(t.Context().Err())
+		case <-poll.C:
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("процесс игры не появился в общем бутыле")
+	}
+	t.Logf("процесс: pid=%d %s -> %s", seen[0].PID, seen[0].WinPath, seen[0].Path)
+	if seen[0].Path != exe {
+		t.Fatalf("native-путь процесса = %q, want %q", seen[0].Path, exe)
+	}
+
+	all, err := m.AllProcesses(t.Context())
+	if err != nil {
+		t.Fatalf("AllProcesses: %v", err)
+	}
+	found := false
+	for _, p := range all {
+		if p.Path == exe {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("AllProcesses не увидел игру в общем бутыле: %+v", all)
+	}
+
+	if err := m.KillProcesses(t.Context(), b); err != nil {
+		t.Fatalf("KillProcesses: %v", err)
+	}
+
+	after, err := m.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("бутылей стало %d вместо %d: под игру завели свой", len(after), len(before))
+	}
+	if _, err := os.Stat(filepath.Join(b.Path, markerName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("в пользовательский бутыль записана наша метка")
 	}
 }

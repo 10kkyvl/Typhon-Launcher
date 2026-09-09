@@ -1025,6 +1025,10 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir))
 	}
 	source = filepath.Clean(source)
+	if platform.Inside(root, source) {
+		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
+		return err
+	}
 	if err := s.checkBusy(gameID); err != nil {
 		return s.failOrCancel(jobID, err)
 	}

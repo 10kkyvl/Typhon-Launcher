@@ -170,6 +170,103 @@ func TestSetFavoriteStampsFavoriteAt(t *testing.T) {
 	}
 }
 
+func TestSetRequiresSteam(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	id := addGames(t, s, 1)[0]
+
+	s.mu.Lock()
+	g := *s.findLocked(id)
+	s.mu.Unlock()
+	if g.RequiresSteam != nil {
+		t.Fatalf("new game RequiresSteam = %v, want nil", g.RequiresSteam)
+	}
+	if !g.UsesSharedBottle() {
+		t.Fatalf("nil RequiresSteam must default to shared bottle")
+	}
+
+	got, err := s.SetRequiresSteam(id, true)
+	if err != nil {
+		t.Fatalf("nil -> true: %v", err)
+	}
+	if got.RequiresSteam == nil || !*got.RequiresSteam {
+		t.Fatalf("game = %+v, want RequiresSteam = &true", got)
+	}
+
+	got, err = s.SetRequiresSteam(id, false)
+	if err != nil {
+		t.Fatalf("true -> false: %v", err)
+	}
+	if got.RequiresSteam == nil || *got.RequiresSteam {
+		t.Fatalf("game = %+v, want RequiresSteam = &false", got)
+	}
+	if got.UsesSharedBottle() {
+		t.Fatalf("explicit false must isolate the bottle")
+	}
+
+	got, err = s.SetRequiresSteam(id, true)
+	if err != nil {
+		t.Fatalf("false -> true: %v", err)
+	}
+	if got.RequiresSteam == nil || !*got.RequiresSteam {
+		t.Fatalf("game = %+v, want RequiresSteam = &true", got)
+	}
+
+	reloaded := mustServiceAt(t, path)
+	reloaded.mu.Lock()
+	rg := reloaded.findLocked(id)
+	if rg == nil {
+		reloaded.mu.Unlock()
+		t.Fatalf("game %s not found after reload", id)
+	}
+	rgCopy := *rg
+	reloaded.mu.Unlock()
+	if rgCopy.RequiresSteam == nil || !*rgCopy.RequiresSteam {
+		t.Fatalf("reloaded game = %+v, want RequiresSteam = &true", rgCopy)
+	}
+
+	if _, err := s.SetRequiresSteam("missing", true); !errors.Is(err, errNotFound) {
+		t.Fatalf("err = %v, want errNotFound", err)
+	}
+}
+
+func TestSetRequiresSteamNoopDoesNotRewriteFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	id := addGames(t, s, 1)[0]
+
+	if _, err := s.SetRequiresSteam(id, true); err != nil {
+		t.Fatalf("set true: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.SetRequiresSteam(id, true); err != nil {
+		t.Fatalf("re-set true: %v", err)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("file bytes changed on a no-op re-set")
+	}
+	if !beforeInfo.ModTime().Equal(afterInfo.ModTime()) {
+		t.Fatalf("mtime changed on a no-op re-set: before=%v after=%v", beforeInfo.ModTime(), afterInfo.ModTime())
+	}
+}
+
 func TestSetStatusLeavesFavoriteAt(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)

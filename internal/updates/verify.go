@@ -456,7 +456,7 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		Properties: usagestats.Properties{GameID: game.CanonicalGameID},
 	})
 
-	previous, err := s.backupInPlace(ctx, game.ID, game.InstallDir, game.Version)
+	previous, err := s.backupInPlaceSuffix(ctx, game.ID, game.InstallDir, game.Version, ".repair")
 	if err != nil {
 		s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, err))
 		s.failRepair(ctx, game.ID, err)
@@ -496,6 +496,10 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 	for {
 		select {
 		case <-ctx.Done():
+			if err := s.stopRepairDownload(task.ID); err != nil {
+				s.failRepair(ctx, game.ID, err)
+				return
+			}
 			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			s.recordRepairFailure(game.CanonicalGameID, started, ctx.Err())
 			s.failRepair(ctx, game.ID, ctx.Err())
@@ -504,6 +508,10 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		}
 		current, err := s.downloads.Get(task.ID)
 		if err != nil {
+			if err := s.stopRepairDownload(task.ID); err != nil {
+				s.failRepair(ctx, game.ID, err)
+				return
+			}
 			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, errDownloadFailed))
 			s.failRepair(ctx, game.ID, errDownloadFailed)
@@ -515,10 +523,11 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		})
 		switch current.Status {
 		case download.StatusCompleted:
-			removeTree(previous)
 			if err := s.clearJournal(game.ID); err != nil {
-				slog.Error("clear repair journal", "game", game.ID, "error", err)
+				s.failRepair(ctx, game.ID, err)
+				return
 			}
+			removeTree(previous)
 			now := time.Now()
 			s.emitVerify(game.ID, eventRepairCompleted, func(v *VerifyState) {
 				v.Repairing = false
@@ -542,6 +551,10 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 			slog.Info("game repaired", "game", game.ID, "release", release.ID)
 			return
 		case download.StatusFailed:
+			if err := s.stopRepairDownload(task.ID); err != nil {
+				s.failRepair(ctx, game.ID, err)
+				return
+			}
 			s.undoSwapAndClear(game.ID, game.InstallDir, previous)
 			cause := errors.New(current.Error)
 			s.recordRepairFailure(game.CanonicalGameID, started, terminalCause(ctx, cause))
@@ -654,4 +667,11 @@ func (s *Service) runManifest(ctx context.Context, game library.Game) {
 		}
 	})
 	slog.Info("manifest built", "game", game.ID, "files", len(manifest.Entries))
+}
+
+func (s *Service) stopRepairDownload(id string) error {
+	if stopper, ok := s.downloads.(interface{ StopAndWait(string) error }); ok {
+		return stopper.StopAndWait(id)
+	}
+	return s.downloads.Cancel(id)
 }

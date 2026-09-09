@@ -116,6 +116,11 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 			// Изменившийся заголовок или версия — другой запрос к каталогу,
 			// поэтому прошлый результат матчинга больше не действителен.
 			current.MatchEpoch = 0
+			if !current.Locked && current.NormalizedTitle != next.NormalizedTitle {
+				current.CanonicalGameID = nil
+				current.MatchStatus = ""
+				current.MatchMethod = ""
+			}
 		}
 		current.RawTitle = next.RawTitle
 		current.Kind = next.Kind

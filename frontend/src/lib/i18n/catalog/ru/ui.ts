@@ -73,6 +73,7 @@ export const ui = {
   'ui.signIn': 'Войти в аккаунт',
   'ui.signOut': 'Выйти',
   'ui.statusChangeFailed': 'Не удалось сменить статус',
+  'ui.presenceAutoAwayHint': 'Отошёл: нет активности. Вернётесь за компьютер — статус вернётся сам',
   'ui.signOutFailed': 'Не удалось выйти',
   'ui.offlineProfileTooltip': 'Нет связи с сервером аккаунтов, показан кэш профиля',
   'ui.offlineSuffix': ' · офлайн',

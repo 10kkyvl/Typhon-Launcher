@@ -34,6 +34,8 @@ const (
 )
 
 type Service struct {
+	consentEpoch uint64
+
 	identity   clientid.Identity
 	client     *client
 	enabled    func() bool
@@ -54,6 +56,7 @@ type Service struct {
 	rateWindowStart time.Time
 	rateCount       int
 	seen            map[string]time.Time
+	sentPending     map[string]bool
 	ctx             context.Context
 
 	cancel context.CancelFunc
@@ -135,6 +138,9 @@ func (s *Service) ServiceShutdown() error {
 func (s *Service) SetEnabled(on bool) {
 	s.mu.Lock()
 	s.disabled = !on
+	if !on {
+		s.consentEpoch++
+	}
 	dir := s.pendingDir
 	if !on {
 		s.queue = nil
@@ -225,6 +231,13 @@ func (s *Service) capture(component, operation, message, stack, errorCode string
 
 func (s *Service) enqueue(rp reportPayload, fingerprint string) {
 	s.mu.Lock()
+	// capture() read the flag before sanitizing, which takes long enough for
+	// an opt-out to land in between. Re-check it now that the lock is held
+	// for the write itself.
+	if s.disabled {
+		s.mu.Unlock()
+		return
+	}
 	now := s.clock()
 
 	if now.Sub(s.rateWindowStart) >= s.rateWindow {
@@ -293,14 +306,15 @@ func (s *Service) flush(ctx context.Context) {
 		s.mu.Unlock()
 		return
 	}
+	epoch := s.consentEpoch
 	batch := s.queue
 	s.queue = nil
 	dir := s.pendingDir
 	s.mu.Unlock()
 
-	s.drainPending(ctx, dir)
+	s.drainPendingEpoch(ctx, dir, epoch)
 
-	if len(batch) == 0 {
+	if len(batch) == 0 || !s.consentCurrent(epoch) {
 		return
 	}
 	if err := s.client.send(ctx, s.identity, batch); err != nil {
@@ -311,20 +325,50 @@ func (s *Service) flush(ctx context.Context) {
 		slog.Debug("diagnostics flush failed", "count", len(batch), "error", err)
 		if spillErr := savePending(dir, s.clock(), batch); spillErr != nil {
 			slog.Warn("diagnostics: spill failed batch to disk", "error", spillErr)
+		} else if !s.consentCurrent(epoch) {
+			// The user revoked consent while this batch was in flight. The
+			// spill recreated the directory opt-out had already removed
+			// (storage.Save does its own MkdirAll), so the last writer here
+			// has to clear it again -- otherwise the report waits on disk
+			// for the next opt-in.
+			if rmErr := removePendingDir(dir); rmErr != nil {
+				slog.Warn("diagnostics: remove pending dir after opt-out race", "error", rmErr)
+			}
 		}
 	}
 }
 
-func (s *Service) drainPending(ctx context.Context, dir string) {
+func (s *Service) consentCurrent(epoch uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.disabled && s.consentEpoch == epoch
+}
+func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint64) {
 	names, err := listPendingFiles(dir)
 	if err != nil {
 		slog.Warn("diagnostics: list pending files", "error", err)
 		return
 	}
+	s.keepSentOnly(names)
 	for _, name := range names {
+		if !s.consentCurrent(epoch) {
+			return
+		}
 		path := filepath.Join(dir, name)
+		if s.isSent(name) {
+			continue
+		}
 		batch, err := loadPending(path)
 		if err != nil {
+			// A file that could not be read at all is not a corrupt one: a
+			// lock, a permission or a failing disk hides a perfectly good
+			// report behind an OS error, and deleting it there destroys the
+			// only copy. Keep it and try again on the next flush.
+			var pathErr *fs.PathError
+			if errors.As(err, &pathErr) {
+				slog.Warn("diagnostics: keep unreadable pending file", "path", name, "error", err)
+				continue
+			}
 			slog.Warn("diagnostics: drop corrupt pending file", "path", name, "error", err)
 			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
 				slog.Warn("diagnostics: remove corrupt pending file", "path", name, "error", rmErr)
@@ -336,7 +380,47 @@ func (s *Service) drainPending(ctx context.Context, dir string) {
 			return
 		}
 		if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			// The batch is on the server and the file is still on disk.
+			// Remember it: without this the next tick reads it again and
+			// duplicates the same report every twenty seconds for as long
+			// as the directory stays unwritable.
 			slog.Warn("diagnostics: remove sent pending file", "path", name, "error", rmErr)
+			s.markSent(name)
 		}
 	}
+}
+
+// The sent set only guards against re-reading a file this process already
+// delivered, so it is pruned down to what is still on disk on every drain and
+// never outlives the process.
+func (s *Service) keepSentOnly(names []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sentPending) == 0 {
+		return
+	}
+	live := make(map[string]bool, len(names))
+	for _, name := range names {
+		live[name] = true
+	}
+	for name := range s.sentPending {
+		if !live[name] {
+			delete(s.sentPending, name)
+		}
+	}
+}
+
+func (s *Service) isSent(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sentPending[name]
+}
+
+func (s *Service) markSent(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sentPending == nil {
+		s.sentPending = make(map[string]bool)
+	}
+	s.sentPending[name] = true
 }

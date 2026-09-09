@@ -75,6 +75,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.signIn': 'Sign in',
   'ui.signOut': 'Sign out',
   'ui.statusChangeFailed': "Couldn't change status",
+  'ui.presenceAutoAwayHint': 'Away: no activity. The status comes back on its own once you are back at the computer',
   'ui.signOutFailed': "Couldn't sign out",
   'ui.offlineProfileTooltip': 'No connection to the accounts server, showing cached profile',
   'ui.offlineSuffix': ' · offline',

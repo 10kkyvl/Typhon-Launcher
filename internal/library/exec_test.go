@@ -24,6 +24,15 @@ func testExecutable(t *testing.T) (path string, exitArgs []string) {
 	return "/bin/sh", []string{"-c", "exit 0"}
 }
 
+// testExitArgs returns LaunchArgs that make the process from testExecutable
+// exit with the given code.
+func testExitArgs(code int) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"/C", fmt.Sprintf("exit %d", code)}
+	}
+	return []string{"-c", fmt.Sprintf("exit %d", code)}
+}
+
 // testHoldArgs returns LaunchArgs that keep the process from testExecutable
 // alive for roughly seconds before it exits on its own.
 func testHoldArgs(seconds int) []string {

@@ -23,21 +23,54 @@ export async function initSettings() {
   }
 }
 
+// Saves run one at a time. saveSettings writes the whole object, so two of
+// them in flight together race over every field, not just the one the user
+// clicked, and Go stores whichever request happens to arrive last.
+let saving: Promise<void> = Promise.resolve();
+let revision = 0;
+let queued = 0;
+let confirmed: Settings | null = null;
+const fieldRevision = new Map<string, number>();
+
 export async function updateSettings(patch: Partial<Settings>) {
-  const current = get(settings);
-  if (!current) {
+  const before = get(settings);
+  if (!before) {
     toast(msg('state.settingsNotLoaded'), 'danger');
     return;
   }
-  const next = { ...current, ...patch };
-  settings.set(next);
-  try {
-    await saveSettings(next);
-  } catch (err) {
-    console.error('save settings', err);
-    toast(msg('state.settingsSaveFailed'), 'danger');
-    settings.set(current);
-  }
+  if (queued++ === 0) confirmed = { ...before };
+  const mine = ++revision;
+  for (const key of Object.keys(patch)) fieldRevision.set(key, mine);
+  settings.set({ ...before, ...patch });
+  saving = saving.then(async () => {
+    const next = get(settings);
+    if (!next) return;
+    try {
+      await saveSettings(next);
+      confirmed = { ...next };
+    } catch (err) {
+      console.error('save settings', err);
+      toast(msg('state.settingsSaveFailed'), 'danger');
+      // Undo this call's own keys against the latest state instead of
+      // restoring the whole snapshot: another call may have saved a
+      // different field successfully while this one was in flight, and
+      // that value must survive the rollback.
+      const latest = get(settings);
+      if (!latest) return;
+      const reverted: Settings = { ...latest };
+      const target = reverted as unknown as Record<string, unknown>;
+      const source = confirmed as unknown as Record<string, unknown>;
+      for (const key of Object.keys(patch)) {
+        if (fieldRevision.get(key) === mine) target[key] = source[key];
+      }
+      settings.set(reverted);
+    }
+  }).catch((err) => {
+    // Nothing above is expected to throw -- saveSettings is already caught --
+    // but a rejected link would poison every later save in the chain.
+    console.error('settings save chain', err);
+  }).finally(() => { queued--; });
+  return saving;
 }
 
 export async function createLibrary(parent: string): Promise<Settings> {

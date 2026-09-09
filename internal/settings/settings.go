@@ -71,6 +71,9 @@ var (
 	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
 )
 
+// ErrCodeConsentSaveFailed marks a consent answer that could not be written.
+const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
+
 type Settings struct {
 	Theme                  string  `json:"theme"`
 	UIScale                float64 `json:"uiScale"`
@@ -107,7 +110,8 @@ type Settings struct {
 
 	LANSharing bool `json:"lanSharing"`
 
-	PresenceStatus string `json:"presenceStatus"`
+	PresenceStatus   string `json:"presenceStatus"`
+	PresenceAutoAway bool   `json:"presenceAutoAway"`
 
 	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
@@ -175,7 +179,8 @@ func Defaults() Settings {
 
 		LANSharing: false,
 
-		PresenceStatus: PresenceOnline,
+		PresenceStatus:   PresenceOnline,
+		PresenceAutoAway: true,
 
 		AccountSync:           false,
 		SourcesNoticeAccepted: false,
@@ -518,7 +523,10 @@ func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
 	next.AnonymousDiagnostics = diagnostics
 	next.TelemetryConsentVersion = CurrentTelemetryConsent
 	if err := s.SaveSettings(next); err != nil {
-		return Settings{}, fmt.Errorf("save telemetry consent: %w", err)
+		// The consent screen closes only on a successful answer, so its error
+		// text is the one thing the user is left with. Give it a code the
+		// frontend can translate instead of a raw Go string.
+		return Settings{}, uierr.Wrap(ErrCodeConsentSaveFailed, fmt.Errorf("save telemetry consent: %w", err))
 	}
 	return s.GetSettings(), nil
 }

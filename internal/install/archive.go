@@ -111,6 +111,12 @@ func skipEntry(archivePath, name string) {
 	slog.Warn("skip unsafe archive entry", "archive", archivePath, "entry", name)
 }
 
+// skipIrregular: распакованная игра, в которой не хватает файла, выглядит как
+// «не запускается», и молчащий пропуск не оставляет об этом ни следа.
+func skipIrregular(archivePath, name string) {
+	slog.Warn("skip non-regular archive entry", "archive", archivePath, "entry", name)
+}
+
 func writeEntry(ctx context.Context, target string, mode fs.FileMode, src io.Reader, rep *reporter, buf []byte) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err

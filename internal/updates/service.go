@@ -381,6 +381,10 @@ func (s *Service) persistJournalsLocked() error {
 // filesystem step. A persist failure must not leave a journal in memory that
 // disk recovery cannot see, so it is rolled back on error (invariant I.4).
 func (s *Service) setJournal(j SwapJournal) error {
+	if g, ok := s.installedGame(j.GameID); ok {
+		j.Original = &library.InstalledUpdate{ID: g.ID, Executable: g.Executable, InstallDir: g.InstallDir, Version: g.Version, VersionSource: g.VersionSource, ReleaseID: g.ReleaseID, SourceID: g.SourceID}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	previous, had := s.journals[j.GameID]

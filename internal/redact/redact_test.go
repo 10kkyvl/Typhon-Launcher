@@ -2,12 +2,39 @@ package redact
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
 )
 
 const magnetURI = "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&dn=Startup+Panic&tr=udp%3A%2F%2Ftracker.example%3A80"
+
+// Error only knew how to rewrite *url.Error, and returned anything else
+// untouched -- including an error whose text was built with fmt.Errorf around
+// the very same URL.
+func TestErrorScrubsAnErrorThatIsNotAURLError(t *testing.T) {
+	sentinel := errors.New("i/o timeout")
+	err := Error(fmt.Errorf("fetch %s: %w", "https://feed.example/list.json?token=s3cret", sentinel))
+
+	if strings.Contains(err.Error(), "s3cret") {
+		t.Fatalf("Error() left the token in the message: %q", err)
+	}
+	if !strings.Contains(err.Error(), "feed.example") {
+		t.Fatalf("Error() dropped the host, which is the diagnostic part: %q", err)
+	}
+	// Redacting the text must not cut the chain: callers still match on the
+	// error they wrapped.
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("Error() broke errors.Is against the wrapped error: %q", err)
+	}
+}
+
+func TestErrorPassesNilThrough(t *testing.T) {
+	if err := Error(nil); err != nil {
+		t.Fatalf("Error(nil) = %v, want nil", err)
+	}
+}
 
 func TestURL(t *testing.T) {
 	cases := []struct {

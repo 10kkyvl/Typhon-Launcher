@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"typhon/internal/uierr"
 	"typhon/internal/wine"
@@ -55,6 +56,12 @@ func (r wineRunner) run(ctx context.Context, spec runSpec) (int, error) {
 
 // bottle заводит бутыль под каталог установки. Для удаления Destination
 // пустой, и каталогом установки служит папка самого деинсталлятора.
+//
+// Общий бутыль предпочтительнее собственного: если установщик пропишет игру
+// в его реестр, запуск (wineStarter.bottleFor, internal/library/process_darwin.go)
+// найдёт её в том же префиксе, и Steam API, оверлей и достижения будут
+// рабочими. Разные бутыли для установки и запуска развели бы VC-редисты,
+// ассоциации и запись удаления не туда, куда реально легла игра.
 func (r wineRunner) bottle(spec runSpec) (wine.Bottle, error) {
 	dest := spec.Destination
 	if dest == "" {
@@ -67,14 +74,29 @@ func (r wineRunner) bottle(spec runSpec) (wine.Bottle, error) {
 	if err != nil {
 		return wine.Bottle{}, errWineMissing
 	}
+	manager := wine.NewManager(rt)
+
+	sharedBottle, sharedErr := manager.SharedBottle(dest)
+	if sharedErr == nil {
+		slog.Info("installing into shared bottle", "bottle", sharedBottle.Name, "shared", sharedBottle.Shared, "destination", dest)
+		return sharedBottle, nil
+	}
+	if !wine.SharedBottleUnavailable(sharedErr) {
+		return wine.Bottle{}, uierr.Wrap("wine.bottle_create_failed", sharedErr)
+	}
+	// Общего бутыля нет или он не покрывает путь установки — обычное
+	// состояние машины без общего Steam, а не поломка.
+	slog.Info("shared bottle unavailable, using own bottle", "destination", dest, "error", sharedErr)
+
 	games := ""
 	if r.gamesPath != nil {
 		games = r.gamesPath()
 	}
-	bottle, err := wine.NewManager(rt).Ensure(dest, games)
+	bottle, err := manager.Ensure(dest, games)
 	if err != nil {
 		return wine.Bottle{}, uierr.Wrap("wine.bottle_create_failed", err)
 	}
+	slog.Info("installing into own bottle", "bottle", bottle.Name, "shared", bottle.Shared, "destination", dest)
 	return bottle, nil
 }
 
@@ -85,11 +107,21 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 	}
 	// WaitChildren: установщик распаковывает себя во временный каталог и
 	// работает уже оттуда, поэтому ждать надо всё дерево, а не загрузчик.
-	cmd := wine.Cmd{Path: winPath, Args: spec.Args, Log: spec.LogPath, WaitChildren: true}
+	args := spec.Args
+	if spec.Engine == EngineNsis && spec.Destination != "" {
+		args = []string{"/S", "/D=" + spec.Destination}
+	}
+	args, err = winePathArgs(bottle, args)
+	if err != nil {
+		return 0, err
+	}
+	cmd := wine.Cmd{Path: winPath, Args: args, Log: spec.LogPath, WaitChildren: true}
 	if spec.Dir != "" {
-		if dir, dirErr := bottle.ToWindows(spec.Dir); dirErr == nil {
-			cmd.WorkDir = dir
+		dir, dirErr := bottle.ToWindows(spec.Dir)
+		if dirErr != nil {
+			return 0, fmt.Errorf("рабочая папка установщика: %w", dirErr)
 		}
+		cmd.WorkDir = dir
 	}
 	code, err := r.doRun(ctx, bottle, cmd)
 	return code, classifyRunErr(err)
@@ -116,4 +148,24 @@ func classifyRunErr(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, err)
+}
+
+// Convert path-valued installer options as well as the executable itself.
+func winePathArgs(b wine.Bottle, args []string) ([]string, error) {
+	out := append([]string(nil), args...)
+	for i, arg := range out {
+		prefix, value := "", arg
+		if key, v, ok := strings.Cut(arg, "="); ok {
+			prefix, value = key+"=", v
+		}
+		if !filepath.IsAbs(value) || (prefix == "" && strings.Count(value, "/") < 2) {
+			continue
+		}
+		win, err := b.ToWindows(value)
+		if err != nil {
+			return nil, fmt.Errorf("параметр установщика %s: %w", prefix, err)
+		}
+		out[i] = prefix + win
+	}
+	return out, nil
 }

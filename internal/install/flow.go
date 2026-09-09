@@ -57,11 +57,8 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 
 	report := func(p Progress) { s.updateProgress(id, p) }
 	var err error
-	if item.Mode == ModeMove {
-		err = MoveDir(ctx, item.ContentRoot, partial, report)
-	} else {
-		err = CopyDir(ctx, item.ContentRoot, partial, report)
-	}
+	// Keep the source until both the destination and library entry are committed.
+	err = CopyDirVerified(ctx, item.ContentRoot, partial, report)
 	if err == nil {
 		err = s.commit(ctx, partial, item.Destination)
 	}
@@ -69,7 +66,15 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 		s.cleanupPartial(partial)
 		return err
 	}
-	return s.finalize(ctx, id)
+	if err := s.finalize(ctx, id); err != nil {
+		return err
+	}
+	if item.Mode == ModeMove {
+		if err := os.RemoveAll(item.ContentRoot); err != nil {
+			return fmt.Errorf("remove installed source: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) runArchive(ctx context.Context, id string, item Installation) error {
@@ -744,6 +749,17 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 	slog.Info("download data removed after install", "id", downloadID)
 }
 
+// candidatePaths — то, что лаунчер предложил на выбор. Один только счётчик в
+// журнале не отвечает на первый вопрос разбора «игра не запускается»: что
+// именно было предложено и что из этого запускается.
+func candidatePaths(candidates []Candidate) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		out = append(out, fmt.Sprintf("%s (%.0f)", c.Path, c.Score))
+	}
+	return out
+}
+
 func (s *Service) setExecutable(id, executable string, candidates []Candidate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -759,6 +775,7 @@ func (s *Service) setExecutable(id, executable string, candidates []Candidate) e
 		item.Candidates = prevCandidates
 		return wrapPersistError(err)
 	}
+	slog.Info("install executable chosen", "id", id, "executable", executable, "candidates", len(candidates))
 	return nil
 }
 

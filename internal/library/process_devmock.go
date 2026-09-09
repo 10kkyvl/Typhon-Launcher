@@ -19,8 +19,8 @@ func (p *devmockProcess) wait() error { return p.proc.Wait() }
 func (p *devmockProcess) kill() error { return p.proc.Kill() }
 
 func newGameStarter() gameStarter {
-	return func(_ context.Context, executable string, args []string, dir string) (gameProcess, error) {
-		proc, err := devmock.Start(executable, args, dir)
+	return func(_ context.Context, req launch) (gameProcess, error) {
+		proc, err := devmock.Start(req.executable, req.args, req.workDir)
 		if err != nil {
 			return nil, err
 		}

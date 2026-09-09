@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
 	"typhon/internal/app"
+	"typhon/internal/devmock"
+	"typhon/internal/idle"
 	"typhon/internal/library"
 	"typhon/internal/settings"
 
@@ -27,11 +31,38 @@ const (
 	// снижает её при 429. Если сервер и правда старой версии без этого эндпоинта,
 	// лаунчер продолжит спрашивать, но заметно реже, чем раз в defaultInterval.
 	unsupportedBackoff = 10 * defaultInterval
+	// defaultAwayAfter: столько система стоит без ввода, прежде чем статус
+	// «В сети» превращается в «Отошёл». Проверяется в такте отчёта, так что
+	// возврат за клавиатуру виден друзьям в пределах defaultInterval.
+	defaultAwayAfter = 10 * time.Minute
+	// awaySecondsEnv укорачивает порог в devmock-сборке: иначе «Отошёл» не
+	// проверить в живом окне, не просидев десять минут без мыши.
+	awaySecondsEnv = "TYPHON_DEVMOCK_AWAY_SECONDS"
 )
 
 var ErrInvalidStatus = errors.New("online: unknown presence status")
 
+// statusEvent доезжает до фронта событием presence:status: Status — то, что
+// видят друзья, Chosen — выбранный пользователем статус, Auto — отличается ли
+// первое от второго из-за простоя.
+type statusEvent struct {
+	Status string `json:"status"`
+	Chosen string `json:"chosen"`
+	Auto   bool   `json:"auto"`
+}
+
 var igdbIDPattern = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+
+func awayAfterFrom(raw string, mocked bool) time.Duration {
+	if !mocked {
+		return defaultAwayAfter
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		return defaultAwayAfter
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 func realTicker(d time.Duration) (<-chan time.Time, func()) {
 	t := time.NewTicker(d)
@@ -53,10 +84,14 @@ type Service struct {
 	now       func() time.Time
 	sent      chan struct{}
 
+	awayAfter time.Duration
+	idleSince func() (time.Duration, bool)
+
 	mu           sync.Mutex
 	status       string
 	running      map[string]runningGame
 	seq          int64
+	auto         bool
 	healthy      bool
 	healthyKnown bool
 	unsupported  bool
@@ -92,6 +127,8 @@ func NewService(baseURL string, token func() (string, error), resolveIGDBID func
 		interval:      defaultInterval,
 		newTicker:     realTicker,
 		now:           time.Now,
+		awayAfter:     awayAfterFrom(os.Getenv(awaySecondsEnv), devmock.Enabled),
+		idleSince:     idle.Since,
 		running:       map[string]runningGame{},
 		kick:          make(chan struct{}, 1),
 	}, nil
@@ -158,6 +195,7 @@ func (s *Service) SetStatus(status string) error {
 	s.mu.Lock()
 	changed := s.status != status
 	s.status = status
+	s.auto = false
 	s.mu.Unlock()
 	if changed {
 		s.poke()
@@ -197,6 +235,7 @@ func (s *Service) applySettings(next settings.Settings) {
 	changed := next.PresenceStatus != s.status
 	if changed {
 		s.status = next.PresenceStatus
+		s.auto = false
 	}
 	syncOn := s.syncOn
 	s.syncOn = next.AccountSync
@@ -260,7 +299,27 @@ func (s *Service) report(ctx context.Context, forced bool) {
 	}
 }
 
-func (s *Service) snapshot() payload {
+// awayNow спрашивает систему о простое вне мьютекса: инвариант 18 запрещает
+// сисколлы под общим локом, а ответ нужен только для того, чтобы собрать
+// payload.
+func (s *Service) awayNow() bool {
+	set := s.settings.GetSettings()
+	if !set.PresenceAutoAway || s.idleSince == nil {
+		return false
+	}
+	s.mu.Lock()
+	after := s.awayAfter
+	s.mu.Unlock()
+	elapsed, known := s.idleSince()
+	if !known {
+		return false
+	}
+	return elapsed >= after
+}
+
+func (s *Service) snapshot() (payload, bool) {
+	away := s.awayNow()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var latest runningGame
@@ -269,7 +328,42 @@ func (s *Service) snapshot() payload {
 			latest = g
 		}
 	}
-	return payload{Status: s.status, GameID: latest.gameID, AppVersion: app.Version}
+	status := s.status
+	auto := away && len(s.running) == 0 && status == settings.PresenceOnline
+	if auto {
+		status = settings.PresenceAway
+	}
+	changed := auto != s.auto
+	s.auto = auto
+	return payload{Status: status, GameID: latest.gameID, AppVersion: app.Version}, changed
+}
+
+// EffectiveStatus — то, что видят друзья: выбранный статус или «Отошёл», если
+// лаунчер сам увёл пользователя в простой.
+func (s *Service) EffectiveStatus() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.auto {
+		return settings.PresenceAway
+	}
+	return s.status
+}
+
+func (s *Service) emitStatus(p payload) {
+	s.mu.Lock()
+	auto := s.auto
+	chosen := s.status
+	after := s.awayAfter
+	s.mu.Unlock()
+	if auto {
+		slog.Info("presence set to away: no input", "after", after)
+	} else {
+		slog.Info("presence restored after idle", "status", p.Status)
+	}
+	if application.Get() == nil {
+		return
+	}
+	application.Get().Event.Emit("presence:status", statusEvent{Status: p.Status, Chosen: chosen, Auto: auto})
 }
 
 func (s *Service) send(ctx context.Context, forced bool) {
@@ -295,9 +389,13 @@ func (s *Service) send(ctx context.Context, forced bool) {
 	}
 	s.mu.Unlock()
 
-	err := s.client.report(ctx, s.snapshot())
+	p, autoChanged := s.snapshot()
+	err := s.client.report(ctx, p)
 	if errors.Is(err, ErrSignedOut) {
 		return
+	}
+	if autoChanged {
+		s.emitStatus(p)
 	}
 
 	if errors.Is(err, ErrUnsupported) {

@@ -1,0 +1,33 @@
+name: Set up cached Wails CLI
+description: Cache the Wails executable separately from Go modules and build outputs.
+inputs:
+  version:
+    description: Exact Wails version
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve tool directory and Go version
+      id: tool
+      shell: bash
+      run: |
+        echo "path=$RUNNER_TEMP/typhon-wails" >> "$GITHUB_OUTPUT"
+        echo "go=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+    - name: Restore Wails executable
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.tool.outputs.path }}
+        key: wails-cli-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.tool.outputs.go }}-${{ inputs.version }}
+    - name: Install Wails on a cache miss
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GOBIN: ${{ steps.tool.outputs.path }}
+        WAILS_VERSION: ${{ inputs.version }}
+      run: go install "github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION"
+    - name: Add Wails to PATH
+      shell: bash
+      env:
+        TOOL_DIR: ${{ steps.tool.outputs.path }}
+      run: echo "$TOOL_DIR" >> "$GITHUB_PATH"
