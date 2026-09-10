@@ -61,7 +61,9 @@ func TestLiveInnoOptionalActions(t *testing.T) {
 	compiler := filepath.Join(root, "Compiler")
 	run := func(path string, args ...string) {
 		t.Helper()
-		code, e := manager.Run(ctx, b, wine.Cmd{Path: win(path), Args: args})
+		// Fixture setup also uses the bridge so inherited Wine service pipes
+		// cannot masquerade as an installer failure after the loader exits.
+		code, e := (wineRunner{detect: func() (wine.Runtime, error) { return rt, nil }}).doRun(ctx, b, wine.Cmd{Path: win(path), Args: args, InstallerGuard: true, HideProgress: true})
 		if code != 0 || e != nil {
 			t.Fatalf("%s: %d %v", path, code, e)
 		}
