@@ -180,6 +180,7 @@ export interface PrimaryAction {
 }
 
 export interface BusyState {
+  indeterminate?: boolean;
   label: string;
   progress: number;
 }
@@ -246,14 +247,14 @@ export function cancelFreesDisk(status: TerminalDownloadStatus): boolean {
 }
 
 export function busyState(
-  entries: (({ active: boolean; label: string; progress: number }) | null | undefined)[],
+  entries: (({ active: boolean; label: string; progress: number; indeterminate?: boolean }) | null | undefined)[],
 ): BusyState | null {
   for (const entry of entries) {
     if (!entry || !entry.active) continue;
     const label = clean(entry.label);
     if (!label) continue;
     const progress = Number.isFinite(entry.progress) ? Math.min(1, Math.max(0, entry.progress)) : 0;
-    return { label, progress };
+    return { label, progress, ...(entry.indeterminate ? { indeterminate: true } : {}) };
   }
   return null;
 }

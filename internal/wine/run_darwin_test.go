@@ -3,7 +3,9 @@ package wine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,5 +178,49 @@ func TestStartDetachedReportsUnstartable(t *testing.T) {
 
 	if err := m.StartDetached(context.Background(), b, Cmd{Path: `T:\a.exe`}); err == nil {
 		t.Fatal("StartDetached without cxstart: want error")
+	}
+}
+
+func TestRunCancelledStopsWrappedInstaller(t *testing.T) {
+	m, bottles, _ := newTestManager(t)
+	home := t.TempDir()
+	fakeSharedBottle(t, bottles, "Steam", home)
+	b, err := m.SharedBottle(filepath.Join(home, "Games", "Demo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	victim := exec.Command("/bin/sleep", "30")
+	if err = victim.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- victim.Wait() }()
+	//nolint:errcheck // test cleanup; process may already have exited.
+	defer victim.Process.Kill()
+	original := `Z:\Downloads\setup.exe`
+	m.psOutput = func() (string, error) {
+		return fmt.Sprintf("%d Sun Sep  6 07:31:35 2026 %s\n", victim.Process.Pid, original), nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = m.Run(ctx, b, Cmd{Path: `C:\bridge\installguard.exe`, StopPaths: []string{original}})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("installer was not killed")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("wrapped installer survived cancellation")
+	}
+}
+
+func TestRunRequiresBridgeCompletionAcknowledgement(t *testing.T) {
+	manager := NewManager(Runtime{CxStart: "/usr/bin/true"})
+	_, err := manager.Run(context.Background(), Bottle{Name: "fixture"}, Cmd{Path: `C:\fixture.exe`, CancelFile: filepath.Join(t.TempDir(), "cancel")})
+	if !errors.Is(err, ErrTreeNotStopped) {
+		t.Fatalf("unconfirmed bridge exit: %v", err)
 	}
 }

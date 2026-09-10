@@ -81,7 +81,7 @@
     refreshMetadata,
     type MetadataView,
   } from '../../lib/services/metadata';
-  import { openFolder } from '../../lib/services/settings';
+  import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
     getReleasesForGame,
@@ -381,7 +381,7 @@
 
   const busy = $derived(
     busyState([
-      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress } : null,
+      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: ownInstall.status === 'verifying' } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
         ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,
@@ -668,7 +668,7 @@
   async function reveal() {
     if (!localGame) return;
     try {
-      await openFolder(localGame.installDir);
+      await openGameFolder(localGame.installDir, localGame.executable);
     } catch {
       toast(msg('games.errorFolderUnavailable'), 'danger');
     }
@@ -780,8 +780,8 @@
           {#if primary.kind === 'progress'}
             <div class="progress">
               <span class="progress-label">{primary.label}</span>
-              <ProgressBar value={busyPercent} />
-              <span class="progress-pct">{busyPercent}%</span>
+              <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} />
+              {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else}
             <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>

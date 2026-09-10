@@ -50,18 +50,25 @@ type Service struct {
 	flushTimeout   time.Duration
 	clock          func() time.Time
 
-	mu              sync.Mutex
-	queue           []reportPayload
-	disabled        bool
-	rateWindowStart time.Time
-	rateCount       int
-	seen            map[string]time.Time
-	sentPending     map[string]bool
-	ctx             context.Context
+	mu sync.Mutex
+	// logUploadMu is deliberately separate from mu: a manual upload can spend
+	// time reading/compressing logs and waiting on the network, and must never
+	// hold the diagnostics queue lock while it does so. It also makes the
+	// single-flight guarantee true for callers outside the frontend.
+	logUploadMu         sync.Mutex
+	lastDeliveryWarning time.Time
+	queue               []reportPayload
+	disabled            bool
+	rateWindowStart     time.Time
+	rateCount           int
+	seen                map[string]time.Time
+	sentPending         map[string]bool
+	ctx                 context.Context
 
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	kick   chan struct{}
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	kick      chan struct{}
+	logEvents chan capturedLog
 }
 
 func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
@@ -101,6 +108,7 @@ func newServiceAt(configDir string, id clientid.Identity, enabled func() bool) (
 		clock:          time.Now,
 		seen:           map[string]time.Time{},
 		kick:           make(chan struct{}, 1),
+		logEvents:      make(chan capturedLog, 32),
 	}, nil
 }
 
@@ -111,8 +119,9 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.cancel = cancel
 	s.mu.Unlock()
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.loop(runCtx)
+	go s.captureLogs(runCtx)
 	return nil
 }
 
@@ -184,7 +193,7 @@ func (s *Service) CapturePanic(component string, recovered any, stack []byte) {
 // dropped, not surfaced as an error, because there is nothing the caller
 // can do about a scrub failure other than not send raw data.
 func (s *Service) ReportClientError(component, operation, message, stack string, fatal bool) error {
-	s.capture(component, operation, message, stack, usagestats.CodeNone, fatal)
+	s.capture(component, operation, message, stack, "frontend_error", fatal)
 	return nil
 }
 
@@ -322,7 +331,10 @@ func (s *Service) flush(ctx context.Context) {
 		// бэкенде очередь росла бы вечно и пережила бы последующий
 		// opt-out. Он спиливается на диск и подхватывается следующим
 		// flush через drainPending.
-		slog.Debug("diagnostics flush failed", "count", len(batch), "error", err)
+		s.logDeliveryFailure(err, len(batch))
+		if permanentDeliveryError(err) {
+			dir = filepath.Join(dir, "rejected")
+		}
 		if spillErr := savePending(dir, s.clock(), batch); spillErr != nil {
 			slog.Warn("diagnostics: spill failed batch to disk", "error", spillErr)
 		} else if !s.consentCurrent(epoch) {
@@ -331,7 +343,7 @@ func (s *Service) flush(ctx context.Context) {
 			// (storage.Save does its own MkdirAll), so the last writer here
 			// has to clear it again -- otherwise the report waits on disk
 			// for the next opt-in.
-			if rmErr := removePendingDir(dir); rmErr != nil {
+			if rmErr := removePendingDir(s.pendingDir); rmErr != nil {
 				slog.Warn("diagnostics: remove pending dir after opt-out race", "error", rmErr)
 			}
 		}
@@ -376,8 +388,25 @@ func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint6
 			continue
 		}
 		if err := s.client.send(ctx, s.identity, batch); err != nil {
-			slog.Debug("diagnostics: pending drain failed", "path", name, "error", err)
-			return
+			s.logDeliveryFailure(err, len(batch))
+			if !permanentDeliveryError(err) {
+				return
+			}
+			// Keep bounded evidence locally, but let subsequent valid files through.
+			if saveErr := savePending(filepath.Join(dir, "rejected"), s.clock(), batch); saveErr != nil {
+				slog.Warn("diagnostics: quarantine failed", "error", saveErr)
+				continue
+			}
+			if !s.consentCurrent(epoch) {
+				if err := removePendingDir(dir); err != nil {
+					slog.Warn("diagnostics: remove pending after opt-out", "error", err)
+				}
+				return
+			}
+			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+				slog.Warn("diagnostics: remove rejected pending file", "error", rmErr)
+			}
+			continue
 		}
 		if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
 			// The batch is on the server and the file is still on disk.
@@ -423,4 +452,17 @@ func (s *Service) markSent(name string) {
 		s.sentPending = make(map[string]bool)
 	}
 	s.sentPending[name] = true
+}
+
+func (s *Service) logDeliveryFailure(err error, count int) {
+	s.mu.Lock()
+	now := s.clock()
+	emit := s.lastDeliveryWarning.IsZero() || now.Sub(s.lastDeliveryWarning) >= time.Minute
+	if emit {
+		s.lastDeliveryWarning = now
+	}
+	s.mu.Unlock()
+	if emit {
+		slog.Warn("diagnostics delivery failed", "component", "diagnostics", "count", count, "permanent", permanentDeliveryError(err), "error", err)
+	}
 }

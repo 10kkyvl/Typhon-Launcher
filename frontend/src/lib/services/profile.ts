@@ -2,6 +2,7 @@ import { Service as ProfileService } from '../../../bindings/typhon/internal/pro
 import { inWails } from './backend';
 
 export interface GameRef {
+  archived?: boolean;
   id: string;
   title: string;
   cover: string;

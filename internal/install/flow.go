@@ -130,6 +130,9 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		return err
 	}
 	if item.Silent && item.Destination != "" {
+		if err := s.rememberInstallerDestination(id, item.Destination); err != nil {
+			return err
+		}
 		return s.runSilent(ctx, id, item, roots, before, beforeEntries, shell)
 	}
 	if item.Unattended {
@@ -209,7 +212,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		return err
 	}
 
-	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal)
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath)
 	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
 	stop()
 	if runErr != nil {
@@ -369,18 +372,29 @@ func (s *Service) discardSilent(item Installation, before fsSnapshot, cause erro
 	}
 }
 
-func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64) func() {
+func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	s.wg.Add(1)
+	done := make(chan struct{})
 	go func() {
 		defer s.wg.Done()
+		defer close(done)
 		ticker := time.NewTicker(installPollInterval)
 		defer ticker.Stop()
+		verifying := false
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if ctx.Err() != nil {
+					return
+				}
+				if !verifying && installerLogVerifying(logPath) {
+					if err := s.setInstallerVerifying(id); err == nil {
+						verifying = true
+					}
+				}
 				size, err := DirSize(ctx, dir)
 				if err != nil {
 					continue
@@ -389,7 +403,7 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 			}
 		}
 	}()
-	return cancel
+	return func() { cancel(); <-done }
 }
 
 func silentSpec(item Installation, installer, logPath string, opts installOptions) (runSpec, error) {
@@ -487,6 +501,27 @@ func decodeLogText(data []byte) string {
 	return strings.ReplaceAll(string(data), "\x00", "")
 }
 
+// rememberInstallerDestination persists an empty target before the installer can
+// write into it. Never claim an existing nonempty directory on a legacy retry.
+func (s *Service) rememberInstallerDestination(id, destination string) error {
+	if !destAvailable(destination) {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil || item.OwnedDestination == destination {
+		return nil
+	}
+	prev := item.OwnedDestination
+	item.OwnedDestination = destination
+	if err := s.persistLocked(); err != nil {
+		item.OwnedDestination = prev
+		return wrapPersistError(err)
+	}
+	return nil
+}
+
 // setRemoval выясняет, чем игру потом удалять: свежая запись в ветке Uninstall
 // даёт деинсталлятор, а отсутствие каталога в снимке до установки — право
 // удалить каталог целиком. Ошибка чтения реестра не превращается в «удалять
@@ -513,7 +548,7 @@ func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEn
 		return nil
 	}
 	prevOwned, prevUninstall, prevUnknown := item.Owned, item.Uninstall, item.UninstallUnknown
-	item.Owned = owned
+	item.Owned = owned || (destination != "" && samePath(item.OwnedDestination, destination))
 	item.Uninstall = uninstall
 	item.UninstallUnknown = unknown
 	if err := s.persistLocked(); err != nil {

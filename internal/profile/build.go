@@ -34,6 +34,7 @@ type Stats struct {
 }
 
 type GameRef struct {
+	Archived        bool       `json:"archived,omitempty"`
 	ID              string     `json:"id"`
 	Title           string     `json:"title"`
 	Cover           string     `json:"cover"`
@@ -83,7 +84,11 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 			snap.Stats.Completed++
 		}
 	}
-	snap.Stats.Games = len(games)
+	for _, g := range games {
+		if !g.Archived {
+			snap.Stats.Games++
+		}
+	}
 	snap.Stats.Hours = int(totalSeconds / 3600)
 
 	windowStart := now.Add(-recentWindow)
@@ -188,6 +193,13 @@ func MonthStart(now time.Time) time.Time {
 }
 
 func showcaseGames(kind string, games []library.Game) []GameRef {
+	active := make([]library.Game, 0, len(games))
+	for _, g := range games {
+		if !g.Archived {
+			active = append(active, g)
+		}
+	}
+	games = active
 	picked := make([]library.Game, 0, len(games))
 	var less func(a, b library.Game) bool
 	switch kind {
@@ -234,5 +246,5 @@ func timeOf(t *time.Time) time.Time {
 }
 
 func ref(g library.Game) GameRef {
-	return GameRef{ID: g.ID, Title: g.Title, Cover: g.Cover, CanonicalGameID: g.CanonicalGameID, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
+	return GameRef{Archived: g.Archived, ID: g.ID, Title: g.Title, Cover: g.Cover, CanonicalGameID: g.CanonicalGameID, PlaytimeSeconds: g.PlaytimeSeconds, Status: g.Status, StatusAt: g.StatusAt}
 }

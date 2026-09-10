@@ -271,3 +271,14 @@ func mustFind(t *testing.T, root, title string) []Candidate {
 	}
 	return got
 }
+
+func TestClientOutranksServerAndEditor(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"ClientG64.exe", "InstanceServerG64.exe", "Public_PGTerrainEditor64.exe", "ModTools/GUIEditor.exe"} {
+		mkFile(t, filepath.Join(root, name), 20<<20)
+	}
+	got := mustFind(t, root, "9-Bit Armies")
+	if filepath.Base(got[0].Path) != "ClientG64.exe" || !HighConfidence(got) {
+		t.Fatalf("ambiguous tools: %+v", got)
+	}
+}

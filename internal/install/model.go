@@ -103,6 +103,10 @@ type Installation struct {
 	StartedAt        time.Time         `json:"startedAt"`
 	CompletedAt      *time.Time        `json:"completedAt"`
 	Error            string            `json:"error"`
+
+	// OwnedDestination records the empty target before starting an installer.
+	// Unlike a filesystem snapshot, it survives retries and launcher restarts.
+	OwnedDestination string `json:"ownedDestination,omitempty"`
 }
 
 type PlanInfo struct {

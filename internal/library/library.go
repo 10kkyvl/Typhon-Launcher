@@ -27,6 +27,7 @@ import (
 )
 
 type Game struct {
+	Archived   bool     `json:"archived,omitempty"`
 	ID         string   `json:"id"`
 	Title      string   `json:"title"`
 	Executable string   `json:"executable"`
@@ -151,6 +152,7 @@ type Service struct {
 	path         string
 	excludedPath string
 	games        []Game
+	archived     []Game
 	excluded     []string
 	running      map[string]*session
 	onSession    func(gameID string, seconds int64)
@@ -242,7 +244,13 @@ func NewServiceAt(path string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.games = games
+	for _, game := range games {
+		if game.Archived {
+			s.archived = append(s.archived, game)
+		} else {
+			s.games = append(s.games, game)
+		}
+	}
 	s.excluded = excluded
 	return s, nil
 }
@@ -294,7 +302,7 @@ func (s *Service) persist() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(s.games, "", "  ")
+	data, err := json.MarshalIndent(append(append([]Game{}, s.games...), s.archived...), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -635,9 +643,21 @@ func (s *Service) RemoveGame(id string) error {
 		}
 		s.dropShortcutLocked(&s.games[i])
 		previous := append([]Game(nil), s.games...)
+		previousArchive := append([]Game(nil), s.archived...)
+		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Archived: true}
+		for j, old := range s.archived {
+			if old.ID == game.ID {
+				archived.PlaytimeSeconds += old.PlaytimeSeconds
+				s.archived = append(s.archived[:j:j], s.archived[j+1:]...)
+				break
+			}
+		}
+		s.archived = append(s.archived, archived)
 		s.games = append(s.games[:i:i], s.games[i+1:]...)
 		if err := s.persist(); err != nil {
 			s.games = previous
+			s.archived = previousArchive
 			if rollback := s.allowLocked(game.InstallDir); rollback != nil {
 				return errors.Join(err, rollback)
 			}
@@ -859,4 +879,27 @@ func measureInstall(id, dir string) (int64, bool) {
 		return 0, true
 	}
 	return size, false
+}
+
+// GetHistoryGames includes removed games for local profile history only.
+//
+//wails:ignore
+func (s *Service) GetHistoryGames() []Game {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := append([]Game{}, s.games...)
+	for _, archived := range s.archived {
+		found := false
+		for i := range out {
+			if out[i].ID == archived.ID {
+				out[i].PlaytimeSeconds += archived.PlaytimeSeconds
+				found = true
+				break
+			}
+		}
+		if !found {
+			out = append(out, archived)
+		}
+	}
+	return out
 }

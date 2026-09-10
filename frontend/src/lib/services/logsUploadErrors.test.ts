@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { logsUploadErrorText } from './logsUploadErrors';
 
 describe('logsUploadErrorText', () => {
+  it('distinguishes timeout and cancellation from connectivity errors', () => {
+    expect(logsUploadErrorText(new Error('typhon:diagnostics.log_upload_timeout: deadline'))).toBe('Сервер не успел ответить на отправку логов. Попробуйте позже.');
+    expect(logsUploadErrorText(new Error('typhon:diagnostics.log_upload_cancelled: canceled'))).toBe('Отправка логов отменена.');
+  });
   it('maps the too-large code to its own message', () => {
     expect(logsUploadErrorText(new Error('typhon:diagnostics.log_upload_too_large: 413 body'))).toBe(
       'Логи слишком большие даже после сжатия — сервер не принял архив.',

@@ -15,7 +15,7 @@ export const state: Record<StateKey, Message> = {
   'state.installStatusPreparing': 'Preparing',
   'state.installStatusInstalling': 'Installing',
   'state.installStatusExtracting': 'Extracting',
-  'state.installStatusVerifying': 'Verifying',
+  'state.installStatusVerifying': 'Verifying files',
   'state.installStatusWaitingForUser': 'Action required',
   'state.installStatusCompleted': 'Installed',
   'state.installStatusCancelled': 'Cancelled',

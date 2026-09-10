@@ -16,7 +16,7 @@
     type PlanInfo,
   } from '../services/install';
   import { installErrorText } from '../install/installErrors';
-  import { openFolder, selectFolder } from '../services/settings';
+  import { openGameFolder, selectFolder } from '../services/settings';
   import { downloadsById } from '../stores/downloads';
   import {
     installActive,
@@ -202,7 +202,7 @@
     const path = plan?.sourcePath;
     if (!path) return;
     return run(async () => {
-      await openFolder(path);
+      await openGameFolder(path, plan?.installerPath || '');
     });
   }
 
@@ -371,11 +371,13 @@
       {#if externalWait}
         <p class="note">{msg('modals.installWaitingExternal')}</p>
       {:else}
-        <ProgressBar value={installation.progress * 100} />
+        <ProgressBar value={installation.progress * 100} indeterminate={installation.status === 'verifying'} />
+        {#if installation.status !== 'verifying'}
         <div class="progress-foot">
           <span class="size">{bytesSize(installation.bytesDone)} / {bytesSize(installation.bytesTotal)}</span>
           <span class="pct">{progressPercent(installation.progress)}%</span>
         </div>
+        {/if}
         {#if installation.currentFile}
           <span class="current-file">{truncateMiddle(installation.currentFile, 56)}</span>
         {/if}
@@ -390,7 +392,7 @@
             <span class="radio" class:on={chosen === path}></span>
             <span class="cand-text">
               <span class="cand-name">{basename(path)}</span>
-              <span class="cand-path">{path}</span>
+              <span class="cand-path" title={path}>{path}</span>
             </span>
           </button>
         {/each}
@@ -686,9 +688,9 @@
   .cand-path {
     font-size: 1.2rem;
     color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    user-select: text;
   }
 
   .cleanup-actions {

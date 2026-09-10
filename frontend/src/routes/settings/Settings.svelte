@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Clipboard } from '@wailsio/runtime';
   import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -8,6 +9,7 @@
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import { msg } from '../../lib/i18n';
@@ -28,7 +30,7 @@
   import { sendLogsPrompt } from '../../lib/confirm/prompts';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
-  import { sendLogs, type SendLogsResult } from '../../lib/services/logsUpload';
+  import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
@@ -88,23 +90,39 @@
   let logsBundle = $state<LogBundle | null>(null);
   let logsSaving = $state(false);
   let logsSending = $state(false);
+  let logsStage = $state<LogUploadStatus['state'] | 'idle'>('idle');
+  let logsProgress = $state<{ sentBytes: number; totalBytes: number } | null>(null);
+  const logsProgressPercent = $derived(
+    logsProgress ? Math.min(100, Math.round((logsProgress.sentBytes / logsProgress.totalBytes) * 100)) : 0,
+  );
   let logsSendResult = $state<SendLogsResult | null>(null);
   let logsSendFailure = $state('');
 
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
   let forgettingRemote = $state(false);
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => void | Promise<void> } | null>(null);
 
-  onMount(async () => {
-    appInfo = await getAppInfo();
-    systemInfo = await getSystemInfo();
-    wineStatus = await getWineStatus();
-    try {
-      legalDocs = await listLegalDocuments();
-    } catch {
-      legalError = inWails ? msg('settings.aboutLegalLoadError') : msg('settings.aboutLegalUnavailable');
-    }
+  onMount(() => {
+    const offLogs = onLogUploadStatus((status) => {
+      logsStage = status.state;
+      if (status.state === 'sending' && (status.totalBytes ?? 0) > 0) {
+        logsProgress = { sentBytes: status.sentBytes ?? 0, totalBytes: status.totalBytes ?? 0 };
+      } else if (status.state !== 'sending') {
+        logsProgress = null;
+      }
+    });
+    void (async () => {
+      appInfo = await getAppInfo();
+      systemInfo = await getSystemInfo();
+      wineStatus = await getWineStatus();
+      try {
+        legalDocs = await listLegalDocuments();
+      } catch {
+        legalError = inWails ? msg('settings.aboutLegalLoadError') : msg('settings.aboutLegalUnavailable');
+      }
+    })();
+    return offLogs;
   });
 
   async function saveLogs() {
@@ -135,28 +153,36 @@
       toast(msg('settings.aboutLogsDesktopOnly'));
       return;
     }
+    if (logsSending) return;
     logsSendFailure = '';
     pending = { prompt: sendLogsPrompt(), run: confirmSendLogs };
   }
 
-  async function confirmSendLogs() {
+  function confirmSendLogs() {
+    if (logsSending) return;
     logsSending = true;
+    logsSendResult = null;
+    logsStage = 'preparing';
+    logsProgress = null;
     logsSendFailure = '';
-    try {
-      const result = await sendLogs();
-      logsSendResult = result;
-    } catch (err) {
-      logsSendResult = null;
-      logsSendFailure = logsUploadErrorText(err);
-    } finally {
-      logsSending = false;
-    }
+    void sendLogs()
+      .then((result) => {
+        logsSendResult = result;
+      })
+      .catch((err) => {
+        logsSendResult = null;
+        logsStage = 'error';
+        logsSendFailure = logsUploadErrorText(err);
+      })
+      .finally(() => {
+        logsSending = false;
+      });
   }
 
   async function copySendLogsId() {
     if (!logsSendResult) return;
     try {
-      await navigator.clipboard.writeText(logsSendResult.id);
+      await Clipboard.SetText(logsSendResult.id);
       toast(msg('settings.aboutLogsSendIdCopiedToast'), 'info');
     } catch {
       toast(msg('settings.aboutLogsSendIdCopyFailedToast'), 'danger');
@@ -892,7 +918,15 @@
           <div class="row-text">
             <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
             <span class="row-sub">
-              {#if logsSendFailure}
+              {#if logsStage === 'preparing'}
+                {msg('settings.aboutLogsPreparingEllipsis')}
+              {:else if logsStage === 'sending' && logsProgress}
+                {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
+              {:else if logsStage === 'sending'}
+                {msg('settings.aboutLogsSendingEllipsis')}
+              {:else if logsStage === 'waiting'}
+                {msg('settings.aboutLogsWaitingEllipsis')}
+              {:else if logsSendFailure}
                 {logsSendFailure}
               {:else if logsSendResult}
                 {msg('settings.aboutLogsSendResultLabel')}
@@ -900,6 +934,15 @@
                 {msg('settings.aboutLogsSendConfirmNote')}
               {/if}
             </span>
+            {#if logsSending}
+              <div class="logs-upload-progress">
+                <ProgressBar
+                  value={logsProgressPercent}
+                  indeterminate={logsStage !== 'sending' || !logsProgress}
+                  height={5}
+                />
+              </div>
+            {/if}
           </div>
           <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
             <Send size="1.5rem" strokeWidth={1.8} />
@@ -1029,6 +1072,11 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .logs-upload-progress {
+    width: min(28rem, 100%);
+    margin-top: var(--space-2);
   }
 
   .folder-row {

@@ -53,7 +53,9 @@ func codesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []string {
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := codesIn(t, goCodePattern, sourceFiles(t, ".")...)
+	// Platform adapters also return library errors through the same UI contract.
+	paths := append(sourceFiles(t, "."), sourceFiles(t, filepath.Join("..", "platform"))...)
+	goCodes := codesIn(t, goCodePattern, paths...)
 	var libraryCodes []string
 	for _, code := range goCodes {
 		if strings.HasPrefix(code, "library.") {

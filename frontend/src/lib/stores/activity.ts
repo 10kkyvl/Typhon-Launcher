@@ -20,6 +20,7 @@ export interface ActivityItem {
   status: string;
   detail: string;
   progress: number;
+  indeterminate?: boolean;
   tone: ActivityTone;
   attention: boolean;
   pausable: boolean;
@@ -40,6 +41,7 @@ function downloadDetail(item: Download) {
 }
 
 function installDetail(item: Installation) {
+  if (item.status === 'verifying') return '';
   if (item.status === 'waiting_for_user') return msg('state.activityWaitingForUser');
   if (item.currentFile) return truncateMiddle(item.currentFile, 44);
   if (item.bytesTotal > 0) return `${bytesSize(item.bytesDone)} / ${bytesSize(item.bytesTotal)}`;
@@ -77,6 +79,7 @@ function fromInstall(item: Installation): ActivityItem {
     name: item.name,
     status: installStatusLabels(item.status),
     detail: installDetail(item),
+    indeterminate: item.status === 'verifying',
     progress: item.progress,
     tone: waiting ? 'warning' : 'accent',
     attention: waiting,

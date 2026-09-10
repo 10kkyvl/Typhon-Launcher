@@ -160,9 +160,9 @@
               <span class="row-body">
                 <span class="row-head">
                   <span class="row-name">{item.name}</span>
-                  <span class="row-pct">{progressPercent(item.progress)}%</span>
+                  {#if !item.indeterminate}<span class="row-pct">{progressPercent(item.progress)}%</span>{/if}
                 </span>
-                <ProgressBar value={progressPercent(item.progress)} color={toneColor(item.tone)} height={3} />
+                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} color={toneColor(item.tone)} height={3} />
                 <span class="row-foot">
                   <span class="row-status">{item.status}</span>
                   {#if item.detail}
@@ -225,7 +225,7 @@
       {#if items.length > 1}
         <span class="pill-more">+{items.length - 1}</span>
       {/if}
-      <span class="pill-pct">{progressPercent(summary.progress)}%</span>
+      {#if !summary.primary.indeterminate}<span class="pill-pct">{progressPercent(summary.progress)}%</span>{/if}
       <span class="pill-chevron" class:down={expanded}>
         <ChevronUp size="1.6rem" strokeWidth={1.8} />
       </span>

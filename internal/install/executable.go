@@ -359,6 +359,16 @@ func scoreExe(f exeFile, wanted string, pairs paired, shallowest map[string]int)
 		}
 	}
 	flat := normalizeName(f.base)
+	// Keep tools selectable, but do not rank them alongside the playable client.
+	if strings.Contains(flat, "dedicatedserver") || strings.HasPrefix(flat, "instanceserver") || strings.HasSuffix(flat, "editor") || strings.Contains(flat, "terraineditor") || strings.HasPrefix(flat, "guieditor") {
+		score -= 45
+	}
+	for _, part := range parts[:depth] {
+		if strings.EqualFold(part, "modtools") || strings.EqualFold(part, "sdk") {
+			score -= 35
+			break
+		}
+	}
 	score += math.Max(similarity(flat, wanted), similarity(trimArch(flat), wanted))
 	if pairs.has(f.dir, f.base) {
 		score += 30

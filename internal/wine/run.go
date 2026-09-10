@@ -5,21 +5,31 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Cmd — команда, запускаемая внутри бутыля. Path и WorkDir — windows-пути:
 // перевод делает вызывающий через Bottle.ToWindows, потому что только он
 // знает, откуда путь взялся.
 type Cmd struct {
-	Path         string
-	Args         []string
-	WorkDir      string
-	Log          string
-	DLLOverrides string
-	WinVer       string
-	WaitChildren bool
+	Path          string
+	Args          []string
+	WorkDir       string
+	Log           string
+	DLLOverrides  string
+	DebugMessages string
+	WinVer        string
+	WaitChildren  bool
+	// InstallerGuard is interpreted by the installer runner, never game launches.
+	InstallerGuard         bool
+	HideProgress           bool
+	Limit32BitAddressSpace bool
+	// Additional executables launched by a bridge, for cancellation in a shared bottle.
+	StopPaths  []string
+	CancelFile string
 }
 
 // cxstartArgs собирает командную строку cxstart. Аргументы установщика
@@ -40,6 +50,9 @@ func cxstartArgs(b Bottle, c Cmd, wait bool) []string {
 	}
 	if c.Log != "" {
 		args = append(args, "--cx-log", c.Log)
+	}
+	if c.DebugMessages != "" {
+		args = append(args, "--debugmsg", c.DebugMessages)
 	}
 	if c.DLLOverrides != "" {
 		args = append(args, "--dll", c.DLLOverrides)
@@ -63,20 +76,58 @@ var ErrTreeNotStopped = errors.New("wine: не удалось остановит
 func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 	//nolint:gosec // G204: путь до cxstart получен из Detect, аргументы собраны cxstartArgs
 	cmd := exec.CommandContext(ctx, m.rt.CxStart, cxstartArgs(b, c, true)...)
+	// Never let inherited output pipes postpone cancellation indefinitely.
+	cmd.WaitDelay = 5 * time.Second
+	if c.CancelFile != "" {
+		//nolint:forbidigo // fresh private temporary helper file/IPC marker, never persistent user state.
+		cmd.Cancel = func() error { return os.WriteFile(c.CancelFile, []byte("cancel\n"), 0600) }
+	}
 	out, err := cmd.CombinedOutput()
+	if os.Getenv("TYPHON_INSTALLGUARD_TRACE") == "1" {
+		slog.Info("installer bridge diagnostic", "output", string(out))
+	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
+		if c.CancelFile != "" {
+			ack, readErr := os.ReadFile(c.CancelFile + ".stopped")
+			if readErr == nil && string(ack) == "stopped\n" {
+				return 0, ctxErr
+			}
+			if stopErr := m.stopBottle(b, append([]string{c.Path}, c.StopPaths...)...); stopErr != nil {
+				slog.Warn("installer fallback stop failed", "error", stopErr)
+			}
+			return 0, fmt.Errorf("%w: %w: installer bridge did not confirm termination", ErrTreeNotStopped, ctxErr)
+		}
 		// exec.CommandContext убивает только прямого потомка (cxstart, он же
 		// winewrapper): установщик внутри бутыля остаётся жив, поэтому
 		// требуется свалить бутыль целиком. Общий бутыль — исключение: там
 		// гасятся только процессы этой установки, иначе отмена установки
 		// уронила бы Steam и все чужие игры того же префикса.
-		if killErr := m.stopBottle(b, c.Path); killErr != nil {
+		if killErr := m.stopBottle(b, append([]string{c.Path}, c.StopPaths...)...); killErr != nil {
 			return 0, fmt.Errorf("%w: %w: %w", ErrTreeNotStopped, ctxErr, killErr)
 		}
 		return 0, ctxErr
 	}
+
+	if c.CancelFile != "" && cmd.ProcessState != nil {
+		ack, readErr := os.ReadFile(c.CancelFile + ".stopped")
+		if readErr != nil || string(ack) != "stopped\n" {
+			return 0, errors.Join(fmt.Errorf("%w: installer bridge exited without confirming completion", ErrTreeNotStopped), err)
+		}
+		// The bridge has confirmed that no installer writers remain. Wine services
+		// may retain a diagnostic pipe after a successful wrapper exit.
+		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState.Success() {
+			return 0, nil
+		}
+	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
+		// Keep the child diagnostic: bridge/startup failures otherwise look like
+		// an unexplained installer exit code.
+		tail := out
+		if len(tail) > 4096 {
+			tail = tail[len(tail)-4096:]
+		}
+		slog.Warn("wine process exited", "path", c.Path, "code", exit.ExitCode(), "output", strings.TrimSpace(string(tail)))
 		return exit.ExitCode(), nil
 	}
 	if err != nil {

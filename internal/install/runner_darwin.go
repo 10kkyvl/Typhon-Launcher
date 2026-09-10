@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"typhon/internal/installguard/asset"
 	"typhon/internal/uierr"
 	"typhon/internal/wine"
 )
@@ -17,8 +19,8 @@ import (
 var errWineMissing = uierr.New("wine.not_installed", "для установки игр на macOS нужен CrossOver")
 
 // wineRunner ставит игру в её собственном бутыле. Повышения прав здесь нет:
-// UAC на macOS не существует, поэтому весь протокол воркера, state- и
-// cancel-файлов остаётся Windows-только.
+// UAC на macOS не существует; повышение прав через Windows-воркер не
+// используется. Wine-помощник управляет деревом процессов и отменой отдельно.
 type wineRunner struct {
 	gamesPath func() string
 	detect    func() (wine.Runtime, error)
@@ -115,7 +117,7 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 	if err != nil {
 		return 0, err
 	}
-	cmd := wine.Cmd{Path: winPath, Args: args, Log: spec.LogPath, WaitChildren: true}
+	cmd := wine.Cmd{Path: winPath, Args: args, Log: wineInstallerLog(spec.LogPath), WaitChildren: true, InstallerGuard: true, HideProgress: spec.Hidden, Limit32BitAddressSpace: isFitGirlInstaller(spec.Engine, spec.Path), DLLOverrides: wineInstallerDLLOverrides(spec.Engine, spec.Path)}
 	if spec.Dir != "" {
 		dir, dirErr := bottle.ToWindows(spec.Dir)
 		if dirErr != nil {
@@ -135,7 +137,54 @@ func (r wineRunner) doRun(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd)
 	if err != nil {
 		return 0, errWineMissing
 	}
-	return wine.NewManager(rt).Run(ctx, bottle, cmd)
+	manager := wine.NewManager(rt)
+	if !cmd.InstallerGuard {
+		return manager.Run(ctx, bottle, cmd)
+	}
+	// --cx-log otherwise enables expensive per-exception unwind/module traces.
+	cmd.DebugMessages = "-all,-seh,-unwind,-process,-module,-loaddll,-threadname,err+all"
+	path, cleanup, err := asset.Extract(filepath.Join(bottle.Path, "drive_c"))
+	if err != nil {
+		return 0, err
+	}
+	removeHelper := true
+	defer func() {
+		if removeHelper {
+			cleanup()
+		}
+	}()
+	helperPath, err := bottle.ToWindows(path)
+	if err != nil {
+		return 0, fmt.Errorf("путь помощника установщика: %w", err)
+	}
+	original := cmd.Path
+	if cmd.WorkDir == "" {
+		if end := strings.LastIndex(original, `\`); end >= 0 {
+			cmd.WorkDir = original[:end]
+		}
+	}
+	mode := "music"
+	if cmd.HideProgress {
+		mode = "quiet"
+	}
+	if cmd.Limit32BitAddressSpace {
+		mode = "repack-" + mode
+	}
+	cancelPath := filepath.Join(filepath.Dir(path), "cancel")
+	cancelWin, err := bottle.ToWindows(cancelPath)
+	if err != nil {
+		return 0, err
+	}
+	cmd.WaitChildren = false // the bridge waits for writers; Wine services may outlive it
+	cmd.CancelFile = cancelPath
+	cmd.Args = append([]string{mode, cancelWin, "--", original}, cmd.Args...)
+	cmd.Path = helperPath
+	cmd.StopPaths = []string{original}
+	code, err := manager.Run(ctx, bottle, cmd)
+	if errors.Is(err, wine.ErrTreeNotStopped) {
+		removeHelper = false
+	}
+	return code, err
 }
 
 // classifyRunErr переводит отказ Kill подтвердить остановку бутыля в
@@ -168,4 +217,34 @@ func winePathArgs(b wine.Bottle, args []string) ([]string, error) {
 		out[i] = prefix + win
 	}
 	return out, nil
+}
+
+// Inno and cxstart truncate their logs; they must never share the same file.
+func wineInstallerLog(path string) string {
+	if path == "" {
+		return ""
+	}
+	return path + ".wine.log"
+}
+
+// FitGirl's BASS player uses DirectSound and draws an image button, not a
+// checkbox. Disable that optional playback API for this launch only. Keep this
+// profile narrow: other installers may require DirectSound for more than music.
+func isFitGirlInstaller(engine Engine, installer string) bool {
+	if engine != EngineInno || !strings.EqualFold(filepath.Base(installer), "setup.exe") {
+		return false
+	}
+	//nolint:gosec // G703: local user-selected game/helper path; no network path input or privileged filesystem access.
+	marker, err := os.Stat(filepath.Join(filepath.Dir(installer), "fg-01.bin"))
+	if err != nil || !marker.Mode().IsRegular() {
+		return false
+	}
+	return true
+}
+
+func wineInstallerDLLOverrides(engine Engine, installer string) string {
+	if isFitGirlInstaller(engine, installer) {
+		return "dsound="
+	}
+	return ""
 }

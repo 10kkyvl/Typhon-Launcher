@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"runtime"
 	"testing"
+	"time"
 
 	"typhon/internal/app"
 	"typhon/internal/clientid"
@@ -179,8 +180,94 @@ func TestPostLogBundleRespectsCancelledContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a cancelled context")
 	}
-	if code := uierr.Code(err); code != ErrCodeLogUploadNetwork {
-		t.Fatalf("code = %q, want %q", code, ErrCodeLogUploadNetwork)
+	if code := uierr.Code(err); code != ErrCodeLogUploadCancelled {
+		t.Fatalf("code = %q, want %q", code, ErrCodeLogUploadCancelled)
+	}
+}
+
+func TestPostLogBundleReportsOnlyRealBodyProgress(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"id":"progress-id"}`)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	progress := make([][2]int64, 0, 2)
+	raw := bytes.Repeat([]byte("log line\n"), 20_000)
+	gz, err := gzipForTest(t, raw)
+	if err != nil {
+		t.Fatalf("gzipForTest: %v", err)
+	}
+	_, err = postLogBundleWithProgress(context.Background(), srv.Client(), srv.URL, clientid.Identity{}, gz, func(sent, total int64) {
+		progress = append(progress, [2]int64{sent, total})
+	})
+	if err != nil {
+		t.Fatalf("postLogBundleWithProgress: %v", err)
+	}
+	if len(progress) == 0 || progress[0] != [2]int64{0, int64(len(gz))} {
+		t.Fatalf("progress start = %v, want zero of %d", progress, len(gz))
+	}
+	last := progress[len(progress)-1]
+	if last[0] != int64(len(gz)) || last[1] != int64(len(gz)) {
+		t.Fatalf("progress end = %v, want %d/%d", last, len(gz), len(gz))
+	}
+}
+
+func TestPostLogBundleReportsWaitingAfterBodyBeforeResponse(t *testing.T) {
+	release := make(chan struct{})
+	bodyRead := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength != 4 {
+			t.Errorf("Content-Length = %d, want 4", r.ContentLength)
+		}
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Error(err)
+			return
+		}
+		close(bodyRead)
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"id":"waiting-id"}`)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	waiting := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		_, err := postLogBundleWithCallbacks(context.Background(), srv.Client(), srv.URL, clientid.Identity{}, []byte("logs"), nil, func() { close(waiting) })
+		done <- err
+	}()
+	<-bodyRead
+	select {
+	case <-waiting:
+	case <-time.After(time.Second):
+		t.Fatal("waiting status was not emitted after the request body")
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostLogBundleTimeoutReturnsTimeoutError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-time.After(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err := postLogBundle(ctx, srv.Client(), srv.URL, clientid.Identity{}, []byte("x"))
+	if err == nil || uierr.Code(err) != ErrCodeLogUploadTimeout {
+		t.Fatalf("error = %v, code = %q, want timeout error", err, uierr.Code(err))
 	}
 }
 
@@ -211,6 +298,19 @@ func TestSendLogsRequiresTheServiceToBeStarted(t *testing.T) {
 
 	if _, err := svc.SendLogs(); !errIsNotStarted(err) {
 		t.Fatalf("SendLogs error = %v, want errDiagnosticsNotStarted", err)
+	}
+}
+
+func TestSendLogsRejectsConcurrentUpload(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := newServiceAt(dir, clientid.Identity{InstallationID: "i", SessionID: "s"}, func() bool { return true })
+	if err != nil {
+		t.Fatalf("newServiceAt: %v", err)
+	}
+	svc.logUploadMu.Lock()
+	defer svc.logUploadMu.Unlock()
+	if _, err := svc.SendLogs(); !errors.Is(err, errLogUploadBusy) {
+		t.Fatalf("SendLogs error = %v, want busy", err)
 	}
 }
 

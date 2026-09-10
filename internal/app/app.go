@@ -11,7 +11,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var Version = "0.5.1"
+var Version = "0.5.2"
 
 type AppInfo struct {
 	Version  string `json:"version"`
@@ -82,6 +82,21 @@ func (s *Service) SelectExecutable(title string) (string, error) {
 	return path, nil
 }
 
+// SelectGameExecutable opens the picker in the game's CrossOver bottle on
+// macOS. Other platforms keep using their native dialog.
+func (s *Service) SelectGameExecutable(title, installDir, current string) (string, error) {
+	if runtime.GOOS == "darwin" {
+		return platform.SelectGameExecutable(title, installDir, current)
+	}
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle(title).
+		SetDirectory(installDir).
+		CanChooseFiles(true).
+		AddFilter("Исполняемые файлы (*.exe)", "*.exe").
+		AddFilter("Все файлы", "*.*")
+	return dialog.PromptForSingleSelection()
+}
+
 func (s *Service) SelectFolder(title string) (string, error) {
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle(title).
@@ -101,4 +116,8 @@ func (s *Service) OpenFolder(path string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *Service) OpenGameFolder(path, executable string) error {
+	return platform.OpenGameFolder(path, executable)
 }

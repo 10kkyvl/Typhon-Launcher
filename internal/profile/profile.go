@@ -32,7 +32,11 @@ func (s *Service) Snapshot() Snapshot {
 	now := s.now()
 	monthStart := MonthStart(now)
 	since := minTime(monthStart, now.Add(-recentWindow))
-	return Build(s.library.GetGames(), s.log.Since(since), s.library.GetRunningGames(), s.showcase(), now)
+	games := s.library.GetGames()
+	if history, ok := s.library.(interface{ GetHistoryGames() []library.Game }); ok {
+		games = history.GetHistoryGames()
+	}
+	return Build(games, s.log.Since(since), s.library.GetRunningGames(), s.showcase(), now)
 }
 
 func minTime(a, b time.Time) time.Time {

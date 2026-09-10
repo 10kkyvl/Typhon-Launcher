@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"typhon/internal/installguard"
 )
 
 const backgroundSchedulingClass = 3
@@ -52,6 +53,9 @@ func (processRunner) run(ctx context.Context, spec runSpec) (int, error) {
 		}
 		return 0, err
 	}
+
+	stopGuard := installguard.Start(ctx, cmd.Process.Pid, execSpec.Hidden)
+	defer stopGuard()
 
 	// Установщик распаковывает себя во временный каталог и работает уже оттуда:
 	// без job-объекта отмена убила бы только загрузчик, а установка продолжилась бы.
