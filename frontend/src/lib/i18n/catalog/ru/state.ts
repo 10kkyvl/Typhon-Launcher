@@ -12,7 +12,7 @@ export const state = {
   'state.installStatusPreparing': 'Подготовка',
   'state.installStatusInstalling': 'Установка',
   'state.installStatusExtracting': 'Распаковка',
-  'state.installStatusVerifying': 'Проверка',
+  'state.installStatusVerifying': 'Проверка файлов',
   'state.installStatusWaitingForUser': 'Требуется действие',
   'state.installStatusCompleted': 'Установлено',
   'state.installStatusCancelled': 'Отменено',

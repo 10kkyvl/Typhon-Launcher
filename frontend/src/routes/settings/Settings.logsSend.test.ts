@@ -19,7 +19,15 @@ describe('Settings send-logs flow', () => {
   });
 
   it('only calls sendLogs from inside the confirmed handler', () => {
-    expect(source).toMatch(/async function confirmSendLogs\(\)[\s\S]*?await sendLogs\(\)/);
+    expect(source).toMatch(/function confirmSendLogs\(\)[\s\S]*?void sendLogs\(\)/);
+  });
+
+  it('closes the confirmation immediately and shows real progress on the page', () => {
+    expect(source).toMatch(/function confirmSendLogs\(\)[\s\S]*?void sendLogs\(\)/);
+    expect(source).not.toMatch(/await sendLogs\(\)/);
+    expect(source).toContain('<ProgressBar');
+    expect(source).toContain('value={logsProgressPercent}');
+    expect(source).toContain("indeterminate={logsStage !== 'sending' || !logsProgress}");
   });
 
   it('shows the short id from a successful send', () => {

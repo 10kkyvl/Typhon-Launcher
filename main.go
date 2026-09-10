@@ -450,6 +450,7 @@ func main() {
 		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
 		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
+		slog.SetDefault(slog.New(diagnostics.NewLogHandler(slog.Default().Handler(), diagnosticsService)))
 
 		libraryService.AddSessionWatcher(heartbeatService)
 		libraryService.SetUsageRecorder(usageService.Record)

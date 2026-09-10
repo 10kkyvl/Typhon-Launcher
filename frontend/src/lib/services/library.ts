@@ -114,3 +114,8 @@ export async function selectExecutable(title: string): Promise<string> {
   if (!inWails) return '';
   return await AppService.SelectExecutable(title);
 }
+
+export async function selectGameExecutable(title: string, installDir: string, current: string): Promise<string> {
+  if (!inWails) return '';
+  return await AppService.SelectGameExecutable(title, installDir, current);
+}

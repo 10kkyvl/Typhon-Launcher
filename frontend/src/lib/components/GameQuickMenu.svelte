@@ -17,7 +17,7 @@
     type LibraryGame,
     type SavesResult,
   } from '../services/library';
-  import { openFolder, selectFolder } from '../services/settings';
+  import { openGameFolder, openFolder, selectFolder } from '../services/settings';
   import { openMoveGame } from '../game/actions/move';
   import { share as shareLan, shares, unshare as unshareLan } from '../stores/lan';
   import { settings } from '../stores/settings';
@@ -72,7 +72,7 @@
         statusOpen = true;
         return;
       case 'folder':
-        return guard(() => openFolder(current.installDir));
+        return guard(() => openGameFolder(current.installDir, current.executable));
       case 'saves':
         return openSaves(current);
       case 'verify':

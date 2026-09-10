@@ -42,7 +42,7 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 	sharedBottle, sharedErr := manager.SharedBottle(in.Destination)
 	if sharedErr == nil {
 		slog.Info("discovery using shared bottle", "bottle", sharedBottle.Name, "destination", in.Destination)
-		return discoverWithBottle(ctx, in, sharedBottle, manager.Run)
+		return discoverWithBottle(ctx, in, sharedBottle, wineRunner{detect: wine.Detect}.doRun)
 	}
 	if !wine.SharedBottleUnavailable(sharedErr) {
 		return discoveryOutcome{}, sharedErr
@@ -53,7 +53,7 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 	if !ok {
 		return discoveryOutcome{reason: "бутыль установки ещё не заведён"}, nil
 	}
-	return discoverWithBottle(ctx, in, bottle, manager.Run)
+	return discoverWithBottle(ctx, in, bottle, wineRunner{detect: wine.Detect}.doRun)
 }
 
 // discoverWithBottle делает ту же работу, что и attemptDiscovery, но берёт
@@ -84,6 +84,13 @@ func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottl
 		return discoveryOutcome{reason: fmt.Sprintf("путь установщика: %v", err)}, nil
 	}
 
+	workDir := ""
+	if in.WorkingDir != "" {
+		workDir, err = bottle.ToWindows(in.WorkingDir)
+		if err != nil {
+			return discoveryOutcome{}, fmt.Errorf("рабочая папка разведки: %w", err)
+		}
+	}
 	args, err := winePathArgs(bottle, plan.Args)
 	if err != nil {
 		return discoveryOutcome{}, err
@@ -91,14 +98,16 @@ func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottl
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan struct{})
+	var runErr error
 	go func() {
 		defer close(done)
 		// Код возврата разведки не важен: прогон обрывается намеренно, как
 		// только появится INF. А вот ошибка запуска — важна: без неё падение
 		// разведки выглядело бы как «установщик просто не создал файл».
-		if _, runErr := run(runCtx, bottle, wine.Cmd{
-			Path: winInstaller, Args: args, WaitChildren: true,
-		}); runErr != nil && !errors.Is(runErr, context.Canceled) {
+		_, runErr = run(runCtx, bottle, wine.Cmd{
+			Path: winInstaller, Args: args, WorkDir: workDir, WaitChildren: true, InstallerGuard: true, HideProgress: true, Limit32BitAddressSpace: isFitGirlInstaller(in.Engine, in.InstallerPath), DLLOverrides: wineInstallerDLLOverrides(in.Engine, in.InstallerPath),
+		})
+		if runErr != nil && !errors.Is(runErr, context.Canceled) {
 			slog.Debug("discovery run", "installer", winInstaller, "error", runErr)
 		}
 	}()
@@ -106,6 +115,12 @@ func discoverWithBottle(ctx context.Context, in discoverySpec, bottle wine.Bottl
 	reason := awaitDiscoveryFile(ctx, in.InfPath, done)
 	cancel()
 	<-done
+	if errors.Is(runErr, wine.ErrTreeNotStopped) {
+		return discoveryOutcome{}, classifyRunErr(runErr)
+	}
+	if ctx.Err() != nil {
+		return discoveryOutcome{}, ctx.Err()
+	}
 	if reason != "" {
 		return discoveryOutcome{reason: reason}, nil
 	}

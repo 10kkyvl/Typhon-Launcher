@@ -19,7 +19,7 @@
     {#snippet action()}
       {#if hidden}<HiddenBadge text={msg('social.hiddenGenericHint')} />{/if}
     {/snippet}
-    <button class="playing" type="button" onclick={() => navigate('game', { id: game.id })}>
+    <button class="playing" type="button" disabled={game.archived} onclick={() => navigate('game', { id: game.id })}>
       <span class="cover">
         <Artwork src={coverOf(game, $gameArt)} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
       </span>

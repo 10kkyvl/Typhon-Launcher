@@ -90,6 +90,9 @@ func componentDeclined(component string, dict []string) bool {
 			continue
 		}
 		for _, marker := range dict {
+			if marker == "vcredist" && isVersionedVCComponent(seg) {
+				return true
+			}
 			m := strings.ToLower(marker)
 			if len(m) <= 3 {
 				if seg == m {
@@ -123,4 +126,16 @@ func filterComponents(list []string, opts installOptions) ([]string, bool) {
 		return list, false
 	}
 	return kept, true
+}
+
+func isVersionedVCComponent(name string) bool {
+	parts := strings.Split(name, "_")
+	if len(parts) != 3 || parts[0] != "vc" || (parts[2] != "x86" && parts[2] != "x64") {
+		return false
+	}
+	switch parts[1] {
+	case "2005", "2008", "2010", "2012", "2013", "2015", "2017", "2019", "2022":
+		return true
+	}
+	return false
 }

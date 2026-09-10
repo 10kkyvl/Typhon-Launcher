@@ -277,6 +277,14 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		},
 	})
 	if game == nil {
+		for i := range s.archived {
+			if s.archived[i].ID == id {
+				game = &s.archived[i]
+				break
+			}
+		}
+	}
+	if game == nil {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})
 		return
 	}

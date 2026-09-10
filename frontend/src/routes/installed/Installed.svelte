@@ -31,12 +31,13 @@
     addGame,
     playGame,
     selectExecutable,
+    selectGameExecutable,
     setExecutable,
     stopGame,
     type LibraryGame,
   } from '../../lib/services/library';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
-  import { openFolder } from '../../lib/services/settings';
+  import { openGameFolder, openFolder } from '../../lib/services/settings';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -198,7 +199,7 @@
 
   async function openInstallDir(game: LibraryGame) {
     try {
-      await openFolder(game.installDir);
+      await openGameFolder(game.installDir, game.executable);
     } catch {
       toast(msg('games.errorFolderUnavailable'), 'danger');
     }
@@ -253,7 +254,11 @@
 
   async function chooseExecutable(game: LibraryGame) {
     try {
-      const path = await selectExecutable(msg('games.installedChooseExeDialog', { title: game.title }));
+      const path = await selectGameExecutable(
+        msg('games.installedChooseExeDialog', { title: game.title }),
+        game.installDir,
+        game.executable,
+      );
       if (!path) return;
       await setExecutable(game.id, path);
       toast(msg('games.installedExeSavedToast', { title: game.title }), 'success');

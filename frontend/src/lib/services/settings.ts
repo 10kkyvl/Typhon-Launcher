@@ -140,3 +140,8 @@ export async function saveConsent(usageStats: boolean, diagnostics: boolean): Pr
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
 }
+
+export async function openGameFolder(path: string, executable: string): Promise<void> {
+ if (!inWails) throw new Error('unavailable in browser');
+ await AppService.OpenGameFolder(path, executable);
+}

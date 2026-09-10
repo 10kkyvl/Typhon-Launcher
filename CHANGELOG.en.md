@@ -6,6 +6,27 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.5.2 — 2026-09-10
+More reliable game installation through CrossOver, clearer log uploads, and activity history preserved after removing a game.
+
+### Added
+- On macOS, the executable for a Windows game can be selected through a CrossOver dialog; its folder opens in the file explorer of its CrossOver environment
+- Log uploads show archive preparation, transfer progress, and the wait for the server response
+- The website now has getting-started, macOS, and game-transfer guides, a help section, and release history in English and Russian
+
+### Changed
+- Installation progress stays below 100% until the installer finishes; QuickSFV runs appear as a separate file-verification stage
+- Executable selection after installation shows full paths and ranks servers and editors below the game itself
+- When error reporting is enabled, Typhon also sends scrubbed messages and stacks for ordinary internal errors. A full log archive is still sent only manually after confirmation
+
+### Fixed
+- Fixed extraction stalls affecting some FitGirl repacks in CrossOver and waiting for successful QuickSFV completion. Recognized installers have music disabled and optional website-opening actions deselected
+- Cancelling an installation in CrossOver waits for the installer and its child processes to stop before cleaning up files
+- Retrying an installation into an originally empty folder preserves the ability to uninstall the game from the computer
+- Removing a game from the library preserves its local activity history and total playtime; history no longer opens a missing game page
+- Fixed premature log-upload timeouts, server-side archive blocking, and copying the support reference in the desktop app
+- Invalid older error reports no longer block subsequent deliveries; large queues are split into batches
+
 ## 0.5.1 — 2026-09-09
 Easier game launching on Mac, clearer friend activity, and more reliable library moves, game updates and account sync.
 

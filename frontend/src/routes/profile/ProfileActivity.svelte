@@ -23,7 +23,7 @@
     <ul class="list">
       {#each rows as row (`${row.date}:${row.entry.game.id}`)}
         <li>
-          <button class="row" type="button" onclick={() => navigate('game', { id: row.entry.game.id })}>
+          <button class="row" type="button" disabled={row.entry.game.archived} onclick={() => navigate('game', { id: row.entry.game.id })}>
             <span class="icon"><Gamepad2 size="1.7rem" strokeWidth={1.8} /></span>
             <span class="text">
               <span class="title">{row.entry.game.title}</span>

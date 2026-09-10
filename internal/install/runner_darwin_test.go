@@ -281,7 +281,7 @@ func TestWineRunnerInstallerArgs(t *testing.T) {
 	if strings.Join(recorded.Args, " ") != "/VERYSILENT" {
 		t.Fatalf("Args = %v", recorded.Args)
 	}
-	if recorded.Log != "/tmp/x.log" {
+	if recorded.Log != "/tmp/x.log.wine.log" {
 		t.Fatalf("Log = %q", recorded.Log)
 	}
 }
@@ -368,5 +368,27 @@ func TestWineRunnerInstallerInDownloads(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("installer not launched")
+	}
+}
+
+func TestWineFitGirlAudioIsScopedToInstaller(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "setup.exe")
+	if got := wineInstallerDLLOverrides(EngineInno, path); got != "" {
+		t.Fatal(got)
+	}
+	if err := os.WriteFile(filepath.Join(root, "fg-01.bin"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := wineInstallerDLLOverrides(EngineInno, path); got != "dsound=" {
+		t.Fatalf("music override=%q", got)
+	}
+	for _, tc := range []struct {
+		engine Engine
+		path   string
+	}{{EngineNsis, path}, {EngineInno, filepath.Join(root, "game.exe")}, {EngineInno, filepath.Join(root, "unins000.exe")}} {
+		if got := wineInstallerDLLOverrides(tc.engine, tc.path); got != "" {
+			t.Errorf("audio changed outside profile: %q", got)
+		}
 	}
 }

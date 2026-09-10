@@ -541,10 +541,9 @@ func (s *Service) interruptResumed(id string) {
 }
 
 // finishResumed завершает установку по итогу воркера, обнаруженного живым на
-// старте: происхождение каталога и запись деинсталлятора мы честно не
-// знаем (их выясняет setRemoval по снимку до установки, а снимка нет),
-// поэтому Owned=false и UninstallUnknown=true — явный неизвестный статус, а
-// не унаследованный от нулевого значения. Уборка ярлыков здесь не
+// старте: сохранённый OwnedDestination подтверждает происхождение каталога.
+// Без него оставляем Owned=false. Запись деинсталлятора без исходного снимка
+// неизвестна, поэтому UninstallUnknown=true. Уборка ярлыков здесь не
 // выполняется: baseline ярлыков снимался до старта установщика и тоже не
 // восстановим.
 func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
@@ -598,7 +597,7 @@ func (s *Service) markResumedOwnership(id string) error {
 		return nil
 	}
 	prevOwned, prevUninstall, prevUnknown := item.Owned, item.Uninstall, item.UninstallUnknown
-	item.Owned = false
+	item.Owned = item.Destination != "" && samePath(item.OwnedDestination, item.Destination)
 	item.UninstallUnknown = true
 	item.Uninstall = library.Uninstall{}
 	if err := s.persistLocked(); err != nil {
@@ -1400,6 +1399,10 @@ func (s *Service) updateProgress(id string, p Progress) {
 		return
 	}
 	next := ratio(p.BytesDone, p.BytesTotal)
+	// Directory size is an estimate, not confirmation that setup has exited.
+	if item.Status == StatusInstalling && next > 0.99 {
+		next = 0.99
+	}
 	moved := math.Abs(next-item.Progress) >= progressEpsilon ||
 		p.CurrentFile != item.CurrentFile ||
 		(p.BytesTotal <= 0 && p.BytesDone != item.BytesDone)
@@ -1739,4 +1742,24 @@ func newID() string {
 		return fmt.Sprintf("i%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buf)
+}
+
+// The external installer monitor must not replace cancellation or EXE selection.
+func (s *Service) setInstallerVerifying(id string) error {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil || item.Status != StatusInstalling {
+		s.mu.Unlock()
+		return nil
+	}
+	item.Status = StatusVerifying
+	if err := s.persistLocked(); err != nil {
+		item.Status = StatusInstalling
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
+	snap := snapshotOf(item)
+	s.mu.Unlock()
+	emit(eventUpdated, snap)
+	return nil
 }

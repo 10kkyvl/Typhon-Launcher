@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+	"typhon/internal/installguard"
 )
 
 var (
@@ -49,6 +50,9 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		}
 		return discoveryOutcome{reason: fmt.Sprintf("запуск установщика для разведки: %v", startErr)}, nil
 	}
+
+	stopGuard := installguard.Start(ctx, cmd.Process.Pid, true)
+	defer stopGuard()
 
 	reason, err := awaitDiscoveryIni(ctx, cmd, group, in.InfPath, in.InstallerPath)
 	if err != nil {

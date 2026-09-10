@@ -4,6 +4,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,5 +205,36 @@ func TestDiscoverWithBottleReusesGivenBottle(t *testing.T) {
 	}
 	if len(outcome.components) != 1 || outcome.components[0] != "main" {
 		t.Fatalf("components = %v, want [main]", outcome.components)
+	}
+}
+
+func TestDiscoveryDoesNotContinueAfterUnconfirmedStop(t *testing.T) {
+	root := t.TempDir()
+	in := discoverySpec{Engine: EngineInno, InstallerPath: filepath.Join(root, "setup.exe"), Destination: root, InfPath: filepath.Join(root, "probe.inf"), Options: installOptions{SkipExtras: true}}
+	b := wine.Bottle{Name: "fixture", Games: root, Drive: "t"}
+	_, err := discoverWithBottle(context.Background(), in, b, func(ctx context.Context, _ wine.Bottle, _ wine.Cmd) (int, error) {
+		if err := os.WriteFile(in.InfPath, []byte("[Setup]\nComponents=game,redist\n"), 0600); err != nil {
+			return 0, err
+		}
+		<-ctx.Done()
+		return 0, wine.ErrTreeNotStopped
+	})
+	if !errors.Is(err, errInstallerNotConfirmedStopped) {
+		t.Fatalf("unsafe discovery continuation: %v", err)
+	}
+}
+
+func TestDiscoveryPropagatesUserCancellation(t *testing.T) {
+	root := t.TempDir()
+	in := discoverySpec{Engine: EngineInno, InstallerPath: filepath.Join(root, "setup.exe"), Destination: root, InfPath: filepath.Join(root, "probe.inf"), Options: installOptions{SkipExtras: true}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err := discoverWithBottle(ctx, in, wine.Bottle{Name: "fixture", Games: root, Drive: "t"}, func(ctx context.Context, _ wine.Bottle, _ wine.Cmd) (int, error) {
+		cancel()
+		<-ctx.Done()
+		return 0, ctx.Err()
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled discovery continued: %v", err)
 	}
 }
