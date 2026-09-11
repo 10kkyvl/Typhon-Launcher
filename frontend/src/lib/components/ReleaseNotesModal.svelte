@@ -15,7 +15,7 @@
 <Modal
   open={open}
   {title}
-  width="52rem"
+  width="104rem"
   onclose={dismissReleaseNotes}
 >
   {#if notes.length > 1}

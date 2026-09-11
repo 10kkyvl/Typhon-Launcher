@@ -35,6 +35,10 @@ func (b *blockingLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (libra
 	return b.inner.ApplyInstalledUpdate(u)
 }
 
+func (b *blockingLibrary) BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error) {
+	return b.inner.BindDistribution(id, sourceID, releaseID, distributionID, releaseUploadedAt)
+}
+
 func (b *blockingLibrary) LocateSaves(ctx context.Context, id string) (library.SavesResult, error) {
 	return b.inner.LocateSaves(ctx, id)
 }

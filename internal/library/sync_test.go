@@ -199,7 +199,7 @@ func TestApplySyncOwnedMerge(t *testing.T) {
 		incoming bool
 		want     bool
 	}{
-		{"local false incoming true becomes true", false, true, true},
+		{"remote ownership cannot grant local deletion", false, true, false},
 		{"local true incoming false stays true", true, false, true},
 		{"both false stays false", false, false, false},
 		{"both true stays true", true, true, true},

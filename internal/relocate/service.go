@@ -489,6 +489,9 @@ func (s *Service) checkBusy(gameID string) error {
 	if s.lib != nil && s.lib.IsRunning(gameID) {
 		return fmt.Errorf("%s: %w", gameID, ErrGameRunning)
 	}
+	if keeper, ok := s.upd.(interface{ HasRollback(string) bool }); ok && keeper.HasRollback(gameID) {
+		return fmt.Errorf("%s: %w", gameID, ErrRollbackAvailable)
+	}
 	if s.upd != nil && s.upd.Busy(gameID) {
 		return fmt.Errorf("%s: %w", gameID, ErrUpdateBusy)
 	}
@@ -733,6 +736,9 @@ func (s *Service) runPipeline(ctx context.Context, jobID, source, target string,
 		return s.cancelJob(jobID)
 	}
 
+	if err := removeEmptyTarget(target); err != nil {
+		return s.failOrCancel(jobID, err)
+	}
 	if renameErr := os.Rename(source, target); renameErr == nil {
 		if _, err := s.transition(jobID, StageRepoint, func(j *Job) {
 			j.Renamed = true
@@ -812,7 +818,12 @@ func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target strin
 	if _, err := s.transition(jobID, StageCommit, nil); err != nil {
 		return err
 	}
+	if err := removeEmptyTarget(target); err != nil {
+		removeStaging(staging)
+		return s.failOrCancel(jobID, err)
+	}
 	if err := os.Rename(staging, target); err != nil {
+		removeStaging(staging)
 		return s.failOrCancel(jobID, err)
 	}
 	// The manifest stays on disk past this point: a crash recovery resuming
@@ -1218,4 +1229,18 @@ func (s *Service) applyLibrarySettings(jobID, root string) error {
 		return err
 	}
 	return nil
+}
+
+func removeEmptyTarget(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return ErrTargetNotEmpty
+	}
+	return os.Remove(path)
 }

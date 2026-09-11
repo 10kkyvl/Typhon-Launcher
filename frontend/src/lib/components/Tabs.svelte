@@ -8,9 +8,50 @@
     value: string;
     variant?: 'underline' | 'pill';
   } = $props();
+
+  let indicator = $state({ left: 0, width: 0, ready: false });
+
+  function trackSelection(node: HTMLDivElement, _value: string) {
+    let frame = 0;
+    const measure = () => {
+      const selected = node.querySelector<HTMLButtonElement>('[aria-selected="true"]');
+      indicator = selected
+        ? { left: selected.offsetLeft, width: selected.offsetWidth, ready: true }
+        : { left: 0, width: 0, ready: false };
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    const resize = new ResizeObserver(schedule);
+    const observeSizes = () => {
+      resize.disconnect();
+      resize.observe(node);
+      node.querySelectorAll('button').forEach((button) => resize.observe(button));
+      schedule();
+    };
+    const mutation = new MutationObserver(observeSizes);
+    mutation.observe(node, { childList: true, subtree: true, characterData: true });
+    observeSizes();
+    return {
+      update: schedule,
+      destroy() {
+        cancelAnimationFrame(frame);
+        resize.disconnect();
+        mutation.disconnect();
+      },
+    };
+  }
 </script>
 
-<div class="tabs {variant}" role="tablist">
+<div class="tabs {variant}" role="tablist" use:trackSelection={value}>
+  <span
+    class="indicator"
+    class:ready={indicator.ready}
+    aria-hidden="true"
+    style:width="{indicator.width}px"
+    style:transform="translateX({indicator.left}px)"
+  ></span>
   {#each tabs as tab (tab.id)}
     <button
       role="tab"
@@ -29,6 +70,8 @@
 
 <style>
   .tabs {
+    position: relative;
+    isolation: isolate;
     display: flex;
     gap: var(--space-2);
   }
@@ -61,11 +104,20 @@
     color: var(--text);
   }
 
-  .underline .tab.selected::after {
-    content: '';
+  .indicator {
     position: absolute;
     left: 0;
-    right: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: -1;
+  }
+
+  .indicator.ready {
+    opacity: 1;
+    transition: transform var(--dur-panel) var(--ease), width var(--dur-panel) var(--ease);
+  }
+
+  .underline .indicator {
     bottom: -1px;
     height: 2px;
     border-radius: 2px;
@@ -84,9 +136,15 @@
   }
 
   .pill .tab.selected {
-    background: var(--surface-3);
-    border-color: var(--border);
     color: var(--text);
+  }
+
+  .pill .indicator {
+    top: 0;
+    bottom: 0;
+    border-radius: var(--radius-xl);
+    border: 2px solid var(--border);
+    background: var(--surface-3);
   }
 
   .count {

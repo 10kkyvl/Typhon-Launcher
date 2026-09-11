@@ -68,14 +68,16 @@ func (v VerifyState) boundTo(g library.Game) bool {
 }
 
 type Rollback struct {
-	GameID      string     `json:"gameId"`
-	Path        string     `json:"path"`
-	InstallDir  string     `json:"installDir"`
-	Executable  string     `json:"executable"`
-	Version     string     `json:"version"`
-	ReleaseID   string     `json:"releaseId,omitempty"`
-	SourceID    string     `json:"sourceId,omitempty"`
-	AwaitLaunch bool       `json:"awaitLaunch"`
-	KeepUntil   *time.Time `json:"keepUntil,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	GameID            string     `json:"gameId"`
+	Path              string     `json:"path"`
+	InstallDir        string     `json:"installDir"`
+	Executable        string     `json:"executable"`
+	Version           string     `json:"version"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	AwaitLaunch       bool       `json:"awaitLaunch"`
+	KeepUntil         *time.Time `json:"keepUntil,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
 }

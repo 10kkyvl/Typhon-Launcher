@@ -152,7 +152,7 @@ func extractDLCCount(s string) (string, int) {
 }
 
 func extractVersion(s string) (string, string, string) {
-	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reRVer}
+	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
 
 	bestStart := -1
 	var bestLoc []int
@@ -160,6 +160,11 @@ func extractVersion(s string) (string, string, string) {
 		loc := re.FindStringSubmatchIndex(s)
 		if loc == nil {
 			continue
+		}
+		// In a fully lowercase title, a separated v is ambiguous with a
+		// Roman numeral. Keep the title token and extract only the number.
+		if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
+			loc[0] = loc[2]
 		}
 		if bestStart == -1 || loc[0] < bestStart {
 			bestStart = loc[0]
@@ -189,6 +194,20 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 		if found, ok := d.bracketMarker(inner); ok {
 			tags = append(tags, found...)
 			return " "
+		}
+		// A service phrase can share a bracket with a known release
+		// decorator, such as the language marker in
+		// "+ Windows 7 Fix, MULTi6". Try the decorator-stripped form,
+		// but only drop the bracket if what remains is still a dictionary
+		// marker; arbitrary parenthesized title text stays intact below.
+		cleanedInner, decoratorLangs, decoratorTags := d.extractLangAndDashTags(inner)
+		if cleanedInner != inner {
+			if found, ok := d.bracketMarker(cleanedInner); ok {
+				langs = append(langs, decoratorLangs...)
+				tags = append(tags, decoratorTags...)
+				tags = append(tags, found...)
+				return " "
+			}
 		}
 		words := reBracketSplit.Split(inner, -1)
 		var cleaned []string

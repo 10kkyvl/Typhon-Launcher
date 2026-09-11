@@ -1,5 +1,6 @@
 export const errLibrary = {
   'library.no_install_dir': 'каталог установки не задан',
+  'library.installation_changed': 'папка или исполняемый файл игры изменились во время обновления; повторите попытку',
   'library.game_not_found': 'игра не найдена',
   'library.no_canonical_id': 'не указан идентификатор игры каталога',
   'library.no_catalog_title': 'не указано название игры',
@@ -21,6 +22,7 @@ export const errLibrary = {
   'library.not_installed': 'игра не установлена',
   'library.executable_missing': 'исполняемый файл больше не существует',
   'library.runtime_failed': 'не удалось подготовить окружение запуска',
+  'library.launch_cancelled': 'запуск отменён',
   'library.launch_failed': 'не удалось запустить игру',
   'library.shortcut_unsupported': 'ярлыки поддерживаются только в Windows',
   'library.no_shortcut_executable': 'у игры не задан исполняемый файл',

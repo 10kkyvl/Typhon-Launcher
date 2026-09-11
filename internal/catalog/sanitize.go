@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"sort"
+	"strings"
 
 	"typhon/internal/titles"
 )
@@ -36,13 +37,39 @@ func sanitize(games []Game) ([]Game, bool) {
 func splitAliases(game Game) (kept, dropped []string) {
 	normalized := titles.Normalize(game.Title)
 	for _, alias := range game.Aliases {
-		if titles.Similarity(alias, normalized) < aliasFloor {
+		valid := len(alias) <= maxAliasLen
+		if valid && game.ServerID != "" {
+			// Server aliases may be localized and therefore legitimately far
+			// from the title in normalized-token space. Keep concise provider
+			// names, while dropping release-marker spam before it reaches the
+			// fuzzy matcher.
+			valid = safeProviderAlias(alias)
+		} else if valid {
+			valid = titles.Similarity(alias, normalized) >= aliasFloor
+		}
+		if !valid {
 			dropped = append(dropped, alias)
 			continue
 		}
 		kept = append(kept, alias)
 	}
 	return kept, dropped
+}
+
+func safeProviderAlias(alias string) bool {
+	normalized := titles.Normalize(alias)
+	if normalized == "" {
+		return false
+	}
+	for _, marker := range []string{
+		"repack", "steam rip", "fitgirl", "codex", "torrent", "portable",
+		"multi", "update", "patch", "build", "hotfix",
+	} {
+		if strings.Contains(" "+normalized+" ", " "+marker+" ") {
+			return false
+		}
+	}
+	return true
 }
 
 func duplicateGroups(games []Game) [][]int {

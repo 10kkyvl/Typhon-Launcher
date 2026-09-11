@@ -12,11 +12,13 @@ import (
 func planInputFor(reuse *download.ReuseReport) planInput {
 	return planInput{
 		Installed: InstalledGame{
-			GameID:        "local-1",
-			ReleaseID:     "r1",
-			Version:       "1.0",
-			VersionSource: VersionSourceRelease,
-			InstallDir:    "C:\\Games\\Game",
+			GameID:         "local-1",
+			ReleaseID:      "r1",
+			SourceID:       "src",
+			DistributionID: "main",
+			Version:        "1.0",
+			VersionSource:  VersionSourceRelease,
+			InstallDir:     "C:\\Games\\Game",
 		},
 		Target: func() sources.Release {
 			r := release("r2", "1.1", 100<<30)

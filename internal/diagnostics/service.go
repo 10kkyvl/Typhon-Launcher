@@ -174,7 +174,7 @@ func (s *Service) Capture(component, operation string, err error, fatal bool) {
 	if err == nil {
 		return
 	}
-	s.capture(component, operation, err.Error(), string(debug.Stack()), usagestats.Classify(err), fatal)
+	s.capture(component, operation, err.Error(), string(debug.Stack()), diagnosticCode(err), fatal)
 }
 
 // CapturePanic builds a Fatal report from a recovered panic value and its

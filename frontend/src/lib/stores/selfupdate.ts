@@ -9,6 +9,7 @@ import {
   dismissUpdate as dismissUpdateRequest,
   downloadUpdate as downloadUpdateRequest,
   emptyReleaseNotes,
+  toReleaseNotes,
   getOutcome,
   getReleaseNotes as getReleaseNotesRequest,
   getStatus,
@@ -110,7 +111,7 @@ export async function initSelfUpdate() {
 
   const offStatus = Events.On('launcher:update_status', (event) => applyStatus(event.data as SelfUpdateStatus));
   const offProgress = Events.On('launcher:update_progress', (event) => selfUpdateProgress.set(event.data as SelfUpdateProgress));
-  const offNotes = Events.On('launcher:release_notes', (event) => releaseNotes.set(event.data as ReleaseNotes));
+  const offNotes = Events.On('launcher:release_notes', (event) => releaseNotes.set(toReleaseNotes(event.data)));
 
   return () => {
     offStatus();

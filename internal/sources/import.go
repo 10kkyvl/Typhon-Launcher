@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,13 +18,11 @@ const maxRemovedReleases = 5000
 
 type matcher interface {
 	ResolveAll(queries []catalog.Query) []catalog.Match
-	Provision(queries []catalog.Query) (map[string]catalog.Game, error)
 	Epoch() uint64
 }
 
 func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Release {
-	out := make([]*Release, 0, len(entries))
-	seen := make(map[string]bool, len(entries))
+	parsedEntries := make([]*Release, 0, len(entries))
 	for _, e := range entries {
 		parsed := titles.Parse(e.Title)
 		kind := KindRelease
@@ -43,6 +40,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		}
 		r := &Release{
 			SourceID:        sourceID,
+			DistributionID:  e.DistributionID,
 			Kind:            kind,
 			RawTitle:        e.Title,
 			Title:           base,
@@ -74,6 +72,27 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 				break
 			}
 		}
+		parsedEntries = append(parsedEntries, r)
+	}
+
+	// A line identifier must point to one current full release (or one exact
+	// patch transition). If a feed assigns it to competing entries, treating
+	// either one as the installed distribution would be an unsafe guess.
+	distributionCounts := make(map[string]int, len(parsedEntries))
+	for _, r := range parsedEntries {
+		if r.DistributionID != "" {
+			distributionCounts[r.identity()]++
+		}
+	}
+	for _, r := range parsedEntries {
+		if r.DistributionID != "" && distributionCounts[r.identity()] > 1 {
+			r.DistributionID = ""
+		}
+	}
+
+	out := make([]*Release, 0, len(parsedEntries))
+	seen := make(map[string]bool, len(parsedEntries))
+	for _, r := range parsedEntries {
 		key := r.identity()
 		if seen[key] {
 			continue
@@ -87,8 +106,23 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {
 	var summary Summary
 	index := make(map[string]*Release, len(existing))
+	legacyIndex := make(map[string]*Release, len(existing))
+	ambiguousLegacy := make(map[string]bool)
+	incomingLegacyCounts := make(map[string]int, len(incoming))
+	for _, r := range incoming {
+		incomingLegacyCounts[r.legacyIdentity()]++
+	}
 	for _, r := range existing {
 		index[r.identity()] = r
+		if r.DistributionID != "" {
+			continue
+		}
+		key := r.legacyIdentity()
+		if legacyIndex[key] != nil {
+			ambiguousLegacy[key] = true
+		} else {
+			legacyIndex[key] = r
+		}
 	}
 
 	present := make(map[string]bool, len(incoming))
@@ -97,6 +131,15 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		key := next.identity()
 		present[key] = true
 		current, ok := index[key]
+		// A source can add distributionId to an existing entry without
+		// changing its torrent. The exact former identity is the only safe
+		// migration path; title/game/repacker similarities are deliberately
+		// not used here.
+		if !ok && next.DistributionID != "" && incomingLegacyCounts[next.legacyIdentity()] == 1 &&
+			!ambiguousLegacy[next.legacyIdentity()] {
+			current = legacyIndex[next.legacyIdentity()]
+			ok = current != nil
+		}
 		if !ok {
 			next.ID = catalog.NewID()
 			next.New = !initial
@@ -123,6 +166,7 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 			}
 		}
 		current.RawTitle = next.RawTitle
+		current.DistributionID = next.DistributionID
 		current.Kind = next.Kind
 		current.Title = next.Title
 		current.NormalizedTitle = next.NormalizedTitle
@@ -195,7 +239,8 @@ func evictStaleRemoved(list []*Release) []*Release {
 }
 
 func changed(current, next *Release) bool {
-	return current.RawTitle != next.RawTitle ||
+	return current.DistributionID != next.DistributionID ||
+		current.RawTitle != next.RawTitle ||
 		current.Kind != next.Kind ||
 		current.Version != next.Version ||
 		current.FromVersion != next.FromVersion ||
@@ -268,42 +313,6 @@ func applyMatches(m matcher, list []*Release) error {
 		r.MatchEpoch = epoch
 	}
 
-	pending := make([]catalog.Query, 0)
-	pendingSeen := map[string]bool{}
-	for _, r := range targets {
-		if r.MatchStatus != catalog.StatusUnmatched || r.NormalizedTitle == "" {
-			continue
-		}
-		if pendingSeen[r.NormalizedTitle] {
-			continue
-		}
-		pendingSeen[r.NormalizedTitle] = true
-		pending = append(pending, catalog.Query{Title: r.Title, Normalized: r.NormalizedTitle, Year: r.Year})
-	}
-	if len(pending) == 0 {
-		return nil
-	}
-	provisioned, err := m.Provision(pending)
-	if err != nil {
-		return fmt.Errorf("provision matched games: %w", err)
-	}
-	for _, r := range targets {
-		if r.MatchStatus != catalog.StatusUnmatched {
-			continue
-		}
-		game, ok := provisioned[r.NormalizedTitle]
-		if !ok {
-			continue
-		}
-		id := game.ID
-		r.CanonicalGameID = &id
-		r.MatchStatus = catalog.StatusMatched
-		r.MatchConfidence = 1
-		r.MatchMethod = string(catalog.MethodProvisional)
-		// Provision добавляет игры в каталог, то есть двигает эпоху: без
-		// пересчёта эти релизы матчились бы заново на следующем же рефетче.
-		r.MatchEpoch = m.Epoch()
-	}
 	return nil
 }
 
@@ -312,7 +321,7 @@ func applyMatches(m matcher, list []*Release) error {
 // пересчитывается на каждом обновлении, точный и ручной — нет.
 func stableMatch(method string) bool {
 	switch catalog.Method(method) {
-	case catalog.MethodExactTitle, catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodProvisional:
+	case catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodExactTitle:
 		return true
 	}
 	return false

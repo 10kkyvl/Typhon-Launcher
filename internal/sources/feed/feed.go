@@ -23,16 +23,19 @@ var (
 )
 
 type Entry struct {
-	Title       string
-	Game        string
-	Type        string
-	FromVersion string
-	ToVersion   string
-	Sequence    int
-	URIs        []string
-	UploadedAt  *time.Time
-	Size        int64
-	SizeUnknown bool
+	// DistributionID identifies one update line inside a source. Feed authors
+	// keep it stable when that distribution changes title, version or torrent.
+	DistributionID string
+	Title          string
+	Game           string
+	Type           string
+	FromVersion    string
+	ToVersion      string
+	Sequence       int
+	URIs           []string
+	UploadedAt     *time.Time
+	Size           int64
+	SizeUnknown    bool
 }
 
 type Feed struct {
@@ -53,13 +56,14 @@ type rawFeed struct {
 }
 
 type rawEntry struct {
-	Title       string `json:"title"`
-	Game        string `json:"game"`
-	Type        string `json:"type"`
-	FromVersion string `json:"fromVersion"`
-	ToVersion   string `json:"toVersion"`
-	Sequence    *int   `json:"sequence"`
-	Order       *int   `json:"order"`
+	DistributionID string `json:"distributionId"`
+	Title          string `json:"title"`
+	Game           string `json:"game"`
+	Type           string `json:"type"`
+	FromVersion    string `json:"fromVersion"`
+	ToVersion      string `json:"toVersion"`
+	Sequence       *int   `json:"sequence"`
+	Order          *int   `json:"order"`
 
 	URIs       []string        `json:"uris"`
 	URI        string          `json:"uri"`
@@ -158,6 +162,14 @@ func trimGame(raw string) string {
 		return ""
 	}
 	return name
+}
+
+func trimDistributionID(raw string) string {
+	id := strings.TrimSpace(raw)
+	if utf8.RuneCountInString(id) > MaxDistributionIDLen {
+		return ""
+	}
+	return id
 }
 
 func sequenceOf(re rawEntry) int {
@@ -326,10 +338,11 @@ func Parse(data []byte) (Feed, error) {
 			wc.badPatch++
 			continue
 		}
+		distributionID := trimDistributionID(re.DistributionID)
 
 		sortedURIs := append([]string(nil), uris...)
 		sort.Strings(sortedURIs)
-		key := entryType + "\x1f" + title + "\x1f" + strings.Join(sortedURIs, "\x1f")
+		key := distributionID + "\x1f" + entryType + "\x1f" + title + "\x1f" + strings.Join(sortedURIs, "\x1f")
 		if seen[key] {
 			wc.duplicates++
 			continue
@@ -337,16 +350,17 @@ func Parse(data []byte) (Feed, error) {
 		seen[key] = true
 
 		entries = append(entries, Entry{
-			Title:       title,
-			Game:        trimGame(re.Game),
-			Type:        entryType,
-			FromVersion: from,
-			ToVersion:   to,
-			Sequence:    sequenceOf(re),
-			URIs:        uris,
-			UploadedAt:  uploadedAt,
-			Size:        size,
-			SizeUnknown: unknownSize,
+			DistributionID: distributionID,
+			Title:          title,
+			Game:           trimGame(re.Game),
+			Type:           entryType,
+			FromVersion:    from,
+			ToVersion:      to,
+			Sequence:       sequenceOf(re),
+			URIs:           uris,
+			UploadedAt:     uploadedAt,
+			Size:           size,
+			SizeUnknown:    unknownSize,
 		})
 	}
 	if len(entries) == 0 {
@@ -379,6 +393,7 @@ func Fingerprint(f Feed) string {
 		uris := append([]string(nil), e.URIs...)
 		sort.Strings(uris)
 		parts = append(parts, strings.Join([]string{
+			e.DistributionID,
 			e.Title,
 			e.Game,
 			e.Type,

@@ -34,6 +34,7 @@
   let query = $state('');
   let searchResults = $state<CatalogGame[]>([]);
   let searching = $state(false);
+  let searchError = $state('');
   let submitting = $state(false);
   let searchToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -42,6 +43,10 @@
     const isOpen = open;
     const current = release;
     untrack(() => {
+      clearTimeout(searchTimer);
+      searchToken += 1;
+      searching = false;
+      searchError = '';
       selectedGameId = null;
       query = '';
       searchResults = [];
@@ -63,19 +68,24 @@
 
   function onQueryInput() {
     clearTimeout(searchTimer);
+    const token = ++searchToken;
+    searching = false;
+    searchError = '';
     const value = query.trim();
     if (!value) {
       searchResults = [];
       return;
     }
     searchTimer = setTimeout(async () => {
-      const token = ++searchToken;
       searching = true;
       try {
         const result = await searchGames(value);
         if (token === searchToken) searchResults = result;
-      } catch {
-        if (token === searchToken) searchResults = [];
+      } catch (err) {
+        if (token === searchToken) {
+          searchResults = [];
+          searchError = errorMessage(err);
+        }
       } finally {
         if (token === searchToken) searching = false;
       }
@@ -175,6 +185,9 @@
         <input class="input" type="text" placeholder={msg('modals.releaseMatchNamePlaceholder')} bind:value={query} oninput={onQueryInput} />
         {#if searching}
           <p class="muted">{msg('modals.releaseMatchSearching')}</p>
+        {:else if searchError}
+          <p class="muted" role="alert">{searchError}</p>
+          <Button size="sm" onclick={onQueryInput}>{msg('common.retry')}</Button>
         {:else if searchResults.length > 0}
           <div class="candidates">
             {#each searchResults as game (game.id)}

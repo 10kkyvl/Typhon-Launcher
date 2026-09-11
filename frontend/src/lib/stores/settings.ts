@@ -1,3 +1,4 @@
+import { applyPersonalAccent } from '../theme/apply';
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
@@ -9,6 +10,7 @@ export const settings = writable<Settings | null>(null);
 
 settings.subscribe((value) => {
   if (!value) return;
+  applyPersonalAccent(value.accentColor ?? '');
   applyLanguage(value.language);
   document.documentElement.style.setProperty('--ui-scale', String(value.uiScale));
   document.documentElement.classList.toggle('no-anim', !value.animationsEnabled);

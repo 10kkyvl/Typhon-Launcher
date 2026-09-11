@@ -1,6 +1,7 @@
 <script lang="ts">
+  import AccentPicker from './AccentPicker.svelte';
   import { msg } from '../../lib/i18n';
-  import { themeDisplayName, themeVars } from '../../lib/theme/apply';
+  import { themeDisplayName, personalThemeVars, displayedAccent } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -73,7 +74,10 @@
   }
 
   const previewSource = $derived(draft ?? active);
-  const previewVars = $derived(previewSource ? themeVars(previewSource) : {});
+  const previewVars = $derived.by(() => {
+    $displayedAccent;
+    return previewSource ? personalThemeVars(previewSource) : {};
+  });
   const previewStyle = $derived(
     Object.entries(previewVars)
       .map(([name, value]) => `${name}: ${value}`)
@@ -154,122 +158,7 @@
   }
 </script>
 
-<div class="single-column">
-  <Card title={msg('settings.appearanceTab')}>
-    <div class="preset-grid">
-      <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
-        <span class="preset-swatch system"></span>
-        <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
-      </button>
-      {#each list as theme (theme.id)}
-        <button
-          type="button"
-          class="preset"
-          class:selected={$themeMode === 'theme' && active?.id === theme.id}
-          onclick={() => pickTheme(theme)}
-        >
-          <span
-            class="preset-swatch"
-            style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
-          ></span>
-          <span class="preset-name">{themeDisplayName(theme)}</span>
-          {#if !theme.builtIn}
-            <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
-          {/if}
-        </button>
-      {/each}
-    </div>
-    <div class="row">
-      <div class="row-text">
-        <span class="row-label">{msg('settings.appearanceImportLabel')}</span>
-        <span class="row-sub">{msg('settings.appearanceImportSub')}</span>
-      </div>
-      <Button size="sm" disabled={importing} onclick={runImport}>
-        {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
-      </Button>
-    </div>
-  </Card>
-
-  {#if draft}
-    <Card title={msg('settings.appearanceEditingCardTitle', { name: themeDisplayName(draft) })}>
-      {#if draft.builtIn}
-        <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
-      {/if}
-      <div class="editor-layout">
-        <div class="editor-fields">
-          <label class="field">
-            <span class="row-label">{msg('settings.appearanceNameFieldLabel')}</span>
-            <input class="input" type="text" bind:value={draftName} />
-          </label>
-
-          <div class="token-rows">
-            {#each Object.keys(draft.tokens) as name (name)}
-              <div class="token-row">
-                <span class="token-name">{name}</span>
-                {#if isColorValue(draft.tokens[name] ?? '')}
-                  <input
-                    class="color-input"
-                    type="color"
-                    value={draft.tokens[name]}
-                    oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
-                  />
-                {/if}
-                <input
-                  class="input sm token-value"
-                  type="text"
-                  value={draft.tokens[name] ?? ''}
-                  oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
-                />
-              </div>
-            {/each}
-          </div>
-
-          <button type="button" class="advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
-            {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
-          </button>
-          {#if advancedOpen}
-            <label class="field">
-              <span class="row-label">{msg('settings.appearanceCustomCssLabel')}</span>
-              <textarea class="textarea" rows="8" bind:value={cssDraft}></textarea>
-            </label>
-          {/if}
-
-          {#if errors.length > 0}
-            <ul class="errors">
-              {#each errors as error}
-                <li>{error}</li>
-              {/each}
-            </ul>
-          {/if}
-
-          <div class="editor-actions">
-            <Button size="sm" disabled={saving} onclick={saveDraft}>
-              {saving ? msg('settings.appearanceSavingEllipsis') : msg('common.save')}
-            </Button>
-            <Button size="sm" variant="secondary" disabled={exporting} onclick={runExport}>
-              {exporting ? msg('settings.appearanceExportingEllipsis') : msg('settings.appearanceExportButton')}
-            </Button>
-            {#if !draft.builtIn}
-              <Button size="sm" variant="danger" disabled={deleting} onclick={removeDraft}>
-                {deleting ? msg('settings.appearanceDeletingEllipsis') : msg('common.delete')}
-              </Button>
-            {/if}
-          </div>
-        </div>
-
-        <div class="editor-preview">
-          <Card surface="panel">
-            <div class="preview" style={previewStyle}>
-              <span class="preview-title">Typhon</span>
-              <span class="preview-sub">{msg('settings.appearancePreviewSub')}</span>
-              <button type="button" class="preview-btn">{msg('settings.appearancePreviewButtonLabel')}</button>
-            </div>
-          </Card>
-        </div>
-      </div>
-    </Card>
-  {/if}
-
+{#snippet resetCard()}
   <Card title={msg('settings.appearanceResetCardTitle')}>
     <div class="row">
       <div class="row-text">
@@ -279,6 +168,133 @@
       <Button size="sm" variant="danger" onclick={askReset}>{msg('settings.appearanceResetButton')}</Button>
     </div>
   </Card>
+{/snippet}
+
+<div class="settings-grid">
+  <div class="settings-column">
+    <AccentPicker />
+    <Card title={msg('settings.appearanceTab')}>
+      <div class="preset-grid">
+        <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
+          <span class="preset-swatch system"></span>
+          <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
+        </button>
+        {#each list as theme (theme.id)}
+          <button
+            type="button"
+            class="preset"
+            class:selected={$themeMode === 'theme' && active?.id === theme.id}
+            onclick={() => pickTheme(theme)}
+          >
+            <span
+              class="preset-swatch"
+              style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
+            ></span>
+            <span class="preset-name">{themeDisplayName(theme)}</span>
+            {#if !theme.builtIn}
+              <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+      <div class="row">
+        <div class="row-text">
+          <span class="row-label">{msg('settings.appearanceImportLabel')}</span>
+          <span class="row-sub">{msg('settings.appearanceImportSub')}</span>
+        </div>
+        <Button size="sm" disabled={importing} onclick={runImport}>
+          {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
+        </Button>
+      </div>
+    </Card>
+
+    {#if draft}
+      {@render resetCard()}
+    {/if}
+  </div>
+  <div class="settings-column">
+    {#if draft}
+      <Card title={msg('settings.appearanceEditingCardTitle', { name: themeDisplayName(draft) })}>
+        {#if draft.builtIn}
+          <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
+        {/if}
+        <div class="editor-layout">
+          <div class="editor-fields">
+            <label class="field">
+              <span class="row-label">{msg('settings.appearanceNameFieldLabel')}</span>
+              <input class="input" type="text" bind:value={draftName} />
+            </label>
+
+            <div class="token-rows">
+              {#each Object.keys(draft.tokens) as name (name)}
+                <div class="token-row">
+                  <span class="token-name">{name}</span>
+                  {#if isColorValue(draft.tokens[name] ?? '')}
+                    <input
+                      class="color-input"
+                      type="color"
+                      value={draft.tokens[name]}
+                      oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                    />
+                  {/if}
+                  <input
+                    class="input sm token-value"
+                    type="text"
+                    value={draft.tokens[name] ?? ''}
+                    oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                  />
+                </div>
+              {/each}
+            </div>
+
+            <button type="button" class="advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
+              {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
+            </button>
+            {#if advancedOpen}
+              <label class="field">
+                <span class="row-label">{msg('settings.appearanceCustomCssLabel')}</span>
+                <textarea class="textarea" rows="8" bind:value={cssDraft}></textarea>
+              </label>
+            {/if}
+
+            {#if errors.length > 0}
+              <ul class="errors">
+                {#each errors as error}
+                  <li>{error}</li>
+                {/each}
+              </ul>
+            {/if}
+
+            <div class="editor-actions">
+              <Button size="sm" disabled={saving} onclick={saveDraft}>
+                {saving ? msg('settings.appearanceSavingEllipsis') : msg('common.save')}
+              </Button>
+              <Button size="sm" variant="secondary" disabled={exporting} onclick={runExport}>
+                {exporting ? msg('settings.appearanceExportingEllipsis') : msg('settings.appearanceExportButton')}
+              </Button>
+              {#if !draft.builtIn}
+                <Button size="sm" variant="danger" disabled={deleting} onclick={removeDraft}>
+                  {deleting ? msg('settings.appearanceDeletingEllipsis') : msg('common.delete')}
+                </Button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="editor-preview">
+            <Card surface="panel">
+              <div class="preview" style={previewStyle}>
+                <span class="preview-title">Typhon</span>
+                <span class="preview-sub">{msg('settings.appearancePreviewSub')}</span>
+                <button type="button" class="preview-btn">{msg('settings.appearancePreviewButtonLabel')}</button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </Card>
+    {:else}
+      {@render resetCard()}
+    {/if}
+  </div>
 </div>
 
 {#if pending}
@@ -286,13 +302,6 @@
 {/if}
 
 <style>
-  .single-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    max-width: 96rem;
-  }
-
   .hint {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -479,10 +488,12 @@
 
   .editor-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
   .editor-preview {
+    order: -1;
     min-width: 0;
   }
 
@@ -512,15 +523,18 @@
     padding: 0 1.5rem;
     height: var(--control-md);
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-on, #fff);
     border-radius: var(--radius-md);
     font-size: var(--font-sm);
     font-weight: 500;
   }
 
-  @media (min-width: 1200px) {
+  @container settings-card (min-width: 76rem) {
+    .editor-preview {
+      order: 0;
+    }
     .editor-layout {
-      grid-template-columns: 1fr 32rem;
+      grid-template-columns: minmax(0, 1fr) 28rem;
     }
   }
 </style>

@@ -6,7 +6,7 @@ import (
 )
 
 func patch(id, from, to string, size int64) Patch {
-	return Patch{ID: id, FromVersion: from, ToVersion: to, ReleaseID: id, Size: size}
+	return Patch{ID: id, FromVersion: from, ToVersion: to, ReleaseID: id, SourceID: "src", DistributionID: "main", Size: size}
 }
 
 func TestFindPatchPathPrefersCheapestChain(t *testing.T) {

@@ -14,7 +14,9 @@ func TestRegressionRepairDestroysRollback(t *testing.T) {
 	h.withTorrent(damagedTorrentReport())
 	old := h.installDir + previousSuffix
 	writeFile(t, old, "game.exe", "PREVIOUS VERSION")
-	h.service.registerRollback(h.library.games[0], old)
+	if err := h.service.registerRollback(h.library.games[0], old); err != nil {
+		t.Fatal(err)
+	}
 	if err := h.service.VerifyGame("local-1"); err != nil {
 		t.Fatal(err)
 	}

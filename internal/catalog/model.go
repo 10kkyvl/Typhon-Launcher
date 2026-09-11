@@ -12,27 +12,36 @@ func (e ExternalIDs) empty() bool {
 	return e.Steam == "" && e.IGDB == "" && e.GOG == ""
 }
 
+// Game stores both the server projection and local provider evidence. The
+// latter is persisted for matching across incomplete remote pages but is
+// stripped from public remote page responses.
 type Game struct {
-	ID                string      `json:"id"`
-	Title             string      `json:"title"`
-	SortTitle         string      `json:"sortTitle"`
-	ReleaseYear       *int        `json:"releaseYear,omitempty"`
-	ReleaseDate       *time.Time  `json:"releaseDate,omitempty"`
-	Summary           string      `json:"summary,omitempty"`
-	Developer         string      `json:"developer,omitempty"`
-	Publisher         string      `json:"publisher,omitempty"`
-	Genres            []string    `json:"genres,omitempty"`
-	Themes            []string    `json:"themes,omitempty"`
-	Platforms         []string    `json:"platforms,omitempty"`
-	GameType          string      `json:"gameType,omitempty"`
-	ExternalIDs       ExternalIDs `json:"externalIds"`
-	Aliases           []string    `json:"aliases,omitempty"`
-	CoverAssetID      string      `json:"coverAssetId,omitempty"`
-	HeroAssetID       string      `json:"heroAssetId,omitempty"`
-	MetadataUpdatedAt *time.Time  `json:"metadataUpdatedAt,omitempty"`
-	MetadataPartial   bool        `json:"metadataPartial,omitempty"`
-	Provisional       bool        `json:"provisional,omitempty"`
-	CreatedAt         time.Time   `json:"createdAt"`
+	AliasIDs          []string            `json:"aliasIds,omitempty"`
+	ProviderLinks     map[string][]string `json:"providerLinks,omitempty"`
+	ServerID          string              `json:"serverId,omitempty"`
+	CoverURL          string              `json:"coverUrl,omitempty"`
+	ID                string              `json:"id"`
+	Title             string              `json:"title"`
+	SortTitle         string              `json:"sortTitle"`
+	ReleaseYear       *int                `json:"releaseYear,omitempty"`
+	ReleaseDate       *time.Time          `json:"releaseDate,omitempty"`
+	Summary           string              `json:"summary,omitempty"`
+	Developer         string              `json:"developer,omitempty"`
+	Publisher         string              `json:"publisher,omitempty"`
+	Genres            []string            `json:"genres,omitempty"`
+	Themes            []string            `json:"themes,omitempty"`
+	Platforms         []string            `json:"platforms,omitempty"`
+	GameType          string              `json:"gameType,omitempty"`
+	ExternalIDs       ExternalIDs         `json:"externalIds"`
+	Aliases           []string            `json:"aliases,omitempty"`
+	LocalExternalIDs  ExternalIDs         `json:"localExternalIds,omitempty"`
+	CoverAssetID      string              `json:"coverAssetId,omitempty"`
+	HeroAssetID       string              `json:"heroAssetId,omitempty"`
+	MetadataLanguage  string              `json:"metadataLanguage,omitempty"`
+	MetadataUpdatedAt *time.Time          `json:"metadataUpdatedAt,omitempty"`
+	MetadataPartial   bool                `json:"metadataPartial,omitempty"`
+	Provisional       bool                `json:"provisional,omitempty"`
+	CreatedAt         time.Time           `json:"createdAt"`
 }
 
 type MatchOverride struct {

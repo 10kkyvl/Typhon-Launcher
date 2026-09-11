@@ -3,6 +3,7 @@ import type { ErrLibraryKey } from '../ru/errLibrary';
 
 export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.no_install_dir': 'The game has no install directory set',
+  'library.installation_changed': 'The game folder or executable changed during the update. Please try again',
   'library.game_not_found': 'Game not found',
   'library.no_canonical_id': 'No catalog game id given',
   'library.no_catalog_title': 'No game title given',
@@ -24,6 +25,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.not_installed': 'The game is not installed',
   'library.executable_missing': 'The executable file no longer exists',
   'library.runtime_failed': 'Could not prepare the launch environment',
+  'library.launch_cancelled': 'Launch cancelled',
   'library.launch_failed': 'Could not start the game',
   'library.shortcut_unsupported': 'Shortcuts are only supported on Windows',
   'library.no_shortcut_executable': 'The game has no executable set',

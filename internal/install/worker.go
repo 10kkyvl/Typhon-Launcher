@@ -25,7 +25,9 @@ var errWorkerStatePathUnavailable = errors.New("путь состояния во
 // тихий прогон установщика: воркер получает только эти данные, остальное
 // состояние сервиса ему недоступно и не нужно.
 type workerSpec struct {
-	ID string `json:"id"`
+	BrokerSignature string `json:"brokerSignature,omitempty"`
+	InstallerSHA256 string `json:"installerSHA256,omitempty"`
+	ID              string `json:"id"`
 	// Run отличает прогоны одного установочного задания. Файл состояния один
 	// на всю цепочку установщиков, и без него оставшийся от предыдущего
 	// Done: true был бы прочитан как результат следующего прогона: воркер

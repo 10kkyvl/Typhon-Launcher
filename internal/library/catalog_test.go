@@ -183,3 +183,22 @@ func TestRegisterInstalledRevivesCatalogOnlyRecord(t *testing.T) {
 		t.Fatalf("games = %+v, want exactly one", got)
 	}
 }
+
+func TestAddingRedirectedCatalogIdentityKeepsPersonalRecord(t *testing.T) {
+	s, err := NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.AddCatalogGame("old", "Official title", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetCanonicalIdentity(func(a, b string) bool { return a == "old" && b == "canonical" })
+	after, err := s.AddCatalogGame("canonical", "Official title", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ID != before.ID || after.CanonicalGameID != "old" {
+		t.Fatalf("personal reference replaced: %+v", after)
+	}
+}

@@ -111,6 +111,9 @@ func (s *Service) detectTick(ctx context.Context) {
 
 	s.mu.Lock()
 	for id, proc := range matches {
+		if s.starting[id] != nil {
+			continue
+		}
 		if sess, ok := s.running[id]; ok {
 			sess.lastSeen = now
 			// Сессия, запущенная лаунчером, своего createdAt не знает:

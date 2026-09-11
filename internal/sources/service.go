@@ -96,6 +96,15 @@ func NewService(settingsService *settings.Service, cat *catalog.Service) (*Servi
 	return newServiceAt(dir, settingsService, cat)
 }
 
+// NewServiceAt builds a source service whose state is isolated under dir.
+// It is useful for integration checks and other hosts that provide their own
+// configuration root instead of the desktop application's global one.
+//
+//wails:ignore
+func NewServiceAt(dir string, cat *catalog.Service) (*Service, error) {
+	return newServiceAt(dir, nil, cat)
+}
+
 func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Service) (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("sources path unavailable")

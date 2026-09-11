@@ -1,4 +1,6 @@
 import { Service as MetadataService } from '../../../bindings/typhon/internal/metadata';
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { inWails } from './backend';
 import type { CatalogGame } from './sources';
 
@@ -41,6 +43,15 @@ export interface MetadataView {
   match: MetadataMatch;
 }
 
+let languageQueue: Promise<void> = Promise.resolve();
+locale.subscribe((language) => {
+  if (inWails) languageQueue = languageQueue.catch(() => {}).then(() => MetadataService.SetLanguage(language));
+});
+async function syncLanguage() {
+  await languageQueue;
+  await MetadataService.SetLanguage(get(locale));
+}
+
 const unavailable = () => new Error('unavailable in browser');
 
 const emptyView = (gameId: string): MetadataView => ({
@@ -56,6 +67,7 @@ const emptyView = (gameId: string): MetadataView => ({
 
 export async function isMetadataAvailable(): Promise<boolean> {
   if (!inWails) return false;
+  await syncLanguage();
   try {
     return await MetadataService.Available();
   } catch {
@@ -65,6 +77,7 @@ export async function isMetadataAvailable(): Promise<boolean> {
 
 export async function getMetadataView(gameId: string): Promise<MetadataView> {
   if (!inWails) return emptyView(gameId);
+  await syncLanguage();
   try {
     return (await MetadataService.GetView(gameId)) as unknown as MetadataView;
   } catch {
@@ -74,6 +87,7 @@ export async function getMetadataView(gameId: string): Promise<MetadataView> {
 
 export async function getGameArt(gameIds: string[]): Promise<Record<string, GameArt>> {
   if (!inWails || gameIds.length === 0) return {};
+  await syncLanguage();
   try {
     return ((await MetadataService.GetArt(gameIds)) ?? {}) as unknown as Record<string, GameArt>;
   } catch {
@@ -83,36 +97,43 @@ export async function getGameArt(gameIds: string[]): Promise<Record<string, Game
 
 export async function ensureArt(gameIds: string[]): Promise<string[]> {
   if (!inWails || gameIds.length === 0) return gameIds;
+  await syncLanguage();
   return (await MetadataService.EnsureArt(gameIds)) ?? [];
 }
 
 export async function findMetadataCandidates(gameId: string): Promise<MetadataCandidate[]> {
   if (!inWails) return [];
+  await syncLanguage();
   return ((await MetadataService.FindCandidates(gameId)) ?? []) as unknown as MetadataCandidate[];
 }
 
 export async function searchMetadataCandidates(query: string): Promise<MetadataCandidate[]> {
   if (!inWails) return [];
+  await syncLanguage();
   return ((await MetadataService.SearchCandidates(query)) ?? []) as unknown as MetadataCandidate[];
 }
 
 export async function applyMetadataMatch(gameId: string, providerId: string): Promise<MetadataView> {
   if (!inWails) throw unavailable();
+  await syncLanguage();
   return (await MetadataService.ApplyMatch(gameId, providerId)) as unknown as MetadataView;
 }
 
 export async function dismissMetadataMatch(gameId: string): Promise<MetadataView> {
   if (!inWails) throw unavailable();
+  await syncLanguage();
   return (await MetadataService.DismissMatch(gameId)) as unknown as MetadataView;
 }
 
 export async function refreshMetadata(gameId: string): Promise<MetadataView> {
   if (!inWails) throw unavailable();
+  await syncLanguage();
   return (await MetadataService.Refresh(gameId)) as unknown as MetadataView;
 }
 
 export async function ensureMetadataFresh(gameId: string): Promise<boolean> {
   if (!inWails) return false;
+  await syncLanguage();
   try {
     return await MetadataService.EnsureFresh(gameId);
   } catch {

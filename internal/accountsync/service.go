@@ -402,15 +402,19 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 
 	results := make(map[string]gameCompute, len(localByIGDB))
 	for igdbID, local := range localByIGDB {
+		// The library may keep a local installation while acknowledging the
+		// cloud removal. Do not echo that retained installation back as an
+		// active cloud card on this or subsequent syncs.
+		if _, removed := remoteRemovedIDs[igdbID]; removed {
+			continue
+		}
 		remote, hasRemote := remoteByIGDB[igdbID]
 		prev := st.Games[igdbID]
 
 		remoteSeconds := int64(0)
-		remoteOwned := false
 		var remoteLastPlayed *time.Time
 		if hasRemote {
 			remoteSeconds = remote.PlaytimeSeconds
-			remoteOwned = remote.Owned
 			remoteLastPlayed = remote.LastPlayedAt
 		}
 
@@ -442,7 +446,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 				IGDBID:          igdbID,
 				CanonicalGameID: local.CanonicalGameID,
 				PlaytimeSeconds: combinedSeconds,
-				Owned:           local.Owned || remoteOwned,
+				Owned:           local.Owned,
 				LastPlayed:      laterOf(local.LastPlayed, remoteLastPlayed),
 				Favorite:        favorite,
 				FavoriteAt:      favoriteAt,
@@ -544,7 +548,13 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	}
 	for _, rg := range snap.Games {
 		if rg.Removed && rg.RemovedAt != nil {
-			newState.Tombstones[strconv.FormatInt(rg.IGDBID, 10)] = *rg.RemovedAt
+			key := strconv.FormatInt(rg.IGDBID, 10)
+			// A failed local removal is not an acknowledged tombstone: on
+			// the next sync it must be retried, not treated as a manual restore.
+			if _, stillLocal := localByIGDB[key]; stillLocal {
+				continue
+			}
+			newState.Tombstones[key] = *rg.RemovedAt
 		}
 	}
 	for id := range restored {
@@ -613,7 +623,7 @@ func upToDate(st syncState, results map[string]gameCompute, remote map[string]wi
 		if !seen || prev.DeviceSeconds != r.device {
 			return false
 		}
-		if rem.Owned != r.combined.Owned || rem.Favorite != r.combined.Favorite || rem.Status != r.combined.Status {
+		if (r.combined.Owned && !rem.Owned) || rem.Favorite != r.combined.Favorite || rem.Status != r.combined.Status {
 			return false
 		}
 		if !sameStamp(rem.FavoriteAt, r.combined.FavoriteAt) || !sameStamp(rem.StatusAt, r.combined.StatusAt) {

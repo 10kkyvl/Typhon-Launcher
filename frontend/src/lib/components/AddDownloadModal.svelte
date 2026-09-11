@@ -411,6 +411,7 @@
   }
 
   .box.on {
+    color: var(--accent-on, #fff);
     background: var(--accent);
     border-color: var(--accent);
   }

@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/catalog"
 	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/sources"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -563,10 +565,50 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	s, downloads, registrar := newTestService(t)
 	root := t.TempDir()
 	portableSource(t, root, "Game")
+	cat, err := catalog.NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = cat.AddGame(catalog.Game{ID: "canon-1", Title: "Game", ExternalIDs: catalog.ExternalIDs{IGDB: "20"}}); err != nil {
+		t.Fatal(err)
+	}
+	src, err := sources.NewServiceAt(t.TempDir(), cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = src.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := src.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	feedPath := filepath.Join(t.TempDir(), "feed.json")
+	if err = os.WriteFile(feedPath, []byte(`{"version":1,"name":"Install flow fixture","downloads":[{"title":"Game v1.0 [Папка игры]","distributionId":"game-fitgirl","uploadDate":"2026-09-09T12:00:00Z","uris":["magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	added, err := src.AddSourceFile(feedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := src.GetReleasesForGame("canon-1")
+	if len(groups) != 1 {
+		t.Fatalf("catalog release groups %+v", groups)
+	}
+	request, err := src.PrepareDownload(groups[0].Release.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.SourceID != added.ID {
+		t.Fatal("selected source lost")
+	}
+	s.SetTitleResolver(func(origin download.Origin) string { return cat.TitleOf(origin.GameID) })
 	downloads.add("d1", "Game", root)
 	downloads.mu.Lock()
 	d := downloads.items["d1"]
-	d.Origin = download.Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "canon-1"}
+	uploadedAt := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+	d.Origin = download.Origin{ReleaseID: request.ReleaseID, SourceID: request.SourceID, DistributionID: request.DistributionID, ReleaseUploadedAt: request.ReleaseUploadedAt, GameID: request.GameID, Version: request.Version}
 	downloads.items["d1"] = d
 	downloads.mu.Unlock()
 
@@ -575,7 +617,7 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if item.Origin.ReleaseID != "rel-1" {
+	if item.Origin.ReleaseID != request.ReleaseID {
 		t.Fatalf("installation origin = %+v", item.Origin)
 	}
 
@@ -584,7 +626,8 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	if len(games) != 1 {
 		t.Fatalf("registered = %+v", games)
 	}
-	if games[0].ReleaseID != "rel-1" || games[0].SourceID != "src-1" || games[0].CanonicalGameID != "canon-1" {
+	if games[0].ReleaseID != request.ReleaseID || games[0].SourceID != request.SourceID || games[0].DistributionID != "game-fitgirl" ||
+		games[0].ReleaseUploadedAt == nil || !games[0].ReleaseUploadedAt.Equal(uploadedAt) || games[0].CanonicalGameID != "canon-1" || games[0].Version != request.Version {
 		t.Fatalf("registered game = %+v, want provenance from the download", games[0])
 	}
 }

@@ -67,6 +67,7 @@ func (j Job) clone() Job {
 }
 
 var (
+	ErrRollbackAvailable  = uierr.New("relocate.rollback_available", "перед переносом завершите откат или дождитесь удаления предыдущей версии")
 	ErrEmptyInstallDir    = uierr.New("relocate.no_install_dir", "у игры не задан каталог установки")
 	ErrGameRunning        = uierr.New("relocate.game_running", "игра сейчас запущена")
 	ErrUpdateBusy         = uierr.New("relocate.updating", "для игры выполняется обновление")

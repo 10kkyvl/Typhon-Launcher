@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -81,6 +82,7 @@ type librarySource interface {
 	GetInstalledGames() []library.Game
 	GetRunningGames() []string
 	ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error)
+	BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 }
 
@@ -107,13 +109,15 @@ type job struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	settings  *settings.Service
-	library   librarySource
-	releases  releaseSource
-	downloads downloadSource
-	installs  installer
-	store     *store
+	checkMu        sync.Mutex
+	rollbackActive map[string]bool
+	mu             sync.Mutex
+	settings       *settings.Service
+	library        librarySource
+	releases       releaseSource
+	downloads      downloadSource
+	installs       installer
+	store          *store
 
 	updates       map[string]*Update
 	verifications map[string]*VerifyState
@@ -261,6 +265,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 		item.Planning = false
 		item.Plan = nil
+		// Availability and plans are derived from mutable source data. Never
+		// expose a persisted offer before it has passed the current provenance
+		// checks in this process.
+		item.Availability = UpdateAvailability{Kind: KindNone, GameID: item.GameID}
+		if item.State == StateAvailable || item.State == StateReady {
+			item.State = StateIdle
+		}
 		s.updates[item.GameID] = &item
 	}
 	for _, v := range storedVerifications {
@@ -382,20 +393,24 @@ func (s *Service) persistJournalsLocked() error {
 // disk recovery cannot see, so it is rolled back on error (invariant I.4).
 func (s *Service) setJournal(j SwapJournal) error {
 	if g, ok := s.installedGame(j.GameID); ok {
-		j.Original = &library.InstalledUpdate{ID: g.ID, Executable: g.Executable, InstallDir: g.InstallDir, Version: g.Version, VersionSource: g.VersionSource, ReleaseID: g.ReleaseID, SourceID: g.SourceID}
+		j.Original = &library.InstalledUpdate{ID: g.ID, Executable: g.Executable, InstallDir: g.InstallDir, Version: g.Version, VersionSource: g.VersionSource, ReleaseID: g.ReleaseID, SourceID: g.SourceID, DistributionID: g.DistributionID, ReleaseUploadedAt: g.ReleaseUploadedAt}
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	previous, had := s.journals[j.GameID]
+	// An unfinished transaction owns its recovery paths until it is cleared.
+	// Replacing its journal would lose the only record of those files.
+	if s.journals[j.GameID] != nil {
+		return errBusy
+	}
+	if j.Kind == JournalSwap && s.rollbacks[j.GameID] != nil {
+		copyEntry := *s.rollbacks[j.GameID]
+		j.PreviousRollback = &copyEntry
+	}
 	entry := j
 	s.journals[j.GameID] = &entry
 	if err := s.persistJournalsLocked(); err != nil {
-		if had {
-			s.journals[j.GameID] = previous
-		} else {
-			delete(s.journals, j.GameID)
-		}
+		delete(s.journals, j.GameID)
 		return err
 	}
 	return nil
@@ -403,14 +418,47 @@ func (s *Service) setJournal(j SwapJournal) error {
 
 func (s *Service) clearJournal(gameID string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	previous, ok := s.journals[gameID]
 	if !ok {
+		s.mu.Unlock()
 		return nil
+	}
+	if previous.RetainedPrevious != "" && previous.Kind != JournalCleanup {
+		// The install is committed. Persist a cleanup-only phase before removing
+		// the retained backup: recovery must never undo the new install after
+		// some (or all) of that older backup has already been deleted.
+		cleanup := *previous
+		cleanup.Kind = JournalCleanup
+		s.journals[gameID] = &cleanup
+		if err := s.persistJournalsLocked(); err != nil {
+			s.journals[gameID] = previous
+			s.mu.Unlock()
+			return err
+		}
+		previous = &cleanup
+	}
+	s.mu.Unlock()
+	if previous.RetainedPrevious != "" {
+		if err := os.RemoveAll(previous.RetainedPrevious); err != nil {
+			slog.Warn("retained update backup cleanup deferred", "gameId", gameID, "error", err)
+			return nil
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.journals[gameID] == nil {
+		return nil
+	}
+	if s.journals[gameID] != previous {
+		return errBusy
 	}
 	delete(s.journals, gameID)
 	if err := s.persistJournalsLocked(); err != nil {
 		s.journals[gameID] = previous
+		if previous.Kind == JournalCleanup {
+			slog.Warn("update cleanup journal removal deferred", "gameId", gameID, "error", err)
+			return nil
+		}
 		return err
 	}
 	return nil
@@ -540,7 +588,7 @@ func (s *Service) GetUpdates() []Update {
 func (s *Service) Busy(gameID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.jobs[gameID] != nil
+	return s.jobs[gameID] != nil || s.rollbackActive[gameID]
 }
 
 func (s *Service) GetUpdate(gameID string) (Update, error) {
@@ -589,16 +637,19 @@ func (s *Service) running(gameID string) bool {
 
 func installedOf(g library.Game) InstalledGame {
 	return InstalledGame{
-		GameID:          g.ID,
-		CanonicalGameID: g.CanonicalGameID,
-		Title:           g.Title,
-		InstallDir:      g.InstallDir,
-		Executable:      g.Executable,
-		ReleaseID:       g.ReleaseID,
-		SourceID:        g.SourceID,
-		Version:         g.Version,
-		VersionSource:   versionSourceOf(g.VersionSource),
-		SizeBytes:       g.SizeBytes,
+		InstalledAt:       g.InstalledAt,
+		GameID:            g.ID,
+		CanonicalGameID:   g.CanonicalGameID,
+		Title:             g.Title,
+		InstallDir:        g.InstallDir,
+		Executable:        g.Executable,
+		ReleaseID:         g.ReleaseID,
+		SourceID:          g.SourceID,
+		DistributionID:    g.DistributionID,
+		ReleaseUploadedAt: g.ReleaseUploadedAt,
+		Version:           g.Version,
+		VersionSource:     versionSourceOf(g.VersionSource),
+		SizeBytes:         g.SizeBytes,
 	}
 }
 
@@ -647,6 +698,11 @@ func (s *Service) CheckGame(gameID string) (Update, error) {
 }
 
 func (s *Service) checkAll(ctx context.Context) {
+	s.checkMu.Lock()
+	defer s.checkMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 	if s.library == nil {
 		return
 	}
@@ -727,8 +783,9 @@ func (s *Service) check(game library.Game) error {
 	if s.releases == nil {
 		return nil
 	}
-	installed := installedOf(game)
 	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
+	game = s.bindLegacyDistribution(game, list)
+	installed := installedOf(game)
 	availability := ResolveUpdate(installed, list, PatchesFrom(list))
 	availability.GameID = game.ID
 
@@ -743,17 +800,19 @@ func (s *Service) check(game library.Game) error {
 	}
 	busy := current.State == StateDownloading || current.State == StateUpdating
 	previous := current.Availability
+	changed := availabilityChanged(previous, availability)
 	current.Title = game.Title
 	current.CheckedAt = time.Now()
 	current.CanRollback = s.rollbacks[game.ID] != nil
 	if !busy {
 		current.Availability = availability
-		if previous.TargetReleaseID != availability.TargetReleaseID {
+		if changed {
 			current.Plan = nil
+			current.DownloadID = ""
 			current.Error = ""
 		}
 		switch {
-		case availability.Available && current.State != StateReady:
+		case availability.Available && (current.State != StateReady || changed):
 			current.State = StateAvailable
 		case !availability.Available:
 			current.State = StateIdle
@@ -775,13 +834,58 @@ func (s *Service) check(game library.Game) error {
 	s.mu.Unlock()
 
 	emit(eventUpdated, snap)
-	if !busy && availability.Available && previous.TargetReleaseID != availability.TargetReleaseID {
+	if !busy && availability.Available && changed {
 		slog.Info("update available", "game", game.ID, "kind", availability.Kind,
 			"from", availability.InstalledVersion, "to", availability.TargetVersion,
 			"strategy", availability.Strategy, "confidence", availability.Confidence)
 		emit(eventAvailable, snap)
 	}
 	return nil
+}
+
+func availabilityChanged(a, b UpdateAvailability) bool {
+	return a.Available != b.Available || a.Kind != b.Kind ||
+		a.InstalledReleaseID != b.InstalledReleaseID || a.InstalledVersion != b.InstalledVersion ||
+		a.TargetReleaseID != b.TargetReleaseID || a.TargetVersion != b.TargetVersion ||
+		a.SourceID != b.SourceID || a.DistributionID != b.DistributionID ||
+		!samePlanTime(a.InstalledReleaseUploadedAt, b.InstalledReleaseUploadedAt) ||
+		!samePlanTime(a.TargetReleaseUploadedAt, b.TargetReleaseUploadedAt)
+}
+
+func (s *Service) bindLegacyDistribution(game library.Game, releases []sources.Release) library.Game {
+	if game.SourceID == "" || game.ReleaseID == "" || s.library == nil ||
+		(game.DistributionID != "" && game.ReleaseUploadedAt != nil) {
+		return game
+	}
+	var match *sources.Release
+	for i := range releases {
+		r := &releases[i]
+		if r.ID != game.ReleaseID || r.SourceID != game.SourceID || r.DistributionID == "" ||
+			(game.DistributionID != "" && r.DistributionID != game.DistributionID) {
+			continue
+		}
+		if match != nil {
+			return game
+		}
+		match = r
+	}
+	if match == nil {
+		return game
+	}
+	var releaseUploadedAt *time.Time
+	if game.ReleaseUploadedAt == nil && game.Version == releaseVersion(*match) &&
+		(game.InstalledAt.IsZero() || match.UploadedAt == nil || !match.UploadedAt.After(game.InstalledAt)) {
+		releaseUploadedAt = match.UploadedAt
+	}
+	if game.DistributionID != "" && releaseUploadedAt == nil {
+		return game
+	}
+	bound, err := s.library.BindDistribution(game.ID, game.SourceID, game.ReleaseID, match.DistributionID, releaseUploadedAt)
+	if err != nil {
+		slog.Warn("bind legacy installation to distribution", "game", game.ID, "error", err)
+		return game
+	}
+	return bound
 }
 
 // HandleSourcesRefreshed re-resolves availability once new releases arrive.
@@ -843,7 +947,7 @@ func (s *Service) HandleSessionEnded(gameID string, seconds int64) {
 	}
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
-	if !ok || !entry.AwaitLaunch {
+	if !ok || !entry.AwaitLaunch || s.rollbackActive[gameID] || s.journals[gameID] != nil {
 		s.mu.Unlock()
 		return
 	}
@@ -908,6 +1012,9 @@ func (s *Service) sweepPrevious() {
 	removedRollbacks := map[string]*Rollback{}
 	changedUpdates := map[string]Update{}
 	for id, entry := range s.rollbacks {
+		if s.rollbackActive[id] || s.journals[id] != nil {
+			continue
+		}
 		if entry.KeepUntil == nil || now.Before(*entry.KeepUntil) {
 			continue
 		}
@@ -965,12 +1072,26 @@ func (s *Service) sweepPrevious() {
 // cannot be tied to the service's lifecycle simply does not start.
 func (s *Service) beginJob(gameID string) (context.Context, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closing || s.ctx == nil || s.jobs[gameID] != nil {
+	pending := s.journals[gameID]
+	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] || (pending != nil && pending.Kind != JournalCleanup) {
+		s.mu.Unlock()
 		return nil, false
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.jobs[gameID] = &job{cancel: cancel, done: make(chan struct{})}
+	s.mu.Unlock()
+	if pending != nil {
+		// Reserve the job while retrying cleanup so no other transaction can
+		// race its files. A released antivirus handle needs no app restart.
+		err := s.clearJournal(gameID)
+		s.mu.Lock()
+		blocked := err != nil || s.journals[gameID] != nil
+		s.mu.Unlock()
+		if blocked {
+			s.endJob(gameID)
+			return nil, false
+		}
+	}
 	return ctx, true
 }
 

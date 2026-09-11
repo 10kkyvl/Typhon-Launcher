@@ -32,7 +32,12 @@
     flex-shrink: 0;
     transition:
       background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+      color var(--dur) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+
+  .icon-btn:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   .md {

@@ -233,7 +233,9 @@ func (s *Service) removalPlan(gameID string) (removalPlan, error) {
 		marker, err := library.ReadMarker(game.InstallDir)
 		switch {
 		case err == nil:
-			plan.owned = true
+			// Untyped markers can also have been written by relocation of a
+			// manually added folder; they do not authorize recursive deletion.
+			plan.owned = marker.Owned && marker.InstallType != ""
 			plan.installType = marker.InstallType
 			if plan.uninstall.Empty() {
 				plan.uninstall = marker.Uninstall

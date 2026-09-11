@@ -22,6 +22,8 @@ export type DownloadPurpose = 'update' | 'repair';
 export interface DownloadOrigin {
   releaseId?: string;
   sourceId?: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   gameId?: string;
   version?: string;
   purpose?: DownloadPurpose;

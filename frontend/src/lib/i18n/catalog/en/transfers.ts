@@ -216,6 +216,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.movePhaseSummary': '{stage}: {phase}',
   'transfers.moveErrFallback': 'Failed to move',
   'transfers.moveErrGameRunning': 'The game is running. Close it and try again',
+  'transfers.moveErrRollbackAvailable': 'A previous version is kept for rollback. Before moving, roll back or wait for the backup to be removed according to its retention setting.',
   'transfers.moveErrUpdating': 'The game is currently being updated. Wait for it to finish',
   'transfers.moveErrInstalling': 'The game is currently being installed. Wait for it to finish',
   'transfers.moveErrDownloading': 'The game is currently downloading. Wait for it to finish',

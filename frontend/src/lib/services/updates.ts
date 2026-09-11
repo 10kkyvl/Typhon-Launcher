@@ -30,6 +30,10 @@ export interface UpdateAvailability {
   gameId: string;
   installedReleaseId: string;
   targetReleaseId: string;
+  sourceId?: string;
+  distributionId?: string;
+  installedReleaseUploadedAt?: string;
+  targetReleaseUploadedAt?: string;
   installedVersion: string;
   targetVersion: string;
   confidence: number;
@@ -56,6 +60,10 @@ export interface UpdatePlan {
   gameId: string;
   installedReleaseId: string;
   targetReleaseId: string;
+  sourceId: string;
+  distributionId?: string;
+  installedReleaseUploadedAt?: string;
+  targetReleaseUploadedAt?: string;
   installedVersion: string;
   targetVersion: string;
   strategy: StrategyType;

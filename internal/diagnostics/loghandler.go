@@ -66,7 +66,7 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 			e.operation = a.Value.String()
 		case "err", "error":
 			if cause, ok := a.Value.Any().(error); ok {
-				e.code = usagestats.Classify(cause)
+				e.code = diagnosticCode(cause)
 			}
 			e.message = r.Message + ": " + fmt.Sprint(a.Value.Any())
 		}

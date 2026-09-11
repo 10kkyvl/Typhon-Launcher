@@ -2,6 +2,9 @@ package install
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -34,6 +37,7 @@ var (
 )
 
 type broker struct {
+	key  ed25519.PrivateKey
 	dir  string
 	proc workerHandle
 	gone chan struct{}
@@ -118,9 +122,13 @@ func (s *Service) startBroker(d download.Download) error {
 	if err != nil {
 		return fmt.Errorf("путь к лаунчеру: %w", err)
 	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
 	proc, err := startElevatedWorker(runSpec{
 		Path:      exe,
-		Args:      []string{installBrokerFlag, dir},
+		Args:      []string{installBrokerFlag, dir, base64.StdEncoding.EncodeToString(public)},
 		Hidden:    true,
 		ID:        d.ID,
 		StatePath: brokerStateAnchor(dir),
@@ -142,7 +150,7 @@ func (s *Service) startBroker(d download.Download) error {
 		s.brokers = map[string]*broker{}
 	}
 	replaced := s.brokers[d.ID]
-	b := &broker{dir: dir, proc: proc, gone: make(chan struct{})}
+	b := &broker{key: private, dir: dir, proc: proc, gone: make(chan struct{})}
 	s.brokers[d.ID] = b
 	base, baseErr := s.baseLocked()
 	if baseErr != nil {
@@ -241,7 +249,7 @@ func (s *Service) brokerFor(downloadID string) *brokerHandoff {
 	if b == nil || b.dead {
 		return nil
 	}
-	return &brokerHandoff{Dir: b.dir, Gone: b.gone}
+	return &brokerHandoff{Dir: b.dir, Gone: b.gone, Key: b.key}
 }
 
 // DropBroker снимает брокера загрузки: она установлена, отменена или удалена,

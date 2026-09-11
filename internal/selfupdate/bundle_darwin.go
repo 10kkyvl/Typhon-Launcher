@@ -6,12 +6,12 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"typhon/internal/uierr"
 )
@@ -175,28 +175,18 @@ func swapBundle(staged, current string) error {
 	if _, err := os.Stat(staged); err != nil {
 		return fmt.Errorf("selfupdate: новый бандл недоступен: %w", err)
 	}
-	backup := fmt.Sprintf("%s.old-%d", current, time.Now().UnixNano())
-	hadCurrent := true
-	if err := os.Rename(current, backup); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("selfupdate: отодвинуть текущий бандл: %w", err)
-		}
-		hadCurrent = false
+	if _, err := os.Stat(current); errors.Is(err, os.ErrNotExist) {
+		return os.Rename(staged, current)
+	} else if err != nil {
+		return err
 	}
-	if err := os.Rename(staged, current); err != nil {
-		if hadCurrent {
-			if restoreErr := os.Rename(backup, current); restoreErr != nil {
-				return fmt.Errorf("selfupdate: подмена не удалась (%w) и старый бандл не вернулся: %w", err, restoreErr)
-			}
-		}
-		return fmt.Errorf("selfupdate: поставить новый бандл: %w", err)
+	// RENAME_SWAP atomically exchanges both directories. There is no instant
+	// at which current disappears, even if the worker dies immediately after.
+	if err := unix.RenamexNp(staged, current, unix.RENAME_SWAP); err != nil {
+		return fmt.Errorf("selfupdate: атомарная замена бандла: %w", err)
 	}
-	if hadCurrent {
-		// Обновление уже состоялось: оставшийся дубликат — мусор, а не сбой,
-		// поэтому в лог, а не в ошибку.
-		if err := os.RemoveAll(backup); err != nil {
-			slog.Warn("remove replaced bundle", "path", backup, "error", err)
-		}
+	if err := os.RemoveAll(staged); err != nil {
+		slog.Warn("remove replaced bundle", "path", staged, "error", err)
 	}
 	return nil
 }

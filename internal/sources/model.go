@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"strconv"
 	"time"
 
 	"typhon/internal/catalog"
@@ -72,6 +73,7 @@ const (
 type Release struct {
 	ID              string         `json:"id"`
 	SourceID        string         `json:"sourceId"`
+	DistributionID  string         `json:"distributionId,omitempty"`
 	Kind            Kind           `json:"kind,omitempty"`
 	RawTitle        string         `json:"rawTitle"`
 	Title           string         `json:"title"`
@@ -107,6 +109,17 @@ type Release struct {
 }
 
 func (r *Release) identity() string {
+	if r.DistributionID != "" {
+		prefix := "distribution:" + strconv.Itoa(len(r.DistributionID)) + ":" + r.DistributionID
+		if r.Kind == KindPatch {
+			return prefix + "|patch|" + r.FromVersion + "|" + r.ToVersion
+		}
+		return prefix + "|release"
+	}
+	return r.legacyIdentity()
+}
+
+func (r *Release) legacyIdentity() string {
 	if r.InfoHash != "" {
 		return "hash:" + r.InfoHash
 	}
@@ -220,10 +233,12 @@ type ReleaseBatch struct {
 }
 
 type DownloadRequest struct {
-	URI       string `json:"uri"`
-	Name      string `json:"name"`
-	ReleaseID string `json:"releaseId"`
-	SourceID  string `json:"sourceId"`
-	GameID    string `json:"gameId"`
-	Version   string `json:"version"`
+	URI               string     `json:"uri"`
+	Name              string     `json:"name"`
+	ReleaseID         string     `json:"releaseId"`
+	SourceID          string     `json:"sourceId"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	GameID            string     `json:"gameId"`
+	Version           string     `json:"version"`
 }

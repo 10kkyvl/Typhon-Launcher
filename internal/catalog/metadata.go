@@ -15,6 +15,8 @@ var (
 )
 
 type MetadataPatch struct {
+	Language     string
+	SteamID      string
 	IGDBID       string
 	Title        string
 	Summary      string
@@ -37,7 +39,7 @@ func (s *Service) ApplyMetadata(gameID string, patch MetadataPatch) (Game, error
 	if gameID == "" {
 		return Game{}, ErrNoGame
 	}
-	if strings.TrimSpace(patch.IGDBID) == "" {
+	if strings.TrimSpace(patch.IGDBID) == "" && strings.TrimSpace(patch.SteamID) == "" {
 		return Game{}, errNoProvider
 	}
 	if patch.UpdatedAt.IsZero() {
@@ -64,6 +66,7 @@ func (s *Service) ApplyMetadata(gameID string, patch MetadataPatch) (Game, error
 }
 
 func (s *Service) positionLocked(gameID string) (int, error) {
+	gameID = s.resolveIDLocked(gameID)
 	pos, ok := s.idx.byID[gameID]
 	if !ok || pos >= len(s.games) || s.games[pos].ID != gameID {
 		for i := range s.games {
@@ -77,9 +80,21 @@ func (s *Service) positionLocked(gameID string) (int, error) {
 }
 
 func applyPatch(game Game, patch MetadataPatch) Game {
-	game.ExternalIDs.IGDB = strings.TrimSpace(patch.IGDBID)
+	igdbID := strings.TrimSpace(patch.IGDBID)
+	steamID := strings.TrimSpace(patch.SteamID)
+	// A provider response may contain only a Steam id. An empty IGDB field
+	// means "not returned", not "remove the id we already confirmed".
+	if igdbID != "" {
+		if steamID != "" || game.ExternalIDs.IGDB != igdbID {
+			game.ExternalIDs.Steam = steamID
+		}
+		game.ExternalIDs.IGDB = igdbID
+	} else if steamID != "" {
+		game.ExternalIDs.Steam = steamID
+	}
 	game = applyTitle(game, strings.TrimSpace(patch.Title))
 	game.Summary = patch.Summary
+	game.MetadataLanguage = patch.Language
 	game.Developer = patch.Developer
 	game.Publisher = patch.Publisher
 	game.Genres = copyStrings(patch.Genres)
@@ -101,7 +116,7 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 }
 
 func applyTitle(game Game, title string) Game {
-	if title == "" || !game.Provisional {
+	if title == "" || (!game.Provisional && game.ServerID == "") {
 		return game
 	}
 	game.Title = title

@@ -6,6 +6,34 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.6.0 — 2026-09-11
+A Steam and IGDB catalog, personal accent colors, screenshot zoom and more reliable game updates.
+
+### Added
+- A Steam and IGDB game catalog: search and browsing are no longer limited to connected release sources. Filter by platform and entry type: games, bundles and editions
+- Saved catalog pages remain available offline with a stale-data notice. While the server imports the index, the launcher indicates that the catalog is still incomplete
+- Steam is an additional source of descriptions, covers and other game information; details and images load as you browse
+- Personal accent colors: choose a palette preset or preview a custom shade. The accent applies over the selected theme, including light and custom themes
+- Zoom screenshots up to 400%, drag to pan, and adjust zoom with the wheel, slider or “+” and “−” keys; “0” resets the view
+
+### Changed
+- Releases are separate from the official catalog: unknown releases stay in source management, and manual matching applies only to the selected release. Game pages explain when no releases are available
+- Release lists retain original titles to distinguish editions and variants. Game details come from the catalog rather than repack titles
+- Updates and patches must belong to the same distribution and source as the installed game. The source must supply a stable distribution identifier; matching titles, repackers or versions are insufficient. New revisions with an unchanged version number are also considered
+- Settings use an adaptive layout, grouping theme selection, accents and the appearance editor. Controls and image transitions have been refreshed and respect reduced-motion preferences
+- The “What's new” window is wider to make longer changelogs easier to read
+
+### Fixed
+- Game removal requires local proof that Typhon installed it: a cloud flag alone cannot authorize deleting an externally installed game folder and its saves
+- If contact with an installer is lost, its folder is not cleaned up until the process is confirmed stopped; two installations cannot occupy the same folder concurrently
+- Protected recovery after an interrupted game update or failed rollback: new operations cannot overwrite an unfinished recovery journal, and restarting Typhon resumes recovery of both files and the library record
+- macOS self-updates now replace the application atomically: a crash between renames can no longer leave the usual application path empty. This protection applies when updating from 0.6.0 or later
+- With administrator permission granted in advance on Windows, the installer and job parameters are verified before execution: replacement of the file or job after authorization is rejected
+- After navigating between games, a loading failure no longer leaves the previous game's releases on the new page, where they could be downloaded by mistake
+- Fixed critical identity preservation issues in the new catalog: partial Steam/IGDB responses do not erase known identifiers or local matches; index refreshes do not revive removed duplicates, and mapping corrections preserve game ownership of provider links
+- During preparation of the new catalog, fixed indexing stopping at a malformed record, excessive delays after rate limiting, and a separate cover request for every bulk search result
+- Also fixed 39 confirmed non-critical bugs across the launcher, server and website found during verification of this release
+
 ## 0.5.2 — 2026-09-10
 More reliable game installation through CrossOver, clearer log uploads, and activity history preserved after removing a game.
 
@@ -82,7 +110,7 @@ The launcher runs on macOS, downloading is told apart from installing, and games
 
 ### Fixed
 - A game removed from the library on one device came back from another on the next sync: the removal now travels to the server and reaches the other devices, even if there was no network at the moment it was removed
-- One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Папка игры]" the version and the brackets stayed in the name, so every entry counted as its own game
+- One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Game folder]" the version and the brackets stayed in the name, so every entry counted as its own game
 - A 1.8 GB repack was offered as an update to a 9.8 GB installation when both were published on the same day and neither version could be read
 - An install started from a release row lost its version, and updates for that game were never found afterwards
 - The release list labelled "Update" even a release the launcher does not treat as one: those read "New release"

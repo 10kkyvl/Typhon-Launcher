@@ -546,9 +546,9 @@ describe("metaStatus", () => {
       want: "ready",
     },
     {
-      name: "keeps the card quiet for a matched game",
+      name: "offers retry when details of a matched game failed to load",
       input: { available: true, busy: false, match: "failed", resolved: true },
-      want: "ready",
+      want: "failed",
     },
     {
       name: "reports a lookup started by the card itself",
@@ -586,6 +586,12 @@ describe("metaStatus", () => {
       want: "ready",
     },
   ];
+
+  it('shows loading for an identified Steam game while its details are still arriving', () => {
+    expect(metaStatus({available: true, resolved: true, busy: true, match: 'idle'})).toBe('searching');
+    expect(metaStatus({available: true, resolved: true, busy: false, match: 'searching'})).toBe('searching');
+    expect(metaStatus({available: true, resolved: true, busy: false, match: 'idle'})).toBe('ready');
+  });
 
   for (const c of cases) {
     it(c.name, () => {

@@ -266,3 +266,34 @@ func TestApplyMetadataResolvesByExternalID(t *testing.T) {
 		t.Fatalf("resolve = %+v", match)
 	}
 }
+
+func TestSteamPatchNeverStoresSteamAsIGDB(t *testing.T) {
+	g := applyPatch(Game{Title: "Steam game"}, MetadataPatch{SteamID: "620", Title: "Steam game", UpdatedAt: time.Now()})
+	if g.ExternalIDs.IGDB != "" || g.ExternalIDs.Steam != "620" {
+		t.Fatalf("%+v", g.ExternalIDs)
+	}
+	g = applyPatch(g, MetadataPatch{IGDBID: "72", SteamID: "620", Title: "Linked game", UpdatedAt: time.Now()})
+	if g.ExternalIDs.IGDB != "72" || g.ExternalIDs.Steam != "620" {
+		t.Fatalf("%+v", g.ExternalIDs)
+	}
+}
+
+func TestIGDBRefreshPreservesKnownSteamLink(t *testing.T) {
+	g := Game{Title: "Game", ExternalIDs: ExternalIDs{IGDB: "72", Steam: "620"}}
+	g = applyPatch(g, MetadataPatch{IGDBID: "72", Title: "Game", UpdatedAt: time.Now()})
+	if g.ExternalIDs.Steam != "620" {
+		t.Fatal("older server erased known Steam link")
+	}
+	g = applyPatch(g, MetadataPatch{IGDBID: "999", Title: "Different game", UpdatedAt: time.Now()})
+	if g.ExternalIDs.Steam != "" {
+		t.Fatal("manual rematch retained another game's Steam ID")
+	}
+}
+
+func TestProviderTitleUpdatePreservesOfficialParentheses(t *testing.T) {
+	g := Game{ID: "local", ServerID: "canonical", Title: "Old official title"}
+	got := applyTitle(g, "1000 Deaths (Thousand Deaths)")
+	if got.Title != "1000 Deaths (Thousand Deaths)" || got.ID != g.ID || got.ServerID != g.ServerID {
+		t.Fatalf("official title damaged %+v", got)
+	}
+}

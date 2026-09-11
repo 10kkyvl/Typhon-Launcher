@@ -70,8 +70,8 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 		return err
 	}
 	if item.Mode == ModeMove {
-		if err := os.RemoveAll(item.ContentRoot); err != nil {
-			return fmt.Errorf("remove installed source: %w", err)
+		if err := removeInstalledSource(item.ContentRoot); err != nil {
+			slog.Warn("installed successfully, source cleanup incomplete", "path", item.ContentRoot, "error", err)
 		}
 	}
 	return nil
@@ -746,21 +746,23 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		title = item.Name
 	}
 	return s.library.RegisterInstalled(library.InstalledGame{
-		Title:            title,
-		Executable:       item.Executable,
-		InstallDir:       item.Destination,
-		Version:          version,
-		VersionSource:    source,
-		SourceDownloadID: item.DownloadID,
-		ReleaseID:        item.Origin.ReleaseID,
-		SourceID:         item.Origin.SourceID,
-		CanonicalGameID:  item.Origin.GameID,
-		Repacker:         s.repackerOf(item.Origin.ReleaseID),
-		ReleaseVersion:   item.Origin.Version,
-		InstallType:      string(item.Type),
-		Owned:            item.Owned,
-		Uninstall:        item.Uninstall,
-		UninstallUnknown: item.UninstallUnknown,
+		Title:             title,
+		Executable:        item.Executable,
+		InstallDir:        item.Destination,
+		Version:           version,
+		VersionSource:     source,
+		SourceDownloadID:  item.DownloadID,
+		ReleaseID:         item.Origin.ReleaseID,
+		SourceID:          item.Origin.SourceID,
+		DistributionID:    item.Origin.DistributionID,
+		ReleaseUploadedAt: item.Origin.ReleaseUploadedAt,
+		CanonicalGameID:   item.Origin.GameID,
+		Repacker:          s.repackerOf(item.Origin.ReleaseID),
+		ReleaseVersion:    item.Origin.Version,
+		InstallType:       string(item.Type),
+		Owned:             item.Owned,
+		Uninstall:         item.Uninstall,
+		UninstallUnknown:  item.UninstallUnknown,
 	})
 }
 
@@ -953,3 +955,5 @@ func pickInstallDir(dirs []string, candidates []Candidate) string {
 	}
 	return ""
 }
+
+var removeInstalledSource = os.RemoveAll

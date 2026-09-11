@@ -2,6 +2,12 @@ import type { Message } from '../../types';
 import type { UiKey } from '../ru/ui';
 
 export const ui: Record<UiKey, Message> = {
+  'ui.updateDifferentEdition': 'A different edition of the game',
+  'ui.updateEditionUnverified': 'The game edition could not be matched',
+  'ui.updateEditionUnknown': 'The release edition is unspecified',
+  'ui.updateDifferentLanguage': 'The release languages differ from the installed game',
+  'ui.updateReleaseMuchSmaller': 'The release is much smaller than the installed game',
+  'ui.updateCompatibilityReview': 'Check this release’s compatibility',
   'ui.library': 'Library',
   'ui.activity': 'Activity',
   'ui.allDownloads': 'All downloads',
@@ -43,6 +49,11 @@ export const ui: Record<UiKey, Message> = {
   'ui.savesMultipleCandidates': 'Several matching folders were found. Choose the one for “{title}”.',
   'ui.pickAnotherFolder': 'Choose another',
 
+  'ui.imageZoom': 'Zoom',
+  'ui.imageZoomIn': 'Zoom in',
+  'ui.imageZoomOut': 'Zoom out',
+  'ui.imageZoomReset': 'Reset zoom',
+  'ui.imageZoomToggle': 'Zoom image in or out',
   'ui.imageViewer': 'Image viewer',
   'ui.imageUnavailable': 'Image unavailable',
   'ui.previous': 'Previous',
@@ -101,6 +112,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.newRelease': 'new release',
   'ui.readyToInstall': 'Ready to install',
   'ui.versionsNotComparable': 'Versions not comparable',
+  'ui.distributionUpdated': 'Distribution updated',
+  'ui.newDistributionRevisionReason': 'The source published a new revision of your distribution.',
   'ui.calculatingDownloadSize': 'Calculating download size…',
   'ui.downloadLabel': 'Download',
   'ui.method': 'Method',

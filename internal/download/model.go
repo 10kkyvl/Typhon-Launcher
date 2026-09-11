@@ -27,13 +27,15 @@ const (
 )
 
 type Origin struct {
-	ReleaseID    string  `json:"releaseId,omitempty"`
-	SourceID     string  `json:"sourceId,omitempty"`
-	GameID       string  `json:"gameId,omitempty"`
-	Version      string  `json:"version,omitempty"`
-	Purpose      Purpose `json:"purpose,omitempty"`
-	UpdatePlanID string  `json:"updatePlanId,omitempty"`
-	LibraryID    string  `json:"libraryId,omitempty"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	GameID            string     `json:"gameId,omitempty"`
+	Version           string     `json:"version,omitempty"`
+	Purpose           Purpose    `json:"purpose,omitempty"`
+	UpdatePlanID      string     `json:"updatePlanId,omitempty"`
+	LibraryID         string     `json:"libraryId,omitempty"`
 
 	// AutoInstall is a pointer because it has to outlive the global setting:
 	// the download starts now and finishes hours later, and the choice made in

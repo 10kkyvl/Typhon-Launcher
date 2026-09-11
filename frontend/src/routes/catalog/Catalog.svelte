@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List } from '@lucide/svelte';
+  import { createPagePrefetch } from '../../lib/catalog/prefetch';
+  import { loadCatalogContinuation } from '../../lib/catalog/pages';
   import { onDestroy, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -11,22 +14,24 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
+  import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
   import {
     compatOnlyWorking,
-    getGenreFacets,
     queryCatalogGames,
     type CatalogGame,
     type CompatInfo,
     type GenreFacet,
+    type Source,
   } from '../../lib/services/sources';
   import { getAppInfo } from '../../lib/services/system';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
-  import { gameArt, gameInfo, loadArt, requestArt } from '../../lib/stores/metadata';
+  import { gameArt, gameInfo, requestArt } from '../../lib/stores/metadata';
   import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
   import { inview } from '../../lib/utils/inview';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -47,6 +52,7 @@
   };
 
   interface Snapshot {
+    sourceState: Source[] | undefined;
     search: string;
     genre: string;
     sort: Sort;
@@ -55,10 +61,19 @@
     total: number;
     page: number;
     failed: boolean;
+    revision: number;
+    offline: boolean;
+    incomplete: boolean;
+    platform: string;
+    kind: string;
+    facets: GenreFacet[];
+    platforms: GenreFacet[];
   }
 
   const routeKey = currentRouteKey();
   const restored = recallRoute<Snapshot>(routeKey, 'catalog');
+
+  let sourceState = restored?.sourceState;
 
   let search = $state(restored?.search ?? '');
   let genre = $state(restored?.genre ?? '');
@@ -74,7 +89,13 @@
   let loading = $state(!restored);
   let appending = $state(false);
   let failed = $state(restored?.failed ?? false);
-  let facets = $state<GenreFacet[]>([]);
+  let revision = $state(restored?.revision ?? 0);
+  let offline = $state(restored?.offline ?? false);
+  let incomplete = $state(restored?.incomplete ?? false);
+  let facets = $state<GenreFacet[]>(restored?.facets ?? []);
+  let platforms = $state<GenreFacet[]>(restored?.platforms ?? []);
+  let platform = $state(restored?.platform ?? "");
+  let kind = $state(restored?.kind ?? "");
 
   let token = 0;
   let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -88,6 +109,8 @@
   onDestroy(() => {
     clearTimeout(debounce);
     stashRoute(routeKey, 'catalog', {
+      revision, offline, incomplete, platform, kind, facets, platforms,
+      sourceState,
       search,
       genre,
       sort,
@@ -102,7 +125,10 @@
   const installedByGame = $derived.by(() => {
     const map = new Map<string, string>();
     for (const game of $installedGames) {
-      if (game.canonicalGameId) map.set(game.canonicalGameId, game.id);
+      if (game.canonicalGameId) {
+        map.set(game.canonicalGameId, game.id);
+        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+      }
     }
     return map;
   });
@@ -110,7 +136,10 @@
   const libraryByGame = $derived.by(() => {
     const map = new Map<string, string>();
     for (const game of $libraryGames) {
-      if (game.canonicalGameId) map.set(game.canonicalGameId, game.id);
+      if (game.canonicalGameId) {
+        map.set(game.canonicalGameId, game.id);
+        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+      }
     }
     return map;
   });
@@ -123,39 +152,58 @@
 
   const chips = $derived([allGenres, ...facets.filter((f) => f.count > 0).map((f) => f.label)]);
 
-  async function loadFacets() {
-    try {
-      facets = await getGenreFacets();
-    } catch {
-      facets = [];
-    }
-  }
+  const prefetch = createPagePrefetch<Awaited<ReturnType<typeof queryCatalogGames>>>();
 
   async function fetchPage(next: number) {
     const current = ++token;
+    const requestedSources = get(sources);
     loading = true;
     appending = next > 1;
     try {
-      const result = await queryCatalogGames({
+      const request = {
+        revision: next === 1 ? 0 : revision,
         search,
-        genre,
+        genre, platform, kind,
         sort,
         compat: compatOnly ? compatOnlyWorking : '',
         page: next,
         pageSize,
-      });
+      };
+      const continuation = await loadCatalogContinuation(
+        request, items, queryCatalogGames,
+        () => prefetch.take(JSON.stringify(request), () => queryCatalogGames(request)),
+        () => current === token,
+      );
+      const { result, refreshed } = continuation;
       if (current !== token) return;
-      items = next === 1 ? result.items : [...items, ...result.items];
-      compatByGame = next === 1 ? (result.compat ?? {}) : { ...compatByGame, ...(result.compat ?? {}) };
+      sourceState = requestedSources;
+      items = continuation.items;
+      compatByGame = next === 1 || refreshed ? (result.compat ?? {}) : { ...compatByGame, ...(result.compat ?? {}) };
       total = result.total;
       page = result.page;
       failed = false;
-      loadArt(result.items.map((game) => game.id));
+      facets = result.facets ?? [];
+      platforms = result.platforms ?? [];
+      revision = result.revision ?? 0;
+      offline = result.offline ?? false;
+      incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
+      if (!offline && items.length < total) {
+        const upcoming = { ...request, page: page + 1, revision };
+        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+      }
     } catch {
       if (current !== token) return;
+      prefetch.clear();
       if (next === 1) {
         items = [];
         total = 0;
+        page = 0;
+        revision = 0;
+        offline = false;
+        incomplete = false;
+        facets = [];
+        platforms = [];
+        compatByGame = {};
       }
       failed = true;
     } finally {
@@ -167,6 +215,7 @@
   }
 
   function reload() {
+    prefetch.clear();
     page = 0;
     seen.clear();
     fetchPage(1);
@@ -196,33 +245,15 @@
   }
 
   onMount(() => {
-    loadFacets();
-    if (restored) requestArt(items.map((game) => game.id));
-    else reload();
+    if (!restored) reload();
   });
 
   onMount(async () => {
-    try {
-      compatRelevant = (await getAppInfo()).platform === 'darwin';
-    } catch {
-      compatRelevant = false;
-    }
+    try { compatRelevant = (await getAppInfo()).platform === 'darwin'; }
+    catch { compatRelevant = false; }
   });
 
-  onMount(() => {
-    const timer = setInterval(() => {
-      const missing = [...seen].filter((id) => !$gameArt[id]?.cover);
-      if (missing.length > 0) requestArt(missing);
-    }, 20000);
-    return () => clearInterval(timer);
-  });
-
-  function listMeta(game: CatalogGame) {
-    const bits: string[] = [];
-    if (game.releaseYear) bits.push(String(game.releaseYear));
-    if (game.developer) bits.push(game.developer);
-    return bits.join(' · ');
-  }
+  function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
   async function toggleRun(libraryId: string) {
     try {
@@ -268,6 +299,10 @@
       {/if}
     </div>
     <div class="controls">
+      <Select bind:value={platform} width="20rem" onchange={reload}
+        options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
+      <Select bind:value={kind} width="13rem" onchange={reload}
+        options={[{id:'',label:msg('games.catalogGames')},{id:'DLC',label:'DLC'},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
       <DropdownMenu
         items={[
           { id: 'title', label: sortLabels.title },
@@ -302,15 +337,30 @@
     </div>
   </div>
 
+  {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
+  {:else if incomplete}<p class="muted" role="status">{msg('games.catalogIncomplete')}</p>{/if}
+  {#if failed || offline}<Button onclick={reload}>{msg('games.catalogRetry')}</Button>{/if}
+
   {#if items.length === 0}
     {#if loading}
-      <p class="muted">{msg('games.catalogLoadingLabel')}</p>
+      <p class="muted" role="status">{msg('games.catalogLoadingLabel')}</p>
+      <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
+        {#each Array(12) as _}
+          <div class="loading-item">
+            <div class="loading-skeleton loading-cover"></div>
+            <div class="loading-copy">
+              <div class="loading-skeleton loading-title"></div>
+              <div class="loading-skeleton loading-meta"></div>
+            </div>
+          </div>
+        {/each}
+      </div>
     {:else if failed}
       <EmptyState
         title={msg('games.catalogUnavailableTitle')}
         description={msg('games.catalogUnavailableDescription')}
       />
-    {:else if search.trim() || genre}
+    {:else if search.trim() || genre || platform || kind || compatOnly}
       <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
     {:else}
       <EmptyState
@@ -329,7 +379,7 @@
           <GameCard
             id={game.id}
             title={shown.title}
-            cover={$gameArt[game.id]?.cover ?? ''}
+            cover={game.coverUrl || $gameArt[game.id]?.cover || ''}
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={shown.developer ?? ''}
@@ -381,7 +431,7 @@
           onclick={() => navigate('game', { id: game.id })}
         >
           <div class="list-thumb">
-            <Artwork src={$gameArt[game.id]?.cover ?? ''} alt={shown.title} radius="var(--radius-xs)" />
+            <Artwork src={game.coverUrl || $gameArt[game.id]?.cover || ''} alt={shown.title} radius="var(--radius-xs)" />
           </div>
           <span class="list-title">{shown.title}</span>
           <span class="list-meta">{listMeta(shown)}</span>
@@ -393,17 +443,30 @@
     </div>
   {/if}
 
-  {#if items.length > 0 && items.length < total}
+  {#if items.length > 0}
     <div class="more">
-      <Button onclick={() => fetchPage(page + 1)} disabled={loading}>
+      {#if items.length < total}<Button onclick={() => fetchPage(page + 1)} disabled={loading}>
         {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
-      </Button>
+      </Button>{/if}
+      {#if failed}<span class="more-error" role="alert">{msg('games.catalogMoreFailed')}</span>{/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
   {/if}
 </Card>
 
 <style>
+  .more-error { color: var(--danger); }
+  .catalog-skeleton { margin-top: var(--space-4); }
+  .loading-item { min-width: 0; }
+  .loading-cover { aspect-ratio: 3 / 4; border-radius: var(--radius-md); }
+  .loading-copy { margin-top: 0.9rem; }
+  .loading-title { height: 1.6rem; width: 75%; }
+  .loading-meta { height: 1.2rem; width: 45%; margin-top: 0.6rem; }
+  .loading-list { display: grid; gap: var(--space-3); }
+  .loading-list .loading-item { display: flex; align-items: center; gap: var(--space-3); }
+  .loading-list .loading-cover { width: 5rem; flex-shrink: 0; }
+  .loading-list .loading-copy { width: min(32rem, 60%); margin-top: 0; }
+
   .search-row {
     max-width: 46rem;
     margin-bottom: var(--space-4);

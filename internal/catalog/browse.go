@@ -3,6 +3,7 @@ package catalog
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"typhon/internal/titles"
 )
@@ -25,6 +26,9 @@ var genreGroups = []struct {
 }
 
 type GameQuery struct {
+	Platform string `json:"platform"`
+	Kind     string `json:"kind"`
+	Revision int64  `json:"revision"`
 	Search   string `json:"search"`
 	Genre    string `json:"genre"`
 	Sort     string `json:"sort"`
@@ -38,8 +42,20 @@ type GameQuery struct {
 // отсеивать на фронте значит отдавать страницы разной длины.
 const CompatOnlyWorking = "works"
 
+type IndexStatus struct {
+	Provider  string     `json:"provider"`
+	Complete  bool       `json:"complete"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+	Records   int64      `json:"records"`
+}
 type GamePage struct {
-	Items []Game `json:"items"`
+	Facets    []GenreFacet  `json:"facets"`
+	Platforms []GenreFacet  `json:"platforms"`
+	Offline   bool          `json:"offline"`
+	CachedAt  time.Time     `json:"cachedAt"`
+	Revision  int64         `json:"revision"`
+	Providers []IndexStatus `json:"providers"`
+	Items     []Game        `json:"items"`
 	// Compat отдаётся отдельной картой, а не полем Game: общая статистика
 	// приходит с сервера и меняется сама по себе, а Game лежит на диске.
 	Compat   map[string]CompatInfo `json:"compat,omitempty"`
@@ -81,6 +97,12 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	for i := range s.idx.entries {
 		e := &s.idx.entries[i]
 		g := s.idx.games[i]
+		// Redirected records remain in the on-disk catalog for history and
+		// installed-library references, but the public catalog exposes the
+		// canonical card only once.
+		if s.resolveIDLocked(g.ID) != g.ID {
+			continue
+		}
 		if search != "" && !entryMatches(e, g, search, normalized) {
 			continue
 		}
@@ -206,11 +228,15 @@ func (s *Service) GetGames(ids []string) []Game {
 	out := make([]Game, 0, len(ids))
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
-		if id == "" || seen[id] {
+		if id == "" {
 			continue
 		}
-		seen[id] = true
-		game, ok := s.idx.game(id)
+		canonical := s.resolveIDLocked(id)
+		if canonical == "" || seen[canonical] {
+			continue
+		}
+		seen[canonical] = true
+		game, ok := s.idx.game(canonical)
 		if !ok {
 			continue
 		}

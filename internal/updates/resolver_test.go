@@ -16,6 +16,7 @@ func release(id, ver string, size int64) sources.Release {
 	return sources.Release{
 		ID:              id,
 		SourceID:        "src",
+		DistributionID:  "main",
 		Kind:            sources.KindRelease,
 		RawTitle:        "Game " + ver,
 		Title:           "Game",
@@ -37,9 +38,19 @@ func installedAt(releaseID, ver string) InstalledGame {
 		CanonicalGameID: canonical,
 		Title:           "Game",
 		ReleaseID:       releaseID,
+		SourceID:        "src",
+		DistributionID:  "main",
 		Version:         ver,
 		VersionSource:   VersionSourceRelease,
 	}
+}
+
+func patchRelease(id, from, to string, size int64) sources.Release {
+	r := release(id, to, size)
+	r.Kind = sources.KindPatch
+	r.FromVersion = from
+	r.ToVersion = to
+	return r
 }
 
 func TestResolveUpdateAvailable(t *testing.T) {
@@ -61,6 +72,81 @@ func TestResolveUpdateAvailable(t *testing.T) {
 	}
 }
 
+func TestResolveUpdateRejectsNewerReleaseFromAnotherSource(t *testing.T) {
+	other := release("other", "9.0", 1)
+	other.SourceID = "other-source"
+	got := ResolveUpdate(installedAt("r1", "1.0"), []sources.Release{other}, nil)
+	if got.Available {
+		t.Fatalf("foreign source offered as update: %+v", got)
+	}
+}
+
+func TestResolveUpdateRejectsSiblingDistributionFromSameRepacker(t *testing.T) {
+	other := release("other", "9.0", 1)
+	other.DistributionID = "sibling"
+	other.Repacker = "fitgirl"
+	installed := installedAt("r1", "1.0")
+	got := ResolveUpdate(installed, []sources.Release{other}, nil)
+	if got.Available {
+		t.Fatalf("sibling distribution offered as update: %+v", got)
+	}
+}
+
+func TestResolveUpdateAcceptsChangedTorrentOnConfirmedDistribution(t *testing.T) {
+	target := release("new-record", "2.0", 1)
+	target.InfoHash = "entirely-new-infohash"
+	got := ResolveUpdate(installedAt("old-record", "1.0"), []sources.Release{target}, nil)
+	if !got.Available || got.TargetReleaseID != "new-record" {
+		t.Fatalf("confirmed distribution update rejected: %+v", got)
+	}
+}
+
+func TestResolveUpdateAcceptsVersionChangeOnSameReleaseRecord(t *testing.T) {
+	target := release("r1", "2.0", 1)
+	got := ResolveUpdate(installedAt("r1", "1.0"), []sources.Release{target}, nil)
+	if !got.Available || got.TargetReleaseID != "r1" || got.TargetVersion != "2.0" {
+		t.Fatalf("updated stable record not offered: %+v", got)
+	}
+}
+
+func TestResolveUpdateRejectsUnknownOrLostBinding(t *testing.T) {
+	target := release("r2", "2.0", 1)
+	cases := []InstalledGame{
+		{GameID: "local", SourceID: "src", Version: "1.0"},
+		{GameID: "local", ReleaseID: "r1", Version: "1.0"},
+		{GameID: "local", ReleaseID: "missing", SourceID: "src", Version: "1.0"},
+	}
+	for _, installed := range cases {
+		if got := ResolveUpdate(installed, []sources.Release{target}, nil); got.Available {
+			t.Fatalf("unknown binding %+v offered %+v", installed, got)
+		}
+	}
+}
+
+func TestResolveUpdateRejectsForeignPatchesWithMatchingVersions(t *testing.T) {
+	foreign := patch("foreign", "1.0", "2.0", 1)
+	foreign.DistributionID = "sibling"
+	got := ResolveUpdate(installedAt("r1", "1.0"), []sources.Release{release("r2", "2.0", 100)}, []Patch{foreign})
+	if !got.Available || got.Strategy != StrategyFullRelease || got.PatchCount != 0 {
+		t.Fatalf("foreign patch entered update strategy: %+v", got)
+	}
+}
+
+func TestResolveUpdateLegacyBindingOnlyFollowsExactRecord(t *testing.T) {
+	installed := installedAt("r1", "1.0")
+	installed.DistributionID = ""
+	exact := release("r1", "1.1", 1)
+	exact.DistributionID = ""
+	if got := ResolveUpdate(installed, []sources.Release{exact}, nil); !got.Available {
+		t.Fatalf("exact legacy record not followed: %+v", got)
+	}
+	other := release("r2", "2.0", 1)
+	other.DistributionID = ""
+	if got := ResolveUpdate(installed, []sources.Release{other}, nil); got.Available {
+		t.Fatalf("legacy metadata guess offered: %+v", got)
+	}
+}
+
 func TestResolveUpdateInstalledIsNewest(t *testing.T) {
 	got := ResolveUpdate(installedAt("r2", "1.1"), []sources.Release{
 		release("r1", "1.0", 10<<30),
@@ -73,9 +159,12 @@ func TestResolveUpdateInstalledIsNewest(t *testing.T) {
 
 func TestResolveUpdateAmbiguousVersionIsNewRelease(t *testing.T) {
 	newer := release("r2", "goty", 12<<30)
+	installedStamp := time.Unix(1000, 0)
 	stamp := time.Unix(5000, 0)
 	newer.UploadedAt = &stamp
-	got := ResolveUpdate(installedAt("r1", "1.0"), []sources.Release{
+	installed := installedAt("r1", "1.0")
+	installed.ReleaseUploadedAt = &installedStamp
+	got := ResolveUpdate(installed, []sources.Release{
 		release("r1", "1.0", 10<<30),
 		newer,
 	}, nil)
@@ -87,6 +176,63 @@ func TestResolveUpdateAmbiguousVersionIsNewRelease(t *testing.T) {
 	}
 	if got.Reason == "" {
 		t.Fatal("expected a reason for the weaker claim")
+	}
+}
+
+func TestResolveUpdateUsesStoredRevisionDateWhenStableRecordChangesVersionScheme(t *testing.T) {
+	installedStamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	targetStamp := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	installed := installedAt("r1", "1.0")
+	installed.ReleaseUploadedAt = &installedStamp
+	target := release("r1", "build-20260910", 1)
+	target.UploadedAt = &targetStamp
+
+	got := ResolveUpdate(installed, []sources.Release{target}, nil)
+	if !got.Available || got.Kind != KindNewRelease || got.TargetReleaseID != "r1" {
+		t.Fatalf("changed version scheme was not offered from immutable revision date: %+v", got)
+	}
+}
+
+func TestResolveUpdateUsesStoredRevisionDateWhenStableRecordHasNoVersion(t *testing.T) {
+	installedStamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	targetStamp := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	installed := installedAt("r1", "")
+	installed.VersionSource = VersionSourceUnknown
+	installed.ReleaseUploadedAt = &installedStamp
+	target := release("r1", "", 1)
+	target.InfoHash = "changed-infohash"
+	target.UploadedAt = &targetStamp
+
+	got := ResolveUpdate(installed, []sources.Release{target}, nil)
+	if !got.Available || got.Kind != KindNewRelease || got.TargetReleaseID != "r1" {
+		t.Fatalf("new revision without a version was not offered: %+v", got)
+	}
+}
+
+func TestResolveUpdateUsesStoredRevisionDateWhenVersionIsUnchanged(t *testing.T) {
+	installedStamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	targetStamp := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	installed := installedAt("r1", "1.0")
+	installed.ReleaseUploadedAt = &installedStamp
+	target := release("r1", "1.0", 1)
+	target.UploadedAt = &targetStamp
+
+	got := ResolveUpdate(installed, []sources.Release{target}, nil)
+	if !got.Available || got.Kind != KindNewRelease || got.TargetReleaseID != "r1" {
+		t.Fatalf("new revision with an unchanged version was not offered: %+v", got)
+	}
+	if got.Reason != "new_distribution_revision" {
+		t.Fatalf("unchanged version must be explained as a new distribution revision: %q", got.Reason)
+	}
+}
+
+func TestResolveUpdateDoesNotGuessRecencyWithoutInstalledRevisionDate(t *testing.T) {
+	targetStamp := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	target := release("r1", "build-20260910", 1)
+	target.UploadedAt = &targetStamp
+
+	if got := ResolveUpdate(installedAt("r1", "1.0"), []sources.Release{target}, nil); got.Available {
+		t.Fatalf("unknown installed revision date was guessed as older: %+v", got)
 	}
 }
 
@@ -189,6 +335,7 @@ func TestResolveUpdateIgnoresSameDayReleaseWithoutVersion(t *testing.T) {
 
 	installed := installedAt("r2-portable", "")
 	installed.VersionSource = VersionSourceUnknown
+	installed.ReleaseUploadedAt = &stamp
 	got := ResolveUpdate(installed, []sources.Release{installedRelease, repack}, nil)
 
 	if got.Available || got.Kind != KindNone {
@@ -206,6 +353,7 @@ func TestResolveUpdateOffersStrictlyNewerReleaseWithoutVersion(t *testing.T) {
 
 	installed := installedAt("r-old", "")
 	installed.VersionSource = VersionSourceUnknown
+	installed.ReleaseUploadedAt = &older
 	got := ResolveUpdate(installed, []sources.Release{installedRelease, candidate}, nil)
 
 	if !got.Available || got.Kind != KindNewRelease {

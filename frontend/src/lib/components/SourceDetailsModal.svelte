@@ -169,11 +169,8 @@
   }
 
   function openMatch(view: ReleaseView) {
-    if (view.release.availability === 'removed') return;
-    if (view.release.matchStatus === 'review' || view.release.matchStatus === 'unmatched') {
-      matchRelease = view;
-      matchOpen = true;
-    }
+    matchRelease = view;
+    matchOpen = true;
   }
 
   function matchLabel(view: ReleaseView) {
@@ -240,8 +237,7 @@
         {:else}
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}
-            {@const clickable = view.release.availability !== 'removed' && (view.release.matchStatus === 'review' || view.release.matchStatus === 'unmatched')}
-            <button class="row" class:clickable onclick={() => openMatch(view)} disabled={!clickable}>
+            <button class="row clickable" onclick={() => openMatch(view)}>
               <span class="cell title" title={view.release.rawTitle}>{view.release.rawTitle}</span>
               <span class="cell">{view.gameTitle || '—'}</span>
               <span class="cell">{view.release.edition || view.release.version || '—'}</span>

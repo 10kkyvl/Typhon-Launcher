@@ -3,6 +3,7 @@ package catalog
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,6 +79,26 @@ func TestSanitizeKeepsCleanDuplicate(t *testing.T) {
 	}
 }
 
+func TestSanitizeKeepsLocalizedProviderAliasAndDropsServerSpam(t *testing.T) {
+	games := []Game{{
+		ID:       "server",
+		ServerID: "server",
+		Title:    "The Witcher",
+		Aliases: []string{
+			"Ведьмак",
+			"FitGirl Repack",
+			strings.Repeat("oversized", 20),
+		},
+	}}
+	got, changed := sanitize(games)
+	if !changed {
+		t.Fatal("server aliases were not sanitized")
+	}
+	if len(got[0].Aliases) != 1 || got[0].Aliases[0] != "Ведьмак" {
+		t.Fatalf("aliases = %v, want only localized provider alias", got[0].Aliases)
+	}
+}
+
 func TestServiceSanitizesOnLoad(t *testing.T) {
 	dir := t.TempDir()
 	svc, err := NewServiceAt(dir)
@@ -113,5 +134,18 @@ func TestServiceSanitizesOnLoad(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "catalog.json")); err != nil {
 		t.Fatalf("catalog file: %v", err)
+	}
+}
+
+func TestServerAliasMarkersMatchWholeTokens(t *testing.T) {
+	for _, alias := range []string{"Multiversus", "Builder Simulator", "Dispatch", "Codexia"} {
+		if !safeProviderAlias(alias) {
+			t.Fatalf("honest title rejected: %s", alias)
+		}
+	}
+	for _, alias := range []string{"Game multi", "Game build", "Game patch", "Game codex"} {
+		if safeProviderAlias(alias) {
+			t.Fatalf("release marker accepted: %s", alias)
+		}
 	}
 }

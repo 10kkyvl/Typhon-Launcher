@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { revealImage } from '../utils/revealImage';
   let {
     src,
     alt = '',
@@ -36,7 +37,9 @@
       <span>{initials || '?'}</span>
     </div>
   {:else}
-    <img {src} {alt} loading="lazy" draggable="false" onerror={() => (failed = true)} />
+    {#key src}
+      <img {src} {alt} class="media-reveal" use:revealImage loading="lazy" decoding="async" draggable="false" onerror={() => (failed = true)} />
+    {/key}
   {/if}
 </div>
 
@@ -47,6 +50,15 @@
     background: var(--surface-3);
     width: 100%;
     height: 100%;
+  }
+
+  .artwork:has(img:not([data-ready]))::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--surface-2);
+    animation: loading-breathe 1.6s ease-in-out 3;
+    pointer-events: none;
   }
 
   img {

@@ -1420,3 +1420,20 @@ func TestManualMatchClearsTheDismissal(t *testing.T) {
 		t.Fatalf("record = %+v, want the dismissal gone after a manual match", rec)
 	}
 }
+
+func TestIdentifiedGameStillReportsDetailsLoading(t *testing.T) {
+	svc, cat, _ := newTestService(t, &fakeProvider{})
+	game := addGame(t, cat, catalog.Game{Title: "Steam game", ExternalIDs: catalog.ExternalIDs{Steam: "620"}})
+	svc.mu.Lock()
+	svc.refreshing[game.ID] = true
+	svc.mu.Unlock()
+	view, err := svc.GetView(game.ID)
+	if err != nil || !view.Resolved || view.Match != MatchSearching {
+		t.Fatalf("loading view: %+v, %v", view, err)
+	}
+	svc.release(game.ID)
+	view, err = svc.GetView(game.ID)
+	if err != nil || view.Match == MatchSearching {
+		t.Fatalf("completed view: %+v, %v", view, err)
+	}
+}

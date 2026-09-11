@@ -140,9 +140,37 @@ h4 {
   background: rgba(102, 115, 242, 0.35);
 }
 
+.media-reveal {
+  opacity: 0;
+}
+
+.media-reveal[data-ready] {
+  opacity: 1;
+  animation: media-in var(--dur) var(--ease);
+}
+
+.loading-skeleton {
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  animation: loading-breathe 1.6s ease-in-out 3;
+}
+
+@keyframes media-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loading-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 .no-anim *,
 .no-anim *::before,
 .no-anim *::after {
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-delay: 0ms !important;
   animation-duration: 0.01ms !important;
   transition-duration: 0.01ms !important;
 }

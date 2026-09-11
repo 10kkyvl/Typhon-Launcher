@@ -103,7 +103,7 @@ func (idx *index) resolve(q Query, overrides map[string]string) Match {
 	}
 	ambiguous := rival >= 0 && top.Score-rival < AmbiguityDelta
 	switch {
-	case top.Score >= AutoThreshold && !ambiguous:
+	case top.Score >= AutoThreshold && !ambiguous && top.Method != MethodFuzzy:
 		return Match{Status: StatusMatched, GameID: top.GameID, Confidence: top.Score, Method: top.Method, Candidates: candidates}
 	case top.Score >= ReviewThreshold:
 		return Match{Status: StatusReview, Confidence: top.Score, Method: top.Method, Candidates: candidates}
@@ -141,4 +141,13 @@ func adjust(score float64, q Query, game Game) float64 {
 		score = 0
 	}
 	return score
+}
+
+// The visited-page cache cannot establish that an official title is unique.
+func conservativeMatch(m Match, partial bool) Match {
+	if partial && m.Status == StatusMatched && m.Method != MethodExternalID && m.Method != MethodOverride {
+		m.Status = StatusReview
+		m.GameID = ""
+	}
+	return m
 }

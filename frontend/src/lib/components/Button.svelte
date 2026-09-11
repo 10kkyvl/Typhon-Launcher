@@ -42,7 +42,7 @@
   }
 
   .btn:active:not(:disabled) {
-    transform: translateY(1px);
+    transform: scale(0.98);
   }
 
   .btn:disabled {
@@ -70,7 +70,7 @@
 
   .primary {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-on, #fff);
     border-radius: var(--radius-md);
   }
 

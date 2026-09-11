@@ -13,6 +13,7 @@
     game,
     stats,
     variant = 'list',
+    compact = false,
     actions,
     onopen,
   }: {
@@ -22,6 +23,7 @@
     game?: { igdbId: number; title: string } | null;
     stats?: string[];
     variant?: 'list' | 'grid' | 'card';
+    compact?: boolean;
     actions?: Snippet;
     onopen?: () => void;
   } = $props();
@@ -56,7 +58,7 @@
 
 {#snippet metaLine()}
   {#if game}
-    <span class="playing">{msg('social.playingLabel')} <button type="button" class="game-link" onclick={openGame}>{game.title}</button></span>
+    <span class="playing"><span class="playing-label">{msg('social.playingLabel')}</span> <button type="button" class="game-link" title={game.title} onclick={openGame}>{game.title}</button></span>
   {:else}
     <span class="meta">{meta || '—'}</span>
   {/if}
@@ -87,7 +89,7 @@
     </div>
   </Card>
 {:else}
-  <div class="row">
+  <div class="row" class:compact>
     {@render identity()}
     {@render metaLine()}
     {#if actions}
@@ -97,6 +99,38 @@
 {/if}
 
 <style>
+  .row.compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+    padding: 0.8rem 0;
+  }
+
+  .compact .playing,
+  .compact .meta {
+    min-width: 0;
+    margin-left: calc(3.2rem + var(--space-3));
+    text-align: left;
+  }
+
+  .compact .playing {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+
+  .playing-label {
+    flex-shrink: 0;
+  }
+
+  .compact .game-link {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
   .row {
     display: flex;
     align-items: center;

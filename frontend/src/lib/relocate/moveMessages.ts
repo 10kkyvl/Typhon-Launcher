@@ -3,6 +3,7 @@ import type { MessageKey } from '../i18n';
 
 export const REASONS: Record<string, MessageKey> = {
   'relocate.game_running': 'transfers.moveErrGameRunning',
+  'relocate.rollback_available': 'transfers.moveErrRollbackAvailable',
   'relocate.updating': 'transfers.moveErrUpdating',
   'relocate.installing': 'transfers.moveErrInstalling',
   'relocate.downloading': 'transfers.moveErrDownloading',

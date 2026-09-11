@@ -169,3 +169,43 @@ describe('applyTheme / clearTheme', () => {
     vi.unstubAllGlobals();
   });
 });
+
+it('keeps a personal accent through theme edits, recalculates on switch, and restores original tokens on cancel/reset', async () => {
+  const { fakeDocument, rootProps, elements } = createFakeDocument();
+  vi.stubGlobal('document', fakeDocument);
+  const { applyTheme, applyPersonalAccent } = await import('./apply');
+  const dark = baseTheme({ tokens: { '--bg': '#111111', '--accent': '#6875e8', '--danger': '#ff0000' }, css: ':root { --accent: red !important; }' });
+  applyTheme(dark);
+  applyPersonalAccent('#FFFF00');
+  const darkAccent = rootProps.get('--accent');
+  applyPersonalAccent('#FF');
+  expect(rootProps.get('--accent')).toBe(darkAccent);
+  expect(darkAccent).not.toBe('#6875e8');
+  expect(rootProps.get('--danger')).toBe('#ff0000');
+  applyTheme({ ...dark, name: 'Edited' });
+  expect(rootProps.get('--accent')).toBe(darkAccent);
+  applyTheme(baseTheme({ base: 'light', tokens: { '--bg': '#ffffff', '--accent': '#1125d8' } }));
+  expect(rootProps.get('--accent')).not.toBe(darkAccent);
+  applyPersonalAccent('');
+  expect(rootProps.get('--accent')).toBe('#1125d8');
+  expect(rootProps.has('--accent-on')).toBe(false);
+  expect(dark.tokens?.['--accent']).toBe('#6875e8');
+  applyTheme(dark);
+  expect(elements.get('typhon-theme')?.textContent).toBe(dark.css);
+  vi.unstubAllGlobals();
+});
+
+describe('personal accent without a loaded theme', () => {
+  it('applies and resets the selected accent against the base stylesheet after ActiveTheme fails', async () => {
+    const { fakeDocument, rootProps } = createFakeDocument();
+    vi.stubGlobal('document', fakeDocument);
+    const { applyPersonalAccent, displayedAccent } = await import('./apply');
+    const { get } = await import('svelte/store');
+    applyPersonalAccent('#E45D87');
+    expect(rootProps.get('--accent')).toMatch(/^#[0-9a-f]{6}$/);
+    expect(get(displayedAccent)).toBe('#E45D87');
+    applyPersonalAccent('');
+    expect(rootProps.has('--accent')).toBe(false);
+    expect(get(displayedAccent)).toBe('#6673F2');
+  });
+});

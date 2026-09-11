@@ -14,7 +14,8 @@ vi.mock('@wailsio/runtime', () => ({
 
 vi.mock('../services/backend', () => ({ inWails: true }));
 
-vi.mock('../services/selfupdate', () => ({
+vi.mock('../services/selfupdate', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../services/selfupdate')>(),
   getStatus: vi.fn(),
   getOutcome: vi.fn(),
   checkForUpdate: vi.fn(),
@@ -273,7 +274,11 @@ describe('release notes', () => {
       unseen: [makeNote('1.1.0')],
       history: [makeNote('1.1.0')],
     } as never);
-    vi.mocked(service.acknowledgeReleaseNotes).mockResolvedValue(undefined as never);
+    vi.mocked(service.acknowledgeReleaseNotes).mockImplementation(async () => {
+      handlers['launcher:release_notes']({
+        data: { currentVersion: '1.1.0', unseen: null, history: [makeNote('1.1.0')] },
+      });
+    });
 
     await store.initSelfUpdate();
     await store.dismissReleaseNotes();
@@ -281,6 +286,21 @@ describe('release notes', () => {
     expect(service.acknowledgeReleaseNotes).toHaveBeenCalledTimes(1);
     expect(get(store.unseenReleaseNotes)).toHaveLength(0);
     expect(get(store.releaseNotesHistory)).toHaveLength(1);
+    // The modal reads .length again after the acknowledgement event arrives.
+    expect(get(store.unseenReleaseNotes).length > 0).toBe(false);
+    await store.dismissReleaseNotes();
+    expect(service.acknowledgeReleaseNotes).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes empty notes events from a background update check', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    await store.initSelfUpdate();
+    handlers['launcher:release_notes']({
+      data: { currentVersion: '1.1.0', unseen: null, history: null },
+    });
+    expect(get(store.unseenReleaseNotes)).toEqual([]);
+    expect(get(store.releaseNotesHistory)).toEqual([]);
   });
 
   it('toasts when the acknowledgement cannot be saved', async () => {
