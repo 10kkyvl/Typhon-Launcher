@@ -28,12 +28,11 @@
   import { getAppInfo } from '../../lib/services/system';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
-  import { gameArt, gameInfo, requestArt } from '../../lib/stores/metadata';
+  import { gameArt, gameInfo } from '../../lib/stores/metadata';
   import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
-  import { inview } from '../../lib/utils/inview';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
 
   function libraryErrorText(err: unknown, fallback: string): string {
@@ -99,12 +98,9 @@
 
   let token = 0;
   let debounce: ReturnType<typeof setTimeout> | undefined;
-  const seen = new Set<string>();
-
-  function see(id: string) {
-    seen.add(id);
-    requestArt([id]);
-  }
+  // Browse responses already contain list artwork. Loading full metadata for
+  // every visible card also changes provider identities while paging through
+  // the catalog; reserve that work for the game detail view.
 
   onDestroy(() => {
     clearTimeout(debounce);
@@ -217,7 +213,6 @@
   function reload() {
     prefetch.clear();
     page = 0;
-    seen.clear();
     fetchPage(1);
   }
 
@@ -375,7 +370,7 @@
         {@const libId = libraryByGame.get(game.id)}
         {@const isFav = libId ? favoriteByLibraryId.get(libId) : false}
         {@const isInstalled = installedByGame.has(game.id)}
-        <div class="cell" use:inview={() => see(game.id)}>
+        <div class="cell">
           <GameCard
             id={game.id}
             title={shown.title}
@@ -427,7 +422,6 @@
         {@const shown = $gameInfo[game.id] ?? game}
         <button
           class="list-row"
-          use:inview={() => see(game.id)}
           onclick={() => navigate('game', { id: game.id })}
         >
           <div class="list-thumb">
