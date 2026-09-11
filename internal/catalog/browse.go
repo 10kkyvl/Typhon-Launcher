@@ -97,6 +97,12 @@ func (s *Service) QueryGames(q GameQuery) GamePage {
 	for i := range s.idx.entries {
 		e := &s.idx.entries[i]
 		g := s.idx.games[i]
+		// Redirected records remain in the on-disk catalog for history and
+		// installed-library references, but the public catalog exposes the
+		// canonical card only once.
+		if s.resolveIDLocked(g.ID) != g.ID {
+			continue
+		}
 		if search != "" && !entryMatches(e, g, search, normalized) {
 			continue
 		}
@@ -222,11 +228,15 @@ func (s *Service) GetGames(ids []string) []Game {
 	out := make([]Game, 0, len(ids))
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
-		if id == "" || seen[id] {
+		if id == "" {
 			continue
 		}
-		seen[id] = true
-		game, ok := s.idx.game(id)
+		canonical := s.resolveIDLocked(id)
+		if canonical == "" || seen[canonical] {
+			continue
+		}
+		seen[canonical] = true
+		game, ok := s.idx.game(canonical)
 		if !ok {
 			continue
 		}

@@ -319,7 +319,12 @@ func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 			continue
 		}
 		if positions := s.idx.byTitle[q.Normalized]; len(positions) > 0 {
-			out[q.Normalized] = s.idx.games[positions[0]]
+			game := s.idx.games[positions[0]]
+			canonical := s.resolveIDLocked(game.ID)
+			if canonicalGame, ok := s.idx.game(canonical); ok {
+				game = canonicalGame
+			}
+			out[q.Normalized] = game
 			continue
 		}
 		game := newGame(q)
@@ -633,7 +638,12 @@ func (s *Service) LookupByTitle(title string) (Game, bool) {
 	if len(positions) == 0 {
 		return Game{}, false
 	}
-	return s.idx.games[positions[0]], true
+	game := s.idx.games[positions[0]]
+	canonical := s.resolveIDLocked(game.ID)
+	if canonicalGame, ok := s.idx.game(canonical); ok {
+		game = canonicalGame
+	}
+	return game, true
 }
 
 func (s *Service) resolveIDLocked(id string) string {

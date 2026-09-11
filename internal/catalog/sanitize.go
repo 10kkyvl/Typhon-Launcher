@@ -12,9 +12,6 @@ func sanitize(games []Game) ([]Game, bool) {
 	junk := make([][]string, len(games))
 	changed := false
 	for i := range games {
-		if games[i].ServerID != "" {
-			continue
-		}
 		kept, dropped := splitAliases(games[i])
 		junk[i] = dropped
 		if len(dropped) == 0 {
@@ -39,7 +36,7 @@ func sanitize(games []Game) ([]Game, bool) {
 func splitAliases(game Game) (kept, dropped []string) {
 	normalized := titles.Normalize(game.Title)
 	for _, alias := range game.Aliases {
-		if titles.Similarity(alias, normalized) < aliasFloor {
+		if len(alias) > maxAliasLen || titles.Similarity(alias, normalized) < aliasFloor {
 			dropped = append(dropped, alias)
 			continue
 		}

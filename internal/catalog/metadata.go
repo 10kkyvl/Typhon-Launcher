@@ -82,10 +82,16 @@ func (s *Service) positionLocked(gameID string) (int, error) {
 func applyPatch(game Game, patch MetadataPatch) Game {
 	igdbID := strings.TrimSpace(patch.IGDBID)
 	steamID := strings.TrimSpace(patch.SteamID)
-	if steamID != "" || game.ExternalIDs.IGDB != igdbID {
+	// A provider response may contain only a Steam id. An empty IGDB field
+	// means "not returned", not "remove the id we already confirmed".
+	if igdbID != "" {
+		if steamID != "" || game.ExternalIDs.IGDB != igdbID {
+			game.ExternalIDs.Steam = steamID
+		}
+		game.ExternalIDs.IGDB = igdbID
+	} else if steamID != "" {
 		game.ExternalIDs.Steam = steamID
 	}
-	game.ExternalIDs.IGDB = igdbID
 	game = applyTitle(game, strings.TrimSpace(patch.Title))
 	game.Summary = patch.Summary
 	game.MetadataLanguage = patch.Language
