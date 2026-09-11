@@ -3,6 +3,7 @@ package catalog
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -75,6 +76,26 @@ func TestSanitizeKeepsCleanDuplicate(t *testing.T) {
 	}
 	if got[1].Provisional || got[1].ExternalIDs.IGDB != "115473" {
 		t.Fatalf("game = %+v", got[1])
+	}
+}
+
+func TestSanitizeKeepsLocalizedProviderAliasAndDropsServerSpam(t *testing.T) {
+	games := []Game{{
+		ID:       "server",
+		ServerID: "server",
+		Title:    "The Witcher",
+		Aliases: []string{
+			"Ведьмак",
+			"FitGirl Repack",
+			strings.Repeat("oversized", 20),
+		},
+	}}
+	got, changed := sanitize(games)
+	if !changed {
+		t.Fatal("server aliases were not sanitized")
+	}
+	if len(got[0].Aliases) != 1 || got[0].Aliases[0] != "Ведьмак" {
+		t.Fatalf("aliases = %v, want only localized provider alias", got[0].Aliases)
 	}
 }
 

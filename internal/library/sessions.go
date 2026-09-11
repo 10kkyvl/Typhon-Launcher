@@ -87,6 +87,9 @@ func (s *Service) PlayGame(id string) error {
 	err = s.prepare(ctx, req)
 	s.mu.Lock()
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return context.Canceled
+		}
 		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
 		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
 		// стартовавший процесс. На macOS это вообще самая частая причина, по

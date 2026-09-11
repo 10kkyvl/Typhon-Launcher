@@ -128,6 +128,7 @@ var (
 	errNotFound             = uierr.New("library.game_not_found", "игра не найдена")
 	errEmptyCanonicalGameID = uierr.New("library.no_canonical_id", "не указан идентификатор игры каталога")
 	errEmptyCatalogTitle    = uierr.New("library.no_catalog_title", "не указано название игры")
+	errInstallationChanged  = uierr.New("library.installation_changed", "установка изменилась во время обновления")
 )
 
 const MaxFavorites = 6
@@ -290,7 +291,16 @@ func (s *Service) load() ([]Game, error) {
 			// Sync used to contaminate this flag. A typed on-disk marker is
 			// local installation evidence; a bare cloud flag is not.
 			m, markerErr := ReadMarker(g.InstallDir)
-			g.Owned = markerErr == nil && m.InstallType != "" && m.Owned
+			switch {
+			case markerErr == nil:
+				g.Owned = m.InstallType != "" && m.Owned
+			case errors.Is(markerErr, fs.ErrNotExist):
+				g.Owned = false
+			default:
+				// Permission errors, an unavailable volume and malformed JSON do
+				// not prove that the installation stopped being owned.
+				// Keep the flag unchanged until the marker can be checked.
+			}
 		}
 		if entry.Completed && g.Status == "" {
 			g.Status = StatusCompleted
@@ -605,60 +615,80 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 
 //wails:ignore
 func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
-	before, err := s.Find(u.ID)
-	if err != nil {
-		return Game{}, err
-	}
-	dir := u.InstallDir
-	if dir == "" {
-		dir = before.InstallDir
-	}
-	if dir == "" {
-		return Game{}, errEmptyInstallDir
-	}
-	size, unknown := measureInstall(u.ID, dir)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i := range s.games {
-		if s.games[i].ID != u.ID {
-			continue
+	const maxMeasureRetries = 3
+	for attempt := 0; attempt < maxMeasureRetries; attempt++ {
+		before, err := s.Find(u.ID)
+		if err != nil {
+			return Game{}, err
 		}
-		previous := s.games[i]
-		if previous.InstallDir != before.InstallDir || previous.Executable != before.Executable {
-			return Game{}, errors.New("installation changed while measuring update")
+		dir := u.InstallDir
+		if dir == "" {
+			dir = before.InstallDir
 		}
-		if u.Executable != "" {
-			s.games[i].Executable = u.Executable
-		}
-		if u.InstallDir != "" {
-			s.games[i].InstallDir = u.InstallDir
-		}
-		if s.games[i].InstallDir == "" {
+		if dir == "" {
 			return Game{}, errEmptyInstallDir
 		}
-		s.games[i].Version = u.Version
-		s.games[i].VersionSource = u.VersionSource
-		s.games[i].SizeBytes, s.games[i].SizeUnknown = size, unknown
-		s.games[i].ReleaseID = u.ReleaseID
-		s.games[i].SourceID = u.SourceID
-		s.games[i].DistributionID = u.DistributionID
-		s.games[i].ReleaseUploadedAt = u.ReleaseUploadedAt
+		size, unknown := measureInstall(u.ID, dir)
+
+		s.mu.Lock()
+		pos := -1
+		for i := range s.games {
+			if s.games[i].ID == u.ID {
+				pos = i
+				break
+			}
+		}
+		if pos < 0 {
+			s.mu.Unlock()
+			return Game{}, errors.New("игра не найдена")
+		}
+		previous := s.games[pos]
+		if previous.InstallDir != before.InstallDir || previous.Executable != before.Executable {
+			s.mu.Unlock()
+			if u.InstallDir != "" && previous.InstallDir != u.InstallDir {
+				return Game{}, errInstallationChanged
+			}
+			if attempt+1 == maxMeasureRetries {
+				return Game{}, errInstallationChanged
+			}
+			continue
+		}
+		if u.Executable != "" {
+			s.games[pos].Executable = u.Executable
+		}
+		if u.InstallDir != "" {
+			s.games[pos].InstallDir = u.InstallDir
+		}
+		if s.games[pos].InstallDir == "" {
+			s.mu.Unlock()
+			return Game{}, errEmptyInstallDir
+		}
+		s.games[pos].Version = u.Version
+		s.games[pos].VersionSource = u.VersionSource
+		s.games[pos].SizeBytes, s.games[pos].SizeUnknown = size, unknown
+		s.games[pos].ReleaseID = u.ReleaseID
+		s.games[pos].SourceID = u.SourceID
+		s.games[pos].DistributionID = u.DistributionID
+		s.games[pos].ReleaseUploadedAt = u.ReleaseUploadedAt
 		if u.ReleaseID == "" {
-			s.games[i].Repacker = ""
-			s.games[i].ReleaseVersion = ""
+			s.games[pos].Repacker = ""
+			s.games[pos].ReleaseVersion = ""
 		} else {
-			s.games[i].ReleaseVersion = u.Version
+			s.games[pos].ReleaseVersion = u.Version
 		}
 		if err := s.persist(); err != nil {
-			s.games[i] = previous
+			s.games[pos] = previous
+			s.mu.Unlock()
 			return Game{}, fmt.Errorf("save library: %w", err)
 		}
-		markInstalled(s.games[i])
+		updated := s.games[pos]
+		markInstalled(updated)
 		slog.Info("game version updated", "id", u.ID, "version", u.Version)
 		s.emitUpdated()
-		return s.games[i], nil
+		s.mu.Unlock()
+		return updated, nil
 	}
-	return Game{}, errors.New("игра не найдена")
+	return Game{}, errInstallationChanged
 }
 
 // BindDistribution upgrades an older installation only when its exact saved
