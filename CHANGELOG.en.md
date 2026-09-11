@@ -82,7 +82,7 @@ The launcher runs on macOS, downloading is told apart from installing, and games
 
 ### Fixed
 - A game removed from the library on one device came back from another on the next sync: the removal now travels to the server and reaches the other devices, even if there was no network at the moment it was removed
-- One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Папка игры]" the version and the brackets stayed in the name, so every entry counted as its own game
+- One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Game folder]" the version and the brackets stayed in the name, so every entry counted as its own game
 - A 1.8 GB repack was offered as an update to a 9.8 GB installation when both were published on the same day and neither version could be read
 - An install started from a release row lost its version, and updates for that game were never found afterwards
 - The release list labelled "Update" even a release the launcher does not treat as one: those read "New release"
