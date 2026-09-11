@@ -68,12 +68,14 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 			return GamePage{}, err
 		}
 		page.Offline = true
+		s.normalizeCachedPage(&page)
 		return page, nil
 	}
 	s.mu.Lock()
 	previous := append([]Game(nil), s.games...)
 	complete := remoteProviderCompleteness(page.Providers)
 	byServer, byIGDB, bySteam := remoteIndexes(s.games)
+	claims := make([]Game, len(page.Items))
 	for i, g := range page.Items {
 		// LocalExternalIDs is a private durability detail. A remote response
 		// must never be able to inject it, and it must not leak through the
@@ -82,6 +84,7 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		// Existing personal references retain their IDs. ServerID records the
 		// provider-independent identity without rewriting installation provenance.
 		g.ServerID = g.ID
+		claims[i] = g
 		pos := remoteMatchPosition(g, byServer, byIGDB, bySteam)
 		if pos >= 0 {
 			old := s.games[pos]
@@ -102,7 +105,7 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		g.LocalExternalIDs = ExternalIDs{}
 		page.Items[i] = g
 	}
-	s.reconcileRemotePageLinksLocked(page.Items, complete)
+	s.reconcileRemotePageLinksLocked(claims)
 	changed := !reflect.DeepEqual(previous, s.games)
 	if changed {
 		s.rebuildLocked()
@@ -137,7 +140,7 @@ func (s *Service) HasRemoteCatalog() bool {
 
 // A new authoritative claim invalidates stale claims on other visited games,
 // even when those other games are outside the current result page.
-func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete map[string]bool) {
+func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game) {
 	claimed := map[string]bool{}
 	igdbClaims := map[string]bool{}
 	currentServers := map[string]bool{}
@@ -149,7 +152,7 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete m
 		if current.ExternalIDs.IGDB != "" {
 			currentIGDB[current.ExternalIDs.IGDB] = true
 		}
-		if remoteProviderComplete(complete, "igdb") {
+		if len(current.ProviderLinks["igdb"]) > 0 || current.ExternalIDs.IGDB != "" {
 			for _, id := range current.ProviderLinks["igdb"] {
 				igdbClaims[id] = true
 			}
@@ -157,7 +160,7 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete m
 				igdbClaims[current.ExternalIDs.IGDB] = true
 			}
 		}
-		if remoteProviderComplete(complete, "steam") {
+		if len(current.ProviderLinks["steam"]) > 0 || current.ExternalIDs.Steam != "" {
 			for _, id := range current.ProviderLinks["steam"] {
 				claimed[id] = true
 			}
@@ -310,11 +313,11 @@ func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
 		(!remoteProviderComplete(complete, "igdb") || !remoteProviderComplete(complete, "steam")) {
 		merged.ProviderLinks = make(map[string][]string)
 	}
-	if !remoteProviderComplete(complete, "igdb") {
+	if !remoteProviderComplete(complete, "igdb") && remote.ExternalIDs.IGDB == "" && len(remote.ProviderLinks["igdb"]) == 0 {
 		merged.ExternalIDs.IGDB = old.ExternalIDs.IGDB
 		merged.ProviderLinks["igdb"] = append([]string(nil), old.ProviderLinks["igdb"]...)
 	}
-	if !remoteProviderComplete(complete, "steam") {
+	if !remoteProviderComplete(complete, "steam") && remote.ExternalIDs.Steam == "" && len(remote.ProviderLinks["steam"]) == 0 {
 		merged.ExternalIDs.Steam = old.ExternalIDs.Steam
 		merged.ProviderLinks["steam"] = append([]string(nil), old.ProviderLinks["steam"]...)
 	}
@@ -345,8 +348,12 @@ func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
 	merged.Aliases = mergeRemoteStrings(old.Aliases, remote.Aliases)
 	if old.MetadataUpdatedAt != nil {
 		merged.Summary = old.Summary
-		merged.Developer = old.Developer
-		merged.Publisher = old.Publisher
+		if merged.Developer == "" {
+			merged.Developer = old.Developer
+		}
+		if merged.Publisher == "" {
+			merged.Publisher = old.Publisher
+		}
 		merged.CoverAssetID = old.CoverAssetID
 		merged.HeroAssetID = old.HeroAssetID
 		merged.MetadataUpdatedAt = cloneTimePointer(old.MetadataUpdatedAt)
@@ -393,56 +400,26 @@ func cloneTimePointer(value *time.Time) *time.Time {
 	return &copy
 }
 
+// Include both providers when finding personal references to a canonical row.
+// The SameGame check rejects conflicting IGDB identities sharing a stale Steam ID.
 func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
 	byKey := map[string][]string{}
-	add := func(key, id string) {
-		for _, existing := range byKey[key] {
-			if existing == id {
-				return
-			}
-		}
-		byKey[key] = append(byKey[key], id)
-	}
 	for _, game := range s.games {
 		id := s.resolveIDLocked(game.ID)
 		if id == "" {
 			continue
 		}
-		if game.ExternalIDs.IGDB != "" {
-			add("igdb:"+strings.ToLower(game.ExternalIDs.IGDB), id)
-			for _, providerID := range game.ProviderLinks["igdb"] {
-				add("igdb:"+strings.ToLower(providerID), id)
-			}
-			continue
-		}
-		if game.ExternalIDs.Steam != "" {
-			add("steam:"+strings.ToLower(game.ExternalIDs.Steam), id)
-		}
-		for _, providerID := range game.ProviderLinks["steam"] {
-			add("steam:"+strings.ToLower(providerID), id)
+		for _, key := range remoteIdentityKeys(game) {
+			byKey[key] = append(byKey[key], id)
 		}
 	}
 	aliases := make([][]string, len(items))
 	for i, game := range items {
-		keys := []string{}
-		if game.ExternalIDs.IGDB != "" {
-			keys = append(keys, "igdb:"+strings.ToLower(game.ExternalIDs.IGDB))
-			for _, providerID := range game.ProviderLinks["igdb"] {
-				keys = append(keys, "igdb:"+strings.ToLower(providerID))
-			}
-		} else {
-			if game.ExternalIDs.Steam != "" {
-				keys = append(keys, "steam:"+strings.ToLower(game.ExternalIDs.Steam))
-			}
-			for _, providerID := range game.ProviderLinks["steam"] {
-				keys = append(keys, "steam:"+strings.ToLower(providerID))
-			}
-		}
 		seen := map[string]bool{}
 		canonical := s.resolveIDLocked(game.ID)
-		for _, key := range keys {
+		for _, key := range remoteIdentityKeys(game) {
 			for _, id := range byKey[key] {
-				if id != canonical && !seen[id] {
+				if id != canonical && !seen[id] && s.sameGameLocked(canonical, id) {
 					seen[id] = true
 					aliases[i] = append(aliases[i], id)
 				}
@@ -450,6 +427,58 @@ func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
 		}
 	}
 	return aliases
+}
+
+func remoteIdentityKeys(game Game) []string {
+	keys := []string{}
+	for provider, id := range map[string]string{"igdb": game.ExternalIDs.IGDB, "steam": game.ExternalIDs.Steam} {
+		if id != "" {
+			keys = append(keys, provider+":"+strings.ToLower(id))
+		}
+		for _, linked := range game.ProviderLinks[provider] {
+			if linked != "" {
+				keys = append(keys, provider+":"+strings.ToLower(linked))
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// A cached page retains membership, but old provider duplicates can be folded
+// using confirmed links learned since it was saved. No personal record is added.
+func (s *Service) normalizeCachedPage(page *GamePage) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]Game, 0, len(page.Items))
+	for _, cached := range page.Items {
+		game := cached
+		if current, ok := s.idx.game(s.resolveIDLocked(cached.ID)); ok {
+			game = current
+		}
+		duplicate := -1
+		for i, prior := range items {
+			if s.sameGameLocked(prior.ID, game.ID) {
+				duplicate = i
+				break
+			}
+		}
+		if duplicate < 0 {
+			items = append(items, game)
+			continue
+		}
+		// An IGDB provider home is preferred to a Steam home enriched by details.
+		if len(game.ProviderLinks["igdb"]) > len(items[duplicate].ProviderLinks["igdb"]) {
+			items[duplicate] = game
+		}
+	}
+	page.Total = max(len(items), page.Total-(len(page.Items)-len(items)))
+	page.Items = items
+	aliases := s.remotePageAliasesLocked(items)
+	for i := range page.Items {
+		page.Items[i].AliasIDs = aliases[i]
+		page.Items[i].LocalExternalIDs = ExternalIDs{}
+	}
 }
 
 func pruneCatalogPageCache(dir string, now time.Time) {
