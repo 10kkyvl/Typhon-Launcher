@@ -161,6 +161,11 @@ func extractVersion(s string) (string, string, string) {
 		if loc == nil {
 			continue
 		}
+		// In a fully lowercase title, a separated v is ambiguous with a
+		// Roman numeral. Keep the title token and extract only the number.
+		if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
+			loc[0] = loc[2]
+		}
 		if bestStart == -1 || loc[0] < bestStart {
 			bestStart = loc[0]
 			bestLoc = loc

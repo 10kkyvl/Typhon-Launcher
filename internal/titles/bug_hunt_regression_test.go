@@ -1,15 +1,21 @@
 package titles
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRomanVIsNotParsedAsVersion(t *testing.T) {
 	for _, input := range []string{
 		"Grand Theft Auto V 1.0.2845",
 		"Civilization V 1.0",
 		"Battlefield V 1.2",
+		"grand theft auto v 1.0.2845",
+		"civilization v 1.0",
+		"battlefield v 1.2",
 	} {
 		parsed := Parse(input)
-		if parsed.Base == "Grand Theft Auto" || parsed.Base == "Civilization" || parsed.Base == "Battlefield" {
+		if !strings.HasSuffix(strings.ToLower(parsed.Base), " v") {
 			t.Fatalf("Parse(%q) dropped Roman V: base=%q version=%q", input, parsed.Base, parsed.Version)
 		}
 	}
