@@ -1,5 +1,5 @@
 import { errorCode } from '../i18n/errors';
-import type { CatalogGame, CatalogPage, CatalogQuery } from '../services/sources';
+import type { CatalogGame, CatalogPage, CatalogQuery, CompatInfo } from '../services/sources';
 
 // Reject a mismatched continuation before publishing any of it to the view.
 // Previous items remain intact so retry can restart the query explicitly.
@@ -12,6 +12,39 @@ export function appendCatalogPage(previous: CatalogGame[], page: CatalogPage, re
     seen.add(id);
   }
   return [...previous, ...page.items];
+}
+
+export async function reloadCatalogPrefix(
+  query: CatalogQuery,
+  pageCount: number,
+  load: (query: CatalogQuery) => Promise<CatalogPage>,
+  active: () => boolean = () => true,
+): Promise<{ result: CatalogPage; items: CatalogGame[]; compat: Record<string, CompatInfo> }> {
+  const targetPage = Math.max(1, pageCount);
+  let lastError: unknown;
+
+  // A metadata update can race one backend revision change. Retry the complete
+  // prefix once, then leave the current view intact for a later user action.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      let result = await load({ ...query, page: 1, revision: 0 });
+      let items = [...result.items];
+      let compat = { ...(result.compat ?? {}) };
+      for (let page = 2; page <= targetPage && items.length < result.total; page++) {
+        if (!active()) throw new Error('catalog.refresh_cancelled');
+        const next = await load({ ...query, page, revision: result.revision ?? 0 });
+        items = appendCatalogPage(items, next, result.revision ?? 0);
+        compat = { ...compat, ...(next.compat ?? {}) };
+        result = next;
+      }
+      return { result, items, compat };
+    } catch (err) {
+      lastError = err;
+      if (errorCode(err) !== 'catalog.changed' || attempt === 1 || !active()) throw err;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('catalog.refresh_failed');
 }
 
 // Publish a refreshed prefix only after all of its pages share one revision.

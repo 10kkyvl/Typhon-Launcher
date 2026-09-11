@@ -153,12 +153,21 @@ export interface MatchCandidate {
   method: string;
 }
 
+export interface CatalogExternalIDs {
+  steam?: string;
+  igdb?: string;
+  gog?: string;
+  [provider: string]: string | undefined;
+}
+
 export interface CatalogGame {
   id: string;
   title: string;
   sortTitle: string;
   coverUrl?: string;
   serverId?: string;
+  externalIds?: CatalogExternalIDs;
+  providerLinks?: Record<string, string[]>;
   aliasIds?: string[];
   releaseYear?: number;
   developer?: string;

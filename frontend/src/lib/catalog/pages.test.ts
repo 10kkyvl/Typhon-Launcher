@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appendCatalogPage } from './pages';
+import { appendCatalogPage, reloadCatalogPrefix } from './pages';
 import type { CatalogGame, CatalogPage } from '../services/sources';
 const game = (id: string): CatalogGame => ({ id, title: id, sortTitle: id, createdAt: '' });
 const page = (items: CatalogGame[], revision = 3): CatalogPage => ({ items, revision, total: 3, page: 2, pageSize: 1 });
@@ -60,5 +60,44 @@ describe('catalog duplicate recovery', () => {
     const load = vi.fn().mockResolvedValueOnce({ ...page([game('a')]), page: 1 }).mockResolvedValueOnce(page([game('a')]));
     await expect(loadCatalogContinuation({ page: 2, revision: 3 }, [game('a')], load, async () => page([game('a')]))).rejects.toThrow('catalog_duplicate_page');
     expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('catalog prefix refresh', () => {
+  it('keeps same-title games separate while rebuilding the loaded pages', async () => {
+    const load = vi.fn(async (query): Promise<CatalogPage> => {
+      const pageNumber = query.page ?? 1;
+      return {
+        items: [{ ...game(`fresh-${pageNumber}`), title: 'Same title' }],
+        total: 3,
+        page: pageNumber,
+        pageSize: 1,
+        revision: 7,
+      };
+    });
+
+    const result = await reloadCatalogPrefix({ search: 'same', pageSize: 1 }, 3, load);
+
+    expect(result.items.map((item) => item.id)).toEqual(['fresh-1', 'fresh-2', 'fresh-3']);
+    expect(result.items.map((item) => item.title)).toEqual(['Same title', 'Same title', 'Same title']);
+    expect(load.mock.calls.map(([query]) => [query.page, query.revision])).toEqual([[1, 0], [2, 7], [3, 7]]);
+  });
+
+  it('retries the complete prefix once after a changed revision', async () => {
+    let first = true;
+    const load = vi.fn(async (query): Promise<CatalogPage> => {
+      if (first) {
+        first = false;
+        throw changed();
+      }
+      const pageNumber = query.page ?? 1;
+      return { ...page([game(`fresh-${pageNumber}`)], 8), page: pageNumber, total: 2 };
+    });
+
+    const result = await reloadCatalogPrefix({ pageSize: 1 }, 2, load);
+
+    expect(result.items.map((item) => item.id)).toEqual(['fresh-1', 'fresh-2']);
+    expect(load).toHaveBeenCalledTimes(3);
+    expect(load.mock.calls.map(([query]) => [query.page, query.revision])).toEqual([[1, 0], [1, 0], [2, 8]]);
   });
 });

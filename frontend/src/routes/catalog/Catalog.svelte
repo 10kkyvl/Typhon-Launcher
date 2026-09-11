@@ -1,7 +1,10 @@
 <script lang="ts">
   import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List } from '@lucide/svelte';
+  import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
-  import { loadCatalogContinuation } from '../../lib/catalog/pages';
+  import { mergeCatalogDisplay } from '../../lib/catalog/display';
+  import { loadCatalogContinuation, reloadCatalogPrefix } from '../../lib/catalog/pages';
+  import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
@@ -25,7 +28,9 @@
     type GenreFacet,
     type Source,
   } from '../../lib/services/sources';
+  import { inWails } from '../../lib/services/backend';
   import { getAppInfo } from '../../lib/services/system';
+  import type { MetadataView } from '../../lib/services/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo } from '../../lib/stores/metadata';
@@ -98,12 +103,16 @@
 
   let token = 0;
   let debounce: ReturnType<typeof setTimeout> | undefined;
+  let identityRefreshKey = '';
+  let identityRefreshRunning = false;
+  let identityRefreshToken = 0;
   // Browse responses already contain list artwork. Loading full metadata for
   // every visible card also changes provider identities while paging through
   // the catalog; reserve that work for the game detail view.
 
   onDestroy(() => {
     clearTimeout(debounce);
+    token++;
     stashRoute(routeKey, 'catalog', {
       revision, offline, incomplete, platform, kind, facets, platforms,
       sourceState,
@@ -211,9 +220,86 @@
   }
 
   function reload() {
+    identityRefreshRunning = false;
+    identityRefreshToken = 0;
     prefetch.clear();
     page = 0;
     fetchPage(1);
+  }
+
+  async function refreshLoadedPrefix() {
+    if (!inWails || identityRefreshRunning || page <= 0) return;
+    const current = ++token;
+    identityRefreshToken = current;
+    const targetPage = page;
+    identityRefreshRunning = true;
+    loading = true;
+    appending = false;
+    prefetch.clear();
+    try {
+      const prefix = await reloadCatalogPrefix(
+        {
+          revision: 0,
+          search,
+          genre,
+          platform,
+          kind,
+          sort,
+          compat: compatOnly ? compatOnlyWorking : '',
+          page: 1,
+          pageSize,
+        },
+        targetPage,
+        queryCatalogGames,
+        () => current === token,
+      );
+      if (current !== token) return;
+      sourceState = get(sources);
+      items = prefix.items;
+      compatByGame = prefix.compat;
+      total = prefix.result.total;
+      page = prefix.result.page;
+      failed = false;
+      facets = prefix.result.facets ?? [];
+      platforms = prefix.result.platforms ?? [];
+      revision = prefix.result.revision ?? 0;
+      offline = prefix.result.offline ?? false;
+      incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
+      if (!offline && items.length < total) {
+        const upcoming = {
+          revision,
+          search,
+          genre,
+          platform,
+          kind,
+          sort,
+          compat: compatOnly ? compatOnlyWorking : '',
+          page: page + 1,
+          pageSize,
+        };
+        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+      }
+    } catch {
+      if (current === token) prefetch.clear();
+    } finally {
+      if (identityRefreshToken === current) {
+        identityRefreshRunning = false;
+        if (current === token) {
+          loading = false;
+          appending = false;
+        }
+      }
+    }
+  }
+
+  function refreshForMetadata(game: CatalogGame | undefined) {
+    if (!game || page <= 0) return;
+    const item = items.find((candidate) => matchesCatalogIdentity(candidate, game));
+    if (!item || !identityEvidenceChanged(item, game)) return;
+    const key = `${item.id}:${identityFingerprint(game)}`;
+    if (key === identityRefreshKey) return;
+    identityRefreshKey = key;
+    void refreshLoadedPrefix();
   }
 
   function onSearch() {
@@ -241,6 +327,14 @@
 
   onMount(() => {
     if (!restored) reload();
+    else if (inWails && page > 0) void refreshLoadedPrefix();
+  });
+
+  onMount(() => {
+    if (!inWails) return;
+    return Events.On('metadata:updated', (event) => {
+      refreshForMetadata((event.data as MetadataView)?.game);
+    });
   });
 
   onMount(async () => {
@@ -366,7 +460,7 @@
   {:else if $catalogView === 'grid'}
     <div class="grid">
       {#each items as game (game.id)}
-        {@const shown = $gameInfo[game.id] ?? game}
+        {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         {@const libId = libraryByGame.get(game.id)}
         {@const isFav = libId ? favoriteByLibraryId.get(libId) : false}
         {@const isInstalled = installedByGame.has(game.id)}
@@ -419,7 +513,7 @@
   {:else}
     <div class="list">
       {#each items as game (game.id)}
-        {@const shown = $gameInfo[game.id] ?? game}
+        {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         <button
           class="list-row"
           onclick={() => navigate('game', { id: game.id })}
