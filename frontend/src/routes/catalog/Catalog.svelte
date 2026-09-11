@@ -178,6 +178,7 @@
         request, items, queryCatalogGames,
         () => prefetch.take(JSON.stringify(request), () => queryCatalogGames(request)),
         () => current === token,
+        offline,
       );
       const { result, refreshed } = continuation;
       if (current !== token) return;

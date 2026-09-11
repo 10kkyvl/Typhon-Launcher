@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { appendCatalogPage, reloadCatalogPrefix } from './pages';
+import { appendCatalogPage, appendOfflineCatalogPage, loadCatalogContinuation, reloadCatalogPrefix } from './pages';
 import type { CatalogGame, CatalogPage } from '../services/sources';
-const game = (id: string): CatalogGame => ({ id, title: id, sortTitle: id, createdAt: '' });
+const game = (id: string, patch: Partial<CatalogGame> = {}): CatalogGame => ({
+  id,
+  title: id,
+  sortTitle: id,
+  createdAt: '',
+  ...patch,
+});
 const page = (items: CatalogGame[], revision = 3): CatalogPage => ({ items, revision, total: 3, page: 2, pageSize: 1 });
 describe('catalog continuation', () => {
   it('preserves previous position and appends a stable page', () => {
@@ -20,7 +26,6 @@ describe('catalog continuation', () => {
 });
 
 import { vi } from 'vitest';
-import { loadCatalogContinuation } from './pages';
 const changed = () => new Error('typhon:catalog.changed: reload');
 const fresh = (n: number, revision = 4): CatalogPage => ({ ...page([game(`fresh-${n}`)], revision), page: n });
 describe('catalog revision recovery', () => {
@@ -60,6 +65,61 @@ describe('catalog duplicate recovery', () => {
     const load = vi.fn().mockResolvedValueOnce({ ...page([game('a')]), page: 1 }).mockResolvedValueOnce(page([game('a')]));
     await expect(loadCatalogContinuation({ page: 2, revision: 3 }, [game('a')], load, async () => page([game('a')]))).rejects.toThrow('catalog_duplicate_page');
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('folds explicit aliases across offline pages and keeps canonical metadata', async () => {
+    const previous = [game('steam', { title: 'Same', aliasIds: ['igdb'] })];
+    const canonical = game('igdb', {
+      title: 'Same',
+      developer: 'Author',
+      externalIds: { igdb: '42' },
+      providerLinks: { igdb: ['42'] },
+      aliasIds: ['steam'],
+    });
+    const offlinePage: CatalogPage = {
+      items: [canonical],
+      total: 2,
+      page: 2,
+      pageSize: 1,
+      revision: 3,
+      offline: true,
+    };
+
+    const result = await loadCatalogContinuation(
+      { page: 2, revision: 3 },
+      previous,
+      vi.fn(),
+      async () => offlinePage,
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].id).toBe('igdb');
+    expect(result.items[0].developer).toBe('Author');
+  });
+
+  it('does not fold same-title offline homonyms without aliases', () => {
+    const previous = [game('first', { title: 'Same' })];
+    const next: CatalogPage = {
+      ...page([game('second', { title: 'Same' })]),
+      offline: true,
+    };
+
+    expect(appendOfflineCatalogPage(previous, next, 3).map((item) => item.id)).toEqual(['first', 'second']);
+  });
+
+  it('keeps online continuation on strict server identity checks', async () => {
+    const previous = [game('steam', { aliasIds: ['igdb'] })];
+    const canonical = game('igdb', { aliasIds: ['steam'] });
+    const onlinePage: CatalogPage = { ...page([canonical]), offline: false };
+
+    const result = await loadCatalogContinuation(
+      { page: 2, revision: 3 },
+      previous,
+      vi.fn(),
+      async () => onlinePage,
+    );
+
+    expect(result.items.map((item) => item.id)).toEqual(['steam', 'igdb']);
   });
 });
 
