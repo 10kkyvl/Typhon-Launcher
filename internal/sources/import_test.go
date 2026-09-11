@@ -388,6 +388,29 @@ func TestApplyMatchesKeepsExactMatch(t *testing.T) {
 	}
 }
 
+func TestApplyMatchesSkipsUnchangedExactTitleAfterEpochShift(t *testing.T) {
+	matcher := &stubMatcher{epoch: 42, resolve: func(queries []catalog.Query) []catalog.Match {
+		t.Fatalf("exact-title release was recomputed: %+v", queries)
+		return nil
+	}}
+	id := "game"
+	release := &Release{
+		ID:              "release",
+		Title:           "Some Game",
+		NormalizedTitle: "some game",
+		CanonicalGameID: &id,
+		MatchStatus:     catalog.StatusMatched,
+		MatchMethod:     string(catalog.MethodExactTitle),
+		MatchEpoch:      42,
+	}
+	if err := applyMatches(matcher, []*Release{release}); err != nil {
+		t.Fatal(err)
+	}
+	if matcher.resolved != 0 || release.CanonicalGameID == nil {
+		t.Fatalf("exact-title release changed: resolved=%d release=%+v", matcher.resolved, release)
+	}
+}
+
 func TestApplyMatchesSkipsLocked(t *testing.T) {
 	cat := mustCatalog(t, t.TempDir())
 	now := time.Now()

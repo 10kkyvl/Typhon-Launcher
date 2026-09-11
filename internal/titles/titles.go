@@ -152,7 +152,7 @@ func extractDLCCount(s string) (string, int) {
 }
 
 func extractVersion(s string) (string, string, string) {
-	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reRVer}
+	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
 
 	bestStart := -1
 	var bestLoc []int

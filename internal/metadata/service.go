@@ -342,7 +342,10 @@ func (s *Service) EnsureFresh(gameID string) (bool, error) {
 		s.mu.Unlock()
 		return false, errNotStarted
 	}
-	if s.refreshing[gameID] || (game.MetadataLanguage == s.language && !s.attempts.due(gameID, true)) {
+	// Backoff and dismissal apply even before the first metadata language has
+	// been recorded. Calling due outside the language equality check prevents
+	// an empty MetadataLanguage from turning every card open into a new search.
+	if s.refreshing[gameID] || !s.attempts.due(gameID, true) {
 		s.mu.Unlock()
 		return false, nil
 	}
@@ -729,21 +732,32 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 	}
 
 	// Do not let an old-language response overwrite a newer UI selection.
-	s.mu.Lock()
-	lang := s.language
-	if lang != "ru" {
-		lang = "en"
-	}
+	// Keep the metadata mutex out of disk replacement and catalog persistence:
+	// readers and a locale change must remain responsive while those operations
+	// fsync.
+	lang := s.currentLanguage()
 	if Language(ctx) != lang {
-		s.mu.Unlock()
 		s.store.removeFiles(batch.created)
 		return View{}, context.Canceled
 	}
 	previous, err := s.store.replace(gameID, batch.assets)
 	if err != nil {
 		s.store.removeFiles(batch.created)
-		s.mu.Unlock()
 		return View{}, err
+	}
+	s.mu.Lock()
+	currentLanguage := s.language
+	if currentLanguage != "ru" {
+		currentLanguage = "en"
+	}
+	languageChanged := s.closing || Language(ctx) != currentLanguage
+	s.mu.Unlock()
+	if languageChanged {
+		if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {
+			slog.Error("restore media assets", "game", gameID, "error", restoreErr)
+		}
+		s.store.removeFiles(batch.created)
+		return View{}, context.Canceled
 	}
 
 	igdbID := meta.ProviderID
@@ -770,7 +784,6 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		UpdatedAt:    time.Now(),
 		Partial:      batch.partial,
 	})
-	s.mu.Unlock()
 	if err != nil {
 		if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {
 			slog.Error("restore media assets", "game", gameID, "error", restoreErr)

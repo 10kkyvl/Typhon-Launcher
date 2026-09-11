@@ -321,7 +321,7 @@ func applyMatches(m matcher, list []*Release) error {
 // пересчитывается на каждом обновлении, точный и ручной — нет.
 func stableMatch(method string) bool {
 	switch catalog.Method(method) {
-	case catalog.MethodExternalID, catalog.MethodOverride:
+	case catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodExactTitle:
 		return true
 	}
 	return false
