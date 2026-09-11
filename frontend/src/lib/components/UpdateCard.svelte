@@ -77,7 +77,7 @@
       {:else if busy}
         <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
       {:else if !isUpdate}
-        <StatusBadge kind="accent" label={msg(isNewRevision ? 'ui.distributionUpdated' : 'ui.newReleaseAvailable')} dot={false} />
+        <StatusBadge kind="accent" label={msg(isNewRevision ? 'ui.distributionUpdated' : 'ui.versionsNotComparable')} dot={false} />
       {/if}
     </div>
   </div>
@@ -115,7 +115,7 @@
   {/if}
 
   {#if availability.reason && !isUpdate}
-    <p class="muted reason">{isNewRevision ? msg('ui.newDistributionRevisionReason') : availability.reason}</p>
+    <p class="muted reason">{msg(isNewRevision ? 'ui.newDistributionRevisionReason' : 'ui.versionsNotComparable')}</p>
   {/if}
   {#if update.error}
     <p class="error">{update.error}</p>

@@ -1,10 +1,11 @@
+import { msg } from '../i18n';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import type { Settings } from '../services/settings';
 
 globalThis.document = {
   documentElement: {
-    style: { setProperty: () => {} },
+    style: { setProperty: () => {}, removeProperty: () => {} },
     classList: { toggle: () => {} },
   },
 } as unknown as Document;
@@ -100,7 +101,7 @@ it('restores the last confirmed value when two successive saves fail', async () 
  await Promise.all([a,b]);expect(get(settings)!.uiScale).toBe(1);
 });
 
-it('rolls back personal accent and icon after a failed save and reports its cause', async () => {
+it('rolls back personal accent and icon after a failed save and shows a translated failure', async () => {
   settings.set({ ...makeSettings(), accentColor: '#6673F2', tintLogo: false });
   const write = deferred<void>();
   vi.mocked(saveSettings).mockImplementationOnce(() => write.promise);
@@ -111,5 +112,5 @@ it('rolls back personal accent and icon after a failed save and reports its caus
   expect(get(settings)?.accentColor).toBe('#6673F2');
   expect(get(settings)?.tintLogo).toBe(false);
   const { toast } = await import('./toasts');
-  expect(toast).toHaveBeenLastCalledWith(expect.stringContaining('disk full'), 'danger');
+  expect(toast).toHaveBeenLastCalledWith(msg('state.settingsSaveFailed'), 'danger');
 });

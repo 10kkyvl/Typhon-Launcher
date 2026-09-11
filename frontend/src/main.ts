@@ -16,7 +16,8 @@ async function start() {
   try {
     await initSettings();
   } catch (err) {
-    toast(msg('state.settingsNotLoaded') + ": " + String(err), 'danger');
+    console.error('load settings', err);
+    toast(msg('state.settingsNotLoaded'), 'danger');
   }
   await initTheme();
   mount(App, { target: document.getElementById('app')! });

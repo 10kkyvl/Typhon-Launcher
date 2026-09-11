@@ -52,7 +52,7 @@ export async function updateSettings(patch: Partial<Settings>) {
       confirmed = { ...next };
     } catch (err) {
       console.error('save settings', err);
-      toast(msg('state.settingsSaveFailed') + ': ' + String(err instanceof Error ? err.message : err), 'danger');
+      toast(msg('state.settingsSaveFailed'), 'danger');
       // Undo this call's own keys against the latest state instead of
       // restoring the whole snapshot: another call may have saved a
       // different field successfully while this one was in flight, and
