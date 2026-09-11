@@ -1,6 +1,7 @@
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
+import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
 
 export { markError };
@@ -69,7 +70,9 @@ export async function setExecutable(id: string, executable: string): Promise<Lib
 
 export async function playGame(id: string): Promise<void> {
   if (!inWails) throw unavailable();
-  await LibraryService.PlayGame(id);
+  try { await LibraryService.PlayGame(id); } catch (err) {
+    if (errorCode(err) !== 'library.launch_cancelled') throw err;
+  }
 }
 
 export async function stopGame(id: string): Promise<void> {

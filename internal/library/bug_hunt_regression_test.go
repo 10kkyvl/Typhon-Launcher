@@ -3,11 +3,13 @@ package library
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+	"typhon/internal/uierr"
 )
 
 func TestUnreadableLegacyMarkerDoesNotDropLocalOwnership(t *testing.T) {
@@ -48,39 +50,48 @@ func TestUnreadableLegacyMarkerDoesNotDropLocalOwnership(t *testing.T) {
 }
 
 func TestStopDuringPrepareReturnsCodedCancellation(t *testing.T) {
-	service := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	exe := tempGameExe(t)
-	game, err := service.AddGame(exe, "Game")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.ctx = context.Background()
-	failures := make(chan string, 1)
-	service.SetLaunchFailureRecorder(func(_, code, _ string) { failures <- code })
-	entered := make(chan struct{})
-	service.prepare = func(ctx context.Context, _ launch) error {
-		close(entered)
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	done := make(chan error, 1)
-	go func() { done <- service.PlayGame(game.ID) }()
-	<-entered
-	if err := service.StopGame(game.ID); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("error = %v, want context cancellation", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("PlayGame did not return after cancellation")
-	}
-	select {
-	case code := <-failures:
-		t.Fatalf("canceled prepare recorded launch failure %q", code)
-	default:
+	for _, returnCancellation := range []bool{true, false} {
+		t.Run(fmt.Sprint(returnCancellation), func(t *testing.T) {
+
+			service := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			exe := tempGameExe(t)
+			game, err := service.AddGame(exe, "Game")
+			if err != nil {
+				t.Fatal(err)
+			}
+			service.ctx = context.Background()
+			failures := make(chan string, 1)
+			service.SetLaunchFailureRecorder(func(_, code, _ string) { failures <- code })
+			entered := make(chan struct{})
+			service.prepare = func(ctx context.Context, _ launch) error {
+				close(entered)
+				<-ctx.Done()
+				if returnCancellation {
+					return ctx.Err()
+				}
+				return nil
+			}
+			done := make(chan error, 1)
+			go func() { done <- service.PlayGame(game.ID) }()
+			<-entered
+			if err := service.StopGame(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) || uierr.Code(err) != "library.launch_cancelled" {
+					t.Fatalf("error = %v, want context cancellation", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("PlayGame did not return after cancellation")
+			}
+			select {
+			case code := <-failures:
+				t.Fatalf("canceled prepare recorded launch failure %q", code)
+			default:
+			}
+
+		})
 	}
 }
 

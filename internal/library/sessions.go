@@ -88,7 +88,7 @@ func (s *Service) PlayGame(id string) error {
 	s.mu.Lock()
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			return context.Canceled
+			return uierr.Wrap("library.launch_cancelled", context.Canceled)
 		}
 		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
 		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
@@ -100,12 +100,18 @@ func (s *Service) PlayGame(id string) error {
 	}
 
 	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return uierr.Wrap("library.launch_cancelled", err)
+		}
 		return err
 	}
 	s.mu.Unlock()
 	proc, err := s.start(ctx, req)
 	s.mu.Lock()
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return uierr.Wrap("library.launch_cancelled", context.Canceled)
+		}
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))

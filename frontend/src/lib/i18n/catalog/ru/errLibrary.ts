@@ -22,6 +22,7 @@ export const errLibrary = {
   'library.not_installed': 'игра не установлена',
   'library.executable_missing': 'исполняемый файл больше не существует',
   'library.runtime_failed': 'не удалось подготовить окружение запуска',
+  'library.launch_cancelled': 'запуск отменён',
   'library.launch_failed': 'не удалось запустить игру',
   'library.shortcut_unsupported': 'ярлыки поддерживаются только в Windows',
   'library.no_shortcut_executable': 'у игры не задан исполняемый файл',
