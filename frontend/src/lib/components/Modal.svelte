@@ -26,6 +26,12 @@
 
   const id = Symbol();
 
+  // Fixed overlays must escape layout/size containment in settings and cards.
+  function portal(node: HTMLDivElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   $effect(() => {
     if (!open) return;
     untrack(() => { stack = [...stack, id]; });
@@ -49,7 +55,7 @@
 <svelte:window onkeydown={open ? onKeydown : undefined} />
 
 {#if open}
-  <div class="overlay" inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
+  <div class="overlay" use:portal inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
     <div class="modal" style:width role="dialog" aria-modal={topmost} aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
