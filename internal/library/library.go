@@ -295,7 +295,11 @@ func (s *Service) load() ([]Game, error) {
 			case markerErr == nil:
 				g.Owned = m.InstallType != "" && m.Owned
 			case errors.Is(markerErr, fs.ErrNotExist):
-				g.Owned = false
+				// ENOENT also describes an unavailable installation volume. Only
+				// an accessible directory proves that its marker is absent.
+				if _, dirErr := os.Stat(g.InstallDir); dirErr == nil || g.InstallDir == "" {
+					g.Owned = false
+				}
 			default:
 				// Permission errors, an unavailable volume and malformed JSON do
 				// not prove that the installation stopped being owned.
