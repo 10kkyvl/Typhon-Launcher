@@ -242,11 +242,14 @@ func TestOfflineBrowseDropsPartialRemoteResponseBeforeLoadingCache(t *testing.T)
 	}
 	// Simulate a backend that returned a partially decoded response together
 	// with its error. The stale Compat value must not bleed into the cache load.
-	remote.page.Compat = map[string]CompatInfo{"server": {Works: 1, Total: 10}}
+	remote.page.Compat = map[string]CompatInfo{"partial-only": {Works: 1, Total: 10}}
 	remote.err = errors.New("backend unavailable")
 	offline, err := service.BrowseGames(query)
 	if err != nil || !offline.Offline {
 		t.Fatalf("offline page = %+v, err = %v", offline, err)
+	}
+	if _, exists := offline.Compat["partial-only"]; exists {
+		t.Fatal("partial remote Compat leaked into the offline page")
 	}
 	if got := offline.Compat["server"]; got.Works != 8 || got.Total != 10 {
 		t.Fatalf("offline Compat = %+v, want cached value 8/10", got)
