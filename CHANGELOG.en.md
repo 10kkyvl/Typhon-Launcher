@@ -7,13 +7,17 @@ this file carries the same entries for the GitHub releases. It starts at
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
 ## 0.6.1 — 2026-09-12
-Fixed catalog page loading and reduced waiting while browsing games.
+Fixed Steam and IGDB duplicates, card refreshes, and catalog pagination.
 
 ### Changed
 - All Games uses the titles and covers supplied by the catalog without requesting full metadata for every visible card. Detailed information loads when opening a game
 - Server-side page loading, search and filter counts are faster across the large Steam and IGDB catalog
 
 ### Fixed
+- A game from Steam and IGDB no longer remains two cards after a confirmed link is found: the launcher accepts new links while the index is incomplete and refreshes the list after viewing details
+- Older saved pages use provider links already learned by the launcher; installations, favorites, and personal references to previous cards are preserved
+- Developers are shown from available catalog data without opening every game's details
+- Background Steam and IGDB linking processes consecutive batches without a minute-long pause between them and continues past missing provider records
 - The next-page loading error during background catalog updates. Changes outside the displayed list no longer reset pagination; changes to the displayed list are still checked to prevent skipped or repeated games
 - A server-side deadlock between Steam imports and IGDB synchronization that caused catalog updates to fail
 - Fixed 1 additional non-critical bug
