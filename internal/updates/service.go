@@ -440,7 +440,8 @@ func (s *Service) clearJournal(gameID string) error {
 	s.mu.Unlock()
 	if previous.RetainedPrevious != "" {
 		if err := os.RemoveAll(previous.RetainedPrevious); err != nil {
-			return fmt.Errorf("remove retained update backup: %w", err)
+			slog.Warn("retained update backup cleanup deferred", "gameId", gameID, "error", err)
+			return nil
 		}
 	}
 	s.mu.Lock()
@@ -454,6 +455,10 @@ func (s *Service) clearJournal(gameID string) error {
 	delete(s.journals, gameID)
 	if err := s.persistJournalsLocked(); err != nil {
 		s.journals[gameID] = previous
+		if previous.Kind == JournalCleanup {
+			slog.Warn("update cleanup journal removal deferred", "gameId", gameID, "error", err)
+			return nil
+		}
 		return err
 	}
 	return nil
@@ -1067,12 +1072,26 @@ func (s *Service) sweepPrevious() {
 // cannot be tied to the service's lifecycle simply does not start.
 func (s *Service) beginJob(gameID string) (context.Context, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] || s.journals[gameID] != nil {
+	pending := s.journals[gameID]
+	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] || (pending != nil && pending.Kind != JournalCleanup) {
+		s.mu.Unlock()
 		return nil, false
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.jobs[gameID] = &job{cancel: cancel, done: make(chan struct{})}
+	s.mu.Unlock()
+	if pending != nil {
+		// Reserve the job while retrying cleanup so no other transaction can
+		// race its files. A released antivirus handle needs no app restart.
+		err := s.clearJournal(gameID)
+		s.mu.Lock()
+		blocked := err != nil || s.journals[gameID] != nil
+		s.mu.Unlock()
+		if blocked {
+			s.endJob(gameID)
+			return nil, false
+		}
+	}
 	return ctx, true
 }
 
