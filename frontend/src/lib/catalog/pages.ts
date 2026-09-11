@@ -83,7 +83,7 @@ export async function reloadCatalogPrefix(
         offline ||= next.offline === true;
         result = next;
       }
-      return { result, items, compat };
+      return { result: { ...result, offline }, items, compat };
     } catch (err) {
       lastError = err;
       if (errorCode(err) !== 'catalog.changed' || attempt === 1 || !active()) throw err;
@@ -107,7 +107,7 @@ export async function loadCatalogContinuation(
     const items = query.page === 1
       ? result.items
       : appendCatalogContinuation(previous, result, query.revision ?? 0, offline);
-    return { result, items, refreshed: false };
+    return { result: { ...result, offline: result.offline || (query.page !== 1 && offline) }, items, refreshed: false };
   } catch (err) {
     if (errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
     let result = await load({ ...query, page: 1, revision: 0 });
@@ -122,6 +122,6 @@ export async function loadCatalogContinuation(
       offline ||= next.offline === true;
       result = next;
     }
-    return { result: { ...result, compat }, items, refreshed: true };
+    return { result: { ...result, compat, offline }, items, refreshed: true };
   }
 }

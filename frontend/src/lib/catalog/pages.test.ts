@@ -161,3 +161,11 @@ describe('catalog prefix refresh', () => {
     expect(load.mock.calls.map(([query]) => [query.page, query.revision])).toEqual([[1, 0], [1, 0], [2, 8]]);
   });
 });
+
+ it('preserves offline state when a cached prefix receives an online continuation', async () => {
+    const result = await loadCatalogContinuation(
+      { page: 2, revision: 3 }, [game('a')], vi.fn(),
+      async () => ({ ...page([game('b')]), offline: false }), () => true, true,
+    );
+    expect(result.result.offline).toBe(true);
+  });
