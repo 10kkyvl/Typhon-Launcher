@@ -461,6 +461,9 @@ func TestApplyPatchChainCommitsEachPatchBeforeTheNext(t *testing.T) {
 	if version != "1.1" {
 		t.Fatalf("library version = %q, want 1.1", version)
 	}
+	if applied[0].ReleaseID != "p1" {
+		t.Fatalf("intermediate patch used another release identity: %+v", applied[0])
+	}
 	if data, err := os.ReadFile(filepath.Join(installDir, "game.exe")); err != nil || string(data) != "v1.1" {
 		t.Fatalf("game.exe = %q, err = %v, want v1.1", data, err)
 	}

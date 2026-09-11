@@ -110,7 +110,7 @@ func (s *Service) torrentIdentity(game library.Game) (sources.Release, bool) {
 		return sources.Release{}, false
 	}
 	release, ok := s.releases.FindRelease(game.ReleaseID)
-	if !ok || release.InfoHash == "" || release.SourceID != game.SourceID ||
+	if !ok || release.Kind == sources.KindPatch || release.InfoHash == "" || release.SourceID != game.SourceID ||
 		release.DistributionID != game.DistributionID || releaseVersion(release) != game.Version {
 		return sources.Release{}, false
 	}

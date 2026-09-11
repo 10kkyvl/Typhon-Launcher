@@ -812,7 +812,7 @@ func (s *Service) runPatchChain(ctx context.Context, plan UpdatePlan, game libra
 			return applied > 0 || !restored, errNoLaunchTarget
 		}
 
-		releaseID := game.ReleaseID
+		releaseID := patch.ReleaseID
 		releaseUploadedAt := patch.UploadedAt
 		if patch.ToVersion == plan.TargetVersion {
 			releaseID = plan.TargetReleaseID
