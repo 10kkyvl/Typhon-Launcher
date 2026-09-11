@@ -153,12 +153,21 @@ export interface MatchCandidate {
   method: string;
 }
 
+export interface CatalogExternalIDs {
+  steam?: string;
+  igdb?: string;
+  gog?: string;
+  [provider: string]: string | undefined;
+}
+
 export interface CatalogGame {
   id: string;
   title: string;
   sortTitle: string;
   coverUrl?: string;
   serverId?: string;
+  externalIds?: CatalogExternalIDs;
+  providerLinks?: Record<string, string[]>;
   aliasIds?: string[];
   releaseYear?: number;
   developer?: string;
@@ -205,7 +214,13 @@ export interface CatalogPage {
   platforms?: GenreFacet[];
   revision?: number;
   offline?: boolean;
-  providers?: {provider: string; complete: boolean; updatedAt?: string; records: number}[];
+  providers?: {
+    provider: string;
+    complete: boolean;
+    updatedAt?: string;
+    records: number;
+    links?: {complete: boolean; processed: number; records: number; updatedAt?: string};
+  }[];
   items: CatalogGame[];
   compat?: Record<string, CompatInfo>;
   total: number;
