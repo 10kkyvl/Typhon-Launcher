@@ -84,24 +84,26 @@ type Art struct {
 }
 
 type Service struct {
-	language   string
-	mu         sync.Mutex
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	loops      sync.WaitGroup
-	closing    bool
-	refreshing map[string]bool
+	language      string
+	languageEpoch uint64
+	mu            sync.Mutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	loops         sync.WaitGroup
+	closing       bool
+	refreshing    map[string]bool
 
-	catalog  *catalog.Service
-	provider Provider
-	store    *assetStore
-	attempts *attemptStore
-	budget   *budget
-	images   *http.Client
-	imgGate  chan struct{}
-	artGate  chan struct{}
-	ttl      time.Duration
+	catalog       *catalog.Service
+	applyMetadata func(string, catalog.MetadataPatch) (catalog.Game, error)
+	provider      Provider
+	store         *assetStore
+	attempts      *attemptStore
+	budget        *budget
+	images        *http.Client
+	imgGate       chan struct{}
+	artGate       chan struct{}
+	ttl           time.Duration
 }
 
 func NewService(cat *catalog.Service, provider Provider) (*Service, error) {
@@ -126,16 +128,17 @@ func NewServiceAt(dir string, cat *catalog.Service, provider Provider) (*Service
 		return nil, err
 	}
 	return &Service{
-		refreshing: map[string]bool{},
-		catalog:    cat,
-		provider:   provider,
-		store:      store,
-		attempts:   attempts,
-		budget:     newBudget(time.Now),
-		images:     newImageClient(),
-		imgGate:    make(chan struct{}, imageSlots),
-		artGate:    make(chan struct{}, 1),
-		ttl:        defaultTTL,
+		refreshing:    map[string]bool{},
+		catalog:       cat,
+		applyMetadata: cat.ApplyMetadata,
+		provider:      provider,
+		store:         store,
+		attempts:      attempts,
+		budget:        newBudget(time.Now),
+		images:        newImageClient(),
+		imgGate:       make(chan struct{}, imageSlots),
+		artGate:       make(chan struct{}, 1),
+		ttl:           defaultTTL,
 	}, nil
 }
 
@@ -735,7 +738,13 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 	// Keep the metadata mutex out of disk replacement and catalog persistence:
 	// readers and a locale change must remain responsive while those operations
 	// fsync.
-	lang := s.currentLanguage()
+	s.mu.Lock()
+	lang := s.language
+	if lang != "ru" {
+		lang = "en"
+	}
+	epoch := s.languageEpoch
+	s.mu.Unlock()
 	if Language(ctx) != lang {
 		s.store.removeFiles(batch.created)
 		return View{}, context.Canceled
@@ -750,7 +759,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 	if currentLanguage != "ru" {
 		currentLanguage = "en"
 	}
-	languageChanged := s.closing || Language(ctx) != currentLanguage
+	languageChanged := s.closing || Language(ctx) != currentLanguage || epoch != s.languageEpoch
 	s.mu.Unlock()
 	if languageChanged {
 		if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {
@@ -766,7 +775,11 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		steamID = strings.TrimPrefix(igdbID, "steam:")
 		igdbID = ""
 	}
-	updated, err := s.catalog.ApplyMetadata(gameID, catalog.MetadataPatch{
+	applyMetadata := s.applyMetadata
+	if applyMetadata == nil {
+		applyMetadata = s.catalog.ApplyMetadata
+	}
+	updated, err := applyMetadata(gameID, catalog.MetadataPatch{
 		SteamID:      steamID,
 		Language:     Language(ctx),
 		IGDBID:       igdbID,
@@ -791,8 +804,24 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		s.store.removeFiles(batch.created)
 		return View{}, err
 	}
+	s.mu.Lock()
+	languageChanged = s.closing || epoch != s.languageEpoch
+	s.mu.Unlock()
+	if languageChanged {
+		// The catalog row is intentionally left tagged with the language that
+		// produced it. stale() will schedule a fresh request for the new locale;
+		// returning no view here prevents an in-flight old-language response from
+		// replacing the user's current card.
+		return View{}, context.Canceled
+	}
 
 	s.store.removeFiles(staleAssets(previous, batch.assets))
+	s.mu.Lock()
+	languageChanged = s.closing || epoch != s.languageEpoch
+	s.mu.Unlock()
+	if languageChanged {
+		return View{}, context.Canceled
+	}
 	return s.view(updated), nil
 }
 

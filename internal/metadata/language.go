@@ -23,6 +23,7 @@ func (s *Service) SetLanguage(lang string) {
 	}
 	s.mu.Lock()
 	s.language = lang
+	s.languageEpoch++
 	s.mu.Unlock()
 }
 func (s *Service) currentLanguage() string {
