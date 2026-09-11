@@ -24,6 +24,8 @@ A Steam and IGDB catalog, personal accent colors, screenshot zoom and more relia
 - The “What's new” window is wider to make longer changelogs easier to read
 
 ### Fixed
+- Game removal requires local proof that Typhon installed it: a cloud flag alone cannot authorize deleting an externally installed game folder and its saves
+- If contact with an installer is lost, its folder is not cleaned up until the process is confirmed stopped; two installations cannot occupy the same folder concurrently
 - Protected recovery after an interrupted game update or failed rollback: new operations cannot overwrite an unfinished recovery journal, and restarting Typhon resumes recovery of both files and the library record
 - macOS self-updates now replace the application atomically: a crash between renames can no longer leave the usual application path empty. This protection applies when updating from 0.6.0 or later
 - With administrator permission granted in advance on Windows, the installer and job parameters are verified before execution: replacement of the file or job after authorization is rejected
