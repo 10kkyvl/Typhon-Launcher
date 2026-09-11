@@ -42,11 +42,19 @@ type GameQuery struct {
 // отсеивать на фронте значит отдавать страницы разной длины.
 const CompatOnlyWorking = "works"
 
-type IndexStatus struct {
-	Provider  string     `json:"provider"`
+type IndexLinkStatus struct {
 	Complete  bool       `json:"complete"`
-	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+	Processed int64      `json:"processed"`
 	Records   int64      `json:"records"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+}
+
+type IndexStatus struct {
+	Links     *IndexLinkStatus `json:"links,omitempty"`
+	Provider  string           `json:"provider"`
+	Complete  bool             `json:"complete"`
+	UpdatedAt *time.Time       `json:"updatedAt,omitempty"`
+	Records   int64            `json:"records"`
 }
 type GamePage struct {
 	Facets    []GenreFacet  `json:"facets"`

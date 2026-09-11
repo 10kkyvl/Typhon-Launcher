@@ -14,7 +14,7 @@ func TestBrowseHTTPPreservesNewProviderLinkAndDeveloper(t *testing.T) {
 			t.Errorf("path=%s", r.URL.Path)
 		}
 		if linked.Load() {
-			writeJSON(t, w, 200, `{"items":[{"id":"canonical","title":"0xFF","developer":"Sandstrom","externalIds":{"igdb":"242303","steam":"2218760"},"providerLinks":{"igdb":["242303"],"steam":["2218760"]}}],"total":1,"providers":[{"provider":"igdb","complete":false},{"provider":"steam","complete":false}]}`)
+			writeJSON(t, w, 200, `{"items":[{"id":"canonical","title":"0xFF","developer":"Sandstrom","externalIds":{"igdb":"242303","steam":"2218760"},"providerLinks":{"igdb":["242303"],"steam":["2218760"]}}],"total":1,"providers":[{"provider":"igdb","complete":false},{"provider":"steam","complete":false,"links":{"complete":false,"processed":10,"records":100}}]}`)
 		} else {
 			writeJSON(t, w, 200, `{"items":[{"id":"canonical","title":"0xFF","externalIds":{"igdb":"242303"},"providerLinks":{"igdb":["242303"]}},{"id":"steam-home","title":"0xFF","externalIds":{"steam":"2218760"},"providerLinks":{"steam":["2218760"]}}],"total":2,"providers":[{"provider":"igdb","complete":false},{"provider":"steam","complete":false}]}`)
 		}
@@ -33,6 +33,9 @@ func TestBrowseHTTPPreservesNewProviderLinkAndDeveloper(t *testing.T) {
 	page, err := svc.BrowseGames(catalog.GameQuery{})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("linked=%+v err=%v", page, err)
+	}
+	if len(page.Providers) != 2 || page.Providers[1].Links == nil || page.Providers[1].Links.Processed != 10 {
+		t.Fatalf("link progress lost at HTTP/service boundary: %+v", page.Providers)
 	}
 	g := page.Items[0]
 	if g.Developer != "Sandstrom" || g.ExternalIDs.Steam != "2218760" || len(g.AliasIDs) != 1 || g.AliasIDs[0] != "steam-home" {
