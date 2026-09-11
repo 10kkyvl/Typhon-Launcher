@@ -70,10 +70,10 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	complete := remoteProviderCompleteness(page.Providers)
 	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	for i, g := range page.Items {
-		// LocalExternalIDs is a private durability detail. A remote response
+		// Local provider evidence is a private durability detail. A remote response
 		// must never be able to inject it, and it must not leak through the
 		// public page returned to the frontend.
-		g.LocalExternalIDs = ExternalIDs{}
+		g.localExternalIDs = ExternalIDs{}
 		// Existing personal references retain their IDs. ServerID records the
 		// provider-independent identity without rewriting installation provenance.
 		g.ServerID = g.ID
@@ -94,7 +94,7 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 			page.Compat[g.ID] = c
 		}
 		g.AliasIDs = nil
-		g.LocalExternalIDs = ExternalIDs{}
+		g.localExternalIDs = ExternalIDs{}
 		page.Items[i] = g
 	}
 	s.reconcileRemotePageLinksLocked(page.Items, complete)
@@ -178,8 +178,8 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete m
 			old.ExternalIDs.Steam = ""
 			changed = true
 		}
-		if old.LocalExternalIDs.Steam != "" && claimed[old.LocalExternalIDs.Steam] {
-			old.LocalExternalIDs.Steam = ""
+		if old.localExternalIDs.Steam != "" && claimed[old.localExternalIDs.Steam] {
+			old.localExternalIDs.Steam = ""
 			changed = true
 		}
 		keptIGDB := []string{}
@@ -190,8 +190,8 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete m
 				keptIGDB = append(keptIGDB, id)
 			}
 		}
-		if old.LocalExternalIDs.IGDB != "" && igdbClaims[old.LocalExternalIDs.IGDB] {
-			old.LocalExternalIDs.IGDB = ""
+		if old.localExternalIDs.IGDB != "" && igdbClaims[old.localExternalIDs.IGDB] {
+			old.localExternalIDs.IGDB = ""
 			changed = true
 		}
 		if !changed {
@@ -316,25 +316,25 @@ func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
 	// Personal records do not have ServerID. Their provider IDs are local
 	// evidence and must survive a partial server projection.
 	if old.ServerID == "" {
-		if old.LocalExternalIDs.IGDB == "" {
-			merged.LocalExternalIDs.IGDB = old.ExternalIDs.IGDB
+		if old.localExternalIDs.IGDB == "" {
+			merged.localExternalIDs.IGDB = old.ExternalIDs.IGDB
 		}
-		if old.LocalExternalIDs.Steam == "" {
-			merged.LocalExternalIDs.Steam = old.ExternalIDs.Steam
+		if old.localExternalIDs.Steam == "" {
+			merged.localExternalIDs.Steam = old.ExternalIDs.Steam
 		}
 		if merged.ExternalIDs.IGDB == "" {
-			merged.ExternalIDs.IGDB = merged.LocalExternalIDs.IGDB
+			merged.ExternalIDs.IGDB = merged.localExternalIDs.IGDB
 		}
 		if merged.ExternalIDs.Steam == "" {
-			merged.ExternalIDs.Steam = merged.LocalExternalIDs.Steam
+			merged.ExternalIDs.Steam = merged.localExternalIDs.Steam
 		}
 	} else {
-		merged.LocalExternalIDs = old.LocalExternalIDs
+		merged.localExternalIDs = old.localExternalIDs
 		if merged.ExternalIDs.IGDB == "" {
-			merged.ExternalIDs.IGDB = old.LocalExternalIDs.IGDB
+			merged.ExternalIDs.IGDB = old.localExternalIDs.IGDB
 		}
 		if merged.ExternalIDs.Steam == "" {
-			merged.ExternalIDs.Steam = old.LocalExternalIDs.Steam
+			merged.ExternalIDs.Steam = old.localExternalIDs.Steam
 		}
 	}
 	merged.Aliases = mergeRemoteStrings(old.Aliases, remote.Aliases)
