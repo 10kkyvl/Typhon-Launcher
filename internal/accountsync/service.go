@@ -402,6 +402,12 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 
 	results := make(map[string]gameCompute, len(localByIGDB))
 	for igdbID, local := range localByIGDB {
+		// The library may keep a local installation while acknowledging the
+		// cloud removal. Do not echo that retained installation back as an
+		// active cloud card on this or subsequent syncs.
+		if _, removed := remoteRemovedIDs[igdbID]; removed {
+			continue
+		}
 		remote, hasRemote := remoteByIGDB[igdbID]
 		prev := st.Games[igdbID]
 

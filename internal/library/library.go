@@ -753,8 +753,9 @@ func (s *Service) RemoveGame(id string) error {
 	return s.removeGameLocked(id)
 }
 
-// RemoveSyncedGame translates catalog identity under the same lock as removal.
-// It archives only the library record; installed files are never deleted.
+// RemoveSyncedGame archives cloud-only cards. A remote tombstone cannot remove
+// a local installation, its shortcut or its discovery eligibility, including
+// when the installation's volume is temporarily unavailable.
 //
 //wails:ignore
 func (s *Service) RemoveSyncedGame(canonicalID string) error {
@@ -762,6 +763,9 @@ func (s *Service) RemoveSyncedGame(canonicalID string) error {
 	defer s.mu.Unlock()
 	for _, game := range s.games {
 		if s.sameCanonicalLocked(game.CanonicalGameID, canonicalID) {
+			if game.InstallDir != "" || game.Executable != "" {
+				return nil
+			}
 			return s.removeGameLocked(game.ID)
 		}
 	}
