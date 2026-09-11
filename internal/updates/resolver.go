@@ -263,7 +263,7 @@ func build(
 	}
 	if kind == KindUpdate && confidence < updateConfidenceThreshold {
 		out.Kind = KindNewRelease
-		out.Reason = "низкая уверенность в сопоставлении версий"
+		out.Reason = "versions_not_comparable"
 	}
 	if out.Kind == KindNewRelease && confidence < newReleaseMinConfidence {
 		return UpdateAvailability{
@@ -276,7 +276,7 @@ func build(
 			InstalledVersion:           installed.Version,
 		}
 	}
-	if len(compat.Reasons) > 0 && out.Reason == "" {
+	if len(compat.Reasons) > 0 && out.Reason != "new_distribution_revision" {
 		out.Reason = compat.Reasons[0]
 	}
 

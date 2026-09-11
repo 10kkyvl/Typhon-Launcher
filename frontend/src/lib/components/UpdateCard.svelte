@@ -16,6 +16,7 @@
     strategyLabels,
   } from '../stores/updates';
   import { bytesSize, progressPercent, relativeDate } from '../utils/format';
+  import { updateReasonKey } from './updateReason';
   import { msg } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
@@ -115,7 +116,7 @@
   {/if}
 
   {#if availability.reason && !isUpdate}
-    <p class="muted reason">{msg(isNewRevision ? 'ui.newDistributionRevisionReason' : 'ui.versionsNotComparable')}</p>
+    <p class="muted reason">{msg(updateReasonKey(availability.reason))}</p>
   {/if}
   {#if update.error}
     <p class="error">{update.error}</p>

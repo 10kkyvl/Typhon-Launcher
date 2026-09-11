@@ -1,4 +1,10 @@
 export const ui = {
+  'ui.updateDifferentEdition': 'Другое издание игры',
+  'ui.updateEditionUnverified': 'Совпадение издания не подтверждено',
+  'ui.updateEditionUnknown': 'Издание раздачи не указано',
+  'ui.updateDifferentLanguage': 'Языки раздачи отличаются от установленной игры',
+  'ui.updateReleaseMuchSmaller': 'Раздача значительно меньше установленной игры',
+  'ui.updateCompatibilityReview': 'Проверьте совместимость этой раздачи',
   'ui.library': 'Библиотека',
   'ui.activity': 'Активность',
   'ui.allDownloads': 'Все загрузки',

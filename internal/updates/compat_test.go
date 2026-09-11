@@ -19,7 +19,7 @@ func TestCompatibleFlagsMuchSmallerRelease(t *testing.T) {
 	if got.Confidence >= confidenceExactEdition {
 		t.Fatalf("confidence = %v, want it lowered", got.Confidence)
 	}
-	if len(got.Reasons) == 0 || !strings.Contains(strings.Join(got.Reasons, " "), "размер") {
+	if len(got.Reasons) == 0 || !strings.Contains(strings.Join(got.Reasons, " "), "release_much_smaller") {
 		t.Fatalf("reasons = %v, want the size mentioned", got.Reasons)
 	}
 }
@@ -67,5 +67,16 @@ func TestResolveUpdateDowngradesMuchSmallerReleaseWithNewerVersion(t *testing.T)
 	}
 	if got.Kind != KindNewRelease {
 		t.Fatalf("kind = %q, want %q", got.Kind, KindNewRelease)
+	}
+}
+
+func TestAvailabilityKeepsSpecificCompatibilityReason(t *testing.T) {
+	installed := installedAt("r1", "1.0")
+	target := release("r2", "2.0", 100)
+	for _, reason := range []string{"release_much_smaller", "different_edition", "edition_unknown", "different_language"} {
+		got := build(installed, target, CompatibilityResult{Compatible: true, Confidence: 0.5, Reasons: []string{reason}}, 1, nil, KindUpdate)
+		if got.Kind != KindNewRelease || got.Reason != reason {
+			t.Fatalf("availability = %+v, want %s", got, reason)
+		}
 	}
 }

@@ -26,23 +26,23 @@ func Compatible(installed InstalledGame, r sources.Release) CompatibilityResult 
 	target := titles.Normalize(r.Edition)
 	switch {
 	case current != "" && target != "" && current != target:
-		return CompatibilityResult{Confidence: 0, Reasons: []string{"edition: " + r.Edition}}
+		return CompatibilityResult{Confidence: 0, Reasons: []string{"different_edition"}}
 	case current == "" && target != "":
 		result.Confidence = confidenceUnknownEdition
-		result.Reasons = append(result.Reasons, "edition: "+r.Edition)
+		result.Reasons = append(result.Reasons, "edition_unverified")
 	case current != "" && target == "":
 		result.Confidence = confidenceUnknownEdition
-		result.Reasons = append(result.Reasons, "edition unknown")
+		result.Reasons = append(result.Reasons, "edition_unknown")
 	}
 
 	if len(installed.Languages) > 0 && len(r.Languages) > 0 && !sharesLanguage(installed.Languages, r.Languages) {
 		result.Confidence *= confidenceLanguageMiss
-		result.Reasons = append(result.Reasons, "language: "+strings.Join(r.Languages, ", "))
+		result.Reasons = append(result.Reasons, "different_language")
 	}
 
 	if muchSmaller(installed.SizeBytes, r.Size) {
 		result.Confidence *= confidenceSmallerRelease
-		result.Reasons = append(result.Reasons, "размер раздачи сильно меньше установленной игры")
+		result.Reasons = append(result.Reasons, "release_much_smaller")
 	}
 	return result
 }

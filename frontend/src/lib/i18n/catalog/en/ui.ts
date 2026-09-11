@@ -2,6 +2,12 @@ import type { Message } from '../../types';
 import type { UiKey } from '../ru/ui';
 
 export const ui: Record<UiKey, Message> = {
+  'ui.updateDifferentEdition': 'A different edition of the game',
+  'ui.updateEditionUnverified': 'The game edition could not be matched',
+  'ui.updateEditionUnknown': 'The release edition is unspecified',
+  'ui.updateDifferentLanguage': 'The release languages differ from the installed game',
+  'ui.updateReleaseMuchSmaller': 'The release is much smaller than the installed game',
+  'ui.updateCompatibilityReview': 'Check this release’s compatibility',
   'ui.library': 'Library',
   'ui.activity': 'Activity',
   'ui.allDownloads': 'All downloads',
