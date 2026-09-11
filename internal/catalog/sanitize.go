@@ -65,7 +65,7 @@ func safeProviderAlias(alias string) bool {
 		"repack", "steam rip", "fitgirl", "codex", "torrent", "portable",
 		"multi", "update", "patch", "build", "hotfix",
 	} {
-		if strings.Contains(normalized, marker) {
+		if strings.Contains(" "+normalized+" ", " "+marker+" ") {
 			return false
 		}
 	}

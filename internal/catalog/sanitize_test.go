@@ -136,3 +136,16 @@ func TestServiceSanitizesOnLoad(t *testing.T) {
 		t.Fatalf("catalog file: %v", err)
 	}
 }
+
+func TestServerAliasMarkersMatchWholeTokens(t *testing.T) {
+	for _, alias := range []string{"Multiversus", "Builder Simulator", "Dispatch", "Codexia"} {
+		if !safeProviderAlias(alias) {
+			t.Fatalf("honest title rejected: %s", alias)
+		}
+	}
+	for _, alias := range []string{"Game multi", "Game build", "Game patch", "Game codex"} {
+		if safeProviderAlias(alias) {
+			t.Fatalf("release marker accepted: %s", alias)
+		}
+	}
+}
