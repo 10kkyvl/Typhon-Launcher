@@ -75,7 +75,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		Background:    spec.Background,
 		Hidden:        true,
 	}
-	exited, cleanup, terminate, err := handOffToWorker(spec, ws, specFile)
+	exited, cleanup, terminate, err := handOffToWorker(ctx, spec, ws, specFile)
 	if err != nil {
 		return 0, err
 	}
@@ -186,9 +186,9 @@ var errBrokerTerminateUnsupported = errors.New("процесс, которым �
 // terminate — способ runElevated принудительно оборвать ожидание, если
 // воркер не подтвердил остановку к дедлайну; для брокера его нет (см.
 // errBrokerTerminateUnsupported).
-func handOffToWorker(spec runSpec, ws workerSpec, specFile string) (<-chan elevatedResult, func(), func() error, error) {
+func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile string) (<-chan elevatedResult, func(), func() error, error) {
 	if spec.Broker != nil {
-		if err := writeSignedBrokerSpec(spec.Broker.Dir, ws, spec.Broker.Key); err != nil {
+		if err := writeSignedBrokerSpec(ctx, spec.Broker.Dir, ws, spec.Broker.Key); err != nil {
 			return nil, nil, nil, fmt.Errorf("передача задания брокеру установки: %w", err)
 		}
 		gone := spec.Broker.Gone

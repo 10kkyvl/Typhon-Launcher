@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,7 +16,7 @@ import (
 
 // The private key exists only in the launcher. The elevated process receives
 // the public key in its launch arguments, never from the writable queue.
-func writeSignedBrokerSpec(dir string, spec workerSpec, key ed25519.PrivateKey) error {
+func writeSignedBrokerSpec(ctx context.Context, dir string, spec workerSpec, key ed25519.PrivateKey) error {
 	if len(key) != ed25519.PrivateKeySize {
 		return errBrokerOutsidePin
 	}
@@ -23,8 +24,7 @@ func writeSignedBrokerSpec(dir string, spec workerSpec, key ed25519.PrivateKey) 
 	if err != nil {
 		return err
 	}
-	sum := sha256.New()
-	_, readErr := io.Copy(sum, f)
+	digest, readErr := hashBrokerInstaller(ctx, f)
 	closeErr := f.Close()
 	if readErr != nil {
 		return readErr
@@ -32,14 +32,29 @@ func writeSignedBrokerSpec(dir string, spec workerSpec, key ed25519.PrivateKey) 
 	if closeErr != nil {
 		return closeErr
 	}
-	spec.InstallerSHA256 = hex.EncodeToString(sum.Sum(nil))
+	spec.InstallerSHA256 = digest
 	spec.BrokerSignature = ""
 	data, err := json.Marshal(spec)
 	if err != nil {
 		return err
 	}
 	spec.BrokerSignature = base64.StdEncoding.EncodeToString(ed25519.Sign(key, data))
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return writeWorkerSpec(brokerSpecPath(dir), spec)
+}
+
+// Bound each read so cancellation does not wait for hashing the entire installer.
+func hashBrokerInstaller(ctx context.Context, src io.Reader) (string, error) {
+	sum := sha256.New()
+	if err := copyStream(ctx, sum, src, &reporter{}, make([]byte, 128*1024)); err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(sum.Sum(nil)), nil
 }
 
 func verifyBrokerSignature(spec workerSpec, keys []string) error {

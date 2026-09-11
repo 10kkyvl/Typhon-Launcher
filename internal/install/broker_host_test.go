@@ -234,7 +234,7 @@ func TestHandOffPrefersTheLiveBroker(t *testing.T) {
 	}
 	t.Cleanup(func() { startElevatedWorker = old })
 
-	exited, cleanup, _, err := handOffToWorker(spec, ws, filepath.Join(dir, "worker-spec.json"))
+	exited, cleanup, _, err := handOffToWorker(context.Background(), spec, ws, filepath.Join(dir, "worker-spec.json"))
 	if err != nil {
 		t.Fatalf("handOffToWorker: %v", err)
 	}

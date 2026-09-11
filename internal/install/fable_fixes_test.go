@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -110,7 +111,7 @@ func TestAuditFix010RejectsTamperedSignedSpec(t *testing.T) {
 	if err := os.WriteFile(spec.InstallerPath, []byte("fixture"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeSignedBrokerSpec(dir, spec, brokerTestPrivate); err != nil {
+	if err := writeSignedBrokerSpec(context.Background(), dir, spec, brokerTestPrivate); err != nil {
 		t.Fatal(err)
 	}
 	signed, found, err := readBrokerSpec(dir, pin, brokerTestPublic)
@@ -124,7 +125,7 @@ func TestAuditFix010RejectsTamperedSignedSpec(t *testing.T) {
 	if _, _, err := readBrokerSpec(dir, pin, brokerTestPublic); err == nil {
 		t.Fatal("tampered destination accepted")
 	}
-	if err := writeSignedBrokerSpec(dir, spec, brokerTestPrivate); err != nil {
+	if err := writeSignedBrokerSpec(context.Background(), dir, spec, brokerTestPrivate); err != nil {
 		t.Fatal(err)
 	}
 	signed, _, err = readBrokerSpec(dir, pin, brokerTestPublic)
