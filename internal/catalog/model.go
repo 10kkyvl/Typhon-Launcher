@@ -1,9 +1,6 @@
 package catalog
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
 
 type ExternalIDs struct {
 	Steam string `json:"steam,omitempty"`
@@ -37,41 +34,14 @@ type Game struct {
 	GameType          string              `json:"gameType,omitempty"`
 	ExternalIDs       ExternalIDs         `json:"externalIds"`
 	Aliases           []string            `json:"aliases,omitempty"`
-	localExternalIDs  ExternalIDs
-	CoverAssetID      string     `json:"coverAssetId,omitempty"`
-	HeroAssetID       string     `json:"heroAssetId,omitempty"`
-	MetadataLanguage  string     `json:"metadataLanguage,omitempty"`
-	MetadataUpdatedAt *time.Time `json:"metadataUpdatedAt,omitempty"`
-	MetadataPartial   bool       `json:"metadataPartial,omitempty"`
-	Provisional       bool       `json:"provisional,omitempty"`
-	CreatedAt         time.Time  `json:"createdAt"`
-}
-
-// MarshalJSON keeps local provider evidence in catalog.json without making it
-// part of the Wails-facing Game model. The evidence is a local durability
-// detail, not a field that a remote page or frontend may submit.
-func (g Game) MarshalJSON() ([]byte, error) {
-	type gameJSON Game
-	return json.Marshal(struct {
-		gameJSON
-		LocalExternalIDs ExternalIDs `json:"localExternalIds,omitempty"`
-	}{
-		gameJSON:         gameJSON(g),
-		LocalExternalIDs: g.localExternalIDs,
-	})
-}
-
-func (g *Game) UnmarshalJSON(data []byte) error {
-	type gameJSON Game
-	decoded := struct {
-		*gameJSON
-		LocalExternalIDs ExternalIDs `json:"localExternalIds,omitempty"`
-	}{gameJSON: (*gameJSON)(g)}
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	g.localExternalIDs = decoded.LocalExternalIDs
-	return nil
+	LocalExternalIDs  ExternalIDs         `json:"localExternalIds,omitempty"`
+	CoverAssetID      string              `json:"coverAssetId,omitempty"`
+	HeroAssetID       string              `json:"heroAssetId,omitempty"`
+	MetadataLanguage  string              `json:"metadataLanguage,omitempty"`
+	MetadataUpdatedAt *time.Time          `json:"metadataUpdatedAt,omitempty"`
+	MetadataPartial   bool                `json:"metadataPartial,omitempty"`
+	Provisional       bool                `json:"provisional,omitempty"`
+	CreatedAt         time.Time           `json:"createdAt"`
 }
 
 type MatchOverride struct {
