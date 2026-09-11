@@ -3,6 +3,8 @@ package catalog
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -221,6 +223,90 @@ func TestBrowseDoesNotPersistUnchangedRemotePage(t *testing.T) {
 	}
 	if !os.SameFile(beforeInfo, afterInfo) {
 		t.Fatal("unchanged remote page replaced catalog.json")
+	}
+}
+
+func TestOfflineBrowseDropsPartialRemoteResponseBeforeLoadingCache(t *testing.T) {
+	service, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &remoteRegressionFixture{page: GamePage{
+		Items:  []Game{{ID: "server", Title: "Stable", ExternalIDs: ExternalIDs{IGDB: "1"}}},
+		Compat: map[string]CompatInfo{"server": {Works: 8, Total: 10}},
+	}}
+	service.SetRemoteCatalog(remote)
+	query := GameQuery{}
+	if _, err = service.BrowseGames(query); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a backend that returned a partially decoded response together
+	// with its error. The stale Compat value must not bleed into the cache load.
+	remote.page.Compat = map[string]CompatInfo{"server": {Works: 1, Total: 10}}
+	remote.err = errors.New("backend unavailable")
+	offline, err := service.BrowseGames(query)
+	if err != nil || !offline.Offline {
+		t.Fatalf("offline page = %+v, err = %v", offline, err)
+	}
+	if got := offline.Compat["server"]; got.Works != 8 || got.Total != 10 {
+		t.Fatalf("offline Compat = %+v, want cached value 8/10", got)
+	}
+}
+
+func TestCatalogPageCachePrunesByAgeAndCountWithoutTouchingOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+	for i := 0; i < maxCatalogPageCacheEntries+2; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("page-%03d.json", i))
+		if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		stamp := now.Add(-time.Duration(i+1) * time.Minute)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldJSON := filepath.Join(dir, "old.json")
+	if err := os.WriteFile(oldJSON, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldStamp := now.Add(-catalogPageCacheMaxAge - time.Hour)
+	if err := os.Chtimes(oldJSON, oldStamp, oldStamp); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "old.txt")
+	if err := os.WriteFile(other, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(other, oldStamp, oldStamp); err != nil {
+		t.Fatal(err)
+	}
+
+	pruneCatalogPageCache(dir, now)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonCount := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+			jsonCount++
+		}
+	}
+	if jsonCount != maxCatalogPageCacheEntries {
+		t.Fatalf("cached JSON pages = %d, want %d", jsonCount, maxCatalogPageCacheEntries)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "page-000.json")); err != nil {
+		t.Fatalf("newest page was pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "page-129.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oldest over-count page still exists, err=%v", err)
+	}
+	if _, err := os.Stat(oldJSON); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired JSON cache still exists, err=%v", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatalf("non-JSON cache file was touched: %v", err)
 	}
 }
 
