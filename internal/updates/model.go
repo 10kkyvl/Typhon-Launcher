@@ -47,6 +47,7 @@ const (
 )
 
 type InstalledGame struct {
+	InstalledAt       time.Time     `json:"installedAt"`
 	GameID            string        `json:"gameId"`
 	CanonicalGameID   string        `json:"canonicalGameId"`
 	Title             string        `json:"title"`

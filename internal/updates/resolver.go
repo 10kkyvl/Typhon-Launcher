@@ -148,7 +148,7 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 
 	ordered := OrderReleases(compatible)
 	baseConfidence := versionConfidence(installed)
-	installedUpload := installed.ReleaseUploadedAt
+	installedUpload := revisionBaseline(installed, releases)
 
 	var fallback *sources.Release
 	for i := range ordered {
@@ -178,6 +178,33 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 		return out
 	}
 	return build(installed, *fallback, compat[fallback.ID], baseConfidence, patchesFor(installed, *fallback, patches), KindNewRelease)
+}
+
+// Older installations did not store the source upload date. Their installation
+// time is a conservative upper bound: a release uploaded afterwards is newer,
+// without pretending that this local timestamp is provider metadata.
+func revisionBaseline(installed InstalledGame, releases []sources.Release) *time.Time {
+	if installed.ReleaseUploadedAt != nil {
+		return installed.ReleaseUploadedAt
+	}
+	if !installed.InstalledAt.IsZero() {
+		return &installed.InstalledAt
+	}
+	// Some imported legacy records lack installation time as well. Only the
+	// exact saved source/release/version can supply a baseline in that case.
+	var baseline *time.Time
+	matched := false
+	for _, release := range releases {
+		if release.ID != installed.ReleaseID || !sameDistribution(installed, release) || releaseVersion(release) != installed.Version {
+			continue
+		}
+		if matched {
+			return nil
+		}
+		matched = true
+		baseline = release.UploadedAt
+	}
+	return baseline
 }
 
 func sameInstalledRevision(installed InstalledGame, release sources.Release) bool {

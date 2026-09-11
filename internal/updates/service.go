@@ -632,6 +632,7 @@ func (s *Service) running(gameID string) bool {
 
 func installedOf(g library.Game) InstalledGame {
 	return InstalledGame{
+		InstalledAt:       g.InstalledAt,
 		GameID:            g.ID,
 		CanonicalGameID:   g.CanonicalGameID,
 		Title:             g.Title,
@@ -867,7 +868,8 @@ func (s *Service) bindLegacyDistribution(game library.Game, releases []sources.R
 		return game
 	}
 	var releaseUploadedAt *time.Time
-	if game.ReleaseUploadedAt == nil && game.Version == releaseVersion(*match) {
+	if game.ReleaseUploadedAt == nil && game.Version == releaseVersion(*match) &&
+		(game.InstalledAt.IsZero() || match.UploadedAt == nil || !match.UploadedAt.After(game.InstalledAt)) {
 		releaseUploadedAt = match.UploadedAt
 	}
 	if game.DistributionID != "" && releaseUploadedAt == nil {
