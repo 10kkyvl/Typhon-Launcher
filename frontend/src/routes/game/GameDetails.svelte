@@ -175,6 +175,7 @@
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
+    catalogGame = null;
     try {
       const found = await getCatalogGame(gameId);
       if (current !== catalogToken) return;
@@ -240,6 +241,7 @@
     $locale;
     untrack(() => {
       metaSearching = false;
+      metaView = null;
       if (!metaGameId) {
         metaToken++;
         metaReading = false;
@@ -285,7 +287,7 @@
   const screenshots = $derived(metaView?.screenshots ?? []);
   const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
   const shots = $derived(galleryShots(screenshots, heroSrc));
-  const coverSrc = $derived(clean(catalogGame?.coverUrl) || clean(localGame?.cover) || clean(metaView?.cover));
+  const coverSrc = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl) || clean(localGame?.cover));
   const showHero = $derived(Boolean(heroSrc) && !heroFailed);
 
   $effect(() => {
@@ -536,8 +538,12 @@
   async function refreshMeta() {
     if (!canonicalId || metaRefreshing) return;
     metaRefreshing = true;
+    const gameId = canonicalId;
+    const current = metaToken;
     try {
-      metaView = await refreshMetadata(canonicalId);
+      const view = await refreshMetadata(gameId);
+      if (gameId !== canonicalId || current !== metaToken) return;
+      metaView = view;
       toast(msg('games.detailMetaRefreshedToast'), 'success');
     } catch (err) {
       toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
@@ -549,8 +555,12 @@
   async function skipMeta() {
     if (!canonicalId || metaSkipping) return;
     metaSkipping = true;
+    const gameId = canonicalId;
+    const current = metaToken;
     try {
-      metaView = await dismissMetadataMatch(canonicalId);
+      const view = await dismissMetadataMatch(gameId);
+      if (gameId !== canonicalId || current !== metaToken) return;
+      metaView = view;
     } catch (err) {
       toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
     } finally {
@@ -566,6 +576,8 @@
   async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined) {
     const current = ++releaseToken;
     releasesLoading = true;
+    releasesFailed = false;
+    releaseGroups = [];
     try {
       const groups = canonicalGameId
         ? await getReleasesForGame(canonicalGameId)
