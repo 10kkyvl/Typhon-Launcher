@@ -10,7 +10,7 @@ func requestLanguage(ctx context.Context, lang string) context.Context {
 
 // Language returns the UI language captured when this operation started.
 func Language(ctx context.Context) string {
-	if lang, _ := ctx.Value(languageKey{}).(string); lang == "ru" {
+	if lang, ok := ctx.Value(languageKey{}).(string); ok && lang == "ru" {
 		return lang
 	}
 	return "en"

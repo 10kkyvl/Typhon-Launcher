@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -173,7 +175,16 @@ func Plan(dir string) (Report, error) {
 	sort.Slice(out.Review, func(i, j int) bool { return strings.Join(out.Review[i], "\x00") < strings.Join(out.Review[j], "\x00") })
 	sort.Slice(out.Confident, func(i, j int) bool { return out.Confident[i].Target < out.Confident[j].Target })
 	sort.Strings(out.WithoutProviders)
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	scanRoot, err := os.OpenRoot(dir)
+	if err != nil {
+		return out, err
+	}
+	defer func() {
+		if closeErr := scanRoot.Close(); closeErr != nil {
+			slog.Warn("close catalog scan root", "error", closeErr)
+		}
+	}()
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -193,7 +204,7 @@ func Plan(dir string) (Report, error) {
 		if e != nil {
 			return e
 		}
-		b, e := os.ReadFile(path)
+		b, e := scanRoot.ReadFile(rel)
 		if e != nil {
 			return e
 		}
@@ -246,9 +257,7 @@ func Apply(dir string, report Report) error {
 			if name == "catalog-redirects.json" {
 				var current map[string]string
 				if storage.Load(filepath.Join(dir, name), 1, nil, &current) == nil {
-					a, _ := json.Marshal(current)
-					b, _ := json.Marshal(report.Redirects)
-					if string(a) == string(b) {
+					if reflect.DeepEqual(current, report.Redirects) {
 						continue
 					}
 				}
@@ -309,9 +318,7 @@ func Restore(dir, backup string) error {
 	if err := storage.Load(filepath.Join(dir, "catalog-redirects.json"), 1, nil, &current); err != nil {
 		return err
 	}
-	a, _ := json.Marshal(current)
-	b, _ := json.Marshal(report.Redirects)
-	if string(a) != string(b) {
+	if !reflect.DeepEqual(current, report.Redirects) {
 		return errors.New("redirects changed after migration")
 	}
 	var previous map[string]string

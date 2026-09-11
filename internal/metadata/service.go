@@ -537,7 +537,9 @@ func (s *Service) spawn(game catalog.Game, providerID string, mode refreshMode, 
 		view, err := s.refresh(game.ID, providerID, mode, class)
 		s.release(game.ID)
 		if errors.Is(err, context.Canceled) && s.baseContext() != nil && s.baseContext().Err() == nil {
-			if started, _ := s.EnsureFresh(game.ID); started {
+			if started, retryErr := s.EnsureFresh(game.ID); retryErr != nil {
+				slog.Debug("retry metadata after locale change", "gameID", game.ID, "error", retryErr)
+			} else if started {
 				return
 			}
 		}

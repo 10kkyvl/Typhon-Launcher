@@ -15,6 +15,7 @@ func main() {
 	flag.Parse()
 	if *dir == "" {
 		fmt.Fprintln(os.Stderr, "--dir is required; no default user data location")
+		//nolint:forbidigo // This is the main function of the offline migration command.
 		os.Exit(2)
 	}
 	var err error
@@ -41,6 +42,7 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		//nolint:forbidigo // This is the main function of the offline migration command.
 		os.Exit(1)
 	}
 }

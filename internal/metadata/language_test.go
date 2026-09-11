@@ -29,7 +29,10 @@ func TestLanguageSwitchInvalidatesCacheAndRejectsOldResponse(t *testing.T) {
 		t.Fatalf("RU %+v %v", ru, e)
 	}
 	s.SetLanguage("en")
-	view, _ = s.GetView(game.ID)
+	view, e = s.GetView(game.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
 	if !view.Stale {
 		t.Fatal("switch back stayed fresh")
 	}

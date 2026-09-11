@@ -5,6 +5,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 	"typhon/internal/library"
@@ -12,7 +13,7 @@ import (
 
 func TestAuditFix006RecoveryAtEachRollbackBoundary(t *testing.T) {
 	for _, boundary := range []int{0, 1, 2} {
-		t.Run(string(rune('0'+boundary)), func(t *testing.T) {
+		t.Run(strconv.Itoa(boundary), func(t *testing.T) {
 			root := t.TempDir()
 			current := filepath.Join(root, "game")
 			previous := current + previousSuffix
@@ -85,7 +86,7 @@ func TestAuditFix006RecoveryAtEachRollbackBoundary(t *testing.T) {
 
 func TestAuditFix011RecoveryRetainsOlderRollback(t *testing.T) {
 	for _, boundary := range []int{0, 1, 2, 3} {
-		t.Run(string(rune('0'+boundary)), func(t *testing.T) {
+		t.Run(strconv.Itoa(boundary), func(t *testing.T) {
 			root := t.TempDir()
 			current := filepath.Join(root, "game")
 			previous := current + previousSuffix

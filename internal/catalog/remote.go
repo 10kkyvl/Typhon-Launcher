@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,9 +43,13 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)
 	s.mu.RUnlock()
-	raw, _ := json.Marshal(q)
+	raw, marshalErr := json.Marshal(q)
+	if marshalErr != nil {
+		return GamePage{}, marshalErr
+	}
 	sum := sha256.Sum256(raw)
 	path := filepath.Join(dir, "catalog-pages", hex.EncodeToString(sum[:])+".json")
+	//nolint:forbidigo // Wails RPC entry point: this service has no lifecycle context; each request is bounded and canceled on return.
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	var page GamePage
@@ -467,14 +472,18 @@ func pruneCatalogPageCache(dir string, now time.Time) {
 		}
 		path := filepath.Join(dir, entry.Name())
 		if now.Sub(info.ModTime()) > catalogPageCacheMaxAge {
-			_ = os.Remove(path)
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				slog.Debug("prune catalog page", "path", path, "error", err)
+			}
 			continue
 		}
 		pages = append(pages, cachedPage{path: path, modTime: info.ModTime()})
 	}
 	sort.Slice(pages, func(i, j int) bool { return pages[i].modTime.Before(pages[j].modTime) })
 	for len(pages) > maxCatalogPageCacheEntries {
-		_ = os.Remove(pages[0].path)
+		if err := os.Remove(pages[0].path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Debug("prune catalog page", "path", pages[0].path, "error", err)
+		}
 		pages = pages[1:]
 	}
 }

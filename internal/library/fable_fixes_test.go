@@ -56,7 +56,9 @@ func TestAuditFix007(t *testing.T) {
 		}
 		return errors.New("stop before real launch")
 	}
-	_ = s.PlayGame(g.ID)
+	if err := s.PlayGame(g.ID); err == nil {
+		t.Fatal("expected injected preparation failure")
+	}
 	if held {
 		t.Fatal("007 reproduced: global library mutex held during runtime preparation")
 	}

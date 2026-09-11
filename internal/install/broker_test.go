@@ -182,4 +182,4 @@ func TestRunBrokerRefusesSpecOutsidePin(t *testing.T) {
 }
 
 var brokerTestPrivate = ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
-var brokerTestPublic = base64.StdEncoding.EncodeToString(brokerTestPrivate.Public().(ed25519.PublicKey))
+var brokerTestPublic = base64.StdEncoding.EncodeToString(brokerTestPrivate[ed25519.SeedSize:])

@@ -39,11 +39,17 @@ func TestReportApplyResumePreservesPersonalData(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	after, _ := os.ReadFile(filepath.Join(dir, "catalog.json"))
+	after, err := os.ReadFile(filepath.Join(dir, "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(before) != string(after) {
 		t.Fatal("catalog was rewritten")
 	}
-	after, _ = os.ReadFile(path)
+	after, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(personal) != string(after) {
 		t.Fatal("personal state/provenance changed")
 	}
@@ -75,7 +81,10 @@ func TestReportApplyResumePreservesPersonalData(t *testing.T) {
 	if got, err := restored.GetGame("other"); err != nil || got.ID != "other" {
 		t.Fatal("rollback did not remove redirect")
 	}
-	after, _ = os.ReadFile(path)
+	after, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(after) != string(personal) {
 		t.Fatal("rollback changed personal data")
 	}
@@ -161,5 +170,26 @@ func TestApplyResumesAfterBackupBeforeRedirectCommit(t *testing.T) {
 	redirects = nil
 	if err = storage.Load(filepath.Join(dir, "catalog-redirects.json"), 1, nil, &redirects); err != nil || len(redirects) != 0 {
 		t.Fatalf("backup overwritten on resume %v %v", redirects, err)
+	}
+}
+
+func TestPlanIgnoresSymlinkToExternalJSON(t *testing.T) {
+	dir := t.TempDir()
+	if err := storage.Save(filepath.Join(dir, "catalog.json"), 1, []catalog.Game{}); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.json")
+	if err := os.WriteFile(outside, []byte("not valid JSON"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "external.json")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	report, err := Plan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, included := report.Hashes["external.json"]; included {
+		t.Fatal("report included an external symlink")
 	}
 }

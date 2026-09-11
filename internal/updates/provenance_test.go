@@ -34,7 +34,11 @@ func TestInstalledDistributionFlowImportsRegistersAndSelectsExactLine(t *testing
 	if err := releaseSource.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = releaseSource.ServiceShutdown() })
+	t.Cleanup(func() {
+		if err := releaseSource.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 
 	feedPath := filepath.Join(root, "feed.json")
 	writeDistributionFeed(t, feedPath,
@@ -400,7 +404,11 @@ func TestServiceStartupDoesNotExposePersistedOfferOrPlan(t *testing.T) {
 	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = svc.ServiceShutdown() })
+	t.Cleanup(func() {
+		if err := svc.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 	got, err := svc.GetUpdate("local-1")
 	if err != nil {
 		t.Fatal(err)

@@ -32,10 +32,12 @@ func TestRetainedCleanupFailureResumesWithoutRollingBackCommittedInstall(t *test
 			if err := s.setJournal(SwapJournal{GameID: "g", Kind: JournalSwap, InstallDir: current, Previous: previous, RetainedPrevious: retained}); err != nil {
 				t.Fatal(err)
 			}
+			//nolint:gosec // G302: retained is a directory; owner execute permission is required for the cleanup fixture.
 			if err := os.Chmod(retained, 0500); err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
+				//nolint:gosec // G302: retained is a directory; owner execute permission is required for the cleanup fixture.
 				if err := os.Chmod(retained, 0700); err != nil && !os.IsNotExist(err) {
 					t.Error(err)
 				}
@@ -50,6 +52,7 @@ func TestRetainedCleanupFailureResumesWithoutRollingBackCommittedInstall(t *test
 			if readMarker(t, current) != "v3" || readMarker(t, previous) != "v2" {
 				t.Fatal("cleanup changed committed installation")
 			}
+			//nolint:gosec // G302: retained is a directory; owner execute permission is required for the cleanup fixture.
 			if err := os.Chmod(retained, 0700); err != nil {
 				t.Fatal(err)
 			}

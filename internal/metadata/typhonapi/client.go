@@ -217,6 +217,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
+	//nolint:gosec // G704: baseURL is validated in New; private callers build fixed routes with encoded query values.
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
 		return fmt.Errorf("собрать запрос метаданных: %w", err)
@@ -237,6 +238,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 	req.Header.Set("User-Agent", account.UserAgent)
 	req.Header.Set("X-Typhon-Version", app.Version)
 
+	//nolint:gosec // G704: the validated configured API origin is intentional; CheckRedirect validates schemes and strips credentials on cross-origin redirects.
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrUpstream, err)

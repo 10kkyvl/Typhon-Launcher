@@ -579,7 +579,11 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	if err = src.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = src.ServiceShutdown() })
+	t.Cleanup(func() {
+		if err := src.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 	feedPath := filepath.Join(t.TempDir(), "feed.json")
 	if err = os.WriteFile(feedPath, []byte(`{"version":1,"name":"Install flow fixture","downloads":[{"title":"Game v1.0 [Папка игры]","distributionId":"game-fitgirl","uploadDate":"2026-09-09T12:00:00Z","uris":["magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}]}`), 0600); err != nil {
 		t.Fatal(err)
