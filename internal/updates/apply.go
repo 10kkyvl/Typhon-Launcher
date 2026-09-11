@@ -290,12 +290,20 @@ func (s *Service) downloadRelease(ctx context.Context, plan UpdatePlan, releaseI
 func (s *Service) existingTask(plan UpdatePlan, release sources.Release, destination string, inPlace, flat bool) (download.Download, bool) {
 	for _, task := range s.downloads.ByOrigin(plan.GameID, download.PurposeUpdate) {
 		if task.Origin.ReleaseID != release.ID || task.Origin.SourceID != release.SourceID ||
-			task.Origin.DistributionID != release.DistributionID || task.Origin.LibraryID != plan.GameID ||
+			(task.Origin.DistributionID != "" && task.Origin.DistributionID != release.DistributionID) || task.Origin.LibraryID != plan.GameID ||
 			task.Origin.Version != releaseVersion(release) || !sameDownloadDestination(task.Destination, destination) ||
 			task.InPlace != inPlace || task.Flat != flat ||
-			!samePlanTime(task.Origin.ReleaseUploadedAt, release.UploadedAt) ||
+			(task.Origin.ReleaseUploadedAt != nil && !samePlanTime(task.Origin.ReleaseUploadedAt, release.UploadedAt)) ||
 			task.Status == download.StatusFailed {
 			continue
+		}
+		if (task.Origin.DistributionID == "" && release.DistributionID != "") ||
+			(task.Origin.ReleaseUploadedAt == nil && release.UploadedAt != nil) {
+			// Legacy origins lack provenance fields. Reuse only with proof that
+			// this is the same payload, not a replaced revision of the same ID.
+			if release.InfoHash == "" || task.InfoHash == "" || !strings.EqualFold(task.InfoHash, release.InfoHash) {
+				continue
+			}
 		}
 		return task, true
 	}
