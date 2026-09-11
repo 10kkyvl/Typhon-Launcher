@@ -397,19 +397,19 @@ func (s *Service) setJournal(j SwapJournal) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// An unfinished transaction owns its recovery paths until it is cleared.
+	// Replacing its journal would lose the only record of those files.
+	if s.journals[j.GameID] != nil {
+		return errBusy
+	}
 	if j.Kind == JournalSwap && s.rollbacks[j.GameID] != nil {
 		copyEntry := *s.rollbacks[j.GameID]
 		j.PreviousRollback = &copyEntry
 	}
-	previous, had := s.journals[j.GameID]
 	entry := j
 	s.journals[j.GameID] = &entry
 	if err := s.persistJournalsLocked(); err != nil {
-		if had {
-			s.journals[j.GameID] = previous
-		} else {
-			delete(s.journals, j.GameID)
-		}
+		delete(s.journals, j.GameID)
 		return err
 	}
 	return nil
@@ -1042,7 +1042,7 @@ func (s *Service) sweepPrevious() {
 func (s *Service) beginJob(gameID string) (context.Context, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] {
+	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] || s.journals[gameID] != nil {
 		return nil, false
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
