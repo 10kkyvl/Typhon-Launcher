@@ -51,15 +51,17 @@ func PatchesFrom(releases []sources.Release) []Patch {
 			continue
 		}
 		patch := Patch{
-			ID:          r.ID,
-			FromVersion: r.FromVersion,
-			ToVersion:   r.ToVersion,
-			ReleaseID:   r.ID,
-			SourceID:    r.SourceID,
-			Title:       r.RawTitle,
-			Size:        r.Size,
-			Priority:    r.Sequence,
-			CreatedAt:   r.CreatedAt,
+			ID:             r.ID,
+			FromVersion:    r.FromVersion,
+			ToVersion:      r.ToVersion,
+			ReleaseID:      r.ID,
+			SourceID:       r.SourceID,
+			DistributionID: r.DistributionID,
+			UploadedAt:     r.UploadedAt,
+			Title:          r.RawTitle,
+			Size:           r.Size,
+			Priority:       r.Sequence,
+			CreatedAt:      r.CreatedAt,
 		}
 		if r.CanonicalGameID != nil {
 			patch.GameID = *r.CanonicalGameID
@@ -82,21 +84,55 @@ func usable(installed InstalledGame, r sources.Release) bool {
 	return true
 }
 
+// sameDistribution is the trust boundary for update discovery. A feed's
+// distributionId is an explicit assertion of continuity and is scoped by the
+// source. Older installations may only follow the exact source/release record
+// they saved; all metadata similarities are intentionally ignored.
+func sameDistribution(installed InstalledGame, r sources.Release) bool {
+	if installed.SourceID == "" || installed.ReleaseID == "" || r.SourceID != installed.SourceID {
+		return false
+	}
+	if installed.DistributionID != "" {
+		return r.DistributionID != "" && r.DistributionID == installed.DistributionID
+	}
+	return r.ID == installed.ReleaseID
+}
+
+func patchesFor(installed InstalledGame, target sources.Release, patches []Patch) []Patch {
+	distributionID := installed.DistributionID
+	if distributionID == "" && target.ID == installed.ReleaseID && target.SourceID == installed.SourceID {
+		distributionID = target.DistributionID
+	}
+	if installed.SourceID == "" || distributionID == "" {
+		return nil
+	}
+	out := make([]Patch, 0, len(patches))
+	for _, patch := range patches {
+		if patch.SourceID == installed.SourceID && patch.DistributionID == distributionID {
+			out = append(out, patch)
+		}
+	}
+	return out
+}
+
 // ResolveUpdate is deterministic: the same installation, releases and patches
 // always produce the same availability.
 func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches []Patch) UpdateAvailability {
 	out := UpdateAvailability{
-		Kind:               KindNone,
-		GameID:             installed.GameID,
-		InstalledReleaseID: installed.ReleaseID,
-		InstalledVersion:   installed.Version,
+		Kind:                       KindNone,
+		GameID:                     installed.GameID,
+		InstalledReleaseID:         installed.ReleaseID,
+		SourceID:                   installed.SourceID,
+		DistributionID:             installed.DistributionID,
+		InstalledReleaseUploadedAt: installed.ReleaseUploadedAt,
+		InstalledVersion:           installed.Version,
 	}
 
 	current := version.Parse(installed.Version)
 	compatible := make([]sources.Release, 0, len(releases))
 	compat := map[string]CompatibilityResult{}
 	for _, r := range releases {
-		if !usable(installed, r) {
+		if !sameDistribution(installed, r) || !usable(installed, r) {
 			continue
 		}
 		result := Compatible(installed, r)
@@ -112,20 +148,24 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 
 	ordered := OrderReleases(compatible)
 	baseConfidence := versionConfidence(installed)
-	installedUpload := uploadedAtOf(releases, installed.ReleaseID)
+	installedUpload := installed.ReleaseUploadedAt
 
 	var fallback *sources.Release
 	for i := range ordered {
 		r := ordered[i]
-		if r.ID == installed.ReleaseID {
-			break
+		if sameInstalledRevision(installed, r) {
+			continue
 		}
 		target := version.Parse(releaseVersion(r))
 		newer, ok := version.Newer(target, current)
 		if ok && newer {
-			return build(installed, r, current, target, compat[r.ID], baseConfidence, patches, KindUpdate)
+			return build(installed, r, compat[r.ID], baseConfidence, patchesFor(installed, r, patches), KindUpdate)
 		}
 		if ok {
+			if version.Equal(target, current) && fallback == nil && publishedLater(installedUpload, r.UploadedAt) {
+				copied := r
+				fallback = &copied
+			}
 			continue
 		}
 		if fallback == nil && publishedLater(installedUpload, r.UploadedAt) {
@@ -137,30 +177,21 @@ func ResolveUpdate(installed InstalledGame, releases []sources.Release, patches 
 	if fallback == nil {
 		return out
 	}
-	target := version.Parse(releaseVersion(*fallback))
-	return build(installed, *fallback, current, target, compat[fallback.ID], baseConfidence, patches, KindNewRelease)
+	return build(installed, *fallback, compat[fallback.ID], baseConfidence, patchesFor(installed, *fallback, patches), KindNewRelease)
 }
 
-// The installed release is looked up in the full list rather than in the
-// compatible subset: it can have been pulled from the feed since.
-func uploadedAtOf(releases []sources.Release, releaseID string) *time.Time {
-	if releaseID == "" {
-		return nil
-	}
-	for i := range releases {
-		if releases[i].ID == releaseID {
-			return releases[i].UploadedAt
-		}
-	}
-	return nil
+func sameInstalledRevision(installed InstalledGame, release sources.Release) bool {
+	return release.ID == installed.ReleaseID && releaseVersion(release) == installed.Version &&
+		samePlanTime(release.UploadedAt, installed.ReleaseUploadedAt)
 }
 
-// With versions incomparable, recency is the only argument left for calling a
-// release newer, so an equal date is no argument at all: two builds uploaded the
-// same day are alternatives, not successors.
+// When versions do not establish an order (incomparable or equal), recency is
+// the only argument left for calling a release newer. An equal date is no
+// argument at all: two builds uploaded the same day are alternatives, not
+// successors.
 func publishedLater(installed, candidate *time.Time) bool {
 	if installed == nil {
-		return true
+		return false
 	}
 	if candidate == nil {
 		return false
@@ -171,7 +202,6 @@ func publishedLater(installed, candidate *time.Time) bool {
 func build(
 	installed InstalledGame,
 	target sources.Release,
-	currentVersion, targetVersion version.Version,
 	compat CompatibilityResult,
 	baseConfidence float64,
 	patches []Patch,
@@ -184,36 +214,39 @@ func build(
 	confidence := clamp(baseConfidence * matchConfidence * clamp(compat.Confidence))
 
 	out := UpdateAvailability{
-		Available:              true,
-		Kind:                   kind,
-		GameID:                 installed.GameID,
-		InstalledReleaseID:     installed.ReleaseID,
-		TargetReleaseID:        target.ID,
-		InstalledVersion:       installed.Version,
-		TargetVersion:          releaseVersion(target),
-		Confidence:             confidence,
-		Strategy:               StrategyFullRelease,
-		EstimatedDownloadBytes: target.Size,
-		RequiresFullInstall:    true,
-		TargetSize:             target.Size,
+		Available:                  true,
+		Kind:                       kind,
+		GameID:                     installed.GameID,
+		InstalledReleaseID:         installed.ReleaseID,
+		TargetReleaseID:            target.ID,
+		SourceID:                   installed.SourceID,
+		DistributionID:             installed.DistributionID,
+		InstalledReleaseUploadedAt: installed.ReleaseUploadedAt,
+		TargetReleaseUploadedAt:    target.UploadedAt,
+		InstalledVersion:           installed.Version,
+		TargetVersion:              releaseVersion(target),
+		Confidence:                 confidence,
+		Strategy:                   StrategyFullRelease,
+		EstimatedDownloadBytes:     target.Size,
+		RequiresFullInstall:        true,
+		TargetSize:                 target.Size,
+	}
+	if kind == KindNewRelease {
+		out.Reason = "new_distribution_revision"
 	}
 	if kind == KindUpdate && confidence < updateConfidenceThreshold {
 		out.Kind = KindNewRelease
 		out.Reason = "низкая уверенность в сопоставлении версий"
 	}
-	if out.Kind == KindNewRelease && out.Reason == "" {
-		if !currentVersion.Comparable || !targetVersion.Comparable {
-			out.Reason = "версии нельзя сравнить"
-		} else {
-			out.Reason = "версии из разных схем нумерации"
-		}
-	}
 	if out.Kind == KindNewRelease && confidence < newReleaseMinConfidence {
 		return UpdateAvailability{
-			Kind:               KindNone,
-			GameID:             installed.GameID,
-			InstalledReleaseID: installed.ReleaseID,
-			InstalledVersion:   installed.Version,
+			Kind:                       KindNone,
+			GameID:                     installed.GameID,
+			InstalledReleaseID:         installed.ReleaseID,
+			SourceID:                   installed.SourceID,
+			DistributionID:             installed.DistributionID,
+			InstalledReleaseUploadedAt: installed.ReleaseUploadedAt,
+			InstalledVersion:           installed.Version,
 		}
 	}
 	if len(compat.Reasons) > 0 && out.Reason == "" {

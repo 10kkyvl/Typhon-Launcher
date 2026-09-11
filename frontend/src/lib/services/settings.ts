@@ -4,6 +4,8 @@ import { inWails } from './backend';
 
 export interface Settings {
   theme: string;
+  accentColor: string;
+  tintLogo: boolean;
   uiScale: number;
   language: string;
   libraryPath: string;
@@ -48,6 +50,8 @@ const FALLBACK_KEY = 'typhon.settings';
 
 const fallbackDefaults: Settings = {
   theme: 'dark',
+  accentColor: '',
+  tintLogo: false,
   uiScale: 1,
   language: 'system',
   libraryPath: '',

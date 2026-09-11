@@ -110,7 +110,8 @@ func (s *Service) torrentIdentity(game library.Game) (sources.Release, bool) {
 		return sources.Release{}, false
 	}
 	release, ok := s.releases.FindRelease(game.ReleaseID)
-	if !ok || release.InfoHash == "" {
+	if !ok || release.InfoHash == "" || release.SourceID != game.SourceID ||
+		release.DistributionID != game.DistributionID || releaseVersion(release) != game.Version {
 		return sources.Release{}, false
 	}
 	return release, true
@@ -476,12 +477,14 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		InPlace:     true,
 		Verify:      true,
 		Origin: download.Origin{
-			ReleaseID: release.ID,
-			SourceID:  release.SourceID,
-			GameID:    game.CanonicalGameID,
-			Version:   releaseVersion(release),
-			Purpose:   download.PurposeRepair,
-			LibraryID: game.ID,
+			ReleaseID:         release.ID,
+			SourceID:          release.SourceID,
+			DistributionID:    release.DistributionID,
+			ReleaseUploadedAt: release.UploadedAt,
+			GameID:            game.CanonicalGameID,
+			Version:           releaseVersion(release),
+			Purpose:           download.PurposeRepair,
+			LibraryID:         game.ID,
 		},
 	})
 	if err != nil {

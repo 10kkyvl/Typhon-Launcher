@@ -197,11 +197,11 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--install-broker" {
-		if len(os.Args) < 3 {
+		if len(os.Args) < 4 {
 			slog.Error("install broker failed", "error", errNoBrokerDir)
 			os.Exit(1)
 		}
-		outcome, err := install.RunBroker(os.Args[2])
+		outcome, err := install.RunBroker(os.Args[2], os.Args[3])
 		if err != nil {
 			slog.Error("install broker failed", "outcome", string(outcome), "error", err)
 			os.Exit(1)
@@ -276,11 +276,15 @@ func main() {
 	if err != nil {
 		fatal("start catalog service", err)
 	}
+	libraryService.SetCanonicalIdentity(catalogService.SameGame)
 	sourcesService, err := sources.NewService(settingsService, catalogService)
 	if err != nil {
 		fatal("start sources service", err)
 	}
 	provider := metadataProvider(accountService)
+	if remote, ok := provider.(catalog.RemoteCatalog); ok {
+		catalogService.SetRemoteCatalog(remote)
+	}
 	metadataService, err := metadata.NewService(catalogService, provider)
 	if err != nil {
 		fatal("start metadata service", err)

@@ -64,7 +64,7 @@ func (s *Service) ApplySync(items []SyncGame) error {
 	changed := false
 	for _, item := range items {
 		for i := range s.games {
-			if s.games[i].CanonicalGameID != item.CanonicalGameID {
+			if !s.sameCanonicalLocked(s.games[i].CanonicalGameID, item.CanonicalGameID) {
 				continue
 			}
 			if item.PlaytimeSeconds > s.games[i].PlaytimeSeconds {
@@ -80,10 +80,7 @@ func (s *Service) ApplySync(items []SyncGame) error {
 				s.games[i].LastPlayed = merged
 				changed = true
 			}
-			if item.Owned && !s.games[i].Owned {
-				s.games[i].Owned = true
-				changed = true
-			}
+			// Ownership authorizes local file deletion; it never comes from sync.
 			if item.StatusAt != nil && ValidStatus(item.Status) && (s.games[i].StatusAt == nil || item.StatusAt.After(*s.games[i].StatusAt)) {
 				t := *item.StatusAt
 				s.games[i].Status = item.Status

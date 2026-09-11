@@ -38,6 +38,7 @@ type Candidate struct {
 }
 
 type GameMetadata struct {
+	SteamAppID  string     `json:"steamAppId,omitempty"`
 	ProviderID  string     `json:"providerId"`
 	Title       string     `json:"title"`
 	Summary     string     `json:"summary"`

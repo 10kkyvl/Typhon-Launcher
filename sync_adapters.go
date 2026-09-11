@@ -68,7 +68,7 @@ func (a syncLibrary) Add(canonicalGameID, title string) error {
 }
 
 func (a syncLibrary) Remove(canonicalGameID string) error {
-	return a.svc.RemoveGame(canonicalGameID)
+	return a.svc.RemoveSyncedGame(canonicalGameID)
 }
 
 type syncCatalog struct{ svc *catalog.Service }

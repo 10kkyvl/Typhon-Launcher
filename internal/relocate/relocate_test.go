@@ -454,6 +454,9 @@ func TestMoveGameRefusesWhileRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
+	if err := lib.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	if err := lib.PlayGame(game.ID); err != nil {
 		t.Fatalf("play game: %v", err)
 	}

@@ -21,6 +21,8 @@ export interface LibraryGame {
   installedAt: string;
   releaseId?: string;
   sourceId?: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   canonicalGameId?: string;
   source?: string;
   uninstalled?: boolean;

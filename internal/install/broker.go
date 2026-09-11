@@ -39,11 +39,7 @@ var (
 	brokerMaxLifetime     = 12 * time.Hour
 )
 
-// brokerPin — границы, записанные лаунчером до того, как он попросил права.
-// Всё, что брокер соглашается выполнить, обязано укладываться в них: спеку он
-// получает часами позже, и к этому моменту единственная гарантия, что она
-// пришла от лаунчера, а не от чужого процесса под тем же пользователем, — это
-// совпадение путей с уже согласованными.
+// brokerPin restricts paths; signed jobs authenticate the parent separately.
 type brokerPin struct {
 	DownloadID  string `json:"downloadId"`
 	ContentRoot string `json:"contentRoot"`
@@ -154,7 +150,7 @@ func validateBrokerSpec(pin brokerPin, spec workerSpec) error {
 	return nil
 }
 
-func readBrokerSpec(dir string, pin brokerPin) (workerSpec, bool, error) {
+func readBrokerSpec(dir string, pin brokerPin, key ...string) (workerSpec, bool, error) {
 	path := brokerSpecPath(dir)
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return workerSpec{}, false, nil
@@ -168,6 +164,9 @@ func readBrokerSpec(dir string, pin brokerPin) (workerSpec, bool, error) {
 	if err := validateBrokerSpec(pin, spec); err != nil {
 		return workerSpec{}, false, err
 	}
+	if err := verifyBrokerSignature(spec, key); err != nil {
+		return workerSpec{}, false, err
+	}
 	return spec, true, nil
 }
 
@@ -178,7 +177,7 @@ func readBrokerSpec(dir string, pin brokerPin) (workerSpec, bool, error) {
 // ограничивать её время жизни больше некому.
 //
 //nolint:forbidigo // RunBroker — точка входа отдельного процесса, эквивалент main для брокера: вызывающего ctx нет (инвариант 20 разрешает Background только в main)
-func RunBroker(dir string) (BrokerOutcome, error) {
+func RunBroker(dir string, key ...string) (BrokerOutcome, error) {
 	if dir == "" {
 		return BrokerAborted, errBrokerNoDir
 	}
@@ -195,6 +194,7 @@ func RunBroker(dir string) (BrokerOutcome, error) {
 	// проходит через того же брокера: выйти после первого значило бы
 	// потребовать UAC на втором, ровно тогда, когда пользователя уже нет.
 	served := 0
+	seen := map[string]bool{}
 	for {
 		aborted, err := brokerAbortRequested(brokerAbortPath(dir))
 		if err != nil {
@@ -204,11 +204,15 @@ func RunBroker(dir string) (BrokerOutcome, error) {
 			return brokerIdleOutcome(served, BrokerAborted), nil
 		}
 
-		spec, found, err := readBrokerSpec(dir, pin)
+		spec, found, err := readBrokerSpec(dir, pin, key...)
 		if err != nil {
 			return brokerIdleOutcome(served, BrokerAborted), err
 		}
 		if found {
+			if spec.Run == "" || seen[spec.Run] {
+				return BrokerAborted, errBrokerOutsidePin
+			}
+			seen[spec.Run] = true
 			// Задание снимается до запуска: иначе смерть брокера посреди
 			// установки оставила бы спеку, которую следующий прогон принял
 			// бы за новую и поставил игру второй раз.
@@ -216,7 +220,7 @@ func RunBroker(dir string) (BrokerOutcome, error) {
 				return brokerIdleOutcome(served, BrokerAborted), fmt.Errorf("consume broker spec: %w", err)
 			}
 			slog.Info("broker takes the install", "download", pin.DownloadID, "installer", spec.InstallerPath)
-			if err := runWorkerSpec(spec); err != nil {
+			if err := runSignedBrokerSpec(spec); err != nil {
 				return BrokerInstalled, err
 			}
 			served++

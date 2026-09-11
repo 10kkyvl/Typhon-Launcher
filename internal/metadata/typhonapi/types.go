@@ -21,6 +21,7 @@ type imagePayload struct {
 }
 
 type gameResponse struct {
+	SteamAppID  int64          `json:"steamAppId"`
 	ProviderID  string         `json:"providerId"`
 	Title       string         `json:"title"`
 	Summary     string         `json:"summary"`

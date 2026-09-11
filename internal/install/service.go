@@ -910,6 +910,12 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		s.mu.Unlock()
 		return Installation{}, errUnavailable
 	}
+	for _, existing := range s.items {
+		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
+			s.mu.Unlock()
+			return Installation{}, errBusy
+		}
+	}
 	s.items = append(s.items, item)
 	if err := s.persistLocked(); err != nil {
 		s.items = s.items[:len(s.items)-1]

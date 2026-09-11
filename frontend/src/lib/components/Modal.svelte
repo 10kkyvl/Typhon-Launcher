@@ -1,9 +1,9 @@
 <script module lang="ts">
-  const stack: symbol[] = [];
+  let stack = $state<symbol[]>([]);
 </script>
 
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
@@ -28,12 +28,13 @@
 
   $effect(() => {
     if (!open) return;
-    stack.push(id);
+    untrack(() => { stack = [...stack, id]; });
     return () => {
-      const at = stack.indexOf(id);
-      if (at >= 0) stack.splice(at, 1);
+      stack = stack.filter((entry) => entry !== id);
     };
   });
+
+  const topmost = $derived(stack.length === 0 || stack[stack.length - 1] === id);
 
   function close() {
     open = false;
@@ -48,8 +49,8 @@
 <svelte:window onkeydown={open ? onKeydown : undefined} />
 
 {#if open}
-  <div class="overlay" role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
-    <div class="modal" style:width role="dialog" aria-modal="true" aria-label={title}>
+  <div class="overlay" inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
+    <div class="modal" style:width role="dialog" aria-modal={topmost} aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
         <IconButton label={msg('common.close')} size="sm" onclick={close}>

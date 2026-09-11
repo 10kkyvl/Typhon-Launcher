@@ -38,6 +38,8 @@ var (
 )
 
 type Service struct {
+	redirects     map[string]string
+	remote        RemoteCatalog
 	mu            sync.RWMutex
 	epoch         uint64
 	gamesPath     string
@@ -78,6 +80,19 @@ func (s *Service) load() error {
 	if err := loadList(s.overridesPath, overridesVersion, &s.overrides); err != nil {
 		return fmt.Errorf("load match overrides: %w", err)
 	}
+	if err := loadList(filepath.Join(filepath.Dir(s.gamesPath), "catalog-redirects.json"), 1, &s.redirects); err != nil {
+		return err
+	}
+	known := map[string]bool{}
+	for _, g := range s.games {
+		known[g.ID] = true
+	}
+	for old := range s.redirects {
+		target := s.resolveIDLocked(old)
+		if !known[old] || target == "" || !known[target] {
+			return fmt.Errorf("invalid catalog redirect %q", old)
+		}
+	}
 	games, changed := sanitize(s.games)
 	s.games = games
 	s.rebuildLocked()
@@ -104,6 +119,16 @@ func loadList(path string, version int, out any) error {
 func (s *Service) rebuildLocked() {
 	s.epoch++
 	s.idx = buildIndex(s.games)
+	for old := range s.redirects {
+		target := s.resolveIDLocked(old)
+		if pos, ok := s.idx.byID[target]; ok {
+			if oldPos, exists := s.idx.byID[old]; exists && oldPos != pos {
+				s.idx.entries[oldPos].matchable = false
+			}
+			s.idx.byID[old] = pos
+		}
+	}
+
 	s.overrideMap = make(map[string]string, len(s.overrides))
 	for _, o := range s.overrides {
 		if o.Pattern == "" || o.GameID == "" {
@@ -190,6 +215,12 @@ func (s *Service) GetGame(id string) (Game, error) {
 	if !ok {
 		return Game{}, errNotFound
 	}
+	game.AliasIDs = nil
+	for _, other := range s.games {
+		if other.ID != game.ID && s.sameGameLocked(other.ID, game.ID) {
+			game.AliasIDs = append(game.AliasIDs, other.ID)
+		}
+	}
 	return game, nil
 }
 
@@ -212,7 +243,7 @@ func (s *Service) ListOverrides() []MatchOverride {
 func (s *Service) Resolve(q Query) Match {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.idx.resolve(normalizeQuery(q), s.overrideMap)
+	return conservativeMatch(s.idx.resolve(normalizeQuery(q), s.overrideMap), s.remote != nil)
 }
 
 // ResolveAll — самая тяжёлая операция каталога: пачка на 20 тысяч названий
@@ -244,7 +275,7 @@ func (s *Service) ResolveAll(queries []Query) []Match {
 	}
 	if workers <= 1 || len(queries) < parallelResolveFloor {
 		for i, q := range queries {
-			out[i] = idx.resolve(normalizeQuery(q), overrides)
+			out[i] = conservativeMatch(idx.resolve(normalizeQuery(q), overrides), s.remote != nil)
 		}
 		return out
 	}
@@ -264,7 +295,7 @@ func (s *Service) ResolveAll(queries []Query) []Match {
 		go func() {
 			defer wg.Done()
 			for i := start; i < end; i++ {
-				out[i] = idx.resolve(normalizeQuery(queries[i]), overrides)
+				out[i] = conservativeMatch(idx.resolve(normalizeQuery(queries[i]), overrides), s.remote != nil)
 			}
 		}()
 	}
@@ -603,4 +634,66 @@ func (s *Service) LookupByTitle(title string) (Game, bool) {
 		return Game{}, false
 	}
 	return s.idx.games[positions[0]], true
+}
+
+func (s *Service) resolveIDLocked(id string) string {
+	seen := map[string]bool{}
+	for s.redirects[id] != "" {
+		if seen[id] {
+			return ""
+		}
+		seen[id] = true
+		id = s.redirects[id]
+	}
+	return id
+}
+
+//wails:ignore
+func (s *Service) SameGame(a, b string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sameGameLocked(a, b)
+}
+func (s *Service) sameGameLocked(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a = s.resolveIDLocked(a)
+	b = s.resolveIDLocked(b)
+	if a == b {
+		return true
+	}
+	x, xok := s.idx.game(a)
+	y, yok := s.idx.game(b)
+	if !xok || !yok {
+		return false
+	}
+	if x.ExternalIDs.IGDB != "" && y.ExternalIDs.IGDB != "" {
+		if x.ExternalIDs.IGDB == y.ExternalIDs.IGDB {
+			return true
+		}
+		for _, id := range x.ProviderLinks["igdb"] {
+			if id == y.ExternalIDs.IGDB {
+				return true
+			}
+		}
+		for _, id := range y.ProviderLinks["igdb"] {
+			if id == x.ExternalIDs.IGDB {
+				return true
+			}
+		}
+		return false
+	}
+	linked := func(g, other Game) bool {
+		if other.ExternalIDs.IGDB != "" {
+			return false
+		}
+		for _, id := range g.ProviderLinks["steam"] {
+			if id == other.ExternalIDs.Steam && id != "" {
+				return true
+			}
+		}
+		return false
+	}
+	return linked(x, y) || linked(y, x)
 }

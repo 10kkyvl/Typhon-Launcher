@@ -167,7 +167,7 @@ func (s *Service) GetReleasesForGame(gameID string) []ReleaseGroup {
 	var list []*Release
 	for _, releases := range s.releases {
 		for _, r := range releases {
-			if r.Ignored || r.CanonicalGameID == nil || *r.CanonicalGameID != gameID {
+			if r.Ignored || r.CanonicalGameID == nil || !s.sameGame(*r.CanonicalGameID, gameID) {
 				continue
 			}
 			list = append(list, r)
@@ -270,8 +270,11 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	if _, err := cat.GetGame(gameID); err != nil {
 		return err
 	}
-	if err := cat.LearnMatch(normalized, gameID); err != nil {
-		return err
+	learnPattern := !cat.HasRemoteCatalog()
+	if learnPattern {
+		if err := cat.LearnMatch(normalized, gameID); err != nil {
+			return err
+		}
 	}
 
 	s.mu.Lock()
@@ -279,7 +282,7 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	before := map[string][]Release{}
 	for sourceID, list := range s.releases {
 		for _, item := range list {
-			if item.ID != releaseID && (item.Locked || item.NormalizedTitle != normalized) {
+			if item.ID != releaseID && (!learnPattern || item.Locked || item.NormalizedTitle != normalized) {
 				continue
 			}
 			if !touched[sourceID] {
@@ -396,11 +399,13 @@ func (s *Service) PrepareDownload(releaseID string) (DownloadRequest, error) {
 		return DownloadRequest{}, errNoURI
 	}
 	request := DownloadRequest{
-		URI:       r.URIs[0],
-		Name:      r.RawTitle,
-		ReleaseID: r.ID,
-		SourceID:  r.SourceID,
-		Version:   releaseVersion(r),
+		URI:               r.URIs[0],
+		Name:              r.RawTitle,
+		ReleaseID:         r.ID,
+		SourceID:          r.SourceID,
+		DistributionID:    r.DistributionID,
+		ReleaseUploadedAt: r.UploadedAt,
+		Version:           releaseVersion(r),
 	}
 	if r.CanonicalGameID != nil {
 		request.GameID = *r.CanonicalGameID
@@ -430,10 +435,15 @@ func (s *Service) ReleasesFor(canonicalGameID, title string) []Release {
 	var out []Release
 	for _, list := range s.releases {
 		for _, r := range list {
-			if r.Ignored || r.CanonicalGameID == nil || *r.CanonicalGameID != canonicalGameID {
+			if r.Ignored || r.CanonicalGameID == nil || !s.sameGame(*r.CanonicalGameID, canonicalGameID) {
 				continue
 			}
-			out = append(out, *r)
+			// Present confirmed aliases in the caller's identity space. This is
+			// a copy: persisted release/source/distribution provenance is unchanged.
+			copy := *r
+			id := canonicalGameID
+			copy.CanonicalGameID = &id
+			out = append(out, copy)
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].ID < out[b].ID })
@@ -661,4 +671,11 @@ func latestVersion(refs []versionRef) string {
 		}
 	}
 	return raw
+}
+
+func (s *Service) sameGame(a, b string) bool {
+	if a == b {
+		return true
+	}
+	return s.catalog != nil && s.catalog.SameGame(a, b)
 }

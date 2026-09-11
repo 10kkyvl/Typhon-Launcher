@@ -170,7 +170,7 @@
         {:else}
           <div class="friends">
             {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
-              <FriendRow user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
+              <FriendRow compact user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
             {/each}
           </div>
         {/if}
@@ -202,6 +202,7 @@
     min-width: 0;
     max-height: calc(100vh - var(--topbar-h) - var(--space-8));
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .center {
@@ -255,7 +256,7 @@
   .friends {
     display: flex;
     flex-direction: column;
-    margin: 0 calc(var(--space-6) * -1);
+    min-width: 0;
   }
 
   .muted {

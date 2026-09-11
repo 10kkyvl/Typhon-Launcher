@@ -87,7 +87,7 @@ func TestHandleDownloadStartedRaisesBroker(t *testing.T) {
 
 	select {
 	case spec := <-started:
-		if len(spec.Args) != 2 || spec.Args[0] != installBrokerFlag {
+		if len(spec.Args) != 3 || spec.Args[0] != installBrokerFlag {
 			t.Fatalf("брокер запущен не тем флагом: %v", spec.Args)
 		}
 	case <-time.After(5 * time.Second):
@@ -219,9 +219,12 @@ func TestHandOffPrefersTheLiveBroker(t *testing.T) {
 	spec := runSpec{
 		ID:        "i1",
 		StatePath: filepath.Join(dir, "state.json"),
-		Broker:    &brokerHandoff{Dir: dir, Gone: gone},
+		Broker:    &brokerHandoff{Key: brokerTestPrivate, Dir: dir, Gone: gone},
 	}
 	ws := workerSpec{ID: "i1", InstallerPath: filepath.Join(dir, "setup.exe")}
+	if err := os.WriteFile(ws.InstallerPath, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	spawned := false
 	old := startElevatedWorker

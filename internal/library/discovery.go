@@ -26,15 +26,19 @@ const (
 )
 
 type Discovered struct {
-	GameID          string
-	Title           string
-	Executable      string
-	InstallDir      string
-	Version         string
-	VersionSource   string
-	CanonicalGameID string
-	SizeBytes       int64
-	SizeUnknown     bool
+	GameID            string
+	Title             string
+	Executable        string
+	InstallDir        string
+	Version           string
+	VersionSource     string
+	ReleaseID         string
+	SourceID          string
+	DistributionID    string
+	ReleaseUploadedAt *time.Time
+	CanonicalGameID   string
+	SizeBytes         int64
+	SizeUnknown       bool
 }
 
 // markInstalled оставляет метку рядом с установкой. Каталог может быть закрыт
@@ -112,7 +116,7 @@ func (s *Service) matchDiscoveredLocked(gameID, key, executable, canonicalGameID
 		if executable != "" && byExecutable < 0 && strings.EqualFold(s.games[i].Executable, executable) {
 			byExecutable = i
 		}
-		if canonicalGameID != "" && byCanonical < 0 && s.games[i].Uninstalled && s.games[i].CanonicalGameID == canonicalGameID {
+		if canonicalGameID != "" && byCanonical < 0 && s.games[i].Uninstalled && s.sameCanonicalLocked(s.games[i].CanonicalGameID, canonicalGameID) {
 			byCanonical = i
 		}
 	}
@@ -137,17 +141,21 @@ func (s *Service) createDiscoveredLocked(d Discovered, installDir, executable st
 		return Game{}, "", uierr.New("library.no_discovered_title", "не удалось определить название игры")
 	}
 	game := Game{
-		ID:              newID(),
-		Title:           title,
-		Executable:      executable,
-		InstallDir:      installDir,
-		Version:         d.Version,
-		VersionSource:   d.VersionSource,
-		SizeBytes:       d.SizeBytes,
-		SizeUnknown:     d.SizeUnknown,
-		InstalledAt:     time.Now(),
-		CanonicalGameID: d.CanonicalGameID,
-		Source:          SourceDiscovered,
+		ID:                newID(),
+		Title:             title,
+		Executable:        executable,
+		InstallDir:        installDir,
+		Version:           d.Version,
+		VersionSource:     d.VersionSource,
+		ReleaseID:         d.ReleaseID,
+		SourceID:          d.SourceID,
+		DistributionID:    d.DistributionID,
+		ReleaseUploadedAt: d.ReleaseUploadedAt,
+		SizeBytes:         d.SizeBytes,
+		SizeUnknown:       d.SizeUnknown,
+		InstalledAt:       time.Now(),
+		CanonicalGameID:   d.CanonicalGameID,
+		Source:            SourceDiscovered,
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
@@ -183,6 +191,13 @@ func (s *Service) mergeDiscoveredLocked(pos int, d Discovered, installDir, execu
 	if next.Version == "" && d.Version != "" {
 		next.Version = d.Version
 		next.VersionSource = d.VersionSource
+		changed = true
+	}
+	if next.ReleaseID == "" && d.ReleaseID != "" {
+		next.ReleaseID = d.ReleaseID
+		next.SourceID = d.SourceID
+		next.DistributionID = d.DistributionID
+		next.ReleaseUploadedAt = d.ReleaseUploadedAt
 		changed = true
 	}
 	if next.Source == "" {

@@ -242,13 +242,17 @@ func (s *Service) adopt(ctx context.Context, c candidate, marker library.Marker)
 		}
 	}
 	return s.store(library.Discovered{
-		Title:           title,
-		Executable:      executable,
-		InstallDir:      c.path,
-		Version:         marker.Version,
-		VersionSource:   marker.VersionSource,
-		CanonicalGameID: canonical,
-		SizeBytes:       size,
+		Title:             title,
+		Executable:        executable,
+		InstallDir:        c.path,
+		Version:           marker.Version,
+		VersionSource:     marker.VersionSource,
+		ReleaseID:         marker.ReleaseID,
+		SourceID:          marker.SourceID,
+		DistributionID:    marker.DistributionID,
+		ReleaseUploadedAt: marker.ReleaseUploadedAt,
+		CanonicalGameID:   canonical,
+		SizeBytes:         size,
 	}, provisioned)
 }
 

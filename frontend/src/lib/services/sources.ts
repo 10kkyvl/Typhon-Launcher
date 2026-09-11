@@ -34,6 +34,7 @@ export interface Source {
 export interface Release {
   id: string;
   sourceId: string;
+  distributionId?: string;
   kind?: 'release' | 'patch';
   rawTitle: string;
   title: string;
@@ -156,6 +157,9 @@ export interface CatalogGame {
   id: string;
   title: string;
   sortTitle: string;
+  coverUrl?: string;
+  serverId?: string;
+  aliasIds?: string[];
   releaseYear?: number;
   developer?: string;
   publisher?: string;
@@ -185,6 +189,9 @@ export interface CompatInfo {
 export const compatOnlyWorking = 'works';
 
 export interface CatalogQuery {
+  revision?: number;
+  platform?: string;
+  kind?: string;
   search?: string;
   genre?: string;
   sort?: string;
@@ -194,6 +201,11 @@ export interface CatalogQuery {
 }
 
 export interface CatalogPage {
+  facets?: GenreFacet[];
+  platforms?: GenreFacet[];
+  revision?: number;
+  offline?: boolean;
+  providers?: {provider: string; complete: boolean; updatedAt?: string; records: number}[];
   items: CatalogGame[];
   compat?: Record<string, CompatInfo>;
   total: number;
@@ -211,6 +223,8 @@ export interface ReleaseDownloadRequest {
   name: string;
   releaseId: string;
   sourceId: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   gameId: string;
   version?: string;
 }
@@ -342,7 +356,7 @@ export async function getRelease(releaseId: string): Promise<ReleaseView | null>
 
 export async function searchGames(query: string, limit = 20): Promise<CatalogGame[]> {
   if (!inWails) return [];
-  return ((await CatalogService.SearchGames(query, limit)) ?? []) as unknown as CatalogGame[];
+  return (await queryCatalogGames({ search: query, kind: 'all', page: 1, pageSize: limit })).items;
 }
 
 export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
@@ -359,6 +373,9 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
   const payload = {
+    revision: query.revision ?? 0,
+    platform: query.platform ?? '',
+    kind: query.kind ?? '',
     search: query.search ?? '',
     genre: query.genre ?? '',
     sort: query.sort ?? '',
@@ -366,7 +383,7 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
     page,
     pageSize,
   };
-  const result = (await CatalogService.QueryGames(payload as never)) as unknown as CatalogPage;
+  const result = (await CatalogService.BrowseGames(payload as never)) as unknown as CatalogPage;
   return { ...result, items: result.items ?? [], compat: result.compat ?? {} };
 }
 

@@ -1,3 +1,4 @@
+import { updateSettings } from './settings';
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
@@ -83,10 +84,14 @@ function onSystemChange() {
 
 export async function resetAppearance() {
   cancelConfirm();
+  const previous = get(activeTheme);
+  // Keep the emergency reset usable even when custom CSS hides the interface.
   clearThemeDom();
   try {
     await resetThemeRequest();
+    await updateSettings({ accentColor: '', tintLogo: false });
   } catch (err) {
+    if (previous) setActive(previous);
     toast(themeErrorText(err), 'danger');
     return;
   }

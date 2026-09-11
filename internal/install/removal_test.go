@@ -168,7 +168,7 @@ func TestRemoveGameKeepsFilesWithoutOwnership(t *testing.T) {
 func TestRemoveGameTrustsMarker(t *testing.T) {
 	s, _, registrar := newTestService(t)
 	dir := gameDir(t, "Marked")
-	if err := library.WriteMarker(dir, library.Marker{GameID: "g1", Title: "Marked", InstalledAt: time.Now()}); err != nil {
+	if err := library.WriteMarker(dir, library.Marker{GameID: "g1", Title: "Marked", InstallType: string(TypePortable), Owned: true, InstalledAt: time.Now()}); err != nil {
 		t.Fatalf("write marker: %v", err)
 	}
 	registrar.put(library.Game{ID: "g1", Title: "Marked", InstallDir: dir})

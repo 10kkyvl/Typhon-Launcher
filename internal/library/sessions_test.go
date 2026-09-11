@@ -542,7 +542,8 @@ func TestStopGameExternalSessionRejectsUnstartedService(t *testing.T) {
 		t.Fatal(err)
 	}
 	fakeExternalSession(s, game.ID, 4245, time.Now().Add(-time.Minute))
-	// ServiceStartup was never called, so s.ctx is still nil: StopGame must
+	s.ctx = nil
+	// ServiceStartup was never called, so s.ctx is nil: StopGame must
 	// refuse to confirm identity rather than pass a nil ctx to s.scan.
 
 	err = s.StopGame(game.ID)

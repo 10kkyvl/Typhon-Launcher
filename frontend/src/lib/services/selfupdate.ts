@@ -137,15 +137,19 @@ export function emptyReleaseNotes(): ReleaseNotes {
   return { currentVersion: '', unseen: [], history: [] };
 }
 
+export function toReleaseNotes(value: unknown): ReleaseNotes {
+  const notes = value as Partial<ReleaseNotes> | null;
+  return {
+    currentVersion: notes?.currentVersion ?? '',
+    unseen: notes?.unseen ?? [],
+    history: notes?.history ?? [],
+  };
+}
+
 export async function getReleaseNotes(): Promise<ReleaseNotes> {
   if (!inWails) return emptyReleaseNotes();
   try {
-    const notes = (await SelfUpdateService.GetReleaseNotes()) as unknown as Partial<ReleaseNotes> | null;
-    return {
-      currentVersion: notes?.currentVersion ?? '',
-      unseen: notes?.unseen ?? [],
-      history: notes?.history ?? [],
-    };
+    return toReleaseNotes(await SelfUpdateService.GetReleaseNotes());
   } catch (err) {
     throw toSelfUpdateError(err);
   }

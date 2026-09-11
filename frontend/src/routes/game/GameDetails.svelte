@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { revealImage } from '../../lib/utils/revealImage';
+  import { locale } from '../../lib/i18n/locale';
   import {
     BookmarkPlus,
     ChevronRight,
@@ -98,6 +100,7 @@
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -113,8 +116,9 @@
   let { id }: { id: string } = $props();
 
   const localGame = $derived(
-    $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id),
+    $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
+  const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
@@ -161,6 +165,7 @@
 
   let releaseGroups = $state<ReleaseGroup[]>([]);
   let releasesLoading = $state(false);
+  let releasesFailed = $state(false);
   let releaseToken = 0;
 
   let catalogGame = $state<CatalogGame | null>(null);
@@ -201,6 +206,8 @@
 
   let metaView = $state<MetadataView | null>(null);
   let metaToken = 0;
+  let metaEventVersion = 0;
+  let metaReading = $state(false);
   let metaRefreshing = $state(false);
   let metaSearching = $state(false);
   let metaSkipping = $state(false);
@@ -214,20 +221,28 @@
 
   async function loadMetaView(gameId: string) {
     const current = ++metaToken;
-    const view = await getMetadataView(gameId);
-    if (current !== metaToken) return;
-    metaView = preferView(metaView, view);
-    const started = await ensureMetadataFresh(gameId);
-    if (current !== metaToken || !started) return;
-    metaSearching = true;
+    const eventVersion = metaEventVersion;
+    metaReading = true;
+    try {
+      const view = await getMetadataView(gameId);
+      if (current !== metaToken) return;
+      if (eventVersion === metaEventVersion) metaView = preferView(metaView, view);
+      const started = await ensureMetadataFresh(gameId);
+      if (current !== metaToken || eventVersion !== metaEventVersion) return;
+      metaSearching = started || view.match === 'searching';
+    } finally {
+      if (current === metaToken) metaReading = false;
+    }
   }
 
   $effect(() => {
     const metaGameId = canonicalId;
+    $locale;
     untrack(() => {
       metaSearching = false;
       if (!metaGameId) {
         metaToken++;
+        metaReading = false;
         metaView = null;
         return;
       }
@@ -247,7 +262,8 @@
     return Events.On('metadata:updated', (event) => {
       const view = event.data as MetadataView;
       if (view.game?.id && view.game.id === canonicalId) {
-        metaSearching = false;
+        metaEventVersion++;
+        metaSearching = view.match === 'searching';
         metaView = preferView(metaView, view);
       }
     });
@@ -256,7 +272,7 @@
   const metaState = $derived(
     metaStatus({
       available: $metadataAvailable,
-      busy: metaSearching || metaRefreshing || metaSkipping,
+      busy: metaReading || metaSearching || metaRefreshing || metaSkipping,
       match: metaView?.match,
       resolved: metaView?.resolved,
     }),
@@ -264,12 +280,12 @@
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
-    clean(localGame?.title) || clean(catalogGame?.title) || clean(info?.title) || clean(anyOwnDownload?.name),
+    clean(info?.title) || clean(catalogGame?.title) || clean(localGame?.title) || clean(anyOwnDownload?.name),
   );
   const screenshots = $derived(metaView?.screenshots ?? []);
   const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
   const shots = $derived(galleryShots(screenshots, heroSrc));
-  const coverSrc = $derived(clean(metaView?.cover) || clean(localGame?.cover));
+  const coverSrc = $derived(clean(catalogGame?.coverUrl) || clean(localGame?.cover) || clean(metaView?.cover));
   const showHero = $derived(Boolean(heroSrc) && !heroFailed);
 
   $effect(() => {
@@ -558,9 +574,10 @@
           : [];
       if (current !== releaseToken) return;
       releaseGroups = groups;
+      releasesFailed = false;
     } catch {
       if (current !== releaseToken) return;
-      releaseGroups = [];
+      releasesFailed = true;
     } finally {
       if (current === releaseToken) releasesLoading = false;
     }
@@ -568,6 +585,7 @@
 
   $effect(() => {
     releaseKey;
+    $sources; // A feed can finish importing while this game is already open.
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
     untrack(() => {
@@ -718,7 +736,9 @@
   <section class="hero" class:plain={!showHero}>
     <div class="art">
       {#if showHero}
-        <img src={heroSrc} alt="" draggable="false" onerror={() => (heroFailed = true)} />
+        {#key heroSrc}
+          <img src={heroSrc} class="media-reveal" use:revealImage alt="" decoding="async" draggable="false" onerror={() => (heroFailed = true)} />
+        {/key}
       {/if}
     </div>
     <div class="veil"></div>
@@ -748,7 +768,7 @@
             <StatusBadge kind="accent" label={msg('games.runningLabel')} />
           {:else if installed}
             <StatusBadge kind="success" label={msg('games.installedStatusWord')} dot={false} />
-          {:else if localGame}
+          {:else if localGame && wasInstalled}
             <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
           {:else if title}
             <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
@@ -839,7 +859,7 @@
 
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
           <p class="note danger">{terminalDownload.error}</p>
-        {:else if localGame && !installed}
+        {:else if localGame && !installed && wasInstalled}
           <p class="note">
             {primary.kind === 'install-download'
               ? msg('games.detailUninstalledDownloadedNote')
@@ -916,9 +936,11 @@
             </button>
           {/if}
         {:else if !title || metaState === 'searching'}
-          <div class="skeleton line"></div>
-          <div class="skeleton line"></div>
-          <div class="skeleton line short"></div>
+          <div aria-hidden="true">
+            <div class="skeleton line"></div>
+            <div class="skeleton line"></div>
+            <div class="skeleton line short"></div>
+          </div>
         {/if}
 
         {#if tags.length > 0}
@@ -973,9 +995,11 @@
           </section>
         {/if}
 
-        {#if releasesLoading || releaseGroups.length > 0}
+        {#if catalogGame || localGame}
           <section class="section">
             <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+            {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+            {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
             <ReleaseList
               groups={releaseGroups}
               loading={releasesLoading}
@@ -1080,7 +1104,6 @@
     height: 100%;
     object-fit: cover;
     object-position: 50% 28%;
-    animation: art-in 320ms var(--ease);
   }
 
   .hero.plain {
@@ -1500,9 +1523,8 @@
   }
 
   .skeleton {
-    background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
-    background-size: 200% 100%;
-    animation: shimmer 1.4s linear infinite;
+    background: var(--surface-3);
+    animation: loading-breathe 1.6s ease-in-out 3;
     border-radius: var(--radius-sm);
   }
 
@@ -1514,19 +1536,6 @@
 
   .line.short {
     width: 40%;
-  }
-
-  @keyframes shimmer {
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @keyframes art-in {
-    from {
-      opacity: 0;
-      transform: scale(1.02);
-    }
   }
 
   @media (max-width: 1400px) {

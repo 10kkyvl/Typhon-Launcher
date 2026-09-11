@@ -1,4 +1,5 @@
 <script lang="ts">
+  import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
   import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
@@ -326,9 +327,10 @@
   <Tabs {tabs} bind:value={tab} />
 </div>
 
+<div class="settings-page">
 {#if tab === 'general'}
-  <div class="columns">
-    <div class="column">
+  <div class="settings-grid">
+    <div class="settings-column">
       <Card title={msg('settings.generalStartupCardTitle')}>
         <div class="rows">
           <div class="row">
@@ -420,7 +422,7 @@
       </Card>
     </div>
 
-    <div class="column">
+    <div class="settings-column">
       <Card title={msg('settings.generalInterfaceCardTitle')}>
         <div class="rows">
           <div class="row">
@@ -590,410 +592,420 @@
     </div>
   </div>
 {:else if tab === 'downloads'}
-  <div class="single-column">
-    <Card title={msg('settings.downloadsTab')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
-          </div>
-          <RateLimitInput
-            value={current?.downloadRateLimit ?? 0}
-            presets={downloadLimitPresets}
-            onchange={(bytes) => set({ downloadRateLimit: bytes })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
-          </div>
-          <RateLimitInput
-            value={current?.uploadRateLimit ?? 0}
-            presets={uploadLimitPresets}
-            onchange={(bytes) => set({ uploadRateLimit: bytes })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
-          </div>
-          <Select
-            value={maxActiveValue}
-            width="20rem"
-            options={maxActiveDownloadOptions}
-            onchange={(id) => set({ maxActiveDownloads: Number(id) })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.uploadWhileDownloading ?? false}
-            label={msg('settings.downloadsUploadWhileDownloadingToggle')}
-            onchange={(v) => set({ uploadWhileDownloading: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.seedAfterDownload ?? false}
-            label={msg('settings.downloadsSeedAfterToggle')}
-            onchange={(v) => set({ seedAfterDownload: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
-          </div>
-          <Select
-            value={sourceRefreshInterval}
-            width="20rem"
-            options={sourceRefreshOptions}
-            onchange={(id) => set({ sourceRefreshInterval: id })}
-          />
-        </div>
-      </div>
-    </Card>
-
-    <Card title={msg('settings.downloadsInstallCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
-          </div>
-          <Select
-            value={cleanupPolicy}
-            width="26rem"
-            options={cleanupPolicyOptions}
-            onchange={(id) => set({ installCleanupPolicy: id })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.autoInstall ?? false}
-            label={msg('settings.downloadsAutoInstallToggle')}
-            onchange={(v) => set({ autoInstall: v })}
-          />
-        </div>
-        {#if appInfo && elevationSupported(appInfo)}
+  <div class="settings-grid">
+    <div class="settings-column">
+      <Card title={msg('settings.downloadsTab')}>
+        <div class="rows">
           <div class="row">
             <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+              <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
             </div>
-            <Toggle
-              checked={current?.elevateAhead ?? false}
-              label={msg('settings.downloadsElevateAheadToggle')}
-              onchange={(v) => set({ elevateAhead: v })}
+            <RateLimitInput
+              value={current?.downloadRateLimit ?? 0}
+              presets={downloadLimitPresets}
+              onchange={(bytes) => set({ downloadRateLimit: bytes })}
             />
           </div>
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
+            </div>
+            <RateLimitInput
+              value={current?.uploadRateLimit ?? 0}
+              presets={uploadLimitPresets}
+              onchange={(bytes) => set({ uploadRateLimit: bytes })}
+            />
           </div>
-          <Toggle
-            checked={current?.installSkipShortcuts ?? true}
-            label={msg('settings.downloadsSkipShortcutsToggle')}
-            onchange={(v) => set({ installSkipShortcuts: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
+            </div>
+            <Select
+              value={maxActiveValue}
+              width="20rem"
+              options={maxActiveDownloadOptions}
+              onchange={(id) => set({ maxActiveDownloads: Number(id) })}
+            />
           </div>
-          <Toggle
-            checked={current?.desktopShortcuts ?? true}
-            label={msg('settings.downloadsDesktopShortcutsToggle')}
-            onchange={(v) => set({ desktopShortcuts: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.uploadWhileDownloading ?? false}
+              label={msg('settings.downloadsUploadWhileDownloadingToggle')}
+              onchange={(v) => set({ uploadWhileDownloading: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.installSkipExtras ?? true}
-            label={msg('settings.downloadsSkipExtrasToggle')}
-            onchange={(v) => set({ installSkipExtras: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.seedAfterDownload ?? false}
+              label={msg('settings.downloadsSeedAfterToggle')}
+              onchange={(v) => set({ seedAfterDownload: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.verifyAfterInstall ?? true}
-            label={msg('settings.downloadsVerifyAfterInstallToggle')}
-            onchange={(v) => set({ verifyAfterInstall: v })}
-          />
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
+            </div>
+            <Select
+              value={sourceRefreshInterval}
+              width="20rem"
+              options={sourceRefreshOptions}
+              onchange={(id) => set({ sourceRefreshInterval: id })}
+            />
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
 
-    <Card title={msg('settings.downloadsUpdatesCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
+      <Card title={msg('settings.downloadsUpdatesCardTitle')}>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.updateCheckAutomatically ?? true}
+              label={msg('settings.downloadsUpdateCheckAutoToggle')}
+              onchange={(v) => set({ updateCheckAutomatically: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.updateCheckAutomatically ?? true}
-            label={msg('settings.downloadsUpdateCheckAutoToggle')}
-            onchange={(v) => set({ updateCheckAutomatically: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.updateAutoDownload ?? false}
+              label={msg('settings.downloadsUpdateAutoDownloadToggle')}
+              onchange={(v) => set({ updateAutoDownload: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.updateAutoDownload ?? false}
-            label={msg('settings.downloadsUpdateAutoDownloadToggle')}
-            onchange={(v) => set({ updateAutoDownload: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.updateSaveBackup ?? true}
+              label={msg('settings.downloadsSaveBackupToggle')}
+              onchange={(v) => set({ updateSaveBackup: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.updateSaveBackup ?? true}
-            label={msg('settings.downloadsSaveBackupToggle')}
-            onchange={(v) => set({ updateSaveBackup: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
+            </div>
+            <Select
+              value={keepPreviousVersion}
+              width="28rem"
+              options={keepPreviousOptions}
+              onchange={(id) => set({ keepPreviousVersion: id })}
+            />
           </div>
-          <Select
-            value={keepPreviousVersion}
-            width="28rem"
-            options={keepPreviousOptions}
-            onchange={(id) => set({ keepPreviousVersion: id })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.allowTorrentReuse ?? true}
+              label={msg('settings.downloadsTorrentReuseToggle')}
+              onchange={(v) => set({ allowTorrentReuse: v })}
+            />
           </div>
-          <Toggle
-            checked={current?.allowTorrentReuse ?? true}
-            label={msg('settings.downloadsTorrentReuseToggle')}
-            onchange={(v) => set({ allowTorrentReuse: v })}
-          />
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
+    <div class="settings-column">
+      <Card title={msg('settings.downloadsInstallCardTitle')}>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
+            </div>
+            <Select
+              value={cleanupPolicy}
+              width="26rem"
+              options={cleanupPolicyOptions}
+              onchange={(id) => set({ installCleanupPolicy: id })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.autoInstall ?? false}
+              label={msg('settings.downloadsAutoInstallToggle')}
+              onchange={(v) => set({ autoInstall: v })}
+            />
+          </div>
+          {#if appInfo && elevationSupported(appInfo)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.elevateAhead ?? false}
+                label={msg('settings.downloadsElevateAheadToggle')}
+                onchange={(v) => set({ elevateAhead: v })}
+              />
+            </div>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.installSkipShortcuts ?? true}
+              label={msg('settings.downloadsSkipShortcutsToggle')}
+              onchange={(v) => set({ installSkipShortcuts: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.desktopShortcuts ?? true}
+              label={msg('settings.downloadsDesktopShortcutsToggle')}
+              onchange={(v) => set({ desktopShortcuts: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.installSkipExtras ?? true}
+              label={msg('settings.downloadsSkipExtrasToggle')}
+              onchange={(v) => set({ installSkipExtras: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.verifyAfterInstall ?? true}
+              label={msg('settings.downloadsVerifyAfterInstallToggle')}
+              onchange={(v) => set({ verifyAfterInstall: v })}
+            />
+          </div>
+        </div>
+      </Card>
+
+    </div>
   </div>
 {:else if tab === 'appearance'}
   <AppearanceTab />
 {:else if tab === 'about'}
-  <div class="single-column">
-    <Card>
-      <div class="about-logo">
-        <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
-        <div>
-          <h3>Typhon Launcher</h3>
-          <span class="row-sub">{msg('settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+  <div class="settings-grid">
+    <div class="settings-column">
+      <Card>
+        <div class="about-logo">
+          <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
+          <div>
+            <h3>Typhon Launcher</h3>
+            <span class="row-sub">{msg('settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+          </div>
         </div>
-      </div>
-      <div class="rows">
-        {#if systemInfo}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-              <span class="row-sub">{systemInfo.os}</span>
+        <div class="rows">
+          {#if systemInfo}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
+                <span class="row-sub">{systemInfo.os}</span>
+              </div>
             </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-              <span class="row-sub">{systemInfo.cpu} · {msg('settings.aboutCpuThreads', { cores: systemInfo.cores })}</span>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
+                <span class="row-sub">{systemInfo.cpu} · {msg('settings.aboutCpuThreads', { cores: systemInfo.cores })}</span>
+              </div>
             </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-              <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
+                <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+              </div>
             </div>
-          </div>
-        {/if}
-        {#if wineStatus?.required}
+          {/if}
+          {#if wineStatus?.required}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
+                <span class="row-sub">
+                  {#if wineStatus.installed}
+                    CrossOver {wineStatus.version}
+                  {:else}
+                    {msg('settings.aboutRuntimeMissing')}
+                  {/if}
+                </span>
+              </div>
+            </div>
+          {/if}
           <div class="row">
             <div class="row-text">
-              <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
+              <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
               <span class="row-sub">
-                {#if wineStatus.installed}
-                  CrossOver {wineStatus.version}
+                {#if $selfUpdateChecking}
+                  {msg('settings.aboutCheckUpdatesChecking')}
                 {:else}
-                  {msg('settings.aboutRuntimeMissing')}
+                  {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
+                  {#if $selfUpdateStatus.checkedAt}
+                    · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
+                  {/if}
                 {/if}
               </span>
             </div>
+            <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
+              <ListChecks size="1.5rem" strokeWidth={1.8} />
+              {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
+            </Button>
           </div>
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
-            <span class="row-sub">
-              {#if $selfUpdateChecking}
-                {msg('settings.aboutCheckUpdatesChecking')}
-              {:else}
-                {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
-                {#if $selfUpdateStatus.checkedAt}
-                  · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
-                {/if}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
-            <ListChecks size="1.5rem" strokeWidth={1.8} />
-            {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
-          </Button>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
-            <span class="row-sub">
-              {#if $releaseNotesHistory.length > 0}
-                {msg('settings.aboutHistoryHasNotes')}
-              {:else}
-                {msg('settings.aboutHistoryEmpty')}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
-            <ScrollText size="1.5rem" strokeWidth={1.8} />
-            {msg('settings.aboutHistoryButtonLabel')}
-          </Button>
-        </div>
-        <UpdateBanner />
-      </div>
-    </Card>
-
-    <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
-            <span class="row-sub">
-              {#if logsBundle}
-                {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
-              {:else}
-                {msg('settings.aboutLogsSaveHint')}
-              {/if}
-            </span>
-          </div>
-          <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
-            <Download size="1.5rem" strokeWidth={1.8} />
-            {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
-          </Button>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
-            <span class="row-sub">
-              {#if logsStage === 'preparing'}
-                {msg('settings.aboutLogsPreparingEllipsis')}
-              {:else if logsStage === 'sending' && logsProgress}
-                {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
-              {:else if logsStage === 'sending'}
-                {msg('settings.aboutLogsSendingEllipsis')}
-              {:else if logsStage === 'waiting'}
-                {msg('settings.aboutLogsWaitingEllipsis')}
-              {:else if logsSendFailure}
-                {logsSendFailure}
-              {:else if logsSendResult}
-                {msg('settings.aboutLogsSendResultLabel')}
-              {:else}
-                {msg('settings.aboutLogsSendConfirmNote')}
-              {/if}
-            </span>
-            {#if logsSending}
-              <div class="logs-upload-progress">
-                <ProgressBar
-                  value={logsProgressPercent}
-                  indeterminate={logsStage !== 'sending' || !logsProgress}
-                  height={5}
-                />
-              </div>
-            {/if}
-          </div>
-          <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
-            <Send size="1.5rem" strokeWidth={1.8} />
-            {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
-          </Button>
-        </div>
-        {#if logsSendResult}
           <div class="row">
             <div class="row-text">
-              <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
-              <span class="row-sub logs-send-id">{logsSendResult.id}</span>
+              <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
+              <span class="row-sub">
+                {#if $releaseNotesHistory.length > 0}
+                  {msg('settings.aboutHistoryHasNotes')}
+                {:else}
+                  {msg('settings.aboutHistoryEmpty')}
+                {/if}
+              </span>
             </div>
-            <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
-              <Copy size="1.5rem" strokeWidth={1.8} />
-            </IconButton>
+            <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
+              <ScrollText size="1.5rem" strokeWidth={1.8} />
+              {msg('settings.aboutHistoryButtonLabel')}
+            </Button>
           </div>
-          {#if logsSendResult.dropped.length > 0}
-            <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
-          {/if}
-        {/if}
-        {#if logsSendFailure}
-          <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
-        {/if}
-      </div>
-    </Card>
+          <UpdateBanner />
+        </div>
+      </Card>
 
-    <Card title={msg('settings.aboutLegalCardTitle')}>
-      {#if legalError}
-        <p class="row-sub">{legalError}</p>
-      {:else}
+    </div>
+    <div class="settings-column">
+      <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
         <div class="rows">
-          {#each legalDocs as meta (meta.id)}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
+              <span class="row-sub">
+                {#if logsBundle}
+                  {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
+                {:else}
+                  {msg('settings.aboutLogsSaveHint')}
+                {/if}
+              </span>
+            </div>
+            <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
+              <Download size="1.5rem" strokeWidth={1.8} />
+              {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
+            </Button>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
+              <span class="row-sub">
+                {#if logsStage === 'preparing'}
+                  {msg('settings.aboutLogsPreparingEllipsis')}
+                {:else if logsStage === 'sending' && logsProgress}
+                  {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
+                {:else if logsStage === 'sending'}
+                  {msg('settings.aboutLogsSendingEllipsis')}
+                {:else if logsStage === 'waiting'}
+                  {msg('settings.aboutLogsWaitingEllipsis')}
+                {:else if logsSendFailure}
+                  {logsSendFailure}
+                {:else if logsSendResult}
+                  {msg('settings.aboutLogsSendResultLabel')}
+                {:else}
+                  {msg('settings.aboutLogsSendConfirmNote')}
+                {/if}
+              </span>
+              {#if logsSending}
+                <div class="logs-upload-progress">
+                  <ProgressBar
+                    value={logsProgressPercent}
+                    indeterminate={logsStage !== 'sending' || !logsProgress}
+                    height={5}
+                  />
+                </div>
+              {/if}
+            </div>
+            <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
+              <Send size="1.5rem" strokeWidth={1.8} />
+              {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
+            </Button>
+          </div>
+          {#if logsSendResult}
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{meta.title}</span>
+                <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
+                <span class="row-sub logs-send-id">{logsSendResult.id}</span>
               </div>
-              <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
+              <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
+                <Copy size="1.5rem" strokeWidth={1.8} />
+              </IconButton>
             </div>
-          {/each}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
-              <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
-            </div>
-            <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
-          </div>
+            {#if logsSendResult.dropped.length > 0}
+              <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
+            {/if}
+          {/if}
+          {#if logsSendFailure}
+            <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
+          {/if}
         </div>
-      {/if}
-    </Card>
+      </Card>
+
+      <Card title={msg('settings.aboutLegalCardTitle')}>
+        {#if legalError}
+          <p class="row-sub">{legalError}</p>
+        {:else}
+          <div class="rows">
+            {#each legalDocs as meta (meta.id)}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{meta.title}</span>
+                </div>
+                <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
+              </div>
+            {/each}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
+              </div>
+              <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
+            </div>
+          </div>
+        {/if}
+      </Card>
+    </div>
   </div>
 {/if}
+
+</div>
 
 <LibrarySetupModal
   bind:open={librarySetupOpen}
@@ -1009,35 +1021,13 @@
 {#if pending}
   <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
-<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="52rem">
+<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>
 
 <style>
   .tabs-wrap {
     margin-bottom: var(--space-8);
-  }
-
-  .columns {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-8);
-    align-items: start;
-    max-width: 96rem;
-  }
-
-  .column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    min-width: 0;
-  }
-
-  .single-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    max-width: 96rem;
   }
 
   .rows {
@@ -1118,12 +1108,5 @@
 
   .privacy-link:hover {
     color: var(--text);
-  }
-
-  @media (min-width: 1600px) {
-    .columns {
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-12);
-    }
   }
 </style>

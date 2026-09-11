@@ -113,15 +113,24 @@ func (s *Service) planInputFor(ctx context.Context, gameID string) (planInput, e
 	if s.releases == nil {
 		return planInput{}, errNoTarget
 	}
-	target, ok := s.releases.FindRelease(current.Availability.TargetReleaseID)
+	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
+	game = s.bindLegacyDistribution(game, list)
+	installed := installedOf(game)
+	availability := ResolveUpdate(installed, list, PatchesFrom(list))
+	if !availability.Available || availability.TargetReleaseID != current.Availability.TargetReleaseID ||
+		availability.TargetVersion != current.Availability.TargetVersion ||
+		availability.InstalledReleaseID != current.Availability.InstalledReleaseID ||
+		availability.InstalledVersion != current.Availability.InstalledVersion {
+		return planInput{}, errNoTarget
+	}
+	target, ok := s.releases.FindRelease(availability.TargetReleaseID)
 	if !ok {
 		return planInput{}, errNoTarget
 	}
-	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
 	return planInput{
-		Installed: installedOf(game),
+		Installed: installed,
 		Target:    target,
-		Patches:   PatchesFrom(list),
+		Patches:   patchesFor(installed, target, PatchesFrom(list)),
 	}, ctx.Err()
 }
 
@@ -157,10 +166,102 @@ func (s *Service) buildPlan(ctx context.Context, gameID string) (*UpdatePlan, er
 		}
 		plan.ID = newID()
 		plan.GameID = gameID
+		plan.SourceID = in.Target.SourceID
+		plan.DistributionID = in.Target.DistributionID
 		plan.CreatedAt = time.Now()
 		return plan, nil
 	}
 	return nil, errNoTarget
+}
+
+func (s *Service) validatePlan(gameID string, plan UpdatePlan) error {
+	game, ok := s.installedGame(gameID)
+	if !ok || s.releases == nil {
+		return errNotTracked
+	}
+	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
+	game = s.bindLegacyDistribution(game, list)
+	installed := installedOf(game)
+	if plan.GameID != gameID || plan.InstalledReleaseID != installed.ReleaseID ||
+		plan.InstalledVersion != installed.Version || plan.SourceID != installed.SourceID ||
+		plan.DistributionID != installed.DistributionID ||
+		!samePlanTime(plan.InstalledReleaseUploadedAt, installed.ReleaseUploadedAt) {
+		return errNoTarget
+	}
+	availability := ResolveUpdate(installed, list, PatchesFrom(list))
+	if !availability.Available || availability.TargetReleaseID != plan.TargetReleaseID ||
+		availability.TargetVersion != plan.TargetVersion {
+		return errNoTarget
+	}
+	target, ok := s.releases.FindRelease(plan.TargetReleaseID)
+	if !ok || !sameDistribution(installed, target) || target.SourceID != plan.SourceID ||
+		target.DistributionID != plan.DistributionID ||
+		!samePlanTime(plan.TargetReleaseUploadedAt, target.UploadedAt) {
+		return errNoTarget
+	}
+	if plan.Strategy != StrategyPatchChain {
+		return nil
+	}
+	allowed := patchesFor(installed, target, PatchesFrom(list))
+	for _, saved := range plan.Patches {
+		found := false
+		for _, current := range allowed {
+			if current.ID == saved.ID && current.ReleaseID == saved.ReleaseID &&
+				current.FromVersion == saved.FromVersion && current.ToVersion == saved.ToVersion &&
+				current.SourceID == saved.SourceID && current.DistributionID == saved.DistributionID &&
+				samePlanTime(current.UploadedAt, saved.UploadedAt) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errNoTarget
+		}
+	}
+	path, ok := FindPatchPath(plan.Patches, plan.InstalledVersion, plan.TargetVersion)
+	if !ok || len(path.Steps) != len(plan.Patches) {
+		return errNoTarget
+	}
+	for i := range path.Steps {
+		if path.Steps[i].ID != plan.Patches[i].ID {
+			return errNoTarget
+		}
+	}
+	return nil
+}
+
+func samePlanTime(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Equal(*b)
+}
+
+func releaseBelongsToPlan(plan UpdatePlan, release sources.Release) bool {
+	if plan.SourceID == "" || release.SourceID != plan.SourceID {
+		return false
+	}
+	if plan.DistributionID == "" {
+		return release.ID == plan.TargetReleaseID && plan.TargetReleaseID == plan.InstalledReleaseID &&
+			release.Kind != sources.KindPatch && releaseVersion(release) == plan.TargetVersion &&
+			samePlanTime(plan.TargetReleaseUploadedAt, release.UploadedAt)
+	}
+	if release.DistributionID != plan.DistributionID {
+		return false
+	}
+	if release.ID == plan.TargetReleaseID {
+		return release.Kind != sources.KindPatch && releaseVersion(release) == plan.TargetVersion &&
+			samePlanTime(plan.TargetReleaseUploadedAt, release.UploadedAt)
+	}
+	for _, patch := range plan.Patches {
+		if patch.ReleaseID == release.ID && release.Kind == sources.KindPatch &&
+			patch.FromVersion == release.FromVersion && patch.ToVersion == release.ToVersion &&
+			patch.SourceID == plan.SourceID && patch.DistributionID == plan.DistributionID &&
+			samePlanTime(patch.UploadedAt, release.UploadedAt) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) inspectReuse(ctx context.Context, in planInput) *download.ReuseReport {
@@ -232,15 +333,19 @@ func (fullReleaseStrategy) CanHandle(_ context.Context, in planInput) bool {
 func (f fullReleaseStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan, error) {
 	size := in.Target.Size
 	plan := &UpdatePlan{
-		InstalledReleaseID: in.Installed.ReleaseID,
-		TargetReleaseID:    in.Target.ID,
-		InstalledVersion:   in.Installed.Version,
-		TargetVersion:      releaseVersion(in.Target),
-		Strategy:           StrategyFullRelease,
-		DownloadBytes:      size,
-		RequiredDiskBytes:  size*2 + size/stagingOverhead,
-		Confidence:         baseConfidenceOf(in),
-		RollbackAvailable:  true,
+		InstalledReleaseID:         in.Installed.ReleaseID,
+		TargetReleaseID:            in.Target.ID,
+		SourceID:                   in.Target.SourceID,
+		DistributionID:             in.Target.DistributionID,
+		InstalledReleaseUploadedAt: in.Installed.ReleaseUploadedAt,
+		TargetReleaseUploadedAt:    in.Target.UploadedAt,
+		InstalledVersion:           in.Installed.Version,
+		TargetVersion:              releaseVersion(in.Target),
+		Strategy:                   StrategyFullRelease,
+		DownloadBytes:              size,
+		RequiredDiskBytes:          size*2 + size/stagingOverhead,
+		Confidence:                 baseConfidenceOf(in),
+		RollbackAvailable:          true,
 		Steps: []UpdateStep{
 			{Kind: StepDownload, Label: "Загрузка релиза", ReleaseID: in.Target.ID, Bytes: size},
 			{Kind: StepInstall, Label: "Установка во временную папку"},
@@ -273,17 +378,21 @@ func (torrentReuseStrategy) CanHandle(_ context.Context, in planInput) bool {
 func (t torrentReuseStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan, error) {
 	report := in.Reuse
 	plan := &UpdatePlan{
-		InstalledReleaseID: in.Installed.ReleaseID,
-		TargetReleaseID:    in.Target.ID,
-		InstalledVersion:   in.Installed.Version,
-		TargetVersion:      releaseVersion(in.Target),
-		Strategy:           StrategyTorrentReuse,
-		ReuseFlat:          report.Flat,
-		DownloadBytes:      report.MissingBytes,
-		ReusedBytes:        report.MatchedBytes,
-		RequiredDiskBytes:  report.MissingBytes + in.Installed.SizeBytes,
-		Confidence:         baseConfidenceOf(in),
-		RollbackAvailable:  true,
+		InstalledReleaseID:         in.Installed.ReleaseID,
+		TargetReleaseID:            in.Target.ID,
+		SourceID:                   in.Target.SourceID,
+		DistributionID:             in.Target.DistributionID,
+		InstalledReleaseUploadedAt: in.Installed.ReleaseUploadedAt,
+		TargetReleaseUploadedAt:    in.Target.UploadedAt,
+		InstalledVersion:           in.Installed.Version,
+		TargetVersion:              releaseVersion(in.Target),
+		Strategy:                   StrategyTorrentReuse,
+		ReuseFlat:                  report.Flat,
+		DownloadBytes:              report.MissingBytes,
+		ReusedBytes:                report.MatchedBytes,
+		RequiredDiskBytes:          report.MissingBytes + in.Installed.SizeBytes,
+		Confidence:                 baseConfidenceOf(in),
+		RollbackAvailable:          true,
 		Steps: []UpdateStep{
 			{Kind: StepRecheck, Label: "Проверка существующих файлов", Bytes: report.MatchedBytes},
 			{Kind: StepDownload, Label: "Загрузка изменившихся данных", ReleaseID: in.Target.ID, Bytes: report.MissingBytes},
@@ -345,17 +454,21 @@ func (p patchChainStrategy) Plan(_ context.Context, in planInput) (*UpdatePlan, 
 	steps = append(steps, UpdateStep{Kind: StepVerify, Label: "Проверка установки"})
 
 	plan := &UpdatePlan{
-		InstalledReleaseID: in.Installed.ReleaseID,
-		TargetReleaseID:    in.Target.ID,
-		InstalledVersion:   in.Installed.Version,
-		TargetVersion:      releaseVersion(in.Target),
-		Strategy:           StrategyPatchChain,
-		Steps:              steps,
-		DownloadBytes:      path.Bytes,
-		RequiredDiskBytes:  path.Bytes + largest*2 + in.Installed.SizeBytes,
-		Confidence:         baseConfidenceOf(in),
-		RollbackAvailable:  true,
-		Patches:            path.Steps,
+		InstalledReleaseID:         in.Installed.ReleaseID,
+		TargetReleaseID:            in.Target.ID,
+		SourceID:                   in.Target.SourceID,
+		DistributionID:             in.Target.DistributionID,
+		InstalledReleaseUploadedAt: in.Installed.ReleaseUploadedAt,
+		TargetReleaseUploadedAt:    in.Target.UploadedAt,
+		InstalledVersion:           in.Installed.Version,
+		TargetVersion:              releaseVersion(in.Target),
+		Strategy:                   StrategyPatchChain,
+		Steps:                      steps,
+		DownloadBytes:              path.Bytes,
+		RequiredDiskBytes:          path.Bytes + largest*2 + in.Installed.SizeBytes,
+		Confidence:                 baseConfidenceOf(in),
+		RollbackAvailable:          true,
+		Patches:                    path.Steps,
 	}
 	return plan, nil
 }

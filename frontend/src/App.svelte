@@ -17,7 +17,7 @@
   import { initMoves } from './lib/stores/relocate';
   import { initPresence } from './lib/stores/presence';
   import { initSelfUpdate } from './lib/stores/selfupdate';
-  import { initSettings, settings } from './lib/stores/settings';
+  import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
@@ -42,7 +42,7 @@
   initDegradedNotices();
   initDownloads();
   initInstalls();
-  initSettings().then(refreshStorage);
+  refreshStorage();
   initLibrary();
   initMoves();
   initSources();

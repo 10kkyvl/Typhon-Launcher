@@ -27,9 +27,9 @@
     justify-content: center;
     gap: 0.6rem;
     height: var(--control-sm);
-    padding: 0 1.2rem;
+    padding: 0 calc(1.2rem - 1px);
     border-radius: var(--radius-xl);
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     font-size: var(--font-sm);
     font-weight: 500;
     white-space: nowrap;
@@ -68,7 +68,7 @@
 
   .filled.selected {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-on, #fff);
   }
 
   .quiet {

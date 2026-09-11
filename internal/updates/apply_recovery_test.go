@@ -58,8 +58,8 @@ func TestSwapDirectoriesJournalsBeforeRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load journals: %v", err)
 	}
-	if len(journals) != 1 || journals[0].GameID != "g1" || journals[0].Kind != JournalSwap {
-		t.Fatalf("journal not written before the swap attempt: %+v", journals)
+	if len(journals) != 0 {
+		t.Fatalf("successfully undone swap retained a journal: %+v", journals)
 	}
 }
 
@@ -412,11 +412,9 @@ func TestApplyPatchChainCommitsEachPatchBeforeTheNext(t *testing.T) {
 	}
 
 	lib := &fakeLibrary{games: []library.Game{{
-		ID:         "g1",
-		Title:      "Game",
-		InstallDir: installDir,
-		Executable: filepath.Join(installDir, "game.exe"),
-		Version:    "1.0",
+		ID: "g1", Title: "Game", InstallDir: installDir,
+		Executable: filepath.Join(installDir, "game.exe"), Version: "1.0",
+		ReleaseID: "r1", SourceID: "src", DistributionID: "main",
 	}}}
 	downloads := &patchDownloads{fakeDownloads: *newFakeDownloads(), failReleaseID: "p2"}
 	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
@@ -424,7 +422,7 @@ func TestApplyPatchChainCommitsEachPatchBeforeTheNext(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.library = lib
-	svc.releases = &fakeReleases{list: []sources.Release{release("p1", "1.1", 1<<20), release("p2", "1.2", 1<<20)}}
+	svc.releases = &fakeReleases{list: []sources.Release{patchRelease("p1", "1.0", "1.1", 1<<20), patchRelease("p2", "1.1", "1.2", 1<<20)}}
 	svc.downloads = downloads
 	svc.installs = &patchInstaller{service: svc, content: map[string]map[string]string{
 		"task-p1": {"game.exe": "v1.1"},
@@ -440,12 +438,12 @@ func TestApplyPatchChainCommitsEachPatchBeforeTheNext(t *testing.T) {
 	t.Cleanup(func() { pollInterval = previousPoll })
 
 	plan := UpdatePlan{
-		GameID:        "g1",
-		Strategy:      StrategyPatchChain,
-		TargetVersion: "1.2",
+		GameID: "g1", Strategy: StrategyPatchChain, InstalledReleaseID: "r1",
+		TargetReleaseID: "r2", SourceID: "src", DistributionID: "main",
+		InstalledVersion: "1.0", TargetVersion: "1.2",
 		Patches: []Patch{
-			{ID: "p1", ReleaseID: "p1", FromVersion: "1.0", ToVersion: "1.1"},
-			{ID: "p2", ReleaseID: "p2", FromVersion: "1.1", ToVersion: "1.2"},
+			{ID: "p1", ReleaseID: "p1", SourceID: "src", DistributionID: "main", FromVersion: "1.0", ToVersion: "1.1"},
+			{ID: "p2", ReleaseID: "p2", SourceID: "src", DistributionID: "main", FromVersion: "1.1", ToVersion: "1.2"},
 		},
 	}
 
@@ -589,11 +587,9 @@ func newInPlaceScenario(t *testing.T) (*Service, *fakeLibrary, *fakeDownloads, s
 		t.Fatal(err)
 	}
 	lib := &fakeLibrary{games: []library.Game{{
-		ID:         "g1",
-		Title:      "Game",
-		InstallDir: installDir,
-		Executable: filepath.Join(installDir, "game.exe"),
-		Version:    "1.0",
+		ID: "g1", Title: "Game", InstallDir: installDir,
+		Executable: filepath.Join(installDir, "game.exe"), Version: "1.0",
+		ReleaseID: "r1", SourceID: "src", DistributionID: "main",
 	}}}
 	downloads := newFakeDownloads()
 	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
@@ -615,7 +611,7 @@ func newInPlaceScenario(t *testing.T) (*Service, *fakeLibrary, *fakeDownloads, s
 }
 
 func inPlacePlan(gameID string) UpdatePlan {
-	return UpdatePlan{GameID: gameID, Strategy: StrategyTorrentReuse, TargetReleaseID: "r2", TargetVersion: "1.1"}
+	return UpdatePlan{GameID: gameID, Strategy: StrategyTorrentReuse, InstalledReleaseID: "r1", TargetReleaseID: "r2", SourceID: "src", DistributionID: "main", InstalledVersion: "1.0", TargetVersion: "1.1"}
 }
 
 // TestApplyTorrentReuseKeepsBackupUntilPolicyDrops covers invariant 15: the

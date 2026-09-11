@@ -1,3 +1,6 @@
+import { toast } from './lib/stores/toasts';
+import { msg } from './lib/i18n';
+import { initSettings } from './lib/stores/settings';
 import { mount } from 'svelte';
 import '@fontsource-variable/inter-tight';
 import './styles/tokens.css';
@@ -9,9 +12,16 @@ import { initTheme, resetAppearance } from './lib/stores/theme';
 
 installDiagnostics();
 
-mount(App, { target: document.getElementById('app')! });
-
-initTheme();
+async function start() {
+  try {
+    await initSettings();
+  } catch (err) {
+    toast(msg('state.settingsNotLoaded') + ": " + String(err), 'danger');
+  }
+  await initTheme();
+  mount(App, { target: document.getElementById('app')! });
+}
+void start();
 mountThemeGuard();
 
 window.addEventListener('keydown', (event) => {

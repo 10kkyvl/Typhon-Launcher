@@ -76,6 +76,8 @@ const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 
 type Settings struct {
 	Theme                  string  `json:"theme"`
+	AccentColor            string  `json:"accentColor"`
+	TintLogo               bool    `json:"tintLogo"`
 	UIScale                float64 `json:"uiScale"`
 	Language               string  `json:"language"`
 	LibraryPath            string  `json:"libraryPath"`
@@ -304,6 +306,12 @@ func legacyLibraryPath(gamesPath string) string {
 }
 
 func sanitize(s Settings) (Settings, error) {
+	if s.AccentColor != "" {
+		if len(s.AccentColor) != 7 || s.AccentColor[0] != '#' || strings.IndexFunc(s.AccentColor[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) >= 0 {
+			return Settings{}, errors.New("accent color must be #RRGGBB")
+		}
+		s.AccentColor = strings.ToUpper(s.AccentColor)
+	}
 	library, err := normalizeLibraryPath(s.LibraryPath)
 	if err != nil {
 		return Settings{}, err
@@ -355,6 +363,9 @@ func sanitize(s Settings) (Settings, error) {
 var migrateConfigDirOnce sync.Once
 
 func ConfigDir() (string, error) {
+	if dir, err := configDirOverride(); dir != "" || err != nil {
+		return dir, err
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err

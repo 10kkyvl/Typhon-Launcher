@@ -14,7 +14,7 @@ func TestParseValidFeed(t *testing.T) {
 		"name": "Example Source",
 		"version": 1,
 		"downloads": [
-			{"title": "Some Game Deluxe Edition v1.5", "uris": ["magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], "uploadDate": "2026-08-20T10:00:00Z", "fileSize": 42949672960}
+			{"distributionId": "some-game-fitgirl", "title": "Some Game Deluxe Edition v1.5", "uris": ["magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], "uploadDate": "2026-08-20T10:00:00Z", "fileSize": 42949672960}
 		]
 	}`)
 
@@ -32,6 +32,9 @@ func TestParseValidFeed(t *testing.T) {
 		t.Fatalf("Entries len = %d", len(f.Entries))
 	}
 	e := f.Entries[0]
+	if e.DistributionID != "some-game-fitgirl" {
+		t.Errorf("DistributionID = %q", e.DistributionID)
+	}
 	if e.Title != "Some Game Deluxe Edition v1.5" {
 		t.Errorf("Title = %q", e.Title)
 	}
@@ -363,6 +366,20 @@ func TestParseDuplicates(t *testing.T) {
 	}
 	if len(f.Warnings) == 0 {
 		t.Error("expected duplicate warning")
+	}
+}
+
+func TestParseKeepsSameTorrentInDifferentDistributions(t *testing.T) {
+	data := []byte(`{"downloads":[
+		{"distributionId":"line-a","title":"Game v1.0","uri":"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+		{"distributionId":"line-b","title":"Game v1.0","uri":"magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+	]}`)
+	got, err := Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Entries) != 2 {
+		t.Fatalf("entries = %d, want both distribution assertions", len(got.Entries))
 	}
 }
 

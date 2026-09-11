@@ -51,7 +51,7 @@ func TestBrokerEndToEndInProcess(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		outcome, err := RunBroker(brokerDir)
+		outcome, err := RunBroker(brokerDir, brokerTestPublic)
 		outcomes <- outcome
 		errs <- err
 	}()
@@ -63,6 +63,9 @@ func TestBrokerEndToEndInProcess(t *testing.T) {
 	})
 
 	installerPath := filepath.Join(contentRoot, "FooGame-setup.exe")
+	if err := os.WriteFile(installerPath, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	dest := filepath.Join(gamesRoot, "FooGame")
 	gone := make(chan struct{})
 	spec := runSpec{
@@ -71,7 +74,7 @@ func TestBrokerEndToEndInProcess(t *testing.T) {
 		StatePath:  filepath.Join(stateDir, "state.json"),
 		CancelPath: filepath.Join(stateDir, "cancel"),
 		InfPath:    filepath.Join(stateDir, "discover.ini"),
-		Broker:     &brokerHandoff{Dir: brokerDir, Gone: gone},
+		Broker:     &brokerHandoff{Key: brokerTestPrivate, Dir: brokerDir, Gone: gone},
 	}
 
 	spawned := false
@@ -136,7 +139,7 @@ func TestBrokerServesTheWholeChain(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if _, err := RunBroker(brokerDir); err != nil {
+		if _, err := RunBroker(brokerDir, brokerTestPublic); err != nil {
 			t.Errorf("RunBroker: %v", err)
 		}
 	}()
@@ -155,6 +158,9 @@ func TestBrokerServesTheWholeChain(t *testing.T) {
 	gone := make(chan struct{})
 	for _, name := range []string{"FooGame", "BarGame"} {
 		installerPath := filepath.Join(contentRoot, name+"-setup.exe")
+		if err := os.WriteFile(installerPath, []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		dest := filepath.Join(gamesRoot, name)
 		spec := runSpec{
 			Path: installerPath, InstallerPath: installerPath, ID: "chain-" + name,
@@ -162,7 +168,7 @@ func TestBrokerServesTheWholeChain(t *testing.T) {
 			StatePath:  filepath.Join(stateDir, "state.json"),
 			CancelPath: filepath.Join(stateDir, "cancel"),
 			InfPath:    filepath.Join(stateDir, "discover.ini"),
-			Broker:     &brokerHandoff{Dir: brokerDir, Gone: gone},
+			Broker:     &brokerHandoff{Key: brokerTestPrivate, Dir: brokerDir, Gone: gone},
 		}
 		code, err := runElevated(context.Background(), spec)
 		if err != nil {

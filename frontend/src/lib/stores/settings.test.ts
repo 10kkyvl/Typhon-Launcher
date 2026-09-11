@@ -99,3 +99,17 @@ it('restores the last confirmed value when two successive saves fail', async () 
  const b=updateSettings({uiScale:1.2});first.reject(new Error('full'));
  await Promise.all([a,b]);expect(get(settings)!.uiScale).toBe(1);
 });
+
+it('rolls back personal accent and icon after a failed save and reports its cause', async () => {
+  settings.set({ ...makeSettings(), accentColor: '#6673F2', tintLogo: false });
+  const write = deferred<void>();
+  vi.mocked(saveSettings).mockImplementationOnce(() => write.promise);
+  const pending = updateSettings({ accentColor: '#FFFF00', tintLogo: true });
+  expect(get(settings)?.accentColor).toBe('#FFFF00');
+  write.reject(new Error('disk full'));
+  await pending;
+  expect(get(settings)?.accentColor).toBe('#6673F2');
+  expect(get(settings)?.tintLogo).toBe(false);
+  const { toast } = await import('./toasts');
+  expect(toast).toHaveBeenLastCalledWith(expect.stringContaining('disk full'), 'danger');
+});

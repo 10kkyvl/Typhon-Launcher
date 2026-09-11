@@ -63,7 +63,8 @@
   },
   "bracketPhraseTags": {
     "папка игры": "portable",
-    "portable": "portable"
+    "portable": "portable",
+    "windows 7 fix": "windows-7-fix"
   },
   "markerTags": {
     "portable": "portable",

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,7 +33,10 @@ func (s *Service) PlayGame(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.running[id]; ok {
+	if s.closed {
+		return errSessionNotRunning
+	}
+	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return uierr.New("library.already_running", "игра уже запущена")
 	}
 	game := s.findLocked(id)
@@ -50,6 +54,8 @@ func (s *Service) PlayGame(id string) error {
 	if err != nil {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
+	copyGame := *game
+	game = &copyGame
 	req := launch{
 		installDir: game.InstallDir,
 		executable: game.Executable,
@@ -57,7 +63,30 @@ func (s *Service) PlayGame(id string) error {
 		workDir:    workDir,
 		shared:     game.UsesSharedBottle(),
 	}
-	if err := s.prepare(s.ctx, req); err != nil {
+	ctx := s.ctx
+	// Constructors are also used without startup by synchronous callers.
+	// A missing context must not start platform work.
+	if ctx == nil {
+		return errSessionCannotConfirm
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	if s.starting == nil {
+		s.starting = map[string]context.CancelFunc{}
+	}
+	s.starting[id] = cancel
+	s.wg.Add(1)
+	defer s.wg.Done()
+	started := false
+	defer func() {
+		delete(s.starting, id)
+		if !started {
+			cancel()
+		}
+	}()
+	s.mu.Unlock()
+	err = s.prepare(ctx, req)
+	s.mu.Lock()
+	if err != nil {
 		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
 		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
 		// стартовавший процесс. На macOS это вообще самая частая причина, по
@@ -67,13 +96,19 @@ func (s *Service) PlayGame(id string) error {
 		return uierr.Wrap("library.runtime_failed", fmt.Errorf("не удалось подготовить окружение запуска: %w", err))
 	}
 
-	proc, err := s.start(s.ctx, req)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Unlock()
+	proc, err := s.start(ctx, req)
+	s.mu.Lock()
 	if err != nil {
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
 
+	started = true
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
 	pid := uint32(proc.pid())
 	startedAt := s.now()
@@ -96,6 +131,7 @@ func (s *Service) PlayGame(id string) error {
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
+		defer cancel()
 		waitErr := proc.wait()
 		logExit(id, executable, s.now().Sub(startedAt), waitErr)
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
@@ -119,7 +155,11 @@ func (s *Service) PlayGame(id string) error {
 // игра должна пережить закрытие лаунчера, а не быть убитой вместе с ним.
 func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
+	s.closed = true
 	cancel := s.cancel
+	for _, stop := range s.starting {
+		stop()
+	}
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -133,6 +173,11 @@ func (s *Service) ServiceShutdown() error {
 
 func (s *Service) StopGame(id string) error {
 	s.mu.Lock()
+	if cancel := s.starting[id]; cancel != nil {
+		cancel()
+		s.mu.Unlock()
+		return nil
+	}
 	current, ok := s.running[id]
 	ctx := s.ctx
 	if ok {

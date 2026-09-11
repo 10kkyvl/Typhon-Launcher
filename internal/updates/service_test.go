@@ -49,7 +49,24 @@ func (f *fakeLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.G
 		f.games[i].Version = u.Version
 		f.games[i].Executable = u.Executable
 		f.games[i].ReleaseID = u.ReleaseID
+		f.games[i].SourceID = u.SourceID
+		f.games[i].DistributionID = u.DistributionID
 		return f.games[i], nil
+	}
+	return library.Game{}, errors.New("not found")
+}
+
+func (f *fakeLibrary) BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.games {
+		if f.games[i].ID == id && f.games[i].SourceID == sourceID && f.games[i].ReleaseID == releaseID {
+			f.games[i].DistributionID = distributionID
+			if f.games[i].ReleaseUploadedAt == nil {
+				f.games[i].ReleaseUploadedAt = releaseUploadedAt
+			}
+			return f.games[i], nil
+		}
 	}
 	return library.Game{}, errors.New("not found")
 }
@@ -215,6 +232,8 @@ func newHarness(t *testing.T) *harness {
 		InstallDir:      installDir,
 		Executable:      filepath.Join(installDir, "game.exe"),
 		ReleaseID:       "r1",
+		SourceID:        "src",
+		DistributionID:  "main",
 		Version:         "1.0",
 		VersionSource:   string(VersionSourceRelease),
 	}
@@ -265,7 +284,7 @@ func (h *harness) waitState(t *testing.T, want State) Update {
 	defer ticker.Stop()
 	timeout := time.After(5 * time.Second)
 	for {
-		if u, ok := h.service.snapshot("local-1"); ok && u.State == want {
+		if u, ok := h.service.snapshot("local-1"); ok && u.State == want && !h.service.Busy("local-1") {
 			return u
 		}
 		select {
@@ -449,6 +468,8 @@ func TestPatchesFromReleasesFeedIntoPlan(t *testing.T) {
 	gameID := canonical
 	h.releases.list = append(h.releases.list, sources.Release{
 		ID:              "p1",
+		SourceID:        "src",
+		DistributionID:  "main",
 		Kind:            sources.KindPatch,
 		CanonicalGameID: &gameID,
 		FromVersion:     "1.0",

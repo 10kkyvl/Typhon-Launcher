@@ -1,6 +1,8 @@
 package install
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -178,3 +180,6 @@ func TestRunBrokerRefusesSpecOutsidePin(t *testing.T) {
 		t.Fatalf("исход = %q, ожидался %q", outcome, BrokerAborted)
 	}
 }
+
+var brokerTestPrivate = ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+var brokerTestPublic = base64.StdEncoding.EncodeToString(brokerTestPrivate.Public().(ed25519.PublicKey))

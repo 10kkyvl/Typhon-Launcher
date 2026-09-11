@@ -12,6 +12,9 @@ func sanitize(games []Game) ([]Game, bool) {
 	junk := make([][]string, len(games))
 	changed := false
 	for i := range games {
+		if games[i].ServerID != "" {
+			continue
+		}
 		kept, dropped := splitAliases(games[i])
 		junk[i] = dropped
 		if len(dropped) == 0 {

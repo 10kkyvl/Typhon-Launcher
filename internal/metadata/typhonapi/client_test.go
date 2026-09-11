@@ -523,3 +523,19 @@ func TestResolveMapsRateLimit(t *testing.T) {
 		t.Fatalf("retry after = %v, want 7s", limit.RetryAfter)
 	}
 }
+
+func TestSteamCardTransport(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != account.APIPrefix+"/metadata/games/steam:620" {
+			t.Errorf("path %q", r.URL.Path)
+		}
+		if r.Header.Get("X-Typhon-Steam-Metadata") != "1" {
+			t.Error("missing capability")
+		}
+		writeJSON(t, w, 200, `{"providerId":"steam:620","steamAppId":620,"title":"Portal 2","summary":"Steam description"}`)
+	}), nil)
+	g, e := client.Get(context.Background(), "steam:620")
+	if e != nil || g.ProviderID != "steam:620" || g.SteamAppID != "620" {
+		t.Fatalf("%+v %v", g, e)
+	}
+}

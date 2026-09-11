@@ -448,7 +448,7 @@
     padding: 0 0.4rem;
     border-radius: 0.8rem;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-on, #fff);
     font-size: 1rem;
     font-weight: 600;
     line-height: 1.6rem;

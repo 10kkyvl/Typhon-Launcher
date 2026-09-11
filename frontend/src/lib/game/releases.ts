@@ -9,6 +9,8 @@ export function releaseOrigin(request: ReleaseDownloadRequest): DownloadOrigin {
     sourceId: request.sourceId,
     gameId: request.gameId,
   };
+  if (request.distributionId) origin.distributionId = request.distributionId;
+  if (request.releaseUploadedAt) origin.releaseUploadedAt = request.releaseUploadedAt;
   if (request.version) origin.version = request.version;
   return origin;
 }
@@ -24,11 +26,11 @@ export interface ReleaseBadgeInput {
 }
 
 export function releaseBadge(input: ReleaseBadgeInput): ReleaseBadge {
-  if (input.currentReleaseId && input.releaseId === input.currentReleaseId) return 'installed';
   if (input.targetReleaseId && input.releaseId === input.targetReleaseId) {
     if (input.updateKind === 'update') return 'update';
     if (input.updateKind === 'new_release') return 'new-release';
   }
+  if (input.currentReleaseId && input.releaseId === input.currentReleaseId) return 'installed';
   return input.isNew ? 'new' : 'none';
 }
 

@@ -37,7 +37,7 @@ func (m *stubMatcher) Provision(queries []catalog.Query) (map[string]catalog.Gam
 	return m.provision(queries)
 }
 
-func TestApplyMatchesPropagatesProvisionError(t *testing.T) {
+func TestApplyMatchesNeverProvisions(t *testing.T) {
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{entry("Some Unmatched Game v1.0", magnetOf("11"), 10)}, now)
 	list, _ = merge(nil, list, now, true)
@@ -54,8 +54,11 @@ func TestApplyMatchesPropagatesProvisionError(t *testing.T) {
 		provision: func([]catalog.Query) (map[string]catalog.Game, error) { return nil, boom },
 	}
 
-	if err := applyMatches(m, list); !errors.Is(err, boom) {
-		t.Fatalf("applyMatches() error = %v, want it to wrap %v", err, boom)
+	if err := applyMatches(m, list); err != nil {
+		t.Fatal(err)
+	}
+	if list[0].CanonicalGameID != nil {
+		t.Fatal("unmatched release attached")
 	}
 }
 
@@ -95,6 +98,24 @@ func TestParseEntriesDropsDuplicates(t *testing.T) {
 	}, now)
 	if len(list) != 2 {
 		t.Fatalf("releases = %d, want 2", len(list))
+	}
+}
+
+func TestParseEntriesDropsAmbiguousDistributionBinding(t *testing.T) {
+	now := time.Now()
+	first := entry("Game v2.0", magnetOf("11"), 100)
+	first.DistributionID = "game-main"
+	second := entry("Game v3.0", magnetOf("22"), 200)
+	second.DistributionID = "game-main"
+
+	list := parseEntries("src", []feed.Entry{first, second}, now)
+	if len(list) != 2 {
+		t.Fatalf("releases = %d, want both ambiguous alternatives", len(list))
+	}
+	for _, release := range list {
+		if release.DistributionID != "" {
+			t.Fatalf("ambiguous distribution binding survived: %+v", release)
+		}
 	}
 }
 
@@ -145,6 +166,109 @@ func TestMergeTracksLifecycle(t *testing.T) {
 	}
 }
 
+func TestMergeDistributionKeepsReleaseAcrossChangedMagnetAndTitle(t *testing.T) {
+	now := time.Now()
+	first := entry("Game v1.0 [FitGirl Repack]", magnetOf("11"), 10)
+	first.DistributionID = "game-fitgirl"
+	merged, _ := merge(nil, parseEntries("src", []feed.Entry{first}, now), now, true)
+	merged[0].ID = "stable-release"
+	oldHash := merged[0].InfoHash
+
+	next := entry("Game v2.0 [FitGirl Repack]", magnetOf("22"), 20)
+	next.DistributionID = "game-fitgirl"
+	merged, summary := merge(merged, parseEntries("src", []feed.Entry{next}, now.Add(time.Hour)), now.Add(time.Hour), false)
+
+	if len(merged) != 1 || merged[0].ID != "stable-release" || merged[0].Version != "2.0" {
+		t.Fatalf("release continuity lost: %+v", merged)
+	}
+	if merged[0].InfoHash == oldHash {
+		t.Fatal("test fixture did not change infohash")
+	}
+	if summary.Updated != 1 || summary.Added != 0 || summary.Removed != 0 {
+		t.Fatalf("summary = %+v", summary)
+	}
+}
+
+func TestMergeAddsDistributionToExactLegacyTorrent(t *testing.T) {
+	now := time.Now()
+	legacy := parseEntries("src", []feed.Entry{entry("Game v1.0", magnetOf("11"), 10)}, now)
+	legacy, _ = merge(nil, legacy, now, true)
+	legacy[0].ID = "legacy-release"
+
+	next := entry("Game v1.0", magnetOf("11"), 10)
+	next.DistributionID = "game-main"
+	merged, _ := merge(legacy, parseEntries("src", []feed.Entry{next}, now.Add(time.Hour)), now.Add(time.Hour), false)
+	if len(merged) != 1 || merged[0].ID != "legacy-release" || merged[0].DistributionID != "game-main" {
+		t.Fatalf("legacy binding was not migrated exactly: %+v", merged)
+	}
+}
+
+func TestMergeDoesNotMigrateLegacyTorrentToAmbiguousIncomingDistributions(t *testing.T) {
+	now := time.Now()
+	legacy := parseEntries("src", []feed.Entry{entry("Game v1.0", magnetOf("11"), 10)}, now)
+	legacy, _ = merge(nil, legacy, now, true)
+	legacy[0].ID = "legacy-release"
+
+	a := entry("Game A v1.0", magnetOf("11"), 10)
+	a.DistributionID = "distribution-a"
+	b := entry("Game B v1.0", magnetOf("11"), 10)
+	b.DistributionID = "distribution-b"
+	merged, summary := merge(legacy, parseEntries("src", []feed.Entry{a, b}, now.Add(time.Hour)), now.Add(time.Hour), false)
+
+	if len(merged) != 3 || summary.Added != 2 || summary.Removed != 1 {
+		t.Fatalf("ambiguous migration should preserve separate records: merged=%+v summary=%+v", merged, summary)
+	}
+	for _, release := range merged {
+		if release.ID == "legacy-release" {
+			if release.DistributionID != "" || release.Availability != AvailabilityRemoved {
+				t.Fatalf("legacy record was rebound: %+v", release)
+			}
+		}
+	}
+}
+
+func TestMergeDoesNotMigrateLegacyTorrentWhenIncomingSiblingHasNoDistribution(t *testing.T) {
+	now := time.Now()
+	legacy := parseEntries("src", []feed.Entry{entry("Game v1.0", magnetOf("11"), 10)}, now)
+	legacy, _ = merge(nil, legacy, now, true)
+	legacy[0].ID = "legacy-release"
+
+	known := entry("Game A v1.0", magnetOf("11"), 10)
+	known.DistributionID = "distribution-a"
+	unknown := entry("Game B v1.0", magnetOf("11"), 10)
+	merged, summary := merge(legacy, parseEntries("src", []feed.Entry{known, unknown}, now.Add(time.Hour)), now.Add(time.Hour), false)
+
+	if len(merged) != 2 || summary.Added != 1 || summary.Updated != 1 {
+		t.Fatalf("mixed incoming ambiguity should not migrate distribution: merged=%+v summary=%+v", merged, summary)
+	}
+	for _, release := range merged {
+		if release.ID == "legacy-release" && release.DistributionID != "" {
+			t.Fatalf("legacy record was rebound: %+v", release)
+		}
+	}
+}
+
+func TestMergeDoesNotRebindKnownDistributionThroughLegacyIdentity(t *testing.T) {
+	now := time.Now()
+	first := entry("Game v1.0", magnetOf("11"), 10)
+	first.DistributionID = "distribution-a"
+	merged, _ := merge(nil, parseEntries("src", []feed.Entry{first}, now), now, true)
+	merged[0].ID = "release-a"
+
+	foreign := entry("Game v1.0", magnetOf("11"), 10)
+	foreign.DistributionID = "distribution-b"
+	merged, summary := merge(merged, parseEntries("src", []feed.Entry{foreign}, now.Add(time.Hour)), now.Add(time.Hour), false)
+
+	if len(merged) != 2 || summary.Added != 1 || summary.Removed != 1 {
+		t.Fatalf("foreign distribution should be separate: merged=%+v summary=%+v", merged, summary)
+	}
+	for _, release := range merged {
+		if release.ID == "release-a" && release.DistributionID != "distribution-a" {
+			t.Fatalf("known distribution was rebound: %+v", release)
+		}
+	}
+}
+
 func TestMergeRestoresRemovedRelease(t *testing.T) {
 	now := time.Now()
 	list := parseEntries("src", []feed.Entry{entry("Game One v1.0", magnetOf("11"), 10)}, now)
@@ -164,30 +288,21 @@ func TestMergeRestoresRemovedRelease(t *testing.T) {
 	}
 }
 
-func TestApplyMatchesProvisionsUnmatched(t *testing.T) {
+func TestApplyMatchesLeavesUnmatchedInSources(t *testing.T) {
 	cat := mustCatalog(t, t.TempDir())
 	now := time.Now()
-	list := parseEntries("src", []feed.Entry{
-		entry("Hades.II.v0.9", magnetOf("11"), 10),
-		entry("Hades II v1.0", magnetOf("22"), 20),
-	}, now)
+	list := parseEntries("src", []feed.Entry{entry("Hades.II.v0.9", magnetOf("11"), 10), entry("Hades II v1.0", magnetOf("22"), 20)}, now)
 	list, _ = merge(nil, list, now, true)
-
 	if err := applyMatches(cat, list); err != nil {
-		t.Fatalf("applyMatches: %v", err)
+		t.Fatal(err)
 	}
-
-	if list[0].CanonicalGameID == nil || list[1].CanonicalGameID == nil {
-		t.Fatal("both releases should be attached to a canonical game")
+	for _, r := range list {
+		if r.CanonicalGameID != nil || r.MatchStatus != catalog.StatusUnmatched {
+			t.Fatalf("unexpected attachment: %+v", r)
+		}
 	}
-	if *list[0].CanonicalGameID != *list[1].CanonicalGameID {
-		t.Fatal("releases of the same game must share the canonical game")
-	}
-	if list[0].MatchStatus != catalog.StatusMatched {
-		t.Fatalf("status = %q, want matched", list[0].MatchStatus)
-	}
-	if len(cat.ListGames()) != 1 {
-		t.Fatalf("catalog games = %d, want 1", len(cat.ListGames()))
+	if len(cat.ListGames()) != 0 {
+		t.Fatal("source import created games")
 	}
 }
 
@@ -240,14 +355,11 @@ func TestApplyMatchesRecomputesAliasMatch(t *testing.T) {
 		t.Fatalf("applyMatches: %v", err)
 	}
 
-	if list[0].CanonicalGameID == nil {
-		t.Fatal("release lost its game instead of getting a fresh one")
+	if list[0].CanonicalGameID != nil {
+		t.Fatal("stale alias match survived refresh")
 	}
-	if *list[0].CanonicalGameID == wrong.ID {
-		t.Fatal("stale alias match survived the refresh")
-	}
-	if list[0].MatchMethod != string(catalog.MethodProvisional) {
-		t.Fatalf("method = %q, want a freshly provisioned game", list[0].MatchMethod)
+	if len(cat.ListGames()) != 1 {
+		t.Fatal("refresh created a replacement game")
 	}
 }
 

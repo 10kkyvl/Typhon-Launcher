@@ -26,18 +26,16 @@ func newPatchScenario(t *testing.T, failReleaseID string) (*Service, *fakeLibrar
 	}
 
 	lib := &fakeLibrary{games: []library.Game{{
-		ID:         "g1",
-		Title:      "Game",
-		InstallDir: installDir,
-		Executable: filepath.Join(installDir, "game.exe"),
-		Version:    "1.0",
+		ID: "g1", Title: "Game", InstallDir: installDir,
+		Executable: filepath.Join(installDir, "game.exe"), Version: "1.0",
+		ReleaseID: "r1", SourceID: "src", DistributionID: "main",
 	}}}
 	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	svc.library = lib
-	svc.releases = &fakeReleases{list: []sources.Release{release("p1", "1.1", 1<<20), release("p2", "1.2", 1<<20)}}
+	svc.releases = &fakeReleases{list: []sources.Release{patchRelease("p1", "1.0", "1.1", 1<<20), patchRelease("p2", "1.1", "1.2", 1<<20)}}
 	svc.downloads = &patchDownloads{fakeDownloads: *newFakeDownloads(), failReleaseID: failReleaseID}
 	svc.installs = &patchInstaller{service: svc, content: map[string]map[string]string{
 		"task-p1": {"game.exe": "v1.1"},
@@ -56,12 +54,12 @@ func newPatchScenario(t *testing.T, failReleaseID string) (*Service, *fakeLibrar
 
 func patchChainPlan() UpdatePlan {
 	return UpdatePlan{
-		GameID:        "g1",
-		Strategy:      StrategyPatchChain,
-		TargetVersion: "1.2",
+		GameID: "g1", Strategy: StrategyPatchChain, InstalledReleaseID: "r1",
+		TargetReleaseID: "r2", SourceID: "src", DistributionID: "main",
+		InstalledVersion: "1.0", TargetVersion: "1.2",
 		Patches: []Patch{
-			{ID: "p1", ReleaseID: "p1", FromVersion: "1.0", ToVersion: "1.1"},
-			{ID: "p2", ReleaseID: "p2", FromVersion: "1.1", ToVersion: "1.2"},
+			{ID: "p1", ReleaseID: "p1", SourceID: "src", DistributionID: "main", FromVersion: "1.0", ToVersion: "1.1"},
+			{ID: "p2", ReleaseID: "p2", SourceID: "src", DistributionID: "main", FromVersion: "1.1", ToVersion: "1.2"},
 		},
 	}
 }

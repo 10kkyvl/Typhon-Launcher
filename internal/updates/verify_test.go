@@ -149,6 +149,26 @@ func TestVerifyGameReportsTorrentDamage(t *testing.T) {
 	}
 }
 
+func TestVerifyGameDoesNotUseUpdatedStableRecordForOlderInstall(t *testing.T) {
+	h := newHarness(t)
+	h.releases.list[0].InfoHash = "new-version-hash"
+	h.releases.list[0].Version = "2.0"
+	h.seedManifest(t)
+
+	if err := h.service.VerifyGame("local-1"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	h.awaitJob(t, "local-1")
+
+	state, err := h.service.GetVerifyState("local-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Method != MethodManifest {
+		t.Fatalf("updated torrent was used for the older install: %+v", state)
+	}
+}
+
 func TestVerifyGameRefusesWhileGameRuns(t *testing.T) {
 	h := newHarness(t)
 	h.seedManifest(t)

@@ -48,6 +48,7 @@
       <div class="release-row" class:current>
         <div class="release-main">
           <span class="release-version">{release.version || '—'}</span>
+          <span class="release-title" title={release.rawTitle}>{release.rawTitle}</span>
           {#if release.edition}
             <span class="release-edition">{release.edition}</span>
           {/if}
@@ -139,6 +140,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .release-title {
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
   }
 
   .release-edition {

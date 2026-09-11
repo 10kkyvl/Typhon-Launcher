@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"crypto/ed25519"
 )
 
 type runSpec struct {
@@ -38,6 +39,7 @@ type runSpec struct {
 }
 
 type brokerHandoff struct {
+	Key  ed25519.PrivateKey
 	Dir  string
 	Gone <-chan struct{}
 }

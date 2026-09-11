@@ -107,7 +107,7 @@ func TestStableMatchesSkipTheResolverAfterAnEpochChange(t *testing.T) {
 	gameID := "game-1"
 	list[0].MatchStatus = catalog.StatusMatched
 	list[0].CanonicalGameID = &gameID
-	list[0].MatchMethod = string(catalog.MethodExactTitle)
+	list[0].MatchMethod = string(catalog.MethodExternalID)
 
 	m := unmatchedMatcher()
 	if err := applyMatches(m, list); err != nil {

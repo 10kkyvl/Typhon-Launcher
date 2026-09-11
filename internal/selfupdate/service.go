@@ -902,10 +902,18 @@ func (s *Service) releaseNotesView() (ReleaseNotes, error) {
 	if err != nil {
 		return ReleaseNotes{}, fmt.Errorf("selfupdate: select unseen release notes: %w", err)
 	}
+	// Both RPC responses and events must encode empty lists as [], not null.
+	if unseen == nil {
+		unseen = []ReleaseNote{}
+	}
+	history := notes.Releases
+	if history == nil {
+		history = []ReleaseNote{}
+	}
 	return ReleaseNotes{
 		CurrentVersion: currentVersion,
 		Unseen:         unseen,
-		History:        notes.Releases,
+		History:        history,
 	}, nil
 }
 

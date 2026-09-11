@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '../../styles/zoom-slider.css';
   import { Minus, Plus } from '@lucide/svelte';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
@@ -156,7 +157,9 @@
         <Minus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
       <input
-        class="slider"
+        class="slider zoom-slider"
+        style:--zoom-progress={`${((zoom - minZoom) / (maxZoom - minZoom)) * 100}%`}
+        aria-valuetext={`${Math.round(zoom * 100)}%`}
         type="range"
         min={minZoom}
         max={maxZoom}
@@ -169,6 +172,7 @@
       <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
         <Plus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
+      <span class="zoom-value">{Math.round(zoom * 100)}%</span>
     </div>
 
     {#if failed}
@@ -231,11 +235,15 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
   }
 
   .slider {
     flex: 1;
-    accent-color: var(--accent);
+    min-width: 0;
     cursor: pointer;
   }
 
@@ -243,6 +251,8 @@
     cursor: default;
     opacity: 0.5;
   }
+
+  .zoom-value { min-width: 4.2rem; color: var(--text-2); font-size: var(--font-xs); font-variant-numeric: tabular-nums; text-align: center; }
 
   .hint {
     font-size: var(--font-xs);

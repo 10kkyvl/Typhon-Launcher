@@ -51,6 +51,8 @@ type Game struct {
 	SourceDownloadID  string     `json:"sourceDownloadId,omitempty"`
 	ReleaseID         string     `json:"releaseId,omitempty"`
 	SourceID          string     `json:"sourceId,omitempty"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
 	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
 	Repacker          string     `json:"repacker,omitempty"`
 	ReleaseVersion    string     `json:"releaseVersion,omitempty"`
@@ -90,31 +92,35 @@ const (
 )
 
 type InstalledGame struct {
-	Title            string    `json:"title"`
-	Executable       string    `json:"executable"`
-	InstallDir       string    `json:"installDir"`
-	Version          string    `json:"version"`
-	VersionSource    string    `json:"versionSource"`
-	SourceDownloadID string    `json:"sourceDownloadId"`
-	ReleaseID        string    `json:"releaseId"`
-	SourceID         string    `json:"sourceId"`
-	CanonicalGameID  string    `json:"canonicalGameId"`
-	Repacker         string    `json:"repacker"`
-	ReleaseVersion   string    `json:"releaseVersion"`
-	InstallType      string    `json:"installType"`
-	Owned            bool      `json:"owned"`
-	Uninstall        Uninstall `json:"uninstall,omitzero"`
-	UninstallUnknown bool      `json:"uninstallUnknown"`
+	Title             string     `json:"title"`
+	Executable        string     `json:"executable"`
+	InstallDir        string     `json:"installDir"`
+	Version           string     `json:"version"`
+	VersionSource     string     `json:"versionSource"`
+	SourceDownloadID  string     `json:"sourceDownloadId"`
+	ReleaseID         string     `json:"releaseId"`
+	SourceID          string     `json:"sourceId"`
+	DistributionID    string     `json:"distributionId"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt"`
+	CanonicalGameID   string     `json:"canonicalGameId"`
+	Repacker          string     `json:"repacker"`
+	ReleaseVersion    string     `json:"releaseVersion"`
+	InstallType       string     `json:"installType"`
+	Owned             bool       `json:"owned"`
+	Uninstall         Uninstall  `json:"uninstall,omitzero"`
+	UninstallUnknown  bool       `json:"uninstallUnknown"`
 }
 
 type InstalledUpdate struct {
-	ID            string `json:"id"`
-	Executable    string `json:"executable"`
-	InstallDir    string `json:"installDir"`
-	Version       string `json:"version"`
-	VersionSource string `json:"versionSource"`
-	ReleaseID     string `json:"releaseId"`
-	SourceID      string `json:"sourceId"`
+	ID                string     `json:"id"`
+	Executable        string     `json:"executable"`
+	InstallDir        string     `json:"installDir"`
+	Version           string     `json:"version"`
+	VersionSource     string     `json:"versionSource"`
+	ReleaseID         string     `json:"releaseId"`
+	SourceID          string     `json:"sourceId"`
+	DistributionID    string     `json:"distributionId"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt"`
 }
 
 var (
@@ -148,14 +154,16 @@ var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites lim
 var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
-	mu           sync.Mutex
-	path         string
-	excludedPath string
-	games        []Game
-	archived     []Game
-	excluded     []string
-	running      map[string]*session
-	onSession    func(gameID string, seconds int64)
+	starting      map[string]context.CancelFunc
+	sameCanonical func(string, string) bool
+	mu            sync.Mutex
+	path          string
+	excludedPath  string
+	games         []Game
+	archived      []Game
+	excluded      []string
+	running       map[string]*session
+	onSession     func(gameID string, seconds int64)
 	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.
@@ -278,6 +286,12 @@ func (s *Service) load() ([]Game, error) {
 	games := make([]Game, 0, len(stored))
 	for _, entry := range stored {
 		g := entry.Game
+		if g.Owned && g.InstallType == "" {
+			// Sync used to contaminate this flag. A typed on-disk marker is
+			// local installation evidence; a bare cloud flag is not.
+			m, markerErr := ReadMarker(g.InstallDir)
+			g.Owned = markerErr == nil && m.InstallType != "" && m.Owned
+		}
 		if entry.Completed && g.Status == "" {
 			g.Status = StatusCompleted
 			g.StatusAt = entry.CompletedAt
@@ -352,6 +366,9 @@ func (s *Service) GetRunningGames() []string {
 	for id := range s.running {
 		ids = append(ids, id)
 	}
+	for id := range s.starting {
+		ids = append(ids, id)
+	}
 	return ids
 }
 
@@ -413,7 +430,7 @@ func (s *Service) matchRegisteredLocked(g InstalledGame) int {
 		if strings.EqualFold(s.games[i].Executable, g.Executable) {
 			return i
 		}
-		if match < 0 && s.games[i].Uninstalled && g.CanonicalGameID != "" && s.games[i].CanonicalGameID == g.CanonicalGameID {
+		if match < 0 && s.games[i].Uninstalled && g.CanonicalGameID != "" && s.sameCanonicalLocked(s.games[i].CanonicalGameID, g.CanonicalGameID) {
 			match = i
 		}
 	}
@@ -422,6 +439,9 @@ func (s *Service) matchRegisteredLocked(g InstalledGame) int {
 
 func (s *Service) reviveLocked(pos int, title, installDir string, size int64, unknown bool) (Game, error) {
 	previous := s.games[pos]
+	clearInstalledProvenance(&s.games[pos])
+	s.games[pos].Owned = false
+	s.games[pos].InstallType = ""
 	s.games[pos].Uninstalled = false
 	s.games[pos].InstallDir = installDir
 	s.games[pos].SizeBytes = size
@@ -448,6 +468,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
+	size, unknown := measureInstall("", installDir)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -464,23 +485,19 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		s.games[i].InstallDir = installDir
 		s.games[i].Version = g.Version
 		s.games[i].VersionSource = g.VersionSource
-		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, installDir)
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = size, unknown
 		s.games[i].SourceDownloadID = g.SourceDownloadID
-		if g.ReleaseID != "" {
-			s.games[i].ReleaseID = g.ReleaseID
-		}
-		if g.SourceID != "" {
-			s.games[i].SourceID = g.SourceID
-		}
+		s.games[i].ReleaseID = g.ReleaseID
+		s.games[i].SourceID = g.SourceID
+		s.games[i].DistributionID = g.DistributionID
+		s.games[i].ReleaseUploadedAt = g.ReleaseUploadedAt
 		if g.CanonicalGameID != "" {
 			s.games[i].CanonicalGameID = g.CanonicalGameID
 		}
 		// Переустановка может принести другую сборку, и тогда прошлая больше
 		// не описывает то, что лежит на диске.
-		if g.ReleaseID != "" {
-			s.games[i].Repacker = g.Repacker
-			s.games[i].ReleaseVersion = g.ReleaseVersion
-		}
+		s.games[i].Repacker = g.Repacker
+		s.games[i].ReleaseVersion = g.ReleaseVersion
 		s.games[i].Source = SourceManaged
 		s.games[i].InstallType = g.InstallType
 		s.games[i].Owned = g.Owned
@@ -499,28 +516,29 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	if title == "" {
 		title = TitleFromExecutable(g.Executable)
 	}
-	size, unknown := measureInstall("", installDir)
 	game := Game{
-		ID:               newID(),
-		Title:            title,
-		Executable:       g.Executable,
-		InstallDir:       installDir,
-		Version:          g.Version,
-		VersionSource:    g.VersionSource,
-		SizeBytes:        size,
-		SizeUnknown:      unknown,
-		InstalledAt:      time.Now(),
-		SourceDownloadID: g.SourceDownloadID,
-		ReleaseID:        g.ReleaseID,
-		SourceID:         g.SourceID,
-		CanonicalGameID:  g.CanonicalGameID,
-		Repacker:         g.Repacker,
-		ReleaseVersion:   g.ReleaseVersion,
-		Source:           SourceManaged,
-		InstallType:      g.InstallType,
-		Owned:            g.Owned,
-		Uninstall:        g.Uninstall,
-		UninstallUnknown: g.UninstallUnknown,
+		ID:                newID(),
+		Title:             title,
+		Executable:        g.Executable,
+		InstallDir:        installDir,
+		Version:           g.Version,
+		VersionSource:     g.VersionSource,
+		SizeBytes:         size,
+		SizeUnknown:       unknown,
+		InstalledAt:       time.Now(),
+		SourceDownloadID:  g.SourceDownloadID,
+		ReleaseID:         g.ReleaseID,
+		SourceID:          g.SourceID,
+		DistributionID:    g.DistributionID,
+		ReleaseUploadedAt: g.ReleaseUploadedAt,
+		CanonicalGameID:   g.CanonicalGameID,
+		Repacker:          g.Repacker,
+		ReleaseVersion:    g.ReleaseVersion,
+		Source:            SourceManaged,
+		InstallType:       g.InstallType,
+		Owned:             g.Owned,
+		Uninstall:         g.Uninstall,
+		UninstallUnknown:  g.UninstallUnknown,
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
@@ -587,6 +605,18 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 
 //wails:ignore
 func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
+	before, err := s.Find(u.ID)
+	if err != nil {
+		return Game{}, err
+	}
+	dir := u.InstallDir
+	if dir == "" {
+		dir = before.InstallDir
+	}
+	if dir == "" {
+		return Game{}, errEmptyInstallDir
+	}
+	size, unknown := measureInstall(u.ID, dir)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.games {
@@ -594,6 +624,9 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 			continue
 		}
 		previous := s.games[i]
+		if previous.InstallDir != before.InstallDir || previous.Executable != before.Executable {
+			return Game{}, errors.New("installation changed while measuring update")
+		}
 		if u.Executable != "" {
 			s.games[i].Executable = u.Executable
 		}
@@ -605,17 +638,22 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 		}
 		s.games[i].Version = u.Version
 		s.games[i].VersionSource = u.VersionSource
-		s.games[i].SizeBytes, s.games[i].SizeUnknown = measureInstall(s.games[i].ID, s.games[i].InstallDir)
-		if u.ReleaseID != "" {
-			s.games[i].ReleaseID = u.ReleaseID
-		}
-		if u.SourceID != "" {
-			s.games[i].SourceID = u.SourceID
+		s.games[i].SizeBytes, s.games[i].SizeUnknown = size, unknown
+		s.games[i].ReleaseID = u.ReleaseID
+		s.games[i].SourceID = u.SourceID
+		s.games[i].DistributionID = u.DistributionID
+		s.games[i].ReleaseUploadedAt = u.ReleaseUploadedAt
+		if u.ReleaseID == "" {
+			s.games[i].Repacker = ""
+			s.games[i].ReleaseVersion = ""
+		} else {
+			s.games[i].ReleaseVersion = u.Version
 		}
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return Game{}, fmt.Errorf("save library: %w", err)
 		}
+		markInstalled(s.games[i])
 		slog.Info("game version updated", "id", u.ID, "version", u.Version)
 		s.emitUpdated()
 		return s.games[i], nil
@@ -623,9 +661,72 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 	return Game{}, errors.New("игра не найдена")
 }
 
+// BindDistribution upgrades an older installation only when its exact saved
+// source/release pair still matches. It never guesses from game metadata.
+//
+//wails:ignore
+func (s *Service) BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (Game, error) {
+	if id == "" || sourceID == "" || releaseID == "" || distributionID == "" {
+		return Game{}, errors.New("неполная привязка раздачи")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.games {
+		if s.games[i].ID != id {
+			continue
+		}
+		if s.games[i].SourceID != sourceID || s.games[i].ReleaseID != releaseID {
+			return Game{}, errors.New("сохранённая привязка раздачи изменилась")
+		}
+		if s.games[i].DistributionID != "" && s.games[i].DistributionID != distributionID {
+			return Game{}, errors.New("установка уже привязана к другой раздаче")
+		}
+		if s.games[i].DistributionID == distributionID &&
+			(s.games[i].ReleaseUploadedAt != nil || releaseUploadedAt == nil) {
+			return s.games[i], nil
+		}
+		previous := s.games[i]
+		s.games[i].DistributionID = distributionID
+		if s.games[i].ReleaseUploadedAt == nil && releaseUploadedAt != nil {
+			stamp := *releaseUploadedAt
+			s.games[i].ReleaseUploadedAt = &stamp
+		}
+		if err := s.persist(); err != nil {
+			s.games[i] = previous
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+		markInstalled(s.games[i])
+		s.emitUpdated()
+		return s.games[i], nil
+	}
+	return Game{}, errNotFound
+}
+
 func (s *Service) RemoveGame(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.removeGameLocked(id)
+}
+
+// RemoveSyncedGame translates catalog identity under the same lock as removal.
+// It archives only the library record; installed files are never deleted.
+//
+//wails:ignore
+func (s *Service) RemoveSyncedGame(canonicalID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, game := range s.games {
+		if s.sameCanonicalLocked(game.CanonicalGameID, canonicalID) {
+			return s.removeGameLocked(game.ID)
+		}
+	}
+	return nil // Already removed is an idempotent sync result.
+}
+
+func (s *Service) removeGameLocked(id string) error {
+	if s.starting[id] != nil {
+		return uierr.New("library.already_running", "игра запускается")
+	}
 	for i, game := range s.games {
 		if game.ID != id {
 			continue
@@ -698,6 +799,7 @@ func (s *Service) MarkUninstalled(id string) error {
 		}
 		s.dropShortcutLocked(&s.games[i])
 		previous := s.games[i]
+		clearInstalledProvenance(&s.games[i])
 		s.games[i].Uninstalled = true
 		s.games[i].SizeBytes = 0
 		s.games[i].SizeUnknown = false
@@ -828,7 +930,7 @@ func (s *Service) IsRunning(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, ok := s.running[id]
-	return ok
+	return ok || s.starting[id] != nil
 }
 
 func TitleFromExecutable(executable string) string {
@@ -872,7 +974,7 @@ func dirSize(dir string) (int64, error) {
 
 // measureInstall не роняет регистрацию игры: недоступный подкаталог не повод
 // потерять запись, но и нулевой размер выдавать за настоящий нельзя.
-func measureInstall(id, dir string) (int64, bool) {
+var measureInstall = func(id, dir string) (int64, bool) {
 	size, err := dirSize(dir)
 	if err != nil {
 		slog.Warn("measure install dir", "id", id, "error", err)
@@ -902,4 +1004,13 @@ func (s *Service) GetHistoryGames() []Game {
 		}
 	}
 	return out
+}
+
+func clearInstalledProvenance(g *Game) {
+	g.ReleaseID = ""
+	g.SourceID = ""
+	g.DistributionID = ""
+	g.ReleaseUploadedAt = nil
+	g.Repacker = ""
+	g.ReleaseVersion = ""
 }

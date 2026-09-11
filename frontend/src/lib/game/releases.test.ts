@@ -8,10 +8,19 @@ describe('releaseOrigin', () => {
       name: 'Game — v1.0.30000 | Portable',
       releaseId: 'r1',
       sourceId: 's1',
+      distributionId: 'game-main',
+      releaseUploadedAt: '2026-09-09T12:00:00Z',
       gameId: 'g1',
       version: '1.0.30000',
     });
-    expect(origin).toEqual({ releaseId: 'r1', sourceId: 's1', gameId: 'g1', version: '1.0.30000' });
+    expect(origin).toEqual({
+      releaseId: 'r1',
+      sourceId: 's1',
+      distributionId: 'game-main',
+      releaseUploadedAt: '2026-09-09T12:00:00Z',
+      gameId: 'g1',
+      version: '1.0.30000',
+    });
   });
 
   it('omits an unknown version instead of recording an empty one', () => {
@@ -36,6 +45,24 @@ describe('releaseBadge', () => {
 
   it('calls a target an update only when the resolver claims one', () => {
     expect(releaseBadge({ ...base, updateKind: 'update' })).toBe('update');
+  });
+
+  it('shows an updated stable record as an update, not as already installed', () => {
+    expect(
+      releaseBadge({ releaseId: 'r1', currentReleaseId: 'r1', targetReleaseId: 'r1', updateKind: 'update', isNew: false }),
+    ).toBe('update');
+  });
+
+  it('shows a changed-version-scheme stable record as a new release', () => {
+    expect(
+      releaseBadge({
+        releaseId: 'r1',
+        currentReleaseId: 'r1',
+        targetReleaseId: 'r1',
+        updateKind: 'new_release',
+        isNew: false,
+      }),
+    ).toBe('new-release');
   });
 
   it('calls a merely different build a new release', () => {

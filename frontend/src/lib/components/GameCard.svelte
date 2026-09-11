@@ -149,7 +149,7 @@
     height: 3.2rem;
     border-radius: var(--radius-md);
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-on, #fff);
     opacity: 0;
     transform: translateY(0.3rem);
     transition:

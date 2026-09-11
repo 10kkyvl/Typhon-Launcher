@@ -134,3 +134,68 @@ func TestParseMarkersKeepSeasonInTitle(t *testing.T) {
 		t.Errorf("Base = %q, «Season 1» не должно было пропасть из названия", p.Base)
 	}
 }
+
+func TestParseServiceSuffixes(t *testing.T) {
+	cases := []struct {
+		raw     string
+		base    string
+		version string
+		tags    []string
+		langs   []string
+	}{
+		{
+			raw:  "112 Operator [Папка игры] PC | Лицензия",
+			base: "112 Operator",
+			tags: []string{"license", "pc", "portable"},
+		},
+		{
+			raw:     "112 Operator v 0.250801 [Архив]",
+			base:    "112 Operator",
+			version: "0.250801",
+			tags:    []string{"archive"},
+		},
+		{
+			raw:  "11F (+ Windows 7 Fix, )",
+			base: "11F",
+			tags: []string{"windows-7-fix"},
+		},
+		{
+			raw:   "11F (+ Windows 7 Fix, MULTi6) [FitGirl Repack]",
+			base:  "11F",
+			tags:  []string{"fitgirl", "repack", "windows-7-fix"},
+			langs: []string{"MULTi6"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			p := Parse(tc.raw)
+			want(t, "Base", p.Base, tc.base)
+			want(t, "Version", p.Version, tc.version)
+			for _, tag := range tc.tags {
+				mustContainStr(t, "Tags", p.Tags, tag)
+			}
+			for _, lang := range tc.langs {
+				mustContainStr(t, "Languages", p.Languages, lang)
+			}
+		})
+	}
+}
+
+func TestParseKeepsMeaningfulParentheses(t *testing.T) {
+	cases := []struct {
+		raw  string
+		base string
+	}{
+		{"1000 Deaths (Thousand Deaths)", "1000 Deaths (Thousand Deaths)"},
+		{"Resident Evil 4 (2023) Remake", "Resident Evil 4 Remake"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			if got := Parse(tc.raw).Base; got != tc.base {
+				t.Fatalf("Parse(%q).Base = %q, want %q", tc.raw, got, tc.base)
+			}
+		})
+	}
+}

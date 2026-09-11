@@ -1,3 +1,4 @@
+import { applyPersonalAccent } from '../theme/apply';
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
@@ -9,6 +10,7 @@ export const settings = writable<Settings | null>(null);
 
 settings.subscribe((value) => {
   if (!value) return;
+  applyPersonalAccent(value.accentColor ?? '');
   applyLanguage(value.language);
   document.documentElement.style.setProperty('--ui-scale', String(value.uiScale));
   document.documentElement.classList.toggle('no-anim', !value.animationsEnabled);
@@ -50,7 +52,7 @@ export async function updateSettings(patch: Partial<Settings>) {
       confirmed = { ...next };
     } catch (err) {
       console.error('save settings', err);
-      toast(msg('state.settingsSaveFailed'), 'danger');
+      toast(msg('state.settingsSaveFailed') + ': ' + String(err instanceof Error ? err.message : err), 'danger');
       // Undo this call's own keys against the latest state instead of
       // restoring the whole snapshot: another call may have saved a
       // different field successfully while this one was in flight, and

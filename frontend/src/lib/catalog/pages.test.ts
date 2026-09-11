@@ -1,0 +1,47 @@
+import { describe, it, expect } from 'vitest';
+import { appendCatalogPage } from './pages';
+import type { CatalogGame, CatalogPage } from '../services/sources';
+const game = (id: string): CatalogGame => ({ id, title: id, sortTitle: id, createdAt: '' });
+const page = (items: CatalogGame[], revision = 3): CatalogPage => ({ items, revision, total: 3, page: 2, pageSize: 1 });
+describe('catalog continuation', () => {
+  it('preserves previous position and appends a stable page', () => {
+    const previous = [game('a')];
+    expect(appendCatalogPage(previous, page([game('b')]), 3).map((g) => g.id)).toEqual(['a', 'b']);
+    expect(previous).toHaveLength(1);
+  });
+  it('keeps the old page intact when the server revision changed', () => {
+    const previous = [game('a')];
+    expect(() => appendCatalogPage(previous, page([game('b')], 4), 3)).toThrow('catalog.changed');
+    expect(previous).toEqual([game('a')]);
+  });
+  it('rejects repeated canonical identities even under different local IDs', () => {
+    expect(() => appendCatalogPage([{ ...game('old'), serverId: 'same' }], page([{ ...game('new'), serverId: 'same' }]), 3)).toThrow('catalog_duplicate_page');
+  });
+});
+
+import { vi } from 'vitest';
+import { loadCatalogContinuation } from './pages';
+const changed = () => new Error('typhon:catalog.changed: reload');
+const fresh = (n: number, revision = 4): CatalogPage => ({ ...page([game(`fresh-${n}`)], revision), page: n });
+describe('catalog revision recovery', () => {
+  it('rebuilds the visible prefix and the requested page with a fresh revision', async () => {
+    const load = vi.fn().mockResolvedValueOnce(fresh(1)).mockResolvedValueOnce(fresh(2)).mockResolvedValueOnce(fresh(3));
+    const old = [game('old-1'), game('old-2')];
+    const result = await loadCatalogContinuation({page: 3, revision: 3, search: 'test'}, old, load, () => Promise.reject(changed()));
+    expect(result.items.map(g => g.id)).toEqual(['fresh-1','fresh-2','fresh-3']);
+    expect(result.result.page).toBe(3);
+    expect(load.mock.calls.map(([q]) => [q.page,q.revision,q.search])).toEqual([[1,0,'test'],[2,4,'test'],[3,4,'test']]);
+    expect(old.map(g => g.id)).toEqual(['old-1','old-2']);
+  });
+  it('does not loop or mix versions when the catalog changes again during recovery', async () => {
+    const load = vi.fn().mockResolvedValueOnce(fresh(1)).mockResolvedValueOnce(fresh(2,5));
+    await expect(loadCatalogContinuation({page: 3,revision: 3}, [], load, () => Promise.reject(changed()))).rejects.toThrow('catalog.changed');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+  it('does not restart for network errors or a superseded search', async () => {
+    const load = vi.fn();
+    await expect(loadCatalogContinuation({page: 3}, [], load, () => Promise.reject(new Error('offline')))).rejects.toThrow('offline');
+    await expect(loadCatalogContinuation({page: 3}, [], load, () => Promise.reject(changed()), () => false)).rejects.toThrow('catalog.changed');
+    expect(load).not.toHaveBeenCalled();
+  });
+});

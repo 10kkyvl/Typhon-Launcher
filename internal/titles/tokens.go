@@ -16,7 +16,7 @@ var (
 	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
-	reVVer      = regexp.MustCompile(`(?i)\bv\.?(\d+(?:\.\d+){0,4})\b`)
+	reVVer      = regexp.MustCompile(`(?i)\bv[.\s]*(\d+(?:\.\d+){0,4})\b`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
 	reDLCCount  = regexp.MustCompile(`(?i)\+\s*(\d+)\s*(?:dlc(?:'s|s)?|дополнени\p{L}*)`)
 

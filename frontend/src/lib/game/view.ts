@@ -57,9 +57,11 @@ export interface MetaStatusInput {
 }
 
 export function metaStatus(input: MetaStatusInput): MetaStatus {
-  if (!input.available || input.resolved) return 'ready';
+  if (!input.available) return 'ready';
   if (input.busy || input.match === 'searching') return 'searching';
-  if (input.match === 'unmatched' || input.match === 'failed' || input.match === 'skipped') return input.match;
+  if (input.match === 'failed') return 'failed';
+  if (input.resolved) return 'ready';
+  if (input.match === 'unmatched' || input.match === 'skipped') return input.match;
   return 'ready';
 }
 

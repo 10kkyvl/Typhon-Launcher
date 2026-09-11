@@ -218,6 +218,7 @@ export const transfers = {
   'transfers.movePhaseSummary': '{stage}: {phase}',
   'transfers.moveErrFallback': 'Не удалось выполнить перенос',
   'transfers.moveErrGameRunning': 'Игра запущена. Закройте её и повторите',
+  'transfers.moveErrRollbackAvailable': 'Сохранена предыдущая версия игры. Перед переносом выполните откат или дождитесь удаления резервной копии согласно настройке её хранения.',
   'transfers.moveErrUpdating': 'Для игры сейчас выполняется обновление. Дождитесь его завершения',
   'transfers.moveErrInstalling': 'Для игры сейчас идёт установка. Дождитесь её завершения',
   'transfers.moveErrDownloading': 'Для игры сейчас идёт загрузка. Дождитесь её завершения',

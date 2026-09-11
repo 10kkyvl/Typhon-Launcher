@@ -92,7 +92,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		select {
 		case res := <-exited:
 			if res.err != nil {
-				return 0, res.err
+				return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, res.err)
 			}
 			return readFinalWorkerState(spec.StatePath, run)
 		case <-ctx.Done():
@@ -158,7 +158,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 				// подмена файла, и вот её мы возвращаем.
 				stateReadFailures++
 				if stateReadFailures >= workerStateReadRetries {
-					return 0, fmt.Errorf("состояние установки: %w", stateErr)
+					return 0, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, stateErr)
 				}
 				slog.Debug("read installer worker state", "path", spec.StatePath,
 					"attempt", stateReadFailures, "error", stateErr)
@@ -188,7 +188,7 @@ var errBrokerTerminateUnsupported = errors.New("процесс, которым �
 // errBrokerTerminateUnsupported).
 func handOffToWorker(spec runSpec, ws workerSpec, specFile string) (<-chan elevatedResult, func(), func() error, error) {
 	if spec.Broker != nil {
-		if err := writeWorkerSpec(brokerSpecPath(spec.Broker.Dir), ws); err != nil {
+		if err := writeSignedBrokerSpec(spec.Broker.Dir, ws, spec.Broker.Key); err != nil {
 			return nil, nil, nil, fmt.Errorf("передача задания брокеру установки: %w", err)
 		}
 		gone := spec.Broker.Gone
@@ -238,10 +238,10 @@ func handOffToWorker(spec runSpec, ws workerSpec, specFile string) (<-chan eleva
 func readFinalWorkerState(statePath, run string) (int, error) {
 	state, found, err := readWorkerState(statePath)
 	if err != nil {
-		return 0, fmt.Errorf("состояние установки: %w", err)
+		return 0, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, err)
 	}
 	if !found || !state.Done || state.Run != run {
-		return 0, errWorkerNotFinished
+		return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, errWorkerNotFinished)
 	}
 	return finishElevatedState(state)
 }

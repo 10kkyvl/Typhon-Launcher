@@ -84,6 +84,7 @@ type Art struct {
 }
 
 type Service struct {
+	language   string
 	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -197,7 +198,7 @@ func (s *Service) GetView(gameID string) (View, error) {
 		return View{}, err
 	}
 	view := s.view(game)
-	if !view.Resolved && s.busy(gameID) {
+	if s.busy(gameID) {
 		view.Match = MatchSearching
 	}
 	return view, nil
@@ -332,7 +333,7 @@ func (s *Service) EnsureFresh(gameID string) (bool, error) {
 		return false, nil
 	}
 	providerID := game.ExternalIDs.IGDB
-	if providerID != "" && !s.stale(game) && !game.MetadataPartial {
+	if (providerID != "" || game.ExternalIDs.Steam != "") && !s.stale(game) && !game.MetadataPartial {
 		return false, nil
 	}
 
@@ -341,7 +342,7 @@ func (s *Service) EnsureFresh(gameID string) (bool, error) {
 		s.mu.Unlock()
 		return false, errNotStarted
 	}
-	if s.refreshing[gameID] || !s.attempts.due(gameID, true) {
+	if s.refreshing[gameID] || (game.MetadataLanguage == s.language && !s.attempts.due(gameID, true)) {
 		s.mu.Unlock()
 		return false, nil
 	}
@@ -420,6 +421,9 @@ func (s *Service) runArtBatch(games []catalog.Game) {
 	}()
 
 	ctx := s.baseContext()
+	if ctx != nil {
+		ctx = requestLanguage(ctx, s.currentLanguage())
+	}
 	if ctx == nil {
 		return
 	}
@@ -483,7 +487,7 @@ func (s *Service) resolveArt(ctx context.Context, resolver BatchProvider, games 
 			rest = append(rest, game)
 			continue
 		}
-		if !sameGame(game, meta) {
+		if !sameGame(game, meta) || (s.catalog.HasRemoteCatalog() && game.ExternalIDs.IGDB == "" && game.ExternalIDs.Steam == "") {
 			slog.Info("batch metadata rejected", "game", game.Title, "offered", meta.Title)
 			rest = append(rest, game)
 			continue
@@ -524,8 +528,13 @@ func (s *Service) resolve(ctx context.Context, resolver BatchProvider, titles []
 func (s *Service) spawn(game catalog.Game, providerID string, mode refreshMode, class callClass) {
 	go func() {
 		defer s.wg.Done()
-		defer s.release(game.ID)
 		view, err := s.refresh(game.ID, providerID, mode, class)
+		s.release(game.ID)
+		if errors.Is(err, context.Canceled) && s.baseContext() != nil && s.baseContext().Err() == nil {
+			if started, _ := s.EnsureFresh(game.ID); started {
+				return
+			}
+		}
 		s.report(game, view, err)
 	}()
 }
@@ -559,9 +568,6 @@ func (s *Service) report(game catalog.Game, view View, err error) {
 // поиск событие шлёт, а неудачный до сих пор не слал ничего.
 func (s *Service) emitState(game catalog.Game, state MatchState) {
 	view := s.view(game)
-	if view.Resolved {
-		return
-	}
 	view.Match = state
 	emit("metadata:updated", view)
 }
@@ -691,7 +697,13 @@ func (s *Service) lookup(ctx context.Context, provider Provider, game catalog.Ga
 	if providerID == "" {
 		providerID = game.ExternalIDs.IGDB
 	}
+	if providerID == "" && game.ExternalIDs.Steam != "" {
+		providerID = "steam:" + game.ExternalIDs.Steam
+	}
 	if providerID == "" {
+		if s.catalog.HasRemoteCatalog() {
+			return GameMetadata{}, ErrAmbiguous
+		}
 		found, err := s.search(ctx, provider, game.Title, candidateLimit, class)
 		if err != nil {
 			return GameMetadata{}, err
@@ -716,14 +728,34 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		return View{}, err
 	}
 
+	// Do not let an old-language response overwrite a newer UI selection.
+	s.mu.Lock()
+	lang := s.language
+	if lang != "ru" {
+		lang = "en"
+	}
+	if Language(ctx) != lang {
+		s.mu.Unlock()
+		s.store.removeFiles(batch.created)
+		return View{}, context.Canceled
+	}
 	previous, err := s.store.replace(gameID, batch.assets)
 	if err != nil {
 		s.store.removeFiles(batch.created)
+		s.mu.Unlock()
 		return View{}, err
 	}
 
+	igdbID := meta.ProviderID
+	steamID := meta.SteamAppID
+	if strings.HasPrefix(igdbID, "steam:") {
+		steamID = strings.TrimPrefix(igdbID, "steam:")
+		igdbID = ""
+	}
 	updated, err := s.catalog.ApplyMetadata(gameID, catalog.MetadataPatch{
-		IGDBID:       meta.ProviderID,
+		SteamID:      steamID,
+		Language:     Language(ctx),
+		IGDBID:       igdbID,
 		Title:        meta.Title,
 		Summary:      meta.Summary,
 		ReleaseDate:  meta.ReleaseDate,
@@ -738,6 +770,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		UpdatedAt:    time.Now(),
 		Partial:      batch.partial,
 	})
+	s.mu.Unlock()
 	if err != nil {
 		if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {
 			slog.Error("restore media assets", "game", gameID, "error", restoreErr)
@@ -891,7 +924,7 @@ func (s *Service) view(game catalog.Game) View {
 		Game:        game,
 		Cover:       s.coverURL(game),
 		Screenshots: s.screenshots(game.ID),
-		Resolved:    game.ExternalIDs.IGDB != "",
+		Resolved:    game.ExternalIDs.IGDB != "" || game.ExternalIDs.Steam != "",
 		Stale:       s.stale(game),
 	}
 	if s.provider != nil {
@@ -903,7 +936,7 @@ func (s *Service) view(game catalog.Game) View {
 }
 
 func (s *Service) matchState(game catalog.Game) MatchState {
-	if s.provider == nil || game.ExternalIDs.IGDB != "" {
+	if s.provider == nil || game.ExternalIDs.IGDB != "" || game.ExternalIDs.Steam != "" {
 		return MatchIdle
 	}
 	rec, ok := s.attempts.state(game.ID)
@@ -942,7 +975,11 @@ func (s *Service) coverURL(game catalog.Game) string {
 }
 
 func (s *Service) stale(game catalog.Game) bool {
-	if game.MetadataUpdatedAt == nil {
+	lang := game.MetadataLanguage
+	if lang == "" {
+		lang = "en"
+	}
+	if lang != s.currentLanguage() || game.MetadataUpdatedAt == nil {
 		return true
 	}
 	return time.Since(*game.MetadataUpdatedAt) > s.ttl
@@ -964,7 +1001,7 @@ func (s *Service) session(timeout time.Duration) (Provider, providerSession, err
 	if base == nil || closing {
 		return nil, providerSession{}, errNotStarted
 	}
-	ctx, cancel := context.WithTimeout(base, timeout)
+	ctx, cancel := context.WithTimeout(requestLanguage(base, s.currentLanguage()), timeout)
 	return s.provider, providerSession{ctx: ctx, cancel: cancel}, nil
 }
 

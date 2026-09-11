@@ -32,10 +32,11 @@ func magnetOf(seed string) string {
 }
 
 type feedEntry struct {
-	Title      string   `json:"title"`
-	URIs       []string `json:"uris"`
-	UploadDate string   `json:"uploadDate,omitempty"`
-	FileSize   int64    `json:"fileSize"`
+	DistributionID string   `json:"distributionId,omitempty"`
+	Title          string   `json:"title"`
+	URIs           []string `json:"uris"`
+	UploadDate     string   `json:"uploadDate,omitempty"`
+	FileSize       int64    `json:"fileSize"`
 }
 
 func feedBody(t *testing.T, name string, entries ...feedEntry) string {
@@ -165,7 +166,14 @@ func releasesOf(t *testing.T, s *Service, sourceID, status string) []ReleaseView
 }
 
 func TestAddSourceImportsReleases(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Cyberpunk 2077"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.AddGame(catalog.Game{Title: "The Witcher 3 Wild Hunt"}); err != nil {
+		t.Fatal(err)
+	}
+
 	server := newFeedServer(t, feedBody(t, "Example Source",
 		feedEntry{Title: "Cyberpunk.2077.Ultimate.Edition.v2.31", URIs: []string{magnetOf("aa")}, FileSize: 82 << 30},
 		feedEntry{Title: "The.Witcher.3.Wild.Hunt.Complete.Edition.v4.04", URIs: []string{magnetOf("bb")}, FileSize: 50 << 30},
@@ -312,7 +320,11 @@ func TestConfirmMatchIsRememberedOnRefresh(t *testing.T) {
 }
 
 func TestDuplicateInfoHashAcrossSources(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Shared Game"}); err != nil {
+		t.Fatal(err)
+	}
+
 	shared := magnetOf("dd")
 	first := newFeedServer(t, feedBody(t, "First", feedEntry{Title: "Shared Game v1.0", URIs: []string{shared}}))
 	second := newFeedServer(t, feedBody(t, "Second", feedEntry{Title: "Shared Game v1.0", URIs: []string{shared}}))
@@ -342,7 +354,11 @@ func TestDuplicateInfoHashAcrossSources(t *testing.T) {
 }
 
 func TestDifferentInfoHashesAreNotMerged(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Shared Game"}); err != nil {
+		t.Fatal(err)
+	}
+
 	server := newFeedServer(t, feedBody(t, "Example",
 		feedEntry{Title: "Shared Game v1.0", URIs: []string{magnetOf("aa")}},
 		feedEntry{Title: "Shared Game v1.0", URIs: []string{magnetOf("bb")}},
@@ -639,9 +655,13 @@ func TestIgnoreRelease(t *testing.T) {
 }
 
 func TestPrepareDownloadCarriesProvenance(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Game One", ExternalIDs: catalog.ExternalIDs{IGDB: "123"}}); err != nil {
+		t.Fatal(err)
+	}
+	uploadedAt := "2026-09-09T12:00:00Z"
 	server := newFeedServer(t, feedBody(t, "Example",
-		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+		feedEntry{DistributionID: "game-one-main", Title: "Game One v1.0", URIs: []string{magnetOf("aa")}, UploadDate: uploadedAt},
 	))
 	src := addSource(t, s, server.url())
 	release := releasesOf(t, s, src.ID, "all")[0].Release
@@ -653,7 +673,8 @@ func TestPrepareDownloadCarriesProvenance(t *testing.T) {
 	if request.URI != release.URIs[0] {
 		t.Fatalf("uri = %q, want %q", request.URI, release.URIs[0])
 	}
-	if request.ReleaseID != release.ID || request.SourceID != src.ID {
+	if request.ReleaseID != release.ID || request.SourceID != src.ID || request.DistributionID != "game-one-main" ||
+		request.ReleaseUploadedAt == nil || request.ReleaseUploadedAt.Format(time.RFC3339) != uploadedAt {
 		t.Fatalf("request = %+v", request)
 	}
 	if request.GameID == "" || release.CanonicalGameID == nil || request.GameID != *release.CanonicalGameID {
@@ -684,11 +705,11 @@ func TestLargeFeedImport(t *testing.T) {
 	if src.Entries != total {
 		t.Fatalf("entries = %d, want %d", src.Entries, total)
 	}
-	if src.Matched != total {
-		t.Fatalf("matched = %d, want %d", src.Matched, total)
+	if src.Matched != 0 || src.Unmatched != total {
+		t.Fatalf("unmatched = %d, want %d", src.Unmatched, total)
 	}
-	if len(cat.ListGames()) != total {
-		t.Fatalf("catalog games = %d, want %d", len(cat.ListGames()), total)
+	if len(cat.ListGames()) != 0 {
+		t.Fatalf("source import created %d catalog games", len(cat.ListGames()))
 	}
 	if elapsed > 60*time.Second {
 		t.Fatalf("import took %s, too slow", elapsed)

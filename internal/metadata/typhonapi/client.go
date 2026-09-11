@@ -17,6 +17,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/catalog"
 	"typhon/internal/metadata"
 )
 
@@ -112,7 +113,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]metadat
 
 func (c *Client) Get(ctx context.Context, providerID string) (metadata.GameMetadata, error) {
 	providerID = strings.TrimSpace(providerID)
-	if !numeric(providerID) {
+	if !numeric(strings.TrimPrefix(providerID, "steam:")) {
 		return metadata.GameMetadata{}, fmt.Errorf("%w: некорректный идентификатор %q", ErrBadRequest, providerID)
 	}
 
@@ -185,6 +186,12 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 		Platforms:   payload.Platforms,
 		GameType:    strings.TrimSpace(payload.GameType),
 	}
+	if payload.SteamAppID > 0 {
+		meta.SteamAppID = strconv.FormatInt(payload.SteamAppID, 10)
+	}
+	if strings.HasPrefix(payload.ProviderID, "steam:") {
+		meta.SteamAppID = strings.TrimPrefix(payload.ProviderID, "steam:")
+	}
 	if payload.Cover != nil && payload.Cover.URL != "" {
 		meta.Cover = &metadata.ImageRef{URL: payload.Cover.URL, Width: payload.Cover.Width, Height: payload.Cover.Height}
 	}
@@ -224,6 +231,8 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set("X-Typhon-Steam-Metadata", "1")
+	req.Header.Set("X-Typhon-Metadata-Language", metadata.Language(ctx))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", account.UserAgent)
 	req.Header.Set("X-Typhon-Version", app.Version)
@@ -254,6 +263,8 @@ func statusError(resp *http.Response, body io.Reader) error {
 	switch {
 	case status == http.StatusServiceUnavailable && code == "metadata_unavailable":
 		return fmt.Errorf("%w: провайдер не настроен на сервере", metadata.ErrNotConfigured)
+	case status == http.StatusConflict && code == "catalog_changed":
+		return catalog.ErrCatalogChanged
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %d", metadata.ErrNoMatch, status)
 	case status == http.StatusTooManyRequests:
@@ -312,4 +323,20 @@ func numeric(s string) bool {
 		}
 	}
 	return true
+}
+
+func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
+	params := url.Values{"compat": {q.Compat}, "search": {q.Search}, "genre": {q.Genre}, "platform": {q.Platform}, "kind": {q.Kind}, "sort": {q.Sort}}
+	if q.Page > 0 {
+		params.Set("page", strconv.Itoa(q.Page))
+	}
+	if q.PageSize > 0 {
+		params.Set("pageSize", strconv.Itoa(q.PageSize))
+	}
+	if q.Revision > 0 {
+		params.Set("revision", strconv.FormatInt(q.Revision, 10))
+	}
+	var page catalog.GamePage
+	err := c.get(ctx, account.APIPrefix+"/catalog/games?"+params.Encode(), &page)
+	return page, err
 }

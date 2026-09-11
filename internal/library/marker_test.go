@@ -12,15 +12,20 @@ import (
 func TestMarkerRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "bin", "game.exe")
+	uploadedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	game := Game{
-		ID:              "abc",
-		Title:           "Portal",
-		Executable:      exe,
-		InstallDir:      dir,
-		Version:         "1.2",
-		VersionSource:   "release_metadata",
-		CanonicalGameID: "cid",
-		InstalledAt:     time.Now().Truncate(time.Second),
+		ID:                "abc",
+		Title:             "Portal",
+		Executable:        exe,
+		InstallDir:        dir,
+		Version:           "1.2",
+		VersionSource:     "release_metadata",
+		ReleaseID:         "release-a",
+		SourceID:          "source-a",
+		DistributionID:    "distribution-a",
+		ReleaseUploadedAt: &uploadedAt,
+		CanonicalGameID:   "cid",
+		InstalledAt:       time.Now().Truncate(time.Second),
 	}
 	if err := WriteMarker(dir, markerFor(game)); err != nil {
 		t.Fatalf("write marker: %v", err)
@@ -32,6 +37,10 @@ func TestMarkerRoundTrip(t *testing.T) {
 	}
 	if marker.GameID != game.ID || marker.Title != game.Title || marker.CanonicalGameID != game.CanonicalGameID {
 		t.Fatalf("marker = %+v, want identity of %+v", marker, game)
+	}
+	if marker.ReleaseID != game.ReleaseID || marker.SourceID != game.SourceID || marker.DistributionID != game.DistributionID ||
+		marker.ReleaseUploadedAt == nil || !marker.ReleaseUploadedAt.Equal(uploadedAt) {
+		t.Fatalf("marker lost release provenance: %+v", marker)
 	}
 	if marker.Executable != "bin/game.exe" {
 		t.Fatalf("executable = %q, want a path relative to the install dir", marker.Executable)

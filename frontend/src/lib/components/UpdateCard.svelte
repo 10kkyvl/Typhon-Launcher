@@ -29,6 +29,7 @@
   const plan = $derived(update.plan ?? null);
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
   const isUpdate = $derived(availability.kind === 'update');
+  const isNewRevision = $derived(availability.reason === 'new_distribution_revision');
   const headline = $derived(isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable'));
 
   const sizeLabel = $derived.by(() => {
@@ -76,7 +77,7 @@
       {:else if busy}
         <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
       {:else if !isUpdate}
-        <StatusBadge kind="warning" label={msg('ui.versionsNotComparable')} dot={false} />
+        <StatusBadge kind="accent" label={msg(isNewRevision ? 'ui.distributionUpdated' : 'ui.newReleaseAvailable')} dot={false} />
       {/if}
     </div>
   </div>
@@ -114,7 +115,7 @@
   {/if}
 
   {#if availability.reason && !isUpdate}
-    <p class="muted reason">{availability.reason}</p>
+    <p class="muted reason">{isNewRevision ? msg('ui.newDistributionRevisionReason') : availability.reason}</p>
   {/if}
   {#if update.error}
     <p class="error">{update.error}</p>
