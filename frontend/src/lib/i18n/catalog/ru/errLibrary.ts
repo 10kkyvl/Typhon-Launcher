@@ -1,5 +1,6 @@
 export const errLibrary = {
   'library.no_install_dir': 'каталог установки не задан',
+  'library.installation_changed': 'папка или исполняемый файл игры изменились во время обновления; повторите попытку',
   'library.game_not_found': 'игра не найдена',
   'library.no_canonical_id': 'не указан идентификатор игры каталога',
   'library.no_catalog_title': 'не указано название игры',
