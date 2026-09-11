@@ -194,3 +194,18 @@ it('keeps a personal accent through theme edits, recalculates on switch, and res
   expect(elements.get('typhon-theme')?.textContent).toBe(dark.css);
   vi.unstubAllGlobals();
 });
+
+describe('personal accent without a loaded theme', () => {
+  it('applies and resets the selected accent against the base stylesheet after ActiveTheme fails', async () => {
+    const { fakeDocument, rootProps } = createFakeDocument();
+    vi.stubGlobal('document', fakeDocument);
+    const { applyPersonalAccent, displayedAccent } = await import('./apply');
+    const { get } = await import('svelte/store');
+    applyPersonalAccent('#E45D87');
+    expect(rootProps.get('--accent')).toMatch(/^#[0-9a-f]{6}$/);
+    expect(get(displayedAccent)).toBe('#E45D87');
+    applyPersonalAccent('');
+    expect(rootProps.has('--accent')).toBe(false);
+    expect(get(displayedAccent)).toBe('#6673F2');
+  });
+});

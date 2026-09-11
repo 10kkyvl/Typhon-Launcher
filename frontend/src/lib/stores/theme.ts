@@ -20,6 +20,7 @@ export type ThemeMode = 'system' | 'theme';
 
 const CONFIRM_DELAY_MS = 5000;
 
+export const appearanceResetVersion = writable(0);
 export const activeTheme = writable<Theme | null>(null);
 export const themeList = writable<Theme[]>([]);
 export const themeMode = writable<ThemeMode>('theme');
@@ -83,6 +84,7 @@ function onSystemChange() {
 }
 
 export async function resetAppearance() {
+  appearanceResetVersion.update(value => value + 1);
   cancelConfirm();
   const previous = get(activeTheme);
   // Keep the emergency reset usable even when custom CSS hides the interface.

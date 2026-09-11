@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { msg, type MessageKey } from '../../lib/i18n';
   import { settings, updateSettings } from '../../lib/stores/settings';
@@ -9,6 +9,7 @@
   import Card from '../../lib/components/Card.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import { appearanceResetVersion } from '../../lib/stores/theme';
   const presetLabels: MessageKey[] = [
     'settings.accentPreset1', 'settings.accentPreset2', 'settings.accentPreset3', 'settings.accentPreset4',
     'settings.accentPreset5', 'settings.accentPreset6', 'settings.accentPreset7', 'settings.accentPreset8',
@@ -23,6 +24,10 @@
     applyPersonalAccent(get(settings)?.accentColor ?? '');
   }
   onDestroy(cancel);
+  $effect(() => {
+    $appearanceResetVersion;
+    untrack(() => { editing = false; draft = ''; lastValid = '#6673F2'; });
+  });
   function preview(value: string) {
     draft = value;
     if (validAccent(value)) { lastValid = value; applyPersonalAccent(value); }

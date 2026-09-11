@@ -26,3 +26,14 @@ describe('personal accent palette', () => {
     }
   });
 });
+
+it('composites alpha surfaces over a light theme instead of treating their black channels as opaque', () => {
+  const p = accentPalette('#388BFF', 'light', { '--bg': '#ffffff', '--surface': '#ffffff', '--surface-3': 'rgba(0, 0, 0, 0.05)' });
+  expect(p['--accent-text']).not.toBe('#000000');
+  expect(contrast(p['--accent-text'], '#f2f2f2')).toBeGreaterThanOrEqual(4.5);
+});
+it('resolves CSS token references and uses the theme background for unsupported color forms', () => {
+  const p = accentPalette('#388BFF', 'light', { '--bg': '#ffffff', '--surface': '#f8f9fb', '--surface-3': 'var(--surface)', '--surface-4': 'color(display-p3 1 1 1)' });
+  expect(p['--accent-text']).not.toBe('#000000');
+  expect(contrast(p['--accent-text'], '#f8f9fb')).toBeGreaterThanOrEqual(4.5);
+});

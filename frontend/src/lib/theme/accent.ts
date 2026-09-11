@@ -2,12 +2,30 @@
 export const accentPresets = ['#6673F2', '#388BFF', '#16A6B6', '#36A66A', '#E4B836', '#ED873D', '#E45D87', '#AB70E5'];
 export const validAccent = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value);
 type RGB = [number, number, number];
-export function rgb(value: string): RGB {
-  const hex = value.trim().replace(/^#([\da-f])([\da-f])([\da-f])$/i, '#$1$1$2$2$3$3');
-  if (validAccent(hex)) return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RGB;
-  const channels = value.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/);
-  return channels ? channels.slice(1, 4).map(Number) as RGB : [17, 23, 31];
+// Resolve translucent surfaces against the theme background before measuring contrast.
+// Unknown CSS forms inherit that background instead of becoming an unrelated dark surface.
+export function rgb(value: string, background: RGB = [17, 23, 31]): RGB {
+  const text = value.trim().toLowerCase();
+  let color: RGB;
+  let alpha = 1;
+  const hexMatch = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/.exec(text);
+  if (hexMatch) {
+    let digits = hexMatch[1];
+    if (digits.length <= 4) digits = [...digits].map(c => c + c).join('');
+    color = [0, 2, 4].map(i => parseInt(digits.slice(i, i + 2), 16)) as RGB;
+    if (digits.length === 8) alpha = parseInt(digits.slice(6), 16) / 255;
+  } else {
+    if (text === 'transparent') return [...background];
+    const match = /^rgba?\(\s*([^()]+)\s*\)$/.exec(text);
+    if (!match) return [...background];
+    const parts = match[1].trim().split(/[\s,/]+/);
+    if (parts.length < 3 || parts.length > 4 || parts.some(p => !/^[+-]?(?:\d+\.?\d*|\.\d+)%?$/.test(p))) return [...background];
+    color = parts.slice(0, 3).map(p => Math.max(0, Math.min(255, parseFloat(p) * (p.endsWith('%') ? 2.55 : 1)))) as RGB;
+    if (parts[3]) alpha = Math.max(0, Math.min(1, parseFloat(parts[3]) / (parts[3].endsWith('%') ? 100 : 1)));
+  }
+  return color.map((channel, i) => channel * alpha + background[i] * (1 - alpha)) as RGB;
 }
+
 const hex = (c: RGB) => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 const mix = (a: RGB, b: RGB, t: number): RGB => a.map((v, i) => v + (b[i] - v) * t) as RGB;
 function luminance(c: RGB): number {
@@ -28,7 +46,13 @@ function readable(seed: RGB, surfaces: string[], ratio: number, light: boolean):
 export function accentPalette(color: string, base: string, tokens: Record<string, string | undefined> = {}): Record<string, string> {
   if (!validAccent(color)) return {};
   const light = base === 'light';
-  const backgrounds = ['--bg', '--surface', '--surface-2', '--surface-3', '--surface-4', '--bg-sidebar'].map(k => tokens[k] || (light ? '#ffffff' : '#242c38'));
+  const fallback: RGB = light ? [255, 255, 255] : [36, 44, 56];
+  const resolve = (value: string, seen = new Set<string>()): string => value.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^()]+))?\)/g, (_, name: string, alternative: string) => {
+    if (seen.has(name)) return alternative || '';
+    return resolve(tokens[name] || alternative || '', new Set([...seen, name]));
+  });
+  const background = rgb(resolve(tokens['--bg'] || ''), fallback);
+  const backgrounds = ['--bg', '--surface', '--surface-2', '--surface-3', '--surface-4', '--bg-sidebar'].map(k => hex(rgb(resolve(tokens[k] || ''), background)));
   const seed = rgb(color);
   const main = readable(seed, backgrounds, 3, light);
   const foreground = contrast(hex(main), '#ffffff') >= contrast(hex(main), '#000000') ? '#ffffff' : '#000000';
@@ -43,7 +67,7 @@ export function accentPalette(color: string, base: string, tokens: Record<string
       break;
     }
   }
-  const subtle = hex(mix(rgb(tokens['--surface'] || (light ? '#ffffff' : '#11171f')), main, .14));
+  const subtle = hex(mix(rgb(backgrounds[1]), main, .14));
   return {
     '--accent': hex(main), '--accent-hover': hex(hover), '--accent-on': foreground,
     '--accent-subtle': subtle,

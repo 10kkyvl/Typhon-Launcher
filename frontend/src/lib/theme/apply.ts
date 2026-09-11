@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { accentPalette, validAccent } from './accent';
+import { accentPalette, contrast, validAccent } from './accent';
 import type { Theme } from '../../../bindings/typhon/internal/theme';
 import { msg, type MessageKey } from '../i18n';
 
@@ -39,7 +39,22 @@ let personalColor = '';
 export function applyPersonalAccent(color: string): void {
   if ((color && !validAccent(color)) || color === personalColor) return;
   personalColor = color;
-  if (currentTheme) applyTheme(currentTheme);
+  if (currentTheme) {
+    applyTheme(currentTheme);
+    return;
+  }
+  const root = document.documentElement;
+  // Base stylesheet remains usable when ActiveTheme fails during startup.
+  for (const name of appliedTokenNames) root.style.removeProperty(name);
+  appliedTokenNames = [];
+  const computed = typeof getComputedStyle === 'function' ? getComputedStyle(root) : null;
+  const tokens = Object.fromEntries(['--bg', '--surface', '--surface-2', '--surface-3', '--surface-4', '--bg-sidebar'].map(name => [name, computed?.getPropertyValue(name).trim()]));
+  const background = tokens['--bg'] || '#0a0f15';
+  const base = contrast(background, '#000000') > contrast(background, '#ffffff') ? 'light' : 'dark';
+  const vars = accentPalette(personalColor, base, tokens);
+  for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value, 'important');
+  appliedTokenNames = Object.keys(vars);
+  displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || '#6673F2');
 }
 
 export function personalThemeVars(theme: Theme): Record<string, string> {
