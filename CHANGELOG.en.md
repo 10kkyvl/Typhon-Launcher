@@ -6,6 +6,18 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.6.1 — 2026-09-12
+Fixed catalog page loading and reduced waiting while browsing games.
+
+### Changed
+- All Games uses the titles and covers supplied by the catalog without requesting full metadata for every visible card. Detailed information loads when opening a game
+- Server-side page loading, search and filter counts are faster across the large Steam and IGDB catalog
+
+### Fixed
+- The next-page loading error during background catalog updates. Changes outside the displayed list no longer reset pagination; changes to the displayed list are still checked to prevent skipped or repeated games
+- A server-side deadlock between Steam imports and IGDB synchronization that caused catalog updates to fail
+- Fixed 1 additional non-critical bug
+
 ## 0.6.0 — 2026-09-11
 A Steam and IGDB catalog, personal accent colors, screenshot zoom and more reliable game updates.
 
