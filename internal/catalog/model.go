@@ -12,6 +12,9 @@ func (e ExternalIDs) empty() bool {
 	return e.Steam == "" && e.IGDB == "" && e.GOG == ""
 }
 
+// Game stores both the server projection and local provider evidence. The
+// latter is persisted for matching across incomplete remote pages but is
+// stripped from public remote page responses.
 type Game struct {
 	AliasIDs          []string            `json:"aliasIds,omitempty"`
 	ProviderLinks     map[string][]string `json:"providerLinks,omitempty"`
@@ -31,6 +34,7 @@ type Game struct {
 	GameType          string              `json:"gameType,omitempty"`
 	ExternalIDs       ExternalIDs         `json:"externalIds"`
 	Aliases           []string            `json:"aliases,omitempty"`
+	LocalExternalIDs  ExternalIDs         `json:"localExternalIds,omitempty"`
 	CoverAssetID      string              `json:"coverAssetId,omitempty"`
 	HeroAssetID       string              `json:"heroAssetId,omitempty"`
 	MetadataLanguage  string              `json:"metadataLanguage,omitempty"`

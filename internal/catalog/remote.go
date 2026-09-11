@@ -70,6 +70,10 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	complete := remoteProviderCompleteness(page.Providers)
 	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	for i, g := range page.Items {
+		// LocalExternalIDs is a private durability detail. A remote response
+		// must never be able to inject it, and it must not leak through the
+		// public page returned to the frontend.
+		g.LocalExternalIDs = ExternalIDs{}
 		// Existing personal references retain their IDs. ServerID records the
 		// provider-independent identity without rewriting installation provenance.
 		g.ServerID = g.ID
@@ -85,14 +89,15 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 			pos = len(s.games) - 1
 		}
 		indexRemoteGame(g, pos, byServer, byIGDB, bySteam)
-		s.reconcileRemoteLinksLocked(g, complete)
 		if c, ok := page.Compat[g.ServerID]; ok && g.ID != g.ServerID {
 			delete(page.Compat, g.ServerID)
 			page.Compat[g.ID] = c
 		}
 		g.AliasIDs = nil
+		g.LocalExternalIDs = ExternalIDs{}
 		page.Items[i] = g
 	}
+	s.reconcileRemotePageLinksLocked(page.Items, complete)
 	changed := !reflect.DeepEqual(previous, s.games)
 	if changed {
 		s.rebuildLocked()
@@ -127,27 +132,37 @@ func (s *Service) HasRemoteCatalog() bool {
 
 // A new authoritative claim invalidates stale claims on other visited games,
 // even when those other games are outside the current result page.
-func (s *Service) reconcileRemoteLinksLocked(current Game, complete map[string]bool) {
+func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, complete map[string]bool) {
 	claimed := map[string]bool{}
 	igdbClaims := map[string]bool{}
-	if remoteProviderComplete(complete, "igdb") {
-		for _, id := range current.ProviderLinks["igdb"] {
-			igdbClaims[id] = true
+	currentServers := map[string]bool{}
+	currentIGDB := map[string]bool{}
+	for _, current := range currentGames {
+		if current.ServerID != "" {
+			currentServers[current.ServerID] = true
 		}
 		if current.ExternalIDs.IGDB != "" {
-			igdbClaims[current.ExternalIDs.IGDB] = true
+			currentIGDB[current.ExternalIDs.IGDB] = true
 		}
-	}
-	if remoteProviderComplete(complete, "steam") {
-		for _, id := range current.ProviderLinks["steam"] {
-			claimed[id] = true
+		if remoteProviderComplete(complete, "igdb") {
+			for _, id := range current.ProviderLinks["igdb"] {
+				igdbClaims[id] = true
+			}
+			if current.ExternalIDs.IGDB != "" {
+				igdbClaims[current.ExternalIDs.IGDB] = true
+			}
 		}
-		if current.ExternalIDs.Steam != "" {
-			claimed[current.ExternalIDs.Steam] = true
+		if remoteProviderComplete(complete, "steam") {
+			for _, id := range current.ProviderLinks["steam"] {
+				claimed[id] = true
+			}
+			if current.ExternalIDs.Steam != "" {
+				claimed[current.ExternalIDs.Steam] = true
+			}
 		}
 	}
 	for i, old := range s.games {
-		if old.ServerID == current.ServerID || old.ExternalIDs.IGDB == "" || (current.ExternalIDs.IGDB != "" && old.ExternalIDs.IGDB == current.ExternalIDs.IGDB) {
+		if (old.ServerID != "" && currentServers[old.ServerID]) || old.ExternalIDs.IGDB == "" || currentIGDB[old.ExternalIDs.IGDB] {
 			continue
 		}
 		kept := []string{}
@@ -163,6 +178,10 @@ func (s *Service) reconcileRemoteLinksLocked(current Game, complete map[string]b
 			old.ExternalIDs.Steam = ""
 			changed = true
 		}
+		if old.LocalExternalIDs.Steam != "" && claimed[old.LocalExternalIDs.Steam] {
+			old.LocalExternalIDs.Steam = ""
+			changed = true
+		}
 		keptIGDB := []string{}
 		for _, id := range old.ProviderLinks["igdb"] {
 			if igdbClaims[id] {
@@ -171,10 +190,17 @@ func (s *Service) reconcileRemoteLinksLocked(current Game, complete map[string]b
 				keptIGDB = append(keptIGDB, id)
 			}
 		}
+		if old.LocalExternalIDs.IGDB != "" && igdbClaims[old.LocalExternalIDs.IGDB] {
+			old.LocalExternalIDs.IGDB = ""
+			changed = true
+		}
 		if !changed {
 			continue
 		}
 		links := cloneProviderLinks(old.ProviderLinks)
+		if links == nil {
+			links = make(map[string][]string)
+		}
 		links["steam"] = kept
 		links["igdb"] = keptIGDB
 		old.ProviderLinks = links
@@ -275,7 +301,8 @@ func unindexRemoteGame(game Game, pos int, byServer, byIGDB, bySteam map[string]
 func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
 	merged := remote
 	merged.ProviderLinks = cloneProviderLinks(remote.ProviderLinks)
-	if merged.ProviderLinks == nil {
+	if merged.ProviderLinks == nil &&
+		(!remoteProviderComplete(complete, "igdb") || !remoteProviderComplete(complete, "steam")) {
 		merged.ProviderLinks = make(map[string][]string)
 	}
 	if !remoteProviderComplete(complete, "igdb") {
@@ -289,11 +316,25 @@ func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
 	// Personal records do not have ServerID. Their provider IDs are local
 	// evidence and must survive a partial server projection.
 	if old.ServerID == "" {
+		if old.LocalExternalIDs.IGDB == "" {
+			merged.LocalExternalIDs.IGDB = old.ExternalIDs.IGDB
+		}
+		if old.LocalExternalIDs.Steam == "" {
+			merged.LocalExternalIDs.Steam = old.ExternalIDs.Steam
+		}
 		if merged.ExternalIDs.IGDB == "" {
-			merged.ExternalIDs.IGDB = old.ExternalIDs.IGDB
+			merged.ExternalIDs.IGDB = merged.LocalExternalIDs.IGDB
 		}
 		if merged.ExternalIDs.Steam == "" {
-			merged.ExternalIDs.Steam = old.ExternalIDs.Steam
+			merged.ExternalIDs.Steam = merged.LocalExternalIDs.Steam
+		}
+	} else {
+		merged.LocalExternalIDs = old.LocalExternalIDs
+		if merged.ExternalIDs.IGDB == "" {
+			merged.ExternalIDs.IGDB = old.LocalExternalIDs.IGDB
+		}
+		if merged.ExternalIDs.Steam == "" {
+			merged.ExternalIDs.Steam = old.LocalExternalIDs.Steam
 		}
 	}
 	merged.Aliases = mergeRemoteStrings(old.Aliases, remote.Aliases)
