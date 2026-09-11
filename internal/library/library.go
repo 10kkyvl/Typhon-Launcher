@@ -616,6 +616,7 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 //wails:ignore
 func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 	const maxMeasureRetries = 3
+	preserveExecutable := false
 	for attempt := 0; attempt < maxMeasureRetries; attempt++ {
 		before, err := s.Find(u.ID)
 		if err != nil {
@@ -648,12 +649,26 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 			if u.InstallDir != "" && previous.InstallDir != u.InstallDir {
 				return Game{}, errInstallationChanged
 			}
+			if previous.Executable != before.Executable {
+				// The update pipeline may still carry the executable selected
+				// before the measurement started. If the user changed it while
+				// we were measuring, keep that newer choice instead of silently
+				// switching it back. A different update target is safe only when
+				// it agrees with the current user choice; otherwise report a
+				// conflict and leave the library untouched.
+				switch {
+				case u.Executable == "", u.Executable == before.Executable:
+					preserveExecutable = true
+				case u.Executable != previous.Executable:
+					return Game{}, errInstallationChanged
+				}
+			}
 			if attempt+1 == maxMeasureRetries {
 				return Game{}, errInstallationChanged
 			}
 			continue
 		}
-		if u.Executable != "" {
+		if u.Executable != "" && !preserveExecutable {
 			s.games[pos].Executable = u.Executable
 		}
 		if u.InstallDir != "" {

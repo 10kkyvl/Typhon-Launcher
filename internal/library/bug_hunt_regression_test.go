@@ -55,6 +55,8 @@ func TestStopDuringPrepareReturnsCodedCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	service.ctx = context.Background()
+	failures := make(chan string, 1)
+	service.SetLaunchFailureRecorder(func(_, code, _ string) { failures <- code })
 	entered := make(chan struct{})
 	service.prepare = func(ctx context.Context, _ launch) error {
 		close(entered)
@@ -74,6 +76,11 @@ func TestStopDuringPrepareReturnsCodedCancellation(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("PlayGame did not return after cancellation")
+	}
+	select {
+	case code := <-failures:
+		t.Fatalf("canceled prepare recorded launch failure %q", code)
+	default:
 	}
 }
 
@@ -114,7 +121,10 @@ func TestApplyInstalledUpdateRetriesAfterExecutableRepoint(t *testing.T) {
 		err  error
 	}, 1)
 	go func() {
-		updated, err := service.ApplyInstalledUpdate(InstalledUpdate{ID: game.ID, Version: "2"})
+		// The update was resolved against oldExe. The user changes the
+		// executable while its size is being measured; the retry must keep
+		// the newer user choice instead of writing oldExe back.
+		updated, err := service.ApplyInstalledUpdate(InstalledUpdate{ID: game.ID, Version: "2", Executable: oldExe})
 		done <- struct {
 			game Game
 			err  error
@@ -131,5 +141,12 @@ func TestApplyInstalledUpdateRetriesAfterExecutableRepoint(t *testing.T) {
 	}
 	if result.game.Executable != newExe || result.game.SizeBytes != 99 {
 		t.Fatalf("updated game = %+v, want new executable and retried measurement", result.game)
+	}
+	stored, err := service.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Executable != newExe {
+		t.Fatalf("persisted executable = %q, want user-selected %q", stored.Executable, newExe)
 	}
 }
