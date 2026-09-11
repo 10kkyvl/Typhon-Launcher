@@ -45,3 +45,20 @@ describe('catalog revision recovery', () => {
     expect(load).not.toHaveBeenCalled();
   });
 });
+
+describe('catalog duplicate recovery', () => {
+  it('rebuilds a prefix after compatibility filtering shifts a game between pages without a revision change', async () => {
+    const old = [game('a')];
+    const load = vi.fn().mockResolvedValueOnce({ ...page([game('b')]), page: 1 }).mockResolvedValueOnce(page([game('a')]));
+    const result = await loadCatalogContinuation({ page: 2, revision: 3, compat: 'working' }, old, load, async () => page([game('a')]));
+    expect(result.items.map(g => g.id)).toEqual(['b', 'a']);
+    expect(result.refreshed).toBe(true);
+    expect(result.result.page).toBe(2);
+    expect(old.map(g => g.id)).toEqual(['a']);
+  });
+  it('stops after one recovery attempt when the server repeats a duplicate', async () => {
+    const load = vi.fn().mockResolvedValueOnce({ ...page([game('a')]), page: 1 }).mockResolvedValueOnce(page([game('a')]));
+    await expect(loadCatalogContinuation({ page: 2, revision: 3 }, [game('a')], load, async () => page([game('a')]))).rejects.toThrow('catalog_duplicate_page');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});

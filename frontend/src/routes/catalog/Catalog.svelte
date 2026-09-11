@@ -28,7 +28,7 @@
   import { getAppInfo } from '../../lib/services/system';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
-  import { gameArt, gameInfo } from '../../lib/stores/metadata';
+  import { gameArt, gameInfo, requestArt } from '../../lib/stores/metadata';
   import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { sources } from '../../lib/stores/sources';
@@ -91,7 +91,7 @@
   let failed = $state(restored?.failed ?? false);
   let revision = $state(restored?.revision ?? 0);
   let offline = $state(restored?.offline ?? false);
-  let incomplete = $state(restored?.incomplete ?? true);
+  let incomplete = $state(restored?.incomplete ?? false);
   let facets = $state<GenreFacet[]>(restored?.facets ?? []);
   let platforms = $state<GenreFacet[]>(restored?.platforms ?? []);
   let platform = $state(restored?.platform ?? "");
@@ -103,7 +103,7 @@
 
   function see(id: string) {
     seen.add(id);
-
+    requestArt([id]);
   }
 
   onDestroy(() => {
@@ -197,6 +197,13 @@
       if (next === 1) {
         items = [];
         total = 0;
+        page = 0;
+        revision = 0;
+        offline = false;
+        incomplete = false;
+        facets = [];
+        platforms = [];
+        compatByGame = {};
       }
       failed = true;
     } finally {
@@ -372,7 +379,7 @@
           <GameCard
             id={game.id}
             title={shown.title}
-            cover={game.coverUrl ?? $gameArt[game.id]?.cover ?? ''}
+            cover={game.coverUrl || $gameArt[game.id]?.cover || ''}
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={shown.developer ?? ''}
@@ -424,7 +431,7 @@
           onclick={() => navigate('game', { id: game.id })}
         >
           <div class="list-thumb">
-            <Artwork src={game.coverUrl ?? $gameArt[game.id]?.cover ?? ''} alt={shown.title} radius="var(--radius-xs)" />
+            <Artwork src={game.coverUrl || $gameArt[game.id]?.cover || ''} alt={shown.title} radius="var(--radius-xs)" />
           </div>
           <span class="list-title">{shown.title}</span>
           <span class="list-meta">{listMeta(shown)}</span>

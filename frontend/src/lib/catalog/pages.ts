@@ -8,7 +8,7 @@ export function appendCatalogPage(previous: CatalogGame[], page: CatalogPage, re
   const seen = new Set(previous.map((g) => g.serverId || g.id));
   for (const game of page.items) {
     const id = game.serverId || game.id;
-    if (seen.has(id)) throw new Error('catalog_duplicate_page');
+    if (seen.has(id)) throw new Error('typhon:catalog.changed: catalog_duplicate_page');
     seen.add(id);
   }
   return [...previous, ...page.items];
