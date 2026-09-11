@@ -205,6 +205,7 @@ const (
 	JournalSwap     = "swap"
 	JournalPatch    = "patch"
 	JournalInplace  = "inplace"
+	JournalCleanup  = "cleanup"
 )
 
 // SwapJournal records a multi-rename filesystem operation before its first

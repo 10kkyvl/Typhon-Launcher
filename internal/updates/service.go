@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -422,15 +423,38 @@ func (s *Service) clearJournal(gameID string) error {
 		s.mu.Unlock()
 		return nil
 	}
-	delete(s.journals, gameID)
-	if err := s.persistJournalsLocked(); err != nil {
-		s.journals[gameID] = previous
-		s.mu.Unlock()
-		return err
+	if previous.RetainedPrevious != "" && previous.Kind != JournalCleanup {
+		// The install is committed. Persist a cleanup-only phase before removing
+		// the retained backup: recovery must never undo the new install after
+		// some (or all) of that older backup has already been deleted.
+		cleanup := *previous
+		cleanup.Kind = JournalCleanup
+		s.journals[gameID] = &cleanup
+		if err := s.persistJournalsLocked(); err != nil {
+			s.journals[gameID] = previous
+			s.mu.Unlock()
+			return err
+		}
+		previous = &cleanup
 	}
 	s.mu.Unlock()
 	if previous.RetainedPrevious != "" {
-		removeTree(previous.RetainedPrevious)
+		if err := os.RemoveAll(previous.RetainedPrevious); err != nil {
+			return fmt.Errorf("remove retained update backup: %w", err)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.journals[gameID] == nil {
+		return nil
+	}
+	if s.journals[gameID] != previous {
+		return errBusy
+	}
+	delete(s.journals, gameID)
+	if err := s.persistJournalsLocked(); err != nil {
+		s.journals[gameID] = previous
+		return err
 	}
 	return nil
 }

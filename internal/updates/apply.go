@@ -1049,7 +1049,15 @@ func (s *Service) swapDirectories(gameID, current, staging, previous, version st
 	if _, err := os.Stat(previous); err == nil {
 		j.RetainedPrevious = previous + ".retained"
 		if exists(j.RetainedPrevious) {
-			return fmt.Errorf("%w: retained backup requires recovery", errSwapFailed)
+			// Older builds cleared the journal before best-effort cleanup.
+			// Reclaim an orphan only after reserving it in a cleanup journal;
+			// any unfinished transaction prevents this reservation.
+			if err := s.setJournal(SwapJournal{GameID: gameID, Kind: JournalCleanup, RetainedPrevious: j.RetainedPrevious}); err != nil {
+				return err
+			}
+			if err := s.clearJournal(gameID); err != nil {
+				return err
+			}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -1158,6 +1166,10 @@ func (s *Service) recoverJournals() {
 			}
 		}
 		switch j.Kind {
+		case JournalCleanup:
+			if err := s.clearJournal(j.GameID); err != nil {
+				s.failJournalRecovery(j, err)
+			}
 		case JournalRollback:
 			if err := s.finishRollback(j); err != nil {
 				s.failJournalRecovery(j, err)
