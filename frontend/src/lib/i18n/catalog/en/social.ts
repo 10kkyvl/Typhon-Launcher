@@ -225,6 +225,8 @@ export const social: Record<SocialKey, Message> = {
   'social.chatTyping': '{name} is typing…',
   'social.chatTooLong': 'A message can contain up to 2000 characters.',
   'social.chatReconnect': 'Connection lost. Retry',
+  'social.chatConversationsError': 'Could not load chats. Retry.',
+  'social.chatHistoryError': 'Could not load history. Retry.',
   'social.friendsGuestTitle': 'Friends need an account',
   'social.friendsGuestDesc': 'Sign in to add friends, see their profiles and games you have in common.',
   'social.friendsConsentTitle': 'Account sync is needed',

@@ -4,6 +4,7 @@ import { inWails } from '../services/backend';
 import { needsSocialConsent } from './social';
 import { authState, currentUser } from './user';
 import { presenceStatus } from './presence';
+import { msg } from '../i18n';
 import {
   HISTORY_DAYS,
   isMessageAlive,
@@ -61,7 +62,11 @@ let typingSentAt = new Map<string, number>();
 let notifyIds = new Set<string>();
 let messageLoad = new Map<string, number>();
 let expiryTimer: ReturnType<typeof setInterval> | null = null;
+let conversationRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let startRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let unreadMessageIds = new Map<string, Set<string>>();
+let sessionQueue = Promise.resolve();
+let sessionSerial = 0;
 
 export function draftKey(peerId: string, accountId = get(currentUser)?.id ?? ''): string {
   return `${DRAFT_PREFIX}:${accountId}:${peerId}`;
@@ -94,16 +99,36 @@ function sortMessages(list: Message[]): Message[] {
 }
 
 function pruneExpired(): void {
-  messagesByPeer.update((all) => {
-    const next: Record<string, Message[]> = {};
-    for (const [peerId, list] of Object.entries(all)) next[peerId] = sortMessages(list);
-    return next;
+  const currentMessages = get(messagesByPeer);
+  let messagesChanged = false;
+  const nextMessages: Record<string, Message[]> = {};
+  for (const [peerId, list] of Object.entries(currentMessages)) {
+    const hasExpired = list.some((message) => !isMessageAlive(message));
+    const alive = hasExpired ? sortMessages(list) : list;
+    nextMessages[peerId] = alive;
+    if (alive.length !== list.length) messagesChanged = true;
+  }
+  if (messagesChanged) messagesByPeer.set(nextMessages);
+  const currentConversations = get(conversations);
+  let conversationsChanged = false;
+  const updatedConversations = currentConversations.map((conversation) => {
+    const messages = (messagesChanged ? nextMessages : currentMessages)[conversation.peer.id] ?? [];
+    const aliveLast = conversation.lastMessage && isMessageAlive(conversation.lastMessage) ? conversation.lastMessage : null;
+    const unreadIds = unreadMessageIds.get(conversation.peer.id);
+    let knownExpired = 0;
+    if (unreadIds) {
+      for (const id of [...unreadIds]) {
+        if (!messages.some((item) => item.id === id)) {
+          unreadIds.delete(id);
+          knownExpired += 1;
+        }
+      }
+    }
+    const unread = aliveLast ? Math.max(0, conversation.unread - knownExpired) : 0;
+    if (aliveLast?.id !== conversation.lastMessage?.id || unread !== conversation.unread) conversationsChanged = true;
+    return { ...conversation, lastMessage: aliveLast, unread };
   });
-  conversations.update((list) => list.map((conversation) => ({
-    ...conversation,
-    lastMessage: conversation.lastMessage && isMessageAlive(conversation.lastMessage) ? conversation.lastMessage : null,
-    unread: conversation.lastMessage && isMessageAlive(conversation.lastMessage) ? conversation.unread : 0,
-  })));
+  if (conversationsChanged) conversations.set(updatedConversations);
 }
 
 function mergeMessage(list: Message[], incoming: Message): Message[] {
@@ -146,6 +171,11 @@ function clearTyping(peerId: string): void {
     delete next[peerId];
     return next;
   });
+}
+
+function stopTyping(peerId: string): void {
+  clearTyping(peerId);
+  void typingCall(peerId, false).catch(() => undefined);
 }
 
 function scheduleStartRetry(expectedGeneration: number): void {
@@ -221,7 +251,7 @@ async function reloadConversations(expected = generation): Promise<void> {
     }
   } catch (err) {
     console.warn('messaging conversations failed', err);
-    if (expected === generation) chatHistoryError.set('Не удалось загрузить чаты. Повторите попытку.');
+    if (expected === generation) chatHistoryError.set(msg('social.chatConversationsError'));
   }
 }
 
@@ -235,6 +265,7 @@ export async function loadMessages(peerId: string, before = '', append = false, 
     const page: MessagePage = await fetchMessages(peerId, before);
     if (expectedGeneration !== generation || messageLoad.get(peerId) !== request) return;
     const filtered = sortMessages(page.messages);
+    const hadMessages = (get(messagesByPeer)[peerId] ?? []).length > 0;
     messagesByPeer.update((all) => {
       const current = all[peerId] ?? [];
       const keepLocal = current.filter((message) => message.id.startsWith('local:'));
@@ -245,7 +276,11 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       );
       return { ...all, [peerId]: merged };
     });
-    nextByPeer.update((all) => ({ ...all, [peerId]: page.next ?? '' }));
+    nextByPeer.update((all) => {
+      const current = get(messagesByPeer)[peerId] ?? [];
+      const next = append || !hadMessages ? page.next ?? '' : all[peerId] ?? page.next ?? '';
+      return { ...all, [peerId]: next };
+    });
     if (page.canSend !== undefined) {
       canSendByPeer.update((all) => ({ ...all, [peerId]: page.canSend === true }));
       updateConversation(peerId, (conversation) => ({ ...conversation, canSend: page.canSend ?? conversation.canSend }));
@@ -254,7 +289,7 @@ export async function loadMessages(peerId: string, before = '', append = false, 
     if (expectedGeneration === generation) chatHistoryError.set('');
   } catch (err) {
     console.warn('messaging history failed', err);
-    if (expectedGeneration === generation) chatHistoryError.set('Не удалось загрузить историю. Повторите попытку.');
+    if (expectedGeneration === generation) chatHistoryError.set(msg('social.chatHistoryError'));
     throw err;
   } finally {
     if (expectedGeneration === generation) {
@@ -286,7 +321,7 @@ export function openChatById(peerId: string): void {
 
 export function closeChat(): void {
   const peer = get(activePeer);
-  if (peer) clearTyping(peer.id);
+  if (peer) stopTyping(peer.id);
   activePeer.set(null);
   chatOpen.set(false);
   panelVisible = false;
@@ -313,13 +348,14 @@ export async function markPeerRead(peerId: string): Promise<void> {
   try {
     await read(peerId, last.id);
     if (expectedGeneration !== generation || !visibleOpenPeer(peerId)) return;
+    unreadMessageIds.delete(peerId);
     updateConversation(peerId, (conversation) => ({ ...conversation, unread: 0 }));
   } catch (err) {
     console.warn('messaging read failed', err);
   }
 }
 
-export async function sendMessage(peerId: string, text: string, clientId = crypto.randomUUID()): Promise<Message> {
+export async function sendMessage(peerId: string, text: string, clientId: string = crypto.randomUUID()): Promise<Message> {
   const value = text.trim();
   if (!value) throw new Error('message_empty');
   if (Array.from(value).length > 2000) throw new Error('message_too_long');
@@ -328,7 +364,7 @@ export async function sendMessage(peerId: string, text: string, clientId = crypt
   setMessage(peerId, optimistic);
   markPending(clientId, true);
   markFailed(clientId, false);
-  clearTyping(peerId);
+  stopTyping(peerId);
   setDraft(peerId, '');
   try {
     const sent = await sendMessageCall(peerId, clientId, value);
@@ -430,6 +466,9 @@ async function incomingMessage(peerId: string, message: Message, expectedGenerat
     void markPeerRead(peerId);
     return;
   }
+  const unreadIds = unreadMessageIds.get(peerId) ?? new Set<string>();
+  unreadIds.add(message.id);
+  unreadMessageIds.set(peerId, unreadIds);
   updateConversation(peerId, (conversation) => ({
     ...conversation,
     lastMessage: message,
@@ -473,7 +512,14 @@ async function handleEvent(event: ChatEvent): Promise<void> {
   }
 }
 
-async function setSession(nextKey: string): Promise<void> {
+function setSession(nextKey: string): Promise<void> {
+  const serial = ++sessionSerial;
+  sessionQueue = sessionQueue.catch(() => undefined).then(() => runSession(nextKey, serial));
+  return sessionQueue;
+}
+
+async function runSession(nextKey: string, serial: number): Promise<void> {
+  if (serial !== sessionSerial) return;
   if (nextKey === authKey) return;
   authKey = nextKey;
   generation += 1;
@@ -482,6 +528,7 @@ async function setSession(nextKey: string): Promise<void> {
     startRetryTimer = null;
   }
   notifyIds = new Set();
+  unreadMessageIds = new Map();
   for (const peerId of typingTimers.keys()) clearTyping(peerId);
   messagesByPeer.set({});
   nextByPeer.set({});
@@ -502,14 +549,15 @@ async function setSession(nextKey: string): Promise<void> {
   const expectedGeneration = generation;
   try {
     await start();
+    if (serial !== sessionSerial || expectedGeneration !== generation || authKey !== nextKey) return;
     chatConnected.set(true);
   } catch (err) {
+    if (serial !== sessionSerial || expectedGeneration !== generation || authKey !== nextKey) return;
     chatConnected.set(false);
     console.warn('messaging start failed', err);
     scheduleStartRetry(expectedGeneration);
     return;
   }
-  if (expectedGeneration !== generation || authKey !== nextKey) return;
   await reloadConversations(expectedGeneration);
 }
 
@@ -524,6 +572,7 @@ export async function retryMessaging(): Promise<void> {
     const peer = get(activePeer);
     if (peer) await loadMessages(peer.id).catch(() => undefined);
   } catch (err) {
+    if (expectedGeneration !== generation || !authKey) return;
     chatConnected.set(false);
     console.warn('messaging retry failed', err);
     scheduleStartRetry(expectedGeneration);
@@ -534,6 +583,9 @@ export function initMessaging(): void {
   if (started) return;
   started = true;
   if (!expiryTimer) expiryTimer = setInterval(pruneExpired, 1000);
+  if (!conversationRefreshTimer) conversationRefreshTimer = setInterval(() => {
+    if (authKey) void reloadConversations(generation);
+  }, 60000);
   if (inWails) {
     Events.On('chat:event', (event) => {
       void handleEvent(event.data as ChatEvent);

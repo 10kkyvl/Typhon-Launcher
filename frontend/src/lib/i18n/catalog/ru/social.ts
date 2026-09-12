@@ -222,6 +222,8 @@ export const social = {
   'social.chatTyping': '{name} печатает…',
   'social.chatTooLong': 'В сообщении может быть не больше 2000 символов.',
   'social.chatReconnect': 'Связь потеряна. Повторить',
+  'social.chatConversationsError': 'Не удалось загрузить чаты. Повторите попытку.',
+  'social.chatHistoryError': 'Не удалось загрузить историю. Повторите попытку.',
   'social.friendsGuestTitle': 'Друзья доступны с аккаунтом',
   'social.friendsGuestDesc': 'Войдите, чтобы добавлять друзей, видеть их профили и общие игры.',
   'social.friendsConsentTitle': 'Нужна синхронизация с аккаунтом',

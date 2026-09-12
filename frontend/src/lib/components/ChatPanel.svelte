@@ -46,7 +46,7 @@
   let sending = $state(false);
   let error = $state('');
   let reactionMenu = $state<string | null>(null);
-  let lastMessageCount = 0;
+  let lastRenderedLastMessage = '';
 
   const peer = $derived($activePeer);
   const activeMessages = $derived(peer ? ($messagesByPeer[peer.id] ?? []) : []);
@@ -78,13 +78,17 @@
 
   async function submit(): Promise<void> {
     if (!peer || !canSend || !draft.trim() || sending) return;
+    const targetPeerId = peer.id;
+    const submitted = draft.trim();
     sending = true;
     error = '';
     try {
-      await sendMessage(peer.id, draft.trim());
-      draft = '';
-      composer?.focus();
-      scrollToEnd();
+      await sendMessage(targetPeerId, submitted);
+      if ($activePeer?.id === targetPeerId && draft.trim() === submitted) draft = '';
+      if ($activePeer?.id === targetPeerId) {
+        composer?.focus();
+        scrollToEnd();
+      }
     } catch (err) {
       error = err instanceof Error && err.message === 'message_too_long' ? msg('social.chatTooLong') : msg('social.chatSendError');
     } finally {
@@ -168,11 +172,9 @@
   });
 
   $effect(() => {
-    const count = activeMessages.length;
-    if (count !== lastMessageCount) {
-      lastMessageCount = count;
-      scrollToEnd();
-    }
+    const last = activeMessages[activeMessages.length - 1]?.id ?? '';
+    if (last && last !== lastRenderedLastMessage && !$chatLoadingMore) scrollToEnd();
+    lastRenderedLastMessage = last;
   });
 
   $effect(() => {
