@@ -28,6 +28,7 @@ import (
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
+	"typhon/internal/messaging"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
@@ -129,6 +130,8 @@ func init() {
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
+	application.RegisterEvent[messaging.Event](messaging.EventName)
+	application.RegisterEvent[messaging.OpenEvent]("chat:open")
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -415,6 +418,10 @@ func main() {
 	if err != nil {
 		fatal("start social service", err)
 	}
+	messagingService, err := messaging.NewService(account.BaseURL(), accountService.SessionToken, func() bool { return settingsService.GetSettings().AccountSync })
+	if err != nil {
+		fatal("start messaging service", err)
+	}
 	onlineService, err := online.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID, settingsService)
 	if err != nil {
 		fatal("start online service", err)
@@ -478,6 +485,7 @@ func main() {
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
+		application.NewService(messagingService),
 		application.NewService(onlineService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
@@ -562,6 +570,9 @@ func main() {
 		URL: "/",
 	})
 
+	chatDesktop := messaging.NewDesktop(wails, window)
+	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
+	defer chatDesktop.Close()
 	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
