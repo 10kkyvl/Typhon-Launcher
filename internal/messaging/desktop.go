@@ -61,6 +61,10 @@ func popupHTML(title, body string) string {
 }
 
 func (d *Desktop) Notify(owner, peer, title, body string) bool {
+	return application.InvokeSyncWithResult(func() bool { return d.notifyOnUI(owner, peer, title, body) })
+}
+
+func (d *Desktop) notifyOnUI(owner, peer, title, body string) bool {
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
@@ -84,6 +88,9 @@ func (d *Desktop) Notify(owner, peer, title, body string) bool {
 		d.timer.Stop()
 	}
 	d.mu.Unlock()
+	// Initialise the hidden window before Show; its first call may only create
+	// the native handle, which Windows also needs for the no-activation style.
+	d.popup.Run()
 	d.popup.SetHTML(popupHTML(title, body))
 	if screen, err := d.main.GetScreen(); err == nil && screen != nil {
 		a := screen.WorkArea
@@ -93,22 +100,28 @@ func (d *Desktop) Notify(owner, peer, title, body string) bool {
 	d.mu.Lock()
 	if !d.closed && d.serial == serial {
 		d.timer = time.AfterFunc(6*time.Second, func() {
-			d.mu.Lock()
-			current := !d.closed && d.serial == serial
-			d.mu.Unlock()
-			if current {
-				d.Clear()
-			}
+			application.InvokeAsync(func() {
+				d.mu.Lock()
+				current := !d.closed && d.serial == serial
+				d.mu.Unlock()
+				if current {
+					d.clearOnUI()
+				}
+			})
 		})
 	}
 	d.mu.Unlock()
 	return true
 }
 func (d *Desktop) open() {
+	application.InvokeSync(d.openOnUI)
+}
+
+func (d *Desktop) openOnUI() {
 	d.mu.Lock()
 	owner, peer := d.owner, d.peer
 	d.mu.Unlock()
-	d.Clear()
+	d.clearOnUI()
 	if owner == "" || peer == "" {
 		return
 	}
@@ -118,6 +131,10 @@ func (d *Desktop) open() {
 	d.app.Event.Emit("chat:open", OpenEvent{OwnerID: owner, PeerID: peer})
 }
 func (d *Desktop) Clear() {
+	application.InvokeSync(d.clearOnUI)
+}
+
+func (d *Desktop) clearOnUI() {
 	d.mu.Lock()
 	d.owner = ""
 	d.peer = ""
@@ -169,7 +186,7 @@ func (d *Desktop) playLocked() {
 // An original, short two-note chime; no external audio asset or codec required.
 func messageTone() []byte {
 	const rate = 22050
-	const count = rate * 36 / 100
+	const count = rate * 42 / 100
 	out := make([]byte, 44+count*2)
 	copy(out, "RIFF")
 	binary.LittleEndian.PutUint32(out[4:], uint32(len(out)-8))
@@ -186,10 +203,11 @@ func messageTone() []byte {
 	for i := 0; i < count; i++ {
 		t := float64(i) / rate
 		sample := 0.0
-		for j, f := range []float64{659.25, 987.77} {
-			x := t - float64(j)*0.10
+		for j, f := range []float64{329.63, 440} {
+			x := t - float64(j)*0.11
 			if x >= 0 {
-				sample += 0.16 * math.Min(1, x/0.006) * math.Exp(-x*15) * math.Sin(2*math.Pi*f*x)
+				// Keep the soft attack while raising the user-selected volume.
+				sample += 0.22 * math.Min(1, x/0.025) * math.Exp(-x*12) * math.Sin(2*math.Pi*f*x)
 			}
 		}
 		binary.LittleEndian.PutUint16(out[44+i*2:], uint16(int16(sample*32767)))

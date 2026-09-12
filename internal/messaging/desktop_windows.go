@@ -30,6 +30,6 @@ func playTone(ctx context.Context, path string) {
 		return
 	}
 	// SND_FILENAME | SND_NODEFAULT. Synchronous playback stays in the tracked
-	// worker; the sound lasts only 360ms and needs no external executable.
+	// worker; the sound lasts only 420ms and needs no external executable.
 	chatPlaySound.Call(uintptr(unsafe.Pointer(p)), 0, 0x00020002)
 }
