@@ -212,7 +212,7 @@
       {#if hasUnread}<span class="unread-dot">{$conversations.reduce((sum, item) => sum + item.unread, 0)}</span>{/if}
     </button>
   {:else}
-    <section class="chat-panel" aria-label="Чаты">
+    <section class="chat-panel" aria-label={msg('social.chatPanelLabel')}>
       <header class="chat-header">
         {#if peer}
           <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
@@ -223,12 +223,13 @@
           </div>
         {:else}
           <MessageCircle size="1.8rem" />
-          <div class="header-copy"><strong>Сообщения</strong><span>Друзья</span></div>
+          <div class="header-copy"><strong>{msg('social.chatMessages')}</strong><span>{msg('social.chatFriends')}</span></div>
         {/if}
         <IconButton label={msg('social.chatClose')} size="sm" onclick={closeChat}><X size="1.7rem" /></IconButton>
       </header>
 
       {#if peer}
+        <div class="history-note">{msg('social.chatSevenDayNote')}</div>
         <div class="messages" bind:this={scrollBox}>
           {#if $nextByPeer[peer.id]}
             <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id)}>
@@ -236,7 +237,7 @@
             </button>
           {/if}
           {#if $chatHistoryError}
-            <div class="history-error">{$chatHistoryError}<button type="button" onclick={retryHistory}>Повторить</button></div>
+            <div class="history-error">{$chatHistoryError}<button type="button" onclick={retryHistory}>{msg('social.chatRetry')}</button></div>
           {/if}
           {#if $chatLoading && activeMessages.length === 0 && !$chatHistoryError}
             <div class="state">{msg('social.chatLoadingHistory')}</div>
@@ -247,7 +248,7 @@
               <div class="message-row" class:own={isOwn(message)}>
                 <article class="message" class:failed={$failedMessages.has(message.clientId)}>
                   <div class="message-meta">
-                    <span>{isOwn(message) ? 'Вы' : displayName(peer)}</span>
+                    <span>{isOwn(message) ? msg('social.chatYou') : displayName(peer)}</span>
                     <time>{time(message.createdAt)}</time>
                     {#if message.editedAt}<span class="edited">{msg('social.chatEdited')}</span>{/if}
                   </div>
@@ -265,7 +266,7 @@
                     </p>
                     <div class="message-footer">
                       {#if isOwn(message) && !$failedMessages.has(message.clientId)}
-                        <button class="tiny-action" type="button" title="Изменить" onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
+                        <button class="tiny-action" type="button" title={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
                       {/if}
                       {#if $failedMessages.has(message.clientId)}
                         <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
@@ -313,14 +314,14 @@
               oninput={(event) => setComposer((event.currentTarget as HTMLTextAreaElement).value)}
               onkeydown={onKeydown}
             ></textarea>
-            <button class="send" type="button" aria-label="Отправить" disabled={!draft.trim() || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
+            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={!draft.trim() || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
           </div>
           <div class="composer-hint">{msg('social.chatHint')}</div>
         {/if}
       {:else}
         <div class="conversation-list">
           {#if $chatHistoryError}
-            <div class="state error-state">{$chatHistoryError}<button type="button" onclick={() => retryMessaging()}>Повторить</button></div>
+            <div class="state error-state">{$chatHistoryError}<button type="button" onclick={() => retryMessaging()}>{msg('social.chatRetry')}</button></div>
           {:else if $conversations.length === 0}
             <div class="state">{msg('social.chatNoConversations')}</div>
           {:else}
@@ -329,7 +330,7 @@
                 <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} />
                 <span class="conversation-copy">
                   <strong>{displayName(item.peer)}</strong>
-                  <span>{item.lastMessage?.text ?? 'Новый диалог'}</span>
+                  <span>{item.lastMessage?.text ?? msg('social.chatNewConversation')}</span>
                 </span>
                 {#if item.unread > 0}<span class="conversation-unread">{item.unread}</span>{/if}
               </button>
@@ -354,6 +355,7 @@
   .header-copy { flex: 1; }
   .header-copy strong { font-size: var(--font-sm); }
   .header-copy span, .conversation-copy span, .toast-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--font-xs); }
+  .history-note { padding: 0.7rem 1rem 0; color: var(--text-3); font-size: 1rem; text-align: center; }
   .messages { flex: 1; overflow-y: auto; padding: 1rem; }
   .load-more { display: flex; align-items: center; gap: 0.4rem; margin: 0 auto 1rem; border: 0; background: transparent; color: var(--accent-text); font-size: var(--font-xs); cursor: pointer; }
   .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; color: var(--text-3); text-align: center; font-size: var(--font-sm); }

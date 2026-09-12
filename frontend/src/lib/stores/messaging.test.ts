@@ -122,19 +122,23 @@ describe('messaging store session and event races', () => {
     expect(get(messaging.conversations)).toEqual([]);
   });
 
-  it('marks only the latest server incoming message read after Read succeeds', async () => {
+  it('does not clear unread before Read succeeds and keeps it after rejection', async () => {
     const { messaging } = await load();
     api.messages.mockResolvedValue({ messages: [message()], next: '', canSend: true });
-    let resolveRead!: () => void;
-    api.read.mockReturnValueOnce(new Promise<void>((resolve) => { resolveRead = resolve; }));
+    let rejectRead!: (error: Error) => void;
+    api.read.mockReturnValueOnce(new Promise<void>((_, reject) => { rejectRead = reject; }));
+    messaging.conversations.set([{ peer, lastMessage: null, unread: 2, canSend: true }]);
 
     messaging.openChat(peer);
     await flush();
     expect(api.read).toHaveBeenCalledTimes(1);
-    expect(get(messaging.conversations)[0].unread).toBe(0);
-    resolveRead();
+    expect(get(messaging.conversations)[0].unread).toBe(2);
+    rejectRead(new Error('offline'));
     await flush();
     expect(api.read).toHaveBeenCalledWith(peer.id, 'message-1');
+    expect(get(messaging.conversations)[0].unread).toBe(2);
+    await messaging.markPeerRead(peer.id);
+    expect(get(messaging.conversations)[0].unread).toBe(0);
   });
 
   it('deduplicates incoming events and increments unread once', async () => {
@@ -190,6 +194,34 @@ describe('messaging store session and event races', () => {
 
     expect(get(messaging.messagesByPeer)[peer.id]).toEqual([]);
     expect(get(messaging.conversations)[0].unread).toBe(0);
+  });
+
+  it('refreshes unread counts within one minute when an older unread expires', async () => {
+    vi.useFakeTimers();
+    const { messaging } = await load();
+    const expiredIncoming = message({ id: 'expired-incoming', expiresAt: new Date(Date.now() - 1).toISOString() });
+    const newerOwn = message({ id: 'newer-own', senderId: 'me', recipientId: peer.id });
+    messaging.messagesByPeer.set({ [peer.id]: [expiredIncoming, newerOwn] });
+    messaging.conversations.set([{ peer, lastMessage: newerOwn, unread: 2, canSend: true }]);
+    api.conversations.mockResolvedValue([{ peer, lastMessage: newerOwn, unread: 0, canSend: true }]);
+    vi.advanceTimersByTime(60000);
+    await flush();
+
+    expect(get(messaging.conversations)[0].unread).toBe(0);
+    expect(api.conversations).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a stale history response overwrite a newer edited event', async () => {
+    const { messaging } = await load();
+    let resolveHistory!: (page: unknown) => void;
+    api.messages.mockReturnValueOnce(new Promise((resolve) => { resolveHistory = resolve; }));
+    const edited = message({ editedAt: new Date(Date.now() + 1000).toISOString(), text: 'edited' });
+    const pending = messaging.loadMessages(peer.id);
+    messaging.messagesByPeer.set({ [peer.id]: [edited] });
+    resolveHistory({ messages: [message({ text: 'stale' })], next: '', canSend: true });
+    await pending;
+
+    expect(get(messaging.messagesByPeer)[peer.id][0].text).toBe('edited');
   });
 
   it('does not apply an in-flight history response after logout', async () => {

@@ -78,13 +78,36 @@ function applyStatus(status: SelfUpdateStatus) {
 }
 
 export async function initSelfUpdate() {
+  // Listen before asking. The backend runs its own check at startup and
+  // answers with an event; landing between the first request and a
+  // subscription made after it, that answer would be lost until the next
+  // poll. An event that arrives while a request is in flight is also the
+  // newer of the two, so the request's answer must not overwrite it.
+  let statusFromEvent = false;
+  let notesFromEvent = false;
+  const offs: Array<() => void> = [];
+  if (inWails) {
+    offs.push(
+      Events.On('launcher:update_status', (event) => {
+        statusFromEvent = true;
+        applyStatus(event.data as SelfUpdateStatus);
+      }),
+      Events.On('launcher:update_progress', (event) => selfUpdateProgress.set(event.data as SelfUpdateProgress)),
+      Events.On('launcher:release_notes', (event) => {
+        notesFromEvent = true;
+        releaseNotes.set(toReleaseNotes(event.data));
+      }),
+    );
+  }
   try {
-    applyStatus(await getStatus());
+    const status = await getStatus();
+    if (!statusFromEvent) applyStatus(status);
   } catch (err) {
     toast(updateReason(err), 'danger');
   }
   try {
-    releaseNotes.set(await getReleaseNotesRequest());
+    const notes = await getReleaseNotesRequest();
+    if (!notesFromEvent) releaseNotes.set(notes);
   } catch (err) {
     toast(updateReason(err), 'danger');
   }
@@ -107,16 +130,9 @@ export async function initSelfUpdate() {
   } catch (err) {
     toast(updateReason(err), 'danger');
   }
-  if (!inWails) return () => {};
-
-  const offStatus = Events.On('launcher:update_status', (event) => applyStatus(event.data as SelfUpdateStatus));
-  const offProgress = Events.On('launcher:update_progress', (event) => selfUpdateProgress.set(event.data as SelfUpdateProgress));
-  const offNotes = Events.On('launcher:release_notes', (event) => releaseNotes.set(toReleaseNotes(event.data)));
 
   return () => {
-    offStatus();
-    offProgress();
-    offNotes();
+    for (const off of offs) off();
   };
 }
 

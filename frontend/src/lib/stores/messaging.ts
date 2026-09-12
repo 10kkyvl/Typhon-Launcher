@@ -131,10 +131,18 @@ function pruneExpired(): void {
   if (conversationsChanged) conversations.set(updatedConversations);
 }
 
-function mergeMessage(list: Message[], incoming: Message): Message[] {
+function mergeMessage(list: Message[], incoming: Message, preserveNewer = false): Message[] {
   incoming = normalizeMessage(incoming);
   const index = list.findIndex((message) => message.id === incoming.id || message.clientId === incoming.clientId);
   if (index < 0) return sortMessages([...list, incoming]);
+  const current = list[index];
+  if (preserveNewer && !current.id.startsWith('local:')) {
+    const currentAt = Date.parse(current.editedAt ?? current.createdAt);
+    const incomingAt = Date.parse(incoming.editedAt ?? incoming.createdAt);
+    if ((Number.isNaN(currentAt) ? 0 : currentAt) >= (Number.isNaN(incomingAt) ? 0 : incomingAt)) {
+      return sortMessages(list);
+    }
+  }
   const next = [...list];
   next[index] = incoming;
   return sortMessages(next);
@@ -271,7 +279,7 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       const keepLocal = current.filter((message) => message.id.startsWith('local:'));
       const base = append ? current : current.filter((message) => !message.id.startsWith('local:'));
       const merged = [...base, ...filtered, ...keepLocal].reduce<Message[]>(
-        (list, message) => mergeMessage(list, message),
+        (list, message) => mergeMessage(list, message, true),
         [],
       );
       return { ...all, [peerId]: merged };
