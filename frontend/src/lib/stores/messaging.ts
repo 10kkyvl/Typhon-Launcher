@@ -65,6 +65,7 @@ let expiryTimer: ReturnType<typeof setInterval> | null = null;
 let conversationRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let startRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let unreadMessageIds = new Map<string, Set<string>>();
+let messageRevisions = new Map<string, number>();
 let sessionQueue = Promise.resolve();
 let sessionSerial = 0;
 
@@ -131,15 +132,25 @@ function pruneExpired(): void {
   if (conversationsChanged) conversations.set(updatedConversations);
 }
 
-function mergeMessage(list: Message[], incoming: Message, preserveNewer = false): Message[] {
+function messageRevisionKey(peerId: string, messageId: string): string {
+  return `${peerId}:${messageId}`;
+}
+
+function mergeMessage(
+  list: Message[],
+  incoming: Message,
+  preserveNewer = false,
+  protectedIds?: Set<string>,
+): Message[] {
   incoming = normalizeMessage(incoming);
   const index = list.findIndex((message) => message.id === incoming.id || message.clientId === incoming.clientId);
   if (index < 0) return sortMessages([...list, incoming]);
   const current = list[index];
   if (preserveNewer && !current.id.startsWith('local:')) {
+    if (protectedIds?.has(current.id)) return sortMessages(list);
     const currentAt = Date.parse(current.editedAt ?? current.createdAt);
     const incomingAt = Date.parse(incoming.editedAt ?? incoming.createdAt);
-    if ((Number.isNaN(currentAt) ? 0 : currentAt) >= (Number.isNaN(incomingAt) ? 0 : incomingAt)) {
+    if ((Number.isNaN(currentAt) ? 0 : currentAt) > (Number.isNaN(incomingAt) ? 0 : incomingAt)) {
       return sortMessages(list);
     }
   }
@@ -149,6 +160,8 @@ function mergeMessage(list: Message[], incoming: Message, preserveNewer = false)
 }
 
 function setMessage(peerId: string, message: Message): void {
+  const key = messageRevisionKey(peerId, message.id);
+  messageRevisions.set(key, (messageRevisions.get(key) ?? 0) + 1);
   messagesByPeer.update((all) => ({ ...all, [peerId]: mergeMessage(all[peerId] ?? [], message) }));
 }
 
@@ -267,6 +280,9 @@ export async function loadMessages(peerId: string, before = '', append = false, 
   const expectedGeneration = generation;
   const request = (messageLoad.get(peerId) ?? 0) + 1;
   messageLoad.set(peerId, request);
+  const requestRevisions = new Map(
+    (get(messagesByPeer)[peerId] ?? []).map((item) => [item.id, messageRevisions.get(messageRevisionKey(peerId, item.id)) ?? 0]),
+  );
   if (append) chatLoadingMore.set(true);
   else chatLoading.set(true);
   try {
@@ -278,8 +294,13 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       const current = all[peerId] ?? [];
       const keepLocal = current.filter((message) => message.id.startsWith('local:'));
       const base = append ? current : current.filter((message) => !message.id.startsWith('local:'));
+      const protectedIds = new Set(
+        current
+          .filter((message) => (messageRevisions.get(messageRevisionKey(peerId, message.id)) ?? 0) > (requestRevisions.get(message.id) ?? 0))
+          .map((message) => message.id),
+      );
       const merged = [...base, ...filtered, ...keepLocal].reduce<Message[]>(
-        (list, message) => mergeMessage(list, message, true),
+        (list, message) => mergeMessage(list, message, true, protectedIds),
         [],
       );
       return { ...all, [peerId]: merged };
@@ -539,6 +560,7 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   unreadMessageIds = new Map();
   for (const peerId of typingTimers.keys()) clearTyping(peerId);
   messagesByPeer.set({});
+  messageRevisions = new Map();
   nextByPeer.set({});
   conversations.set([]);
   canSendByPeer.set({});

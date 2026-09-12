@@ -91,7 +91,7 @@ async function load() {
 }
 
 async function emit(name: string, data: unknown): Promise<void> {
-  handlers.get(name)?.({ data });
+  await handlers.get(name)?.({ data });
   await flush();
 }
 
@@ -222,6 +222,57 @@ describe('messaging store session and event races', () => {
     await pending;
 
     expect(get(messaging.messagesByPeer)[peer.id][0].text).toBe('edited');
+  });
+
+  it('applies refreshed reactions when message timestamps are unchanged', async () => {
+    const { messaging } = await load();
+    const createdAt = new Date(Date.now() - 1000).toISOString();
+    const base = message({ id: 'reaction-1', createdAt, reactions: [] });
+    messaging.messagesByPeer.set({ [peer.id]: [base] });
+    api.messages.mockResolvedValueOnce({
+      messages: [message({ id: 'reaction-1', createdAt, reactions: [{ emoji: 'heart', userIds: ['peer-1'] }] })],
+      next: '',
+      canSend: true,
+    });
+
+    await messaging.loadMessages(peer.id);
+
+    expect(get(messaging.messagesByPeer)[peer.id][0].reactions).toEqual([{ emoji: 'heart', userIds: ['peer-1'] }]);
+  });
+
+  it('keeps a reaction event received while history is in flight', async () => {
+    const { messaging } = await load();
+    const createdAt = new Date(Date.now() - 1000).toISOString();
+    const base = message({ id: 'reaction-race', createdAt, reactions: [] });
+    messaging.messagesByPeer.set({ [peer.id]: [base] });
+    let resolveHistory!: (page: unknown) => void;
+    api.messages.mockReturnValueOnce(new Promise((resolve) => { resolveHistory = resolve; }));
+    const pending = messaging.loadMessages(peer.id);
+    await flush();
+
+    const updated = message({ id: 'reaction-race', createdAt, reactions: [{ emoji: 'fire', userIds: ['peer-1'] }] });
+    await emit('chat:event', { ownerId: 'me', kind: 'updated', peerId: peer.id, message: updated });
+    resolveHistory({ messages: [base], next: '', canSend: true });
+    await pending;
+
+    expect(get(messaging.messagesByPeer)[peer.id][0].reactions).toEqual([{ emoji: 'fire', userIds: ['peer-1'] }]);
+  });
+
+  it('refreshes reactions after a reconnect sync', async () => {
+    const { messaging } = await load();
+    const createdAt = new Date(Date.now() - 1000).toISOString();
+    const base = message({ id: 'reaction-sync', createdAt, reactions: [] });
+    const refreshed = message({ id: 'reaction-sync', createdAt, reactions: [{ emoji: 'party', userIds: ['peer-1'] }] });
+    messaging.messagesByPeer.set({ [peer.id]: [base] });
+    messaging.conversations.set([{ peer, lastMessage: base, unread: 0, canSend: true }]);
+    api.messages.mockResolvedValueOnce({ messages: [base], next: '', canSend: true });
+    messaging.openChat(peer);
+    await flush();
+    api.messages.mockResolvedValue({ messages: [refreshed], next: '', canSend: true });
+
+    await emit('chat:event', { ownerId: 'me', kind: 'sync', peerId: peer.id });
+
+    expect(get(messaging.messagesByPeer)[peer.id][0].reactions).toEqual([{ emoji: 'party', userIds: ['peer-1'] }]);
   });
 
   it('does not apply an in-flight history response after logout', async () => {
