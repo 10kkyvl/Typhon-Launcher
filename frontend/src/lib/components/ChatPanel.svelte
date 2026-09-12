@@ -58,6 +58,17 @@
     return target.displayName || target.username;
   }
 
+  const reactionLabels: Record<ReactionKey, Parameters<typeof msg>[0]> = {
+    fire: 'social.reactionFire',
+    salute: 'social.reactionSalute',
+    heart: 'social.reactionHeart',
+    clap: 'social.reactionClap',
+    skull: 'social.reactionSkull',
+    party: 'social.reactionParty',
+    eyes: 'social.reactionEyes',
+    joy: 'social.reactionJoy',
+  };
+
   function isOwn(message: Message): boolean {
     return message.senderId === $currentUser?.id;
   }
@@ -285,7 +296,7 @@
                     {#if reactionMenu === message.id}
                       <div class="reaction-menu">
                         {#each REACTION_KEYS as key}
-                          <button type="button" title={key} onclick={() => chooseReaction(message, key)}>{REACTION_GLYPHS[key]}</button>
+                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}>{REACTION_GLYPHS[key]}</button>
                         {/each}
                       </div>
                     {/if}
