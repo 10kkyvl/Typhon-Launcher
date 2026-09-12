@@ -3,7 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { mergeCatalogDisplay } from '../../lib/catalog/display';
-  import { loadCatalogContinuation, reloadCatalogPrefix } from '../../lib/catalog/pages';
+  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -228,7 +228,7 @@
     fetchPage(1);
   }
 
-  async function refreshLoadedPrefix() {
+  async function refreshLoadedPrefix(validateSnapshot = false) {
     if (!inWails || identityRefreshRunning || page <= 0) return;
     const current = ++token;
     identityRefreshToken = current;
@@ -238,22 +238,14 @@
     appending = false;
     prefetch.clear();
     try {
-      const prefix = await reloadCatalogPrefix(
-        {
-          revision: 0,
-          search,
-          genre,
-          platform,
-          kind,
-          sort,
-          compat: compatOnly ? compatOnlyWorking : '',
-          page: 1,
-          pageSize,
-        },
-        targetPage,
-        queryCatalogGames,
-        () => current === token,
-      );
+      const request = {
+        revision, search, genre, platform, kind, sort,
+        compat: compatOnly ? compatOnlyWorking : '',
+        page: targetPage, pageSize,
+      };
+      const prefix = validateSnapshot
+        ? await refreshCatalogSnapshot(request, items, compatByGame, queryCatalogGames, () => current === token, offline)
+        : await reloadCatalogPrefix(request, targetPage, queryCatalogGames, () => current === token);
       if (current !== token) return;
       sourceState = get(sources);
       items = prefix.items;
@@ -328,7 +320,7 @@
 
   onMount(() => {
     if (!restored) reload();
-    else if (inWails && page > 0) void refreshLoadedPrefix();
+    else if (inWails && page > 0) void refreshLoadedPrefix(true);
   });
 
   onMount(() => {

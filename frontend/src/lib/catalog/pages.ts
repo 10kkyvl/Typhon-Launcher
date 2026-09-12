@@ -93,6 +93,43 @@ export async function reloadCatalogPrefix(
   throw lastError instanceof Error ? lastError : new Error('catalog.refresh_failed');
 }
 
+// A successful continuation proves the preceding server prefix. Reuse the
+// snapshot only if its last page also has exactly the same identities. This
+// makes returning from details one request regardless of the loaded depth.
+export async function refreshCatalogSnapshot(
+  query: CatalogQuery,
+  previous: CatalogGame[],
+  compat: Record<string, CompatInfo>,
+  load: (query: CatalogQuery) => Promise<CatalogPage>,
+  active: () => boolean = () => true,
+  offline = false,
+): Promise<{ result: CatalogPage; items: CatalogGame[]; compat: Record<string, CompatInfo> }> {
+  const pageCount = Math.max(1, query.page ?? 1);
+  const pageSize = query.pageSize ?? 60;
+  if (!offline && !query.compat && query.revision && pageCount > 1) {
+    try {
+      const result = await load(query);
+      if (!active()) throw new Error('catalog.refresh_cancelled');
+      const offset = (pageCount - 1) * pageSize;
+      const tail = previous.slice(offset);
+      if (!result.offline && result.revision === query.revision && result.page === pageCount
+        && result.pageSize === pageSize && tail.length > 0 && tail.length === result.items.length
+        && tail.every((game, i) => game.id === result.items[i].id
+          && (game.serverId || game.id) === (result.items[i].serverId || result.items[i].id))) {
+        return {
+          result,
+          items: [...previous.slice(0, offset), ...result.items],
+          compat: { ...compat, ...(result.compat ?? {}) },
+        };
+      }
+    } catch (err) {
+      if (errorCode(err) !== 'catalog.changed' || !active()) throw err;
+    }
+  }
+  if (!active()) throw new Error('catalog.refresh_cancelled');
+  return reloadCatalogPrefix(query, pageCount, load, active);
+}
+
 // Publish a refreshed prefix only after all of its pages share one revision.
 export async function loadCatalogContinuation(
   query: CatalogQuery,
