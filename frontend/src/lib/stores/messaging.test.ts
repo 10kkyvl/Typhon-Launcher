@@ -104,6 +104,22 @@ beforeEach(() => {
 });
 
 describe('messaging store session and event races', () => {
+  it('keeps a replacement toast for its own five seconds', async () => {
+    vi.useFakeTimers();
+    const { messaging } = await load();
+    await emit('chat:event', { ownerId: 'me', kind: 'message', peerId: peer.id, message: message() });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(get(messaging.chatToast)?.message.id).toBe('message-1');
+    await emit('chat:event', {
+      ownerId: 'me', kind: 'message', peerId: peer.id,
+      message: message({ id: 'message-2', clientId: 'client-2' }),
+    });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(get(messaging.chatToast)?.message.id).toBe('message-2');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(get(messaging.chatToast)).toBeNull();
+  });
+
   it('ignores a stale notify result after logout', async () => {
     const { user, messaging } = await load();
     messaging.conversations.set([{ peer, lastMessage: null, unread: 0, canSend: true }]);

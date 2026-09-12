@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, Check, ChevronUp, MessageCircle, MoreHorizontal, Pencil, RefreshCw, Send, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
@@ -207,7 +208,7 @@
 
 <div class="chat-root">
   {#if $chatToast}
-    <button class="chat-toast" type="button" onclick={openToast}>
+    <button class="chat-toast" type="button" onclick={openToast} out:fade={{ duration: 240 }}>
       <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} />
       <span class="toast-copy">
         <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>

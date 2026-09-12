@@ -468,7 +468,7 @@ export async function setTyping(peerId: string, value: boolean): Promise<void> {
 function showChatToast(peer: ChatPeer, message: Message): void {
   const id = ++toastId;
   chatToast.set({ id, peer, message });
-  setTimeout(() => chatToast.update((current) => (current?.id === id ? null : current)), 7000);
+  setTimeout(() => chatToast.update((current) => (current?.id === id ? null : current)), 5000);
 }
 
 async function incomingMessage(peerId: string, message: Message, expectedGeneration: number): Promise<void> {

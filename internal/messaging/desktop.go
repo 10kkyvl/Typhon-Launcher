@@ -37,10 +37,11 @@ func NewDesktop(app *application.App, main *application.WebviewWindow) *Desktop 
 	d.popup = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "chat-notification", Title: "Typhon", Width: 360, Height: 112,
 		Hidden: true, Frameless: true, DisableResize: true, AlwaysOnTop: true,
-		BackgroundColour: application.NewRGB(20, 27, 36),
+		BackgroundType:   application.BackgroundTypeTransparent,
+		BackgroundColour: application.RGBA{},
 		HTML:             popupHTML("Typhon", ""), AllowSimpleEventEmit: true,
 		Windows: application.WindowsWindow{HiddenOnTaskbar: true},
-		Mac:     application.MacWindow{WindowClass: application.MacWindowClassPanel, PanelPreferences: application.MacPanelPreferences{NonActivating: true, FloatingPanel: true, BecomesKeyOnlyIfNeeded: true}, CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorFullScreenAuxiliary},
+		Mac:     application.MacWindow{Backdrop: application.MacBackdropTransparent, WindowClass: application.MacWindowClassPanel, PanelPreferences: application.MacPanelPreferences{NonActivating: true, FloatingPanel: true, BecomesKeyOnlyIfNeeded: true}, CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorFullScreenAuxiliary},
 	})
 	d.unsub = append(d.unsub, app.Event.On("chat:popup-open", func(e *application.CustomEvent) { d.open() }), app.Event.On("chat:popup-close", func(e *application.CustomEvent) { d.Clear() }))
 	if f, err := os.CreateTemp("", "typhon-message-*.wav"); err == nil {
@@ -57,7 +58,7 @@ func NewDesktop(app *application.App, main *application.WebviewWindow) *Desktop 
 
 func popupHTML(title, body string) string {
 	// No user-controlled HTML, URL or event name is interpolated.
-	return `<!doctype html><html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#141b24;color:#edf2f7;font:14px -apple-system,Segoe UI,sans-serif}button{font:inherit;color:inherit;cursor:pointer}#open{display:block;width:100%;height:112px;text-align:left;background:none;border:1px solid #354558;border-left:3px solid #76b9ff;padding:15px 42px 15px 16px}.brand{font-size:10px;letter-spacing:2px;color:#8c9cac;margin-bottom:7px}b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px}p{margin:0;color:#becbda;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}#close{position:absolute;right:8px;top:7px;background:none;border:0;font-size:22px;color:#8c9cac}button:focus-visible{outline:2px solid #76b9ff;outline-offset:-3px}</style><button id="open" onclick="window._wails.invoke('wails:event:emit:chat:popup-open')"><div class="brand">TYPHON · CHAT</div><b>` + html.EscapeString(title) + `</b><p>` + html.EscapeString(body) + `</p></button><button id="close" aria-label="Close" onclick="window._wails.invoke('wails:event:emit:chat:popup-close')">×</button></html>`
+	return `<!doctype html><html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;transition:opacity 240ms ease; background:transparent;color:#edf2f7;font:14px -apple-system,Segoe UI,sans-serif}button{font:inherit;color:inherit;cursor:pointer}#open{display:block;width:100%;height:112px;text-align:left;background:#141b24;border:1px solid #354558;border-left:3px solid #76b9ff;padding:15px 42px 15px 16px}.brand{font-size:10px;letter-spacing:2px;color:#8c9cac;margin-bottom:7px}b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px}p{margin:0;color:#becbda;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}#close{position:absolute;right:8px;top:7px;background:none;border:0;font-size:22px;color:#8c9cac}button:focus-visible{outline:2px solid #76b9ff;outline-offset:-3px}</style><button id="open" onclick="window._wails.invoke('wails:event:emit:chat:popup-open')"><div class="brand">TYPHON · CHAT</div><b>` + html.EscapeString(title) + `</b><p>` + html.EscapeString(body) + `</p></button><button id="close" aria-label="Close" onclick="window._wails.invoke('wails:event:emit:chat:popup-close')">×</button></html>`
 }
 
 func (d *Desktop) Notify(owner, peer, title, body string) bool {
@@ -97,21 +98,31 @@ func (d *Desktop) notifyOnUI(owner, peer, title, body string) bool {
 		d.popup.SetPosition(a.X+max(0, a.Width-376), a.Y+max(0, a.Height-128))
 	}
 	showWithoutActivation(d.popup)
-	d.mu.Lock()
-	if !d.closed && d.serial == serial {
-		d.timer = time.AfterFunc(6*time.Second, func() {
-			application.InvokeAsync(func() {
-				d.mu.Lock()
-				current := !d.closed && d.serial == serial
-				d.mu.Unlock()
-				if current {
-					d.clearOnUI()
-				}
-			})
-		})
-	}
-	d.mu.Unlock()
+	d.scheduleOnUI(serial, 4*time.Second, func() {
+		d.popup.ExecJS("document.body.style.opacity='0'; document.body.style.pointerEvents='none'")
+		d.scheduleOnUI(serial, 240*time.Millisecond, d.clearOnUI)
+	})
 	return true
+}
+
+// Both dismissal stages belong to the current notification. A replacement
+// cancels the old fade/hide timer, including callbacks already queued on the UI.
+func (d *Desktop) scheduleOnUI(serial uint64, delay time.Duration, action func()) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed || d.serial != serial {
+		return
+	}
+	d.timer = time.AfterFunc(delay, func() {
+		application.InvokeAsync(func() {
+			d.mu.Lock()
+			current := !d.closed && d.serial == serial
+			d.mu.Unlock()
+			if current {
+				action()
+			}
+		})
+	})
 }
 func (d *Desktop) open() {
 	application.InvokeSync(d.openOnUI)
