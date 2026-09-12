@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { route } from '../stores/router';
   import { authState, isOffline } from '../stores/user';
+  import { needsSocialConsent } from '../stores/social';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
@@ -39,7 +40,7 @@
 </div>
 
 <GameQuickMenu />
-{#if $authState === 'authenticated'}
+{#if $authState === 'authenticated' && !$needsSocialConsent}
   <ChatPanel />
 {/if}
 
