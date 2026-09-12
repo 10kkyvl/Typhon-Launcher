@@ -14,6 +14,7 @@
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
+  import { initMessaging } from './lib/stores/messaging';
   import { initMoves } from './lib/stores/relocate';
   import { initPresence } from './lib/stores/presence';
   import { initSelfUpdate } from './lib/stores/selfupdate';
@@ -51,6 +52,7 @@
   initMetadata();
   initDiscovery();
   initAuth();
+  initMessaging();
   initHistory();
   initLan();
   initSocial();

@@ -23,6 +23,7 @@
   import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
+  import { openChat } from '../../lib/stores/messaging';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
@@ -220,7 +221,7 @@
   </EmptyState>
 {:else if data}
   <div class="profile" class:refreshing>
-    <UserHeader profile={data} {busy} onaction={act} />
+    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
     {#if closed}
       <p class="muted note">{msg('social.userProfileClosed')}</p>
     {:else if restricted}

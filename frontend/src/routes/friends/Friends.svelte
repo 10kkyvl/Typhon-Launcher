@@ -41,6 +41,7 @@
   import { commonLine, sentAt } from '../../lib/social/view';
   import { friendsView } from '../../lib/stores/ui';
   import { navigate } from '../../lib/stores/router';
+  import { openChat } from '../../lib/stores/messaging';
   import { friendsPage, incomingCount, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
@@ -220,6 +221,10 @@
     navigate('user', { username: user.username });
   }
 
+  function openMessage(user: UserCard) {
+    openChat(user);
+  }
+
   $effect(() => {
     const next = initialTab;
     untrack(() => {
@@ -347,6 +352,7 @@
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
+                <Button size="sm" onclick={() => openMessage(friend)}>{msg('social.chatWrite')}</Button>
                 <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
                   {#snippet trigger({ toggle })}
                     <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
@@ -370,6 +376,7 @@
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
+                <Button size="sm" onclick={() => openMessage(friend)}>{msg('social.chatWrite')}</Button>
                 <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
                   {#snippet trigger({ toggle })}
                     <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>

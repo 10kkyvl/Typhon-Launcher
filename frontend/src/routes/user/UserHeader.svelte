@@ -15,10 +15,12 @@
     profile,
     busy,
     onaction,
+    onmessage,
   }: {
     profile: PublicProfile;
     busy: boolean;
     onaction: (id: string) => void;
+    onmessage?: () => void;
   } = $props();
 
   type MenuItem = { id: string; label: string; danger?: boolean; separator?: boolean };
@@ -69,6 +71,7 @@
         <div class="head-actions">
           {#if profile.relation === 'friend'}
             <Button disabled>{relationLabel('friend')}</Button>
+            {#if onmessage}<Button variant="primary" onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('social.moreLabel')} onclick={toggle}>
