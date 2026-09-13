@@ -2,6 +2,7 @@ package selfupdate
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -174,4 +175,20 @@ func TestFetchManifestRedirectToHTTPBreaks(t *testing.T) {
 	if err == nil {
 		t.Fatalf("FetchManifest() error = nil, want redirect to plain http non-loopback to be rejected")
 	}
+}
+
+// newClientWithKey строит Client, который проверяет подпись манифеста
+// заданным ключом вместо прод-ключа. Не экспортируется и не участвует в
+// NewClient намеренно: это единственная точка, где ключ проверки подписи
+// можно заменить, и она закрыта для всего, что лежит за пределами пакета
+// selfupdate. Так тест может прогнать весь цикл (манифест → подпись →
+// скачивание → применение) на одноразовой паре ключей, а прод-путь
+// (NewClient, PublicKey()) остаётся тем же самым кодом без единой лазейки.
+func newClientWithKey(baseURL string, key ed25519.PublicKey) (*Client, error) {
+	c, err := NewClient(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	c.key = key
+	return c, nil
 }

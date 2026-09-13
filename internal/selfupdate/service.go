@@ -27,7 +27,18 @@ const (
 	eventReleaseNotes = "launcher:release_notes"
 )
 
-var checkInterval = 6 * time.Hour
+// checkInterval is how often a running launcher asks whether a release went
+// out. Someone sitting in the launcher when a version ships should hear
+// about it in minutes, not hours; the manifest is a few kilobytes served
+// with no-store, so the backend does not notice the difference.
+var checkInterval = 15 * time.Minute
+
+// checkRetryBase is the first pause after a failed quiet check, doubling on
+// every further failure up to checkInterval. The check at startup fails for
+// a boring reason more often than not: the launcher autostarted before the
+// network came up. Waiting a whole interval for the next attempt would leave
+// the user without the update for as long as they stay in.
+var checkRetryBase = 30 * time.Second
 
 var errNoUpdateChecked = uierr.New("selfupdate.check_first", "selfupdate: check for an update before downloading")
 
@@ -37,6 +48,10 @@ var startWorker = startUpdateWorker
 // onCheckJoined lets a test observe a second caller attaching to the check in
 // flight, the moment that decides whether it shares one request or starts its own.
 var onCheckJoined = func() {}
+
+// onQuietCheckDone lets a test observe a background check finishing, once
+// its status is committed and before the schedule decides on the next one.
+var onQuietCheckDone = func() {}
 
 type Service struct {
 	mu     sync.Mutex
@@ -370,25 +385,52 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 	})
 }
 
+// nextCheckDelay is the pause before the next quiet check after failures
+// consecutive failed ones: the regular interval after a success, exponential
+// backoff from checkRetryBase capped at that interval otherwise.
+func nextCheckDelay(failures int) time.Duration {
+	if failures <= 0 {
+		return checkInterval
+	}
+	delay := checkRetryBase
+	for i := 1; i < failures && delay < checkInterval; i++ {
+		delay *= 2
+	}
+	if delay > checkInterval {
+		return checkInterval
+	}
+	return delay
+}
+
 func (s *Service) periodicCheck() {
 	defer s.wg.Done()
-	s.checkQuiet()
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
+	failures := 0
 	for {
+		if s.checkQuiet() {
+			failures = 0
+		} else {
+			failures++
+		}
+		onQuietCheckDone()
+		timer := time.NewTimer(nextCheckDelay(failures))
 		select {
 		case <-s.ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
-			s.checkQuiet()
+		case <-timer.C:
 		}
 	}
 }
 
-func (s *Service) checkQuiet() {
+// checkQuiet runs one background check and reports whether it got an
+// answer. A cancelled check counts as no answer too: the user preempted it
+// with a download or a dismiss, and the schedule simply asks again.
+func (s *Service) checkQuiet() bool {
 	if _, err := s.runCheck(s.ctx, false); err != nil {
 		slog.Debug("periodic selfupdate check", "error", err)
+		return false
 	}
+	return true
 }
 
 func (s *Service) GetStatus() Status {
