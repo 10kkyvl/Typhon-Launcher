@@ -578,6 +578,9 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 			continue
 		}
 		score, reason, title, reasonGenre := scoreRecommendation(game, profile, item, inLibrary, genreScores, themeScores)
+		if reason == "" {
+			continue
+		}
 		if reason == "similar" {
 			title = similarReference(game, games, library)
 			if title == "" {
@@ -669,9 +672,9 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 		return score, "popular", "", ""
 	}
 	if len(game.Genres) > 0 {
-		return score, "genre", "", game.Genres[0]
+		return score, "category", "", game.Genres[0]
 	}
-	return score, "similar", "", ""
+	return score, "", "", ""
 }
 
 func hasReturnSignal(game Game, item RecommendationLibraryItem, genres, themes map[string]float64) bool {

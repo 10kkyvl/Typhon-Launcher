@@ -70,6 +70,7 @@ func TestDiscoveryExcludesLibraryDismissedAndKnownAddons(t *testing.T) {
 		Game{Title: "Unknown Type", Genres: []string{"Puzzle"}},
 		Game{Title: "DLC", Genres: []string{"Action"}, GameType: "DLC"},
 		Game{Title: "Strategy", Genres: []string{"Strategy"}},
+		Game{Title: "No Metadata"},
 	)
 	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
 		return []RecommendationLibraryItem{{CanonicalGameID: games[0].ID, Sessions: 2, PlaytimeSeconds: 3600}}
@@ -90,6 +91,12 @@ func TestDiscoveryExcludesLibraryDismissedAndKnownAddons(t *testing.T) {
 	for _, item := range result.Items {
 		if item.Game.ID == games[2].ID {
 			foundUnknown = true
+			if item.Reason != "category" || item.ReasonGenre != "Puzzle" {
+				t.Fatalf("unknown game got fabricated preference reason: %+v", item)
+			}
+		}
+		if item.Game.Title == "No Metadata" {
+			t.Fatalf("candidate without a signal or genre was recommended: %+v", item)
 		}
 	}
 	if !foundUnknown {
