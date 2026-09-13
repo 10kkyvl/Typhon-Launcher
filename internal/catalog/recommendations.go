@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,19 +113,29 @@ type recommendationEvidence struct {
 func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
 	games, p, source := s.recommendationSnapshot()
 	if q.Sort == "for-you" && strings.TrimSpace(q.Profile) == "" {
-		profile := profileFromEvidence(buildEvidence(games, func() []RecommendationLibraryItem {
+		profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(func() []RecommendationLibraryItem {
 			if source == nil {
 				return nil
 			}
 			return source()
-		}()), p)
+		}(), p)), p)
 		weights := make(map[string]float64, len(profile.Genres))
+		maxWeight := 0.0
 		for _, facet := range profile.Genres {
-			weights[facet.Value] = facet.Score
+			maxWeight = maxFloat(maxWeight, facet.Score)
 		}
 		themes := make(map[string]float64, len(profile.Themes))
 		for _, facet := range profile.Themes {
-			themes[facet.Value] = facet.Score
+			maxWeight = maxFloat(maxWeight, facet.Score)
+		}
+		if maxWeight == 0 {
+			maxWeight = 1
+		}
+		for _, facet := range profile.Genres {
+			weights[facet.Value] = facet.Score / maxWeight
+		}
+		for _, facet := range profile.Themes {
+			themes[facet.Value] = facet.Score / maxWeight
 		}
 		payload, _ := json.Marshal(struct {
 			Genres   map[string]float64 `json:"genres,omitempty"`
@@ -142,9 +153,6 @@ func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
 		items := source()
 		ids := make([]string, 0, len(items))
 		for _, item := range items {
-			if item.Hidden {
-				continue
-			}
 			if item.CanonicalGameID != "" {
 				ids = append(ids, item.CanonicalGameID)
 			}
@@ -315,7 +323,7 @@ func (s *Service) GetRecommendationProfile() RecommendationProfile {
 	if source != nil {
 		items = source()
 	}
-	evidence := buildEvidence(games, items)
+	evidence := buildEvidence(games, filterEvidenceItems(items, p))
 	return profileFromEvidence(evidence, p)
 }
 
@@ -370,6 +378,21 @@ func buildEvidence(games []Game, items []RecommendationLibraryItem) recommendati
 	return e
 }
 
+func filterEvidenceItems(items []RecommendationLibraryItem, p RecommendationPreferences) []RecommendationLibraryItem {
+	blocked := make(map[string]bool, len(p.NotInterested))
+	for _, id := range p.NotInterested {
+		blocked[id] = true
+	}
+	result := make([]RecommendationLibraryItem, 0, len(items))
+	for _, item := range items {
+		if blocked[item.CanonicalGameID] || blocked[item.LibraryID] {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 func topFacets(values map[string]float64) []RecommendationFacet {
 	result := make([]RecommendationFacet, 0, len(values))
 	for value, score := range values {
@@ -393,7 +416,7 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	if source != nil {
 		items = source()
 	}
-	profile := profileFromEvidence(buildEvidence(games, items), p)
+	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
 	limit := q.Limit
 	if limit <= 0 || limit > maxDiscoveryItems {
 		limit = maxDiscoveryItems
@@ -413,9 +436,34 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	// Discovery is always outside the library. The explicit query flag is
 	// accepted for API symmetry, but cannot make the discovery block leak owned
 	// games into its own results.
-	candidates := rankGames(games, profile, items, p, false, seen, q.GameQuery)
+	candidateGames, remoteOK := s.remoteDiscoveryGames(q.GameQuery, profile.DefaultSort)
+	if !remoteOK {
+		candidateGames = games
+	}
+	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery)
 	selected := diverseRecommendations(candidates, limit)
-	return DiscoveryResult{Items: selected, Fallback: profile.DefaultSort == "popular" && profile.EvidenceGames == 0, Profile: profile}
+	return DiscoveryResult{Items: selected, Fallback: !remoteOK || profile.DefaultSort == "popular" && profile.EvidenceGames == 0, Profile: profile}
+}
+
+func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string) ([]Game, bool) {
+	s.mu.RLock()
+	remote := s.remote
+	s.mu.RUnlock()
+	if remote == nil {
+		return nil, false
+	}
+	q.Sort = sortName
+	q.Page = 1
+	q.PageSize = 60
+	q = s.enrichRecommendationQuery(q)
+	//nolint:forbidigo // Wails recommendation RPC has no lifecycle context; bound each remote request.
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	page, err := remote.Browse(ctx, q)
+	if err != nil || len(page.Items) == 0 {
+		return nil, false
+	}
+	return page.Items, true
 }
 
 func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) []RecommendationItem {
@@ -424,7 +472,7 @@ func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) []Reco
 		return []RecommendationItem{}
 	}
 	items := source()
-	profile := profileFromEvidence(buildEvidence(games, items), p)
+	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
 	excludeLibrary := make(map[string]bool, len(q.ExcludeLibraryIDs))
 	for _, id := range q.ExcludeLibraryIDs {
 		excludeLibrary[id] = true
@@ -497,7 +545,7 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 		if q.Platform != "" && !containsFold(game.Platforms, q.Platform) {
 			continue
 		}
-		if q.Kind != "" && !strings.EqualFold(strings.TrimSpace(game.GameType), strings.TrimSpace(q.Kind)) {
+		if q.Kind != "" && !strings.EqualFold(strings.TrimSpace(q.Kind), "all") && !strings.EqualFold(strings.TrimSpace(game.GameType), strings.TrimSpace(q.Kind)) {
 			continue
 		}
 		item, inLibrary := byID[game.ID]
@@ -513,6 +561,9 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 		score, reason, title, reasonGenre := scoreRecommendation(game, profile, item, inLibrary, genreScores, themeScores)
 		if reason == "similar" {
 			title = similarReference(game, games, library)
+			if title == "" {
+				continue
+			}
 		}
 		result = append(result, rankedRecommendation{RecommendationItem: RecommendationItem{Game: game, LibraryID: item.LibraryID, Reason: reason, ReasonTitle: title, ReasonGenre: reasonGenre}, score: score, genre: reasonGenre})
 	}
@@ -598,6 +649,9 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 	if quality > 0 || popularity > 0 {
 		return score, "popular", "", ""
 	}
+	if len(game.Genres) > 0 {
+		return score, "genre", "", game.Genres[0]
+	}
 	return score, "similar", "", ""
 }
 
@@ -626,9 +680,6 @@ func diverseRecommendations(candidates []rankedRecommendation, limit int) []Reco
 func libraryGameIDs(items []RecommendationLibraryItem) map[string]bool {
 	ids := map[string]bool{}
 	for _, item := range items {
-		if item.Hidden {
-			continue
-		}
 		if item.CanonicalGameID != "" {
 			ids[item.CanonicalGameID] = true
 		}
@@ -661,7 +712,7 @@ func qualityScore(game Game) float64 {
 	if game.Rating == nil || reviewCount == nil || *reviewCount <= 0 {
 		return 0
 	}
-	rating := minFloat(10, maxFloat(0, *game.Rating)) / 10
+	rating := minFloat(100, maxFloat(0, *game.Rating)) / 100
 	confidence := float64(*reviewCount) / float64(*reviewCount+100)
 	return rating * confidence
 }
