@@ -178,7 +178,7 @@
               {msg('social.createAccountButton')}
             </Button>
           {:else}
-            <Button onclick={onappearance}>{msg('profile.appearance')}</Button>
+            <Button size="sm" onclick={onappearance}>{msg('profile.appearance')}</Button>
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
