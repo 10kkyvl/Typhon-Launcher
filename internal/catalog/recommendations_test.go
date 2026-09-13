@@ -129,6 +129,37 @@ func TestRecommendationPreferencesPersistAndUndo(t *testing.T) {
 	}
 }
 
+func TestSavingStalePreferencesKeepsDismissalsAndUndoResolvesAlias(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	game := seed(t, s, Game{ID: "local-game", ServerID: "server-game", Title: "Dismiss Me"})[0]
+	if err := s.SetNotInterested("server-game", true); err != nil {
+		t.Fatal(err)
+	}
+	stale := s.GetRecommendationPreferences()
+	stale.NotInterested = nil
+	stale.DefaultSort = "popular"
+	if err := s.SaveRecommendationPreferences(stale); err != nil {
+		t.Fatal(err)
+	}
+	reloaded := mustServiceAt(t, dir)
+	if got := reloaded.GetRecommendationPreferences().NotInterested; len(got) != 1 || got[0] != game.ID {
+		t.Fatalf("stale save erased dismissal: %v", got)
+	}
+
+	// Simulate an older persisted alias. Undo through the canonical local ID
+	// must remove it as well.
+	reloaded.mu.Lock()
+	reloaded.preferences.NotInterested = []string{"server-game"}
+	reloaded.mu.Unlock()
+	if err := reloaded.SetNotInterested(game.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.GetRecommendationPreferences().NotInterested; len(got) != 0 {
+		t.Fatalf("alias dismissal survived undo: %v", got)
+	}
+}
+
 func TestLibraryRecommendationsHonorsHeroExclusion(t *testing.T) {
 	s := newTestService(t)
 	games := seed(t, s,

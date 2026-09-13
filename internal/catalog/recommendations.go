@@ -239,12 +239,12 @@ func (s *Service) SaveRecommendationPreferences(p RecommendationPreferences) err
 	if !validRecommendationSort(p.DefaultSort) {
 		return errInvalidRecommendationSort
 	}
-	p = sanitizeRecommendationPreferences(p)
 	s.mu.Lock()
 	previous := s.preferences
-	if p.NotInterested == nil {
-		p.NotInterested = append([]string(nil), previous.NotInterested...)
-	}
+	// Dismissals have their own mutation API. Keeping the stored list here
+	// prevents a stale preferences response from undoing a newer decision.
+	p.NotInterested = append([]string(nil), previous.NotInterested...)
+	p = sanitizeRecommendationPreferences(p)
 	s.preferences = p
 	err := storage.Save(s.recommendationPath, recommendationVersion, recommendationState{Preferences: p})
 	if err != nil {
@@ -290,7 +290,7 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 	if on {
 		found := false
 		for _, id := range next.NotInterested {
-			if id == gameID {
+			if s.recommendationCatalogIDLocked(id) == gameID {
 				found = true
 				break
 			}
@@ -301,7 +301,7 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 	} else {
 		kept := next.NotInterested[:0]
 		for _, id := range next.NotInterested {
-			if id != gameID {
+			if s.recommendationCatalogIDLocked(id) != gameID {
 				kept = append(kept, id)
 			}
 		}
