@@ -2,7 +2,7 @@
 
 The first version uses deterministic rules, without a neural model. The API owns
 catalog membership and page ordering; the launcher derives interests from its
-local library and play log and chooses the small recommendation shelves.
+local library and play log and chooses the catalog recommendation shelf.
 
 ## Available evidence
 
@@ -53,7 +53,7 @@ becomes “For you”. The API combines normalized affinity times confidence (we
 0.65) and a bounded popular baseline (weight 0.35). An explicit manual sort wins
 until the user selects Automatic again.
 
-## Shelves
+## Catalog discovery
 
 “Discover something new” selects up to five eligible games outside the library.
 The first pass uses different primary genres; a second fills remaining slots.
@@ -65,10 +65,8 @@ to three API pages (180 games), so a distant niche alternative may be missed.
 Explanations use actual shared genres/themes, a named meaningful library game,
 known rating evidence, or a game’s actual genre. No match percentage is invented.
 
-“What to play” selects library games with an honest reason: never played,
-favorite, similar interests, or return after 90 days with meaningful prior
-activity/favorite/affinity. Installed games receive a small bonus. Archived,
-dismissed and the visible Continue playing item are excluded.
+The library shows Continue playing, recent games and the collection, without a
+separate recommendation shelf.
 
 The shelf score uses genre/theme evidence, confidence-adjusted quality and rating
 count. Its purpose is choosing a small diverse set, rather than duplicating the

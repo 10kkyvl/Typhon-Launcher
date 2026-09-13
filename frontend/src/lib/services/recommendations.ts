@@ -55,7 +55,3 @@ export async function getDiscovery(query: CatalogQuery, refreshExcludeIds: strin
   const result = await CatalogService.GetDiscovery({ ...query, refreshExcludeIds, limit: 5 } as never) as unknown as DiscoveryResult;
   return { ...result, items: result.items ?? [] };
 }
-export async function getLibraryRecommendations(excludeLibraryIds: string[]): Promise<Recommendation[]> {
-  if (!inWails) return [];
-  return (await CatalogService.GetLibraryRecommendations({ limit: 5, excludeLibraryIds } as never) ?? []) as unknown as Recommendation[];
-}
