@@ -45,6 +45,7 @@ type Service struct {
 	gamesPath             string
 	overridesPath         string
 	recommendationPath    string
+	recommendationLoadErr error
 	games                 []Game
 	overrides             []MatchOverride
 	overrideMap           map[string]string
@@ -52,6 +53,7 @@ type Service struct {
 	compat                func(igdbID string) (works, total int, ok bool)
 	recommendationLibrary RecommendationLibrarySource
 	preferences           RecommendationPreferences
+	browseSnapshots       map[string]browseSnapshot
 }
 
 func NewService() (*Service, error) {
@@ -88,7 +90,9 @@ func (s *Service) load() error {
 		return err
 	}
 	if err := s.loadRecommendations(); err != nil {
-		return err
+		s.recommendationLoadErr = err
+		s.preferences = defaultRecommendationPreferences()
+		slog.Warn("recommendation preferences unavailable; using general catalog", "error", err)
 	}
 	known := map[string]bool{}
 	for _, g := range s.games {

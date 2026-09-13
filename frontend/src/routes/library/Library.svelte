@@ -11,6 +11,9 @@
     X,
   } from '@lucide/svelte';
   import { untrack } from 'svelte';
+  import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
+  import { getLibraryRecommendations, setNotInterested } from '../../lib/services/recommendations';
+  import type { Recommendation } from '../../lib/recommendations/display';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -61,6 +64,38 @@
   let search = $state('');
   let heroHidden = $state(false);
   let catalogGames = $state<Record<string, CatalogGame>>({});
+  let recommendations = $state<Recommendation[]>([]);
+  let recommendationLoading = $state(true);
+  let recommendationFailed = $state(false);
+  let lastDismissed = $state<Recommendation | null>(null);
+  let recommendationToken = 0;
+
+  async function loadRecommendations(exclude: string[]) {
+    const active = ++recommendationToken;
+    recommendationLoading = true;
+    try {
+      const result = await getLibraryRecommendations(exclude);
+      if (active !== recommendationToken) return;
+      recommendations = result;
+      recommendationFailed = false;
+    } catch {
+      if (active !== recommendationToken) return;
+      recommendations = [];
+      recommendationFailed = true;
+    } finally { if (active === recommendationToken) recommendationLoading = false; }
+  }
+
+  async function dismissRecommendation(item: Recommendation, on = true) {
+    if (recommendationLoading) return;
+    recommendationLoading = true;
+    try {
+      await setNotInterested(item.game.id, on);
+      lastDismissed = on ? item : null;
+      await loadRecommendations(hero && !heroHidden ? [hero.id] : []);
+    } catch { toast(msg('games.recommendationError'), 'danger'); }
+    finally { recommendationLoading = false; }
+  }
+
 
   const installedByGame = $derived.by(() => {
     const ids = new Set<string>();
@@ -212,6 +247,13 @@
 
   const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null));
 
+  $effect(() => {
+    const inventory = $libraryGames;
+    const excluded = hero && !heroHidden ? [hero.id] : [];
+    untrack(() => { void loadRecommendations(excluded); });
+    return () => { recommendationToken++; };
+  });
+
   const recentGames = $derived(
     playedGames.filter((entry) => entry.lastPlayed !== null && entry.id !== hero?.id),
   );
@@ -271,6 +313,16 @@
       </Card>
     </div>
   {/if}
+
+  {#if lastDismissed}
+    <div class="dismissal" role="status">
+      <span>{msg('games.recommendationDismissed', { title: lastDismissed.game.title })}</span>
+      <Button disabled={recommendationLoading} onclick={() => lastDismissed && dismissRecommendation(lastDismissed, false)}>{msg('games.recommendationUndo')}</Button>
+    </div>
+  {/if}
+  <RecommendationShelf title={msg('games.libraryRecommendationsTitle')} items={recommendations}
+    loading={recommendationLoading} emptyText={recommendationFailed ? msg('games.recommendationFallback') : msg($libraryGames.length ? 'games.recommendationLibraryNoEligible' : 'games.recommendationLibraryEmpty')}
+    ondismiss={(item) => void dismissRecommendation(item)} onplay={(id) => void toggleRun(id)} />
 
   {#if recentGames.length > 0}
     <section class="section">
@@ -401,6 +453,7 @@
 </Card>
 
 <style>
+  .dismissal { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-md); font-size: var(--font-sm); }
   .continue {
     margin-bottom: var(--space-8);
   }

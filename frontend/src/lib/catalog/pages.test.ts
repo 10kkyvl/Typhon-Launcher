@@ -210,3 +210,20 @@ describe('returning to a catalog snapshot', () => {
     expect(previous.map(g => g.id)).toEqual(['a', 'b']);
   });
 });
+
+describe('stable personalized browsing', () => {
+  it('keeps the visible order on a stale continuation until the user reloads', async () => {
+    const load = vi.fn();
+    const previous = [game('a')];
+    await expect(loadCatalogContinuation({ stable: true, page: 2, revision: 3 }, previous, load,
+      () => Promise.reject(changed()))).rejects.toThrow('catalog.changed');
+    expect(load).not.toHaveBeenCalled();
+    expect(previous.map((g) => g.id)).toEqual(['a']);
+  });
+  it('carries the first page personal snapshot through a rebuilt prefix', async () => {
+    const load = vi.fn().mockResolvedValueOnce({ ...fresh(1), snapshot: 'personal-snapshot' })
+      .mockResolvedValueOnce({ ...fresh(2), snapshot: 'personal-snapshot' });
+    await reloadCatalogPrefix({ pageSize: 1, snapshot: 'old' }, 2, load);
+    expect(load.mock.calls[1][0].snapshot).toBe('personal-snapshot');
+  });
+});

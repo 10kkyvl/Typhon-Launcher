@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List } from '@lucide/svelte';
+  import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { mergeCatalogDisplay } from '../../lib/catalog/display';
@@ -7,6 +7,9 @@
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
+  import { genreLabel, type Recommendation } from '../../lib/recommendations/display';
+  import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -45,18 +48,27 @@
     return hasMessage(code) ? msg(code) : fallback;
   }
 
-  type Sort = 'title' | 'year' | 'added';
+  type Sort = CatalogSort;
 
   const pageSize = 60;
   const allGenres = msg('games.filterAll');
   const sortLabels: Record<Sort, string> = {
     title: msg('games.sortAlpha'),
-    year: msg('games.catalogSortYear'),
-    added: msg('games.catalogSortAdded'),
+    year: msg('games.catalogSortNewest'),
+    popular: msg('games.catalogSortPopular'),
+    rating: msg('games.catalogSortRating'),
+    'for-you': msg('games.catalogSortForYou'),
+    auto: msg('games.catalogSortAuto'),
   };
 
   interface Snapshot {
+    preferenceKey: string;
+    personalizationFallback: boolean;
+    snapshot: string;
     sourceState: Source[] | undefined;
+    discovery: Recommendation[];
+    hideLibrary: boolean;
+    hideNotInterested: boolean;
     search: string;
     genre: string;
     sort: Sort;
@@ -78,10 +90,11 @@
   const restored = recallRoute<Snapshot>(routeKey, 'catalog');
 
   let sourceState = restored?.sourceState;
+  let snapshot = $state(restored?.snapshot ?? '');
 
   let search = $state(restored?.search ?? '');
   let genre = $state(restored?.genre ?? '');
-  let sort = $state<Sort>(restored?.sort ?? 'title');
+  let sort = $state<Sort>(restored?.sort ?? 'auto');
   let compatOnly = $state(restored?.compatOnly ?? false);
   // Бейдж и фильтр имеют смысл только там, где игры идут через CrossOver: на
   // Windows они запускаются нативно, и цифра «94% запускается» там ни о чём.
@@ -101,6 +114,26 @@
   let platform = $state(restored?.platform ?? "");
   let kind = $state(restored?.kind ?? "");
 
+  let preferenceKey = restored?.preferenceKey ?? '';
+  let preferences = $state(defaultPreferences());
+  let profile = $state(emptyProfile());
+  let hideLibrary = $state(restored?.hideLibrary ?? false);
+  let hideNotInterested = $state(restored?.hideNotInterested ?? true);
+  let discovery = $state<Recommendation[]>(restored?.discovery ?? []);
+  let discoveryLoading = $state(false);
+  let personalizationFallback = $state(restored?.personalizationFallback ?? false);
+  let lastDismissed = $state<{ id: string; title: string } | null>(null);
+  let preferenceBusy = $state(false);
+  let ready = $state(false);
+  let reloadToken = 0;
+  const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
+  const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
+
+  function personalQuery() {
+    return { stable: true, snapshot, hideLibrary, hideNotInterested,
+      excludeIds: discoveryVisible ? discovery.map((item) => item.game.id) : [] };
+  }
+
   let token = 0;
   let debounce: ReturnType<typeof setTimeout> | undefined;
   let identityRefreshKey = '';
@@ -113,9 +146,10 @@
   onDestroy(() => {
     clearTimeout(debounce);
     token++;
+    reloadToken++;
     stashRoute(routeKey, 'catalog', {
       revision, offline, incomplete, platform, kind, facets, platforms,
-      sourceState,
+      sourceState, snapshot, preferenceKey, personalizationFallback, discovery: [...discovery], hideLibrary, hideNotInterested,
       search,
       genre,
       sort,
@@ -166,6 +200,7 @@
     appending = next > 1;
     try {
       const request = {
+        ...personalQuery(),
         revision: next === 1 ? 0 : revision,
         search,
         genre, platform, kind,
@@ -191,10 +226,12 @@
       facets = result.facets ?? [];
       platforms = result.platforms ?? [];
       revision = result.revision ?? 0;
+      snapshot = result.snapshot ?? '';
+      if (result.personalizationFallback) personalizationFallback = true;
       offline = result.offline ?? false;
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
-        const upcoming = { ...request, page: page + 1, revision };
+        const upcoming = { ...request, page: page + 1, revision, snapshot };
         prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
       }
     } catch {
@@ -220,12 +257,85 @@
     }
   }
 
-  function reload() {
+  async function reload(refreshPicks = false) {
+    if (!ready) return;
+    const active = ++reloadToken;
+    token++;
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
+    loading = true;
+    items = [];
+    total = 0;
+    if (discoveryVisible) {
+      discoveryLoading = true;
+      try {
+        const result = await getDiscovery({ search, genre, platform, kind, sort,
+          compat: compatOnly ? compatOnlyWorking : '' }, refreshPicks ? discovery.map((item) => item.game.id) : []);
+        if (active !== reloadToken) return;
+        discovery = result.items;
+        personalizationFallback = result.fallback;
+      } catch {
+        if (active !== reloadToken) return;
+        discovery = [];
+        personalizationFallback = true;
+      } finally {
+        if (active === reloadToken) discoveryLoading = false;
+      }
+    } else {
+      discovery = [];
+      personalizationFallback = false;
+    }
+    if (active !== reloadToken) return;
     page = 0;
-    fetchPage(1);
+    await fetchPage(1);
+  }
+
+  function restoreChoices() {
+    sort = (preferences.defaultSort || 'auto') as Sort;
+    genre = preferences.genre;
+    platform = preferences.platform;
+    kind = preferences.kind;
+    compatOnly = preferences.compatOnly;
+    hideLibrary = preferences.hideLibrary;
+    hideNotInterested = preferences.hideNotInterested;
+  }
+
+  async function preferencesChanged() {
+    preferenceBusy = true;
+    try {
+      const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
+        platform, kind, compatOnly, hideLibrary, hideNotInterested };
+      await saveRecommendationPreferences(next);
+      preferences = next;
+      preferenceKey = JSON.stringify({ preferences, profile });
+      await reload();
+    } catch {
+      restoreChoices();
+      toast(msg('games.recommendationError'), 'danger');
+    } finally { preferenceBusy = false; }
+  }
+
+  function isDismissed(game: CatalogGame) {
+    return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
+  }
+
+  async function dismiss(game: CatalogGame, on = true) {
+    if (preferenceBusy) return;
+    preferenceBusy = true;
+    try {
+      await setNotInterested(game.id, on);
+      preferences = await getRecommendationPreferences();
+      lastDismissed = on ? { id: game.id, title: game.title } : null;
+      profile = await getRecommendationProfile();
+      await reload();
+    } catch { toast(msg('games.recommendationError'), 'danger'); }
+    finally { preferenceBusy = false; }
+  }
+
+  async function undoDismissal() {
+    if (!lastDismissed) return;
+    await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false);
   }
 
   async function refreshLoadedPrefix(validateSnapshot = false) {
@@ -239,7 +349,7 @@
     prefetch.clear();
     try {
       const request = {
-        revision, search, genre, platform, kind, sort,
+        ...personalQuery(), revision, search, genre, platform, kind, sort,
         compat: compatOnly ? compatOnlyWorking : '',
         page: targetPage, pageSize,
       };
@@ -256,11 +366,12 @@
       facets = prefix.result.facets ?? [];
       platforms = prefix.result.platforms ?? [];
       revision = prefix.result.revision ?? 0;
+      snapshot = prefix.result.snapshot ?? '';
       offline = prefix.result.offline ?? false;
       incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
         const upcoming = {
-          revision,
+          ...personalQuery(), revision,
           search,
           genre,
           platform,
@@ -303,24 +414,40 @@
   function onSort(value: Sort) {
     if (value === sort) return;
     sort = value;
-    reload();
+    void preferencesChanged();
   }
 
   function onGenre(label: string) {
     const value = label === allGenres ? '' : label;
     if (value === genre) return;
     genre = value;
-    reload();
+    void preferencesChanged();
   }
 
   function onCompatOnly() {
     compatOnly = !compatOnly;
-    reload();
+    void preferencesChanged();
   }
 
   onMount(() => {
-    if (!restored) reload();
-    else if (inWails && page > 0) void refreshLoadedPrefix(true);
+    let active = true;
+    void (async () => {
+      try {
+        const [saved, currentProfile] = await Promise.all([getRecommendationPreferences(), getRecommendationProfile()]);
+        if (!active) return;
+        preferences = saved;
+        profile = currentProfile;
+        restoreChoices();
+      } catch { personalizationFallback = true; }
+      if (!active) return;
+      ready = true;
+      const nextKey = JSON.stringify({ preferences, profile });
+      const reuse = restored && page > 0 && preferenceKey === nextKey;
+      preferenceKey = nextKey;
+      if (reuse) await refreshLoadedPrefix(true);
+      else await reload();
+    })();
+    return () => { active = false; ready = false; };
   });
 
   onMount(() => {
@@ -334,6 +461,12 @@
     try { compatRelevant = (await getAppInfo()).platform === 'darwin'; }
     catch { compatRelevant = false; }
   });
+
+  function catalogMeta(game: CatalogGame) {
+    const rating = game.rating != null && game.ratingCount != null && game.ratingCount > 0
+      ? msg('games.catalogRating', { rating: Math.round(game.rating), count: game.ratingCount }) : '';
+    return [game.developer, rating].filter(Boolean).join(' · ');
+  }
 
   function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
@@ -349,6 +482,11 @@
   async function toggleFavorite(libraryId: string, current: boolean) {
     try {
       await setFavorite(libraryId, !current);
+      if (sort === 'auto' || sort === 'for-you') {
+        try { profile = await getRecommendationProfile(); }
+        catch { personalizationFallback = true; }
+        await reload();
+      }
     } catch (err) {
       toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
     }
@@ -362,13 +500,15 @@
     <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
   </div>
 
-  <div class="filter-row">
+  <fieldset class="filter-row" disabled={preferenceBusy || !ready}>
     <div class="chips">
       {#each chips as label (label)}
         <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
-          {label}
+          {label === allGenres ? label : genreLabel(label)}
         </Chip>
       {/each}
+      <Chip variant="outline" selected={hideLibrary} onclick={() => { hideLibrary = !hideLibrary; void preferencesChanged(); }}>{msg('games.catalogHideLibrary')}</Chip>
+      <Chip variant="outline" selected={hideNotInterested} onclick={() => { hideNotInterested = !hideNotInterested; void preferencesChanged(); }}>{msg('games.catalogHideDismissed')}</Chip>
       {#if compatRelevant}
         <Chip
           variant="outline"
@@ -381,22 +521,20 @@
       {/if}
     </div>
     <div class="controls">
-      <Select bind:value={platform} width="20rem" onchange={reload}
+      <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
         options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
-      <Select bind:value={kind} width="13rem" onchange={reload}
-        options={[{id:'',label:msg('games.catalogGames')},{id:'DLC',label:'DLC'},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
+      <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
+        options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
       <DropdownMenu
         items={[
-          { id: 'title', label: sortLabels.title },
-          { id: 'year', label: sortLabels.year },
-          { id: 'added', label: sortLabels.added },
+          ...(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({ id, label: sortLabels[id] })),
         ]}
         onselect={(id) => onSort(id as Sort)}
       >
         {#snippet trigger({ open, toggle })}
           <button class="sort" class:open onclick={toggle}>
             <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-            {sortLabels[sort]}
+            {sortLabels[(effectiveSort || 'popular') as Sort]}
             <ChevronDown size="1.4rem" strokeWidth={1.8} />
           </button>
         {/snippet}
@@ -417,11 +555,22 @@
         {/snippet}
       </SegmentedControl>
     </div>
-  </div>
+  </fieldset>
 
   {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
   {:else if incomplete}<p class="muted" role="status">{msg('games.catalogIncomplete')}</p>{/if}
-  {#if failed || offline}<Button onclick={reload}>{msg('games.catalogRetry')}</Button>{/if}
+  {#if failed || offline}<Button onclick={() => void reload()}>{msg('games.catalogRetry')}</Button>{/if}
+
+  {#if lastDismissed}
+    <div class="dismissal" role="status"><span>{msg('games.recommendationDismissed', { title: lastDismissed.title })}</span>
+      <Button onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button></div>
+  {/if}
+  {#if personalizationFallback}<p class="muted" role="status">{msg('games.recommendationFallback')}</p>{/if}
+  {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
+  {#if discoveryVisible}
+    <RecommendationShelf title={msg('games.discoveryTitle')} items={discovery} loading={discoveryLoading || preferenceBusy}
+      emptyText={msg('games.recommendationEmpty')} onrefresh={() => void reload(true)} ondismiss={(item) => void dismiss(item.game)} />
+  {/if}
 
   {#if items.length === 0}
     {#if loading}
@@ -442,6 +591,8 @@
         title={msg('games.catalogUnavailableTitle')}
         description={msg('games.catalogUnavailableDescription')}
       />
+    {:else if discoveryVisible && discovery.length > 0}
+      <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>
     {:else if search.trim() || genre || platform || kind || compatOnly}
       <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
     {:else}
@@ -464,7 +615,7 @@
             cover={game.coverUrl || $gameArt[game.id]?.cover || ''}
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
-            meta={shown.developer ?? ''}
+            meta={catalogMeta(game)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
             onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
           >
@@ -476,8 +627,13 @@
                   <Download size="1.3rem" strokeWidth={1.8} />{msg('games.gameNotInstalledWord')}
                 {/if}
               </span>
+              <div class="actions">
+                <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+                  active={isDismissed(game)} size="sm" disabled={preferenceBusy}
+                  onclick={() => void dismiss(game, !isDismissed(game))}>
+                  {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+                </IconButton>
               {#if libId}
-                <div class="actions">
                   <IconButton
                     label={isFav ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
                     size="sm"
@@ -496,8 +652,8 @@
                   >
                     <EllipsisVertical size="1.5rem" strokeWidth={1.8} />
                   </IconButton>
-                </div>
               {/if}
+              </div>
             {/snippet}
           </GameCard>
         </div>
@@ -507,6 +663,7 @@
     <div class="list">
       {#each items as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
+        <div class="list-entry">
         <button
           class="list-row"
           onclick={() => navigate('game', { id: game.id })}
@@ -520,6 +677,10 @@
             {installedByGame.has(game.id) ? msg('games.gameInstalledWord') : msg('games.gameNotInstalledWord')}
           </span>
         </button>
+        <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+          active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
+          {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+        </IconButton></div>
       {/each}
     </div>
   {/if}
@@ -536,6 +697,11 @@
 </Card>
 
 <style>
+  .dismissal { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); font-size: var(--font-sm); }
+  .profile-hint { margin-bottom: var(--space-5); }
+  .list-entry { display: flex; align-items: center; }
+  .list-entry .list-row { flex: 1; min-width: 0; }
+
   .more-error { color: var(--danger); }
   .catalog-skeleton { margin-top: var(--space-4); }
   .loading-item { min-width: 0; }
@@ -554,6 +720,9 @@
   }
 
   .filter-row {
+    border: 0;
+    padding: 0;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -573,7 +742,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    flex-shrink: 0;
+    flex-shrink: 1;
+    flex-wrap: wrap;
   }
 
   .sort {
@@ -654,7 +824,7 @@
     transition: background var(--dur) var(--ease);
   }
 
-  .list-row + .list-row {
+  .list-entry + .list-entry {
     border-top: 1px solid var(--border);
   }
 

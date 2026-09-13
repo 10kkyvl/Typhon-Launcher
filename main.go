@@ -294,7 +294,7 @@ func main() {
 		items := make([]catalog.RecommendationLibraryItem, 0, len(games))
 		for _, game := range games {
 			items = append(items, catalog.RecommendationLibraryItem{
-				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID,
+				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID, Title: game.Title, Cover: game.Cover,
 				Favorite: game.Favorite, PlaytimeSeconds: game.PlaytimeSeconds,
 				Sessions: counts[game.ID], LastPlayed: game.LastPlayed,
 				Installed: !game.Uninstalled, Hidden: game.Archived,

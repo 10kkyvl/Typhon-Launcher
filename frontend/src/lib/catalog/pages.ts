@@ -77,7 +77,7 @@ export async function reloadCatalogPrefix(
       let offline = result.offline === true;
       for (let page = 2; page <= targetPage && items.length < result.total; page++) {
         if (!active()) throw new Error('catalog.refresh_cancelled');
-        const next = await load({ ...query, page, revision: result.revision ?? 0 });
+        const next = await load({ ...query, page, revision: result.revision ?? 0, snapshot: result.snapshot });
         items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
         compat = { ...compat, ...(next.compat ?? {}) };
         offline ||= next.offline === true;
@@ -146,14 +146,14 @@ export async function loadCatalogContinuation(
       : appendCatalogContinuation(previous, result, query.revision ?? 0, offline);
     return { result: { ...result, offline: result.offline || (query.page !== 1 && offline) }, items, refreshed: false };
   } catch (err) {
-    if (errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
+    if (query.stable || errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
     let result = await load({ ...query, page: 1, revision: 0 });
     let items = result.items;
     const compat = { ...result.compat };
     let offline = result.offline === true;
     for (let page = 2; page <= (query.page ?? 1) && items.length < result.total; page++) {
       if (!active()) throw err;
-      const next = await load({ ...query, page, revision: result.revision });
+      const next = await load({ ...query, page, revision: result.revision, snapshot: result.snapshot });
       items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
       Object.assign(compat, next.compat);
       offline ||= next.offline === true;

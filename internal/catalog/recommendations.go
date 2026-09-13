@@ -8,8 +8,11 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -90,6 +93,8 @@ var (
 // ranking and the launcher library. The catalog deliberately does not import
 // library: main wires this snapshot callback after both services start.
 type RecommendationLibraryItem struct {
+	Title           string     `json:"title,omitempty"`
+	Cover           string     `json:"cover,omitempty"`
 	LibraryID       string     `json:"libraryId,omitempty"`
 	CanonicalGameID string     `json:"canonicalGameId,omitempty"`
 	Favorite        bool       `json:"favorite,omitempty"`
@@ -170,14 +175,9 @@ type recommendationEvidence struct {
 }
 
 func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
-	games, p, source := s.recommendationSnapshot()
+	_, p, source := s.recommendationSnapshot()
 	if q.Sort == "for-you" && strings.TrimSpace(q.Profile) == "" {
-		profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(func() []RecommendationLibraryItem {
-			if source == nil {
-				return nil
-			}
-			return source()
-		}(), p)), p)
+		profile := s.GetRecommendationProfile()
 		weights := make(map[string]float64, len(profile.Genres))
 		maxWeight := 0.0
 		for _, facet := range profile.Genres {
@@ -203,11 +203,11 @@ func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
 		}{Genres: weights, Themes: themes, Strength: profile.Confidence})
 		q.Profile = string(payload)
 	}
+	ids := append([]string(nil), q.ExcludeIDs...)
 	if q.HideNotInterested {
-		ids := append([]string(nil), p.NotInterested...)
-		ids = append(ids, q.ExcludeIDs...)
-		q.ExcludeNotInterested = strings.Join(mergeIDs(ids), ",")
+		ids = append(ids, p.NotInterested...)
 	}
+	q.ExcludeNotInterested = strings.Join(s.remoteRecommendationIDs(ids), ",")
 	if q.HideLibrary && source != nil {
 		items := source()
 		ids := make([]string, 0, len(items))
@@ -216,7 +216,7 @@ func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
 				ids = append(ids, item.CanonicalGameID)
 			}
 		}
-		q.ExcludeLibrary = strings.Join(mergeIDs(ids), ",")
+		q.ExcludeLibrary = strings.Join(s.remoteRecommendationIDs(ids), ",")
 	}
 	return q
 }
@@ -300,6 +300,10 @@ func (s *Service) SaveRecommendationPreferences(p RecommendationPreferences) err
 		return errInvalidRecommendationSort
 	}
 	s.mu.Lock()
+	if s.recommendationLoadErr != nil {
+		s.mu.Unlock()
+		return uierr.Wrap("catalog.recommendation_save_failed", s.recommendationLoadErr)
+	}
 	previous := s.preferences
 	// Dismissals have their own mutation API. Keeping the stored list here
 	// prevents a stale preferences response from undoing a newer decision.
@@ -341,6 +345,11 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 		return errEmptyRecommendationID
 	}
 	s.mu.Lock()
+	if s.recommendationLoadErr != nil {
+		err := s.recommendationLoadErr
+		s.mu.Unlock()
+		return uierr.Wrap("catalog.recommendation_save_failed", err)
+	}
 	if canonical := s.recommendationCatalogIDLocked(gameID); canonical != "" {
 		gameID = canonical
 	}
@@ -390,12 +399,39 @@ func (s *Service) recommendationSnapshot() ([]Game, RecommendationPreferences, R
 	}
 	p := s.preferences
 	p.NotInterested = append([]string(nil), p.NotInterested...)
-	source := s.recommendationLibrary
+	original := s.recommendationLibrary
+	aliases := make(map[string]string, len(s.games)*2)
+	for _, g := range s.games {
+		aliases[g.ID] = s.resolveIDLocked(g.ID)
+		if g.ServerID != "" {
+			aliases[g.ServerID] = s.resolveIDLocked(g.ID)
+		}
+	}
+	for i, id := range p.NotInterested {
+		if canonical := aliases[id]; canonical != "" {
+			p.NotInterested[i] = canonical
+		}
+	}
 	s.mu.RUnlock()
+	var source RecommendationLibrarySource
+	if original != nil {
+		source = func() []RecommendationLibraryItem {
+			items := append([]RecommendationLibraryItem(nil), original()...)
+			for i := range items {
+				if id := aliases[items[i].CanonicalGameID]; id != "" {
+					items[i].CanonicalGameID = id
+				}
+			}
+			return items
+		}
+	}
 	return games, p, source
 }
 
 func (s *Service) GetRecommendationProfile() RecommendationProfile {
+	if s.recommendationLoadErr != nil {
+		return profileFromEvidence(recommendationEvidence{}, RecommendationPreferences{})
+	}
 	games, p, source := s.recommendationSnapshot()
 	items := []RecommendationLibraryItem(nil)
 	if source != nil {
@@ -424,7 +460,31 @@ func buildEvidence(games []Game, items []RecommendationLibraryItem) recommendati
 		byID[game.ID] = game
 	}
 	e := recommendationEvidence{Genres: map[string]float64{}, Themes: map[string]float64{}}
+	// Several releases or synced copies of one game are one preference signal.
+	// Maxima avoid multiplying counters copied between library entries.
+	unique := make(map[string]RecommendationLibraryItem, len(items))
 	for _, item := range items {
+		if item.Hidden {
+			continue
+		}
+		id := item.CanonicalGameID
+		if _, ok := byID[id]; !ok {
+			id = item.LibraryID
+		}
+		previous := unique[id]
+		item.CanonicalGameID = id
+		item.Favorite = item.Favorite || previous.Favorite
+		item.Sessions = max(item.Sessions, previous.Sessions)
+		item.PlaytimeSeconds = max(item.PlaytimeSeconds, previous.PlaytimeSeconds)
+		unique[id] = item
+	}
+	ids := make([]string, 0, len(unique))
+	for id := range unique {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		item := unique[id]
 		if item.Hidden {
 			continue
 		}
@@ -495,6 +555,9 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 		items = source()
 	}
 	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
+	if s.recommendationLoadErr != nil {
+		profile = profileFromEvidence(recommendationEvidence{}, p)
+	}
 	limit := q.Limit
 	if limit <= 0 || limit > maxDiscoveryItems {
 		limit = maxDiscoveryItems
@@ -518,33 +581,96 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	// Refresh exclusions must reach the backend before it chooses its first
 	// page. Applying them only to the returned page would make a refresh empty
 	// whenever the first remote page contained dismissed/owned titles.
+	remoteQuery.HideLibrary, remoteQuery.HideNotInterested = true, true
 	remoteQuery.ExcludeIDs = mergeIDs(remoteQuery.ExcludeIDs, q.RefreshExcludeIDs)
-	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, profile.DefaultSort)
+	sortName := "popular"
+	if profile.Confidence > 0 {
+		sortName = "for-you"
+	}
+	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, sortName, func(candidateGames []Game) bool {
+		candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
+		return len(diverseRecommendations(candidates, limit)) >= limit
+	})
 	if !remoteOK {
 		candidateGames = games
 	}
-	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery)
+	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 	selected := diverseRecommendations(candidates, limit)
-	return DiscoveryResult{Items: selected, Fallback: !remoteOK, Profile: profile}
+	// Prefer fresh picks, but retain enough existing eligible picks when there
+	// are fewer alternatives than shelf slots. Never show an empty refresh just
+	// because the eligible catalog has already been explored.
+	if len(selected) < limit && len(q.RefreshExcludeIDs) > 0 {
+		retry := q
+		retry.RefreshExcludeIDs = nil
+		old := s.GetDiscovery(retry)
+		used := map[string]bool{}
+		for _, item := range selected {
+			used[item.Game.ID] = true
+		}
+		for _, item := range old.Items {
+			if !used[item.Game.ID] {
+				selected = append(selected, item)
+				used[item.Game.ID] = true
+			}
+			if len(selected) == limit {
+				break
+			}
+		}
+	}
+	return DiscoveryResult{Items: selected, Fallback: !remoteOK || s.recommendationLoadErr != nil, Profile: profile}
 }
 
-func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string) ([]Game, bool) {
+func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string, enough func([]Game) bool) ([]Game, bool) {
 	q.Sort = sortName
 	q.Page = 1
 	q.PageSize = 60
 	page, err := s.BrowseGames(q)
-	if err != nil || page.Offline || len(page.Items) == 0 {
+	if err != nil || page.Offline {
 		return nil, false
 	}
-	return page.Items, true
+	items := append([]Game(nil), page.Items...)
+	for pageNumber := 2; pageNumber <= 3 && !enough(items) && len(page.Items) >= q.PageSize; pageNumber++ {
+		continuation := q
+		continuation.Page = pageNumber
+		continuation.Snapshot = page.Snapshot
+		continuation.Revision = page.Revision
+		continuation.PageSize = q.PageSize
+		next, nextErr := s.BrowseGames(continuation)
+		if nextErr != nil || next.Offline {
+			// The first page is still a valid, frozen result. Do not replace it
+			// with a different revision or turn a continuation failure into a
+			// general-catalog fallback.
+			break
+		}
+		items = append(items, next.Items...)
+		page = next
+	}
+	return items, true
 }
 
 func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) []RecommendationItem {
+	if s.recommendationLoadErr != nil {
+		return []RecommendationItem{}
+	}
 	games, p, source := s.recommendationSnapshot()
 	if source == nil {
 		return []RecommendationItem{}
 	}
 	items := source()
+	known := map[string]bool{}
+	for _, g := range games {
+		known[g.ID] = true
+	}
+	for _, item := range items {
+		id := item.CanonicalGameID
+		if id == "" {
+			id = item.LibraryID
+		}
+		if id != "" && !known[id] && item.Title != "" {
+			games = append(games, Game{ID: id, Title: item.Title, SortTitle: strings.ToLower(item.Title), CoverURL: item.Cover})
+			known[id] = true
+		}
+	}
 	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
 	excludeLibrary := make(map[string]bool, len(q.ExcludeLibraryIDs))
 	for _, id := range q.ExcludeLibraryIDs {
@@ -588,7 +714,7 @@ type rankedRecommendation struct {
 	genre string
 }
 
-func rankGames(games []Game, profile RecommendationProfile, library []RecommendationLibraryItem, p RecommendationPreferences, includeLibrary bool, blocked map[string]bool, q GameQuery) []rankedRecommendation {
+func rankGames(games []Game, profile RecommendationProfile, library []RecommendationLibraryItem, p RecommendationPreferences, includeLibrary bool, blocked map[string]bool, q GameQuery, references ...[]Game) []rankedRecommendation {
 	byID := map[string]RecommendationLibraryItem{}
 	for _, item := range library {
 		id := item.CanonicalGameID
@@ -609,16 +735,13 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 	}
 	result := make([]rankedRecommendation, 0, len(games))
 	for _, game := range games {
-		if blocked[game.ID] || game.GameType != "" && isAddonType(game.GameType) {
+		if blocked[game.ID] || !contentKindMatches(q.Kind, game.GameType) {
 			continue
 		}
 		if q.Genre != "" && !genreMatches(game.Genres, q.Genre) {
 			continue
 		}
 		if q.Platform != "" && !containsFold(game.Platforms, q.Platform) {
-			continue
-		}
-		if q.Kind != "" && !strings.EqualFold(strings.TrimSpace(q.Kind), "all") && !strings.EqualFold(strings.TrimSpace(game.GameType), strings.TrimSpace(q.Kind)) {
 			continue
 		}
 		item, inLibrary := byID[game.ID]
@@ -642,12 +765,16 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 			continue
 		}
 		if reason == "similar" {
-			title = similarReference(game, games, library)
+			referenceGames := games
+			if len(references) > 0 {
+				referenceGames = references[0]
+			}
+			title = similarReference(game, referenceGames, library)
 			if title == "" {
 				continue
 			}
 		}
-		result = append(result, rankedRecommendation{RecommendationItem: RecommendationItem{Game: game, LibraryID: item.LibraryID, Reason: reason, ReasonTitle: title, ReasonGenre: reasonGenre}, score: score, genre: reasonGenre})
+		result = append(result, rankedRecommendation{RecommendationItem: RecommendationItem{Game: game, LibraryID: item.LibraryID, Reason: reason, ReasonTitle: title, ReasonGenre: reasonGenre}, score: score, genre: recommendationPrimaryGenre(game, reasonGenre)})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].score != result[j].score {
@@ -723,7 +850,13 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 		if item.LastPlayed != nil && time.Since(*item.LastPlayed) > time.Duration(recommendationConfig.ReturnDays)*24*time.Hour && hasReturnSignal(game, item, genres, themes) {
 			return score + 0.04, "return", "", bestGenre
 		}
+		if item.Favorite {
+			return score, "favorite", "", bestGenre
+		}
 		return score, "similar", "", bestGenre
+	}
+	if themeScore > 0 && bestGenre == "" {
+		return score, "similar", "", ""
 	}
 	if bestGenre != "" && genreScore > 0 {
 		return score, "genre", "", bestGenre
@@ -824,7 +957,47 @@ func popularityScore(game Game) float64 {
 
 func isAddonType(kind string) bool {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "dlc", "demo", "soundtrack", "expansion", "addon", "add-on":
+	case "dlc", "dlc / addon", "demo", "soundtrack", "music", "expansion", "addon", "add-on", "bundle", "edition":
+		return true
+	default:
+		return false
+	}
+}
+
+// contentKindMatches mirrors the backend catalog groups. Empty and "game"
+// hide known non-game/add-on types while retaining records with an unknown
+// type. "all" includes known add-ons, but still omits software-like records
+// which are not game catalog content.
+func contentKindMatches(filter, gameType string) bool {
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	kind := strings.ToLower(strings.TrimSpace(gameType))
+	switch filter {
+	case "", "game":
+		return !isKnownCatalogExcludedType(kind)
+	case "all":
+		return !isNonGameType(kind)
+	case "dlc":
+		return kind == "dlc" || kind == "dlc / addon" || kind == "expansion"
+	case "demo":
+		return kind == "demo"
+	case "soundtrack":
+		return kind == "soundtrack" || kind == "music"
+	case "bundle":
+		return kind == "bundle"
+	case "edition":
+		return kind == "edition"
+	default:
+		return kind == filter
+	}
+}
+
+func isKnownCatalogExcludedType(kind string) bool {
+	return isAddonType(kind) || isNonGameType(kind)
+}
+
+func isNonGameType(kind string) bool {
+	switch kind {
+	case "software", "application", "video", "hardware", "tool", "mod":
 		return true
 	default:
 		return false
@@ -866,4 +1039,44 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func recommendationPrimaryGenre(game Game, preferred string) string {
+	if preferred != "" {
+		return preferred
+	}
+	if len(game.Genres) > 0 {
+		return game.Genres[0]
+	}
+	return ""
+}
+
+// Exclusions use canonical remote identities or explicit provider evidence.
+// A local file-only game without either cannot be present in the public catalog.
+func (s *Service) remoteRecommendationIDs(ids []string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		resolved := s.resolveIDLocked(id)
+		g, ok := s.idx.game(resolved)
+		if ok {
+			if server, err := uuid.Parse(g.ServerID); err == nil {
+				out = append(out, server.String())
+				continue
+			}
+			if value, err := strconv.ParseInt(g.ExternalIDs.IGDB, 10, 64); err == nil && value > 0 {
+				out = append(out, "igdb:"+strconv.FormatInt(value, 10))
+				continue
+			}
+			if value, err := strconv.ParseInt(g.ExternalIDs.Steam, 10, 64); err == nil && value > 0 {
+				out = append(out, "steam:"+strconv.FormatInt(value, 10))
+				continue
+			}
+		}
+		if parsed, err := uuid.Parse(resolved); err == nil {
+			out = append(out, parsed.String())
+		}
+	}
+	return mergeIDs(out)
 }

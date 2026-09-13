@@ -2,6 +2,9 @@ import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
 
 export const REASONS: Record<string, MessageKey> = {
+  'catalog.invalid_recommendation_sort': 'games.recommendationError',
+  'catalog.empty_recommendation_id': 'games.recommendationError',
+  'catalog.recommendation_save_failed': 'games.recommendationError',
   'catalog.game_not_found': 'errMetadata.catalogGameNotFound',
   'catalog.no_igdb_id': 'errMetadata.catalogNoIgdbId',
   'catalog.no_title': 'errMetadata.catalogNoTitle',

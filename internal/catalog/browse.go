@@ -26,6 +26,7 @@ var genreGroups = []struct {
 }
 
 type GameQuery struct {
+	Snapshot             string   `json:"snapshot,omitempty"`
 	Platform             string   `json:"platform"`
 	Kind                 string   `json:"kind"`
 	Revision             int64    `json:"revision"`
@@ -63,13 +64,15 @@ type IndexStatus struct {
 	Records   int64            `json:"records"`
 }
 type GamePage struct {
-	Facets    []GenreFacet  `json:"facets"`
-	Platforms []GenreFacet  `json:"platforms"`
-	Offline   bool          `json:"offline"`
-	CachedAt  time.Time     `json:"cachedAt"`
-	Revision  int64         `json:"revision"`
-	Providers []IndexStatus `json:"providers"`
-	Items     []Game        `json:"items"`
+	PersonalizationFallback bool          `json:"personalizationFallback,omitempty"`
+	Snapshot                string        `json:"snapshot,omitempty"`
+	Facets                  []GenreFacet  `json:"facets"`
+	Platforms               []GenreFacet  `json:"platforms"`
+	Offline                 bool          `json:"offline"`
+	CachedAt                time.Time     `json:"cachedAt"`
+	Revision                int64         `json:"revision"`
+	Providers               []IndexStatus `json:"providers"`
+	Items                   []Game        `json:"items"`
 	// Compat отдаётся отдельной картой, а не полем Game: общая статистика
 	// приходит с сервера и меняется сама по себе, а Game лежит на диске.
 	Compat   map[string]CompatInfo `json:"compat,omitempty"`

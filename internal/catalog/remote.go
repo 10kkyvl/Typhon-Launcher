@@ -39,7 +39,13 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 // BrowseGames is the public catalog. Local games are a personal/cache store,
 // never the membership source for a successful online response.
 func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
-	q = s.enrichRecommendationQuery(q)
+	var prepareErr error
+	q, prepareErr = s.prepareBrowseSnapshot(q)
+	if prepareErr != nil {
+		return GamePage{}, prepareErr
+	}
+	snapshot := q.Snapshot
+	q.Snapshot = ""
 	s.mu.RLock()
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)
@@ -60,6 +66,26 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	} else {
 		page, err = remote.Browse(ctx, q)
 	}
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) {
+		fallback := q
+		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
+		// A failed personalized source must still allow a general first page.
+		// Preserve exclusions and filters, and pin the fallback for continuations.
+		//nolint:forbidigo // Independent bounded retry after the first RPC deadline.
+		fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
+		fallbackCancel()
+		if fallbackErr == nil {
+			page, err = fallbackPage, nil
+			page.PersonalizationFallback = true
+			s.mu.Lock()
+			if snap, ok := s.browseSnapshots[snapshot]; ok {
+				snap.query.Sort, snap.query.Profile = "popular", ""
+				s.browseSnapshots[snapshot] = snap
+			}
+			s.mu.Unlock()
+		}
+	}
 	if err != nil {
 		if errors.Is(err, ErrCatalogChanged) {
 			return GamePage{}, uierr.Wrap("catalog.changed", err)
@@ -70,6 +96,8 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		}
 		page.Offline = true
 		s.normalizeCachedPage(&page)
+		page.Snapshot = snapshot
+		page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 		return page, nil
 	}
 	s.mu.Lock()
@@ -129,6 +157,8 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		return GamePage{}, err
 	}
 	pruneCatalogPageCache(filepath.Dir(path), page.CachedAt)
+	page.Snapshot = snapshot
+	page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 	return page, nil
 }
 

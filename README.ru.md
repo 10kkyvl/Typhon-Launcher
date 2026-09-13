@@ -235,3 +235,5 @@ cmd/signrelease    подписывает манифест обновления 
 - [`typhon-site`](https://github.com/10kkyvl/typhon-site) — сайт и страница загрузки
 
 </details>
+
+Правила рекомендаций, источники данных и ограничения первой версии описаны в [RECOMMENDATIONS.md](RECOMMENDATIONS.md).
