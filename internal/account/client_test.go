@@ -67,6 +67,63 @@ func TestClientMe(t *testing.T) {
 	}
 }
 
+func TestClientUploadCoverReturnsOwnedURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != APIPrefix+"/me/cover" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeJSON(t, w, http.StatusOK, CoverUpload{CoverURL: "https://cdn.test/profile-covers/u/file.webp"})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	got, err := c.UploadCover(context.Background(), []byte("RIFFxxxxWEBP"))
+	if err != nil {
+		t.Fatalf("UploadCover() error = %v", err)
+	}
+	if got.CoverURL == "" {
+		t.Fatal("UploadCover() returned an empty URL")
+	}
+}
+
+func TestClientUploadCoverOversizedRejectedLocally(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	_, err := c.UploadCover(context.Background(), make([]byte, maxCoverSize+1))
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeCoverTooLarge {
+		t.Fatalf("error = %v, want %q", err, CodeCoverTooLarge)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want local rejection", requests)
+	}
+}
+
+func TestClientUploadCoverMapsServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusUnsupportedMediaType, map[string]any{
+			"error": map[string]string{"code": CodeUnsupportedCover, "field": "cover", "message": "unsupported"},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	_, err := c.UploadCover(context.Background(), []byte("cover"))
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeUnsupportedCover || apiErr.Field != "cover" {
+		t.Fatalf("error = %+v, want unsupported cover field", err)
+	}
+}
+
 func TestClientMeOldStyleProfileReplyGetsNewDefaults(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -97,6 +154,9 @@ func TestClientMeOldStyleProfileReplyGetsNewDefaults(t *testing.T) {
 	}
 	if user.Profile.ShowStats {
 		t.Errorf("profile = %+v, want showStats to keep the server's value (false)", user.Profile)
+	}
+	if user.Profile.Appearance != DefaultProfileAppearance() {
+		t.Errorf("appearance = %+v, want defaults for a legacy response", user.Profile.Appearance)
 	}
 }
 

@@ -132,6 +132,30 @@ func TestLoadProfileAppliesDefaultsToOldStyleProfileCache(t *testing.T) {
 	}
 }
 
+func TestLoadProfilePreservesAppearanceWhenLegacyShowcaseIsMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user": map[string]any{
+			"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com",
+			"profile": map[string]any{
+				"appearance": map[string]any{
+					"theme": "orbital", "accent": "#123456", "coverUrl": "https://cdn.test/profile-covers/u1/a.webp", "coverDim": 0, "coverPosition": 0,
+				},
+			},
+		},
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.User.Profile.Appearance.Theme != "orbital" || loaded.User.Profile.Appearance.CoverURL == "" || loaded.User.Profile.Appearance.CoverDim != 0 || loaded.User.Profile.Appearance.CoverPosition != 0 {
+		t.Fatalf("appearance = %+v, want legacy appearance preserved", loaded.User.Profile.Appearance)
+	}
+}
+
 func TestNewServiceFailsOnCorruptProfileCache(t *testing.T) {
 	path := statePathFor(t)
 	profPath := profilePathFrom(path)

@@ -21,6 +21,7 @@ import (
 const (
 	maxResponseBodySize = 1 << 20
 	maxAvatarSize       = 10 << 20
+	maxCoverSize        = 8 << 20
 	maxRedirects        = 5
 )
 
@@ -33,6 +34,10 @@ type CurrentUser struct {
 	Bio         string          `json:"bio"`
 	Profile     ProfileSettings `json:"profile"`
 	CreatedAt   time.Time       `json:"createdAt"`
+}
+
+type CoverUpload struct {
+	CoverURL string `json:"coverUrl"`
 }
 
 type Patch struct {
@@ -132,6 +137,40 @@ func (c *Client) UploadAvatar(ctx context.Context, data []byte, crop AvatarCrop)
 		path += "?" + query.Encode()
 	}
 	return c.doUser(ctx, http.MethodPut, path, bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+}
+
+func (c *Client) UploadCover(ctx context.Context, data []byte) (CoverUpload, error) {
+	if len(data) == 0 {
+		return CoverUpload{}, &Error{Code: CodeInvalidCover}
+	}
+	if len(data) > maxCoverSize {
+		return CoverUpload{}, &Error{Code: CodeCoverTooLarge}
+	}
+	return c.doCover(ctx, http.MethodPut, APIPrefix+"/me/cover", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+}
+
+func (c *Client) doCover(ctx context.Context, method, path string, body io.Reader, contentType string, hc *http.Client) (CoverUpload, error) {
+	tok, err := c.resolveToken()
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	resp, err := c.do(ctx, method, path, body, contentType, hc, tok)
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	defer closeBody(resp)
+	limited := io.LimitReader(resp.Body, maxResponseBodySize)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return CoverUpload{}, decodeError(resp.StatusCode, limited)
+	}
+	var result CoverUpload
+	if err := json.NewDecoder(limited).Decode(&result); err != nil || result.CoverURL == "" {
+		if err == nil {
+			err = errors.New("empty cover url")
+		}
+		return CoverUpload{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("decode cover response: %w", err)}
+	}
+	return result, nil
 }
 
 func (c *Client) RemoveAvatar(ctx context.Context) (CurrentUser, error) {
