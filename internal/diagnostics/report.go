@@ -18,6 +18,7 @@ type Report struct {
 	Stack      string
 	Timestamp  time.Time
 	Fatal      bool
+	Details    *Details
 }
 
 // The wire shape mirrors the telemetry batch: identity is carried once on the
@@ -36,6 +37,7 @@ type reportPayload struct {
 	Stack      string    `json:"stack"`
 	Timestamp  time.Time `json:"timestamp"`
 	Fatal      bool      `json:"fatal"`
+	Details    *Details  `json:"details,omitempty"`
 }
 
 type batchPayload struct {

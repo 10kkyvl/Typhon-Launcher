@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"typhon/internal/redact"
 	"typhon/internal/uierr"
@@ -84,7 +85,17 @@ func acceptableContentType(ct string) bool {
 	return false
 }
 
-func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditional) (Result, error) {
+func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditional) (result Result, err error) {
+	stage, status := "validate_url", 0
+	defer func() {
+		if err != nil {
+			var timeout time.Duration
+			if client != nil {
+				timeout = client.Timeout
+			}
+			err = &operationError{err: err, stage: stage, status: status, timeout: timeout}
+		}
+	}()
 	normalized, err := ValidateURL(raw)
 	if err != nil {
 		return Result{}, err
@@ -107,6 +118,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		req.Header.Set("If-Modified-Since", cond.LastModified)
 	}
 
+	stage = "http_request"
 	resp, err := client.Do(req)
 	if err != nil {
 		return Result{}, fmt.Errorf("ошибка запроса фида: %w", redact.Error(err))
@@ -120,6 +132,8 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		}
 	}()
 
+	status = resp.StatusCode
+	stage = "http_response"
 	etag := resp.Header.Get("ETag")
 	lastMod := resp.Header.Get("Last-Modified")
 
@@ -149,6 +163,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		return Result{}, ErrTooLarge
 	}
 
+	stage = "read_response"
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBytes+1))
 	if err != nil {
 		return Result{}, fmt.Errorf("ошибка чтения тела ответа: %w", err)
@@ -157,6 +172,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		return Result{}, ErrTooLarge
 	}
 
+	stage = "parse_feed"
 	parsed, err := Parse(body)
 	if err != nil {
 		return Result{}, err

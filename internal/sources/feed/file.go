@@ -29,21 +29,33 @@ func ValidatePath(raw string) (string, error) {
 	return filepath.Clean(trimmed), nil
 }
 
-func ReadFile(ctx context.Context, raw string) (Result, error) {
+func ReadFile(ctx context.Context, raw string) (result Result, err error) {
+	stage := "validate_path"
+	defer func() {
+		if err != nil {
+			if _, ok := err.(*operationError); !ok {
+				err = &operationError{err: err, stage: stage}
+			}
+		}
+	}()
 	path, err := ValidatePath(raw)
 	if err != nil {
 		return Result{}, err
 	}
+	stage = "check_context"
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 
+	stage = "open_file"
 	f, err := os.Open(path)
 	if err != nil {
 		return Result{}, fmt.Errorf("не удалось открыть файл фида: %w", err)
 	}
-	result, err := readFeedFile(ctx, f)
+	stage = "read_file"
+	result, err = readFeedFile(ctx, f)
 	if closeErr := f.Close(); closeErr != nil && err == nil {
+		stage = "close_file"
 		return Result{}, fmt.Errorf("не удалось закрыть файл фида: %w", closeErr)
 	}
 	if err != nil {
@@ -79,7 +91,7 @@ func readFeedFile(ctx context.Context, f *os.File) (Result, error) {
 
 	parsed, err := Parse(body)
 	if err != nil {
-		return Result{}, err
+		return Result{}, &operationError{err: err, stage: "parse_feed"}
 	}
 	return Result{Feed: parsed, Bytes: int64(len(body))}, nil
 }

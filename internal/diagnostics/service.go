@@ -58,6 +58,7 @@ type Service struct {
 	logUploadMu         sync.Mutex
 	lastDeliveryWarning time.Time
 	queue               []reportPayload
+	breadcrumbs         []Breadcrumb
 	disabled            bool
 	rateWindowStart     time.Time
 	rateCount           int
@@ -134,6 +135,15 @@ func (s *Service) ServiceShutdown() error {
 		cancel()
 	}
 	s.wg.Wait()
+	// The worker can select cancellation while errors are still buffered.
+	// Preserve those final errors before flushing the shutdown batch.
+	for remaining := len(s.logEvents); remaining > 0; remaining-- {
+		select {
+		case e := <-s.logEvents:
+			s.captureEvent(e, false)
+		default:
+		}
+	}
 
 	// ctx сервиса уже отменён; финальный флаш — best-effort с коротким
 	// собственным таймаутом, чтобы не блокировать остановку приложения.
@@ -153,6 +163,7 @@ func (s *Service) SetEnabled(on bool) {
 	dir := s.pendingDir
 	if !on {
 		s.queue = nil
+		s.breadcrumbs = nil
 		s.seen = map[string]time.Time{}
 		s.rateCount = 0
 	}
@@ -174,7 +185,7 @@ func (s *Service) Capture(component, operation string, err error, fatal bool) {
 	if err == nil {
 		return
 	}
-	s.capture(component, operation, err.Error(), string(debug.Stack()), diagnosticCode(err), fatal)
+	s.captureWithFields(component, operation, err.Error(), string(debug.Stack()), diagnosticCode(err), fatal, errorContext(err))
 }
 
 // CapturePanic builds a Fatal report from a recovered panic value and its
@@ -198,11 +209,24 @@ func (s *Service) ReportClientError(component, operation, message, stack string,
 }
 
 func (s *Service) capture(component, operation, message, stack, errorCode string, fatal bool) {
+	s.captureWithFields(component, operation, message, stack, errorCode, fatal, nil)
+}
+
+func (s *Service) captureWithFields(component, operation, message, stack, errorCode string, fatal bool, fields map[string]string) {
+	at := time.Now()
+	s.mu.Lock()
+	epoch := s.consentEpoch
+	details := s.detailsLocked(component, at, fields)
+	s.mu.Unlock()
+	s.captureEvent(capturedLog{epoch: epoch, component: component, operation: operation, message: message, stack: stack, code: errorCode, at: at, details: details}, fatal)
+}
+
+func (s *Service) captureEvent(e capturedLog, fatal bool) {
 	if !s.enabled() {
 		return
 	}
 	s.mu.Lock()
-	disabled := s.disabled
+	disabled := s.disabled || s.consentEpoch != e.epoch
 	s.mu.Unlock()
 	if disabled {
 		return
@@ -219,31 +243,39 @@ func (s *Service) capture(component, operation, message, stack, errorCode string
 		AppVersion: app.Version,
 		OS:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
-		Component:  component,
-		Operation:  operation,
-		ErrorCode:  errorCode,
-		Message:    message,
-		Stack:      stack,
-		Timestamp:  time.Now(),
+		Component:  e.component,
+		Operation:  e.operation,
+		ErrorCode:  e.code,
+		Message:    e.message,
+		Stack:      e.stack,
+		Timestamp:  e.at,
+		Details:    e.details,
 		Fatal:      fatal,
 	}
 
 	sanitized, err := sanitizeReport(report)
 	if err != nil {
-		slog.Warn("diagnostics: report dropped", "component", component, "operation", operation, "error", err)
+		slog.Warn("diagnostics: report dropped", "component", e.component, "operation", e.operation, "error", err)
 		return
 	}
 
 	fingerprint := Fingerprint(sanitized.ErrorCode, sanitized.Component, sanitized.Stack)
-	s.enqueue(toPayload(sanitized), fingerprint)
+	s.enqueueEpoch(toPayload(sanitized), fingerprint, e.epoch)
 }
 
 func (s *Service) enqueue(rp reportPayload, fingerprint string) {
 	s.mu.Lock()
+	epoch := s.consentEpoch
+	s.mu.Unlock()
+	s.enqueueEpoch(rp, fingerprint, epoch)
+}
+
+func (s *Service) enqueueEpoch(rp reportPayload, fingerprint string, epoch uint64) {
+	s.mu.Lock()
 	// capture() read the flag before sanitizing, which takes long enough for
 	// an opt-out to land in between. Re-check it now that the lock is held
 	// for the write itself.
-	if s.disabled {
+	if s.disabled || s.consentEpoch != epoch {
 		s.mu.Unlock()
 		return
 	}

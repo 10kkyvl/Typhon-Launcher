@@ -56,6 +56,7 @@ func sanitizeReport(r Report) (out Report, err error) {
 	r.Operation = capText(stripControl(operation), maxOperationLen)
 	r.Message = redact.Message(stripControl(message))
 	r.Stack = redact.Stack(stripControl(stack))
+	r.Details = sanitizeDetails(r.Details)
 	return r, nil
 }
 
