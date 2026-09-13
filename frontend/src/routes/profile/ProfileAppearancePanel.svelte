@@ -1,5 +1,8 @@
 <script lang="ts">
   import '../../styles/zoom-slider.css';
+  import ColorPalette from '../../lib/components/ColorPalette.svelte';
+  import HexColorField from '../../lib/components/HexColorField.svelte';
+  import { validAccent } from '../../lib/theme/accent';
   import BannerCropModal from '../../lib/components/BannerCropModal.svelte';
   import { ArrowDown, ArrowUp, Upload, X, RotateCcw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
@@ -22,6 +25,10 @@
   let draft = $state<ProfileSettings>(initial());
   let appearance = $state(initial().appearance);
   let selectedImage = $state<AvatarImage | null>(null);
+  let customAccent = $state(false);
+  let accentDraft = $state(initial().appearance.accent);
+  $effect(() => { accentDraft = appearance.accent; });
+  function selectAccent(value: string) { accentDraft = value; if (validAccent(value)) appearance.accent = value; }
   let cropOpen = $state(false);
   let cropSource = $state('');
   let originalSource = $state('');
@@ -81,7 +88,7 @@
     draft.showcase = next;
   }
   async function save() {
-    if (disabled || owner !== $currentUser?.id) return;
+    if (disabled || !validAccent(accentDraft) || owner !== $currentUser?.id) return;
     busy = true; error = '';
     try {
       let coverUrl = appearance.coverUrl;
@@ -129,10 +136,13 @@
       <h3>{msg('profile.accent')}</h3>
       <div class="accents">
         {#each PROFILE_ACCENTS as color}
-          <button class="color" style:background={color} class:selected={appearance.accent === color} aria-label={`${msg('profile.accent')} ${color}`} aria-pressed={appearance.accent === color} onclick={() => (appearance.accent = color)}></button>
+          <button class="color" style:background={color} class:selected={appearance.accent.toLowerCase() === color} aria-label={`${msg('profile.accent')} ${color}`} aria-pressed={appearance.accent.toLowerCase() === color} onclick={() => selectAccent(color)}></button>
         {/each}
-        <input type="color" aria-label={msg('profile.accent')} bind:value={appearance.accent} />
+        <Button size="sm" onclick={() => (customAccent = !customAccent)}>{msg('settings.accentCustom')}</Button>
       </div>
+      {#if customAccent}<ColorPalette value={appearance.accent} onchange={selectAccent} {disabled} />{/if}
+      <div class="hex"><HexColorField value={accentDraft} onchange={selectAccent} {disabled} /></div>
+      {#if !validAccent(accentDraft)}<p class="hint">{msg('settings.accentInvalid')}</p>{/if}
       <label class="slider"><span>{msg('profile.dim')} <output>{appearance.coverDim}%</output></span><input class="zoom-slider" style:--zoom-progress={`${appearance.coverDim}%`} type="range" aria-label={msg('profile.dim')} min="0" max="100" bind:value={appearance.coverDim} /></label>
     </section>
     <section>
@@ -155,7 +165,7 @@
   <div class="foot">
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if busy || reading}<p class="hint" role="status">{reading || selectedImage ? msg('profile.uploading') : msg('social.saving')}</p>{/if}
-    <Button variant="primary" disabled={disabled} onclick={save}>{busy ? msg('social.saving') : msg('common.save')}</Button>
+    <Button variant="primary" disabled={disabled || !validAccent(accentDraft)} onclick={save}>{busy ? msg('social.saving') : msg('common.save')}</Button>
     <Button variant="ghost" disabled={busy} onclick={onclose}>{msg('common.cancel')}</Button>
   </div>
 </aside>
@@ -176,7 +186,7 @@
   .selected { outline: 2px solid var(--accent); outline-offset: 1px; }
   .file { display: none; } .accents { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
   .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0; cursor: pointer; }
-  input[type=color] { width: 2.8rem; height: 2.8rem; border: 1px solid var(--border); background: transparent; padding: 0; cursor: pointer; }
+  .hex { margin-top: 1.2rem; }
   .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
   .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
   .showcase-row { display: flex; gap: .3rem; align-items: center; min-height: 4rem; font-size: var(--font-xs); }
