@@ -3,7 +3,6 @@
   import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
@@ -27,6 +26,7 @@
     showPlaying,
     showStats,
     onsettings,
+    onappearance,
   }: {
     running: GameRef[];
     stats: ProfileStatsData;
@@ -34,6 +34,7 @@
     showPlaying: boolean;
     showStats: boolean;
     onsettings: () => void;
+    onappearance: () => void;
   } = $props();
 
   const BIO_LIMIT = 150;
@@ -64,7 +65,7 @@
 
   const menuItems = $derived<MenuItem[]>([
     { id: 'edit', label: msg('social.editProfileLabel') },
-    { id: 'settings', label: msg('social.profileSettingsTitle') },
+    { id: 'settings', label: msg('profile.privacy') },
     { id: 'signout', label: busy ? msg('social.signingOut') : msg('social.signOutLabel'), danger: true, separator: true },
   ]);
 
@@ -126,7 +127,7 @@
 </script>
 
 <section class="profile-header">
-  <Card>
+  <div class="header-surface">
     <div class="head">
       <Avatar
         size="lg"
@@ -177,6 +178,7 @@
               {msg('social.createAccountButton')}
             </Button>
           {:else}
+            <Button onclick={onappearance}>{msg('profile.appearance')}</Button>
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
@@ -242,18 +244,20 @@
         </Button>
       </div>
     {/if}
-  </Card>
+  </div>
 </section>
 
 <style>
+  .header-surface { padding: 0 0 2rem; position: relative; }
   .profile-header {
+    container-type: inline-size;
     display: block;
     margin-bottom: var(--space-6);
   }
 
   .head {
     display: flex;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: var(--space-5);
   }
 
@@ -426,14 +430,17 @@
     margin-right: auto;
   }
 
-  @media (max-width: 1200px) {
+  @container (max-width: 900px) {
     .head {
       flex-wrap: wrap;
     }
 
     .right {
-      align-items: flex-start;
+      align-items: center;
+      flex-direction: row;
+      justify-content: space-between;
       width: 100%;
+      flex-wrap: wrap;
     }
   }
 </style>

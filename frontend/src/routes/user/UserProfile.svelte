@@ -1,5 +1,7 @@
 <script lang="ts">
   import { LogIn, UserRound } from '@lucide/svelte';
+  import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
+  import ProfileCover from '../../lib/components/ProfileCover.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -20,6 +22,7 @@
     unfriend,
   } from '../../lib/services/social';
   import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { showcaseLabel } from '../../lib/profile/view';
   import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
@@ -52,7 +55,6 @@
   const common = $derived(data && !closed && data.common && data.common.count > 0 ? data.common : null);
   const recent = $derived(data && !closed ? data.recentlyPlayed : []);
   const activity = $derived(data && !closed ? data.recentActivity : []);
-  const favorites = $derived(data && !closed ? data.favorites : []);
   const mutual = $derived(data && !closed && data.mutualCount > 0 ? data.mutualFriends : []);
 
   const presenceGame = $derived.by(() => {
@@ -221,6 +223,8 @@
   </EmptyState>
 {:else if data}
   <div class="profile" class:refreshing>
+    <ProfileCanvas appearance={data.appearance}>
+    <ProfileCover appearance={data.appearance} />
     <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
     {#if closed}
       <p class="muted note">{msg('social.userProfileClosed')}</p>
@@ -229,6 +233,9 @@
     {:else}
       <div class="columns">
         <div class="main">
+          {#each data.showcase ?? [] as block (block.kind)}
+            <UserCovers title={showcaseLabel(block.kind)} games={block.games} hearts={block.kind === 'favorites'} />
+          {/each}
           {#if recent.length > 0}
             <UserRecent games={recent} />
           {/if}
@@ -240,9 +247,6 @@
               {#if activity.length > 0}
                 <UserActivity items={activity} />
               {/if}
-            </div>
-            <div class="pair-right">
-              <UserCovers title={msg('social.favoriteGamesTitle')} games={favorites} hearts />
             </div>
           </div>
         </div>
@@ -269,6 +273,7 @@
         </div>
       </div>
     {/if}
+    </ProfileCanvas>
   </div>
 {/if}
 
@@ -312,13 +317,12 @@
 
   .pair {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: var(--space-6);
     align-items: start;
   }
 
-  .pair-left,
-  .pair-right {
+  .pair-left {
     display: contents;
   }
 

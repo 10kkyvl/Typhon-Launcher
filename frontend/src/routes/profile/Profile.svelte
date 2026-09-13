@@ -3,7 +3,7 @@
   import Card from '../../lib/components/Card.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import { DEFAULT_PROFILE } from '../../lib/services/account';
+  import { type ProfileSettings, DEFAULT_PROFILE } from '../../lib/services/account';
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -17,10 +17,22 @@
   import ProfileSettingsModal from './ProfileSettingsModal.svelte';
   import ProfileShowcase from './ProfileShowcase.svelte';
 
+  import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
+  import ProfileCover from '../../lib/components/ProfileCover.svelte';
+  import ProfileAppearancePanel from './ProfileAppearancePanel.svelte';
+  import { getProfilePreview, type ProfileSnapshot } from '../../lib/services/profile';
+  import { appearanceOf } from '../../lib/profile/appearance';
+
+  let appearanceOpen = $state(false);
+  let preview = $state<ProfileSettings | null>(null);
+  let allShowcases = $state<ProfileSnapshot | null>(null);
   let settingsOpen = $state(false);
 
   const isGuest = $derived($authState === 'guest');
   const settings = $derived((isGuest ? null : $currentUser?.profile) ?? DEFAULT_PROFILE);
+  const shown = $derived(preview ?? settings);
+  const appearance = $derived(appearanceOf(shown.appearance));
+  const blocks = $derived(shown.showcase.map((kind) => (allShowcases ?? $profileSnapshot).showcase.find((b) => b.kind === kind) ?? { kind, games: [] }));
   const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
 
   function lastPlayedOf(id: string): string | null {
@@ -28,6 +40,8 @@
   }
 
   function openSettings() {
+    appearanceOpen = false;
+    preview = null;
     settingsOpen = true;
   }
 
@@ -36,9 +50,18 @@
     const ids = [
       ...snapshot.playing.map((entry) => entry.game.canonicalGameId),
       ...snapshot.running.map((game) => game.canonicalGameId),
-      ...snapshot.showcase.flatMap((block) => block.games.map((game) => game.canonicalGameId)),
+      ...(allShowcases ?? snapshot).showcase.flatMap((block) => block.games.map((game) => game.canonicalGameId)),
     ].filter((id): id is string => Boolean(id));
     if (ids.length > 0) loadArt(ids);
+  });
+
+  $effect(() => {
+    let active = true;
+    $currentUser?.id;
+    if (appearanceOpen) {
+      getProfilePreview().then((snapshot) => { if (active) allShowcases = snapshot; }).catch((err) => console.error('profile preview failed', err));
+    } else { allShowcases = null; }
+    return () => { active = false; };
   });
 
   onMount(() => {
@@ -48,19 +71,24 @@
 
 <PageHeader title={msg('social.profileLabel')} />
 
+<div class="workspace" class:customizing={appearanceOpen}>
 <div class="profile">
+<ProfileCanvas {appearance}>
+  <ProfileCover {appearance} />
   <ProfileHeader
     running={$profileSnapshot.running}
     stats={$profileSnapshot.stats}
-    showOnline={settings.showOnline}
-    showPlaying={settings.showPlaying}
-    showStats={settings.showStats}
+    showOnline={shown.showOnline}
+    showPlaying={shown.showPlaying}
+    showStats={shown.showStats}
+    onappearance={() => { appearanceOpen = true; settingsOpen = false; }}
     onsettings={openSettings}
   />
 
   {#if !isGuest}
     <div class="columns">
       <div class="main">
+        <ProfileShowcase {blocks} showEmpty={appearanceOpen} onmanage={() => (appearanceOpen = true)} />
         {#if $profileSnapshot.playing.length > 0}
           <Card title={msg('social.recentlyPlayedTitle')}>
             <div class="recent-row">
@@ -82,15 +110,12 @@
 
         <div class="pair">
           <div class="pair-left">
-            <ProfileActivity days={$profileSnapshot.activity} hidden={!settings.showActivity} />
-          </div>
-          <div class="pair-right">
-            <ProfileShowcase blocks={$profileSnapshot.showcase} onmanage={openSettings} />
+            <ProfileActivity days={$profileSnapshot.activity} hidden={!shown.showActivity} />
           </div>
         </div>
       </div>
       <div class="side">
-        <ProfilePlaying running={$profileSnapshot.running} hidden={!settings.showPlaying} />
+        <ProfilePlaying running={$profileSnapshot.running} hidden={!shown.showPlaying} />
         {#if bio}
           <Card title={msg('social.aboutTitle')}>
             <p class="bio">{bio}</p>
@@ -99,6 +124,13 @@
       </div>
     </div>
   {/if}
+</ProfileCanvas>
+</div>
+{#if !isGuest && appearanceOpen}
+  {#key $currentUser?.id}
+    <ProfileAppearancePanel {settings} onpreview={(value) => (preview = value)} onclose={() => { appearanceOpen = false; preview = null; }} />
+  {/key}
+{/if}
 </div>
 
 {#if !isGuest && settingsOpen}
@@ -106,7 +138,9 @@
 {/if}
 
 <style>
+  .workspace { display: flex; gap: 1.6rem; align-items: flex-start; }
   .profile {
+    flex: 1; min-width: 0;
     display: flex;
     flex-direction: column;
   }
@@ -127,13 +161,12 @@
 
   .pair {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: var(--space-6);
     align-items: start;
   }
 
-  .pair-left,
-  .pair-right {
+  .pair-left {
     display: contents;
   }
 
@@ -178,15 +211,20 @@
     flex-shrink: 0;
   }
 
-  @media (min-width: 1600px) {
+  @media (min-width: 1250px) {
     .columns {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 40rem;
+      grid-template-columns: minmax(0, 1fr) 28rem;
       gap: 0 var(--space-6);
       align-items: start;
     }
   }
 
+  .customizing .columns { display: flex; align-items: stretch; }
+  @media (max-width: 1000px) {
+    .workspace.customizing { flex-direction: column-reverse; }
+    .profile { width: 100%; }
+  }
   @media (max-width: 1200px) {
     .pair {
       grid-template-columns: 1fr;

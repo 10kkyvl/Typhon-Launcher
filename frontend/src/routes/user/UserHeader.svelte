@@ -2,7 +2,6 @@
   import { Calendar, EllipsisVertical, Gamepad2 } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import type { PublicProfile } from '../../lib/services/social';
@@ -43,7 +42,7 @@
 </script>
 
 <section class="user-header">
-  <Card>
+  <div class="header-surface">
     <div class="head">
       <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} />
 
@@ -107,11 +106,13 @@
         </div>
       </div>
     </div>
-  </Card>
+  </div>
 </section>
 
 <style>
+  .header-surface { padding-bottom: 2rem; position: relative; }
   .user-header {
+    container-type: inline-size;
     display: block;
     margin-bottom: var(--space-6);
   }
@@ -194,7 +195,7 @@
     flex-shrink: 0;
   }
 
-  @media (max-width: 1200px) {
+  @container (max-width: 900px) {
     .head {
       flex-wrap: wrap;
     }

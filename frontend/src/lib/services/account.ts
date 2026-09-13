@@ -1,4 +1,5 @@
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
+import { appearanceOf } from '../profile/appearance';
 import { inWails } from './backend';
 import type { CropRect } from '../utils/crop';
 
@@ -8,7 +9,16 @@ export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
 export const VISIBILITIES = ['public', 'friends', 'private'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
+export interface ProfileAppearance {
+  theme: string;
+  accent: string;
+  coverUrl: string;
+  coverDim: number;
+  coverPosition: number;
+}
+
 export interface ProfileSettings {
+  appearance?: ProfileAppearance;
   visibility: Visibility;
   showOnline: boolean;
   showPlaying: boolean;
@@ -86,6 +96,9 @@ const KNOWN_CODES = new Set([
   'email_immutable',
   'launcher_outdated',
   'no_changes',
+  'cover_too_large',
+  'unsupported_cover',
+  'invalid_cover',
   'avatar_too_large',
   'unsupported_avatar',
   'invalid_avatar',
@@ -220,7 +233,7 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
 export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UpdateProfile(patch)) as CurrentUser;
+    return (await AccountService.UpdateProfile({ ...patch, profile: patch.profile ? { ...patch.profile, appearance: appearanceOf(patch.profile.appearance) } : undefined })) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }

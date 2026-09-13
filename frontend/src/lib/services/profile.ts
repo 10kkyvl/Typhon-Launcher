@@ -62,3 +62,8 @@ export async function getProfileSnapshot(): Promise<ProfileSnapshot> {
   if (!inWails) return EMPTY_SNAPSHOT;
   return (await ProfileService.Snapshot()) as unknown as ProfileSnapshot;
 }
+
+export async function getProfilePreview(): Promise<ProfileSnapshot> {
+  if (!inWails) return EMPTY_SNAPSHOT;
+  return (await ProfileService.Preview()) as unknown as ProfileSnapshot;
+}

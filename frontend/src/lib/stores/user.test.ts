@@ -593,3 +593,21 @@ describe('offline mode and reconnect', () => {
     expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(settled + 1);
   });
 });
+
+
+describe('profile customization session ownership', () => {
+  it('does not restore the previous account when saving finishes after an account switch', async () => {
+    const { accountMock, userStore } = await loadModules();
+    const first = makeUser();
+    const second = makeUser({ id: 'u2', username: 'other' });
+    userStore.currentUser.set(first);
+    let resolve!: (value: typeof first) => void;
+    vi.mocked(accountMock.updateProfile).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const pending = userStore.saveProfile({ bio: 'Updated' });
+    userStore.currentUser.set(second);
+    resolve({ ...first, bio: 'Updated' });
+    await expect(pending).rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(get(userStore.currentUser)).toEqual(second);
+    expect(get(userStore.savingProfile)).toBe(false);
+  });
+});
