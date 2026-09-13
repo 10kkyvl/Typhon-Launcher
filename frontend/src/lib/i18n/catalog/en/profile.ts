@@ -2,6 +2,11 @@ import type { Message } from '../../types';
 import type { ProfileKey } from '../ru/profile';
 
 export const profile: Record<ProfileKey, Message> = {
+  'profile.cropTitle': 'Choose your cover crop',
+  'profile.cropHint': 'Drag the image and adjust the zoom. The 4:1 area becomes your banner; arrow keys also move the image.',
+  'profile.applyCrop': 'Apply crop',
+  'profile.editCrop': 'Adjust crop',
+
   'profile.appearance': 'Appearance',
   'profile.theme': 'Profile theme',
   'profile.cover': 'Cover',

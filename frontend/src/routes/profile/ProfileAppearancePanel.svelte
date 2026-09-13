@@ -1,4 +1,6 @@
 <script lang="ts">
+  import '../../styles/zoom-slider.css';
+  import BannerCropModal from '../../lib/components/BannerCropModal.svelte';
   import { ArrowDown, ArrowUp, Upload, X, RotateCcw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -20,6 +22,9 @@
   let draft = $state<ProfileSettings>(initial());
   let appearance = $state(initial().appearance);
   let selectedImage = $state<AvatarImage | null>(null);
+  let cropOpen = $state(false);
+  let cropSource = $state('');
+  let originalSource = $state('');
   let input: HTMLInputElement;
   let busy = $state(false);
   let reading = $state(false);
@@ -27,7 +32,7 @@
   let alive = true;
   let sequence = 0;
   const owner = $currentUser?.id;
-  const disabled = $derived(busy || reading || $savingProfile || $isOffline);
+  const disabled = $derived(busy || reading || cropOpen || $savingProfile || $isOffline);
   $effect(() => onpreview({ ...draft, appearance: { ...appearance } }));
   onDestroy(() => { alive = false; sequence++; });
 
@@ -52,15 +57,21 @@
         img.onerror = reject; img.src = url;
       });
       if (!alive || seq !== sequence) return;
-      selectedImage = { data: url.slice(url.indexOf(',') + 1), mime: file.type };
-      appearance.coverUrl = url;
-      appearance.coverPosition = 50;
+      cropSource = url;
+      cropOpen = true;
     } catch {
       if (alive && seq === sequence) error = msg('profile.coverDecode');
     } finally { if (alive && seq === sequence) reading = false; }
   }
-  function removeCover() { selectedImage = null; appearance.coverUrl = ''; error = ''; }
-  function reset() { selectedImage = null; appearance = { ...DEFAULT_APPEARANCE }; error = ''; }
+  function applyCrop(url: string) {
+    originalSource = cropSource;
+    selectedImage = { data: url.slice(url.indexOf(',') + 1), mime: url.slice(5, url.indexOf(';')) };
+    appearance.coverUrl = url;
+    appearance.coverPosition = 50;
+    error = '';
+  }
+  function removeCover() { originalSource = '';  selectedImage = null; appearance.coverUrl = ''; error = ''; }
+  function reset() { originalSource = ''; selectedImage = null; appearance = { ...DEFAULT_APPEARANCE }; error = ''; }
   function toggle(kind: typeof SHOWCASE_KINDS[number], checked: boolean) {
     draft.showcase = checked ? [...draft.showcase, kind] : draft.showcase.filter((k) => k !== kind);
   }
@@ -92,6 +103,7 @@
   <div class="panel-head"><h2>{msg('profile.appearance')}</h2><IconButton label={msg('common.cancel')} disabled={busy} onclick={onclose}><X size="1.8rem" /></IconButton></div>
   <p class="hint preview">{msg('profile.preview')}</p>
   {#if $isOffline}<p class="hint">{msg('social.settingsRequireConnection')}</p>{/if}
+  <div class="panel-scroll" role="region" aria-label={msg('profile.appearance')}>
   <fieldset disabled={disabled}>
     <section>
       <h3>{msg('profile.theme')}</h3>
@@ -109,7 +121,7 @@
       <Button onclick={() => input.click()}><Upload size="1.5rem" />{msg('profile.upload')}</Button>
       <p class="hint">{msg('profile.coverHint')}</p>
       {#if appearance.coverUrl}
-        <label class="slider">{msg('profile.coverPosition')}<input type="range" min="0" max="100" bind:value={appearance.coverPosition} /></label>
+        {#if originalSource}<Button size="sm" variant="ghost" onclick={() => { cropSource = originalSource; cropOpen = true; }}>{msg('profile.editCrop')}</Button>{/if}
         <Button size="sm" variant="ghost" onclick={removeCover}>{msg('profile.removeCover')}</Button>
       {/if}
     </section>
@@ -121,7 +133,7 @@
         {/each}
         <input type="color" aria-label={msg('profile.accent')} bind:value={appearance.accent} />
       </div>
-      <label class="slider"><span>{msg('profile.dim')} <output>{appearance.coverDim}%</output></span><input type="range" aria-label={msg('profile.dim')} min="0" max="100" bind:value={appearance.coverDim} /></label>
+      <label class="slider"><span>{msg('profile.dim')} <output>{appearance.coverDim}%</output></span><input class="zoom-slider" style:--zoom-progress={`${appearance.coverDim}%`} type="range" aria-label={msg('profile.dim')} min="0" max="100" bind:value={appearance.coverDim} /></label>
     </section>
     <section>
       <h3>{msg('profile.showcases')}</h3>
@@ -139,6 +151,7 @@
     </section>
     <Button size="sm" variant="ghost" onclick={reset}><RotateCcw size="1.4rem" />{msg('profile.reset')}</Button>
   </fieldset>
+  </div>
   <div class="foot">
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if busy || reading}<p class="hint" role="status">{reading || selectedImage ? msg('profile.uploading') : msg('social.saving')}</p>{/if}
@@ -146,8 +159,12 @@
     <Button variant="ghost" disabled={busy} onclick={onclose}>{msg('common.cancel')}</Button>
   </div>
 </aside>
+{#if cropOpen}
+  <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} />
+{/if}
 <style>
-  aside { width: 30rem; flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.8rem; align-self: start; position: sticky; top: 1.6rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  aside { width: 30rem; flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.8rem; align-self: start; position: sticky; top: 1.6rem; max-height: calc(100dvh - 12rem); display: flex; flex-direction: column; overflow: hidden; }
+  .panel-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: .3rem; margin: 0 -.3rem; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; }
   h2 { font-size: var(--font-lg); } h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.2rem; }
   fieldset { border: 0; padding: 0; min-width: 0; } fieldset:disabled { opacity: .65; }
@@ -161,10 +178,10 @@
   .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0; cursor: pointer; }
   input[type=color] { width: 2.8rem; height: 2.8rem; border: 1px solid var(--border); background: transparent; padding: 0; cursor: pointer; }
   .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
-  .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
   .showcase-row { display: flex; gap: .3rem; align-items: center; min-height: 4rem; font-size: var(--font-xs); }
-  .showcase-row > span { flex: 1; } .foot { position: sticky; bottom: -1.8rem; background: var(--surface-2); padding: 1rem 0; display: flex; flex-direction: column; gap: .6rem; margin-top: 1.5rem; }
+  .showcase-row > span { flex: 1; } .foot { flex-shrink: 0; background: var(--surface-2); padding: 1rem 0; display: flex; flex-direction: column; gap: .6rem; margin-top: 1.5rem; }
   .error { font-size: var(--font-xs); color: var(--danger); line-height: 1.5; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  @media (max-width: 1000px) { aside { width: 100%; position: static; max-height: none; } }
+  @media (max-width: 1000px) { aside { width: 100%; position: static; max-height: 75dvh; } }
 </style>
