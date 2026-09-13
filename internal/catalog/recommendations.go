@@ -442,7 +442,7 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	}
 	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery)
 	selected := diverseRecommendations(candidates, limit)
-	return DiscoveryResult{Items: selected, Fallback: !remoteOK || profile.DefaultSort == "popular" && profile.EvidenceGames == 0, Profile: profile}
+	return DiscoveryResult{Items: selected, Fallback: !remoteOK, Profile: profile}
 }
 
 func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string) ([]Game, bool) {

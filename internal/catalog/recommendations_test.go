@@ -1,10 +1,21 @@
 package catalog
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"testing"
 )
+
+type recommendationRemote struct {
+	page GamePage
+	got  GameQuery
+}
+
+func (r *recommendationRemote) Browse(_ context.Context, q GameQuery) (GamePage, error) {
+	r.got = q
+	return r.page, nil
+}
 
 func TestRecommendationProfileRequiresMoreThanOneLaunch(t *testing.T) {
 	s := newTestService(t)
@@ -130,5 +141,22 @@ func TestLibraryRecommendationsHonorsHeroExclusion(t *testing.T) {
 	}
 	if len(result) == 0 || result[0].Reason != "unplayed" {
 		t.Fatalf("unplayed library recommendation missing: %+v", result)
+	}
+}
+
+func TestDiscoveryUsesRemoteCandidatesBeforeLocalFallback(t *testing.T) {
+	s := newTestService(t)
+	owned := seed(t, s, Game{Title: "Owned", Genres: []string{"Action"}})[0]
+	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "remote", Title: "Remote Candidate", SortTitle: "remote", Genres: []string{"Strategy"}}}}}
+	s.SetRemoteCatalog(remote)
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
+		return []RecommendationLibraryItem{{CanonicalGameID: owned.ID, LibraryID: "owned"}}
+	})
+	result := s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{HideLibrary: true, HideNotInterested: true}, Limit: 1})
+	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "remote" {
+		t.Fatalf("remote discovery = %+v, fallback=%v", result.Items, result.Fallback)
+	}
+	if remote.got.Sort != "popular" || remote.got.Page != 1 || remote.got.PageSize != 60 {
+		t.Fatalf("remote query = %+v", remote.got)
 	}
 }
