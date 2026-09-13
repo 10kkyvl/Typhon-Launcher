@@ -329,6 +329,15 @@ func numeric(s string) bool {
 
 func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
 	params := url.Values{"compat": {q.Compat}, "search": {q.Search}, "genre": {q.Genre}, "platform": {q.Platform}, "kind": {q.Kind}, "sort": {q.Sort}}
+	if q.Profile != "" {
+		params.Set("profile", q.Profile)
+	}
+	if q.ExcludeLibrary != "" {
+		params.Set("excludeLibrary", q.ExcludeLibrary)
+	}
+	if q.ExcludeNotInterested != "" {
+		params.Set("excludeNotInterested", q.ExcludeNotInterested)
+	}
 	if q.Page > 0 {
 		params.Set("page", strconv.Itoa(q.Page))
 	}

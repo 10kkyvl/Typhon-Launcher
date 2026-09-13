@@ -39,6 +39,7 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 // BrowseGames is the public catalog. Local games are a personal/cache store,
 // never the membership source for a successful online response.
 func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
+	q = s.enrichRecommendationQuery(q)
 	s.mu.RLock()
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)

@@ -38,17 +38,20 @@ var (
 )
 
 type Service struct {
-	redirects     map[string]string
-	remote        RemoteCatalog
-	mu            sync.RWMutex
-	epoch         uint64
-	gamesPath     string
-	overridesPath string
-	games         []Game
-	overrides     []MatchOverride
-	overrideMap   map[string]string
-	idx           *index
-	compat        func(igdbID string) (works, total int, ok bool)
+	redirects             map[string]string
+	remote                RemoteCatalog
+	mu                    sync.RWMutex
+	epoch                 uint64
+	gamesPath             string
+	overridesPath         string
+	recommendationPath    string
+	games                 []Game
+	overrides             []MatchOverride
+	overrideMap           map[string]string
+	idx                   *index
+	compat                func(igdbID string) (works, total int, ok bool)
+	recommendationLibrary RecommendationLibrarySource
+	preferences           RecommendationPreferences
 }
 
 func NewService() (*Service, error) {
@@ -67,6 +70,7 @@ func NewServiceAt(dir string) (*Service, error) {
 	s := &Service{overrideMap: map[string]string{}}
 	s.gamesPath = filepath.Join(dir, "catalog.json")
 	s.overridesPath = filepath.Join(dir, "match_overrides.json")
+	s.recommendationPath = filepath.Join(dir, "recommendation.json")
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -81,6 +85,9 @@ func (s *Service) load() error {
 		return fmt.Errorf("load match overrides: %w", err)
 	}
 	if err := loadList(filepath.Join(filepath.Dir(s.gamesPath), "catalog-redirects.json"), 1, &s.redirects); err != nil {
+		return err
+	}
+	if err := s.loadRecommendations(); err != nil {
 		return err
 	}
 	known := map[string]bool{}

@@ -26,15 +26,21 @@ var genreGroups = []struct {
 }
 
 type GameQuery struct {
-	Platform string `json:"platform"`
-	Kind     string `json:"kind"`
-	Revision int64  `json:"revision"`
-	Search   string `json:"search"`
-	Genre    string `json:"genre"`
-	Sort     string `json:"sort"`
-	Compat   string `json:"compat"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
+	Platform             string   `json:"platform"`
+	Kind                 string   `json:"kind"`
+	Revision             int64    `json:"revision"`
+	Search               string   `json:"search"`
+	Genre                string   `json:"genre"`
+	Sort                 string   `json:"sort"`
+	Compat               string   `json:"compat"`
+	HideLibrary          bool     `json:"hideLibrary,omitempty"`
+	HideNotInterested    bool     `json:"hideNotInterested,omitempty"`
+	ExcludeIDs           []string `json:"excludeIds,omitempty"`
+	Profile              string   `json:"profile,omitempty"`
+	ExcludeLibrary       string   `json:"excludeLibrary,omitempty"`
+	ExcludeNotInterested string   `json:"excludeNotInterested,omitempty"`
+	Page                 int      `json:"page"`
+	PageSize             int      `json:"pageSize"`
 }
 
 // CompatOnlyWorking — значение GameQuery.Compat, оставляющее только игры,
@@ -275,6 +281,37 @@ func entryMatches(e *entry, g Game, search, normalized string) bool {
 
 func sortGames(list []Game, mode string) {
 	switch mode {
+	case "popular":
+		sort.Slice(list, func(a, b int) bool {
+			left := popularityScore(list[a])*0.4 + qualityScore(list[a])*0.6
+			right := popularityScore(list[b])*0.4 + qualityScore(list[b])*0.6
+			if left != right {
+				return left > right
+			}
+			return lessByTitle(list[a], list[b])
+		})
+	case "rating":
+		sort.Slice(list, func(a, b int) bool {
+			left, right := qualityScore(list[a]), qualityScore(list[b])
+			if left != right {
+				return left > right
+			}
+			return lessByTitle(list[a], list[b])
+		})
+	case "newest":
+		sort.Slice(list, func(a, b int) bool {
+			left, right := list[a].ReleaseYear, list[b].ReleaseYear
+			switch {
+			case left == nil && right == nil:
+			case left == nil:
+				return false
+			case right == nil:
+				return true
+			case *left != *right:
+				return *left > *right
+			}
+			return lessByTitle(list[a], list[b])
+		})
 	case "year":
 		sort.Slice(list, func(a, b int) bool {
 			left, right := list[a].ReleaseYear, list[b].ReleaseYear
