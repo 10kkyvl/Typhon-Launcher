@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -258,6 +257,22 @@ func (s *Service) SaveRecommendationPreferences(p RecommendationPreferences) err
 	return nil
 }
 
+func (s *Service) recommendationCatalogIDLocked(id string) string {
+	if id == "" {
+		return ""
+	}
+	canonical := s.resolveIDLocked(id)
+	if canonical != "" && canonical != id {
+		return canonical
+	}
+	for _, game := range s.games {
+		if game.ID == id || game.ServerID == id {
+			return game.ID
+		}
+	}
+	return id
+}
+
 // SetNotInterested is idempotent and persists before exposing the change in
 // memory. The caller can pass false to undo the decision.
 func (s *Service) SetNotInterested(gameID string, on bool) error {
@@ -266,6 +281,9 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 		return errEmptyRecommendationID
 	}
 	s.mu.Lock()
+	if canonical := s.recommendationCatalogIDLocked(gameID); canonical != "" {
+		gameID = canonical
+	}
 	previous := s.preferences
 	next := previous
 	next.NotInterested = append([]string(nil), previous.NotInterested...)
@@ -436,7 +454,12 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	// Discovery is always outside the library. The explicit query flag is
 	// accepted for API symmetry, but cannot make the discovery block leak owned
 	// games into its own results.
-	candidateGames, remoteOK := s.remoteDiscoveryGames(q.GameQuery, profile.DefaultSort)
+	remoteQuery := q.GameQuery
+	// Refresh exclusions must reach the backend before it chooses its first
+	// page. Applying them only to the returned page would make a refresh empty
+	// whenever the first remote page contained dismissed/owned titles.
+	remoteQuery.ExcludeIDs = mergeIDs(remoteQuery.ExcludeIDs, q.RefreshExcludeIDs)
+	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, profile.DefaultSort)
 	if !remoteOK {
 		candidateGames = games
 	}
@@ -446,21 +469,11 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 }
 
 func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string) ([]Game, bool) {
-	s.mu.RLock()
-	remote := s.remote
-	s.mu.RUnlock()
-	if remote == nil {
-		return nil, false
-	}
 	q.Sort = sortName
 	q.Page = 1
 	q.PageSize = 60
-	q = s.enrichRecommendationQuery(q)
-	//nolint:forbidigo // Wails recommendation RPC has no lifecycle context; bound each remote request.
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	page, err := remote.Browse(ctx, q)
-	if err != nil || len(page.Items) == 0 {
+	page, err := s.BrowseGames(q)
+	if err != nil || page.Offline || len(page.Items) == 0 {
 		return nil, false
 	}
 	return page.Items, true
@@ -558,6 +571,12 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 		if item.Hidden || item.ContinuePlaying {
 			continue
 		}
+		if includeLibrary && item.LastPlayed != nil && time.Since(*item.LastPlayed) > 90*24*time.Hour && !hasReturnSignal(game, item, genreScores, themeScores) {
+			// A short, abandoned launch is not enough evidence to ask the
+			// user to return. Keep stale games only when history or affinity
+			// gives us a concrete reason.
+			continue
+		}
 		score, reason, title, reasonGenre := scoreRecommendation(game, profile, item, inLibrary, genreScores, themeScores)
 		if reason == "similar" {
 			title = similarReference(game, games, library)
@@ -635,10 +654,10 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 		if item.Installed {
 			score += 0.05
 		}
-		if item.PlaytimeSeconds == 0 {
+		if item.Sessions == 0 && item.PlaytimeSeconds == 0 && item.LastPlayed == nil {
 			return score + 0.08, "unplayed", "", bestGenre
 		}
-		if item.LastPlayed != nil && time.Since(*item.LastPlayed) > 90*24*time.Hour {
+		if item.LastPlayed != nil && time.Since(*item.LastPlayed) > 90*24*time.Hour && hasReturnSignal(game, item, genres, themes) {
 			return score + 0.04, "return", "", bestGenre
 		}
 		return score, "similar", "", bestGenre
@@ -653,6 +672,23 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 		return score, "genre", "", game.Genres[0]
 	}
 	return score, "similar", "", ""
+}
+
+func hasReturnSignal(game Game, item RecommendationLibraryItem, genres, themes map[string]float64) bool {
+	if item.Favorite || (item.Sessions >= 2 && item.PlaytimeSeconds >= minMeaningfulPlaytime) {
+		return true
+	}
+	for _, genre := range game.Genres {
+		if genres[strings.ToLower(genre)] > 0 {
+			return true
+		}
+	}
+	for _, theme := range game.Themes {
+		if themes[strings.ToLower(theme)] > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func diverseRecommendations(candidates []rankedRecommendation, limit int) []RecommendationItem {

@@ -3,8 +3,11 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 type recommendationRemote struct {
@@ -144,19 +147,83 @@ func TestLibraryRecommendationsHonorsHeroExclusion(t *testing.T) {
 	}
 }
 
+func TestLibraryRecommendationsDoNotReviveShortAbandonedLaunches(t *testing.T) {
+	s := newTestService(t)
+	games := seed(t, s,
+		Game{Title: "Liked Action", Genres: []string{"Action"}},
+		Game{Title: "Short Puzzle", Genres: []string{"Puzzle"}},
+		Game{Title: "Action Return", Genres: []string{"Action"}},
+	)
+	old := time.Now().Add(-100 * 24 * time.Hour)
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
+		return []RecommendationLibraryItem{
+			{LibraryID: "liked", CanonicalGameID: games[0].ID, Favorite: true, Sessions: 2, PlaytimeSeconds: 3600},
+			{LibraryID: "short", CanonicalGameID: games[1].ID, Sessions: 1, PlaytimeSeconds: 10 * 60, LastPlayed: &old},
+			{LibraryID: "return", CanonicalGameID: games[2].ID, Sessions: 1, PlaytimeSeconds: 10 * 60, LastPlayed: &old},
+		}
+	})
+	result := s.GetLibraryRecommendations(LibraryRecommendationQuery{Limit: 5})
+	for _, item := range result {
+		if item.LibraryID == "short" {
+			t.Fatalf("short abandoned launch was recommended: %+v", result)
+		}
+	}
+	foundReturn := false
+	for _, item := range result {
+		if item.LibraryID == "return" {
+			foundReturn = true
+			if item.Reason != "return" {
+				t.Fatalf("return recommendation reason = %q", item.Reason)
+			}
+		}
+	}
+	if !foundReturn {
+		t.Fatalf("affinity-backed return recommendation missing: %+v", result)
+	}
+}
+
 func TestDiscoveryUsesRemoteCandidatesBeforeLocalFallback(t *testing.T) {
 	s := newTestService(t)
 	owned := seed(t, s, Game{Title: "Owned", Genres: []string{"Action"}})[0]
-	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "remote", Title: "Remote Candidate", SortTitle: "remote", Genres: []string{"Strategy"}}}}}
+	local := seed(t, s, Game{ID: "local-candidate", ServerID: "server-candidate", Title: "Cached Candidate", Genres: []string{"Strategy"}})[0]
+	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "server-candidate", Title: "Remote Candidate", SortTitle: "remote", Genres: []string{"Strategy"}}}}}
 	s.SetRemoteCatalog(remote)
 	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
 		return []RecommendationLibraryItem{{CanonicalGameID: owned.ID, LibraryID: "owned"}}
 	})
-	result := s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{HideLibrary: true, HideNotInterested: true}, Limit: 1})
-	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "remote" {
+	result := s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{HideLibrary: true, HideNotInterested: true, ExcludeIDs: []string{"refresh-id"}}, Limit: 1})
+	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != local.ID {
 		t.Fatalf("remote discovery = %+v, fallback=%v", result.Items, result.Fallback)
 	}
 	if remote.got.Sort != "popular" || remote.got.Page != 1 || remote.got.PageSize != 60 {
 		t.Fatalf("remote query = %+v", remote.got)
+	}
+	if remote.got.ExcludeNotInterested != "refresh-id" || remote.got.ExcludeLibrary != owned.ID {
+		t.Fatalf("remote exclusions = %+v", remote.got)
+	}
+}
+
+func TestDiscoveryPassesLargeLibraryAndRefreshExclusionsToRemote(t *testing.T) {
+	s := newTestService(t)
+	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "next-page", Title: "Next Page Candidate", Genres: []string{"Strategy"}}}}}
+	s.SetRemoteCatalog(remote)
+	owned := make([]RecommendationLibraryItem, 65)
+	for i := range owned {
+		owned[i] = RecommendationLibraryItem{CanonicalGameID: fmt.Sprintf("owned-%d", i)}
+	}
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem { return owned })
+	result := s.GetDiscovery(DiscoveryQuery{
+		GameQuery:         GameQuery{HideLibrary: true, HideNotInterested: true},
+		RefreshExcludeIDs: []string{"refresh-three"},
+		Limit:             1,
+	})
+	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "next-page" {
+		t.Fatalf("discovery after large exclusions = %+v, fallback=%v", result.Items, result.Fallback)
+	}
+	if got := len(strings.Split(remote.got.ExcludeLibrary, ",")); got != len(owned) {
+		t.Fatalf("library exclusions = %d, want %d", got, len(owned))
+	}
+	if !strings.Contains(remote.got.ExcludeLibrary, "owned-64") || remote.got.ExcludeNotInterested != "refresh-three" {
+		t.Fatalf("remote exclusions = %+v", remote.got)
 	}
 }
