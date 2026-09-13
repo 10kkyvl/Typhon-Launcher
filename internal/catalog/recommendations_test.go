@@ -51,10 +51,25 @@ func TestRecommendationProfileRequiresMoreThanOneLaunch(t *testing.T) {
 	}
 }
 
+func TestRecommendationConfigUsesValidatedDefaults(t *testing.T) {
+	defaults, err := parseRecommendationConfig("")
+	if err != nil || defaults.MinMeaningfulSeconds != 30*60 || defaults.MeaningfulSessions != 2 || defaults.ReturnDays != 90 || defaults.InstalledBoost != 0.05 {
+		t.Fatalf("defaults = %+v, err=%v", defaults, err)
+	}
+	custom, err := parseRecommendationConfig(`{"minMeaningfulSeconds":3600,"meaningfulSessions":3,"returnDays":120,"genreWeight":0.6}`)
+	if err != nil || custom.MinMeaningfulSeconds != 3600 || custom.MeaningfulSessions != 3 || custom.ReturnDays != 120 || custom.GenreWeight != 0.6 {
+		t.Fatalf("custom config = %+v, err=%v", custom, err)
+	}
+	invalid, err := parseRecommendationConfig(`{"returnDays":0}`)
+	if err == nil || invalid != defaults {
+		t.Fatalf("invalid config = %+v, err=%v", invalid, err)
+	}
+}
+
 func TestRecommendationRatingUsesReviewConfidence(t *testing.T) {
 	lowReviews, highReviews := 3, 1000
 	lowRating, highRating := 10.0, 8.5
-	if got, want := qualityScore(Game{Rating: &lowRating, ReviewCount: &lowReviews}), qualityScore(Game{Rating: &highRating, ReviewCount: &highReviews}); got >= want {
+	if got, want := qualityScore(Game{Rating: &lowRating, RatingCount: &lowReviews}), qualityScore(Game{Rating: &highRating, RatingCount: &highReviews}); got >= want {
 		t.Fatalf("few enthusiastic reviews outranked reliable rating: %f >= %f", got, want)
 	}
 	if got := qualityScore(Game{}); got != 0 {

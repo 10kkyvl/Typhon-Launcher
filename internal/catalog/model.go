@@ -42,11 +42,10 @@ type Game struct {
 	MetadataPartial   bool                `json:"metadataPartial,omitempty"`
 	Provisional       bool                `json:"provisional,omitempty"`
 	// External signals are optional: missing provider data remains unknown.
-	Rating             *float64  `json:"rating,omitempty"`
-	ReviewCount        *int      `json:"reviewCount,omitempty"`
-	RatingCount        *int      `json:"ratingCount,omitempty"`
-	ExternalPopularity *float64  `json:"externalPopularity,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
+	Rating           *float64  `json:"rating,omitempty"`
+	RatingCount      *int      `json:"ratingCount,omitempty"`
+	PopularitySource string    `json:"popularitySource,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type MatchOverride struct {

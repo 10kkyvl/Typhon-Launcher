@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -14,12 +16,70 @@ import (
 )
 
 const (
-	recommendationVersion      = 1
-	personalizationMinGames    = 3
-	personalizationMinPlaytime = int64(3 * 60 * 60)
-	minMeaningfulPlaytime      = int64(30 * 60)
-	maxDiscoveryItems          = 5
+	recommendationVersion = 1
+	maxDiscoveryItems     = 5
 )
+
+// RecommendationConfig keeps the first ranking policy explicit and tunable.
+// TYPHON_RECOMMENDATION_CONFIG accepts a JSON object with these fields; an
+// invalid object or an out-of-range value uses all defaults. The environment
+// is read once when the process starts, so one catalog query cannot change
+// ranking semantics halfway through a session.
+type RecommendationConfig struct {
+	MinMeaningfulSeconds           int64   `json:"minMeaningfulSeconds"`
+	MeaningfulSessions             int     `json:"meaningfulSessions"`
+	PersonalizationMinGames        int     `json:"personalizationMinGames"`
+	PersonalizationMinPlaytimeSecs int64   `json:"personalizationMinPlaytimeSeconds"`
+	ReturnDays                     int     `json:"returnDays"`
+	InstalledBoost                 float64 `json:"installedBoost"`
+	FavoriteBoost                  float64 `json:"favoriteBoost"`
+	GenreWeight                    float64 `json:"genreWeight"`
+	ThemeWeight                    float64 `json:"themeWeight"`
+}
+
+func defaultRecommendationConfig() RecommendationConfig {
+	return RecommendationConfig{
+		MinMeaningfulSeconds:           30 * 60,
+		MeaningfulSessions:             2,
+		PersonalizationMinGames:        3,
+		PersonalizationMinPlaytimeSecs: 3 * 60 * 60,
+		ReturnDays:                     90,
+		InstalledBoost:                 0.05,
+		FavoriteBoost:                  0.15,
+		GenreWeight:                    0.55,
+		ThemeWeight:                    0.15,
+	}
+}
+
+func parseRecommendationConfig(raw string) (RecommendationConfig, error) {
+	config := defaultRecommendationConfig()
+	if strings.TrimSpace(raw) == "" {
+		return config, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		return defaultRecommendationConfig(), err
+	}
+	if config.MinMeaningfulSeconds < 60 || config.MinMeaningfulSeconds > 24*60*60 ||
+		config.MeaningfulSessions < 2 || config.MeaningfulSessions > 20 ||
+		config.PersonalizationMinGames < 1 || config.PersonalizationMinGames > 100 ||
+		config.PersonalizationMinPlaytimeSecs < 60 || config.PersonalizationMinPlaytimeSecs > 30*24*60*60 ||
+		config.ReturnDays < 1 || config.ReturnDays > 3650 ||
+		config.InstalledBoost < 0 || config.InstalledBoost > 1 ||
+		config.FavoriteBoost < 0 || config.FavoriteBoost > 1 ||
+		config.GenreWeight < 0 || config.GenreWeight > 1 ||
+		config.ThemeWeight < 0 || config.ThemeWeight > 1 {
+		return defaultRecommendationConfig(), errors.New("recommendation config value out of range")
+	}
+	return config, nil
+}
+
+var recommendationConfig = func() RecommendationConfig {
+	config, err := parseRecommendationConfig(os.Getenv("TYPHON_RECOMMENDATION_CONFIG"))
+	if err != nil {
+		return defaultRecommendationConfig()
+	}
+	return config
+}()
 
 var (
 	errInvalidRecommendationSort = uierr.New("catalog.invalid_recommendation_sort", "неизвестная сортировка каталога")
@@ -346,9 +406,9 @@ func (s *Service) GetRecommendationProfile() RecommendationProfile {
 }
 
 func profileFromEvidence(e recommendationEvidence, p RecommendationPreferences) RecommendationProfile {
-	confidence := minFloat(1, float64(e.Games)/float64(personalizationMinGames))
+	confidence := minFloat(1, float64(e.Games)/float64(recommendationConfig.PersonalizationMinGames))
 	if e.Playtime > 0 {
-		confidence = maxFloat(confidence, minFloat(1, float64(e.Playtime)/float64(personalizationMinPlaytime)))
+		confidence = maxFloat(confidence, minFloat(1, float64(e.Playtime)/float64(recommendationConfig.PersonalizationMinPlaytimeSecs)))
 	}
 	defaultSort := "popular"
 	if confidence >= 1 {
@@ -376,7 +436,7 @@ func buildEvidence(games []Game, items []RecommendationLibraryItem) recommendati
 		if !ok {
 			continue
 		}
-		meaningful := item.Favorite || (item.Sessions >= 2 && item.PlaytimeSeconds >= minMeaningfulPlaytime)
+		meaningful := item.Favorite || (item.Sessions >= recommendationConfig.MeaningfulSessions && item.PlaytimeSeconds >= recommendationConfig.MinMeaningfulSeconds)
 		if !meaningful {
 			continue
 		}
@@ -571,7 +631,7 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 		if item.Hidden || item.ContinuePlaying {
 			continue
 		}
-		if includeLibrary && item.LastPlayed != nil && time.Since(*item.LastPlayed) > 90*24*time.Hour && !hasReturnSignal(game, item, genreScores, themeScores) {
+		if includeLibrary && item.LastPlayed != nil && time.Since(*item.LastPlayed) > time.Duration(recommendationConfig.ReturnDays)*24*time.Hour && !hasReturnSignal(game, item, genreScores, themeScores) {
 			// A short, abandoned launch is not enough evidence to ask the
 			// user to return. Keep stale games only when history or affinity
 			// gives us a concrete reason.
@@ -612,7 +672,7 @@ func similarReference(candidate Game, games []Game, library []RecommendationLibr
 			continue
 		}
 		item, ok := byID[game.ID]
-		if !ok || item.Hidden || (!item.Favorite && (item.Sessions < 2 || item.PlaytimeSeconds < minMeaningfulPlaytime)) {
+		if !ok || item.Hidden || (!item.Favorite && (item.Sessions < recommendationConfig.MeaningfulSessions || item.PlaytimeSeconds < recommendationConfig.MinMeaningfulSeconds)) {
 			continue
 		}
 		if shareValue(candidate.Genres, game.Genres) || shareValue(candidate.Themes, game.Themes) {
@@ -646,21 +706,21 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 	}
 	quality := qualityScore(game)
 	popularity := popularityScore(game)
-	score := genreScore*0.55 + themeScore*0.15 + quality*0.2 + popularity*0.1
+	score := genreScore*recommendationConfig.GenreWeight + themeScore*recommendationConfig.ThemeWeight + quality*0.2 + popularity*0.1
 	if profile.DefaultSort == "popular" && profile.Confidence == 0 {
 		score = quality*0.6 + popularity*0.4
 	}
 	if inLibrary {
 		if item.Favorite {
-			score += 0.15
+			score += recommendationConfig.FavoriteBoost
 		}
 		if item.Installed {
-			score += 0.05
+			score += recommendationConfig.InstalledBoost
 		}
 		if item.Sessions == 0 && item.PlaytimeSeconds == 0 && item.LastPlayed == nil {
 			return score + 0.08, "unplayed", "", bestGenre
 		}
-		if item.LastPlayed != nil && time.Since(*item.LastPlayed) > 90*24*time.Hour && hasReturnSignal(game, item, genres, themes) {
+		if item.LastPlayed != nil && time.Since(*item.LastPlayed) > time.Duration(recommendationConfig.ReturnDays)*24*time.Hour && hasReturnSignal(game, item, genres, themes) {
 			return score + 0.04, "return", "", bestGenre
 		}
 		return score, "similar", "", bestGenre
@@ -678,7 +738,7 @@ func scoreRecommendation(game Game, profile RecommendationProfile, item Recommen
 }
 
 func hasReturnSignal(game Game, item RecommendationLibraryItem, genres, themes map[string]float64) bool {
-	if item.Favorite || (item.Sessions >= 2 && item.PlaytimeSeconds >= minMeaningfulPlaytime) {
+	if item.Favorite || (item.Sessions >= recommendationConfig.MeaningfulSessions && item.PlaytimeSeconds >= recommendationConfig.MinMeaningfulSeconds) {
 		return true
 	}
 	for _, genre := range game.Genres {
@@ -744,23 +804,22 @@ func filterRecommendationGames(games []Game, q GameQuery, blocked map[string]boo
 }
 
 func qualityScore(game Game) float64 {
-	reviewCount := game.ReviewCount
-	if reviewCount == nil {
-		reviewCount = game.RatingCount
-	}
-	if game.Rating == nil || reviewCount == nil || *reviewCount <= 0 {
+	if game.Rating == nil || game.RatingCount == nil || *game.RatingCount <= 0 {
 		return 0
 	}
 	rating := minFloat(100, maxFloat(0, *game.Rating)) / 100
-	confidence := float64(*reviewCount) / float64(*reviewCount+100)
+	confidence := float64(*game.RatingCount) / float64(*game.RatingCount+100)
 	return rating * confidence
 }
 
 func popularityScore(game Game) float64 {
-	if game.ExternalPopularity == nil {
+	if game.Rating == nil || game.RatingCount == nil || *game.RatingCount <= 0 {
 		return 0
 	}
-	return minFloat(1, maxFloat(0, *game.ExternalPopularity))
+	// Mirror the backend's bounded recommendation signal: use the actual
+	// provider rating count, log-scaled, with confidence-adjusted rating.
+	raw := math.Log1p(float64(*game.RatingCount)) * qualityScore(game)
+	return minFloat(1, maxFloat(0, raw/5))
 }
 
 func isAddonType(kind string) bool {
