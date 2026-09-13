@@ -6,6 +6,7 @@ export const DEFAULT_APPEARANCE: ProfileAppearance = {
 };
 export const PROFILE_THEMES = [
   { id: 'midnight', background: '#0e141e', surface: '#151d29', banner: 'linear-gradient(125deg, #142235, #29394d 55%, #111923)' },
+  { id: 'black', background: '#000000', surface: '#0c0c0f', banner: 'linear-gradient(125deg, #000000, #17171c 55%, #000000)' },
   { id: 'orbital', background: '#0b161f', surface: '#12232e', banner: 'linear-gradient(125deg, #142530, #345d72 55%, #111e31)' },
   { id: 'forest', background: '#101b18', surface: '#192b24', banner: 'linear-gradient(125deg, #13271f, #3e6450 55%, #102b29)' },
   { id: 'neon', background: '#191223', surface: '#281c35', banner: 'linear-gradient(125deg, #31233d, #563971 55%, #232244)' },

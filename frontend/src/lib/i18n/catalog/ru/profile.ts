@@ -1,4 +1,5 @@
 export const profile = {
+  'profile.black': 'Чёрная',
   'profile.cropTitle': 'Выберите кадр обложки',
   'profile.cropHint': 'Перетащите изображение и настройте масштаб. В баннер попадёт область 4:1; двигать кадр можно и стрелками.',
   'profile.applyCrop': 'Применить кадр',

@@ -1,11 +1,15 @@
 import { contrast } from '../theme/accent';
 import { describe, expect, it } from 'vitest';
-import { appearanceOf, appearancePalette, DEFAULT_APPEARANCE } from './appearance';
+import { appearanceOf, appearancePalette, themeOf, DEFAULT_APPEARANCE } from './appearance';
 
 describe('profile appearance compatibility', () => {
   it('reads profiles created before customization and keeps explicit zero sliders', () => {
     expect(appearanceOf()).toEqual(DEFAULT_APPEARANCE);
     expect(appearanceOf({ coverDim: 0, coverPosition: 0 })).toMatchObject({ coverDim: 0, coverPosition: 0 });
+  });
+  it('keeps the black theme when loading a saved profile', () => {
+    expect(appearanceOf({ theme: 'black' }).theme).toBe('black');
+    expect(themeOf({ ...DEFAULT_APPEARANCE, theme: 'black' }).background).toBe('#000000');
   });
   it('falls back for unrecognized themes and invalid colors', () => {
     expect(appearanceOf({ theme: 'missing', accent: 'red;display:none', coverDim: NaN, coverPosition: 200 })).toMatchObject({
