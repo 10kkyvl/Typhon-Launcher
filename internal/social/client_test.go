@@ -824,3 +824,31 @@ func TestClient_FeedKeepsTheWideShot(t *testing.T) {
 		t.Errorf("CoverURL = %q, want the cover kept alongside it", game.CoverURL)
 	}
 }
+
+func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
+	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15}`, `null`} {
+		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`)
+		})
+		result, err := c.profile(t.Context(), "alice")
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bridge map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &bridge); err != nil {
+			t.Fatal(err)
+		}
+		if appearance == "null" {
+			if _, ok := bridge["appearance"]; ok {
+				t.Fatal("private/legacy profile acquired appearance")
+			}
+		} else if string(bridge["appearance"]) != appearance {
+			t.Fatalf("appearance lost between HTTP and UI: %s", encoded)
+		}
+	}
+}

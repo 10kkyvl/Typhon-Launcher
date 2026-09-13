@@ -289,6 +289,7 @@ function toProfile(value: unknown): PublicProfile {
     username: profile.username,
     displayName: profile.displayName,
     avatarUrl: profile.avatarUrl,
+    appearance: profile.appearance,
     bio: profile.bio ?? '',
     relation: profile.relation ?? 'none',
     visibility: profile.visibility ?? '',

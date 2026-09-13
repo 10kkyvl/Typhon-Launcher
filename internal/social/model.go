@@ -1,6 +1,9 @@
 package social
 
-import "time"
+import (
+	"time"
+	"typhon/internal/account"
+)
 
 type UserCard struct {
 	ID          string `json:"id"`
@@ -58,19 +61,20 @@ type PresenceView struct {
 
 type PublicProfile struct {
 	UserCard
-	Bio            string          `json:"bio"`
-	Relation       string          `json:"relation"`
-	Visibility     string          `json:"visibility"`
-	Stats          *StatsView      `json:"stats"`
-	Favorites      []GameCard      `json:"favorites"`
-	Showcase       []ShowcaseBlock `json:"showcase"`
-	RecentlyPlayed []PlayedGame    `json:"recentlyPlayed"`
-	RecentActivity []ActivityView  `json:"recentActivity"`
-	Common         *CommonGames    `json:"common"`
-	MutualFriends  []UserCard      `json:"mutualFriends"`
-	MutualCount    int             `json:"mutualCount"`
-	CreatedAt      time.Time       `json:"createdAt"`
-	Presence       *PresenceView   `json:"presence,omitempty"`
+	Appearance     *account.ProfileAppearance `json:"appearance,omitempty"`
+	Bio            string                     `json:"bio"`
+	Relation       string                     `json:"relation"`
+	Visibility     string                     `json:"visibility"`
+	Stats          *StatsView                 `json:"stats"`
+	Favorites      []GameCard                 `json:"favorites"`
+	Showcase       []ShowcaseBlock            `json:"showcase"`
+	RecentlyPlayed []PlayedGame               `json:"recentlyPlayed"`
+	RecentActivity []ActivityView             `json:"recentActivity"`
+	Common         *CommonGames               `json:"common"`
+	MutualFriends  []UserCard                 `json:"mutualFriends"`
+	MutualCount    int                        `json:"mutualCount"`
+	CreatedAt      time.Time                  `json:"createdAt"`
+	Presence       *PresenceView              `json:"presence,omitempty"`
 }
 
 type ActivityView struct {
