@@ -69,6 +69,20 @@ func (s *Service) request(r *session, method, path string, body, out any) error 
 	}
 	return nil
 }
+
+type responseFailure struct {
+	status int
+	code   string
+}
+
+func (e *responseFailure) Error() string { return e.code }
+
+func permanentStreamError(err error) bool {
+	var failure *responseFailure
+	return errors.As(err, &failure) && failure.status >= 400 && failure.status < 500 &&
+		failure.status != http.StatusRequestTimeout && failure.status != http.StatusTooManyRequests
+}
+
 func responseError(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		return errSignedOut
@@ -79,9 +93,9 @@ func responseError(resp *http.Response) error {
 		} `json:"error"`
 	}
 	if json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&envelope) == nil && envelope.Error.Code != "" {
-		return errors.New(envelope.Error.Code)
+		return &responseFailure{status: resp.StatusCode, code: envelope.Error.Code}
 	}
-	return fmt.Errorf("chat_server_error_%d", resp.StatusCode)
+	return &responseFailure{status: resp.StatusCode, code: fmt.Sprintf("chat_server_error_%d", resp.StatusCode)}
 }
 
 func (s *Service) loop(r *session) {
@@ -114,7 +128,7 @@ func (s *Service) loop(r *session) {
 		started := time.Now()
 		err := s.stream(r)
 		s.publish(r, Event{Kind: "connection", Connected: false})
-		if errors.Is(err, errSignedOut) {
+		if errors.Is(err, errSignedOut) || permanentStreamError(err) {
 			r.cancel()
 			return
 		}
