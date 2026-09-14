@@ -9,4 +9,6 @@ import (
 )
 
 func showWithoutActivation(w *application.WebviewWindow) { w.Show() }
-func playTone(ctx context.Context, path string)          { _ = exec.CommandContext(ctx, "paplay", path).Run() }
+func playTone(ctx context.Context, path string) {
+	_ = exec.CommandContext(ctx, "/usr/bin/paplay", path).Run()
+}
