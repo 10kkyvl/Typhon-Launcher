@@ -126,12 +126,18 @@
   let preferenceBusy = $state(false);
   let ready = $state(false);
   let reloadToken = 0;
+  let favoriteSeq = 0;
+  let discoveryRefreshOwner = 0;
   const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
   const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
 
   function personalQuery() {
     return { stable: true, snapshot, hideLibrary, hideNotInterested,
       excludeIds: discoveryVisible ? discovery.map((item) => item.game.id) : [] };
+  }
+
+  function favoriteViewKey(): string {
+    return JSON.stringify({ search, genre, platform, kind, sort, compatOnly });
   }
 
   let token = 0;
@@ -264,6 +270,7 @@
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
+    discoveryRefreshOwner = 0;
     loading = true;
     items = [];
     total = 0;
@@ -284,6 +291,7 @@
       }
     } else {
       discovery = [];
+      discoveryLoading = false;
       personalizationFallback = false;
     }
     if (active !== reloadToken) return;
@@ -480,15 +488,55 @@
   }
 
   async function toggleFavorite(libraryId: string, current: boolean) {
+    if (discoveryRefreshOwner) {
+      discoveryRefreshOwner = 0;
+      discoveryLoading = false;
+    }
+    const expected = {
+      favorite: ++favoriteSeq,
+      reload: reloadToken,
+      token,
+      view: favoriteViewKey(),
+    };
+    const isCurrent = () => expected.favorite === favoriteSeq && expected.reload === reloadToken
+      && expected.token === token && expected.view === favoriteViewKey();
     try {
       await setFavorite(libraryId, !current);
+      if (!isCurrent()) return;
       if (sort === 'auto' || sort === 'for-you') {
-        try { profile = await getRecommendationProfile(); }
-        catch { personalizationFallback = true; }
-        await reload();
+        try {
+          const nextProfile = await getRecommendationProfile();
+          if (!isCurrent()) return;
+          profile = nextProfile;
+        } catch {
+          if (!isCurrent()) return;
+          personalizationFallback = true;
+        }
+        prefetch.clear();
+        if (!isCurrent()) return;
+        if (discoveryVisible) {
+          discoveryRefreshOwner = expected.favorite;
+          discoveryLoading = true;
+          try {
+            const result = await getDiscovery({ search, genre, platform, kind, sort,
+              compat: compatOnly ? compatOnlyWorking : '' }, []);
+            if (!isCurrent()) return;
+            discovery = result.items;
+            personalizationFallback = result.fallback;
+          } catch {
+            if (!isCurrent()) return;
+            discovery = [];
+            personalizationFallback = true;
+          } finally {
+            if (discoveryRefreshOwner === expected.favorite) {
+              discoveryRefreshOwner = 0;
+              discoveryLoading = false;
+            }
+          }
+        }
       }
     } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
+      if (isCurrent()) toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
     }
   }
 </script>
