@@ -64,6 +64,7 @@ type IndexStatus struct {
 	Records   int64            `json:"records"`
 }
 type GamePage struct {
+	ProtocolVersion         int           `json:"protocolVersion,omitempty"`
 	PersonalizationFallback bool          `json:"personalizationFallback,omitempty"`
 	Snapshot                string        `json:"snapshot,omitempty"`
 	Facets                  []GenreFacet  `json:"facets"`

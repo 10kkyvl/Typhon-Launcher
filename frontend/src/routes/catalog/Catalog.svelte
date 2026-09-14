@@ -107,6 +107,7 @@
   let loading = $state(!restored);
   let appending = $state(false);
   let failed = $state(restored?.failed ?? false);
+  let backendOutdated = $state(false);
   let revision = $state(restored?.revision ?? 0);
   let offline = $state(restored?.offline ?? false);
   let incomplete = $state(restored?.incomplete ?? false);
@@ -230,6 +231,7 @@
       total = result.total;
       page = result.page;
       failed = false;
+      backendOutdated = false;
       facets = result.facets ?? [];
       platforms = result.platforms ?? [];
       revision = result.revision ?? 0;
@@ -241,7 +243,8 @@
         const upcoming = { ...request, page: page + 1, revision, snapshot };
         prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
       }
-    } catch {
+    } catch (err) {
+      backendOutdated = errorCode(err) === "catalog.backend_outdated";
       if (current !== token) return;
       prefetch.clear();
       if (next === 1) {
@@ -372,6 +375,7 @@
       total = prefix.result.total;
       page = prefix.result.page;
       failed = false;
+      backendOutdated = false;
       facets = prefix.result.facets ?? [];
       platforms = prefix.result.platforms ?? [];
       revision = prefix.result.revision ?? 0;
@@ -618,7 +622,7 @@
     {:else if failed}
       <EmptyState
         title={msg('games.catalogUnavailableTitle')}
-        description={msg('games.catalogUnavailableDescription')}
+        description={msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
       />
     {:else if discoveryVisible && discovery.length > 0}
       <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>

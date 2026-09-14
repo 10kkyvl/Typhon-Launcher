@@ -111,7 +111,7 @@ func TestBrowseUsesPOSTForPersonalQueriesAndSendsHeaders(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("decode POST body: %v", err)
 		}
-		writeJSON(t, w, http.StatusOK, `{"items":[],"page":1,"pageSize":60}`)
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[],"page":1,"pageSize":60}`)
 	}), func() (string, error) { return "session-token", nil })
 
 	_, err := client.Browse(context.Background(), catalog.GameQuery{
@@ -139,7 +139,7 @@ func TestBrowseUsesGETForGeneralQueries(t *testing.T) {
 		if r.URL.Query().Get("sort") != "popular" {
 			t.Errorf("query = %s", r.URL.RawQuery)
 		}
-		writeJSON(t, w, http.StatusOK, `{"items":[]}`)
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[]}`)
 	}), nil)
 	if _, err := client.Browse(context.Background(), catalog.GameQuery{Sort: "popular"}); err != nil {
 		t.Fatalf("browse: %v", err)
@@ -157,7 +157,7 @@ func TestBrowseFallsBackToShortGETWhenPOSTIsUnsupported(t *testing.T) {
 			writeJSON(t, w, http.StatusMethodNotAllowed, `{"error":{"code":"method_not_allowed"}}`)
 			return
 		}
-		writeJSON(t, w, http.StatusOK, `{"items":[]}`)
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[]}`)
 	}), nil)
 	if _, err := client.Browse(context.Background(), catalog.GameQuery{Profile: `{"genres":{"Action":1}}`}); err != nil {
 		t.Fatalf("browse fallback: %v", err)
@@ -621,5 +621,21 @@ func TestSteamCardTransport(t *testing.T) {
 	g, e := client.Get(context.Background(), "steam:620")
 	if e != nil || g.ProviderID != "steam:620" || g.SteamAppID != "620" {
 		t.Fatalf("%+v %v", g, e)
+	}
+}
+
+func TestBrowseRejectsLegacyAlphabeticalResultsForRankedQueries(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, `{"items":[{"id":"alphabetical","title":" A misleading recommendation"}]}`)
+	}), nil)
+	for _, q := range []catalog.GameQuery{{Sort: "popular"}, {Sort: "rating"}, {Sort: "for-you"}, {Kind: "game"}, {ExcludeLibrary: "owned"}} {
+		if _, err := client.Browse(context.Background(), q); !errors.Is(err, catalog.ErrBackendOutdated) {
+			t.Fatalf("query=%+v err=%v", q, err)
+		}
+	}
+	for _, sortName := range []string{"title", "year"} {
+		if _, err := client.Browse(context.Background(), catalog.GameQuery{Sort: sortName}); err != nil {
+			t.Fatalf("legacy %s: %v", sortName, err)
+		}
 	}
 }

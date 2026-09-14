@@ -36,6 +36,7 @@ export const games = {
   'games.genreStrategy': 'Стратегии',
   'games.genreIndie': 'Инди',
   'games.catalogOffline': 'Нет сети. Показана сохранённая страница каталога; данные могут быть неполными или устаревшими.',
+  'games.catalogBackendOutdated': 'Сервер ещё не поддерживает эту сортировку. Выберите «По названию» или повторите после обновления сервера.',
   'games.catalogIncomplete': 'Индекс Steam и IGDB ещё загружается. Сейчас показана доступная часть каталога.',
   'games.detailNoReleases': 'Для этой игры пока нет раздач в подключённых источниках.',
   'games.catalogPlatform': 'Платформа',

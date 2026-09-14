@@ -39,6 +39,7 @@ export const games: Record<GamesKey, Message> = {
   'games.genreStrategy': 'Strategy',
   'games.genreIndie': 'Indie',
   'games.catalogOffline': 'Offline. Showing a cached page; it may be incomplete or outdated.',
+  'games.catalogBackendOutdated': 'The server does not support this sorting yet. Choose title sorting or retry after the server is updated.',
   'games.catalogIncomplete': 'The Steam and IGDB index is still importing. Showing available games.',
   'games.detailNoReleases': 'No downloads for this game are available in your connected sources yet.',
   'games.catalogPlatform': 'Platform',

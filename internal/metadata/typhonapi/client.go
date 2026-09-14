@@ -349,7 +349,7 @@ func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GameP
 		var page catalog.GamePage
 		err = c.post(ctx, account.APIPrefix+"/catalog/games", body, &page)
 		if err == nil {
-			return page, nil
+			return validateBrowseProtocol(q, page)
 		}
 		var statusErr *httpStatusError
 		if !errors.As(err, &statusErr) || (statusErr.status != http.StatusNotFound && statusErr.status != http.StatusMethodNotAllowed) || len(c.baseURL+getPath) > maxBrowseGETURL {
@@ -359,6 +359,14 @@ func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GameP
 	var page catalog.GamePage
 	if err := c.get(ctx, getPath, &page); err != nil {
 		return catalog.GamePage{}, err
+	}
+	return validateBrowseProtocol(q, page)
+}
+
+func validateBrowseProtocol(q catalog.GameQuery, page catalog.GamePage) (catalog.GamePage, error) {
+	needsRanking := q.Sort == "popular" || q.Sort == "rating" || q.Sort == "for-you" || q.Sort == "auto"
+	if page.ProtocolVersion < 1 && (needsRanking || q.Kind == "game" || q.Profile != "" || q.ExcludeLibrary != "" || q.ExcludeNotInterested != "") {
+		return catalog.GamePage{}, catalog.ErrBackendOutdated
 	}
 	return page, nil
 }

@@ -18,6 +18,8 @@ import (
 	"typhon/internal/uierr"
 )
 
+var ErrBackendOutdated = uierr.New("catalog.backend_outdated", "catalog backend needs an update")
+
 var ErrCatalogChanged = errors.New("catalog changed; reload from the first page")
 
 const (
@@ -87,7 +89,7 @@ func (s *Service) browseGames(q GameQuery, durable bool) (GamePage, error) {
 	} else {
 		page, err = remote.Browse(ctx, q)
 	}
-	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 		fallback := q
 		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
 		// A failed personalized source must still allow a general first page.
@@ -109,6 +111,9 @@ func (s *Service) browseGames(q GameQuery, durable bool) (GamePage, error) {
 		}
 	}
 	if err != nil {
+		if errors.Is(err, ErrBackendOutdated) {
+			return GamePage{}, err
+		}
 		if errors.Is(err, ErrCatalogChanged) {
 			return GamePage{}, uierr.Wrap("catalog.changed", err)
 		}
