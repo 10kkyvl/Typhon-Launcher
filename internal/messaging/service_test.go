@@ -30,13 +30,22 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 	h.enabled.Store(true)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/me" {
-			fmt.Fprint(w, `{"id":"a"}`)
+			if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
+				t.Error(err)
+				return
+			}
 			return
 		}
 		if r.URL.Path == prefix+"/events" {
 			w.Header().Set("Content-Type", "text/event-stream")
-			fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n")
-			w.(http.Flusher).Flush()
+			if _, err := fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n"); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := http.NewResponseController(w).Flush(); err != nil {
+				t.Error(err)
+				return
+			}
 			<-r.Context().Done()
 			return
 		}
@@ -49,8 +58,14 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 	}
 	h.svc = svc
 	svc.emit = func(e Event) { h.events <- e }
-	svc.ServiceStartup(context.Background(), application.ServiceOptions{})
-	t.Cleanup(func() { svc.ServiceShutdown() })
+	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := svc.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err = svc.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -85,22 +100,37 @@ func TestMessagingContractsAndRetryIdentity(t *testing.T) {
 		calls = append(calls, r.Method+" "+r.URL.RequestURI())
 		switch {
 		case r.URL.Path == prefix+"/conversations":
-			fmt.Fprintf(w, `{"conversations":[{"peer":{"id":"b","username":"bob"},"lastMessage":%s,"unread":1,"canSend":true}]}`, encoded)
+			if _, err := fmt.Fprintf(w, `{"conversations":[{"peer":{"id":"b","username":"bob"},"lastMessage":%s,"unread":1,"canSend":true}]}`, encoded); err != nil {
+				t.Error(err)
+				return
+			}
 		case r.Method == http.MethodGet:
-			fmt.Fprintf(w, `{"messages":[%s],"next":"41","canSend":true}`, encoded)
+			if _, err := fmt.Fprintf(w, `{"messages":[%s],"next":"41","canSend":true}`, encoded); err != nil {
+				t.Error(err)
+				return
+			}
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/messages"):
 			var body struct {
 				ClientID string `json:"clientId"`
 				Text     string `json:"text"`
 			}
-			json.NewDecoder(r.Body).Decode(&body)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+				return
+			}
 			if body.Text != "го играть" {
 				t.Errorf("text=%q", body.Text)
 			}
 			clientIDs = append(clientIDs, body.ClientID)
-			fmt.Fprint(w, encoded)
+			if _, err := fmt.Fprint(w, encoded); err != nil {
+				t.Error(err)
+				return
+			}
 		case r.Method == http.MethodPatch:
-			fmt.Fprint(w, encoded)
+			if _, err := fmt.Fprint(w, encoded); err != nil {
+				t.Error(err)
+				return
+			}
 		default:
 			w.WriteHeader(http.StatusNoContent)
 		}
@@ -154,7 +184,10 @@ func TestLogoutDiscardsInFlightHistory(t *testing.T) {
 		case <-release:
 		case <-r.Context().Done():
 		}
-		fmt.Fprint(w, `{"messages":[{"text":"private"}]}`)
+		if _, err := fmt.Fprint(w, `{"messages":[{"text":"private"}]}`); err != nil {
+			t.Error(err)
+			return
+		}
 	})
 	result := make(chan error, 1)
 	go func() {
@@ -213,9 +246,18 @@ func TestConcurrentLogoutCancelsStart(t *testing.T) {
 	entered := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(entered); <-r.Context().Done() }))
 	defer server.Close()
-	s, _ := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
-	s.ServiceStartup(context.Background(), application.ServiceOptions{})
-	defer s.ServiceShutdown()
+	s, err := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	}()
 	result := make(chan error, 1)
 	go func() { result <- s.Start() }()
 	<-entered
@@ -233,22 +275,43 @@ func TestStreamReconnectSynchronisesWithoutReplayingNotifications(t *testing.T) 
 	var connections atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/me" {
-			fmt.Fprint(w, `{"id":"a"}`)
+			if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
+				t.Error(err)
+				return
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n")
-		w.(http.Flusher).Flush()
+		if _, err := fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n"); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Error(err)
+			return
+		}
 		if connections.Add(1) == 1 {
-			fmt.Fprint(w, "data: {\"kind\":\"message\",\"peerId\":\"b\",\"message\":{\"id\":\"42\",\"senderId\":\"b\"}}\n\n")
+			if _, err := fmt.Fprint(w, "data: {\"kind\":\"message\",\"peerId\":\"b\",\"message\":{\"id\":\"42\",\"senderId\":\"b\"}}\n\n"); err != nil {
+				t.Error(err)
+				return
+			}
 			return
 		}
 		<-r.Context().Done()
 	}))
 	defer server.Close()
-	s, _ := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
-	s.ServiceStartup(context.Background(), application.ServiceOptions{})
-	defer s.ServiceShutdown()
+	s, err := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	}()
 	events := make(chan Event, 32)
 	s.emit = func(e Event) { events <- e }
 	if err := s.Start(); err != nil {
@@ -270,12 +333,15 @@ func TestPopupEscapesMessageAndToneIsBoundedPCM(t *testing.T) {
 		t.Fatal("unsafe HTML")
 	}
 	wav := messageTone()
-	if string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" || binary.LittleEndian.Uint32(wav[40:]) != uint32(len(wav)-44) {
+	if string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" || int64(binary.LittleEndian.Uint32(wav[40:])) != int64(len(wav))-44 {
 		t.Fatal("invalid PCM")
 	}
-	peak := int16(0)
+	peak := int32(0)
 	for i := 44; i < len(wav); i += 2 {
-		v := int16(binary.LittleEndian.Uint16(wav[i:]))
+		v := int32(binary.LittleEndian.Uint16(wav[i:]))
+		if v >= 1<<15 {
+			v -= 1 << 16
+		}
 		if v < 0 {
 			v = -v
 		}

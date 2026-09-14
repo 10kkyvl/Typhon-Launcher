@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func (s *Service) request(r *session, method, path string, body, out any) error 
 	if err != nil {
 		return fmt.Errorf("messaging request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp.Body)
 	if !s.valid(r) {
 		return errSignedOut
 	}
@@ -162,7 +163,7 @@ func (s *Service) stream(r *session) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return responseError(resp)
 	}
@@ -171,7 +172,7 @@ func (s *Service) stream(r *session) error {
 	}
 	s.publish(r, Event{Kind: "connection", Connected: true})
 	// A black-holed connection must reconnect even if the TCP socket stays open.
-	idle := time.AfterFunc(75*time.Second, func() { resp.Body.Close() })
+	idle := time.AfterFunc(75*time.Second, func() { closeResponseBody(resp.Body) })
 	defer idle.Stop()
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 4096), 256<<10)
@@ -202,4 +203,10 @@ func (s *Service) stream(r *session) error {
 		}
 	}
 	return scanner.Err()
+}
+
+func closeResponseBody(body io.Closer) {
+	if err := body.Close(); err != nil {
+		slog.Debug("close chat response", "error", err)
+	}
 }

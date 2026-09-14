@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"html"
+	"log/slog"
 	"math"
 	"os"
 	"sync"
@@ -17,6 +18,7 @@ import (
 // All window operations are performed outside mu: Wails invokes the UI thread
 // synchronously, and its click handlers may in turn call back into Desktop.
 type Desktop struct {
+	ctx         context.Context
 	mu          sync.Mutex
 	app         *application.App
 	main, popup *application.WebviewWindow
@@ -32,8 +34,8 @@ type Desktop struct {
 }
 
 //wails:ignore
-func NewDesktop(app *application.App, main *application.WebviewWindow) *Desktop {
-	d := &Desktop{app: app, main: main}
+func NewDesktop(ctx context.Context, app *application.App, main *application.WebviewWindow) *Desktop {
+	d := &Desktop{ctx: ctx, app: app, main: main}
 	d.popup = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "chat-notification", Title: "Typhon", Width: 360, Height: 112,
 		Hidden: true, Frameless: true, DisableResize: true, AlwaysOnTop: true,
@@ -45,12 +47,13 @@ func NewDesktop(app *application.App, main *application.WebviewWindow) *Desktop 
 	})
 	d.unsub = append(d.unsub, app.Event.On("chat:popup-open", func(e *application.CustomEvent) { d.open() }), app.Event.On("chat:popup-close", func(e *application.CustomEvent) { d.Clear() }))
 	if f, err := os.CreateTemp("", "typhon-message-*.wav"); err == nil {
-		if _, err = f.Write(messageTone()); err == nil {
+		_, writeErr := f.Write(messageTone())
+		closeErr := f.Close()
+		if writeErr == nil && closeErr == nil {
 			d.soundPath = f.Name()
-		}
-		f.Close()
-		if d.soundPath == "" {
-			os.Remove(f.Name())
+		} else {
+			slog.Warn("prepare chat notification sound", "write_error", writeErr, "close_error", closeErr)
+			removeSoundFile(f.Name())
 		}
 	}
 	return d
@@ -176,7 +179,7 @@ func (d *Desktop) Close() {
 	}
 	d.wg.Wait()
 	if d.soundPath != "" {
-		os.Remove(d.soundPath)
+		removeSoundFile(d.soundPath)
 	}
 }
 func (d *Desktop) playLocked() {
@@ -188,7 +191,7 @@ func (d *Desktop) playLocked() {
 	if d.soundCancel != nil {
 		d.soundCancel()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(d.ctx)
 	d.soundCancel = cancel
 	d.wg.Add(1)
 	go func() { defer d.wg.Done(); defer cancel(); playTone(ctx, d.soundPath) }()
@@ -200,7 +203,7 @@ func messageTone() []byte {
 	const count = rate * 42 / 100
 	out := make([]byte, 44+count*2)
 	copy(out, "RIFF")
-	binary.LittleEndian.PutUint32(out[4:], uint32(len(out)-8))
+	binary.LittleEndian.PutUint32(out[4:], 36+count*2)
 	copy(out[8:], "WAVEfmt ")
 	binary.LittleEndian.PutUint32(out[16:], 16)
 	binary.LittleEndian.PutUint16(out[20:], 1)
@@ -221,7 +224,13 @@ func messageTone() []byte {
 				sample += 0.22 * math.Min(1, x/0.025) * math.Exp(-x*12) * math.Sin(2*math.Pi*f*x)
 			}
 		}
-		binary.LittleEndian.PutUint16(out[44+i*2:], uint16(int16(sample*32767)))
+		binary.LittleEndian.PutUint16(out[44+i*2:], uint16(int32(sample*32767)&0xffff))
 	}
 	return out
+}
+
+func removeSoundFile(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		slog.Warn("remove chat notification sound", "error", err)
+	}
 }

@@ -24,6 +24,7 @@ func TestLiveChatBridge(t *testing.T) {
 		URL        string `json:"url"`
 		Alice, Bob struct{ ID, Token string }
 	}
+	// #nosec G703 -- The explicitly enabled local test reads an operator-selected fixture, never a remote path.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -42,8 +43,14 @@ func TestLiveChatBridge(t *testing.T) {
 		}
 		ch := make(chan Event, 256)
 		s.emit = func(e Event) { ch <- e }
-		s.ServiceStartup(context.Background(), application.ServiceOptions{})
-		t.Cleanup(func() { s.ServiceShutdown() })
+		if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := s.ServiceShutdown(); err != nil {
+				t.Error(err)
+			}
+		})
 		if err = s.Start(); err != nil {
 			t.Fatal(err)
 		}

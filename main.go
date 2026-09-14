@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -594,7 +595,7 @@ func main() {
 		URL: "/",
 	})
 
-	chatDesktop := messaging.NewDesktop(wails, window)
+	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
 	defer chatDesktop.Close()
 	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))

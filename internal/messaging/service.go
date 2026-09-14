@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -47,8 +48,16 @@ func NewService(base string, token func() (string, error), enabled func() bool) 
 	if token == nil || enabled == nil {
 		return nil, errors.New("messaging: missing session ports")
 	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.ResponseHeaderTimeout = 20 * time.Second
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+	}
 	s := &Service{base: base, token: token, enabled: enabled, http: &http.Client{Transport: transport, CheckRedirect: account.CheckRedirect}}
 	s.emit = func(event Event) {
 		if a := application.Get(); a != nil {
