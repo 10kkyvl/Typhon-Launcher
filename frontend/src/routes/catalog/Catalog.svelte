@@ -507,7 +507,15 @@
         try {
           const nextProfile = await getRecommendationProfile();
           if (!isCurrent()) return;
+          const previousSort = effectiveSort;
+          const nextSort = sort === 'auto' ? nextProfile.defaultSort : sort;
           profile = nextProfile;
+          // A changed ranking needs a new snapshot with the shelf excluded.
+          // Ordinary favorite changes keep the current pages and scroll.
+          if (nextSort !== previousSort) {
+            await reload();
+            return;
+          }
         } catch {
           if (!isCurrent()) return;
           personalizationFallback = true;
