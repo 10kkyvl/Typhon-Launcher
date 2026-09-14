@@ -66,13 +66,14 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	} else {
 		page, err = remote.Browse(ctx, q)
 	}
-	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) {
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 		fallback := q
 		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
 		// A failed personalized source must still allow a general first page.
 		// Preserve exclusions and filters, and pin the fallback for continuations.
-		//nolint:forbidigo // Independent bounded retry after the first RPC deadline.
-		fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// The original request owns the total 25-second budget. A fallback gets
+		// at most ten seconds, but cannot outlive the first request's deadline.
+		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
 		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
 		fallbackCancel()
 		if fallbackErr == nil {

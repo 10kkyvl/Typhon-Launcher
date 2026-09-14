@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 	"typhon/internal/uierr"
 )
 
@@ -18,6 +19,92 @@ func (f *remoteFixture) Browse(context.Context, GameQuery) (GamePage, error) {
 	f.calls++
 	return f.page, f.err
 }
+
+type deadlineRemote struct{ calls int }
+
+func (r *deadlineRemote) Browse(context.Context, GameQuery) (GamePage, error) {
+	r.calls++
+	return GamePage{}, context.DeadlineExceeded
+}
+
+func TestPersonalizedBrowseDoesNotRetryAfterDeadline(t *testing.T) {
+	svc, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &deadlineRemote{}
+	svc.SetRemoteCatalog(remote)
+	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("deadline error = %v, want context.DeadlineExceeded", err)
+	}
+	if remote.calls != 1 {
+		t.Fatalf("deadline triggered %d remote calls, want 1", remote.calls)
+	}
+}
+
+type canceledRemote struct{ calls int }
+
+func (r *canceledRemote) Browse(context.Context, GameQuery) (GamePage, error) {
+	r.calls++
+	return GamePage{}, context.Canceled
+}
+
+func TestPersonalizedBrowseDoesNotRetryAfterCancellation(t *testing.T) {
+	svc, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &canceledRemote{}
+	svc.SetRemoteCatalog(remote)
+	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation error = %v, want context.Canceled", err)
+	}
+	if remote.calls != 1 {
+		t.Fatalf("cancellation triggered %d remote calls, want 1", remote.calls)
+	}
+}
+
+type fallbackDeadlineRemote struct {
+	calls            int
+	firstDeadline    time.Time
+	fallbackDeadline time.Time
+}
+
+func (r *fallbackDeadlineRemote) Browse(ctx context.Context, q GameQuery) (GamePage, error) {
+	r.calls++
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return GamePage{}, errors.New("missing request deadline")
+	}
+	if r.calls == 1 {
+		r.firstDeadline = deadline
+		return GamePage{}, errors.New("personal source unavailable")
+	}
+	r.fallbackDeadline = deadline
+	if q.Sort != "popular" {
+		return GamePage{}, errors.New("unexpected fallback sort")
+	}
+	return GamePage{}, context.DeadlineExceeded
+}
+
+func TestPersonalizedFallbackInheritsOriginalDeadline(t *testing.T) {
+	svc, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &fallbackDeadlineRemote{}
+	svc.SetRemoteCatalog(remote)
+	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); err == nil {
+		t.Fatal("fallback deadline error was swallowed")
+	}
+	if remote.calls != 2 {
+		t.Fatalf("fallback calls = %d, want 2", remote.calls)
+	}
+	if remote.fallbackDeadline.After(remote.firstDeadline) {
+		t.Fatalf("fallback deadline %s exceeds original %s", remote.fallbackDeadline, remote.firstDeadline)
+	}
+}
+
 func TestRemotePagesDoNotExposePrivateGamesAndKeepOfflineCache(t *testing.T) {
 	svc, err := NewServiceAt(t.TempDir())
 	if err != nil {
