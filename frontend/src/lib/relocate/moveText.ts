@@ -42,6 +42,5 @@ export function moveSummary(job: Pick<MoveJob, 'stage' | 'phase' | 'copiedBytes'
       total: bytesSize(job.totalBytes),
     });
   }
-  if (job.phase) return msg('transfers.movePhaseSummary', { stage, phase: job.phase });
   return stage;
 }

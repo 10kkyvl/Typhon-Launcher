@@ -48,6 +48,12 @@ export const REASONS: Record<string, MessageKey> = {
 };
 
 export function sourceErrorText(err: unknown, fallback: string = msg('errSources.fallback')): string {
-  const key = REASONS[errorCode(err)];
+  const code = errorCode(err);
+  if (code === 'sources.feed_bad_status') {
+    const raw = err instanceof Error ? err.message : String(err ?? '');
+    const status = /(?:статус|status)\s+(\d{3})\b/i.exec(raw)?.[1];
+    if (status) return msg('errSources.srcFeedHttpStatus', { status });
+  }
+  const key = REASONS[code];
   return key ? msg(key) : fallback;
 }

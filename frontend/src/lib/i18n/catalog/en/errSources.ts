@@ -2,6 +2,20 @@ import type { Message } from '../../types';
 import type { ErrSourcesKey } from '../ru/errSources';
 
 export const errSources: Record<ErrSourcesKey, Message> = {
+  'errSources.srcFeedHttpStatus': 'The source server returned HTTP {status}',
+  'errSources.warningTruncated': "Entry limit reached: the source was truncated to {count} entries.",
+  'errSources.warningTitle': "Entries with invalid titles were skipped: {count}.",
+  'errSources.warningNoUri': "Entries without a valid download link were skipped: {count}.",
+  'errSources.warningNonMagnet': "Links were skipped because only magnet links are supported. Count: {count}.",
+  'errSources.warningHttpOnly': "Releases available only through direct links were skipped: {count}. Direct links are not supported yet.",
+  'errSources.warningLongUri': "Links exceeding the length limit were skipped: {count}.",
+  'errSources.warningUriLimit': "Link lists were limited to {limit} per entry. Entries affected: {count}.",
+  'errSources.warningNegativeSize': "Negative file sizes were reset to zero. Entries affected: {count}.",
+  'errSources.warningBadSize': "File sizes could not be read. Entries affected: {count}.",
+  'errSources.warningBadDate': "Publication dates could not be read. Entries affected: {count}.",
+  'errSources.warningDuplicates': "Duplicate entries were merged: {count}.",
+  'errSources.warningBadPatch': "Patches without a source or target version were skipped: {count}.",
+  'errSources.warningUnknownType': "Entries with an unknown type were treated as regular releases: {count}.",
   'errSources.fallback': 'Something went wrong',
 
   'errSources.srcSourceNotFound': 'Source not found',

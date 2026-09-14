@@ -136,7 +136,7 @@ describe("metaLine", () => {
         genres: ["RPG", "Shooter"],
         platforms: ["Windows"],
       }),
-    ).toEqual(["2020", "CD Projekt RED", "RPG", "Windows"]);
+    ).toEqual(["2020", "CD Projekt RED", "Ролевые", "Windows"]);
   });
 
   it("leaves no gaps when fields are missing", () => {

@@ -114,13 +114,13 @@ describe('обновление лаунчера в списке уведомле
 
   it('ошибка обновления — своя запись, id отличается от записи о доступности', async () => {
     const { selfUpdateStatus, notifications } = await load(makeStorage());
-    selfUpdateStatus.set(status({ state: 'available', availableVersion: '1.3.0', error: 'сеть недоступна' }) as never);
+    selfUpdateStatus.set(status({ state: 'available', availableVersion: '1.3.0', error: 'dial tcp: connection refused' }) as never);
 
     const items = get(notifications.notifications).filter((n) => n.id.startsWith('launcher-update'));
     expect(items).toHaveLength(1);
     expect(items[0].id).toMatch(/^launcher-update-error:1\.3\.0:/);
     expect(items[0].id).not.toBe('launcher-update:1.3.0');
-    expect(items[0].text).toBe('сеть недоступна');
+    expect(items[0].text).toBe('Не удалось связаться с сервером обновлений. Проверьте интернет.');
   });
 
   it('состояние failed без текста ошибки даёт запись с запасным текстом', async () => {
@@ -222,11 +222,11 @@ describe('markAllRead', () => {
     notifications.markAllRead();
     expect(get(notifications.notifications)).toHaveLength(0);
 
-    sources.set([{ id: 's1', name: 'A', lastError: 'истёк токен' } as never]);
+    sources.set([{ id: 's1', name: 'A', lastError: 'typhon:sources.feed_bad_status: сервер вернул статус 401' } as never]);
 
     const items = get(notifications.notifications);
     expect(items).toHaveLength(1);
-    expect(items[0].text).toBe('истёк токен');
+    expect(items[0].text).toBe('Сервер источника вернул ошибку HTTP 401');
   });
 
   it('прочитанная ошибка обновления игры снова показывается, когда причина сбоя изменилась', async () => {
@@ -236,11 +236,11 @@ describe('markAllRead', () => {
     notifications.markAllRead();
     expect(get(notifications.notifications)).toHaveLength(0);
 
-    updates.set([{ gameId: 'g1', title: 'Игра', error: 'битый архив' } as never]);
+    updates.set([{ gameId: 'g1', title: 'Игра', error: 'typhon:updates.download_failed: скачивание оборвалось' } as never]);
 
     const items = get(notifications.notifications);
     expect(items).toHaveLength(1);
-    expect(items[0].text).toContain('битый архив');
+    expect(items[0].text).toContain('не удалось скачать данные обновления');
   });
 
   it('прочитанное для версии X уведомление о лаунчере снова показывается для версии Y', async () => {
@@ -285,4 +285,24 @@ describe('прочитанные id и localStorage', () => {
     expect(() => notifications.markAllRead()).not.toThrow();
     expect(get(notifications.notifications)).toHaveLength(0);
   });
+});
+
+
+it('retranslates live notifications without resurrecting read errors', async () => {
+  const { sources, selfUpdateStatus, notifications } = await load(makeStorage());
+  const { applyLanguage } = await import('../i18n');
+  sources.set([{ id: 's1', name: 'User source', lastError: 'typhon:sources.feed_invalid_json: подробности' } as never]);
+  selfUpdateStatus.set(status({ state: 'failed' }) as never);
+  const stop = notifications.notifications.subscribe(() => {});
+  try {
+    const ids = get(notifications.notifications).map((item) => item.id);
+    applyLanguage('en');
+    const english = get(notifications.notifications);
+    expect(english.map((item) => item.id)).toEqual(ids);
+    expect(english.map((item) => item.text).join(' ')).not.toMatch(/[А-Яа-яЁё]|typhon:/);
+    expect(english.find((item) => item.id.startsWith('source:'))?.text).toBe('The feed is not valid JSON');
+    notifications.markAllRead();
+    applyLanguage('ru');
+    expect(get(notifications.notifications)).toEqual([]);
+  } finally { stop(); applyLanguage('ru'); }
 });

@@ -2,6 +2,7 @@ import type { Message } from '../../types';
 import type { CommonKey } from '../ru/common';
 
 export const common: Record<CommonKey, Message> = {
+  'common.email': 'Email',
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.retry': 'Retry',

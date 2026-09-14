@@ -227,7 +227,7 @@
           {#if fieldErrors.bio}<span class="error">{fieldErrors.bio}</span>{/if}
         </label>
         <div class="field">
-          <span class="field-label">Email</span>
+          <span class="field-label">{msg('common.email')}</span>
           <MaskedEmail email={$currentUser.email} />
           <span class="hint">{msg('social.emailHint')}</span>
         </div>

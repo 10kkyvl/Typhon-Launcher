@@ -2,7 +2,10 @@ import { derived, get, writable } from 'svelte/store';
 import { active } from './downloads';
 import { friendRequestNotification } from '../social/view';
 import { historyRecent } from './history';
-import { msg } from '../i18n';
+import { locale, msg } from '../i18n';
+import { sourceErrorText } from '../sources/sourceErrors';
+import { updateErrorText } from '../updates/updateErrors';
+import { statusReason } from '../services/selfupdateMessages';
 import { incomingCount, incomingPeak } from './social';
 import { installActive, installations } from './install';
 import { mergeNotifications } from '../notifications/merge';
@@ -60,9 +63,9 @@ function fingerprint(text: string): string {
 function launcherUpdateNotification(status: SelfUpdateStatus): Notification | null {
   const version = status.availableVersion ?? status.currentVersion;
   if (status.error || status.state === 'failed') {
-    const text = status.error || msg('state.notifUpdateCheckFailed');
+    const text = statusReason(status) || msg('state.notifUpdateCheckFailed');
     return {
-      id: `launcher-update-error:${version}:${fingerprint(text)}`,
+      id: `launcher-update-error:${version}:${fingerprint(status.error || status.state)}`,
       title: msg('state.notifLauncherUpdateTitle'),
       text,
       route: 'settings',
@@ -91,7 +94,7 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
 }
 
 const allNotifications = derived(
-  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount, incomingPeak],
+  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount, incomingPeak, locale],
   ([
     $active,
     $installations,
@@ -115,7 +118,7 @@ const allNotifications = derived(
       items.push({
         id: `source:${source.id}:${fingerprint(source.lastError)}`,
         title: source.name,
-        text: source.lastError,
+        text: sourceErrorText(source.lastError),
         route: 'sources',
         terminal: false,
       });
@@ -126,7 +129,7 @@ const allNotifications = derived(
         items.push({
           id: `update-error:${update.gameId}:${fingerprint(update.error)}`,
           title: update.title,
-          text: msg('state.notifUpdateFailed', { error: update.error }),
+          text: msg('state.notifUpdateFailed', { error: updateErrorText(update.error) }),
           route: 'installed',
           refId: update.gameId,
           terminal: true,

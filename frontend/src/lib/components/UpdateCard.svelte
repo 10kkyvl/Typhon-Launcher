@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { updateErrorText } from '../updates/updateErrors';
   import { ChevronDown, History, RotateCcw, X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
@@ -119,7 +120,7 @@
     <p class="muted reason">{msg(updateReasonKey(availability.reason))}</p>
   {/if}
   {#if update.error}
-    <p class="error">{update.error}</p>
+    <p class="error">{updateErrorText(update.error)}</p>
   {/if}
   {#if running}
     <p class="muted reason">{msg('ui.gameRunningBeforeUpdate')}</p>

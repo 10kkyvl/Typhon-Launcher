@@ -1,4 +1,5 @@
 import { msg } from '../i18n';
+import { genreLabel } from '../metadata/labels';
 import type { MediaAsset, MetadataMatch, MetadataView } from '../services/metadata';
 
 const blanks = new Set(['', '-', '--', '—', 'n/a', 'na', 'null', 'undefined', 'unknown', 'неизвестно']);
@@ -83,7 +84,7 @@ export function metaLine(input: MetaLineInput): string[] {
   };
   push(input.year);
   push(clean(input.developer) || input.publisher);
-  push(input.genres?.[0]);
+  push(input.genres?.[0] ? genreLabel(input.genres[0]) : '');
   push(input.platforms?.[0]);
   return parts;
 }

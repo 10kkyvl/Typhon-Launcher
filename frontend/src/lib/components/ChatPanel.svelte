@@ -36,6 +36,7 @@
     nextByPeer,
   } from '../stores/messaging';
   import { currentUser } from '../stores/user';
+  import { clockTime } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
   import { REACTION_GLYPHS, REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
   import { msg } from '../i18n';
@@ -77,7 +78,7 @@
   function time(iso: string): string {
     const value = new Date(iso);
     if (Number.isNaN(value.getTime())) return '';
-    return value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return clockTime(value);
   }
 
   function setComposer(value: string): void {

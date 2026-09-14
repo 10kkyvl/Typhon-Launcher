@@ -130,7 +130,7 @@
       <form class="form" onsubmit={onSubmit}>
         {#if isRegister}
           <label class="field">
-            <span class="label">Email</span>
+            <span class="label">{msg('common.email')}</span>
             <input
               class="input"
               class:invalid={!!errors.email}

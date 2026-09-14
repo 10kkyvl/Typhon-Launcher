@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sourceErrorText } from '../sources/sourceErrors';
   import { untrack } from 'svelte';
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import {
@@ -194,7 +195,7 @@
             <span class="updated">{msg('modals.sourceDetailsUpdatedAt', { date: relativeDate(source.lastUpdatedAt) })}</span>
           </div>
           {#if source.lastError}
-            <p class="error">{source.lastError}</p>
+            <p class="error">{sourceErrorText(source.lastError)}</p>
           {/if}
         </div>
         <div class="head-actions">

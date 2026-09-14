@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { updateErrorText } from '../updates/updateErrors';
   import { FileCheck, Wrench } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
@@ -106,7 +107,7 @@
   {/if}
 
   {#if state?.error}
-    <p class="error">{state.error}</p>
+    <p class="error">{updateErrorText(state.error)}</p>
   {/if}
 
   {#if !unavailable}

@@ -1,4 +1,18 @@
 export const errSources = {
+  'errSources.srcFeedHttpStatus': 'Сервер источника вернул ошибку HTTP {status}',
+  'errSources.warningTruncated': "Достигнут лимит: в источнике оставлено записей — {count}.",
+  'errSources.warningTitle': "Записи с некорректным заголовком пропущены: {count}.",
+  'errSources.warningNoUri': "Записи без корректной ссылки пропущены: {count}.",
+  'errSources.warningNonMagnet': "Ссылки пропущены: поддерживаются только magnet-ссылки. Количество: {count}.",
+  'errSources.warningHttpOnly': "Раздачи только с прямыми ссылками пропущены: {count}. Прямые ссылки пока не поддерживаются.",
+  'errSources.warningLongUri': "Слишком длинные ссылки пропущены: {count}.",
+  'errSources.warningUriLimit': "Число ссылок ограничено до {limit} на запись. Затронуто записей: {count}.",
+  'errSources.warningNegativeSize': "Отрицательный размер файла заменён на ноль. Затронуто записей: {count}.",
+  'errSources.warningBadSize': "Не удалось прочитать размер файла. Затронуто записей: {count}.",
+  'errSources.warningBadDate': "Не удалось прочитать дату публикации. Затронуто записей: {count}.",
+  'errSources.warningDuplicates': "Объединено дублирующихся записей: {count}.",
+  'errSources.warningBadPatch': "Патчи без исходной или целевой версии пропущены: {count}.",
+  'errSources.warningUnknownType': "Записи с неизвестным типом обработаны как обычные релизы: {count}.",
   'errSources.fallback': 'Не удалось выполнить операцию',
 
   'errSources.srcSourceNotFound': 'источник не найден',
@@ -23,7 +37,7 @@ export const errSources = {
   'errSources.srcFeedTooManyHops': 'слишком много редиректов (лимит 5)',
   'errSources.srcFeedNoHost': 'URL не содержит хост',
   'errSources.srcFeedInvalidUrl': 'некорректный URL',
-  'errSources.srcFeedBadStatus': 'сервер вернул статус',
+  'errSources.srcFeedBadStatus': 'сервер источника вернул ошибку',
   'errSources.srcFeedChallenge': 'источник закрыт защитой Cloudflare: скачайте файл фида в браузере и добавьте его кнопкой «Выбрать файл фида»',
 
   'errSources.discoveryBusy': 'поиск игр уже выполняется',

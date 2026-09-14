@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { installErrorText } from '../install/installErrors';
   import { FolderOpen } from '@lucide/svelte';
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
@@ -61,7 +62,7 @@
           {#if download.error}
             <div class="row">
               <span class="key">{msg('common.error')}</span>
-              <span class="value danger">{download.error}</span>
+              <span class="value danger">{installErrorText(download.error)}</span>
             </div>
           {/if}
         </div>

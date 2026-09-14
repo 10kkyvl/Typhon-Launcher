@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { sourceWarningText } from '../../lib/sources/sourceWarnings';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { untrack } from 'svelte';
   import {
     CircleAlert,
@@ -219,11 +221,11 @@
             <span class="cell status">
               <StatusBadge kind={badge.kind} label={badge.label} plain />
               {#if source.lastError}
-                <Tooltip text={truncateMiddle(source.lastError, 90)}>
+                <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
                   <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
                 </Tooltip>
               {:else if source.health !== 'healthy'}
-                <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.join('; ')}` : health.label}>
+                <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.map(sourceWarningText).join('; ')}` : health.label}>
                   <span class="health" style:color={health.color}>
                     <health.icon size="1.5rem" strokeWidth={1.8} />
                   </span>

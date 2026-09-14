@@ -1,4 +1,5 @@
 export const common = {
+  'common.email': 'Эл. почта',
   'common.cancel': 'Отмена',
   'common.close': 'Закрыть',
   'common.retry': 'Повторить',

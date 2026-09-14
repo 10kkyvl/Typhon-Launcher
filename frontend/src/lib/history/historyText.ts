@@ -1,4 +1,6 @@
 import { msg } from '../i18n';
+import { installErrorText } from '../install/installErrors';
+import { updateErrorText } from '../updates/updateErrors';
 import type { Record } from '../../../bindings/typhon/internal/history';
 import { bytesSize } from '../utils/format';
 
@@ -21,9 +23,9 @@ export function historyLabel(record: Record): HistoryLabel {
             : '',
       };
     case 'install_failed':
-      return { title: msg('transfers.historyInstallFailedTitle', { title }), detail: record.detail ?? '' };
+      return { title: msg('transfers.historyInstallFailedTitle', { title }), detail: record.detail ? installErrorText(record.detail) : '' };
     case 'update_failed':
-      return { title: msg('transfers.historyUpdateFailedTitle', { title }), detail: record.detail ?? '' };
+      return { title: msg('transfers.historyUpdateFailedTitle', { title }), detail: record.detail ? updateErrorText(record.detail) : '' };
     case 'rolled_back':
       return {
         title: msg('transfers.historyRolledBackTitle', { title, version: record.toVersion || '—' }),

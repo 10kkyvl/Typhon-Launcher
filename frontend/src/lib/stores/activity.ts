@@ -3,7 +3,7 @@ import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation } from '../services/install';
 import type { VerifyState } from '../services/updates';
 import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format';
-import { msg } from '../i18n';
+import { locale, msg } from '../i18n';
 import { downloads, statusLabels } from './downloads';
 import { installActive, installStatusLabels, installations } from './install';
 import { libraryGames } from './library';
@@ -105,7 +105,7 @@ function fromVerify(item: VerifyState, title: string): ActivityItem {
 }
 
 export const activity = derived(
-  [downloads, installations, verifications, libraryGames],
+  [downloads, installations, verifications, libraryGames, locale],
   ([$downloads, $installations, $verifications, $libraryGames]) => {
     const installItems = $installations
       .filter((i) => installActive(i.status) || i.status === 'waiting_for_user')

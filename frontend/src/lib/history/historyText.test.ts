@@ -54,16 +54,16 @@ describe('historyLabel', () => {
   });
 
   it('formats a failed install with the failure detail', () => {
-    expect(historyLabel(record({ kind: Kind.KindInstallFailed, detail: 'нет места на диске' }))).toEqual({
+    expect(historyLabel(record({ kind: Kind.KindInstallFailed, detail: 'typhon:install.not_enough_space: нет места на диске' }))).toEqual({
       title: 'Cyberpunk 2077 не установился',
-      detail: 'нет места на диске',
+      detail: 'недостаточно места на диске',
     });
   });
 
   it('formats a failed update with the failure detail', () => {
-    expect(historyLabel(record({ kind: Kind.KindUpdateFailed, detail: 'обрыв соединения' }))).toEqual({
+    expect(historyLabel(record({ kind: Kind.KindUpdateFailed, detail: 'typhon:updates.download_failed: обрыв соединения' }))).toEqual({
       title: 'Cyberpunk 2077 не обновился',
-      detail: 'обрыв соединения',
+      detail: 'не удалось скачать данные обновления',
     });
   });
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sourceWarningText } from '../sources/sourceWarnings';
   import { untrack } from 'svelte';
   import { FileUp, TriangleAlert } from '@lucide/svelte';
   import { add as addSource, addFile as addSourceFile, sourceErrorText } from '../stores/sources';
@@ -176,7 +177,7 @@
           {#each preview.warnings as warning (warning)}
             <p class="warn">
               <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-              {warning}
+              {sourceWarningText(warning)}
             </p>
           {/each}
         </div>

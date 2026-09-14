@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { genreLabel, themeLabel } from '../../lib/metadata/labels';
   import { revealImage } from '../../lib/utils/revealImage';
   import { locale } from '../../lib/i18n/locale';
   import {
@@ -329,7 +330,7 @@
     }),
   );
 
-  const tags = $derived(tagList([info?.genres, info?.themes]));
+  const tags = $derived(tagList([info?.genres?.map(genreLabel), info?.themes?.map(themeLabel)]));
   const summary = $derived(summaryView(info?.summary ?? '', summaryExpanded));
 
   const gameFacts = $derived(
@@ -870,7 +871,7 @@
         </div>
 
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
-          <p class="note danger">{terminalDownload.error}</p>
+          <p class="note danger">{installErrorText(terminalDownload.error)}</p>
         {:else if localGame && !installed && wasInstalled}
           <p class="note">
             {primary.kind === 'install-download'

@@ -225,3 +225,17 @@ describe('activity', () => {
     expect(get(activityStore.activity)).toEqual([]);
   });
 });
+
+
+it('retranslates a subscribed activity dock without a new download event', async () => {
+  const { downloadsStore, activityStore } = await load();
+  const { applyLanguage } = await import('../i18n');
+  downloadsStore.downloads.set([makeDownload()]);
+  const stop = activityStore.activity.subscribe(() => {});
+  try {
+    applyLanguage('en');
+    expect(get(activityStore.activity)[0].detail).toBe('1.0 MB/s · 1 min 0 s left');
+    applyLanguage('ru');
+    expect(get(activityStore.activity)[0].detail).toBe('1,0 МБ/с · осталось 1 мин 0 сек');
+  } finally { stop(); applyLanguage('ru'); }
+});
