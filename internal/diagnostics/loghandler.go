@@ -48,8 +48,10 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 		return err
 	}
 	e := capturedLog{at: r.Time, component: "launcher", operation: r.Message, message: r.Message, code: usagestats.CodeUnknown}
-	if fn := runtime.FuncForPC(r.PC); fn != nil {
-		if tail, ok := strings.CutPrefix(fn.Name(), "typhon/internal/"); ok {
+	if r.PC != 0 {
+		// Resolve return PCs and inlined callers just like slog source attribution.
+		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
+		if tail, ok := strings.CutPrefix(frame.Function, "typhon/internal/"); ok {
 			e.component = strings.SplitN(tail, ".", 2)[0]
 		}
 	}

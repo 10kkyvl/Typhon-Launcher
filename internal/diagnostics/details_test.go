@@ -60,7 +60,10 @@ func TestLogContextSnapshotAndPrivacy(t *testing.T) {
 	if len(r.Details.Breadcrumbs) != 2 || r.Details.Breadcrumbs[1].Context["attempt"] != "2" {
 		t.Fatalf("breadcrumbs: %+v", r.Details)
 	}
-	data, _ := json.Marshal(r)
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(string(data), "secret") || strings.Contains(string(data), "later event") || strings.Contains(string(data), poisonMarker) {
 		t.Fatalf("unsafe or late context: %s", data)
 	}
@@ -78,7 +81,9 @@ func TestBreadcrumbWindowConsentAndBoundedness(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < 100; i++ {
 		r := slog.NewRecord(now.Add(-time.Duration(100-i)*time.Second), slog.LevelInfo, fmt.Sprint(i), 0)
-		_ = h.Handle(context.Background(), r)
+		if err := h.Handle(context.Background(), r); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if len(s.breadcrumbs) != breadcrumbCapacity {
 		t.Fatal("unbounded breadcrumbs")
@@ -92,9 +97,13 @@ func TestBreadcrumbWindowConsentAndBoundedness(t *testing.T) {
 		t.Fatal("unrelated component included")
 	}
 	old := slog.NewRecord(now.Add(-6*time.Minute), slog.LevelInfo, "stale", 0)
-	_ = h.Handle(context.Background(), old)
+	if err := h.Handle(context.Background(), old); err != nil {
+		t.Fatal(err)
+	}
 	errRecord := slog.NewRecord(now, slog.LevelError, "failed", 0)
-	_ = h.Handle(context.Background(), errRecord)
+	if err := h.Handle(context.Background(), errRecord); err != nil {
+		t.Fatal(err)
+	}
 	e := <-s.logEvents
 	s.SetEnabled(false)
 	s.SetEnabled(true)
@@ -110,7 +119,10 @@ func TestDetailsWireSizeAndOptOutDuringSanitize(t *testing.T) {
 		d.Breadcrumbs = append(d.Breadcrumbs, Breadcrumb{Timestamp: time.Now(), Level: "INFO", Component: "download", Message: strings.Repeat("<", 2000)})
 	}
 	clean := sanitizeDetails(d)
-	data, _ := json.Marshal(clean)
+	data, err := json.Marshal(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(data) > MaxDetailsBytes || len(clean.Breadcrumbs) > MaxBreadcrumbs {
 		t.Fatal("wire limit exceeded")
 	}
@@ -150,7 +162,10 @@ func TestClientLegacyFallbackAndRetryKeepsDetails(t *testing.T) {
 						t.Error("missing details")
 					}
 					w.WriteHeader(http.StatusBadRequest)
-					fmt.Fprintf(w, `{"error":{"code":%q}}`, code)
+					if _, err := fmt.Fprintf(w, `{"error":{"code":%q}}`, code); err != nil {
+						t.Error(err)
+						return
+					}
 					return
 				}
 				if b.Reports[0].Details != nil || b.Reports[0].ErrorID != "same-id" {
@@ -239,8 +254,16 @@ func TestSourceFailureCarriesContext(t *testing.T) {
 	if report.ErrorCode != "not_found" || fields["source_type"] != "file" || fields["stage"] != "open_file" || fields["retry_attempt"] != "1" || fields["scheduled"] != "false" || fields["duration_ms"] == "" {
 		t.Fatalf("source context: %+v", report)
 	}
-	if len(report.Details.Breadcrumbs) < 2 {
-		t.Fatal("source lifecycle events missing")
+	for _, message := range []string{"source added", "source refresh started"} {
+		found := false
+		for _, crumb := range report.Details.Breadcrumbs {
+			if crumb.Component == "sources" && crumb.Message == message {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("missing source lifecycle event %q: %+v", message, report.Details.Breadcrumbs)
+		}
 	}
 }
 

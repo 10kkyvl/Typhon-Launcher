@@ -2,6 +2,7 @@ package feed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -33,7 +34,8 @@ func ReadFile(ctx context.Context, raw string) (result Result, err error) {
 	stage := "validate_path"
 	defer func() {
 		if err != nil {
-			if _, ok := err.(*operationError); !ok {
+			var opErr *operationError
+			if !errors.As(err, &opErr) {
 				err = &operationError{err: err, stage: stage}
 			}
 		}
