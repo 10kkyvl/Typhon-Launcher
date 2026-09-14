@@ -104,7 +104,7 @@ func repoRelativePath(name, rel string) (string, error) {
 		return "", fmt.Errorf("component %s: empty repository path", name)
 	}
 	clean := filepath.Clean(filepath.FromSlash(rel))
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if !filepath.IsLocal(clean) {
 		return "", fmt.Errorf("component %s: repository path %q escapes the repository", name, rel)
 	}
 	return clean, nil
