@@ -132,36 +132,42 @@ wails3 task test:devmock
 
 ## Тесты и проверки
 
-Полный набор, который гоняет CI, — всё это должно проходить до того, как задача считается
-сделанной:
+Быстрый CI в GitHub запускается при push в `dev` и для результата слияния PR:
+сборка и тесты Windows, запрет опасных сочетаний тегов, генерация bindings,
+проверка типов, тесты и production-сборка фронтенда. Перенос проверенного коммита
+из `dev` в `main` не запускает ту же проверку повторно. После прямого push в
+`main` CI нужно запустить вручную.
 
-```
-gofmt -l .                                   # вывод должен быть пустым
-go vet . ./internal/...
-go build . ./internal/...
-GOOS=windows CGO_ENABLED=0 go build . ./internal/...
-go test ./internal/...
-CGO_ENABLED=1 go test -race ./internal/...
-CGO_ENABLED=1 go test -race -tags devmock ./internal/...
-golangci-lint run --new-from-rev=origin/dev --whole-files=false ./...
-go run ./tools/lintbaseline                  # и: -tags devmock
+Перед push на macOS:
+
+```sh
+wails3 task check:local
 ```
 
-Новый и изменённый код обязан быть чистым; весь модуль меряется против базиса в
-`.github/lint-baseline.txt` (ключ — `GOOS` или `GOOS+теги`), и это число может только
-уменьшаться. Версия `golangci-lint` закреплена — v2.13.1, ставит её
-`wails3 task lint:install`.
+Команда проверяет форматирование, vet, линт native/devmock и Windows, сборку для
+Windows, оба режима race-тестов, фронтенд и настоящую упаковку macOS-бандла.
+Используются локальные кэши Go и npm. Выполнение Windows-тестов остаётся в GitHub:
+кросс-сборка на Mac его не заменяет. Только линт: `wails3 task lint:local`.
 
-Фронтенд, из `frontend/`:
+Полная удалённая проверка: **Actions → CI → Run workflow → full_checks**.
+Она дополнительно запускает сборки и race-тесты macOS и линт на Linux, macOS и
+Windows. `lint_base` задаёт базовую ревизию для новых Linux-находок (по умолчанию
+`origin/main`). Linux baseline измеряется на Linux с заголовками GTK/WebKit,
+а не на Mac. Релиз по-прежнему собирает пакеты обеих платформ.
 
-```
+Новый и изменённый код должен быть чистым. `.github/lint-baseline.txt` хранит
+платформенные лимиты, которые могут только уменьшаться. Версия линтера остаётся
+v2.13.1; установка: `wails3 task lint:install`.
+
+Фронтенд можно проверить отдельно из `frontend/`:
+если bindings отсутствуют, сначала выполните `wails3 task common:generate:bindings`.
+
+```sh
 npm ci
-npm run check       # svelte-check
-npm run test        # vitest
+npm run check
+npm test
 npm run build
 ```
-
-Связки между Go и фронтом генерируются: `wails3 task common:generate:bindings`.
 
 ## Структура
 

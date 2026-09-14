@@ -1,256 +1,168 @@
-# Verification pipeline for every push and pull request.
-#
-# The launcher ships for Windows and Apple Silicon macOS:
-# the `devmock` build tag swaps the Windows-only subsystems for mocks so the
-# whole flow (install, play, session detection, shortcuts, account) can be
-# exercised on a Mac. The mocks must never reach the Windows executable, so
-# this pipeline builds and tests both flavours and proves the tag cannot be
-# combined with GOOS=windows or the production tag.
-
+# Fast checks on dev and PR merge results. Run `wails3 task check:local`
+# before pushing; full cross-platform checks remain available on demand.
 name: CI
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev]
+    paths-ignore: ['README*.md', 'docs/**', '.github/screenshots/**']
   pull_request:
+    paths-ignore: ['README*.md', 'docs/**', '.github/screenshots/**']
   workflow_dispatch:
+    inputs:
+      full_checks:
+        description: Also run macOS builds/race tests and lint on all three platforms
+        type: boolean
+        default: false
+      lint_base:
+        description: Git revision for new Linux lint findings (full checks only)
+        default: origin/main
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ inputs.full_checks && 'full' || 'quick' }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  GOLANGCI_LINT_VERSION: v2.13.1
   WAILS_VERSION: v3.0.0-beta.17
 
 jobs:
-  lint:
-    name: Format, vet, lint, cross-build
-    runs-on: ubuntu-latest
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
         with:
-          fetch-depth: 0
+          variant: tests
+      - name: gofmt
+        shell: bash
+        run: bash scripts/check-format.sh
+      - name: go vet
+        run: go vet . ./internal/... ./cmd/... ./tools/...
+      - name: Build launcher and verify forbidden tags
+        shell: bash
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build -o "$RUNNER_TEMP/typhon.exe" .
+          bash scripts/check-build-tags.sh
+      - name: go test
+        run: go test ./...
 
-      - uses: actions/setup-go@v5
+  frontend:
+    name: Frontend check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
-
-      # Type-checking the main package pulls in the Wails Linux backend, which
-      # is cgo over GTK 4 and WebKitGTK 6.0: without the headers go vet and the linter
-      # cannot load the packages at all.
+          variant: frontend
       - name: Install GTK and WebKit headers
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
-
-      - name: gofmt
-        run: |
-          set -euo pipefail
-          out="$(gofmt -l .)"
-          if [ -n "$out" ]; then
-            echo "gofmt needs to run on:" >&2
-            echo "$out" >&2
-            exit 1
-          fi
-
-      - name: go vet
-        run: go vet . ./internal/...
-
-      - name: Cross-build for Windows
-        env:
-          GOOS: windows
-          CGO_ENABLED: "0"
-        run: go build . ./internal/...
-
-      - name: Cross-build for Windows must reject the devmock tag
-        env:
-          GOOS: windows
-          CGO_ENABLED: "0"
-        run: |
-          set -euo pipefail
-          if go build -tags devmock ./internal/devmock/ 2>/dev/null; then
-            echo "devmock compiled for GOOS=windows; internal/devmock/forbid_devmock.go must fail the build" >&2
-            exit 1
-          fi
-
-      - name: Production tag must reject the devmock tag
-        run: |
-          set -euo pipefail
-          if go build -tags production,devmock ./internal/devmock/ 2>/dev/null; then
-            echo "devmock compiled with the production tag; internal/devmock/forbid_devmock.go must fail the build" >&2
-            exit 1
-          fi
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
-
-      # New or changed code must be clean; the whole module is measured
-      # against the per-OS baseline below, which may only go down.
-      - name: golangci-lint on changed code
-        env:
-          BASE_REF: ${{ github.base_ref || 'dev' }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "$BASE_REF"
-          golangci-lint run --timeout=10m --new-from-rev="origin/$BASE_REF" --whole-files=false ./...
-          golangci-lint run --timeout=10m --new-from-rev="origin/$BASE_REF" --whole-files=false --build-tags devmock ./internal/...
-
-      - name: Lint baseline (linux)
-        run: go run ./tools/lintbaseline
-
-      - name: Lint baseline (linux, devmock tag)
-        run: go run ./tools/lintbaseline -tags devmock
-
-  macos-build:
-    name: macOS builds, plain tests, package and lint
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build launcher
-        env:
-          CGO_ENABLED: "1"
-        run: go build -o /dev/null .
-
-      - name: Build launcher with devmock
-        env:
-          CGO_ENABLED: "1"
-        run: go build -tags devmock -o /dev/null .
-
-      - name: go test
-        run: go test ./internal/...
-
-      # Упаковка бандла ломается отдельно от кода: иконки, Info.plist, ditto.
-      # Ловим это здесь, а не в момент релиза.
-      - name: Set up Wails CLI
-        uses: ./.github/actions/setup-wails
-        with:
-          version: ${{ env.WAILS_VERSION }}
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
+      - name: Generate bindings
+        run: wails3 task common:generate:bindings
+      - name: Verify the production tag guard
+        run: bash scripts/check-build-tags.sh
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Check, test and build
+        working-directory: frontend
+        run: |
+          npm run check
+          npm test
+          npm run build
 
+  macos-build:
+    name: macOS builds and package
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: production
+      - name: Build native and devmock launcher
+        run: |
+          go build -o /dev/null .
+          go build -tags devmock -o /dev/null .
+          bash scripts/check-build-tags.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
       - name: Package the macOS bundle
-        env:
-          CGO_ENABLED: "1"
         run: wails3 task darwin:package:zip
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
-
-      - name: Lint baseline (darwin)
-        run: go run ./tools/lintbaseline
-
-      - name: Lint baseline (darwin, devmock tag)
-        run: go run ./tools/lintbaseline -tags devmock
 
   macos-race:
     name: macOS race tests (${{ matrix.mode }})
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
     runs-on: macos-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         mode: [plain, devmock]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          variant: race-${{ matrix.mode }}
       - name: Run race tests
         env:
           CGO_ENABLED: "1"
           MODE: ${{ matrix.mode }}
         run: |
-          if [ "$MODE" = "devmock" ]; then
-            go test -race -tags devmock ./internal/...
+          if [ "$MODE" = devmock ]; then
+            go test -race -tags devmock ./...
           else
-            go test -race ./internal/...
+            go test -race ./...
           fi
 
-  # Keep the existing required-check name while every macOS lane runs in parallel.
-  test-macos:
-    name: Build and test on macOS (plain and devmock)
-    needs: [macos-build, macos-race]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require all macOS checks
-        env:
-          BUILD_RESULT: ${{ needs.macos-build.result }}
-          RACE_RESULT: ${{ needs.macos-race.result }}
-        run: test "$BUILD_RESULT" = success && test "$RACE_RESULT" = success
-
-  test-windows:
-    name: Test on Windows
-    runs-on: windows-latest
+  lint:
+    name: Full lint (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-
-      - name: go vet
-        run: go vet . ./internal/...
-
-      - name: go test
-        run: go test ./internal/...
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
-
-      - name: Lint baseline (windows)
-        run: go run ./tools/lintbaseline
-
-  frontend:
-    name: Frontend check and build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
-
+          variant: lint
       - name: Install GTK and WebKit headers
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Set up Wails CLI
-        uses: ./.github/actions/setup-wails
-        with:
-          version: ${{ env.WAILS_VERSION }}
-
-      - name: Generate bindings
-        run: wails3 task common:generate:bindings
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: svelte-check
-        working-directory: frontend
-        run: npm run check
-
-      - name: Build
-        working-directory: frontend
-        run: npm run build
+      - uses: ./.github/actions/setup-lint
+      - name: Check platform baselines
+        shell: bash
+        env:
+          LINT_BASE: ${{ inputs.lint_base }}
+        run: bash scripts/check-local.sh lint
