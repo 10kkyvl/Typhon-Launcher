@@ -6,6 +6,21 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.7.2 — 2026-09-15
+More reliable chat, more accurate release matching, and more complete interface translations.
+
+### Changed
+- You can keep typing and sending messages while chat reconnects. Pending messages show a “Sending” status
+- Native dialogs, the tray menu, and the updater window follow the selected language; the Windows installer supports Russian and English
+
+### Fixed
+- Chat reconnects after temporary network and server errors. Fixed delivery interruptions caused by slow session checks and full event queues
+- Drafts survive failed sends and are cleared after a successful send or retry if you have not changed the text in the meantime
+- The first incoming message immediately appears in the conversation list. Refresh errors preserve loaded conversations; loading older messages and quickly toggling reactions retain their results during concurrent updates
+- Release matching separates versions, build dates, and bonus notes from game titles more accurately. Fixed GTA name variants, repeated sequel numbers such as “2 (II)”, and mixed Cyrillic and Latin letters
+- Editions such as GTA IV: Complete Edition more accurately select their own catalog entry; alternative numeral spellings are checked while preserving distinct game identities
+- Added missing genre and theme translations, statuses, and error messages for sources, updates, and local network transfers. Notifications and ongoing operations refresh their text when the language changes
+
 ## 0.7.1 — 2026-09-14
 Catalog loading is independent of recommendations, search uses the server catalog, and releases match games more accurately.
 
