@@ -349,6 +349,33 @@ describe('messaging store session and event races', () => {
     await expect(messaging.toggleReaction(peer.id, message(), 'heart')).rejects.toThrow('offline');
   });
 
+  it.each([false, true])('reports history failure separately after an accepted reaction (remove=%s)', async (remove) => {
+    const { messaging } = await load();
+    messaging.openChat(peer);
+    await flush();
+    api.messages.mockRejectedValueOnce(new Error('history offline'));
+    const reacted = message({ reactions: remove ? [{ emoji: 'heart', userIds: ['me'] }] : [] });
+
+    await expect(messaging.toggleReaction(peer.id, reacted, 'heart')).resolves.toBeUndefined();
+
+    expect(remove ? api.unreact : api.react).toHaveBeenCalledWith(peer.id, reacted.id, 'heart');
+    expect(get(messaging.chatHistoryError)).toBeTruthy();
+  });
+
+  it('does not refresh the next session after a reaction from the old account completes', async () => {
+    const { user, messaging } = await load();
+    let finishReaction!: () => void;
+    api.react.mockReturnValueOnce(new Promise<void>((resolve) => { finishReaction = resolve; }));
+    const pending = messaging.toggleReaction(peer.id, message(), 'heart');
+    user.authState.set('unauthenticated');
+    user.currentUser.set(null);
+    await flush();
+    api.messages.mockClear();
+    finishReaction();
+    await pending;
+    expect(api.messages).not.toHaveBeenCalled();
+  });
+
   it('keeps optimistic failed messages when history refreshes', async () => {
     const { messaging } = await load();
     api.send.mockRejectedValueOnce(new Error('network'));

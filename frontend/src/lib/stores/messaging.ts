@@ -493,17 +493,20 @@ export async function editMessage(peerId: string, messageId: string, text: strin
 
 export async function toggleReaction(peerId: string, message: Message, emoji: ReactionKey): Promise<void> {
   const ownId = get(currentUser)?.id;
+  const expectedGeneration = generation;
   if (!ownId) return;
   const current = message.reactions.find((reaction) => reaction.emoji === emoji);
   const mine = current?.userIds.includes(ownId) ?? false;
   try {
     if (mine) await unreactMessageCall(peerId, message.id, emoji);
     else await reactMessageCall(peerId, message.id, emoji);
-    await loadMessages(peerId);
   } catch (err) {
     console.warn('messaging reaction failed', err);
     throw err;
   }
+  if (expectedGeneration !== generation) return;
+  // History reports its own error; an accepted reaction must not look failed.
+  await loadMessages(peerId).catch(() => undefined);
 }
 
 export async function setTyping(peerId: string, value: boolean): Promise<void> {
