@@ -78,12 +78,6 @@ type responseFailure struct {
 
 func (e *responseFailure) Error() string { return e.code }
 
-func permanentStreamError(err error) bool {
-	var failure *responseFailure
-	return errors.As(err, &failure) && failure.status >= 400 && failure.status < 500 &&
-		failure.status != http.StatusRequestTimeout && failure.status != http.StatusTooManyRequests
-}
-
 func responseError(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		return errSignedOut
@@ -117,7 +111,9 @@ func (s *Service) loop(r *session) {
 		started := time.Now()
 		err := s.stream(r)
 		s.publish(r, Event{Kind: "connection", Connected: false})
-		if errors.Is(err, errSignedOut) || permanentStreamError(err) {
+		// Only invalid credentials end the session. Edge/WAF 4xx responses can
+		// be transient and must not disable the independent POST operations.
+		if errors.Is(err, errSignedOut) {
 			r.cancel()
 			return
 		}

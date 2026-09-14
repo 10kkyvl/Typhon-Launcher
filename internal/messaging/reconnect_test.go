@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestStreamStopsOnPermanentHTTPFailure(t *testing.T) {
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound} {
+	for _, status := range []int{http.StatusUnauthorized} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,10 +70,15 @@ func TestStreamStopsOnPermanentHTTPFailure(t *testing.T) {
 }
 
 func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
-	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+	for _, status := range []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusServiceUnavailable} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusCreated)
+					_, _ = fmt.Fprint(w, `{"id":"1","clientId":"client","text":"while reconnecting"}`)
+					return
+				}
 				if r.URL.Path == "/v1/me" {
 					if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
 						t.Errorf("write chat response: %v", err)
@@ -111,6 +117,12 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 			if err = s.Start(); err != nil {
 				t.Fatal(err)
 			}
+			if e := awaitKind(t, events, "connection"); e.Connected {
+				t.Fatal("initial failure did not disconnect")
+			}
+			if m, err := s.Send("peer", "client", "while reconnecting"); err != nil || m.ID != "1" {
+				t.Fatalf("sending during stream retry: %+v, %v", m, err)
+			}
 			awaitKind(t, events, "sync")
 			if requests.Load() != 2 {
 				t.Fatalf("requests = %d", requests.Load())
@@ -126,7 +138,8 @@ func TestResponseErrorPreservesCodeAndStatus(t *testing.T) {
 		if strings.HasPrefix(body, "{") {
 			want = "chat_disabled"
 		}
-		if err.Error() != want || !permanentStreamError(err) {
+		var failure *responseFailure
+		if err.Error() != want || !errors.As(err, &failure) || failure.status != http.StatusForbidden {
 			t.Fatalf("response error = %v", err)
 		}
 	}
