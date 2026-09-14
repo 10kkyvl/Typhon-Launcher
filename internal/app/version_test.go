@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -299,6 +300,40 @@ func TestVersionSourcesMatch(t *testing.T) {
 		{"build/config.yml info.version", configVersion},
 		{"build/windows/info.json fixed.file_version", winFileVersion},
 		{"build/windows/info.json info.0000.ProductVersion", winProductVersion},
+	}
+
+	for _, name := range []string{"Info.plist", "Info.dev.plist"} {
+		data, err := os.ReadFile(filepath.Join(root, "build", "darwin", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plist struct {
+			Dict struct {
+				Entries []struct {
+					XMLName xml.Name
+					Text    string `xml:",chardata"`
+				} `xml:",any"`
+			} `xml:"dict"`
+		}
+		if err := xml.Unmarshal(data, &plist); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"CFBundleShortVersionString", "CFBundleVersion"} {
+			value := ""
+			for i, entry := range plist.Dict.Entries {
+				if entry.XMLName.Local == "key" && entry.Text == key && i+1 < len(plist.Dict.Entries) {
+					next := plist.Dict.Entries[i+1]
+					if next.XMLName.Local == "string" {
+						value = next.Text
+					}
+				}
+			}
+			t.Run("build/darwin/"+name+" "+key, func(t *testing.T) {
+				if value != fileVersion {
+					t.Errorf("%s = %q, want VERSION %q", key, value, fileVersion)
+				}
+			})
+		}
 	}
 
 	for _, tc := range cases {
