@@ -54,6 +54,8 @@ type Service struct {
 	recommendationLibrary RecommendationLibrarySource
 	preferences           RecommendationPreferences
 	browseSnapshots       map[string]browseSnapshot
+	discoveryPages        map[string]GamePage
+	discoveryGames        map[string]discoveryGame
 }
 
 func NewService() (*Service, error) {
@@ -223,8 +225,13 @@ func (s *Service) ListGames() []Game {
 }
 
 func (s *Service) GetGame(id string) (Game, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var err error
+	id, err = s.promoteDiscoveryGameLocked(id)
+	if err != nil {
+		return Game{}, err
+	}
 	game, ok := s.idx.game(id)
 	if !ok {
 		return Game{}, errNotFound

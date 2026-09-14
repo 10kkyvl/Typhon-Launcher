@@ -602,6 +602,16 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	})
 	if !remoteOK {
 		candidateGames = games
+		if q.Compat == CompatOnlyWorking {
+			candidateGames = make([]Game, 0, len(games))
+			s.mu.RLock()
+			for _, game := range games {
+				if s.compatWorksLocked(game.ID) {
+					candidateGames = append(candidateGames, game)
+				}
+			}
+			s.mu.RUnlock()
+		}
 	}
 	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 	selected := diverseRecommendations(candidates, limit)
@@ -625,6 +635,7 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 			}
 		}
 	}
+	s.rememberDiscoveryGames(selected)
 	return DiscoveryResult{Items: selected, Fallback: !remoteOK || s.recommendationLoadErr != nil, Profile: profile}
 }
 
@@ -632,10 +643,15 @@ func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string, enough func
 	q.Sort = sortName
 	q.Page = 1
 	q.PageSize = 60
-	page, err := s.BrowseGames(q)
+	page, err := s.browseGames(q, false)
 	if err != nil || page.Offline {
 		return nil, false
 	}
+	defer func() {
+		s.mu.Lock()
+		delete(s.browseSnapshots, page.Snapshot)
+		s.mu.Unlock()
+	}()
 	items := append([]Game(nil), page.Items...)
 	for pageNumber := 2; pageNumber <= 3 && !enough(items) && len(page.Items) >= q.PageSize; pageNumber++ {
 		continuation := q
@@ -643,7 +659,7 @@ func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string, enough func
 		continuation.Snapshot = page.Snapshot
 		continuation.Revision = page.Revision
 		continuation.PageSize = q.PageSize
-		next, nextErr := s.BrowseGames(continuation)
+		next, nextErr := s.browseGames(continuation, false)
 		if nextErr != nil || next.Offline {
 			// The first page is still a valid, frozen result. Do not replace it
 			// with a different revision or turn a continuation failure into a

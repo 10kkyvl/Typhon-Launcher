@@ -509,41 +509,12 @@
         try {
           const nextProfile = await getRecommendationProfile();
           if (!isCurrent()) return;
-          const previousSort = effectiveSort;
-          const nextSort = sort === 'auto' ? nextProfile.defaultSort : sort;
           profile = nextProfile;
-          // A changed ranking needs a new snapshot with the shelf excluded.
-          // Ordinary favorite changes keep the current pages and scroll.
-          if (nextSort !== previousSort) {
-            await reload();
-            return;
-          }
         } catch {
           if (!isCurrent()) return;
           personalizationFallback = true;
         }
-        prefetch.clear();
-        if (!isCurrent()) return;
-        if (discoveryVisible) {
-          discoveryRefreshOwner = expected.favorite;
-          discoveryLoading = true;
-          try {
-            const result = await getDiscovery({ search, genre, platform, kind, sort,
-              compat: compatOnly ? compatOnlyWorking : '' }, []);
-            if (!isCurrent()) return;
-            discovery = result.items;
-            personalizationFallback = result.fallback;
-          } catch {
-            if (!isCurrent()) return;
-            discovery = [];
-            personalizationFallback = true;
-          } finally {
-            if (discoveryRefreshOwner === expected.favorite) {
-              discoveryRefreshOwner = 0;
-              discoveryLoading = false;
-            }
-          }
-        }
+        if (isCurrent()) await reload();
       }
     } catch (err) {
       if (isCurrent()) toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
