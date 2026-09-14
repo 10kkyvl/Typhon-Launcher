@@ -591,7 +591,7 @@
   </fieldset>
 
   {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
-  {:else if incomplete}<p class="muted" role="status">{msg('games.catalogIncomplete')}</p>{/if}
+  {:else if incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
   {#if failed || offline}<Button onclick={() => void reload()}>{msg('games.catalogRetry')}</Button>{/if}
 
   {#if lastDismissed}
