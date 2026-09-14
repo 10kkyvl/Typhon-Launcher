@@ -564,40 +564,34 @@ func topFacets(values map[string]float64) []RecommendationFacet {
 }
 
 func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
-	games, p, source := s.recommendationSnapshot()
-	items := []RecommendationLibraryItem(nil)
-	if source != nil {
-		items = source()
-	}
-	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
-	if s.recommendationLoadErr != nil {
-		profile = profileFromEvidence(recommendationEvidence{}, p)
-	}
+	games, p, _, items, profile := s.recommendationSnapshotWithProfile()
 	limit := q.Limit
 	if limit <= 0 || limit > maxDiscoveryItems {
 		limit = maxDiscoveryItems
 	}
-	exclude := mergeIDs(q.RefreshExcludeIDs, q.ExcludeIDs)
 	libraryIDs := libraryGameIDs(items)
-	seen := map[string]bool{}
+	baseSeen := map[string]bool{}
 	for _, id := range p.NotInterested {
-		seen[id] = true
+		baseSeen[id] = true
 	}
-	for _, id := range exclude {
-		seen[id] = true
+	for _, id := range q.ExcludeIDs {
+		baseSeen[id] = true
 	}
 	for id := range libraryIDs {
+		baseSeen[id] = true
+	}
+	seen := cloneBoolMap(baseSeen)
+	for _, id := range q.RefreshExcludeIDs {
 		seen[id] = true
 	}
 	// Discovery is always outside the library. The explicit query flag is
 	// accepted for API symmetry, but cannot make the discovery block leak owned
 	// games into its own results.
 	remoteQuery := q.GameQuery
-	// Refresh exclusions must reach the backend before it chooses its first
-	// page. Applying them only to the returned page would make a refresh empty
-	// whenever the first remote page contained dismissed/owned titles.
+	// Fetch one remote candidate stream. Refresh exclusions are applied while
+	// ranking so the same stream can provide both fresh picks and the existing
+	// picks needed to fill a short shelf.
 	remoteQuery.HideLibrary, remoteQuery.HideNotInterested = true, true
-	remoteQuery.ExcludeIDs = mergeIDs(remoteQuery.ExcludeIDs, q.RefreshExcludeIDs)
 	sortName := "popular"
 	if profile.Confidence > 0 {
 		sortName = "for-you"
@@ -612,17 +606,16 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 	selected := diverseRecommendations(candidates, limit)
 	// Prefer fresh picks, but retain enough existing eligible picks when there
-	// are fewer alternatives than shelf slots. Never show an empty refresh just
-	// because the eligible catalog has already been explored.
+	// are fewer alternatives than shelf slots. Reuse the same remote candidate
+	// stream instead of issuing a second discovery request for the backfill.
 	if len(selected) < limit && len(q.RefreshExcludeIDs) > 0 {
-		retry := q
-		retry.RefreshExcludeIDs = nil
-		old := s.GetDiscovery(retry)
+		oldCandidates := rankGames(candidateGames, profile, items, p, false, baseSeen, q.GameQuery, games)
+		old := diverseRecommendations(oldCandidates, limit)
 		used := map[string]bool{}
 		for _, item := range selected {
 			used[item.Game.ID] = true
 		}
-		for _, item := range old.Items {
+		for _, item := range old {
 			if !used[item.Game.ID] {
 				selected = append(selected, item)
 				used[item.Game.ID] = true
@@ -1032,6 +1025,14 @@ func mergeIDs(groups ...[]string) []string {
 		}
 	}
 	return result
+}
+
+func cloneBoolMap(values map[string]bool) map[string]bool {
+	clone := make(map[string]bool, len(values))
+	for key, value := range values {
+		clone[key] = value
+	}
+	return clone
 }
 
 func minFloat(a, b float64) float64 {

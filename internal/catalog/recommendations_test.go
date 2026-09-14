@@ -11,13 +11,25 @@ import (
 )
 
 type recommendationRemote struct {
-	page GamePage
-	got  GameQuery
+	page  GamePage
+	got   GameQuery
+	calls int
+	err   error
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *recommendationRemote) Browse(_ context.Context, q GameQuery) (GamePage, error) {
+	r.calls++
 	r.got = q
-	return r.page, nil
+	return r.page, r.err
 }
 
 func TestRecommendationProfileRequiresMoreThanOneLaunch(t *testing.T) {
@@ -336,6 +348,76 @@ func TestDiscoveryUsesRemoteCandidatesBeforeLocalFallback(t *testing.T) {
 	}
 }
 
+func TestDiscoveryRefreshBackfillsFromSameRemoteCandidatesWithoutSecondFetch(t *testing.T) {
+	s := newTestService(t)
+	localOnly := seed(t, s, Game{ID: "local-only", Title: "Local only", Genres: []string{"Puzzle"}})[0]
+	old := Game{ID: "old-candidate", Title: "Previously shown", Genres: []string{"Strategy"}}
+	remote := &recommendationRemote{page: GamePage{Items: []Game{old, {ID: "fresh-candidate", Title: "Fresh candidate", Genres: []string{"Action"}}}}}
+	s.SetRemoteCatalog(remote)
+	result := s.GetDiscovery(DiscoveryQuery{RefreshExcludeIDs: []string{old.ID}, Limit: 2})
+	if result.Fallback || len(result.Items) != 2 {
+		t.Fatalf("refresh result = %+v, fallback=%v", result.Items, result.Fallback)
+	}
+	ids := map[string]bool{result.Items[0].Game.ID: true, result.Items[1].Game.ID: true}
+	if !ids[old.ID] || !ids["fresh-candidate"] {
+		t.Fatalf("refresh did not use fresh and cached candidates: %+v", result.Items)
+	}
+	if ids[localOnly.ID] {
+		t.Fatalf("successful remote discovery leaked local-only game: %+v", result.Items)
+	}
+	if remote.calls != 1 {
+		t.Fatalf("refresh issued %d remote requests, want 1", remote.calls)
+	}
+	if containsString(remote.got.ExcludeIDs, old.ID) {
+		t.Fatalf("refresh exclusion was sent as a membership filter: %+v", remote.got)
+	}
+}
+
+func TestDiscoveryRefreshBackfillPreservesHardExclusionsOffline(t *testing.T) {
+	s := newTestService(t)
+	dismissed := seed(t, s, Game{ID: "dismissed", Title: "Dismissed", Genres: []string{"Strategy"}})[0]
+	explicit := seed(t, s, Game{ID: "explicit", Title: "Explicitly excluded", Genres: []string{"Action"}})[0]
+	owned := seed(t, s, Game{ID: "owned", Title: "Owned", Genres: []string{"Puzzle"}})[0]
+	if err := s.SetNotInterested(dismissed.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
+		return []RecommendationLibraryItem{{CanonicalGameID: owned.ID, LibraryID: "owned"}}
+	})
+	remote := &recommendationRemote{page: GamePage{}}
+	remote.err = errors.New("offline")
+	s.SetRemoteCatalog(remote)
+	result := s.GetDiscovery(DiscoveryQuery{
+		GameQuery:         GameQuery{ExcludeIDs: []string{explicit.ID}},
+		RefreshExcludeIDs: []string{dismissed.ID, explicit.ID, owned.ID},
+		Limit:             3,
+	})
+	if len(result.Items) != 0 || !result.Fallback {
+		t.Fatalf("offline refresh returned hard-excluded games: %+v, fallback=%v", result.Items, result.Fallback)
+	}
+	if remote.calls != 1 {
+		t.Fatalf("offline refresh issued %d remote requests, want 1", remote.calls)
+	}
+}
+
+func TestDiscoveryRefreshKeepsExplicitExclusionsDuringBackfill(t *testing.T) {
+	s := newTestService(t)
+	old := Game{ID: "old-candidate", Title: "Previously shown", Genres: []string{"Strategy"}}
+	remote := &recommendationRemote{page: GamePage{Items: []Game{old, {ID: "fresh-candidate", Title: "Fresh candidate", Genres: []string{"Action"}}}}}
+	s.SetRemoteCatalog(remote)
+	result := s.GetDiscovery(DiscoveryQuery{
+		GameQuery:         GameQuery{ExcludeIDs: []string{old.ID}},
+		RefreshExcludeIDs: []string{old.ID},
+		Limit:             2,
+	})
+	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "fresh-candidate" {
+		t.Fatalf("explicit exclusion was lost during refresh: %+v, fallback=%v", result.Items, result.Fallback)
+	}
+	if remote.calls != 1 || !containsString(remote.got.ExcludeIDs, old.ID) {
+		t.Fatalf("explicit exclusion query = %+v, calls=%d", remote.got, remote.calls)
+	}
+}
+
 type pagedRecommendationRemote struct {
 	pages   map[int][]Game
 	queries []GameQuery
@@ -369,7 +451,7 @@ func TestDiscoveryFetchesBoundedContinuationForExplainableCandidates(t *testing.
 	}
 }
 
-func TestDiscoveryPassesLargeLibraryAndRefreshExclusionsToRemote(t *testing.T) {
+func TestDiscoveryPassesLargeLibraryButNotRefreshExclusionsToRemote(t *testing.T) {
 	s := newTestService(t)
 	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "next-page", Title: "Next Page Candidate", Genres: []string{"Strategy"}}}}}
 	s.SetRemoteCatalog(remote)
@@ -389,7 +471,7 @@ func TestDiscoveryPassesLargeLibraryAndRefreshExclusionsToRemote(t *testing.T) {
 	if got := len(strings.Split(remote.got.ExcludeLibrary, ",")); got != len(owned) {
 		t.Fatalf("library exclusions = %d, want %d", got, len(owned))
 	}
-	if !strings.Contains(remote.got.ExcludeLibrary, "00000000-0000-0000-0000-000000001064") || remote.got.ExcludeNotInterested != "00000000-0000-0000-0000-000000000333" {
+	if !strings.Contains(remote.got.ExcludeLibrary, "00000000-0000-0000-0000-000000001064") || remote.got.ExcludeNotInterested != "" || containsString(remote.got.ExcludeIDs, "00000000-0000-0000-0000-000000000333") {
 		t.Fatalf("remote exclusions = %+v", remote.got)
 	}
 }

@@ -108,7 +108,7 @@ func TestUnmatchedUnplayedLibraryGameHasHonestRecommendation(t *testing.T) {
 	}
 }
 
-func TestDiscoveryAlwaysExcludesOwnedAndRefreshBeforeFetching(t *testing.T) {
+func TestDiscoveryRefreshDoesNotExpandRemoteMembershipExclusions(t *testing.T) {
 	s, err := NewServiceAt(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -121,8 +121,8 @@ func TestDiscoveryAlwaysExcludesOwnedAndRefreshBeforeFetching(t *testing.T) {
 	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "fresh", Title: "Fresh game", Genres: []string{"Strategy"}}}}}
 	s.SetRemoteCatalog(remote)
 	result := s.GetDiscovery(DiscoveryQuery{RefreshExcludeIDs: []string{skip}, Limit: 1})
-	if len(result.Items) != 1 || !strings.Contains(remote.got.ExcludeLibrary, owned) || !strings.Contains(remote.got.ExcludeNotInterested, skip) {
-		t.Fatalf("UI default query did not exclude before pagination: %+v %+v", result, remote.got)
+	if len(result.Items) != 1 || !strings.Contains(remote.got.ExcludeLibrary, owned) || strings.Contains(remote.got.ExcludeNotInterested, skip) || containsString(remote.got.ExcludeIDs, skip) {
+		t.Fatalf("refresh exclusion leaked into remote membership query: %+v %+v", result, remote.got)
 	}
 }
 
