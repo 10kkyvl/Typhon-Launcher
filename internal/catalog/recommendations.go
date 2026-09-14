@@ -521,7 +521,7 @@ func buildEvidence(games []Game, items []RecommendationLibraryItem) recommendati
 		if item.Favorite {
 			weight += 2
 		}
-		for _, genre := range game.Genres {
+		for _, genre := range canonicalGenres(game.Genres) {
 			e.Genres[genre] += weight
 		}
 		for _, theme := range game.Themes {
@@ -735,7 +735,7 @@ func rankGames(games []Game, profile RecommendationProfile, library []Recommenda
 	}
 	genreScores := map[string]float64{}
 	for _, facet := range profile.Genres {
-		genreScores[strings.ToLower(facet.Value)] = facet.Score
+		genreScores[strings.ToLower(canonicalGenre(facet.Value))] += facet.Score
 	}
 	themeScores := map[string]float64{}
 	for _, facet := range profile.Themes {
@@ -810,7 +810,7 @@ func similarReference(candidate Game, games []Game, library []RecommendationLibr
 		if !ok || item.Hidden || (!item.Favorite && (item.Sessions < recommendationConfig.MeaningfulSessions || item.PlaytimeSeconds < recommendationConfig.MinMeaningfulSeconds)) {
 			continue
 		}
-		if shareValue(candidate.Genres, game.Genres) || shareValue(candidate.Themes, game.Themes) {
+		if shareValue(canonicalGenres(candidate.Genres), canonicalGenres(game.Genres)) || shareValue(candidate.Themes, game.Themes) {
 			return game.Title
 		}
 	}
@@ -830,7 +830,7 @@ func shareValue(left, right []string) bool {
 
 func scoreRecommendation(game Game, profile RecommendationProfile, item RecommendationLibraryItem, inLibrary bool, genres, themes map[string]float64) (float64, string, string, string) {
 	genreScore, bestGenre := 0.0, ""
-	for _, genre := range game.Genres {
+	for _, genre := range canonicalGenres(game.Genres) {
 		if score := genres[strings.ToLower(genre)]; score > genreScore {
 			genreScore, bestGenre = score, genre
 		}
@@ -882,7 +882,7 @@ func hasReturnSignal(game Game, item RecommendationLibraryItem, genres, themes m
 	if item.Favorite || (item.Sessions >= recommendationConfig.MeaningfulSessions && item.PlaytimeSeconds >= recommendationConfig.MinMeaningfulSeconds) {
 		return true
 	}
-	for _, genre := range game.Genres {
+	for _, genre := range canonicalGenres(game.Genres) {
 		if genres[strings.ToLower(genre)] > 0 {
 			return true
 		}

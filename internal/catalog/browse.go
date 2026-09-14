@@ -217,6 +217,9 @@ func (s *Service) GenreFacets() []GenreFacet {
 }
 
 func genreMatches(genres []string, label string) bool {
+	if want := canonicalGenre(label); want != "" && containsFold(canonicalGenres(genres), want) {
+		return true
+	}
 	for _, group := range genreGroups {
 		if strings.EqualFold(group.label, label) {
 			return genresMatchAny(genres, group.sources)

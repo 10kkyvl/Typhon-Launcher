@@ -12,6 +12,7 @@ export interface Recommendation {
 const genreKeys: Record<string, MessageKey> = {
   Action: 'games.genreAction', RPG: 'games.genreRPG', 'Role-playing (RPG)': 'games.genreRPG',
   Shooter: 'games.genreShooter', Adventure: 'games.genreAdventure', Strategy: 'games.genreStrategy', Indie: 'games.genreIndie',
+  'Экшены': 'games.genreAction', 'Ролевые игры': 'games.genreRPG', 'Приключенческие игры': 'games.genreAdventure',
   'Экшен': 'games.genreAction', 'Ролевые': 'games.genreRPG', 'Шутеры': 'games.genreShooter',
   'Приключения': 'games.genreAdventure', 'Стратегии': 'games.genreStrategy', 'Инди': 'games.genreIndie',
 };

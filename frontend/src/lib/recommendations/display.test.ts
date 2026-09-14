@@ -15,6 +15,9 @@ describe('recommendation explanations', () => {
     applyLanguage('en');
     expect(recommendationReason(item('similar', { reasonTitle: 'Hades' }))).toBe('Similar to Hades');
     expect(genreLabel('Экшен')).toBe('Action');
+    expect(genreLabel('Экшены')).toBe('Action');
+    expect(genreLabel('Ролевые игры')).toBe(genreLabel('Role-playing (RPG)'));
+    expect(genreLabel('Приключенческие игры')).toBe('Adventure');
     expect(recommendationReason(item('unplayed'))).toBe('You haven’t played this yet');
   });
   it('supports Russian without invented match percentages', () => {

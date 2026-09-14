@@ -128,6 +128,9 @@ func loadList(path string, version int, out any) error {
 // может изменить исход матчинга, и по эпохе потребители понимают, что прошлый
 // результат больше не действителен.
 func (s *Service) rebuildLocked() {
+	for i := range s.games {
+		s.games[i].Genres = canonicalGenres(s.games[i].Genres)
+	}
 	s.epoch++
 	s.idx = buildIndex(s.games)
 	for old := range s.redirects {
