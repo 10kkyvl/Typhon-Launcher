@@ -22,6 +22,8 @@ describe('provider labels in game details and recommendations', () => {
     expect(themeLabel('Открытый мир')).toBe('Open world');
   });
   it('preserves unknown provider labels', () => {
+    expect(genreLabel('constructor')).toBe('constructor');
+    expect(themeLabel('__proto__')).toBe('__proto__');
     expect(genreLabel('User genre')).toBe('User genre');
     expect(themeLabel('User theme')).toBe('User theme');
   });

@@ -787,12 +787,12 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
 	exePath := filepath.Join(dest, filepath.FromSlash(offer.Exe))
 	if !platform.Inside(dest, exePath) {
-		s.finishTransfer(run, id, TransferFailed, errors.New("lan: received executable escapes destination"))
+		s.finishTransfer(run, id, TransferFailed, errExeOutsideInstall)
 		return
 	}
 	info, err := os.Stat(exePath)
 	if err != nil || info.IsDir() {
-		s.finishTransfer(run, id, TransferFailed, fmt.Errorf("lan: executable missing after transfer: %s", exePath))
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.executable_missing", fmt.Errorf("lan: executable missing after transfer: %s", exePath)))
 		return
 	}
 
@@ -804,7 +804,7 @@ func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, 
 		InstallType:   "lan",
 	})
 	if err != nil {
-		s.finishTransfer(run, id, TransferFailed, fmt.Errorf("lan: register game: %w", err))
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.register_game_failed", err))
 		return
 	}
 

@@ -36,6 +36,8 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.library_unavailable': 'errSources.lanLibraryUnavailable',
   'lan.no_install_dir': 'errSources.lanNoInstallDir',
   'lan.exe_outside_install': 'errSources.lanExeOutsideInstall',
+  'lan.executable_missing': 'errSources.lanExecutableMissing',
+  'lan.register_game_failed': 'errSources.lanRegisterGameFailed',
   'lan.games_path_unavailable': 'errSources.lanGamesPathUnavailable',
   'lan.offer_not_found': 'errSources.lanOfferNotFound',
   'lan.unknown_transfer': 'errSources.lanUnknownTransfer',

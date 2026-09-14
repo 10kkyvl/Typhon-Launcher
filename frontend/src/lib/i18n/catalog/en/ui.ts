@@ -27,7 +27,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.repair': 'Repair',
   'ui.game': 'Game',
   'ui.awaitingSources': 'Waiting for sources',
-  'ui.seedersPeers': '{seeders} seed / {peers} peer',
+  'ui.seedersPeers': 'Seeds: {seeders} · peers: {peers}',
   'ui.bytesOfBytes': '{done} of {total}',
   'ui.timeLeft': '{eta} left',
   'ui.cancelVerb': 'Cancel',

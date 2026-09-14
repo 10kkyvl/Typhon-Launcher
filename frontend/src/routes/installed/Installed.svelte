@@ -84,8 +84,9 @@
   function brokenNote(game: LibraryGame): string {
     const status = compat.get(game.id);
     if (!status || status.state !== 'broken') return '';
-    return status.lastError
-      ? msg('games.compatBrokenWithReason', { reason: status.lastError })
+    const reason = libraryErrorText(status.lastError, '');
+    return reason
+      ? msg('games.compatBrokenWithReason', { reason })
       : msg('games.compatBroken');
   }
 

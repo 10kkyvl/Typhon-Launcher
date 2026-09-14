@@ -1,4 +1,5 @@
 import { msg } from '../i18n';
+import { sourceErrorText } from '../sources/sourceErrors';
 import { bytesSize, progressPercent } from '../utils/format';
 import type { Offer, Stats, Transfer } from '../services/lan';
 import type { MessageKey } from '../i18n';
@@ -39,7 +40,9 @@ export function transferLabel(transfer: Transfer): string {
     case 'completed':
       return msg('transfers.lanReceived');
     case 'failed':
-      return msg('transfers.lanTransferFailed', { error: transfer.error || msg('transfers.lanUnknownError') });
+      return msg('transfers.lanTransferFailed', {
+        error: sourceErrorText(transfer.error, msg('transfers.lanUnknownError')),
+      });
     case 'cancelled':
       return msg('transfers.lanCancelled');
     default:

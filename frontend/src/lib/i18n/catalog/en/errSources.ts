@@ -52,6 +52,8 @@ export const errSources: Record<ErrSourcesKey, Message> = {
   'errSources.lanLibraryUnavailable': 'The game library is unavailable',
   'errSources.lanNoInstallDir': 'The game has no install directory',
   'errSources.lanExeOutsideInstall': 'The executable is outside the install directory',
+  'errSources.lanExecutableMissing': 'The game executable was not found after the transfer',
+  'errSources.lanRegisterGameFailed': 'Could not add the received game to the library',
   'errSources.lanGamesPathUnavailable': 'The games folder is unavailable',
   'errSources.lanOfferNotFound': 'The offer was not found or has expired',
   'errSources.lanUnknownTransfer': 'Transfer not found',

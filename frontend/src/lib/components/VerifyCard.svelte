@@ -69,7 +69,7 @@
     <dl class="summary">
       <div>
         <dt>{msg('verify.matched')}</dt>
-        <dd>{percent}%</dd>
+        <dd>{msg('format.percent', { value: percent })}</dd>
       </div>
       <div>
         <dt>{msg('verify.checked')}</dt>

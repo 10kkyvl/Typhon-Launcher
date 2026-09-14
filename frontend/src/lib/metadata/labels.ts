@@ -111,11 +111,11 @@ const themes: Record<string, MessageKey> = {
 };
 
 export function genreLabel(value: string): string {
-  const key = genres[value.trim().toLowerCase()];
+  const key = Object.hasOwn(genres, value.trim().toLowerCase()) ? genres[value.trim().toLowerCase()] : undefined;
   return key ? msg(key) : value;
 }
 
 export function themeLabel(value: string): string {
-  const key = themes[value.trim().toLowerCase()];
+  const key = Object.hasOwn(themes, value.trim().toLowerCase()) ? themes[value.trim().toLowerCase()] : undefined;
   return key ? msg(key) : value;
 }

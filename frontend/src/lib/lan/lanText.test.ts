@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { applyLanguage, msg } from '../i18n';
 import type { Offer, Stats, Transfer } from '../services/lan';
 import { offerLabel, rejectedSummary, transferLabel } from './lanText';
+
+afterEach(() => applyLanguage('ru'));
 
 function transfer(patch: Partial<Transfer> = {}): Transfer {
   return {
@@ -64,9 +67,10 @@ describe('transferLabel', () => {
   });
 
   it('показывает причину ошибки', () => {
-    expect(transferLabel(transfer({ status: 'failed', error: 'нет места на диске' }))).toBe(
-      'Не удалось: нет места на диске',
-    );
+    const failed = transfer({ status: 'failed', error: 'typhon:lan.executable_missing: lan: executable missing after transfer: /games/test/game.exe' });
+    expect(transferLabel(failed)).toBe(`Не удалось: ${msg('errSources.lanExecutableMissing')}`);
+    applyLanguage('en');
+    expect(transferLabel(failed)).toBe(`Failed: ${msg('errSources.lanExecutableMissing')}`);
   });
 
   it('подставляет заглушку без текста ошибки', () => {

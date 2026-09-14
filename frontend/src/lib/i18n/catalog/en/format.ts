@@ -2,6 +2,7 @@ import type { Message } from '../../types';
 import type { FormatKey } from '../ru/format';
 
 export const format: Record<FormatKey, Message> = {
+  'format.percent': '{value}%',
   'units.b': 'B',
   'units.kb': 'KB',
   'units.mb': 'MB',

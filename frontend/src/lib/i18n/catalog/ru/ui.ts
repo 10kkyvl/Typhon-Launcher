@@ -24,7 +24,7 @@ export const ui = {
   'ui.repair': 'Восстановление',
   'ui.game': 'Игра',
   'ui.awaitingSources': 'Ожидание источников',
-  'ui.seedersPeers': '{seeders} сид / {peers} пир',
+  'ui.seedersPeers': 'Сиды: {seeders} · пиры: {peers}',
   'ui.bytesOfBytes': '{done} из {total}',
   'ui.timeLeft': 'Осталось {eta}',
   'ui.cancelVerb': 'Отменить',

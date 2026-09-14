@@ -1,4 +1,5 @@
 export const format = {
+  'format.percent': '{value}%',
   'units.b': 'Б',
   'units.kb': 'КБ',
   'units.mb': 'МБ',

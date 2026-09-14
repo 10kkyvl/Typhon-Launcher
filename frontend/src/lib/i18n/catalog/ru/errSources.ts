@@ -49,6 +49,8 @@ export const errSources = {
   'errSources.lanLibraryUnavailable': 'библиотека игр недоступна',
   'errSources.lanNoInstallDir': 'у игры не задан каталог установки',
   'errSources.lanExeOutsideInstall': 'исполняемый файл находится вне каталога установки',
+  'errSources.lanExecutableMissing': 'после передачи не найден исполняемый файл игры',
+  'errSources.lanRegisterGameFailed': 'не удалось добавить полученную игру в библиотеку',
   'errSources.lanGamesPathUnavailable': 'папка с играми недоступна',
   'errSources.lanOfferNotFound': 'раздача не найдена или срок её действия истёк',
   'errSources.lanUnknownTransfer': 'передача не найдена',
