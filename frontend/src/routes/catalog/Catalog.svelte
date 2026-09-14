@@ -129,7 +129,6 @@
   let ready = $state(false);
   let reloadToken = 0;
   let favoriteSeq = 0;
-  let discoveryRefreshOwner = 0;
   const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
   const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
 
@@ -274,10 +273,20 @@
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
-    discoveryRefreshOwner = 0;
     loading = true;
     items = [];
     total = 0;
+    // Apply changed library evidence only at a new browse boundary. The shelf,
+    // exclusions and ranking snapshot must stay together while paging.
+    try {
+      const currentProfile = await getRecommendationProfile();
+      if (active !== reloadToken) return;
+      profile = currentProfile;
+      preferenceKey = JSON.stringify({ preferences, profile });
+    } catch {
+      if (active !== reloadToken) return;
+      personalizationFallback = true;
+    }
     if (discoveryVisible) {
       discoveryLoading = true;
       try {
@@ -494,10 +503,6 @@
   }
 
   async function toggleFavorite(libraryId: string, current: boolean) {
-    if (discoveryRefreshOwner) {
-      discoveryRefreshOwner = 0;
-      discoveryLoading = false;
-    }
     const expected = {
       favorite: ++favoriteSeq,
       reload: reloadToken,
@@ -508,18 +513,8 @@
       && expected.token === token && expected.view === favoriteViewKey();
     try {
       await setFavorite(libraryId, !current);
-      if (!isCurrent()) return;
-      if (sort === 'auto' || sort === 'for-you') {
-        try {
-          const nextProfile = await getRecommendationProfile();
-          if (!isCurrent()) return;
-          profile = nextProfile;
-        } catch {
-          if (!isCurrent()) return;
-          personalizationFallback = true;
-        }
-        if (isCurrent()) await reload();
-      }
+      // Saving a heart updates the library store immediately. Keep the visible
+      // shelf and loaded pages frozen until an explicit refresh/filter change.
     } catch (err) {
       if (isCurrent()) toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
     }

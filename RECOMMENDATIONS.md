@@ -132,7 +132,9 @@ Candidate pages are held in a bounded memory cache for two minutes. Refreshing
 picks reuses that stream when its profile and filters match; it does not write
 candidate pages into the offline page cache or import unseen games into the local
 catalog. Opening a pick persists that game before metadata/library operations.
-Favorite changes refresh the shelf and list together with a new exclusion snapshot.
+Favorite changes preserve the visible shelf, loaded pages and scroll position.
+The new profile applies on explicit refresh or filter changes, when the shelf
+and pagination snapshot are replaced together.
 Offline discovery uses the same confirmed-working compatibility rule as the catalog.
 
 New ranking queries require backend catalog protocol version 1. An older backend
