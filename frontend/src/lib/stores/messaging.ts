@@ -38,6 +38,7 @@ export const chatLoadingMore = writable(false);
 export const chatConnected = writable(true);
 export const chatTyping = writable<Record<string, boolean>>({});
 export const chatHistoryError = writable('');
+export const chatConversationsError = writable('');
 export const canSendByPeer = writable<Record<string, boolean>>({});
 export const chatToast = writable<{ id: number; peer: ChatPeer; message: Message } | null>(null);
 export const chatPanelVisible = writable(false);
@@ -61,6 +62,7 @@ let typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let typingSentAt = new Map<string, number>();
 let notifyIds = new Set<string>();
 let messageLoad = new Map<string, number>();
+let reactionChanges = new Map<string, { mine: boolean; tail: Promise<void> }>();
 let knownPeers = new Map<string, ChatPeer>();
 let loadingMorePeer = '';
 let expiryTimer: ReturnType<typeof setInterval> | null = null;
@@ -292,18 +294,20 @@ async function reloadConversations(expected = generation): Promise<void> {
     if (expected === generation) {
       conversations.set(loaded);
       for (const conversation of loaded) knownPeers.set(conversation.peer.id, conversation.peer);
-      chatHistoryError.set('');
+      chatConversationsError.set('');
     }
   } catch (err) {
     console.warn('messaging conversations failed', err);
-    if (expected === generation) chatHistoryError.set(msg('social.chatConversationsError'));
+    if (expected === generation) chatConversationsError.set(msg('social.chatConversationsError'));
   }
 }
 
 export async function loadMessages(peerId: string, before = '', append = false, markReadAfter = false): Promise<void> {
   const expectedGeneration = generation;
-  const request = (messageLoad.get(peerId) ?? 0) + 1;
-  messageLoad.set(peerId, request);
+  // Refreshing the newest messages must not invalidate an older-page request.
+  const requestKey = `${peerId}:${append ? 'older' : 'latest'}`;
+  const request = (messageLoad.get(requestKey) ?? 0) + 1;
+  messageLoad.set(requestKey, request);
   const requestRevisions = new Map(
     (get(messagesByPeer)[peerId] ?? []).map((item) => [item.id, messageRevisions.get(messageRevisionKey(peerId, item.id)) ?? 0]),
   );
@@ -314,13 +318,11 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       chatLoadingMore.set(true);
     }
   } else if (activeAtStart) {
-    loadingMorePeer = '';
-    chatLoadingMore.set(false);
     chatLoading.set(true);
   }
   try {
     const page: MessagePage = await fetchMessages(peerId, before);
-    if (expectedGeneration !== generation || messageLoad.get(peerId) !== request) return;
+    if (expectedGeneration !== generation || messageLoad.get(requestKey) !== request) return;
     const filtered = sortMessages(page.messages);
     const hadMessages = (get(messagesByPeer)[peerId] ?? []).length > 0;
     messagesByPeer.update((all) => {
@@ -339,7 +341,6 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       return { ...all, [peerId]: merged };
     });
     nextByPeer.update((all) => {
-      const current = get(messagesByPeer)[peerId] ?? [];
       const next = append || !hadMessages ? page.next ?? '' : all[peerId] ?? page.next ?? '';
       return { ...all, [peerId]: next };
     });
@@ -348,22 +349,22 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       updateConversation(peerId, (conversation) => ({ ...conversation, canSend: page.canSend ?? conversation.canSend }));
     }
     if (!append && markReadAfter) await markPeerRead(peerId);
-    if (expectedGeneration === generation && messageLoad.get(peerId) === request && get(activePeer)?.id === peerId) {
+    if (expectedGeneration === generation && messageLoad.get(requestKey) === request && get(activePeer)?.id === peerId) {
       chatHistoryError.set('');
     }
   } catch (err) {
     console.warn('messaging history failed', err);
-    if (expectedGeneration === generation && messageLoad.get(peerId) === request && get(activePeer)?.id === peerId) {
+    if (expectedGeneration === generation && messageLoad.get(requestKey) === request && get(activePeer)?.id === peerId) {
       chatHistoryError.set(msg('social.chatHistoryError'));
     }
     throw err;
   } finally {
-    if (expectedGeneration === generation && messageLoad.get(peerId) === request) {
+    if (expectedGeneration === generation && messageLoad.get(requestKey) === request) {
       if (append && loadingMorePeer === peerId && get(activePeer)?.id === peerId) {
         loadingMorePeer = '';
         chatLoadingMore.set(false);
       }
-      else if (get(activePeer)?.id === peerId) chatLoading.set(false);
+      else if (!append && get(activePeer)?.id === peerId) chatLoading.set(false);
     }
   }
 }
@@ -397,6 +398,7 @@ export function closeChat(): void {
   if (peer) stopTyping(peer.id);
   activePeer.set(null);
   chatOpen.set(false);
+  chatHistoryError.set('');
   panelVisible = false;
   chatPanelVisible.set(false);
   loadingMorePeer = '';
@@ -437,15 +439,16 @@ export async function sendMessage(peerId: string, text: string, clientId: string
   if (Array.from(value).length > 2000) throw new Error('message_too_long');
   const expectedGeneration = generation;
   const outgoingPeer = peerFor(peerId);
+  const submittedDraft = getDraft(peerId);
   const optimistic = localMessage(peerId, clientId, value);
   setMessage(peerId, optimistic);
   markPending(clientId, true);
   markFailed(clientId, false);
   stopTyping(peerId);
-  setDraft(peerId, '');
   try {
     const sent = await sendMessageCall(peerId, clientId, value);
     if (expectedGeneration !== generation) throw new Error('session_changed');
+    if (getDraft(peerId) === submittedDraft && submittedDraft.trim() === sent.text.trim()) setDraft(peerId, '');
     replaceLocalMessage(clientId, sent);
     ensureConversation(peerId, sent, outgoingPeer);
     updateConversation(peerId, (conversation) => ({ ...conversation, lastMessage: sent }));
@@ -465,9 +468,11 @@ export async function retryMessage(peerId: string, clientId: string): Promise<Me
   markPending(clientId, true);
   const expectedGeneration = generation;
   const outgoingPeer = peerFor(peerId);
+  const submittedDraft = getDraft(peerId);
   try {
     const sent = await sendMessageCall(peerId, clientId, local.text);
     if (expectedGeneration !== generation) throw new Error('session_changed');
+    if (getDraft(peerId) === submittedDraft && submittedDraft.trim() === sent.text.trim()) setDraft(peerId, '');
     replaceLocalMessage(clientId, sent);
     ensureConversation(peerId, sent, outgoingPeer);
     updateConversation(peerId, (conversation) => ({ ...conversation, lastMessage: sent }));
@@ -494,19 +499,36 @@ export async function editMessage(peerId: string, messageId: string, text: strin
 export async function toggleReaction(peerId: string, message: Message, emoji: ReactionKey): Promise<void> {
   const ownId = get(currentUser)?.id;
   const expectedGeneration = generation;
-  if (!ownId) return;
-  const current = message.reactions.find((reaction) => reaction.emoji === emoji);
-  const mine = current?.userIds.includes(ownId) ?? false;
-  try {
-    if (mine) await unreactMessageCall(peerId, message.id, emoji);
+  if (!ownId || message.id.startsWith('local:')) return;
+  const key = `${peerId}:${message.id}:${emoji}`;
+  const latest = get(messagesByPeer)[peerId]?.find((item) => item.id === message.id) ?? message;
+  const change = reactionChanges.get(key) ?? {
+    mine: latest.reactions.some((reaction) => reaction.emoji === emoji && reaction.userIds.includes(ownId)),
+    tail: Promise.resolve(),
+  };
+  const remove = change.mine;
+  change.mine = !remove;
+  // Remember each click's intent and serialize writes, including clicks made
+  // before the rendered message or an earlier request has caught up.
+  const operation = change.tail.catch(() => undefined).then(async () => {
+    if (expectedGeneration !== generation) return;
+    if (remove) await unreactMessageCall(peerId, message.id, emoji);
     else await reactMessageCall(peerId, message.id, emoji);
+  });
+  change.tail = operation;
+  reactionChanges.set(key, change);
+  try {
+    await operation;
   } catch (err) {
     console.warn('messaging reaction failed', err);
     throw err;
+  } finally {
+    if (expectedGeneration === generation && change.tail === operation) {
+      // Keep the intent until the refreshed message reaches the UI.
+      await loadMessages(peerId).catch(() => undefined);
+      if (reactionChanges.get(key) === change && change.tail === operation) reactionChanges.delete(key);
+    }
   }
-  if (expectedGeneration !== generation) return;
-  // History reports its own error; an accepted reaction must not look failed.
-  await loadMessages(peerId).catch(() => undefined);
 }
 
 export async function setTyping(peerId: string, value: boolean): Promise<void> {
@@ -553,6 +575,7 @@ async function incomingMessage(peerId: string, message: Message, expectedGenerat
   const existingMessages = get(messagesByPeer)[peerId] ?? [];
   if (existingMessages.some((item) => item.id === message.id || item.clientId === message.clientId)) return;
   setMessage(peerId, message);
+  ensureConversation(peerId, message, resolved);
   const visible = visibleOpenPeer(peerId);
   if (visible) {
     void markPeerRead(peerId);
@@ -628,10 +651,13 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   for (const peerId of typingTimers.keys()) clearTyping(peerId);
   messagesByPeer.set({});
   messageRevisions = new Map();
+  messageLoad = new Map();
+  reactionChanges = new Map();
   nextByPeer.set({});
   conversations.set([]);
   canSendByPeer.set({});
   chatHistoryError.set('');
+  chatConversationsError.set('');
   chatToast.set(null);
   pendingMessages.set(new Set());
   failedMessages.set(new Set());

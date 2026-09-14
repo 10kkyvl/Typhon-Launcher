@@ -97,6 +97,12 @@ async function emit(name: string, data: unknown): Promise<void> {
 
 beforeEach(() => {
   vi.useRealTimers();
+  const drafts = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => { drafts.set(key, value); },
+    removeItem: (key: string) => { drafts.delete(key); },
+  } });
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
     value: { visibilityState: 'visible', hasFocus: () => true, documentElement: { lang: '' } },
@@ -499,5 +505,101 @@ describe('messaging store session and event races', () => {
     messaging.closeChat();
 
     expect(api.typing).toHaveBeenCalledWith(peer.id, false);
+  });
+});
+
+
+describe('chat recovery regressions', () => {
+  it('keeps saved conversations and separates background and history errors', async () => {
+    vi.useFakeTimers();
+    const { messaging } = await load();
+    const saved = get(messaging.conversations);
+    api.conversations.mockRejectedValue(new Error('background offline'));
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(get(messaging.conversations)).toEqual(saved);
+    expect(get(messaging.chatConversationsError)).toBeTruthy();
+    expect(get(messaging.chatHistoryError)).toBe('');
+    messaging.chatHistoryError.set('history offline');
+    messaging.closeChat();
+    expect(get(messaging.chatHistoryError)).toBe('');
+    expect(get(messaging.chatConversationsError)).toBeTruthy();
+  });
+
+  it.each([false, true])('creates the first incoming conversation immediately (visible=%s)', async (visible) => {
+    const { messaging } = await load();
+    messaging.openChat(peer);
+    await flush();
+    messaging.conversations.set([]);
+    if (!visible) messaging.closeChat();
+    await emit('chat:event', { ownerId: 'me', kind: 'message', peerId: peer.id, message: message() });
+    expect(get(messaging.conversations)).toHaveLength(1);
+    expect(get(messaging.conversations)[0].lastMessage?.id).toBe('message-1');
+    expect(get(messaging.unreadCount)).toBe(visible ? 0 : 1);
+  });
+
+  it('serializes two fast reaction clicks as add then remove', async () => {
+    const { messaging } = await load();
+    let finish!: () => void;
+    api.react.mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve; }));
+    const stale = message();
+    const first = messaging.toggleReaction(peer.id, stale, 'heart');
+    const second = messaging.toggleReaction(peer.id, stale, 'heart');
+    await flush();
+    expect(api.react).toHaveBeenCalledTimes(1);
+    expect(api.unreact).not.toHaveBeenCalled();
+    finish();
+    await Promise.all([first, second]);
+    expect(api.react).toHaveBeenCalledTimes(1);
+    expect(api.unreact).toHaveBeenCalledExactlyOnceWith(peer.id, stale.id, 'heart');
+  });
+
+  it.each(['read', 'updated', 'sync'])('keeps the older page while %s refreshes the latest messages', async (kind) => {
+    const { messaging } = await load();
+    const latest = message();
+    api.messages.mockResolvedValue({ messages: [latest], next: 'older', canSend: true });
+    messaging.openChat(peer);
+    await flush();
+    let finishOlder!: (value: unknown) => void;
+    api.messages.mockReturnValueOnce(new Promise((resolve) => { finishOlder = resolve; }));
+    const pending = messaging.loadMore(peer.id);
+    await emit('chat:event', { ownerId: 'me', kind, peerId: peer.id });
+    expect(get(messaging.chatLoadingMore)).toBe(true);
+    const older = message({ id: 'older-1', clientId: 'old-client', createdAt: new Date(Date.now() - 60000).toISOString() });
+    finishOlder({ messages: [older], next: 'oldest', canSend: true });
+    await pending;
+    expect(get(messaging.messagesByPeer)[peer.id].map((item) => item.id)).toEqual(['older-1', 'message-1']);
+    expect(get(messaging.nextByPeer)[peer.id]).toBe('oldest');
+    expect(get(messaging.chatLoadingMore)).toBe(false);
+  });
+
+  it('keeps the draft while sending and after failure, then clears it after retry succeeds', async () => {
+    const { messaging } = await load();
+    messaging.setDraft(peer.id, 'hello');
+    let fail!: (err: Error) => void;
+    api.send.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    const pending = messaging.sendMessage(peer.id, 'hello', 'draft-client');
+    expect(messaging.getDraft(peer.id)).toBe('hello');
+    expect(get(messaging.pendingMessages).has('draft-client')).toBe(true);
+    const rejected = expect(pending).rejects.toThrow('offline');
+    fail(new Error('offline'));
+    await rejected;
+    expect(messaging.getDraft(peer.id)).toBe('hello');
+    expect(get(messaging.pendingMessages).has('draft-client')).toBe(false);
+    expect(get(messaging.failedMessages).has('draft-client')).toBe(true);
+    api.send.mockResolvedValueOnce(message({ senderId: 'me', recipientId: peer.id, clientId: 'draft-client' }));
+    await messaging.retryMessage(peer.id, 'draft-client');
+    expect(messaging.getDraft(peer.id)).toBe('');
+  });
+
+  it('does not clear a newer draft when an older send succeeds', async () => {
+    const { messaging } = await load();
+    messaging.setDraft(peer.id, 'hello');
+    let finish!: (value: unknown) => void;
+    api.send.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const pending = messaging.sendMessage(peer.id, 'hello', 'old-draft');
+    messaging.setDraft(peer.id, 'next message');
+    finish(message({ senderId: 'me', recipientId: peer.id, clientId: 'old-draft' }));
+    await pending;
+    expect(messaging.getDraft(peer.id)).toBe('next message');
   });
 });

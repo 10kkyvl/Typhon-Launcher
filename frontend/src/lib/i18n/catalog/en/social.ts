@@ -231,6 +231,8 @@ export const social: Record<SocialKey, Message> = {
   'social.chatPanelLabel': 'Chats',
   'social.chatYou': 'You',
   'social.chatEdit': 'Edit',
+  'social.chatSending': 'Sending…',
+  'social.chatReconnecting': 'Reconnecting…',
   'social.chatSend': 'Send',
   'social.chatNewConversation': 'New conversation',
   'social.chatSevenDayNote': 'Messages are kept for 7 days.',

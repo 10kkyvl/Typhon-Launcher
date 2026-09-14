@@ -11,6 +11,7 @@
     chatLoading,
     chatLoadingMore,
     chatHistoryError,
+    chatConversationsError,
     canSendByPeer,
     chatOpen,
     chatToast,
@@ -133,8 +134,10 @@
   async function retry(message: Message): Promise<void> {
     if (!peer) return;
     error = '';
+    const targetPeerId = peer.id;
     try {
-      await retryMessage(peer.id, message.clientId);
+      await retryMessage(targetPeerId, message.clientId);
+      if ($activePeer?.id === targetPeerId && draft.trim() === message.text.trim()) draft = '';
     } catch {
       error = msg('social.chatSendError');
     }
@@ -174,13 +177,14 @@
 
   function showList(): void {
     closeChat();
+    chatOpen.set(true);
     draft = '';
   }
 
   function retryHistory(): void {
     if (!peer) return;
-    if ($nextByPeer[peer.id]) void loadMore(peer.id);
-    else void loadMessages(peer.id);
+    if ($nextByPeer[peer.id]) void loadMore(peer.id).catch(() => undefined);
+    else void loadMessages(peer.id).catch(() => undefined);
   }
 
   $effect(() => {
@@ -251,7 +255,7 @@
         <div class="history-note">{msg('social.chatSevenDayNote')}</div>
         <div class="messages" bind:this={scrollBox}>
           {#if $nextByPeer[peer.id]}
-            <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id)}>
+            <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
               <ChevronUp size="1.4rem" /> { $chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier') }
             </button>
           {/if}
@@ -265,7 +269,7 @@
           {:else}
             {#each activeMessages as message (message.id)}
               <div class="message-row" class:own={isOwn(message)}>
-                <article class="message" class:failed={$failedMessages.has(message.clientId)}>
+                <article class="message" class:failed={$failedMessages.has(message.clientId)} aria-busy={$pendingMessages.has(message.clientId)}>
                   <div class="message-meta">
                     <span>{isOwn(message) ? msg('social.chatYou') : displayName(peer)}</span>
                     <time>{time(message.createdAt)}</time>
@@ -284,13 +288,18 @@
                       {/each}
                     </p>
                     <div class="message-footer">
-                      {#if isOwn(message) && !$failedMessages.has(message.clientId)}
+                      {#if $pendingMessages.has(message.clientId)}
+                        <span class="sending-status" role="status">{msg('social.chatSending')}</span>
+                      {/if}
+                      {#if isOwn(message) && !message.id.startsWith('local:')}
                         <button class="tiny-action" type="button" title={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
                       {/if}
                       {#if $failedMessages.has(message.clientId)}
                         <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
                       {/if}
+                      {#if !message.id.startsWith('local:')}
                       <button class="tiny-action" type="button" title={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.3rem" /></button>
+                      {/if}
                     </div>
                     {#if message.reactions.length > 0}
                       <div class="reactions">
@@ -318,8 +327,9 @@
 
         {#if error}<div class="chat-error">{error}</div>{/if}
         {#if !$chatConnected}
-          <div class="disabled-copy"><button class="connection-retry" type="button" onclick={() => retryMessaging()}>{msg('social.chatReconnect')}</button></div>
-        {:else if !canSend}
+          <div class="disabled-copy" role="status">{msg('social.chatReconnecting')} <button class="connection-retry" type="button" onclick={() => retryMessaging()}>{msg('social.chatReconnect')}</button></div>
+        {/if}
+        {#if !canSend}
           <div class="disabled-copy">{msg('social.chatDisabled')}</div>
         {:else}
           <div class="composer">
@@ -339,9 +349,10 @@
         {/if}
       {:else}
         <div class="conversation-list">
-          {#if $chatHistoryError}
-            <div class="state error-state">{$chatHistoryError}<button type="button" onclick={() => retryMessaging()}>{msg('social.chatRetry')}</button></div>
-          {:else if $conversations.length === 0}
+          {#if $chatConversationsError}
+            <div class="history-error">{$chatConversationsError}<button type="button" onclick={() => retryMessaging()}>{msg('social.chatRetry')}</button></div>
+          {/if}
+          {#if $conversations.length === 0 && !$chatConversationsError}
             <div class="state">{msg('social.chatNoConversations')}</div>
           {:else}
             {#each $conversations as item (item.peer.id)}
@@ -378,8 +389,8 @@
   .messages { flex: 1; overflow-y: auto; padding: 1rem; }
   .load-more { display: flex; align-items: center; gap: 0.4rem; margin: 0 auto 1rem; border: 0; background: transparent; color: var(--accent-text); font-size: var(--font-xs); cursor: pointer; }
   .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; color: var(--text-3); text-align: center; font-size: var(--font-sm); }
-  .error-state { gap: 0.8rem; color: var(--danger); }
-  .error-state button, .connection-retry { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
+  .sending-status { color: var(--text-3); font-size: 1rem; }
+  .connection-retry { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
   .history-error { display: flex; align-items: center; justify-content: center; gap: 0.7rem; margin-bottom: 0.7rem; color: var(--danger); font-size: var(--font-xs); text-align: center; }
   .history-error button { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
   .message-row { display: flex; justify-content: flex-start; margin: 0.8rem 0; }

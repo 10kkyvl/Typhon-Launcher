@@ -228,6 +228,8 @@ export const social = {
   'social.chatPanelLabel': 'Чаты',
   'social.chatYou': 'Вы',
   'social.chatEdit': 'Изменить',
+  'social.chatSending': 'Отправляется…',
+  'social.chatReconnecting': 'Переподключение…',
   'social.chatSend': 'Отправить',
   'social.chatNewConversation': 'Новый диалог',
   'social.chatSevenDayNote': 'История сообщений хранится 7 дней.',
