@@ -16,7 +16,7 @@ var (
 	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
 	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(\d+(?:\.\d+){0,4})\b`)
-	reVVer      = regexp.MustCompile(`(?i)\bv[.]*(\d+(?:\.\d+){0,4})\b`)
+	reVVer      = regexp.MustCompile(`(?i)\bv(?:[.]+\s*)?(\d+(?:\.\d+){0,4})\b`)
 	// A separated V is ambiguous; extractVersion preserves title numerals.
 	reVVerSpace = regexp.MustCompile(`(?i)\bv\s+(\d+(?:\.\d+){0,4})\b`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
@@ -33,16 +33,20 @@ var (
 	// Только после разделителя: голое «Portable» в хвосте принадлежит названию
 	// игры, как в Persona 3 Portable.
 	rePortable = regexp.MustCompile(`(?i)[|/]\s*portable\b`)
-	reRepackBy = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+by[\s._-]+[A-Za-z0-9_]+)?\b`)
+	reRepackBy = regexp.MustCompile(`(?i)\bre-?pack(?:[\s._-]+(?:by|от)[\s._-]+[\p{L}0-9_.-]+)?\b`)
 	// Маркер раздачи целиком: «RePack от R.G. Механики», «Steam-Rip от Chovka».
 	// Якорь на начало сегмента — «repack» посреди названия маркером не считается.
 	reMarkerRepack = regexp.MustCompile(`(?i)^(re-?pack|steam[\s._-]?rip)\b[\s.:,_-]*(?:от|by|from)?[\s.:,_-]*(.*)$`)
 
-	reDecimalDot   = regexp.MustCompile(`(\d)\.(\d)`)
-	reSepRun       = regexp.MustCompile(`[._\-]+`)
-	reSpaceRun     = regexp.MustCompile(`\s+`)
-	reYear         = regexp.MustCompile(`^(19[7-9]\d|20\d{2})$`)
-	reBracketSplit = regexp.MustCompile(`[\s,./\-]+`)
+	reVersionContinuation = regexp.MustCompile(`(?i)^\s*(?:/\s*(?:online\s*)?\d+(?:\.\d+)*(?:\s+online\b)?|\+\s*\d+(?:\.\d+)+)`)
+	reReleaseBracketStart = regexp.MustCompile(`(?i)^(?:v[.\s]*\d|build[.\s]+\d|update[.\s]+\d|patch[.\s]+\d)`)
+	reRepackerBracket     = regexp.MustCompile(`(?i)^(fitgirl|dodi)\s+repack\b`)
+	reBonusSuffix         = regexp.MustCompile(`(?i)\s+\+\s+(?:bonus\s+(?:content|osts?|soundtrack)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes)\b.*$`)
+	reDecimalDot          = regexp.MustCompile(`(\d)\.(\d)`)
+	reSepRun              = regexp.MustCompile(`[._\-]+`)
+	reSpaceRun            = regexp.MustCompile(`\s+`)
+	reYear                = regexp.MustCompile(`^(19[7-9]\d|20\d{2})$`)
+	reBracketSplit        = regexp.MustCompile(`[\s,./\-]+`)
 
 	// reNeverMatch стоит на месте языковых шаблонов, когда список языков пуст:
 	// альтернатива из нуля вариантов совпала бы с пустой строкой везде.
