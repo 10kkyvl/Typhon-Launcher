@@ -41,7 +41,7 @@ func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 20", len(goCodes))
 	}
 
-	tsPath := filepath.Join("..", "..", "frontend", "src", "lib", "stores", "updates.ts")
+	tsPath := filepath.Join("..", "..", "frontend", "src", "lib", "updates", "updateErrors.ts")
 	tsCodes := updatesCodesIn(t, updatesTSCodePattern, tsPath)
 
 	inTS := map[string]bool{}
@@ -50,7 +50,7 @@ func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
 	}
 	for _, code := range goCodes {
 		if !inTS[code] {
-			t.Errorf("код %q возвращается из Go, но не переводится в frontend/src/lib/stores/updates.ts", code)
+			t.Errorf("код %q возвращается из Go, но не переводится в %s", code, tsPath)
 		}
 	}
 
@@ -60,7 +60,7 @@ func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
 	}
 	for _, code := range tsCodes {
 		if !inGo[code] {
-			t.Errorf("код %q переводится в frontend/src/lib/stores/updates.ts, но Go его не возвращает", code)
+			t.Errorf("код %q переводится в %s, но Go его не возвращает", code, tsPath)
 		}
 	}
 }
