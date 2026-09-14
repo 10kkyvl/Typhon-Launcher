@@ -28,6 +28,8 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 	t.Helper()
 	h := &chatHarness{token: "token-a", events: make(chan Event, 32)}
 	h.enabled.Store(true)
+	streamReady := make(chan struct{})
+	var streamReadyOnce sync.Once
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/me" {
 			if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
@@ -46,6 +48,7 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 				t.Error(err)
 				return
 			}
+			streamReadyOnce.Do(func() { close(streamReady) })
 			<-r.Context().Done()
 			return
 		}
@@ -68,6 +71,13 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 	})
 	if err = svc.Start(); err != nil {
 		t.Fatal(err)
+	}
+	// Start returns before the event stream is established. Join its first
+	// flush so short tests cannot close the server during fixture setup.
+	select {
+	case <-streamReady:
+	case <-time.After(5 * time.Second):
+		t.Fatal("chat fixture stream did not become ready")
 	}
 	return h
 }
