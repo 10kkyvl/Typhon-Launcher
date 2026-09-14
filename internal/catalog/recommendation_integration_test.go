@@ -42,10 +42,23 @@ func TestCorruptRecommendationStateKeepsCatalogAvailableWithoutOverwriting(t *te
 	if profile := s.GetRecommendationProfile(); profile.Confidence != 0 {
 		t.Fatalf("damaged state personalized: %+v", profile)
 	}
+	if _, err = s.GetLibraryRecommendations(LibraryRecommendationQuery{}); err == nil {
+		t.Fatalf("damaged recommendation state was reported as empty: %v", err)
+	}
 	s.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "official", Title: "Available game"}}, Total: 1}})
 	page, err := s.BrowseGames(GameQuery{Sort: "auto", Page: 1})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("general catalog unavailable: %+v %v", page, err)
+	}
+}
+
+func TestLibraryRecommendationsReportsMissingEvidenceSource(t *testing.T) {
+	s, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.GetLibraryRecommendations(LibraryRecommendationQuery{}); err == nil {
+		t.Fatalf("missing library source was reported as empty: %v", err)
 	}
 }
 
@@ -83,14 +96,14 @@ func TestUnmatchedUnplayedLibraryGameHasHonestRecommendation(t *testing.T) {
 	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
 		return []RecommendationLibraryItem{{LibraryID: "local", Title: "My local game", Installed: true}}
 	})
-	picks := s.GetLibraryRecommendations(LibraryRecommendationQuery{})
-	if len(picks) != 1 || picks[0].Reason != "unplayed" || picks[0].Game.Title != "My local game" {
+	picks, err := s.GetLibraryRecommendations(LibraryRecommendationQuery{})
+	if err != nil || len(picks) != 1 || picks[0].Reason != "unplayed" || picks[0].Game.Title != "My local game" {
 		t.Fatalf("missing local-library suggestion: %+v", picks)
 	}
 	if err = s.SetNotInterested("local", true); err != nil {
 		t.Fatal(err)
 	}
-	if got := s.GetLibraryRecommendations(LibraryRecommendationQuery{}); len(got) != 0 {
+	if got, err := s.GetLibraryRecommendations(LibraryRecommendationQuery{}); err != nil || len(got) != 0 {
 		t.Fatalf("dismissed library game returned: %+v", got)
 	}
 }

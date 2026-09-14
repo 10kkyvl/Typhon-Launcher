@@ -85,8 +85,9 @@ var recommendationConfig = func() RecommendationConfig {
 }()
 
 var (
-	errInvalidRecommendationSort = uierr.New("catalog.invalid_recommendation_sort", "неизвестная сортировка каталога")
-	errEmptyRecommendationID     = uierr.New("catalog.empty_recommendation_id", "не указан идентификатор игры")
+	errInvalidRecommendationSort  = uierr.New("catalog.invalid_recommendation_sort", "неизвестная сортировка каталога")
+	errEmptyRecommendationID      = uierr.New("catalog.empty_recommendation_id", "не указан идентификатор игры")
+	errRecommendationsUnavailable = errors.New("recommendation library unavailable")
 )
 
 // RecommendationLibraryItem is the small, stable boundary between catalog
@@ -648,13 +649,13 @@ func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string, enough func
 	return items, true
 }
 
-func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) []RecommendationItem {
+func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) ([]RecommendationItem, error) {
 	if s.recommendationLoadErr != nil {
-		return []RecommendationItem{}
+		return nil, fmt.Errorf("recommendation preferences unavailable: %w", s.recommendationLoadErr)
 	}
 	games, p, source := s.recommendationSnapshot()
 	if source == nil {
-		return []RecommendationItem{}
+		return nil, errRecommendationsUnavailable
 	}
 	items := source()
 	known := map[string]bool{}
@@ -705,7 +706,7 @@ func (s *Service) GetLibraryRecommendations(q LibraryRecommendationQuery) []Reco
 			break
 		}
 	}
-	return result
+	return result, nil
 }
 
 type rankedRecommendation struct {

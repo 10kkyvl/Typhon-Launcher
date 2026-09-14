@@ -263,7 +263,10 @@ func TestLibraryRecommendationsHonorsHeroExclusion(t *testing.T) {
 			{LibraryID: "return-library", CanonicalGameID: games[2].ID, Sessions: 2, PlaytimeSeconds: 3600},
 		}
 	})
-	result := s.GetLibraryRecommendations(LibraryRecommendationQuery{Limit: 2, ExcludeLibraryIDs: []string{"hero-library"}})
+	result, err := s.GetLibraryRecommendations(LibraryRecommendationQuery{Limit: 2, ExcludeLibraryIDs: []string{"hero-library"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, item := range result {
 		if item.LibraryID == "hero-library" {
 			t.Fatalf("hero was duplicated: %+v", result)
@@ -289,7 +292,10 @@ func TestLibraryRecommendationsDoNotReviveShortAbandonedLaunches(t *testing.T) {
 			{LibraryID: "return", CanonicalGameID: games[2].ID, Sessions: 1, PlaytimeSeconds: 10 * 60, LastPlayed: &old},
 		}
 	})
-	result := s.GetLibraryRecommendations(LibraryRecommendationQuery{Limit: 5})
+	result, err := s.GetLibraryRecommendations(LibraryRecommendationQuery{Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, item := range result {
 		if item.LibraryID == "short" {
 			t.Fatalf("short abandoned launch was recommended: %+v", result)
