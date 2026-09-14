@@ -30,9 +30,13 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			kind = KindPatch
 		}
 		base, normalized := parsed.Base, parsed.Normalized
+		year := parsed.Year
 		if e.Game != "" {
 			hint := titles.Parse(e.Game)
 			base, normalized = hint.Base, hint.Normalized
+			if hint.Year != 0 {
+				year = hint.Year
+			}
 		}
 		version := parsed.Version
 		if e.ToVersion != "" {
@@ -40,6 +44,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		}
 		r := &Release{
 			SourceID:        sourceID,
+			GameHint:        e.Game,
 			DistributionID:  e.DistributionID,
 			Kind:            kind,
 			RawTitle:        e.Title,
@@ -52,7 +57,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			Sequence:        e.Sequence,
 			Edition:         parsed.Edition,
 			Languages:       parsed.Languages,
-			Year:            parsed.Year,
+			Year:            year,
 			Tags:            parsed.Tags,
 			Repacker:        titles.Repacker(parsed.Tags),
 			DLCCount:        parsed.DLCCount,
@@ -166,6 +171,7 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 			}
 		}
 		current.RawTitle = next.RawTitle
+		current.GameHint = next.GameHint
 		current.DistributionID = next.DistributionID
 		current.Kind = next.Kind
 		current.Title = next.Title
@@ -241,6 +247,9 @@ func evictStaleRemoved(list []*Release) []*Release {
 func changed(current, next *Release) bool {
 	return current.DistributionID != next.DistributionID ||
 		current.RawTitle != next.RawTitle ||
+		current.GameHint != next.GameHint ||
+		current.NormalizedTitle != next.NormalizedTitle ||
+		current.Year != next.Year ||
 		current.Kind != next.Kind ||
 		current.Version != next.Version ||
 		current.FromVersion != next.FromVersion ||

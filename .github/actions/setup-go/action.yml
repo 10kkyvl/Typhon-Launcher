@@ -1,0 +1,32 @@
+name: Set up Go with focused caches
+description: Keep application modules separate from build outputs and tool installers.
+inputs:
+  variant:
+    description: Build mode, so tests, race builds and production never share an archive
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Resolve Go cache paths
+      id: paths
+      shell: bash
+      run: |
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "version=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+    - name: Cache application modules
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.paths.outputs.modules }}
+        key: go-mod-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.paths.outputs.version }}-${{ hashFiles('go.mod', 'go.sum') }}
+    - name: Cache this build mode
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.paths.outputs.build }}
+        key: go-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.paths.outputs.version }}-${{ inputs.variant }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          go-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.paths.outputs.version }}-${{ inputs.variant }}-${{ hashFiles('go.mod', 'go.sum') }}-

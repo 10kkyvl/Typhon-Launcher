@@ -22,6 +22,8 @@ import (
 const (
 	recommendationVersion = 1
 	maxDiscoveryItems     = 5
+	discoveryPageSize     = 24
+	discoveryMaxPages     = 2
 )
 
 // RecommendationConfig keeps the first ranking policy explicit and tunable.
@@ -570,7 +572,7 @@ func topFacets(values map[string]float64) []RecommendationFacet {
 }
 
 func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
-	games, p, _, items, profile := s.recommendationSnapshotWithProfile()
+	games, p, source, items, profile := s.recommendationSnapshotWithProfile()
 	limit := q.Limit
 	if limit <= 0 || limit > maxDiscoveryItems {
 		limit = maxDiscoveryItems
@@ -598,11 +600,12 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	// ranking so the same stream can provide both fresh picks and the existing
 	// picks needed to fill a short shelf.
 	remoteQuery.HideLibrary, remoteQuery.HideNotInterested = true, true
-	sortName := "popular"
+	remoteQuery.Sort = "popular"
 	if profile.Confidence > 0 {
-		sortName = "for-you"
+		remoteQuery.Sort = "for-you"
 	}
-	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, sortName, func(candidateGames []Game) bool {
+	remoteQuery = s.enrichRecommendationQueryWithSnapshot(remoteQuery, p, source, items, profile)
+	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, func(candidateGames []Game) bool {
 		candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 		return len(diverseRecommendations(candidates, limit)) >= limit
 	})
@@ -645,21 +648,24 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 	return DiscoveryResult{Items: selected, Fallback: !remoteOK || s.recommendationLoadErr != nil, Profile: profile}
 }
 
-func (s *Service) remoteDiscoveryGames(q GameQuery, sortName string, enough func([]Game) bool) ([]Game, bool) {
-	q.Sort = sortName
+// q already carries the profile and exclusions used by the local ranker.
+// Freeze that same evidence without rescanning the library for the first page.
+func (s *Service) remoteDiscoveryGames(q GameQuery, enough func([]Game) bool) ([]Game, bool) {
 	q.Page = 1
-	q.PageSize = 60
-	page, err := s.browseGames(q, false)
+	q.PageSize = discoveryPageSize
+	q.Revision = 0
+	q = s.freezeBrowseQuery(q)
+	defer func() {
+		s.mu.Lock()
+		delete(s.browseSnapshots, q.Snapshot)
+		s.mu.Unlock()
+	}()
+	page, err := s.browsePreparedGames(q, false)
 	if err != nil || page.Offline {
 		return nil, false
 	}
-	defer func() {
-		s.mu.Lock()
-		delete(s.browseSnapshots, page.Snapshot)
-		s.mu.Unlock()
-	}()
 	items := append([]Game(nil), page.Items...)
-	for pageNumber := 2; pageNumber <= 3 && !enough(items) && len(page.Items) >= q.PageSize; pageNumber++ {
+	for pageNumber := 2; pageNumber <= discoveryMaxPages && !enough(items) && len(page.Items) >= q.PageSize; pageNumber++ {
 		continuation := q
 		continuation.Page = pageNumber
 		continuation.Snapshot = page.Snapshot

@@ -91,10 +91,26 @@ tasks:
       - cmd: go run ./tools/lintbaseline -tags devmock {{if eq .UPDATE "true"}}-update{{end}}
         platforms: [darwin, linux]
 
+  check:local:
+    summary: Runs full pre-push checks on macOS (lint, Windows cross-build, race tests, frontend and packaging)
+    platforms: [darwin]
+    deps: [lint:install]
+    cmds:
+      - bash scripts/check-local.sh
+
+  lint:local:
+    summary: Checks formatting, vet and native/devmock/Windows lint without building a release
+    deps: [lint:install]
+    cmds:
+      - bash scripts/check-local.sh lint
+
   lint:install:
     summary: Installs the pinned golangci-lint into $(go env GOPATH)/bin
     status:
-      - golangci-lint --version 2>/dev/null | grep -q "version 2.13.1"
+      - |
+        tool="$(command -v golangci-lint || true)"
+        if [ -z "$tool" ]; then tool="$(go env GOPATH)/bin/golangci-lint"; fi
+        "$tool" --version 2>/dev/null | grep -q "version 2.13.1 "
     cmds:
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
 

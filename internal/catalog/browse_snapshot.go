@@ -65,6 +65,10 @@ func (s *Service) prepareBrowseSnapshot(q GameQuery) (GameQuery, error) {
 		}
 	}
 	q = s.enrichRecommendationQueryWithSnapshot(q, p, source, items, profile)
+	return s.freezeBrowseQuery(q), nil
+}
+
+func (s *Service) freezeBrowseQuery(q GameQuery) GameQuery {
 	if q.Page <= 1 {
 		q.Snapshot = NewID()
 		s.mu.Lock()
@@ -86,7 +90,7 @@ func (s *Service) prepareBrowseSnapshot(q GameQuery) (GameQuery, error) {
 		s.browseSnapshots[q.Snapshot] = browseSnapshot{query: frozen, used: time.Now()}
 		s.mu.Unlock()
 	}
-	return q, nil
+	return q
 }
 
 func browseQueryNeedsSnapshot(q GameQuery) bool {

@@ -254,5 +254,6 @@ export const games: Record<GamesKey, Message> = {
   'games.catalogMoreFailed': 'Could not load the next page. Please try again.',
   'games.catalogLoadingMore': 'Loading…',
   'games.catalogShowMore': 'Show more',
-  'games.catalogShownOf': 'Showing {shown} of {total}',
+  'games.catalogShownOf': 'Loaded {shown} of {total}',
+  'games.recommendationRefreshFailed': 'Could not refresh your picks. Showing the previous selection for now.',
 };

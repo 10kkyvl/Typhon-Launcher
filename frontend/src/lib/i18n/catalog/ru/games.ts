@@ -252,7 +252,8 @@ export const games = {
   'games.catalogMoreFailed': 'Не удалось загрузить следующую страницу. Попробуй ещё раз.',
   'games.catalogLoadingMore': 'Загрузка…',
   'games.catalogShowMore': 'Показать ещё',
-  'games.catalogShownOf': 'Показано {shown} из {total}',
+  'games.catalogShownOf': 'Загружено {shown} из {total}',
+  'games.recommendationRefreshFailed': 'Не удалось обновить подборку. Пока показываем предыдущую.',
 } as const;
 
 export type GamesKey = keyof typeof games;

@@ -109,6 +109,7 @@ export class SearchOverlay {
   }
 
   private schedule(value: string) {
+    this.token++;
     clearTimeout(this.timer);
     this.timer = undefined;
     const trimmed = value.trim();

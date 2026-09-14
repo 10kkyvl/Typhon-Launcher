@@ -25,6 +25,8 @@ runs:
       env:
         GOBIN: ${{ steps.tool.outputs.path }}
         WAILS_VERSION: ${{ inputs.version }}
+        GOMODCACHE: ${{ runner.temp }}/wails-modules
+        GOCACHE: ${{ runner.temp }}/wails-build
       run: go install "github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION"
     - name: Add Wails to PATH
       shell: bash

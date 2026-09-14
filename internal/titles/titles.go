@@ -31,9 +31,43 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reWWW.ReplaceAllString(s, " ")
 
 	s, markerTags := d.extractMarkers(s)
+	// A bracket beginning with a version is release metadata, including
+	// bundled fixes/download notes. Keep recognized fields for extraction.
+	s = reBracket.ReplaceAllStringFunc(s, func(bracket string) string {
+		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
+		if reReleaseBracketStart.MatchString(inner) {
+			_, raw, _ := extractVersion(inner)
+			_, langs, _ := d.extractLangAndDashTags(inner)
+			return "(" + raw + " " + strings.Join(langs, " ") + " " + reDLCCount.FindString(inner) + ")"
+		}
+		if m := reRepackerBracket.FindStringSubmatch(inner); m != nil {
+			return "[" + m[1] + " Repack]"
+		}
+		return bracket
+	})
 	s, rawVersion, version := extractVersion(s)
+	for {
+		cleaned, extra, _ := extractVersion(s)
+		if extra == "" {
+			break
+		}
+		s = cleaned
+	}
+	s = reBonusSuffix.ReplaceAllString(s, " ")
 	s, dlcCount := extractDLCCount(s)
 	s, year, bracketLangs, bracketTags := d.extractBrackets(s)
+	for {
+		next, y, ls, ts := d.extractBrackets(s)
+		if next == s {
+			break
+		}
+		s = next
+		if y != 0 {
+			year = y
+		}
+		bracketLangs = append(bracketLangs, ls...)
+		bracketTags = append(bracketTags, ts...)
+	}
 	s, dashLangs, dashTags := d.extractLangAndDashTags(s)
 
 	s = reDecimalDot.ReplaceAllString(s, "${1}\x00${2}")
@@ -177,7 +211,15 @@ func extractVersion(s string) (string, string, string) {
 
 	raw := s[bestLoc[0]:bestLoc[1]]
 	ver := s[bestLoc[2]:bestLoc[3]]
-	newS := s[:bestLoc[0]] + " " + s[bestLoc[1]:]
+	end := bestLoc[1]
+	for {
+		loc := reVersionContinuation.FindStringIndex(s[end:])
+		if loc == nil {
+			break
+		}
+		end += loc[1]
+	}
+	newS := s[:bestLoc[0]] + " " + s[end:]
 	return newS, strings.TrimSpace(raw), ver
 }
 
@@ -299,6 +341,11 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 	})
 	s = reRepackBy.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "repack")
+		if parts := reMarkerRepack.FindStringSubmatch(m); parts != nil {
+			if slug := d.repackerSlug(parts[2]); slug != "" {
+				tags = append(tags, slug)
+			}
+		}
 		return " "
 	})
 
@@ -354,6 +401,10 @@ func (d *Dict) trailingScan(words []string) ([]string, string, []string) {
 				continue
 			}
 
+			if kind == "edition" && len(remaining) > 1 && strings.EqualFold(remaining[len(remaining)-1], "the") {
+				tail = words[len(words)-L-1:]
+				remaining = remaining[:len(remaining)-1]
+			}
 			words = remaining
 			if kind == "edition" {
 				if edition == "" {

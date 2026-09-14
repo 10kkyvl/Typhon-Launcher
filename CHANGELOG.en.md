@@ -6,6 +6,19 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.7.1 — 2026-09-14
+Catalog loading is independent of recommendations, search uses the server catalog, and releases match games more accurately.
+
+### Changed
+- The game list loads alongside the discovery shelf. Refreshing the shelf or requesting different picks preserves loaded pages; shelf games do not appear twice in the list
+- Reopening the catalog shows cached picks immediately and refreshes them in the background when needed. Network errors preserve recommendations already on screen
+- Preparing recommendations requires fewer requests and less repeated library processing
+
+### Fixed
+- Global search finds games in the server catalog even if their detail pages have never been opened. The local library and sources add installation and release information to those results
+- Updating a source matches release titles against official names and name variants in the server catalog. Previously saved unmatched releases are checked again even when the source has not changed; manual matches are preserved
+- Version numbers, repacker details, and bonus content notes are separated from game titles more accurately when matching releases
+
 ## 0.7.0 — 2026-09-14
 Chat with friends, personalized catalog recommendations, and profile customization with your own cover and colors.
 

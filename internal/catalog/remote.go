@@ -50,6 +50,10 @@ func (s *Service) browseGames(q GameQuery, durable bool) (GamePage, error) {
 	if prepareErr != nil {
 		return GamePage{}, prepareErr
 	}
+	return s.browsePreparedGames(q, durable)
+}
+
+func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, error) {
 	snapshot := q.Snapshot
 	q.Snapshot = ""
 	s.mu.RLock()

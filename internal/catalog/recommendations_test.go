@@ -341,7 +341,7 @@ func TestDiscoveryUsesRemoteCandidatesBeforeLocalFallback(t *testing.T) {
 	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != local.ID {
 		t.Fatalf("remote discovery = %+v, fallback=%v", result.Items, result.Fallback)
 	}
-	if remote.got.Sort != "popular" || remote.got.Page != 1 || remote.got.PageSize != 60 {
+	if remote.got.Sort != "popular" || remote.got.Page != 1 || remote.got.PageSize != 24 {
 		t.Fatalf("remote query = %+v", remote.got)
 	}
 	if remote.got.ExcludeNotInterested != "00000000-0000-0000-0000-000000000222" || remote.got.ExcludeLibrary != owned.ID {
@@ -426,12 +426,12 @@ type pagedRecommendationRemote struct {
 
 func (r *pagedRecommendationRemote) Browse(_ context.Context, q GameQuery) (GamePage, error) {
 	r.queries = append(r.queries, q)
-	return GamePage{Items: r.pages[q.Page], Total: 120, Page: q.Page, PageSize: 60, Revision: 7}, nil
+	return GamePage{Items: r.pages[q.Page], Total: len(r.pages) * q.PageSize, Page: q.Page, PageSize: q.PageSize, Revision: 7}, nil
 }
 
 func TestDiscoveryFetchesBoundedContinuationForExplainableCandidates(t *testing.T) {
 	s := newTestService(t)
-	unknown := make([]Game, 60)
+	unknown := make([]Game, 24)
 	for i := range unknown {
 		unknown[i] = Game{ID: fmt.Sprintf("unknown-%02d", i), Title: fmt.Sprintf("Unknown %02d", i)}
 	}
@@ -449,6 +449,62 @@ func TestDiscoveryFetchesBoundedContinuationForExplainableCandidates(t *testing.
 	}
 	if remote.queries[1].Revision != 7 {
 		t.Fatalf("continuation lost frozen revision: %+v", remote.queries[1])
+	}
+}
+
+func TestDiscoveryStopsAfterTwoSmallCandidatePages(t *testing.T) {
+	s := newTestService(t)
+	remote := &pagedRecommendationRemote{pages: map[int][]Game{}}
+	for page := 1; page <= 3; page++ {
+		for i := 0; i < 24; i++ {
+			remote.pages[page] = append(remote.pages[page], Game{
+				ID: fmt.Sprintf("unknown-%d-%d", page, i), Title: "No recommendation evidence",
+			})
+		}
+	}
+	s.SetRemoteCatalog(remote)
+	result := s.GetDiscovery(DiscoveryQuery{})
+	if result.Fallback || len(result.Items) != 0 || len(remote.queries) != 2 {
+		t.Fatalf("candidate budget not respected: %+v, requests=%d", result, len(remote.queries))
+	}
+	for _, query := range remote.queries {
+		if query.PageSize != 24 {
+			t.Fatalf("oversized discovery page: %+v", query)
+		}
+	}
+	if len(s.browseSnapshots) != 0 {
+		t.Fatal("discovery left a browse snapshot behind")
+	}
+}
+
+func TestDiscoveryUsesOneLibrarySnapshotForProfileAndExclusions(t *testing.T) {
+	s := newTestService(t)
+	owned := seed(t, s, Game{ID: "00000000-0000-0000-0000-000000000111", Title: "Owned", Genres: []string{"Strategy"}})[0]
+	calls := 0
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
+		calls++
+		if calls > 1 {
+			return nil
+		}
+		return []RecommendationLibraryItem{{CanonicalGameID: owned.ID, Favorite: true}}
+	})
+	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "pick", Title: "Pick", Genres: []string{"Strategy"}}}}}
+	s.SetRemoteCatalog(remote)
+	result := s.GetDiscovery(DiscoveryQuery{Limit: 1})
+	if calls != 1 || result.Fallback || len(result.Items) != 1 || result.Profile.EvidenceGames != 1 {
+		t.Fatalf("incoherent discovery evidence: %+v, library calls=%d", result, calls)
+	}
+	if remote.calls != 1 || remote.got.Sort != "for-you" || remote.got.Profile == "" || remote.got.ExcludeLibrary != owned.ID {
+		t.Fatalf("query lost discovery evidence: %+v, requests=%d", remote.got, remote.calls)
+	}
+}
+
+func TestFailedDiscoveryReleasesBrowseSnapshot(t *testing.T) {
+	s := newTestService(t)
+	s.SetRemoteCatalog(&recommendationRemote{err: errors.New("offline")})
+	result := s.GetDiscovery(DiscoveryQuery{})
+	if !result.Fallback || len(s.browseSnapshots) != 0 {
+		t.Fatalf("failed preview leaked browse snapshot: %+v, snapshots=%d", result, len(s.browseSnapshots))
 	}
 }
 

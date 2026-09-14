@@ -135,36 +135,41 @@ the launcher.
 
 ## Tests and checks
 
-The full set CI runs — everything here has to pass before a change is finished:
+Fast GitHub CI runs on `dev` pushes and pull request merge results: Windows
+builds/tests and forbidden-tag checks, plus frontend bindings, type checks,
+unit tests and a production build. Promoting a verified `dev` commit to `main`
+does not run the same suite again. Direct `main` pushes need a manual CI run.
 
-```
-gofmt -l .                                   # must print nothing
-go vet . ./internal/...
-go build . ./internal/...
-GOOS=windows CGO_ENABLED=0 go build . ./internal/...
-go test ./internal/...
-CGO_ENABLED=1 go test -race ./internal/...
-CGO_ENABLED=1 go test -race -tags devmock ./internal/...
-golangci-lint run --new-from-rev=origin/dev --whole-files=false ./...
-go run ./tools/lintbaseline                  # and: -tags devmock
+Before pushing, run on macOS:
+
+```sh
+wails3 task check:local
 ```
 
-New and changed code must be clean; the whole module is measured against the per-OS
-baseline in `.github/lint-baseline.txt` (keyed by `GOOS`, or `GOOS+tags`), and that
-number may only go down. `golangci-lint` is pinned to v2.13.1 —
-`wails3 task lint:install` puts it in place.
+This checks formatting, vet, native and devmock lint, Windows lint/build selection,
+both race-test modes, the frontend and the actual macOS bundle. It uses local Go
+and npm caches. Windows execution stays in GitHub CI; a cross-build cannot replace
+Windows tests. For lint alone, use `wails3 task lint:local`.
 
-Frontend, from `frontend/`:
+For a full remote check, select **Actions → CI → Run workflow → full_checks**.
+This additionally runs macOS builds/race tests and lint on Linux, macOS and
+Windows. `lint_base` selects the comparison revision for new Linux findings
+(default `origin/main`). Linux lint needs Linux with GTK/WebKit headers; a Mac
+cannot measure that baseline. Release builds still package both platforms.
 
-```
+New and changed code must be clean. `.github/lint-baseline.txt` stores the
+per-platform limits, which may only go down. The linter remains pinned to
+v2.13.1; install it with `wails3 task lint:install`.
+
+Frontend checks can also run independently from `frontend/`:
+generate missing bindings first with `wails3 task common:generate:bindings`.
+
+```sh
 npm ci
-npm run check       # svelte-check
-npm run test        # vitest
+npm run check
+npm test
 npm run build
 ```
-
-Bindings between Go and the frontend are generated:
-`wails3 task common:generate:bindings`.
 
 ## Layout
 

@@ -1,0 +1,29 @@
+name: Set up cached golangci-lint
+description: Compile the pinned linter only on a tool-cache miss.
+runs:
+  using: composite
+  steps:
+    - name: Resolve tool directory and version
+      id: tool
+      shell: bash
+      run: |
+        echo "path=$RUNNER_TEMP/typhon-golangci-lint" >> "$GITHUB_OUTPUT"
+        echo "go=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      id: cache
+      with:
+        path: ${{ steps.tool.outputs.path }}
+        key: golangci-cli-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.tool.outputs.go }}-v2.13.1
+    - name: Install on a cache miss
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GOBIN: ${{ steps.tool.outputs.path }}
+        GOMODCACHE: ${{ runner.temp }}/golangci-modules
+        GOCACHE: ${{ runner.temp }}/golangci-build
+      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
+    - name: Add linter to PATH
+      shell: bash
+      env:
+        TOOL_DIR: ${{ steps.tool.outputs.path }}
+      run: echo "$TOOL_DIR" >> "$GITHUB_PATH"

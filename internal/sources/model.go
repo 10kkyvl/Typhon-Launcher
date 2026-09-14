@@ -39,6 +39,7 @@ const (
 )
 
 type Source struct {
+	ParseVersion  int        `json:"parseVersion,omitempty"`
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
 	Type          Type       `json:"type"`
@@ -71,6 +72,7 @@ const (
 )
 
 type Release struct {
+	GameHint        string         `json:"gameHint,omitempty"`
 	ID              string         `json:"id"`
 	SourceID        string         `json:"sourceId"`
 	DistributionID  string         `json:"distributionId,omitempty"`

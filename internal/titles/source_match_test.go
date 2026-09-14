@@ -1,0 +1,50 @@
+package titles
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestSourceReleaseMatchNames(t *testing.T) {
+	cases := []struct {
+		raw   string
+		names []string
+	}{
+		{"Grand Theft Auto V Enhanced – Build 1013.20/Online 1.72", []string{"Grand Theft Auto V Enhanced"}},
+		{"Grand Theft Auto V Enhanced [v. 1.0.814.9] (2025) RePack от Decepticon", []string{"Grand Theft Auto V Enhanced"}},
+		{"Grand Theft Auto V Legacy v.3570.0 + 3586.0 [Папка игры (Steam)] (2015)", []string{"Grand Theft Auto V Legacy"}},
+		{"Grand Theft Auto IV: The Complete Edition v.1.2.0.59 [Папка игры] (2008-2010)", []string{"Grand Theft Auto IV The Complete Edition", "Grand Theft Auto IV"}},
+		{"GTA: The Trilogy – The Definitive Edition — RePack от Igruha", []string{"Grand Theft Auto: The Trilogy The Definitive Edition"}},
+		{"ГТА 4 (GTA 4) — RePack от xatab", []string{"Grand Theft Auto IV"}},
+		{"Grand Theft Auto V / GTA 5 (v1.0.2802/1.64 Online, MULTi13) [FitGirl Repack]", []string{"Grand Theft Auto V"}},
+		{"Grand Theft Auto V (v1.0.3095/1.68 + NVE Platinum Modpack + Bonus OSTs, MULTi13) [FitGirl Repack, Selective Download - from 49.2 GB]", []string{"Grand Theft Auto V"}},
+		{"9-Bit Armies: A Bit Too Far — v864547 (Build 19702616) | Архив", []string{"9 Bit Armies: A Bit Too Far"}},
+		{"Half-Life 2: Episode Two v1.0.4", []string{"Half Life 2: Episode Two"}},
+		{"Persona 3 Portable", []string{"Persona 3 Portable"}},
+		{"Kingdom Come: Deliverance (All Stars)", []string{"Kingdom Come: Deliverance (All Stars)"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			if got := MatchNames(tc.raw); !reflect.DeepEqual(got, tc.names) {
+				t.Fatalf("names=%q, want %q (parsed=%+v)", got, tc.names, Parse(tc.raw))
+			}
+		})
+	}
+}
+
+func TestReleaseBracketKeepsVersionLanguageAndDLCCount(t *testing.T) {
+	p := Parse("Example Game (v1.2 + 12 DLCs + Bonus OST, MULTi13) [FitGirl Repack]")
+	if p.Base != "Example Game" || p.Version != "1.2" || p.DLCCount != 12 || len(p.Languages) != 1 {
+		t.Fatalf("release fields lost: %+v", p)
+	}
+}
+
+func TestSourceMatchKeepsRemasterIdentityAndRepacker(t *testing.T) {
+	if got := MatchNames("Dark Souls Remastered v1.0"); len(got) != 1 || got[0] != "Dark Souls Remastered" {
+		t.Fatalf("remaster collapsed: %q", got)
+	}
+	p := Parse("Grand Theft Auto V v1.0 RePack от xatab")
+	if p.Base != "Grand Theft Auto V" || Repacker(p.Tags) != "xatab" {
+		t.Fatalf("repacker lost: %+v", p)
+	}
+}
