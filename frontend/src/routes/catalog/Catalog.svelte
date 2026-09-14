@@ -2,7 +2,7 @@
   import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
-  import { mergeCatalogDisplay } from '../../lib/catalog/display';
+  import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
@@ -10,6 +10,7 @@
   import { get } from 'svelte/store';
   import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
   import { genreLabel, type Recommendation } from '../../lib/recommendations/display';
+  import { discoveryCache } from '../../lib/recommendations/cache';
   import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -64,7 +65,10 @@
 
   interface Snapshot {
     preferenceKey: string;
-    personalizationFallback: boolean;
+    catalogFallback: boolean;
+    discoveryFallback: boolean;
+    discoveryStale: boolean;
+    profile: ReturnType<typeof emptyProfile>;
     snapshot: string;
     sourceState: Source[] | undefined;
     discovery: Recommendation[];
@@ -118,12 +122,15 @@
 
   let preferenceKey = restored?.preferenceKey ?? '';
   let preferences = $state(defaultPreferences());
-  let profile = $state(emptyProfile());
+  let profile = $state(restored?.profile ?? emptyProfile());
   let hideLibrary = $state(restored?.hideLibrary ?? false);
   let hideNotInterested = $state(restored?.hideNotInterested ?? true);
   let discovery = $state<Recommendation[]>(restored?.discovery ?? []);
   let discoveryLoading = $state(false);
-  let personalizationFallback = $state(restored?.personalizationFallback ?? false);
+  let catalogFallback = $state(restored?.catalogFallback ?? false);
+  let discoveryFallback = $state(restored?.discoveryFallback ?? false);
+  let discoveryStale = $state(restored?.discoveryStale ?? false);
+  const personalizationFallback = $derived(catalogFallback || (discoveryFallback && !discoveryStale));
   let lastDismissed = $state<{ id: string; title: string } | null>(null);
   let preferenceBusy = $state(false);
   let ready = $state(false);
@@ -131,10 +138,10 @@
   let favoriteSeq = 0;
   const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
   const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
+  const displayedItems = $derived(catalogWithoutDiscovery(items, discoveryVisible ? discovery : []));
 
   function personalQuery() {
-    return { stable: true, snapshot, hideLibrary, hideNotInterested,
-      excludeIds: discoveryVisible ? discovery.map((item) => item.game.id) : [] };
+    return { stable: true, snapshot, hideLibrary, hideNotInterested };
   }
 
   function favoriteViewKey(): string {
@@ -156,7 +163,7 @@
     reloadToken++;
     stashRoute(routeKey, 'catalog', {
       revision, offline, incomplete, platform, kind, facets, platforms,
-      sourceState, snapshot, preferenceKey, personalizationFallback, discovery: [...discovery], hideLibrary, hideNotInterested,
+      sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
       search,
       genre,
       sort,
@@ -235,7 +242,8 @@
       platforms = result.platforms ?? [];
       revision = result.revision ?? 0;
       snapshot = result.snapshot ?? '';
-      if (result.personalizationFallback) personalizationFallback = true;
+      if (next === 1 || refreshed) catalogFallback = result.personalizationFallback ?? false;
+      else catalogFallback ||= result.personalizationFallback ?? false;
       offline = result.offline ?? false;
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
@@ -266,7 +274,7 @@
     }
   }
 
-  async function reload(refreshPicks = false) {
+  async function reload(refreshProfile = true) {
     if (!ready) return;
     const active = ++reloadToken;
     token++;
@@ -276,40 +284,64 @@
     loading = true;
     items = [];
     total = 0;
-    // Apply changed library evidence only at a new browse boundary. The shelf,
-    // exclusions and ranking snapshot must stay together while paging.
-    try {
-      const currentProfile = await getRecommendationProfile();
-      if (active !== reloadToken) return;
-      profile = currentProfile;
-      preferenceKey = JSON.stringify({ preferences, profile });
-    } catch {
-      if (active !== reloadToken) return;
-      personalizationFallback = true;
-    }
-    if (discoveryVisible) {
-      discoveryLoading = true;
+    page = 0;
+    revision = 0;
+    snapshot = '';
+    catalogFallback = false;
+    // Pages own their frozen ranking and membership. The shelf may finish or
+    // revalidate later without changing the pagination request or its offsets.
+    await Promise.all([fetchPage(1), refreshDiscovery(active, { refreshProfile })]);
+  }
+
+  async function refreshDiscovery(active: number, { rotate = false, refreshProfile = false } = {}) {
+    const query = { search, genre, platform, kind, sort, compat: compatOnly ? compatOnlyWorking : '' };
+    const previousIDs = rotate ? discovery.map((item) => item.game.id) : [];
+    discoveryLoading = true;
+    if (refreshProfile) {
       try {
-        const result = await getDiscovery({ search, genre, platform, kind, sort,
-          compat: compatOnly ? compatOnlyWorking : '' }, refreshPicks ? discovery.map((item) => item.game.id) : []);
+        const currentProfile = await getRecommendationProfile();
         if (active !== reloadToken) return;
-        discovery = result.items;
-        personalizationFallback = result.fallback;
+        profile = currentProfile;
       } catch {
         if (active !== reloadToken) return;
-        discovery = [];
-        personalizationFallback = true;
+        discoveryFallback = true;
+      }
+    }
+    preferenceKey = JSON.stringify({ preferences, profile });
+    if (discoveryVisible) {
+      const key = JSON.stringify({ query, preferences, profile, library: get(libraryGames).map((game) => [
+        game.id, game.canonicalGameId, game.favorite, game.status, game.uninstalled, game.playtimeSeconds, game.lastPlayed,
+      ]) });
+      const { cached, refreshed } = discoveryCache.get(key, () => getDiscovery(query, previousIDs), rotate);
+      discovery = cached?.items ?? [];
+      discoveryFallback = cached?.fallback ?? false;
+      discoveryStale = false;
+      try {
+        if (refreshed) {
+          const result = await refreshed;
+          if (active !== reloadToken) return;
+          discovery = result.items;
+          discoveryFallback = result.fallback;
+          discoveryStale = result.fallback && Boolean(cached && !cached.fallback);
+        }
+      } catch {
+        if (active !== reloadToken) return;
+        discoveryFallback = true;
+        discoveryStale = Boolean(cached);
       } finally {
         if (active === reloadToken) discoveryLoading = false;
       }
     } else {
       discovery = [];
       discoveryLoading = false;
-      personalizationFallback = false;
+      discoveryFallback = false;
+      discoveryStale = false;
     }
-    if (active !== reloadToken) return;
-    page = 0;
-    await fetchPage(1);
+  }
+
+  function refreshPicks() {
+    if (!ready || discoveryLoading) return;
+    void refreshDiscovery(++reloadToken, { rotate: true });
   }
 
   function restoreChoices() {
@@ -348,7 +380,6 @@
       await setNotInterested(game.id, on);
       preferences = await getRecommendationPreferences();
       lastDismissed = on ? { id: game.id, title: game.title } : null;
-      profile = await getRecommendationProfile();
       await reload();
     } catch { toast(msg('games.recommendationError'), 'danger'); }
     finally { preferenceBusy = false; }
@@ -389,6 +420,7 @@
       platforms = prefix.result.platforms ?? [];
       revision = prefix.result.revision ?? 0;
       snapshot = prefix.result.snapshot ?? '';
+      catalogFallback ||= prefix.result.personalizationFallback ?? false;
       offline = prefix.result.offline ?? false;
       incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
@@ -461,14 +493,14 @@
         preferences = saved;
         profile = currentProfile;
         restoreChoices();
-      } catch { personalizationFallback = true; }
+      } catch { discoveryFallback = true; }
       if (!active) return;
       ready = true;
       const nextKey = JSON.stringify({ preferences, profile });
       const reuse = restored && page > 0 && preferenceKey === nextKey;
       preferenceKey = nextKey;
-      if (reuse) await refreshLoadedPrefix(true);
-      else await reload();
+      if (reuse) await Promise.all([refreshLoadedPrefix(true), refreshDiscovery(reloadToken)]);
+      else await reload(false);
     })();
     return () => { active = false; ready = false; };
   });
@@ -594,13 +626,14 @@
       <Button onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button></div>
   {/if}
   {#if personalizationFallback}<p class="muted" role="status">{msg('games.recommendationFallback')}</p>{/if}
+  {#if discoveryStale}<p class="muted" role="status">{msg('games.recommendationRefreshFailed')}</p>{/if}
   {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
   {#if discoveryVisible}
     <RecommendationShelf title={msg('games.discoveryTitle')} items={discovery} loading={discoveryLoading || preferenceBusy}
-      emptyText={msg('games.recommendationEmpty')} onrefresh={() => void reload(true)} ondismiss={(item) => void dismiss(item.game)} />
+      emptyText={msg('games.recommendationEmpty')} onrefresh={refreshPicks} ondismiss={(item) => void dismiss(item.game)} />
   {/if}
 
-  {#if items.length === 0}
+  {#if displayedItems.length === 0}
     {#if loading}
       <p class="muted" role="status">{msg('games.catalogLoadingLabel')}</p>
       <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
@@ -631,7 +664,7 @@
     {/if}
   {:else if $catalogView === 'grid'}
     <div class="grid">
-      {#each items as game (game.id)}
+      {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         {@const libId = libraryByGame.get(game.id)}
         {@const isFav = libId ? favoriteByLibraryId.get(libId) : false}
@@ -689,7 +722,7 @@
     </div>
   {:else}
     <div class="list">
-      {#each items as game (game.id)}
+      {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         <div class="list-entry">
         <button
