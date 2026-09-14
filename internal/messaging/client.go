@@ -105,23 +105,11 @@ func (s *Service) loop(r *session) {
 	done := make(chan struct{})
 	watcherDone := make(chan struct{})
 	defer func() { close(done); <-watcherDone }()
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
 	go func() {
 		defer close(watcherDone)
-		tick := time.NewTicker(time.Second)
-		defer tick.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-r.ctx.Done():
-				return
-			case <-tick.C:
-				if !s.valid(r) {
-					s.disconnect(r)
-					return
-				}
-			}
-		}
+		s.watchSession(r, tick.C, done)
 	}()
 	delay := time.Second
 	for s.valid(r) {
@@ -145,6 +133,25 @@ func (s *Service) loop(r *session) {
 		delay = min(delay*2, 30*time.Second)
 	}
 }
+
+// watchSession accepts ticks separately so tests can drive an idle credential
+// check without relying on the scheduler or waiting for wall-clock time.
+func (s *Service) watchSession(r *session, ticks <-chan time.Time, done <-chan struct{}) {
+	for {
+		select {
+		case <-done:
+			return
+		case <-r.ctx.Done():
+			return
+		case <-ticks:
+			if !s.valid(r) {
+				s.disconnect(r)
+				return
+			}
+		}
+	}
+}
+
 func (s *Service) stream(r *session) error {
 	req, err := s.newRequest(r.ctx, r, http.MethodGet, prefix+"/events", nil)
 	if err != nil {

@@ -10,7 +10,9 @@ import (
 
 func TestCredentialReadFailureKeepsStreamAndRecoversRequests(t *testing.T) {
 	h := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"conversations":[]}`)
+		if _, err := fmt.Fprint(w, `{"conversations":[]}`); err != nil {
+			t.Errorf("write chat response: %v", err)
+		}
 	})
 	awaitKind(t, h.events, "sync")
 	h.svc.mu.Lock()
@@ -23,11 +25,24 @@ func TestCredentialReadFailureKeepsStreamAndRecoversRequests(t *testing.T) {
 	if _, err := h.svc.Conversations(); !errors.Is(err, storeErr) || errors.Is(err, errSignedOut) {
 		t.Fatalf("credential error lost: %v", err)
 	}
-	// Let the actual idle watcher observe a failed credential read.
+	// Drive the same watcher used by loop and join it after the check. The
+	// unbuffered tick guarantees validation runs before the watcher exits.
+	ticks := make(chan time.Time)
+	done := make(chan struct{})
+	checked := make(chan struct{})
+	go func() {
+		defer close(checked)
+		h.svc.watchSession(r, ticks, done)
+	}()
 	select {
-	case <-r.ctx.Done():
+	case ticks <- time.Time{}:
+	case <-checked:
+		t.Fatal("credential watcher stopped before checking")
+	}
+	close(done)
+	<-checked
+	if r.ctx.Err() != nil {
 		t.Fatal("credential read error cancelled stream")
-	case <-time.After(1200 * time.Millisecond):
 	}
 	h.svc.publish(r, Event{Kind: "connection", Connected: false})
 	if e := awaitKind(t, h.events, "connection"); e.Connected || e.OwnerID != "a" {
@@ -50,7 +65,9 @@ func TestAcceptedSendSurvivesCredentialReadFailure(t *testing.T) {
 		case <-release:
 		case <-r.Context().Done():
 		}
-		fmt.Fprint(w, `{"id":"42","clientId":"sent-once","senderId":"a","recipientId":"b","text":"delivered"}`)
+		if _, err := fmt.Fprint(w, `{"id":"42","clientId":"sent-once","senderId":"a","recipientId":"b","text":"delivered"}`); err != nil {
+			t.Errorf("write chat response: %v", err)
+		}
 	})
 	result := make(chan error, 1)
 	go func() {

@@ -20,20 +20,30 @@ func TestStreamStopsOnPermanentHTTPFailure(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/v1/me" {
-					fmt.Fprint(w, `{"id":"a"}`)
+					if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
+						t.Errorf("write chat response: %v", err)
+					}
 					return
 				}
 				requests.Add(1)
 				w.WriteHeader(status)
-				fmt.Fprint(w, `{"error":{"code":"chat_disabled"}}`)
+				if _, err := fmt.Fprint(w, `{"error":{"code":"chat_disabled"}}`); err != nil {
+					t.Errorf("write chat response: %v", err)
+				}
 			}))
 			defer server.Close()
 			s, err := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
 			if err != nil {
 				t.Fatal(err)
 			}
-			s.ServiceStartup(context.Background(), application.ServiceOptions{})
-			defer s.ServiceShutdown()
+			if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := s.ServiceShutdown(); err != nil {
+					t.Errorf("shutdown chat service: %v", err)
+				}
+			}()
 			events := make(chan Event, 32)
 			s.emit = func(e Event) { events <- e }
 			if err = s.Start(); err != nil {
@@ -64,7 +74,9 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/v1/me" {
-					fmt.Fprint(w, `{"id":"a"}`)
+					if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
+						t.Errorf("write chat response: %v", err)
+					}
 					return
 				}
 				if requests.Add(1) == 1 {
@@ -72,8 +84,13 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
-				fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n")
-				w.(http.Flusher).Flush()
+				if _, err := fmt.Fprint(w, "data: {\"kind\":\"sync\"}\n\n"); err != nil {
+					t.Errorf("write chat response: %v", err)
+				}
+				if err := http.NewResponseController(w).Flush(); err != nil {
+					t.Errorf("flush chat stream: %v", err)
+					return
+				}
 				<-r.Context().Done()
 			}))
 			defer server.Close()
@@ -81,8 +98,14 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			s.ServiceStartup(context.Background(), application.ServiceOptions{})
-			defer s.ServiceShutdown()
+			if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := s.ServiceShutdown(); err != nil {
+					t.Errorf("shutdown chat service: %v", err)
+				}
+			}()
 			events := make(chan Event, 32)
 			s.emit = func(e Event) { events <- e }
 			if err = s.Start(); err != nil {
