@@ -82,27 +82,14 @@ func withProfileDefaults(user CurrentUser) CurrentUser {
 	if user.Profile.Showcase == nil {
 		legacyAppearance := user.Profile.Appearance
 		user.Profile = DefaultProfileSettings()
-		user.Profile.Appearance = mergeAppearance(user.Profile.Appearance, legacyAppearance)
-		return user
+		user.Profile.Appearance = legacyAppearance
 	}
 	if user.Profile.Visibility == "" {
 		user.Profile.Visibility = VisibilityFriends
 		user.Profile.ShowPlaytime = true
 		user.Profile.ShowLibrary = true
 	}
-	if user.Profile.Appearance.Theme == "" {
-		user.Profile.Appearance = DefaultProfileAppearance()
-		return user
-	}
-	if user.Profile.Appearance.Accent == "" {
-		user.Profile.Appearance.Accent = "#67d8ef"
-	}
-	if user.Profile.Appearance.CoverDim < 0 || user.Profile.Appearance.CoverDim > 100 {
-		user.Profile.Appearance.CoverDim = 35
-	}
-	if user.Profile.Appearance.CoverPosition < 0 || user.Profile.Appearance.CoverPosition > 100 {
-		user.Profile.Appearance.CoverPosition = 50
-	}
+	user.Profile.Appearance = mergeAppearance(DefaultProfileAppearance(), user.Profile.Appearance)
 	return user
 }
 
@@ -117,7 +104,11 @@ func mergeAppearance(defaults, value ProfileAppearance) ProfileAppearance {
 	if value.CoverURL != "" {
 		defaults.CoverURL = value.CoverURL
 	}
-	defaults.CoverDim = value.CoverDim
-	defaults.CoverPosition = value.CoverPosition
+	if value.CoverDim >= 0 && value.CoverDim <= 100 {
+		defaults.CoverDim = value.CoverDim
+	}
+	if value.CoverPosition >= 0 && value.CoverPosition <= 100 {
+		defaults.CoverPosition = value.CoverPosition
+	}
 	return defaults
 }
