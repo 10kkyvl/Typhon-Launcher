@@ -240,10 +240,12 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 			return " "
 		}
 		// Feed build dates are not the game's release year or a subtitle.
-		if len(inner) >= 8 && len(inner) <= 10 && strings.ContainsRune("/.-", rune(inner[4])) {
+		if len(inner) >= 8 && len(inner) <= 10 {
 			date := strings.ReplaceAll(strings.ReplaceAll(inner, "/", "-"), ".", "-")
-			if _, err := time.Parse("2006-1-2", date); err == nil {
-				return " "
+			for _, layout := range []string{"2006-1-2", "2-1-2006"} {
+				if _, err := time.Parse(layout, date); err == nil {
+					return " "
+				}
 			}
 		}
 		if found, ok := d.bracketMarker(inner); ok {

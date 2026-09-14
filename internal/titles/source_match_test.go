@@ -32,6 +32,26 @@ func TestSourceReleaseMatchNames(t *testing.T) {
 		{"Prince of Persia: The Lost Crown – Complete Edition, v1.4.3 + 5 DLCs + 2 OSTs", []string{"Prince of Persia: The Lost Crown Complete Edition", "Prince of Persia: The Lost Crown"}},
 		{"Dark Souls Remastered, v1.0 + All DLCs + Bonus OST", []string{"Dark Souls Remastered"}},
 		{"Game + Another Game II", []string{"Game + Another Game II"}},
+		{"GTA 4 / Grand Theft Auto IV: The Complete Edition – v1.2.0.43 + Radio Downgrader + Vanilla Fixes Modpack v1.6.2 + Wrappers", []string{"Grand Theft Auto IV The Complete Edition", "Grand Theft Auto IV"}},
+		{"GTA 4: Complete Edition", []string{"Grand Theft Auto IV Complete Edition", "Grand Theft Auto IV"}},
+		{"Grand Theft Auto V / GTA 5 (Legacy) – v1.0.3725.0/1.72 + Bonus Content", []string{"Grand Theft Auto V Legacy"}},
+		{"Grand Theft Auto V / GTA 5 – v1.0.3411/1.70 + NVE Platinum Modpack + Bonus Content", []string{"Grand Theft Auto V"}},
+		{"Grand Theft Auto V / GTA 5 Redux", []string{"Grand Theft Auto V / GTA 5 Redux"}},
+		{"Age of Empires 2 (II) Definitive Edition — (Build 24094652) | P2P", []string{"Age of Empires II Definitive Edition"}},
+		{"Age of Empires 3 (III) Definitive Edition — RePack от Igruha", []string{"Age of Empires III Definitive Edition"}},
+		{"Age of Empires 4 (IV): Anniversary Edition — RePack от Igruha", []string{"Age of Empires IV Anniversary Edition"}},
+		{"Game 2 (III) Definitive Edition", []string{"Game 2 (III) Definitive Edition"}},
+		{"Дарк Соулс (III)", []string{"Дарк Соулс (III)"}},
+		{"Дарк Соулс 2 (III)", []string{"Дарк Соулс 2 (III)"}},
+		{"Tomb Raider IV-VI Remastered (19/09/2025) [Папка игры] (2025)", []string{"Tomb Raider IV VI Remastered"}},
+		{"Warhammer 40,000: Dawn of War Definitive Edition (19.08.2025)", []string{"Warhammer 40,000: Dawn of War Definitive Edition"}},
+		{"Dаys Gone Remastered — RePack от Igruha", []string{"Dаys Gone Remastered", "Days Gone Remastered"}},
+		{"Niоh 2 The Complete Edition — RePack от Igruha", []string{"Niоh 2 The Complete Edition", "Nioh 2 The Complete Edition", "Niоh 2", "Nioh 2"}},
+		{"BioShоck 2 Remastered", []string{"BioShоck 2 Remastered", "BioShock 2 Remastered"}},
+		{"Kingdom of Velvet Сhains", []string{"Kingdom of Velvet Сhains", "Kingdom of Velvet Chains"}},
+		{"ГТА Сан Андреас (GTA San Andreas) — RePack от Igruha", []string{"Grand Theft Auto San Andreas"}},
+		{"Жизнь и Смерть", []string{"Жизнь и Смерть"}},
+		{"GoЯ", []string{"GoЯ"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {
@@ -49,7 +69,7 @@ func TestReleaseMetadataBracketsAndTrailingEdition(t *testing.T) {
 			t.Fatalf("metadata polluted title: %+v", p)
 		}
 	}
-	for _, name := range []string{"Game (2025/13/01)", "Game (Act 1/2)", "Game (All Stars)"} {
+	for _, name := range []string{"Game (2025/13/01)", "Game (31/02/2025)", "Game (05.05.26)", "Game (Act 1/2)", "Game (All Stars)"} {
 		if p := Parse(name); p.Base != name {
 			t.Fatalf("non-date title removed: %q => %+v", name, p)
 		}

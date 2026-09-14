@@ -45,18 +45,22 @@ func (r *sourceMatchRemote) MatchReleases(_ context.Context, qs []catalog.Releas
 func TestSourceRefreshReparsesMetadataAndPersistsOfficialGameGroups(t *testing.T) {
 	s, cat, dir := testService(t)
 	cases := []struct {
-		raw, title, id string
+		raw, matchName, title, id string
 	}{
-		{"ГТА 3 (GTA 3) — RePack от Igruha", "Grand Theft Auto III", "730"},
-		{"GTA 4 / Grand Theft Auto IV (2010) RePack от xatab", "Grand Theft Auto IV", "731"},
-		{"Little Nightmares III (2025/11/19) [Папка игры] (2025)", "Little Nightmares III", "264398"},
-		{"TerraScape: Deluxe Edition – v2.1.0.3 + 2 DLCs/Bonuses", "TerraScape", "test-terrascape"},
+		{"ГТА 3 (GTA 3) — RePack от Igruha", "Grand Theft Auto III", "Grand Theft Auto III", "730"},
+		{"GTA 4 / Grand Theft Auto IV (2010) RePack от xatab", "Grand Theft Auto IV", "Grand Theft Auto IV", "731"},
+		{"Little Nightmares III (2025/11/19) [Папка игры] (2025)", "Little Nightmares III", "Little Nightmares III", "264398"},
+		{"TerraScape: Deluxe Edition – v2.1.0.3 + 2 DLCs/Bonuses", "TerraScape", "TerraScape", "test-terrascape"},
+		{"GTA 4 / Grand Theft Auto IV: The Complete Edition – v1.2.0.43 + Radio Downgrader + Vanilla Fixes Modpack v1.6.2 + Wrappers", "Grand Theft Auto IV The Complete Edition", "Grand Theft Auto IV: Complete Edition", "27912"},
+		{"Age of Empires 3 (III) Definitive Edition — RePack от Igruha", "Age of Empires III Definitive Edition", "Age of Empires III: Definitive Edition", "55057"},
+		{"Dаys Gone Remastered — RePack от Igruha", "Days Gone Remastered", "Days Gone Remastered", "test-days"},
+		{"Tomb Raider IV-VI Remastered (19/09/2025) [Папка игры] (2025)", "Tomb Raider IV VI Remastered", "Tomb Raider IV•V•VI Remastered", "test-tomb"},
 	}
 	entries := make([]feedEntry, 0, len(cases))
 	remote := &sourceMatchRemote{games: map[string]catalog.Game{}}
 	for _, tc := range cases {
 		entries = append(entries, feedEntry{Title: tc.raw, DistributionID: tc.id, URIs: []string{magnetOf("ab")}})
-		remote.games[tc.title] = catalog.Game{ID: "server-" + tc.id, Title: tc.title, ExternalIDs: catalog.ExternalIDs{IGDB: tc.id}}
+		remote.games[tc.matchName] = catalog.Game{ID: "server-" + tc.id, Title: tc.title, ExternalIDs: catalog.ExternalIDs{IGDB: tc.id}}
 	}
 	server := newFeedServer(t, feedBody(t, "Metadata source", entries...))
 	src := addSource(t, s, server.url())
