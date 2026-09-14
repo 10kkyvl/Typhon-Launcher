@@ -127,3 +127,15 @@ for For you on this development machine. SQL currently scans/sorts the candidate
 catalog; these are observations, not a production latency guarantee. Native game
 execution and production provider ingestion require separate platform/live
 checks. No production rollout is part of this change.
+
+Candidate pages are held in a bounded memory cache for two minutes. Refreshing
+picks reuses that stream when its profile and filters match; it does not write
+candidate pages into the offline page cache or import unseen games into the local
+catalog. Opening a pick persists that game before metadata/library operations.
+Favorite changes refresh the shelf and list together with a new exclusion snapshot.
+Offline discovery uses the same confirmed-working compatibility rule as the catalog.
+
+New ranking queries require backend catalog protocol version 1. An older backend
+is reported explicitly; its alphabetical results cannot masquerade as recommendations.
+Genre keys are canonical English identifiers across both UI languages, including
+normalization of legacy Russian genre names stored by earlier launcher versions.

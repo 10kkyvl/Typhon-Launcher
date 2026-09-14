@@ -244,8 +244,8 @@
         prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
       }
     } catch (err) {
-      backendOutdated = errorCode(err) === "catalog.backend_outdated";
       if (current !== token) return;
+      backendOutdated = errorCode(err) === "catalog.backend_outdated";
       prefetch.clear();
       if (next === 1) {
         items = [];
