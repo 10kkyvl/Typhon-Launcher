@@ -176,9 +176,12 @@ type recommendationEvidence struct {
 }
 
 func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
-	_, p, source := s.recommendationSnapshot()
+	_, p, source, items, profile := s.recommendationSnapshotWithProfile()
+	return s.enrichRecommendationQueryWithSnapshot(q, p, source, items, profile)
+}
+
+func (s *Service) enrichRecommendationQueryWithSnapshot(q GameQuery, p RecommendationPreferences, source RecommendationLibrarySource, items []RecommendationLibraryItem, profile RecommendationProfile) GameQuery {
 	if q.Sort == "for-you" && strings.TrimSpace(q.Profile) == "" {
-		profile := s.GetRecommendationProfile()
 		weights := make(map[string]float64, len(profile.Genres))
 		maxWeight := 0.0
 		for _, facet := range profile.Genres {
@@ -210,7 +213,6 @@ func (s *Service) enrichRecommendationQuery(q GameQuery) GameQuery {
 	}
 	q.ExcludeNotInterested = strings.Join(s.remoteRecommendationIDs(ids), ",")
 	if q.HideLibrary && source != nil {
-		items := source()
 		ids := make([]string, 0, len(items))
 		for _, item := range items {
 			if item.CanonicalGameID != "" {
@@ -429,17 +431,29 @@ func (s *Service) recommendationSnapshot() ([]Game, RecommendationPreferences, R
 	return games, p, source
 }
 
-func (s *Service) GetRecommendationProfile() RecommendationProfile {
-	if s.recommendationLoadErr != nil {
-		return profileFromEvidence(recommendationEvidence{}, RecommendationPreferences{})
-	}
+// recommendationSnapshotWithProfile takes one coherent snapshot of catalog
+// and library evidence. A Browse request may need the profile and the same
+// library IDs for exclusions; calling the source separately can rescan the
+// whole library twice and observe two different states.
+func (s *Service) recommendationSnapshotWithProfile() ([]Game, RecommendationPreferences, RecommendationLibrarySource, []RecommendationLibraryItem, RecommendationProfile) {
 	games, p, source := s.recommendationSnapshot()
 	items := []RecommendationLibraryItem(nil)
 	if source != nil {
 		items = source()
 	}
-	evidence := buildEvidence(games, filterEvidenceItems(items, p))
-	return profileFromEvidence(evidence, p)
+	profile := profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
+	if s.recommendationLoadErr != nil {
+		profile = profileFromEvidence(recommendationEvidence{}, p)
+	}
+	return games, p, source, items, profile
+}
+
+func (s *Service) GetRecommendationProfile() RecommendationProfile {
+	if s.recommendationLoadErr != nil {
+		return profileFromEvidence(recommendationEvidence{}, RecommendationPreferences{})
+	}
+	_, _, _, _, profile := s.recommendationSnapshotWithProfile()
+	return profile
 }
 
 func profileFromEvidence(e recommendationEvidence, p RecommendationPreferences) RecommendationProfile {

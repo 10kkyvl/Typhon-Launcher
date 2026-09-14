@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"strings"
 	"time"
 	"typhon/internal/uierr"
 )
@@ -34,11 +35,28 @@ func (s *Service) prepareBrowseSnapshot(q GameQuery) (GameQuery, error) {
 		frozen.Page, frozen.Revision, frozen.Snapshot = q.Page, q.Revision, q.Snapshot
 		return frozen, nil
 	}
+	if q.Page > 1 && browseQueryNeedsSnapshot(q) {
+		return GameQuery{}, uierr.Wrap("catalog.changed", ErrCatalogChanged)
+	}
 	if q.Sort == "newest" {
 		q.Sort = "year"
 	}
+	games, p, source := s.recommendationSnapshot()
+	items := []RecommendationLibraryItem(nil)
+	profile := profileFromEvidence(recommendationEvidence{}, p)
+	needProfile := q.Sort == "auto" || (q.Sort == "for-you" && strings.TrimSpace(q.Profile) == "")
+	if needProfile || q.HideLibrary {
+		if source != nil {
+			items = source()
+		}
+	}
+	if needProfile {
+		profile = profileFromEvidence(buildEvidence(games, filterEvidenceItems(items, p)), p)
+		if s.recommendationLoadErr != nil {
+			profile = profileFromEvidence(recommendationEvidence{}, p)
+		}
+	}
 	if q.Sort == "auto" {
-		profile := s.GetRecommendationProfile()
 		q.Sort = "popular"
 		// Weak evidence contributes gradually before the UI switches its default
 		// label to For you. Explicit Popular always remains non-personalized.
@@ -46,7 +64,7 @@ func (s *Service) prepareBrowseSnapshot(q GameQuery) (GameQuery, error) {
 			q.Sort = "for-you"
 		}
 	}
-	q = s.enrichRecommendationQuery(q)
+	q = s.enrichRecommendationQueryWithSnapshot(q, p, source, items, profile)
 	if q.Page <= 1 {
 		q.Snapshot = NewID()
 		s.mu.Lock()
@@ -69,4 +87,8 @@ func (s *Service) prepareBrowseSnapshot(q GameQuery) (GameQuery, error) {
 		s.mu.Unlock()
 	}
 	return q, nil
+}
+
+func browseQueryNeedsSnapshot(q GameQuery) bool {
+	return q.Sort == "auto" || q.Sort == "for-you" || q.HideLibrary || q.HideNotInterested || strings.TrimSpace(q.Profile) != ""
 }

@@ -92,6 +92,57 @@ func TestExpiredPersonalSnapshotRequiresExplicitRestart(t *testing.T) {
 	}
 }
 
+func TestAutoBrowseBuildsRecommendationProfileFromOneLibrarySnapshot(t *testing.T) {
+	s, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"known-a", "known-b", "known-c"} {
+		if _, err = s.AddGame(Game{ID: id, Title: "Known"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls := 0
+	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
+		calls++
+		return []RecommendationLibraryItem{
+			{CanonicalGameID: "known-a", Favorite: true},
+			{CanonicalGameID: "known-b", Favorite: true},
+			{CanonicalGameID: "known-c", Favorite: true},
+		}
+	})
+	s.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "remote", Title: "Remote"}}}})
+	if _, err = s.BrowseGames(GameQuery{Sort: "auto", Page: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("recommendation source called %d times, want 1", calls)
+	}
+}
+
+func TestPersonalizedContinuationWithoutSnapshotRequiresRestart(t *testing.T) {
+	s, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.prepareBrowseSnapshot(GameQuery{Sort: "for-you", Page: 2}); !errors.Is(err, ErrCatalogChanged) {
+		t.Fatalf("personalized continuation error = %v, want ErrCatalogChanged", err)
+	}
+}
+
+func TestPopularContinuationWithoutSnapshotRemainsAvailable(t *testing.T) {
+	s, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &remoteFixture{page: GamePage{Items: []Game{{ID: "second", Title: "Second"}}, Page: 2, PageSize: 1}}
+	s.SetRemoteCatalog(remote)
+	page, err := s.BrowseGames(GameQuery{Sort: "popular", Page: 2, PageSize: 1})
+	if err != nil || len(page.Items) != 1 || remote.calls != 1 {
+		t.Fatalf("popular continuation = %+v, err=%v, calls=%d", page, err, remote.calls)
+	}
+}
+
 type fallbackSnapshotRemote struct{ queries []GameQuery }
 
 func (r *fallbackSnapshotRemote) Browse(_ context.Context, q GameQuery) (GamePage, error) {
