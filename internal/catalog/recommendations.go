@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"math"
 	"os"
 	"sort"
@@ -200,12 +201,17 @@ func (s *Service) enrichRecommendationQueryWithSnapshot(q GameQuery, p Recommend
 		for _, facet := range profile.Themes {
 			themes[facet.Value] = facet.Score / maxWeight
 		}
-		payload, _ := json.Marshal(struct {
+		payload, err := json.Marshal(struct {
 			Genres   map[string]float64 `json:"genres,omitempty"`
 			Themes   map[string]float64 `json:"themes,omitempty"`
 			Strength float64            `json:"strength,omitempty"`
 		}{Genres: weights, Themes: themes, Strength: profile.Confidence})
-		q.Profile = string(payload)
+		if err != nil {
+			slog.Warn("encode recommendation profile", "error", err)
+			q.Sort = "popular"
+		} else {
+			q.Profile = string(payload)
+		}
 	}
 	ids := append([]string(nil), q.ExcludeIDs...)
 	if q.HideNotInterested {
@@ -944,20 +950,6 @@ func libraryGameIDs(items []RecommendationLibraryItem) map[string]bool {
 		}
 	}
 	return ids
-}
-
-func filterRecommendationGames(games []Game, q GameQuery, blocked map[string]bool, hideNotInterested bool) []Game {
-	result := make([]Game, 0, len(games))
-	for _, game := range games {
-		if hideNotInterested && blocked[game.ID] {
-			continue
-		}
-		if q.Genre != "" && !genreMatches(game.Genres, q.Genre) {
-			continue
-		}
-		result = append(result, game)
-	}
-	return result
 }
 
 func qualityScore(game Game) float64 {

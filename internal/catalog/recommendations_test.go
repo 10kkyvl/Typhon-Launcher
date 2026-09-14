@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -473,5 +474,16 @@ func TestDiscoveryPassesLargeLibraryButNotRefreshExclusionsToRemote(t *testing.T
 	}
 	if !strings.Contains(remote.got.ExcludeLibrary, "00000000-0000-0000-0000-000000001064") || remote.got.ExcludeNotInterested != "" || containsString(remote.got.ExcludeIDs, "00000000-0000-0000-0000-000000000333") {
 		t.Fatalf("remote exclusions = %+v", remote.got)
+	}
+}
+
+func TestInvalidRecommendationProfileFallsBackToPopular(t *testing.T) {
+	s, err := NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := s.enrichRecommendationQueryWithSnapshot(GameQuery{Sort: "for-you"}, RecommendationPreferences{}, nil, nil, RecommendationProfile{Confidence: math.NaN()})
+	if q.Sort != "popular" || q.Profile != "" {
+		t.Fatalf("invalid profile did not fall back: %+v", q)
 	}
 }
