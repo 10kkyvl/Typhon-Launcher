@@ -615,7 +615,7 @@
             cover={game.coverUrl || $gameArt[game.id]?.cover || ''}
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
-            meta={catalogMeta(game)}
+            meta={catalogMeta(shown)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
             onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
           >
