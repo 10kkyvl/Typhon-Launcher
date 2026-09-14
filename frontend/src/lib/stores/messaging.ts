@@ -61,6 +61,8 @@ let typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let typingSentAt = new Map<string, number>();
 let notifyIds = new Set<string>();
 let messageLoad = new Map<string, number>();
+let knownPeers = new Map<string, ChatPeer>();
+let loadingMorePeer = '';
 let expiryTimer: ReturnType<typeof setInterval> | null = null;
 let conversationRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let startRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -168,7 +170,8 @@ function setMessage(peerId: string, message: Message): void {
 function peerFor(peerId: string): ChatPeer | null {
   const fromConversation = get(conversations).find((conversation) => conversation.peer.id === peerId)?.peer;
   if (fromConversation) return fromConversation;
-  return get(activePeer)?.id === peerId ? get(activePeer) : null;
+  if (get(activePeer)?.id === peerId) return get(activePeer);
+  return knownPeers.get(peerId) ?? null;
 }
 
 function visibleOpenPeer(peerId: string): boolean {
@@ -180,6 +183,26 @@ function updateConversation(peerId: string, apply: (conversation: Conversation) 
   conversations.update((list) => list.map((conversation) =>
     conversation.peer.id === peerId ? apply(conversation) : conversation,
   ));
+}
+
+function ensureConversation(peerId: string, lastMessage: Message | null = null, peer = peerFor(peerId)): void {
+  if (!peer) return;
+  knownPeers.set(peerId, peer);
+  conversations.update((list) => {
+    const index = list.findIndex((conversation) => conversation.peer.id === peerId);
+    if (index < 0) {
+      return [{
+        peer,
+        lastMessage,
+        unread: 0,
+        canSend: get(canSendByPeer)[peerId] ?? true,
+      }, ...list];
+    }
+    if (!lastMessage) return list;
+    const next = [...list];
+    next[index] = { ...next[index], lastMessage };
+    return next;
+  });
 }
 
 function clearTyping(peerId: string): void {
@@ -268,6 +291,7 @@ async function reloadConversations(expected = generation): Promise<void> {
     const loaded = (await fetchConversations()).filter((conversation) => !conversation.lastMessage || isMessageAlive(conversation.lastMessage));
     if (expected === generation) {
       conversations.set(loaded);
+      for (const conversation of loaded) knownPeers.set(conversation.peer.id, conversation.peer);
       chatHistoryError.set('');
     }
   } catch (err) {
@@ -283,8 +307,17 @@ export async function loadMessages(peerId: string, before = '', append = false, 
   const requestRevisions = new Map(
     (get(messagesByPeer)[peerId] ?? []).map((item) => [item.id, messageRevisions.get(messageRevisionKey(peerId, item.id)) ?? 0]),
   );
-  if (append) chatLoadingMore.set(true);
-  else chatLoading.set(true);
+  const activeAtStart = get(activePeer)?.id === peerId;
+  if (append) {
+    if (activeAtStart) {
+      loadingMorePeer = peerId;
+      chatLoadingMore.set(true);
+    }
+  } else if (activeAtStart) {
+    loadingMorePeer = '';
+    chatLoadingMore.set(false);
+    chatLoading.set(true);
+  }
   try {
     const page: MessagePage = await fetchMessages(peerId, before);
     if (expectedGeneration !== generation || messageLoad.get(peerId) !== request) return;
@@ -315,28 +348,39 @@ export async function loadMessages(peerId: string, before = '', append = false, 
       updateConversation(peerId, (conversation) => ({ ...conversation, canSend: page.canSend ?? conversation.canSend }));
     }
     if (!append && markReadAfter) await markPeerRead(peerId);
-    if (expectedGeneration === generation) chatHistoryError.set('');
+    if (expectedGeneration === generation && messageLoad.get(peerId) === request && get(activePeer)?.id === peerId) {
+      chatHistoryError.set('');
+    }
   } catch (err) {
     console.warn('messaging history failed', err);
-    if (expectedGeneration === generation) chatHistoryError.set(msg('social.chatHistoryError'));
+    if (expectedGeneration === generation && messageLoad.get(peerId) === request && get(activePeer)?.id === peerId) {
+      chatHistoryError.set(msg('social.chatHistoryError'));
+    }
     throw err;
   } finally {
-    if (expectedGeneration === generation) {
-      if (append) chatLoadingMore.set(false);
-      else chatLoading.set(false);
+    if (expectedGeneration === generation && messageLoad.get(peerId) === request) {
+      if (append && loadingMorePeer === peerId && get(activePeer)?.id === peerId) {
+        loadingMorePeer = '';
+        chatLoadingMore.set(false);
+      }
+      else if (get(activePeer)?.id === peerId) chatLoading.set(false);
     }
   }
 }
 
 export async function loadMore(peerId: string): Promise<void> {
   const cursor = get(nextByPeer)[peerId];
-  if (!cursor || get(chatLoadingMore)) return;
+  if (!cursor || get(activePeer)?.id !== peerId || get(chatLoadingMore)) return;
   await loadMessages(peerId, cursor, true);
 }
 
 export function openChat(peer: ChatPeer): void {
+  knownPeers.set(peer.id, peer);
   activePeer.set(peer);
   chatOpen.set(true);
+  chatHistoryError.set('');
+  loadingMorePeer = '';
+  chatLoadingMore.set(false);
   panelVisible = true;
   chatPanelVisible.set(true);
   clearTyping(peer.id);
@@ -355,6 +399,9 @@ export function closeChat(): void {
   chatOpen.set(false);
   panelVisible = false;
   chatPanelVisible.set(false);
+  loadingMorePeer = '';
+  chatLoading.set(false);
+  chatLoadingMore.set(false);
   editingMessageId.set(null);
 }
 
@@ -389,6 +436,7 @@ export async function sendMessage(peerId: string, text: string, clientId: string
   if (!value) throw new Error('message_empty');
   if (Array.from(value).length > 2000) throw new Error('message_too_long');
   const expectedGeneration = generation;
+  const outgoingPeer = peerFor(peerId);
   const optimistic = localMessage(peerId, clientId, value);
   setMessage(peerId, optimistic);
   markPending(clientId, true);
@@ -399,6 +447,7 @@ export async function sendMessage(peerId: string, text: string, clientId: string
     const sent = await sendMessageCall(peerId, clientId, value);
     if (expectedGeneration !== generation) throw new Error('session_changed');
     replaceLocalMessage(clientId, sent);
+    ensureConversation(peerId, sent, outgoingPeer);
     updateConversation(peerId, (conversation) => ({ ...conversation, lastMessage: sent }));
     return sent;
   } catch (err) {
@@ -415,10 +464,13 @@ export async function retryMessage(peerId: string, clientId: string): Promise<Me
   markFailed(clientId, false);
   markPending(clientId, true);
   const expectedGeneration = generation;
+  const outgoingPeer = peerFor(peerId);
   try {
     const sent = await sendMessageCall(peerId, clientId, local.text);
     if (expectedGeneration !== generation) throw new Error('session_changed');
     replaceLocalMessage(clientId, sent);
+    ensureConversation(peerId, sent, outgoingPeer);
+    updateConversation(peerId, (conversation) => ({ ...conversation, lastMessage: sent }));
     return sent;
   } catch (err) {
     if (expectedGeneration === generation) markFailed(clientId, true);
@@ -450,6 +502,7 @@ export async function toggleReaction(peerId: string, message: Message, emoji: Re
     await loadMessages(peerId);
   } catch (err) {
     console.warn('messaging reaction failed', err);
+    throw err;
   }
 }
 
@@ -476,7 +529,14 @@ async function incomingMessage(peerId: string, message: Message, expectedGenerat
   if (!ownId || !isMessageAlive(message)) return;
   if (message.senderId === ownId) {
     if (expectedGeneration !== generation) return;
+    let peer = peerFor(peerId);
+    if (!peer) {
+      await reloadConversations(expectedGeneration);
+      peer = peerFor(peerId);
+    }
+    if (expectedGeneration !== generation || !peer) return;
     setMessage(peerId, message);
+    ensureConversation(peerId, message, peer);
     updateConversation(peerId, (conversation) => ({ ...conversation, lastMessage: message }));
     return;
   }
@@ -558,6 +618,10 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   }
   notifyIds = new Set();
   unreadMessageIds = new Map();
+  knownPeers = new Map();
+  loadingMorePeer = '';
+  chatLoading.set(false);
+  chatLoadingMore.set(false);
   for (const peerId of typingTimers.keys()) clearTyping(peerId);
   messagesByPeer.set({});
   messageRevisions = new Map();

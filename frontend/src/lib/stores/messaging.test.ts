@@ -176,6 +176,20 @@ describe('messaging store session and event races', () => {
     expect(api.notify).not.toHaveBeenCalled();
   });
 
+  it('keeps an own SSE echo when the chat was closed before it arrived', async () => {
+    const { messaging } = await load();
+    messaging.conversations.set([]);
+    messaging.openChat(peer);
+    await flush();
+    messaging.closeChat();
+
+    const own = message({ senderId: 'me', recipientId: peer.id, id: 'own-closed-1', clientId: 'own-closed-client' });
+    await emit('chat:event', { ownerId: 'me', kind: 'message', peerId: peer.id, message: own });
+
+    expect(get(messaging.conversations)).toEqual([{ peer, lastMessage: own, unread: 0, canSend: true }]);
+    expect(get(messaging.messagesByPeer)[peer.id]).toEqual([own]);
+  });
+
   it('retries a failed send with the same clientId', async () => {
     const { messaging } = await load();
     const sent = message({ senderId: 'me', recipientId: peer.id, id: 'sent-1', clientId: 'same-client' });
@@ -187,6 +201,152 @@ describe('messaging store session and event races', () => {
     expect(api.send).toHaveBeenNthCalledWith(1, peer.id, 'same-client', 'hello');
     expect(api.send).toHaveBeenNthCalledWith(2, peer.id, 'same-client', 'hello');
     expect(get(messaging.failedMessages).has('same-client')).toBe(false);
+  });
+
+  it('adds a conversation immediately after the first message is sent', async () => {
+    const { messaging } = await load();
+    messaging.conversations.set([]);
+    const sent = message({ senderId: 'me', recipientId: peer.id, id: 'sent-1', clientId: 'first-client' });
+    api.send.mockResolvedValueOnce(sent);
+
+    messaging.openChat(peer);
+    await flush();
+    await messaging.sendMessage(peer.id, 'hello', 'first-client');
+
+    expect(get(messaging.conversations)).toEqual([{ peer, lastMessage: sent, unread: 0, canSend: true }]);
+  });
+
+  it('keeps the first conversation when sending finishes after switching chats', async () => {
+    const { messaging } = await load();
+    const secondPeer = { ...peer, id: 'peer-2', username: 'other', displayName: 'Other' };
+    messaging.conversations.set([]);
+    let resolveSend!: (value: unknown) => void;
+    api.send.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const sent = message({ senderId: 'me', recipientId: peer.id, id: 'sent-after-switch', clientId: 'switch-client' });
+
+    messaging.openChat(peer);
+    await flush();
+    const pending = messaging.sendMessage(peer.id, 'hello', 'switch-client');
+    messaging.openChat(secondPeer);
+    resolveSend(sent);
+    await pending;
+
+    expect(get(messaging.conversations).find((item) => item.peer.id === peer.id)?.lastMessage).toEqual(sent);
+  });
+
+  it('keeps a retried conversation when retry finishes after closing the panel', async () => {
+    const { messaging } = await load();
+    messaging.conversations.set([]);
+    const sent = message({ senderId: 'me', recipientId: peer.id, id: 'sent-after-retry', clientId: 'retry-switch-client' });
+    api.send.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(sent);
+
+    messaging.openChat(peer);
+    await flush();
+    await expect(messaging.sendMessage(peer.id, 'hello', 'retry-switch-client')).rejects.toThrow('network');
+    messaging.closeChat();
+    await messaging.retryMessage(peer.id, 'retry-switch-client');
+
+    expect(get(messaging.conversations).find((item) => item.peer.id === peer.id)?.lastMessage).toEqual(sent);
+  });
+
+  it('keeps history loading while switching chats until the active chat finishes', async () => {
+    const { messaging } = await load();
+    const secondPeer = { ...peer, id: 'peer-2', username: 'other', displayName: 'Other' };
+    messaging.conversations.set([
+      { peer, lastMessage: null, unread: 0, canSend: true },
+      { peer: secondPeer, lastMessage: null, unread: 0, canSend: true },
+    ]);
+    const resolveHistory: Record<string, (page: unknown) => void> = {};
+    api.messages.mockImplementation((peerId: string) => new Promise((resolve) => {
+      resolveHistory[peerId] = resolve;
+    }));
+
+    messaging.openChat(peer);
+    messaging.openChat(secondPeer);
+    await flush();
+    resolveHistory[peer.id]({ messages: [], next: '', canSend: true });
+    await flush();
+
+    expect(get(messaging.activePeer)?.id).toBe(secondPeer.id);
+    expect(get(messaging.chatLoading)).toBe(true);
+    resolveHistory[secondPeer.id]({ messages: [], next: '', canSend: true });
+    await flush();
+    expect(get(messaging.chatLoading)).toBe(false);
+  });
+
+  it('does not show an old chat error after switching to another chat', async () => {
+    const { messaging } = await load();
+    const secondPeer = { ...peer, id: 'peer-2', username: 'other', displayName: 'Other' };
+    messaging.conversations.set([
+      { peer, lastMessage: null, unread: 0, canSend: true },
+      { peer: secondPeer, lastMessage: null, unread: 0, canSend: true },
+    ]);
+    let rejectFirst!: (error: Error) => void;
+    const resolveSecond = vi.fn();
+    api.messages
+      .mockReturnValueOnce(new Promise((_, reject) => { rejectFirst = reject; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond.mockImplementation(resolve); }));
+
+    messaging.openChat(peer);
+    messaging.openChat(secondPeer);
+    rejectFirst(new Error('offline'));
+    await flush();
+
+    expect(get(messaging.chatHistoryError)).toBe('');
+    resolveSecond({ messages: [], next: '', canSend: true });
+    await flush();
+  });
+
+  it('does not let an older read-marked history request clear a newer error', async () => {
+    const { messaging } = await load();
+    messaging.conversations.set([{ peer, lastMessage: null, unread: 1, canSend: true }]);
+    api.messages.mockResolvedValueOnce({ messages: [message()], next: '', canSend: true });
+    let resolveRead!: () => void;
+    api.read.mockReturnValueOnce(new Promise<void>((resolve) => { resolveRead = resolve; }));
+
+    messaging.openChat(peer);
+    await flush();
+    expect(api.read).toHaveBeenCalledWith(peer.id, 'message-1');
+
+    api.messages.mockRejectedValueOnce(new Error('offline'));
+    await expect(messaging.loadMessages(peer.id)).rejects.toThrow('offline');
+    const historyError = get(messaging.chatHistoryError);
+    resolveRead();
+    await flush();
+
+    expect(historyError).toBeTruthy();
+    expect(get(messaging.chatHistoryError)).toBe(historyError);
+  });
+
+  it('clears pagination loading when the active chat changes or closes', async () => {
+    const { messaging } = await load();
+    const secondPeer = { ...peer, id: 'peer-2', username: 'other', displayName: 'Other' };
+    messaging.conversations.set([
+      { peer, lastMessage: null, unread: 0, canSend: true },
+      { peer: secondPeer, lastMessage: null, unread: 0, canSend: true },
+    ]);
+    messaging.openChat(peer);
+    await flush();
+    messaging.nextByPeer.set({ [peer.id]: 'cursor' });
+    let resolveMore!: (page: unknown) => void;
+    api.messages.mockReturnValueOnce(new Promise((resolve) => { resolveMore = resolve; }));
+    const pending = messaging.loadMore(peer.id);
+    await flush();
+    expect(get(messaging.chatLoadingMore)).toBe(true);
+
+    messaging.openChat(secondPeer);
+    expect(get(messaging.chatLoadingMore)).toBe(false);
+    messaging.closeChat();
+    expect(get(messaging.chatLoadingMore)).toBe(false);
+    resolveMore({ messages: [], next: '', canSend: true });
+    await pending;
+  });
+
+  it('propagates reaction failures so the panel can show an error', async () => {
+    const { messaging } = await load();
+    api.react.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(messaging.toggleReaction(peer.id, message(), 'heart')).rejects.toThrow('offline');
   });
 
   it('keeps optimistic failed messages when history refreshes', async () => {

@@ -216,6 +216,7 @@ export const social = {
   'social.chatRetry': 'Повторить',
   'social.chatSendError': 'Не удалось отправить. Можно повторить отправку.',
   'social.chatEditError': 'Не удалось изменить сообщение.',
+  'social.chatReactionError': 'Не удалось изменить реакцию.',
   'social.chatDisabled': 'Отправка недоступна: вы больше не друзья или пользователь заблокирован.',
   'social.chatPlaceholder': 'Написать сообщение…',
   'social.chatHint': 'Enter — отправить · Shift+Enter — новая строка',

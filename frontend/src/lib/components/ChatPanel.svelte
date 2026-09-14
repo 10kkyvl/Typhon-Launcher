@@ -145,10 +145,16 @@
     });
   }
 
-  function chooseReaction(message: Message, key: ReactionKey): void {
+  async function chooseReaction(message: Message, key: ReactionKey): Promise<void> {
     if (!peer || !isOwn(message) && !conversation?.canSend) return;
+    const targetPeerId = peer.id;
     reactionMenu = null;
-    void toggleReaction(peer.id, message, key);
+    error = '';
+    try {
+      await toggleReaction(targetPeerId, message, key);
+    } catch {
+      if ($activePeer?.id === targetPeerId) error = msg('social.chatReactionError');
+    }
   }
 
   function openToast(): void {

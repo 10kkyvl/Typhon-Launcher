@@ -219,6 +219,7 @@ export const social: Record<SocialKey, Message> = {
   'social.chatRetry': 'Retry',
   'social.chatSendError': 'Could not send. You can retry.',
   'social.chatEditError': 'Could not edit the message.',
+  'social.chatReactionError': 'Could not update the reaction.',
   'social.chatDisabled': 'Sending is unavailable: you are no longer friends or the user is blocked.',
   'social.chatPlaceholder': 'Write a message…',
   'social.chatHint': 'Enter — send · Shift+Enter — new line',
