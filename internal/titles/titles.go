@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -36,7 +37,12 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reBracket.ReplaceAllStringFunc(s, func(bracket string) string {
 		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
 		if reReleaseBracketStart.MatchString(inner) {
-			_, raw, _ := extractVersion(inner)
+			_, raw, version := extractVersion(inner)
+			// In a metadata bracket, a separated V cannot be a title's Roman
+			// numeral. Retain its marker so the second extraction sees it too.
+			if raw != "" && raw[0] >= '0' && raw[0] <= '9' {
+				raw = "v" + version
+			}
 			_, langs, _ := d.extractLangAndDashTags(inner)
 			return "(" + raw + " " + strings.Join(langs, " ") + " " + reDLCCount.FindString(inner) + ")"
 		}
@@ -74,7 +80,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reSepRun.ReplaceAllString(s, " ")
 	s = strings.ReplaceAll(s, "\x00", ".")
 	s = reSpaceRun.ReplaceAllString(s, " ")
-	s = strings.TrimSpace(s)
+	s = strings.Trim(s, " -,:;|\u2014\u2013")
 
 	var words []string
 	if s != "" {
@@ -232,6 +238,13 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 		inner := strings.TrimSpace(m[1 : len(m)-1])
 		if inner == "" {
 			return " "
+		}
+		// Feed build dates are not the game's release year or a subtitle.
+		if len(inner) >= 8 && len(inner) <= 10 && strings.ContainsRune("/.-", rune(inner[4])) {
+			date := strings.ReplaceAll(strings.ReplaceAll(inner, "/", "-"), ".", "-")
+			if _, err := time.Parse("2006-1-2", date); err == nil {
+				return " "
+			}
 		}
 		if found, ok := d.bracketMarker(inner); ok {
 			tags = append(tags, found...)

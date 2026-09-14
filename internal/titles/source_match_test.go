@@ -22,6 +22,16 @@ func TestSourceReleaseMatchNames(t *testing.T) {
 		{"Half-Life 2: Episode Two v1.0.4", []string{"Half Life 2: Episode Two"}},
 		{"Persona 3 Portable", []string{"Persona 3 Portable"}},
 		{"Kingdom Come: Deliverance (All Stars)", []string{"Kingdom Come: Deliverance (All Stars)"}},
+		{"GTA 4 / Grand Theft Auto IV - Complete Edition [v 1070-1120] (2010) PC | RePack от xatab", []string{"Grand Theft Auto IV Complete Edition", "Grand Theft Auto IV"}},
+		{"Grand Theft Auto IV: The Complete Edition [v 1.2.0.43] (2010-2020) RePack от xatab", []string{"Grand Theft Auto IV The Complete Edition", "Grand Theft Auto IV"}},
+		{"GTA 4 / Grand Theft Auto IV (2010) RePack от xatab", []string{"Grand Theft Auto IV"}},
+		{"Grand Theft Auto III / GTA 4", []string{"Grand Theft Auto III / GTA 4"}},
+		{"Little Nightmares III (2025/11/19) [Папка игры] (2025)", []string{"Little Nightmares III"}},
+		{"Mortal Sin (2025/10/27)", []string{"Mortal Sin"}},
+		{"TerraScape: Deluxe Edition – v2.1.0.3 + 2 DLCs/Bonuses", []string{"TerraScape Deluxe Edition", "TerraScape"}},
+		{"Prince of Persia: The Lost Crown – Complete Edition, v1.4.3 + 5 DLCs + 2 OSTs", []string{"Prince of Persia: The Lost Crown Complete Edition", "Prince of Persia: The Lost Crown"}},
+		{"Dark Souls Remastered, v1.0 + All DLCs + Bonus OST", []string{"Dark Souls Remastered"}},
+		{"Game + Another Game II", []string{"Game + Another Game II"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {
@@ -29,6 +39,20 @@ func TestSourceReleaseMatchNames(t *testing.T) {
 				t.Fatalf("names=%q, want %q (parsed=%+v)", got, tc.names, Parse(tc.raw))
 			}
 		})
+	}
+}
+
+func TestReleaseMetadataBracketsAndTrailingEdition(t *testing.T) {
+	for _, marker := range []string{"v", "V"} {
+		p := Parse("Example Game: Complete Edition [" + marker + " 1.2.0.43] (2025/10/27) (2010)")
+		if p.Base != "Example Game" || p.Edition != "Complete Edition" || p.Version != "1.2.0.43" || p.Year != 2010 {
+			t.Fatalf("metadata polluted title: %+v", p)
+		}
+	}
+	for _, name := range []string{"Game (2025/13/01)", "Game (Act 1/2)", "Game (All Stars)"} {
+		if p := Parse(name); p.Base != name {
+			t.Fatalf("non-date title removed: %q => %+v", name, p)
+		}
 	}
 }
 

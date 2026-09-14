@@ -13,6 +13,7 @@ type sourceMatchRemote struct {
 	callback func()
 	err      error
 	queries  []catalog.ReleaseQuery
+	games    map[string]catalog.Game
 }
 
 func (r *sourceMatchRemote) Browse(context.Context, catalog.GameQuery) (catalog.GamePage, error) {
@@ -31,8 +32,48 @@ func (r *sourceMatchRemote) MatchReleases(_ context.Context, qs []catalog.Releas
 		if q.Titles[0] == "Grand Theft Auto V" {
 			out[i].Game = &catalog.Game{ID: "server-gta", Title: "Grand Theft Auto V", ExternalIDs: catalog.ExternalIDs{IGDB: "1020"}}
 		}
+		for _, title := range q.Titles {
+			if g, ok := r.games[title]; ok {
+				out[i].Game = &g
+				break
+			}
+		}
 	}
 	return out, nil
+}
+
+func TestSourceRefreshReparsesMetadataAndPersistsOfficialGameGroups(t *testing.T) {
+	s, cat, dir := testService(t)
+	cases := []struct {
+		raw, title, id string
+	}{
+		{"ГТА 3 (GTA 3) — RePack от Igruha", "Grand Theft Auto III", "730"},
+		{"GTA 4 / Grand Theft Auto IV (2010) RePack от xatab", "Grand Theft Auto IV", "731"},
+		{"Little Nightmares III (2025/11/19) [Папка игры] (2025)", "Little Nightmares III", "264398"},
+		{"TerraScape: Deluxe Edition – v2.1.0.3 + 2 DLCs/Bonuses", "TerraScape", "test-terrascape"},
+	}
+	entries := make([]feedEntry, 0, len(cases))
+	remote := &sourceMatchRemote{games: map[string]catalog.Game{}}
+	for _, tc := range cases {
+		entries = append(entries, feedEntry{Title: tc.raw, DistributionID: tc.id, URIs: []string{magnetOf("ab")}})
+		remote.games[tc.title] = catalog.Game{ID: "server-" + tc.id, Title: tc.title, ExternalIDs: catalog.ExternalIDs{IGDB: tc.id}}
+	}
+	server := newFeedServer(t, feedBody(t, "Metadata source", entries...))
+	src := addSource(t, s, server.url())
+	cat.SetRemoteCatalog(remote)
+	summary, err := s.RefreshSource(src.ID)
+	if err != nil || !summary.NotModified {
+		t.Fatalf("cached source refresh: %+v %v", summary, err)
+	}
+	// The card reads these groups, not the transient match response. Reopen
+	// both stores to ensure official identities and links survive a restart.
+	reloaded := mustServiceAt(t, dir, mustCatalog(t, dir))
+	for _, tc := range cases {
+		groups := reloaded.GetReleasesForGame("server-" + tc.id)
+		if len(groups) != 1 || groups[0].Release.DistributionID != tc.id || groups[0].Release.MatchMethod != string(catalog.MethodServerTitle) {
+			t.Fatalf("%s missing its saved release: %+v", tc.title, groups)
+		}
+	}
 }
 
 func TestRemoteMatchingRepairsLegacyLinksOn304AndPreservesManualChoices(t *testing.T) {
