@@ -177,6 +177,27 @@ describe('initSelfUpdate', () => {
     expect(get(toasts.toasts)).toHaveLength(1);
   });
 
+  it('keeps a status that lands while the first getStatus is still in flight', async () => {
+    const { service, store } = await load();
+    let resolveStatus: (value: unknown) => void = () => {};
+    vi.mocked(service.getStatus).mockReturnValue(
+      new Promise((resolve) => {
+        resolveStatus = resolve;
+      }) as never,
+    );
+
+    const init = store.initSelfUpdate();
+    // The backend's own startup check may answer before the first getStatus
+    // does: the listener has to be in place before the request, or that
+    // answer is lost until the next poll.
+    expect(handlers['launcher:update_status']).toBeTypeOf('function');
+    handlers['launcher:update_status']({ data: makeStatus({ state: 'available', availableVersion: '1.1.0' }) });
+    resolveStatus(makeStatus({ state: 'idle' }));
+    await init;
+
+    expect(get(store.selfUpdateStatus)).toEqual(makeStatus({ state: 'available', availableVersion: '1.1.0' }));
+  });
+
   it('returns a disposer that unsubscribes every listener', async () => {
     const { service, store } = await load();
     vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);

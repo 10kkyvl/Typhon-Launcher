@@ -22,21 +22,6 @@ import (
 // manifest и URL артефакта. manifestBody и artifactBody читаются на каждый
 // запрос — тест выставляет их через возвращённые setter'ы до первого вызова
 // клиента, поэтому гонки с обработчиком нет.
-// newClientWithKey строит Client, который проверяет подпись манифеста
-// заданным ключом вместо прод-ключа. Не экспортируется и не участвует в
-// NewClient намеренно: это единственная точка, где ключ проверки подписи
-// можно заменить, и она закрыта для всего, что лежит за пределами пакета
-// selfupdate. Так тест может прогнать весь цикл (манифест → подпись →
-// скачивание → применение) на одноразовой паре ключей, а прод-путь
-// (NewClient, PublicKey()) остаётся тем же самым кодом без единой лазейки.
-func newClientWithKey(baseURL string, key ed25519.PublicKey) (*Client, error) {
-	c, err := NewClient(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	c.key = key
-	return c, nil
-}
 
 func bundleCycleServer(t *testing.T) (srv *httptest.Server, setManifest, setArtifact func([]byte), artifactName string) {
 	t.Helper()

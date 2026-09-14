@@ -386,6 +386,35 @@ func (s *Service) UploadAvatar(encoded string, crop AvatarCrop) (CurrentUser, er
 	return user, nil
 }
 
+func (s *Service) PickCover() (AvatarImage, error) {
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle("Выберите обложку профиля").
+		CanChooseFiles(true).
+		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp)", "*.png;*.jpg;*.jpeg;*.webp").
+		AddFilter("Все файлы", "*.*")
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		return AvatarImage{}, err
+	}
+	if path == "" {
+		return AvatarImage{}, nil
+	}
+	return readCoverImage(path)
+}
+
+func (s *Service) UploadCover(encoded string) (CoverUpload, error) {
+	data, err := decodeCover(encoded)
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	defer cancel()
+	return s.client.UploadCover(ctx, data)
+}
+
 func (s *Service) RemoveAvatar() (CurrentUser, error) {
 	ctx, cancel, err := s.requestContext()
 	if err != nil {

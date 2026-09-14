@@ -6,6 +6,30 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.7.0 — 2026-09-14
+Chat with friends, personalized catalog recommendations, and profile customization with your own cover and colors.
+
+### Added
+- Direct messages to friends inside the launcher, with conversation history, reactions, read receipts, and unread counts. Chat is available when social features are enabled
+- Sound notifications for new messages, with a shortcut to the conversation
+- A discovery shelf featuring games outside your library and clear recommendation reasons. Picks use favorites, play history, genres, and themes
+- Catalog sorting by popularity, rating, and release date, plus automatic ordering that gradually reflects your interests. “Not interested” hides a game from recommendations; dismissed games can be viewed and restored
+- Profile appearance customization with a live preview: upload and crop a 4:1 cover, choose a theme including black, and set custom accent colors. Other users see this appearance when viewing your profile
+- Custom HEX color input and copying in the app accent palette
+
+### Changed
+- Returning from a game keeps loaded catalog pages without downloading the entire list again. Changing favorites preserves the current pages and scroll position; new picks apply after an explicit refresh or filter change
+- Clicking the selected catalog genre or library filter again shows all games
+- Catalog grid cards show the developer when that information is available
+- Catalog metadata coverage is shown in status details so incomplete data no longer looks like an endless import
+- The launcher checks for updates every 15 minutes and retries sooner after network failures
+- When automatic error reporting is enabled, reports include sanitized operation details and recent events to help identify failures. Full logs are still sent manually after confirmation
+
+### Fixed
+- Genre filters work consistently across Steam and IGDB data, Russian game details, and previously saved catalogs
+- Searching for a game to link your own release also finds games previously marked as not interested
+- Errors from earlier catalog requests no longer obscure newer results; new sorting options explain their unavailability when the server version is incompatible
+
 ## 0.6.1 — 2026-09-12
 Fixed Steam and IGDB duplicates, card refreshes, and catalog pagination.
 

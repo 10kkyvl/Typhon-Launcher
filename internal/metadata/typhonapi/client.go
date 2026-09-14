@@ -22,13 +22,14 @@ import (
 )
 
 const (
-	requestTimeout = 45 * time.Second
-	maxBodyBytes   = 4 << 20
-	defaultLimit   = 10
-	maxLimit       = 25
-	maxResolve     = 50
-	providerName   = "igdb"
-	maxRetryAfter  = 24 * time.Hour
+	requestTimeout  = 45 * time.Second
+	maxBodyBytes    = 4 << 20
+	defaultLimit    = 10
+	maxLimit        = 25
+	maxResolve      = 50
+	providerName    = "igdb"
+	maxRetryAfter   = 24 * time.Hour
+	maxBrowseGETURL = 6 << 10
 )
 
 var (
@@ -36,6 +37,14 @@ var (
 	ErrBadRequest = errors.New("сервер метаданных отклонил запрос")
 	ErrOutdated   = errors.New("лаунчер устарел, нужно обновление")
 )
+
+type httpStatusError struct {
+	status int
+	err    error
+}
+
+func (e *httpStatusError) Error() string { return e.err.Error() }
+func (e *httpStatusError) Unwrap() error { return e.err }
 
 type TokenFunc func() (string, error)
 
@@ -262,22 +271,24 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 func statusError(resp *http.Response, body io.Reader) error {
 	status := resp.StatusCode
 	code := decodeCode(body)
+	var err error
 	switch {
 	case status == http.StatusServiceUnavailable && code == "metadata_unavailable":
-		return fmt.Errorf("%w: провайдер не настроен на сервере", metadata.ErrNotConfigured)
+		err = fmt.Errorf("%w: провайдер не настроен на сервере", metadata.ErrNotConfigured)
 	case status == http.StatusConflict && code == "catalog_changed":
-		return catalog.ErrCatalogChanged
+		err = catalog.ErrCatalogChanged
 	case status == http.StatusNotFound:
-		return fmt.Errorf("%w: %d", metadata.ErrNoMatch, status)
+		err = fmt.Errorf("%w: %d", metadata.ErrNoMatch, status)
 	case status == http.StatusTooManyRequests:
-		return &metadata.RateLimitError{RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
+		err = &metadata.RateLimitError{RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
-		return fmt.Errorf("%w: %d %s", ErrBadRequest, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrBadRequest, status, code)
 	case status == http.StatusUpgradeRequired:
-		return fmt.Errorf("%w: %d %s", ErrOutdated, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrOutdated, status, code)
 	default:
-		return fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
 	}
+	return &httpStatusError{status: status, err: err}
 }
 
 func parseRetryAfter(value string, now time.Time) time.Duration {
@@ -328,7 +339,68 @@ func numeric(s string) bool {
 }
 
 func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
+	getPath := browseGETPath(q)
+	personal := q.Profile != "" || q.ExcludeLibrary != "" || q.ExcludeNotInterested != ""
+	if personal {
+		body, err := json.Marshal(newBrowseRequest(q))
+		if err != nil {
+			return catalog.GamePage{}, fmt.Errorf("собрать запрос каталога: %w", err)
+		}
+		var page catalog.GamePage
+		err = c.post(ctx, account.APIPrefix+"/catalog/games", body, &page)
+		if err == nil {
+			return validateBrowseProtocol(q, page)
+		}
+		var statusErr *httpStatusError
+		if !errors.As(err, &statusErr) || (statusErr.status != http.StatusNotFound && statusErr.status != http.StatusMethodNotAllowed) || len(c.baseURL+getPath) > maxBrowseGETURL {
+			return catalog.GamePage{}, err
+		}
+	}
+	var page catalog.GamePage
+	if err := c.get(ctx, getPath, &page); err != nil {
+		return catalog.GamePage{}, err
+	}
+	return validateBrowseProtocol(q, page)
+}
+
+func validateBrowseProtocol(q catalog.GameQuery, page catalog.GamePage) (catalog.GamePage, error) {
+	needsRanking := q.Sort == "popular" || q.Sort == "rating" || q.Sort == "for-you" || q.Sort == "auto"
+	if page.ProtocolVersion < 1 && (needsRanking || q.Kind == "game" || q.Profile != "" || q.ExcludeLibrary != "" || q.ExcludeNotInterested != "") {
+		return catalog.GamePage{}, catalog.ErrBackendOutdated
+	}
+	return page, nil
+}
+
+type browseRequest struct {
+	Compat               string `json:"compat"`
+	Search               string `json:"search"`
+	Genre                string `json:"genre"`
+	Platform             string `json:"platform"`
+	Kind                 string `json:"kind"`
+	Sort                 string `json:"sort"`
+	Page                 int    `json:"page"`
+	PageSize             int    `json:"pageSize"`
+	Revision             int64  `json:"revision"`
+	Profile              string `json:"profile,omitempty"`
+	ExcludeLibrary       string `json:"excludeLibrary,omitempty"`
+	ExcludeNotInterested string `json:"excludeNotInterested,omitempty"`
+}
+
+func newBrowseRequest(q catalog.GameQuery) browseRequest {
+	return browseRequest{Compat: q.Compat, Search: q.Search, Genre: q.Genre, Platform: q.Platform, Kind: q.Kind, Sort: q.Sort, Page: q.Page, PageSize: q.PageSize, Revision: q.Revision, Profile: q.Profile, ExcludeLibrary: q.ExcludeLibrary, ExcludeNotInterested: q.ExcludeNotInterested}
+}
+
+func browseGETPath(q catalog.GameQuery) string {
 	params := url.Values{"compat": {q.Compat}, "search": {q.Search}, "genre": {q.Genre}, "platform": {q.Platform}, "kind": {q.Kind}, "sort": {q.Sort}}
+	if q.Profile != "" {
+		params.Set("profile", q.Profile)
+	}
+	if q.ExcludeLibrary != "" {
+		params.Set("excludeLibrary", q.ExcludeLibrary)
+	}
+	if q.ExcludeNotInterested != "" {
+		params.Set("excludeNotInterested", q.ExcludeNotInterested)
+	}
 	if q.Page > 0 {
 		params.Set("page", strconv.Itoa(q.Page))
 	}
@@ -338,7 +410,5 @@ func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GameP
 	if q.Revision > 0 {
 		params.Set("revision", strconv.FormatInt(q.Revision, 10))
 	}
-	var page catalog.GamePage
-	err := c.get(ctx, account.APIPrefix+"/catalog/games?"+params.Encode(), &page)
-	return page, err
+	return account.APIPrefix + "/catalog/games?" + params.Encode()
 }

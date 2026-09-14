@@ -69,6 +69,60 @@ func readAvatarImage(path string) (AvatarImage, error) {
 	return avatarImage(data)
 }
 
+func coverMIME(data []byte) (string, bool) {
+	mime, ok := avatarMIME(data)
+	return mime, ok && mime != "image/gif"
+}
+
+func coverImage(data []byte) (AvatarImage, error) {
+	if len(data) == 0 {
+		return AvatarImage{}, &Error{Code: CodeInvalidCover}
+	}
+	if len(data) > maxCoverSize {
+		return AvatarImage{}, &Error{Code: CodeCoverTooLarge}
+	}
+	mime, ok := coverMIME(data)
+	if !ok {
+		return AvatarImage{}, &Error{Code: CodeUnsupportedCover}
+	}
+	return AvatarImage{Data: base64.StdEncoding.EncodeToString(data), MIME: mime}, nil
+}
+
+func readCoverImage(path string) (AvatarImage, error) {
+	if path == "" {
+		return AvatarImage{}, &Error{Code: CodeInvalidCover}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return AvatarImage{}, &Error{Code: CodeInvalidCover, cause: err}
+	}
+	if info.Size() > maxCoverSize {
+		return AvatarImage{}, &Error{Code: CodeCoverTooLarge}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return AvatarImage{}, &Error{Code: CodeInvalidCover, cause: err}
+	}
+	return coverImage(data)
+}
+
+func decodeCover(encoded string) ([]byte, error) {
+	if encoded == "" || base64.StdEncoding.DecodedLen(len(encoded)) > maxCoverSize {
+		if encoded != "" && base64.StdEncoding.DecodedLen(len(encoded)) > maxCoverSize {
+			return nil, &Error{Code: CodeCoverTooLarge}
+		}
+		return nil, &Error{Code: CodeInvalidCover}
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, &Error{Code: CodeInvalidCover, cause: err}
+	}
+	if _, ok := coverMIME(data); !ok {
+		return nil, &Error{Code: CodeUnsupportedCover}
+	}
+	return data, nil
+}
+
 func decodeAvatar(encoded string) ([]byte, error) {
 	if encoded == "" {
 		return nil, &Error{Code: CodeInvalidAvatar}

@@ -111,6 +111,8 @@ worker protocol, `0` — install directly), `TYPHON_DEVMOCK_INSTALL_SECONDS` (de
 started by `wails3 task devrelease VERSION=x.y.z`, `TYPHON_DEVMOCK_MANIFEST_URL` and
 `TYPHON_DEVMOCK_RELEASE_PUBKEY`.
 
+Catalog ranking and recommendation rules: [implementation and data sources](RECOMMENDATIONS.md).
+
 ## Configuration
 
 | Variable | Meaning |

@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { msg } from '../i18n';
   import { hexToHsv, hsvToHex, clampUnit } from '../theme/colorPicker';
-  let { value, onchange }: { value: string; onchange: (color: string) => void } = $props();
+  let { value, onchange, disabled = false }: { value: string; onchange: (color: string) => void; disabled?: boolean } = $props();
   let hsv = $state(untrack(() => hexToHsv(value)));
   let lastColor = untrack(() => value);
   $effect(() => {
@@ -22,17 +22,17 @@
     emit();
   }
   function start(event: PointerEvent) {
-    if (event.button !== 0) return;
+    if (disabled || event.button !== 0) return;
     const target = event.currentTarget as HTMLElement;
     target.focus();
     target.setPointerCapture(event.pointerId);
     pick(event);
   }
   function move(event: PointerEvent) {
-    if ((event.currentTarget as HTMLElement).hasPointerCapture(event.pointerId)) pick(event);
+    if (!disabled && (event.currentTarget as HTMLElement).hasPointerCapture(event.pointerId)) pick(event);
   }
   function key(event: KeyboardEvent) {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    if (disabled || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault();
     const step = event.shiftKey ? .1 : .01;
     hsv = { ...hsv,
@@ -47,14 +47,14 @@
   <div class="color-field">
     <div class="sample" style:background={value} aria-hidden="true"></div>
     <div class="saturation" style:--hue={`hsl(${hsv.h} 100% 50%)`}
-      role="slider" tabindex="0" aria-label={msg('settings.accentShade')}
+      role="slider" tabindex={disabled ? -1 : 0} aria-disabled={disabled} aria-label={msg('settings.accentShade')}
       aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(hsv.s * 100)}
       aria-valuetext={msg('settings.accentShadeValue', { saturation: Math.round(hsv.s * 100), brightness: Math.round(hsv.v * 100) })}
       onpointerdown={start} onpointermove={move} onkeydown={key}>
       <span class="cursor" style:left={`${hsv.s * 100}%`} style:top={`${(1 - hsv.v) * 100}%`}></span>
     </div>
   </div>
-  <input class="hue" type="range" min="0" max="360" step="1" value={hsv.h}
+  <input class="hue" {disabled} type="range" min="0" max="360" step="1" value={hsv.h}
     aria-label={msg('settings.accentHue')}
     oninput={event => { hsv = { ...hsv, h: Number(event.currentTarget.value) }; emit(); }} />
 </div>

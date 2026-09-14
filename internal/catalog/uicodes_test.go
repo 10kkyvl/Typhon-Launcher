@@ -36,7 +36,7 @@ func catalogCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []str
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := catalogCodesIn(t, catalogGoCodePattern, "service.go", "metadata.go")
+	goCodes := catalogCodesIn(t, catalogGoCodePattern, "service.go", "metadata.go", "recommendations.go")
 	if len(goCodes) < 8 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 8", len(goCodes))
 	}

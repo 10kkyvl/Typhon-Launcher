@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"typhon/internal/account"
 	"typhon/internal/accountsync"
@@ -28,6 +30,7 @@ import (
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
+	"typhon/internal/messaging"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
@@ -129,6 +132,8 @@ func init() {
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
+	application.RegisterEvent[messaging.Event](messaging.EventName)
+	application.RegisterEvent[messaging.OpenEvent]("chat:open")
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -276,6 +281,29 @@ func main() {
 	if err != nil {
 		fatal("start catalog service", err)
 	}
+	// Recommendations consume a compact snapshot so catalog ranking stays
+	// independent from the library package and can rank the complete catalog
+	// before pagination. Session counts make a single short launch insufficient
+	// evidence of a preference.
+	catalogService.SetRecommendationLibrarySource(func() []catalog.RecommendationLibraryItem {
+		games := libraryService.GetGames()
+		sessions := playlogService.Since(time.Unix(0, 0))
+		counts := make(map[string]int, len(sessions))
+		for _, session := range sessions {
+			counts[session.GameID]++
+		}
+		items := make([]catalog.RecommendationLibraryItem, 0, len(games))
+		for _, game := range games {
+			items = append(items, catalog.RecommendationLibraryItem{
+				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID, Title: game.Title, Cover: game.Cover,
+				Favorite: game.Favorite, PlaytimeSeconds: game.PlaytimeSeconds,
+				Sessions: counts[game.ID], LastPlayed: game.LastPlayed,
+				Installed: !game.Uninstalled, Hidden: game.Archived,
+				ContinuePlaying: game.Status == library.StatusPlaying,
+			})
+		}
+		return items
+	})
 	libraryService.SetCanonicalIdentity(catalogService.SameGame)
 	sourcesService, err := sources.NewService(settingsService, catalogService)
 	if err != nil {
@@ -415,6 +443,10 @@ func main() {
 	if err != nil {
 		fatal("start social service", err)
 	}
+	messagingService, err := messaging.NewService(account.BaseURL(), accountService.SessionToken, func() bool { return settingsService.GetSettings().AccountSync })
+	if err != nil {
+		fatal("start messaging service", err)
+	}
 	onlineService, err := online.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID, settingsService)
 	if err != nil {
 		fatal("start online service", err)
@@ -478,6 +510,7 @@ func main() {
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
+		application.NewService(messagingService),
 		application.NewService(onlineService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
@@ -562,6 +595,9 @@ func main() {
 		URL: "/",
 	})
 
+	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
+	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
+	defer chatDesktop.Close()
 	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)

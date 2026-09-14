@@ -66,9 +66,16 @@ func newClientWithTimeout(baseURL string, timeout time.Duration) (*client, error
 }
 
 func (c *client) send(ctx context.Context, id clientid.Identity, reports []reportPayload) error {
+	return c.sendVersion(ctx, id, reports, true)
+}
+
+func (c *client) sendVersion(ctx context.Context, id clientid.Identity, reports []reportPayload, withDetails bool) error {
 	// Repair persisted reports from clients that used CodeNone for frontend errors.
 	reports = append([]reportPayload(nil), reports...)
 	for i := range reports {
+		if !withDetails {
+			reports[i].Details = nil
+		}
 		if reports[i].ErrorCode == "" {
 			reports[i].ErrorCode = "unknown"
 			if reports[i].Component == "frontend" {
@@ -80,7 +87,7 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 	if len(reports) > 20 {
 		for len(reports) > 0 {
 			n := min(len(reports), 20)
-			if err := c.send(ctx, id, reports[:n]); err != nil {
+			if err := c.sendVersion(ctx, id, reports[:n], withDetails); err != nil {
 				return err
 			}
 			reports = reports[n:]
@@ -104,10 +111,10 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 			return &deliveryError{status: 413, code: "batch_too_large"}
 		}
 		mid := len(reports) / 2
-		if err := c.send(ctx, id, reports[:mid]); err != nil {
+		if err := c.sendVersion(ctx, id, reports[:mid], withDetails); err != nil {
 			return err
 		}
-		return c.send(ctx, id, reports[mid:])
+		return c.sendVersion(ctx, id, reports[mid:], withDetails)
 	}
 	telemetrylog.Record(telemetrylog.KindDiagnostics, path, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
@@ -139,6 +146,16 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 		}
 		if err := json.Unmarshal(data, &envelope); err != nil {
 			return &deliveryError{status: resp.StatusCode, requestID: resp.Header.Get("X-Request-ID")}
+		}
+		// Old servers reject the optional field at JSON decoding, before any
+		// insert. Retry that specific response once with the legacy shape and
+		// identical IDs. Validation errors, throttling and outages never downgrade.
+		if withDetails && resp.StatusCode == http.StatusBadRequest && envelope.Error.Code == "bad_request" {
+			for _, report := range reports {
+				if report.Details != nil {
+					return c.sendVersion(ctx, id, reports, false)
+				}
+			}
 		}
 		return &deliveryError{status: resp.StatusCode, code: envelope.Error.Code, requestID: resp.Header.Get("X-Request-ID")}
 	}

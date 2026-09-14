@@ -97,7 +97,7 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 	game.MetadataLanguage = patch.Language
 	game.Developer = patch.Developer
 	game.Publisher = patch.Publisher
-	game.Genres = copyStrings(patch.Genres)
+	game.Genres = canonicalGenres(patch.Genres)
 	game.Themes = copyStrings(patch.Themes)
 	game.Platforms = copyStrings(patch.Platforms)
 	game.GameType = strings.TrimSpace(patch.GameType)

@@ -18,6 +18,8 @@ import (
 	"typhon/internal/uierr"
 )
 
+var ErrBackendOutdated = uierr.New("catalog.backend_outdated", "catalog backend needs an update")
+
 var ErrCatalogChanged = errors.New("catalog changed; reload from the first page")
 
 const (
@@ -39,6 +41,17 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 // BrowseGames is the public catalog. Local games are a personal/cache store,
 // never the membership source for a successful online response.
 func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
+	return s.browseGames(q, true)
+}
+
+func (s *Service) browseGames(q GameQuery, durable bool) (GamePage, error) {
+	var prepareErr error
+	q, prepareErr = s.prepareBrowseSnapshot(q)
+	if prepareErr != nil {
+		return GamePage{}, prepareErr
+	}
+	snapshot := q.Snapshot
+	q.Snapshot = ""
 	s.mu.RLock()
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)
@@ -49,6 +62,23 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	}
 	sum := sha256.Sum256(raw)
 	path := filepath.Join(dir, "catalog-pages", hex.EncodeToString(sum[:])+".json")
+	if !durable {
+		s.mu.RLock()
+		cached, ok := s.discoveryPages[path]
+		s.mu.RUnlock()
+		if ok && time.Since(cached.CachedAt) < 2*time.Minute {
+			cached.Snapshot = snapshot
+			if cached.PersonalizationFallback {
+				s.mu.Lock()
+				if snap, ok := s.browseSnapshots[snapshot]; ok {
+					snap.query.Sort, snap.query.Profile = "popular", ""
+					s.browseSnapshots[snapshot] = snap
+				}
+				s.mu.Unlock()
+			}
+			return s.previewRemotePage(cached), nil
+		}
+	}
 	//nolint:forbidigo // Wails RPC entry point: this service has no lifecycle context; each request is bounded and canceled on return.
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
@@ -59,9 +89,36 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 	} else {
 		page, err = remote.Browse(ctx, q)
 	}
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		fallback := q
+		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
+		// A failed personalized source must still allow a general first page.
+		// Preserve exclusions and filters, and pin the fallback for continuations.
+		// The original request owns the total 25-second budget. A fallback gets
+		// at most ten seconds, but cannot outlive the first request's deadline.
+		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
+		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
+		fallbackCancel()
+		if fallbackErr == nil {
+			page, err = fallbackPage, nil
+			page.PersonalizationFallback = true
+			s.mu.Lock()
+			if snap, ok := s.browseSnapshots[snapshot]; ok {
+				snap.query.Sort, snap.query.Profile = "popular", ""
+				s.browseSnapshots[snapshot] = snap
+			}
+			s.mu.Unlock()
+		}
+	}
 	if err != nil {
+		if errors.Is(err, ErrBackendOutdated) {
+			return GamePage{}, err
+		}
 		if errors.Is(err, ErrCatalogChanged) {
 			return GamePage{}, uierr.Wrap("catalog.changed", err)
+		}
+		if !durable {
+			return GamePage{}, err
 		}
 		page = GamePage{}
 		if loadErr := storage.Load(path, 1, nil, &page); loadErr != nil {
@@ -69,7 +126,29 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		}
 		page.Offline = true
 		s.normalizeCachedPage(&page)
+		page.Snapshot = snapshot
+		page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 		return page, nil
+	}
+	if !durable {
+		page.CachedAt = time.Now().UTC()
+		s.mu.Lock()
+		if s.discoveryPages == nil {
+			s.discoveryPages = map[string]GamePage{}
+		}
+		if len(s.discoveryPages) >= 12 {
+			oldest := ""
+			for key, cached := range s.discoveryPages {
+				if oldest == "" || cached.CachedAt.Before(s.discoveryPages[oldest].CachedAt) {
+					oldest = key
+				}
+			}
+			delete(s.discoveryPages, oldest)
+		}
+		s.discoveryPages[path] = page
+		s.mu.Unlock()
+		page.Snapshot = snapshot
+		return s.previewRemotePage(page), nil
 	}
 	s.mu.Lock()
 	previous := append([]Game(nil), s.games...)
@@ -128,6 +207,8 @@ func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
 		return GamePage{}, err
 	}
 	pruneCatalogPageCache(filepath.Dir(path), page.CachedAt)
+	page.Snapshot = snapshot
+	page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 	return page, nil
 }
 

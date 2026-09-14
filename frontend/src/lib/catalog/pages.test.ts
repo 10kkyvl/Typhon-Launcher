@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appendCatalogPage, appendOfflineCatalogPage, loadCatalogContinuation, reloadCatalogPrefix } from './pages';
+import { appendCatalogPage, appendOfflineCatalogPage, loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from './pages';
 import type { CatalogGame, CatalogPage } from '../services/sources';
 const game = (id: string, patch: Partial<CatalogGame> = {}): CatalogGame => ({
   id,
@@ -169,3 +169,61 @@ describe('catalog prefix refresh', () => {
     );
     expect(result.result.offline).toBe(true);
   });
+
+describe('returning to a catalog snapshot', () => {
+  it('validates six loaded pages with one request and keeps their order', async () => {
+    const previous = Array.from({ length: 6 }, (_, i) => game(`g${i + 1}`));
+    const load = vi.fn().mockResolvedValue({ items: [game('g6', { developer: 'Updated' })], page: 6, pageSize: 1, revision: 9, total: 10 });
+    const result = await refreshCatalogSnapshot({ page: 6, pageSize: 1, revision: 9 }, previous, {}, load);
+    expect(load.mock.calls).toEqual([[{ page: 6, pageSize: 1, revision: 9 }]]);
+    expect(result.items.map(g => g.id)).toEqual(previous.map(g => g.id));
+    expect(result.items[5].developer).toBe('Updated');
+    expect(previous[5].developer).toBeUndefined();
+  });
+
+  it.each(['changed', 'tail', 'offline'])('rebuilds all pages when validation is %s', async (reason) => {
+    const previous = [game('old-1'), game('old-2')];
+    const load = vi.fn();
+    if (reason === 'changed') load.mockRejectedValueOnce(changed());
+    else load.mockResolvedValueOnce({ ...page([game(reason === 'tail' ? 'replacement' : 'old-2')]), offline: reason === 'offline' });
+    load.mockResolvedValueOnce(fresh(1)).mockResolvedValueOnce(fresh(2));
+    const result = await refreshCatalogSnapshot({ page: 2, pageSize: 1, revision: 3 }, previous, {}, load);
+    expect(result.items.map(g => g.id)).toEqual(['fresh-1', 'fresh-2']);
+    expect(load.mock.calls.map(([q]) => [q.page, q.revision])).toEqual([[2, 3], [1, 0], [2, 4]]);
+  });
+
+  it('never trusts the last page for compatibility filtering or offline snapshots', async () => {
+    for (const options of [{ compat: 'working', offline: false }, { compat: '', offline: true }]) {
+      const load = vi.fn().mockResolvedValueOnce(fresh(1)).mockResolvedValueOnce(fresh(2));
+      await refreshCatalogSnapshot({ page: 2, pageSize: 1, revision: 3, compat: options.compat }, [game('a'), game('b')], {}, load, () => true, options.offline);
+      expect(load.mock.calls.map(([q]) => q.page)).toEqual([1, 2]);
+    }
+  });
+
+  it('preserves the snapshot on network failure and stops a superseded refresh', async () => {
+    const previous = [game('a'), game('b')];
+    const failing = vi.fn().mockRejectedValue(new Error('network'));
+    await expect(refreshCatalogSnapshot({ page: 2, pageSize: 1, revision: 3 }, previous, {}, failing)).rejects.toThrow('network');
+    const cancelled = vi.fn().mockResolvedValue(page([game('b')]));
+    await expect(refreshCatalogSnapshot({ page: 2, pageSize: 1, revision: 3 }, previous, {}, cancelled, () => false)).rejects.toThrow('catalog.refresh_cancelled');
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(previous.map(g => g.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('stable personalized browsing', () => {
+  it('keeps the visible order on a stale continuation until the user reloads', async () => {
+    const load = vi.fn();
+    const previous = [game('a')];
+    await expect(loadCatalogContinuation({ stable: true, page: 2, revision: 3 }, previous, load,
+      () => Promise.reject(changed()))).rejects.toThrow('catalog.changed');
+    expect(load).not.toHaveBeenCalled();
+    expect(previous.map((g) => g.id)).toEqual(['a']);
+  });
+  it('carries the first page personal snapshot through a rebuilt prefix', async () => {
+    const load = vi.fn().mockResolvedValueOnce({ ...fresh(1), snapshot: 'personal-snapshot' })
+      .mockResolvedValueOnce({ ...fresh(2), snapshot: 'personal-snapshot' });
+    await reloadCatalogPrefix({ pageSize: 1, snapshot: 'old' }, 2, load);
+    expect(load.mock.calls[1][0].snapshot).toBe('personal-snapshot');
+  });
+});

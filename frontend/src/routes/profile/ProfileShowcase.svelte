@@ -7,9 +7,9 @@
   import { navigate } from '../../lib/stores/router';
   import { msg } from '../../lib/i18n';
 
-  let { blocks, onmanage }: { blocks: ShowcaseBlock[]; onmanage: () => void } = $props();
+  let { blocks, onmanage, showEmpty = false }: { blocks: ShowcaseBlock[]; onmanage: () => void; showEmpty?: boolean } = $props();
 
-  const visible = $derived(blocks.filter((block) => block.games.length > 0));
+  const visible = $derived(blocks.filter((block) => showEmpty || block.games.length > 0));
 
   function title(kind: string): string {
     if (kind === 'favorites') return msg('social.favoriteGamesTitle');
@@ -19,6 +19,7 @@
 
 {#snippet grid(block: ShowcaseBlock)}
   <div class="grid">
+    {#if block.games.length === 0}<p class="empty">{msg('profile.showcaseEmpty')}</p>{/if}
     {#each block.games as game (game.id)}
       <button class="tile" type="button" onclick={() => navigate('game', { id: game.id })}>
         <span class="cover">
@@ -49,6 +50,7 @@
 {/each}
 
 <style>
+  .empty { color: var(--text-3); font-size: var(--font-sm); padding: 1.5rem 0; grid-column: 1 / -1; }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));

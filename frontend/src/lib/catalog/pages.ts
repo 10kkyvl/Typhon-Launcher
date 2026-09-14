@@ -77,7 +77,7 @@ export async function reloadCatalogPrefix(
       let offline = result.offline === true;
       for (let page = 2; page <= targetPage && items.length < result.total; page++) {
         if (!active()) throw new Error('catalog.refresh_cancelled');
-        const next = await load({ ...query, page, revision: result.revision ?? 0 });
+        const next = await load({ ...query, page, revision: result.revision ?? 0, snapshot: result.snapshot });
         items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
         compat = { ...compat, ...(next.compat ?? {}) };
         offline ||= next.offline === true;
@@ -91,6 +91,43 @@ export async function reloadCatalogPrefix(
   }
 
   throw lastError instanceof Error ? lastError : new Error('catalog.refresh_failed');
+}
+
+// A successful continuation proves the preceding server prefix. Reuse the
+// snapshot only if its last page also has exactly the same identities. This
+// makes returning from details one request regardless of the loaded depth.
+export async function refreshCatalogSnapshot(
+  query: CatalogQuery,
+  previous: CatalogGame[],
+  compat: Record<string, CompatInfo>,
+  load: (query: CatalogQuery) => Promise<CatalogPage>,
+  active: () => boolean = () => true,
+  offline = false,
+): Promise<{ result: CatalogPage; items: CatalogGame[]; compat: Record<string, CompatInfo> }> {
+  const pageCount = Math.max(1, query.page ?? 1);
+  const pageSize = query.pageSize ?? 60;
+  if (!offline && !query.compat && query.revision && pageCount > 1) {
+    try {
+      const result = await load(query);
+      if (!active()) throw new Error('catalog.refresh_cancelled');
+      const offset = (pageCount - 1) * pageSize;
+      const tail = previous.slice(offset);
+      if (!result.offline && result.revision === query.revision && result.page === pageCount
+        && result.pageSize === pageSize && tail.length > 0 && tail.length === result.items.length
+        && tail.every((game, i) => game.id === result.items[i].id
+          && (game.serverId || game.id) === (result.items[i].serverId || result.items[i].id))) {
+        return {
+          result,
+          items: [...previous.slice(0, offset), ...result.items],
+          compat: { ...compat, ...(result.compat ?? {}) },
+        };
+      }
+    } catch (err) {
+      if (errorCode(err) !== 'catalog.changed' || !active()) throw err;
+    }
+  }
+  if (!active()) throw new Error('catalog.refresh_cancelled');
+  return reloadCatalogPrefix(query, pageCount, load, active);
 }
 
 // Publish a refreshed prefix only after all of its pages share one revision.
@@ -109,14 +146,14 @@ export async function loadCatalogContinuation(
       : appendCatalogContinuation(previous, result, query.revision ?? 0, offline);
     return { result: { ...result, offline: result.offline || (query.page !== 1 && offline) }, items, refreshed: false };
   } catch (err) {
-    if (errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
+    if (query.stable || errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
     let result = await load({ ...query, page: 1, revision: 0 });
     let items = result.items;
     const compat = { ...result.compat };
     let offline = result.offline === true;
     for (let page = 2; page <= (query.page ?? 1) && items.length < result.total; page++) {
       if (!active()) throw err;
-      const next = await load({ ...query, page, revision: result.revision });
+      const next = await load({ ...query, page, revision: result.revision, snapshot: result.snapshot });
       items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
       Object.assign(compat, next.compat);
       offline ||= next.offline === true;

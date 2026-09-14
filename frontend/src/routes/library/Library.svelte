@@ -35,13 +35,13 @@
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+  import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
     return hasMessage(code) ? msg(code) : fallback;
   }
 
-  type Filter = 'all' | 'installed' | 'recent';
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
 
   interface Entry {
@@ -56,12 +56,11 @@
     subtitle: string;
   }
 
-  let filter = $state<Filter>('all');
+  let filter = $state<LibraryFilter>('all');
   let sort = $state<Sort>('alpha');
   let search = $state('');
   let heroHidden = $state(false);
   let catalogGames = $state<Record<string, CatalogGame>>({});
-
   const installedByGame = $derived.by(() => {
     const ids = new Set<string>();
     for (const game of $libraryGames) {
@@ -106,7 +105,7 @@
     ]);
   });
 
-  const filters: { id: Filter; label: string; icon?: typeof Clock }[] = [
+  const filters: { id: LibraryFilter; label: string; icon?: typeof Clock }[] = [
     { id: 'all', label: msg('games.filterAll') },
     { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
     { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
@@ -119,7 +118,7 @@
     size: msg('games.sortSize'),
   };
 
-  const sectionTitles: Record<Filter, string> = {
+  const sectionTitles: Record<LibraryFilter, string> = {
     all: msg('games.allGamesTitle'),
     installed: msg('games.filterInstalled'),
     recent: msg('games.recentLabel'),
@@ -314,7 +313,7 @@
       </div>
       <div class="toolbar-right">
         {#each filters as f (f.id)}
-          <Chip selected={filter === f.id} onclick={() => (filter = f.id)}>
+          <Chip selected={filter === f.id} onclick={() => (filter = nextLibraryFilter(filter, f.id))}>
             {#if f.icon}
               <f.icon size="1.4rem" strokeWidth={1.8} />
             {/if}

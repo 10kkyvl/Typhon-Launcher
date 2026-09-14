@@ -38,17 +38,24 @@ var (
 )
 
 type Service struct {
-	redirects     map[string]string
-	remote        RemoteCatalog
-	mu            sync.RWMutex
-	epoch         uint64
-	gamesPath     string
-	overridesPath string
-	games         []Game
-	overrides     []MatchOverride
-	overrideMap   map[string]string
-	idx           *index
-	compat        func(igdbID string) (works, total int, ok bool)
+	redirects             map[string]string
+	remote                RemoteCatalog
+	mu                    sync.RWMutex
+	epoch                 uint64
+	gamesPath             string
+	overridesPath         string
+	recommendationPath    string
+	recommendationLoadErr error
+	games                 []Game
+	overrides             []MatchOverride
+	overrideMap           map[string]string
+	idx                   *index
+	compat                func(igdbID string) (works, total int, ok bool)
+	recommendationLibrary RecommendationLibrarySource
+	preferences           RecommendationPreferences
+	browseSnapshots       map[string]browseSnapshot
+	discoveryPages        map[string]GamePage
+	discoveryGames        map[string]discoveryGame
 }
 
 func NewService() (*Service, error) {
@@ -67,6 +74,7 @@ func NewServiceAt(dir string) (*Service, error) {
 	s := &Service{overrideMap: map[string]string{}}
 	s.gamesPath = filepath.Join(dir, "catalog.json")
 	s.overridesPath = filepath.Join(dir, "match_overrides.json")
+	s.recommendationPath = filepath.Join(dir, "recommendation.json")
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -82,6 +90,11 @@ func (s *Service) load() error {
 	}
 	if err := loadList(filepath.Join(filepath.Dir(s.gamesPath), "catalog-redirects.json"), 1, &s.redirects); err != nil {
 		return err
+	}
+	if err := s.loadRecommendations(); err != nil {
+		s.recommendationLoadErr = err
+		s.preferences = defaultRecommendationPreferences()
+		slog.Warn("recommendation preferences unavailable; using general catalog", "error", err)
 	}
 	known := map[string]bool{}
 	for _, g := range s.games {
@@ -117,6 +130,9 @@ func loadList(path string, version int, out any) error {
 // может изменить исход матчинга, и по эпохе потребители понимают, что прошлый
 // результат больше не действителен.
 func (s *Service) rebuildLocked() {
+	for i := range s.games {
+		s.games[i].Genres = canonicalGenres(s.games[i].Genres)
+	}
 	s.epoch++
 	s.idx = buildIndex(s.games)
 	for old := range s.redirects {
@@ -209,8 +225,13 @@ func (s *Service) ListGames() []Game {
 }
 
 func (s *Service) GetGame(id string) (Game, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var err error
+	id, err = s.promoteDiscoveryGameLocked(id)
+	if err != nil {
+		return Game{}, err
+	}
 	game, ok := s.idx.game(id)
 	if !ok {
 		return Game{}, errNotFound

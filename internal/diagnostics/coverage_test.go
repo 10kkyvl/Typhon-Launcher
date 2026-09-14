@@ -43,6 +43,10 @@ func TestEveryReportFieldIsClassified(t *testing.T) {
 	for i := range rt.NumField() {
 		f := rt.Field(i)
 		t.Run(f.Name, func(t *testing.T) {
+			if f.Name == "Details" && f.Type == reflect.TypeFor[*Details]() {
+				assertDetailsSanitized(t)
+				return
+			}
 			if f.Type.Kind() != reflect.String {
 				assertCannotCarryText(t, f.Name, f.Type)
 				return

@@ -29,6 +29,15 @@ func NewService(lib Library, log Log, showcase func() []string) *Service {
 }
 
 func (s *Service) Snapshot() Snapshot {
+	return s.snapshot(s.showcase())
+}
+
+// Preview includes disabled showcases without changing the saved profile.
+func (s *Service) Preview() Snapshot {
+	return s.snapshot([]string{"favorites", "recently_completed", "most_played"})
+}
+
+func (s *Service) snapshot(showcase []string) Snapshot {
 	now := s.now()
 	monthStart := MonthStart(now)
 	since := minTime(monthStart, now.Add(-recentWindow))
@@ -36,7 +45,7 @@ func (s *Service) Snapshot() Snapshot {
 	if history, ok := s.library.(interface{ GetHistoryGames() []library.Game }); ok {
 		games = history.GetHistoryGames()
 	}
-	return Build(games, s.log.Since(since), s.library.GetRunningGames(), s.showcase(), now)
+	return Build(games, s.log.Since(since), s.library.GetRunningGames(), showcase, now)
 }
 
 func minTime(a, b time.Time) time.Time {

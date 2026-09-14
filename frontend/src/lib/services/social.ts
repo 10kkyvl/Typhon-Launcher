@@ -1,5 +1,5 @@
 import { Service as SocialService } from '../../../bindings/typhon/internal/social';
-import { AccountError, toAccountError } from './account';
+import { type ProfileAppearance, AccountError, toAccountError } from './account';
 import { inWails } from './backend';
 
 export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'blocked';
@@ -112,6 +112,7 @@ export interface ShowcaseBlock {
 }
 
 export interface PublicProfile extends UserCard {
+  appearance?: ProfileAppearance;
   bio: string;
   relation: string;
   visibility: string;
@@ -288,6 +289,7 @@ function toProfile(value: unknown): PublicProfile {
     username: profile.username,
     displayName: profile.displayName,
     avatarUrl: profile.avatarUrl,
+    appearance: profile.appearance,
     bio: profile.bio ?? '',
     relation: profile.relation ?? 'none',
     visibility: profile.visibility ?? '',

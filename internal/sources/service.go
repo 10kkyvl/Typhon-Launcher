@@ -636,10 +636,10 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.mu.Unlock()
 	}()
 
-	slog.Info("source refresh started", "source_id", id, "name", name)
+	slog.Info("source refresh started", "source_id", id, "name", name, "source_type", string(kind), "scheduled", scheduled, "timeout_ms", refreshTimeout.Milliseconds())
 	result, err := s.fetchFeed(ctx, kind, location, cond)
 	if err != nil {
-		s.fail(id, err, scheduled)
+		s.fail(id, err, scheduled, "stage", "fetch", "duration_ms", time.Since(started).Milliseconds(), "timeout_ms", refreshTimeout.Milliseconds())
 		return Summary{}, err
 	}
 	if result.NotModified {
@@ -664,7 +664,7 @@ func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, con
 // degraded instead of returning: fail's own callers already have a more
 // specific error to return (the fetch/merge failure that led here), and
 // replacing that with a persistence error would hide the actual cause.
-func (s *Service) fail(id string, err error, scheduled bool) {
+func (s *Service) fail(id string, err error, scheduled bool, diagnosticAttrs ...any) {
 	interval := refreshInterval(s.config())
 
 	s.mu.Lock()
@@ -700,9 +700,12 @@ func (s *Service) fail(id string, err error, scheduled bool) {
 	}
 	s.clearDegradedLocked()
 	snapshot := *src
+	attempts := s.failures[id]
 	s.mu.Unlock()
 
-	slog.Error("source refresh failed", "source_id", id, "name", snapshot.Name, "error", err)
+	attrs := []any{"source_id", id, "name", snapshot.Name, "error", err, "source_type", string(snapshot.Type), "scheduled", scheduled, "retry_attempt", attempts}
+	attrs = append(attrs, diagnosticAttrs...)
+	slog.Error("source refresh failed", attrs...)
 	emit(eventUpdated, snapshot)
 	emit(eventError, SourceError{SourceID: id, Name: snapshot.Name, Message: err.Error(), Scheduled: scheduled})
 }

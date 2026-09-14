@@ -5,6 +5,7 @@
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { applyPersonalAccent, displayedAccent } from '../../lib/theme/apply';
   import { accentPresets, validAccent } from '../../lib/theme/accent';
+  import HexColorField from '../../lib/components/HexColorField.svelte';
   import ColorPalette from '../../lib/components/ColorPalette.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -56,13 +57,15 @@
     <button class:chosen={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} disabled={busy} aria-pressed={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} onclick={() => { draft = selected || (validAccent($displayedAccent) ? $displayedAccent : '#6673F2'); lastValid = draft; editing = true; }}>{msg('settings.accentCustom')}</button>
   </div>
   {#if editing}
-    <ColorPalette value={lastValid} onchange={preview} />
+    <ColorPalette value={lastValid} onchange={preview} disabled={busy} />
     <div class="editor">
-      <label>HEX<input type="text" value={draft} placeholder="#RRGGBB" maxlength="7" spellcheck={false} aria-invalid={!validAccent(draft)} oninput={e => preview(e.currentTarget.value)} onkeydown={e => { if (e.key === 'Escape') cancel(); if (e.key === 'Enter' && validAccent(draft)) void save(draft); }} /></label>
+      <HexColorField value={draft} onchange={preview} disabled={busy} onkeydown={e => { if (e.key === 'Escape') cancel(); if (e.key === 'Enter' && validAccent(draft)) void save(draft); }} />
       <Button size="sm" variant="primary" disabled={!validAccent(draft) || busy} onclick={() => save(draft)}>{msg('settings.accentDone')}</Button>
       <Button size="sm" variant="secondary" onclick={cancel}>{msg('common.cancel')}</Button>
     </div>
     {#if !validAccent(draft)}<p class="hint">{msg('settings.accentInvalid')}</p>{/if}
+  {:else}
+    <div class="editor"><HexColorField value={selected || $displayedAccent} readonly /></div>
   {/if}
   <div class="tint"><span>{msg('settings.accentTintLogo')}</span><Toggle checked={$settings?.tintLogo ?? false} disabled={busy || editing} label={msg('settings.accentTintLogo')} onchange={tint} /></div>
 </Card>
@@ -76,7 +79,5 @@
   .choices .swatch { padding: .4rem; }
   .swatch span { display: block; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--swatch); }
   .editor { margin-top: var(--space-4); }
-  label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-sm); }
-  input[type=text] { width: 10rem; padding: .7rem; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
   .tint { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); font-size: var(--font-md); }
 </style>

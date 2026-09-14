@@ -175,6 +175,10 @@ export interface CatalogGame {
   aliases?: string[];
   provisional?: boolean;
   createdAt: string;
+  gameType?: string;
+  rating?: number;
+  ratingCount?: number;
+  popularitySource?: string;
   releaseDate?: string;
   summary?: string;
   genres?: string[];
@@ -198,6 +202,11 @@ export interface CompatInfo {
 export const compatOnlyWorking = 'works';
 
 export interface CatalogQuery {
+  stable?: boolean;
+  snapshot?: string;
+  hideLibrary?: boolean;
+  hideNotInterested?: boolean;
+  excludeIds?: string[];
   revision?: number;
   platform?: string;
   kind?: string;
@@ -210,6 +219,8 @@ export interface CatalogQuery {
 }
 
 export interface CatalogPage {
+  personalizationFallback?: boolean;
+  snapshot?: string;
   facets?: GenreFacet[];
   platforms?: GenreFacet[];
   revision?: number;
@@ -388,6 +399,10 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
   const payload = {
+    snapshot: query.snapshot ?? '',
+    hideLibrary: query.hideLibrary ?? false,
+    hideNotInterested: query.hideNotInterested ?? false,
+    excludeIds: query.excludeIds ?? [],
     revision: query.revision ?? 0,
     platform: query.platform ?? '',
     kind: query.kind ?? '',

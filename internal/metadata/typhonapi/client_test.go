@@ -2,6 +2,7 @@ package typhonapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/catalog"
 	"typhon/internal/metadata"
 )
 
@@ -97,6 +99,88 @@ func TestSearchMapsCandidates(t *testing.T) {
 	}
 	if got[1].Title != "Prey" {
 		t.Fatalf("title not trimmed: %q", got[1].Title)
+	}
+}
+
+func TestBrowseUsesPOSTForPersonalQueriesAndSendsHeaders(t *testing.T) {
+	var gotMethod, gotPath, gotAuth, gotVersion string
+	var body catalog.GameQuery
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		gotAuth, gotVersion = r.Header.Get("Authorization"), r.Header.Get("X-Typhon-Version")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode POST body: %v", err)
+		}
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[],"page":1,"pageSize":60}`)
+	}), func() (string, error) { return "session-token", nil })
+
+	_, err := client.Browse(context.Background(), catalog.GameQuery{
+		Sort: "for-you", Page: 1, PageSize: 60,
+		Profile: `{"genres":{"Action":1}}`, ExcludeLibrary: "library-id", ExcludeNotInterested: "dismissed-id",
+	})
+	if err != nil {
+		t.Fatalf("browse: %v", err)
+	}
+	if gotMethod != http.MethodPost || gotPath != account.APIPrefix+"/catalog/games" {
+		t.Fatalf("request = %s %s, want POST catalog games", gotMethod, gotPath)
+	}
+	if gotAuth != "Bearer session-token" || gotVersion != app.Version {
+		t.Fatalf("headers auth=%q version=%q", gotAuth, gotVersion)
+	}
+	if body.Sort != "for-you" || body.Profile == "" || body.ExcludeLibrary != "library-id" || body.ExcludeNotInterested != "dismissed-id" {
+		t.Fatalf("POST body = %+v", body)
+	}
+}
+
+func TestBrowseUsesGETForGeneralQueries(t *testing.T) {
+	var gotMethod string
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		if r.URL.Query().Get("sort") != "popular" {
+			t.Errorf("query = %s", r.URL.RawQuery)
+		}
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[]}`)
+	}), nil)
+	if _, err := client.Browse(context.Background(), catalog.GameQuery{Sort: "popular"}); err != nil {
+		t.Fatalf("browse: %v", err)
+	}
+	if gotMethod != http.MethodGet {
+		t.Fatalf("method = %q, want GET", gotMethod)
+	}
+}
+
+func TestBrowseFallsBackToShortGETWhenPOSTIsUnsupported(t *testing.T) {
+	var methods []string
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		if r.Method == http.MethodPost {
+			writeJSON(t, w, http.StatusMethodNotAllowed, `{"error":{"code":"method_not_allowed"}}`)
+			return
+		}
+		writeJSON(t, w, http.StatusOK, `{"protocolVersion":1,"items":[]}`)
+	}), nil)
+	if _, err := client.Browse(context.Background(), catalog.GameQuery{Profile: `{"genres":{"Action":1}}`}); err != nil {
+		t.Fatalf("browse fallback: %v", err)
+	}
+	if len(methods) != 2 || methods[0] != http.MethodPost || methods[1] != http.MethodGet {
+		t.Fatalf("methods = %v, want POST then GET", methods)
+	}
+}
+
+func TestBrowseDoesNotFallbackToOversizedGET(t *testing.T) {
+	requests := 0
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Method != http.MethodPost {
+			t.Error("oversized personal query unexpectedly fell back to GET")
+		}
+		writeJSON(t, w, http.StatusNotFound, `{"error":{"code":"not_found"}}`)
+	}), nil)
+	if _, err := client.Browse(context.Background(), catalog.GameQuery{Profile: `{"genres":{"Action":1}}`, ExcludeLibrary: strings.Repeat("x", 7000)}); err == nil {
+		t.Fatal("browse unexpectedly succeeded")
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want only POST", requests)
 	}
 }
 
@@ -537,5 +621,21 @@ func TestSteamCardTransport(t *testing.T) {
 	g, e := client.Get(context.Background(), "steam:620")
 	if e != nil || g.ProviderID != "steam:620" || g.SteamAppID != "620" {
 		t.Fatalf("%+v %v", g, e)
+	}
+}
+
+func TestBrowseRejectsLegacyAlphabeticalResultsForRankedQueries(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, `{"items":[{"id":"alphabetical","title":" A misleading recommendation"}]}`)
+	}), nil)
+	for _, q := range []catalog.GameQuery{{Sort: "popular"}, {Sort: "rating"}, {Sort: "for-you"}, {Kind: "game"}, {ExcludeLibrary: "owned"}} {
+		if _, err := client.Browse(context.Background(), q); !errors.Is(err, catalog.ErrBackendOutdated) {
+			t.Fatalf("query=%+v err=%v", q, err)
+		}
+	}
+	for _, sortName := range []string{"title", "year"} {
+		if _, err := client.Browse(context.Background(), catalog.GameQuery{Sort: sortName}); err != nil {
+			t.Fatalf("legacy %s: %v", sortName, err)
+		}
 	}
 }

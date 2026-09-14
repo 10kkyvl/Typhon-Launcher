@@ -203,10 +203,13 @@ function onUnauthenticated(err: unknown) {
 export async function saveProfile(patch: ProfilePatch): Promise<void> {
   if (get(savingProfile)) return;
   savingProfile.set(true);
+  const owner = get(currentUser)?.id;
   try {
-    currentUser.set(await updateProfile(patch));
+    const updated = await updateProfile(patch);
+    if (get(currentUser)?.id !== owner) throw new AccountError('unauthenticated');
+    currentUser.set(updated);
   } catch (err) {
-    onUnauthenticated(err);
+    if (get(currentUser)?.id === owner) onUnauthenticated(err);
     throw err;
   } finally {
     savingProfile.set(false);
