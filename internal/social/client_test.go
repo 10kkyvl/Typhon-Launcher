@@ -829,7 +829,10 @@ func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
 	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15}`, `null`} {
 		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`)
+			if _, err := io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`); err != nil {
+				t.Error(err)
+				return
+			}
 		})
 		result, err := c.profile(t.Context(), "alice")
 		if err != nil {
