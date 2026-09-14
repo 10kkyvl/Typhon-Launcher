@@ -5,6 +5,7 @@ package messaging
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -153,19 +154,49 @@ func (s *Service) active() (*session, error) {
 	r := s.run
 	ready := r != nil && r.owner != ""
 	s.mu.Unlock()
-	if !ready || !s.valid(r) {
+	if !ready {
 		return nil, errSignedOut
+	}
+	if err := s.sessionError(r); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
-func (s *Service) valid(r *session) bool {
+func (s *Service) sessionError(r *session) error {
 	if r.ctx.Err() != nil || !s.enabled() {
-		return false
+		return errSignedOut
 	}
 	tok, err := s.token()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return err == nil && s.run == r && tok != "" && tok == r.token
+	if s.run != r || r.ctx.Err() != nil {
+		return errSignedOut
+	}
+	if err != nil {
+		return fmt.Errorf("read chat credentials: %w", err)
+	}
+	if tok == "" || tok != r.token {
+		return errSignedOut
+	}
+	return nil
+}
+
+// An unreadable credential store is not evidence of logout. Keep the bound
+// stream and accepted responses; new requests still return the storage error.
+func (s *Service) valid(r *session) bool {
+	return !errors.Is(s.sessionError(r), errSignedOut)
+}
+
+func (s *Service) disconnect(r *session) {
+	s.mu.Lock()
+	current := s.run == r && r.ctx.Err() == nil
+	r.cancel()
+	s.mu.Unlock()
+	// publish intentionally suppresses data after a credential/consent change.
+	// This final status must reach the owning UI even after that invalidation.
+	if current && r.owner != "" {
+		s.emit(Event{OwnerID: r.owner, Kind: "connection", Connected: false})
+	}
 }
 func (s *Service) publish(r *session, e Event) {
 	if !s.valid(r) {

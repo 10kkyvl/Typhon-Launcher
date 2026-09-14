@@ -16,11 +16,12 @@ import (
 )
 
 type chatHarness struct {
-	svc     *Service
-	mu      sync.Mutex
-	token   string
-	enabled atomic.Bool
-	events  chan Event
+	svc      *Service
+	mu       sync.Mutex
+	token    string
+	tokenErr error
+	enabled  atomic.Bool
+	events   chan Event
 }
 
 func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
@@ -42,7 +43,7 @@ func newHarness(t *testing.T, handle http.HandlerFunc) *chatHarness {
 		handle(w, r)
 	}))
 	t.Cleanup(server.Close)
-	svc, err := NewService(server.URL, func() (string, error) { h.mu.Lock(); defer h.mu.Unlock(); return h.token, nil }, h.enabled.Load)
+	svc, err := NewService(server.URL, func() (string, error) { h.mu.Lock(); defer h.mu.Unlock(); return h.token, h.tokenErr }, h.enabled.Load)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,6 +202,9 @@ func TestTokenChangeAndConsentStopIdleConnection(t *testing.T) {
 			}
 			if h.svc.Notify("b", "old", "private") {
 				t.Fatal("stale notification allowed")
+			}
+			if e := awaitKind(t, h.events, "connection"); e.Connected || e.OwnerID != "a" {
+				t.Fatalf("missing disconnect status: %+v", e)
 			}
 		})
 	}

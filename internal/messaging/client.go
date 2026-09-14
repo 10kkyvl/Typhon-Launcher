@@ -38,8 +38,8 @@ func (s *Service) newRequest(ctx context.Context, r *session, method, path strin
 	return req, nil
 }
 func (s *Service) request(r *session, method, path string, body, out any) error {
-	if !s.valid(r) {
-		return errSignedOut
+	if err := s.sessionError(r); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(r.ctx, 25*time.Second)
 	defer cancel()
@@ -85,6 +85,7 @@ func responseError(resp *http.Response) error {
 }
 
 func (s *Service) loop(r *session) {
+	defer s.disconnect(r)
 	// Credential changes and consent withdrawal also stop an idle connection;
 	// they do not depend on the webview delivering its Stop call.
 	done := make(chan struct{})
@@ -102,7 +103,7 @@ func (s *Service) loop(r *session) {
 				return
 			case <-tick.C:
 				if !s.valid(r) {
-					r.cancel()
+					s.disconnect(r)
 					return
 				}
 			}
