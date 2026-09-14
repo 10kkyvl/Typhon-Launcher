@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
+	"typhon/internal/storage"
 )
 
 func TestCanonicalGenresUnifyProvidersAndSavedLanguages(t *testing.T) {
@@ -30,5 +32,27 @@ func TestRecommendationGenreChipsAndLegacyProfile(t *testing.T) {
 	ranked := rankGames([]Game{{ID: "candidate", Genres: []string{"Role-playing (RPG)"}}}, profile, nil, RecommendationPreferences{}, false, nil, GameQuery{Genre: "RPG"})
 	if len(ranked) != 1 || ranked[0].Reason != "genre" {
 		t.Fatalf("legacy affinity=%+v", ranked)
+	}
+}
+
+func TestLoadLegacyCatalogCanonicalizesStoredGenres(t *testing.T) {
+	dir := t.TempDir()
+	// Write the old on-disk format directly: AddGame and metadata patching already
+	// normalize genres and would hide a missing normalization during rebuild.
+	legacy := []Game{{ID: "legacy-game", Title: "Legacy game", Genres: []string{"Ролевые игры", "RPG", "Экшены", "Simulation", "Sports", "Early Access"}}}
+	if err := storage.Save(filepath.Join(dir, "catalog.json"), gamesVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewServiceAt(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetGame("legacy-game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Role-playing (RPG)", "Action", "Simulator", "Sport"}
+	if !reflect.DeepEqual(got.Genres, want) {
+		t.Fatalf("loaded game genres=%v, want %v", got.Genres, want)
 	}
 }
