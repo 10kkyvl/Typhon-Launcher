@@ -3,6 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { mergeCatalogDisplay } from '../../lib/catalog/display';
+  import { nextGenre } from '../../lib/catalog/filters';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
@@ -427,8 +428,9 @@
 
   function onGenre(label: string) {
     const value = label === allGenres ? '' : label;
-    if (value === genre) return;
-    genre = value;
+    const next = nextGenre(genre, value);
+    if (next === genre) return;
+    genre = next;
     void preferencesChanged();
   }
 
