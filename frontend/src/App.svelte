@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+  import { initNativeLanguage } from './lib/services/system';
   import AppShell from './lib/components/AppShell.svelte';
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
@@ -40,6 +42,7 @@
   import Sources from './routes/sources/Sources.svelte';
   import UserProfile from './routes/user/UserProfile.svelte';
 
+  onDestroy(initNativeLanguage());
   initDegradedNotices();
   initDownloads();
   initInstalls();

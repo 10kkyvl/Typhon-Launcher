@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/dialogtext"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -412,16 +413,18 @@ func (s *Service) Export(id, path string) error {
 
 var errNoDialog = uierr.New("theme.dialog_unavailable", "диалог выбора файла недоступен")
 
-func (s *Service) SelectThemeFile() (string, error) {
+func (s *Service) SelectThemeFile(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
 		return "", errNoDialog
 	}
 	path, err := app.Dialog.OpenFile().
-		SetTitle("Выберите файл темы").
+		SetTitle(labels.ThemeTitle).
+		SetMessage(labels.ThemeTitle).
 		CanChooseFiles(true).
-		AddFilter("Файл темы (*.typhontheme, *.json)", "*.typhontheme;*.json").
-		AddFilter("Все файлы", "*.*").
+		AddFilter(labels.Themes, "*.typhontheme;*.json").
+		AddFilter(labels.AllFiles, "*.*").
 		PromptForSingleSelection()
 	if err != nil {
 		return "", fmt.Errorf("выбор файла темы: %w", err)
@@ -429,15 +432,16 @@ func (s *Service) SelectThemeFile() (string, error) {
 	return path, nil
 }
 
-func (s *Service) SelectExportPath() (string, error) {
+func (s *Service) SelectExportPath(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
 		return "", errNoDialog
 	}
 	path, err := app.Dialog.SaveFile().
-		SetMessage("Сохранить тему").
+		SetMessage(labels.ExportTheme).
 		SetFilename("theme.typhontheme").
-		AddFilter("Файл темы (*.typhontheme)", "*.typhontheme").
+		AddFilter(labels.Theme, "*.typhontheme").
 		PromptForSingleSelection()
 	if err != nil {
 		return "", fmt.Errorf("выбор пути экспорта темы: %w", err)

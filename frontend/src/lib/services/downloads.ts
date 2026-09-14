@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Manager } from '../../../bindings/typhon/internal/download';
 import { inWails } from './backend';
 
@@ -119,7 +121,7 @@ export async function startDownloadFrom(
 
 export async function selectTorrentFile(): Promise<string> {
   if (!inWails) return '';
-  return await Manager.AddTorrentSelectFile();
+  return await Manager.AddTorrentSelectFile(get(locale));
 }
 
 export async function pauseDownload(id: string): Promise<void> {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"unsafe"
 
+	"typhon/internal/dialogtext"
 	"typhon/internal/exepicker"
 
 	"golang.org/x/sys/windows"
@@ -54,15 +55,16 @@ func utf16Ptr(value string) (*uint16, error) {
 }
 
 func run(args []string) error {
-	if len(args) != 3 {
-		return fmt.Errorf("usage: exepicker <result-file> <initial-path> <title>")
+	if len(args) != 4 {
+		return fmt.Errorf("usage: exepicker <result-file> <initial-path> <title> <language>")
 	}
 	resultPath, initialPath, title := args[0], args[1], args[2]
+	labels := dialogtext.For(args[3])
 	initialDir, initialFile := exepicker.InitialLocation(initialPath)
 	file := make([]uint16, maxWindowsPathLen)
 	copy(file, windows.StringToUTF16(initialFile))
 	filter := make([]uint16, 0, 64)
-	for _, part := range []string{"Executable files (*.exe)", "*.exe", "All files", "*.*", ""} {
+	for _, part := range []string{labels.Executables, "*.exe", labels.AllFiles, "*.*", ""} {
 		encoded := windows.StringToUTF16(part)
 		filter = append(filter, encoded...)
 	}

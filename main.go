@@ -21,6 +21,7 @@ import (
 	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
+	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/download"
@@ -603,7 +604,7 @@ func main() {
 		fatal("start autostart service", err)
 	}
 	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {
-		return newSystemTray(wails, trayController)
+		return newSystemTray(wails, trayController, appService.UILanguage)
 	}, wails.Quit)
 	if err != nil {
 		fatal("start tray controller", err)
@@ -699,13 +700,14 @@ func (w windowControl) Focus() {
 	w.window.Focus()
 }
 
-func newSystemTray(wails *application.App, controller *tray.Controller) (tray.Tray, error) {
+func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {
+	labels := dialogtext.For(language())
 	menu := application.NewMenu()
-	menu.Add("Открыть Typhon").OnClick(func(*application.Context) {
+	openItem := menu.Add(labels.OpenTyphon).OnClick(func(*application.Context) {
 		controller.Open()
 	})
 	menu.AddSeparator()
-	menu.Add("Выход").OnClick(func(*application.Context) {
+	quitItem := menu.Add(labels.Quit).OnClick(func(*application.Context) {
 		controller.Quit()
 	})
 
@@ -714,6 +716,15 @@ func newSystemTray(wails *application.App, controller *tray.Controller) (tray.Tr
 	systemTray.SetTooltip("Typhon")
 	systemTray.SetMenu(menu)
 	systemTray.OnClick(controller.Open)
+	systemTray.OnRightClick(func() {
+		labels := dialogtext.For(language())
+		application.InvokeSync(func() {
+			openItem.SetLabel(labels.OpenTyphon)
+			quitItem.SetLabel(labels.Quit)
+			menu.Update()
+		})
+		systemTray.ShowMenu()
+	})
 	return systemTray, nil
 }
 

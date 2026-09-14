@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as SourcesService } from '../../../bindings/typhon/internal/sources';
 import { Service as CatalogService } from '../../../bindings/typhon/internal/catalog';
 import { inWails } from './backend';
@@ -296,7 +298,7 @@ export async function addSourceFile(path: string): Promise<Source> {
 
 export async function selectFeedFile(): Promise<string> {
   if (!inWails) throw unavailable();
-  return (await SourcesService.SelectFeedFile()) ?? '';
+  return (await SourcesService.SelectFeedFile(get(locale))) ?? '';
 }
 
 export function sourceLocation(source: Pick<Source, 'type' | 'url' | 'path'>): string {

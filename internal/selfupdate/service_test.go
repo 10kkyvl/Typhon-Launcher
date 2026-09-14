@@ -682,14 +682,14 @@ func TestDownloadUpdateCancelledContext(t *testing.T) {
 
 func TestApplyUpdateBusy(t *testing.T) {
 	s := &Service{busy: true}
-	if err := s.ApplyUpdate(); !errors.Is(err, ErrBusy) {
+	if err := s.ApplyUpdate("ru"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("ApplyUpdate() error = %v, want ErrBusy", err)
 	}
 }
 
 func TestApplyUpdateNotReady(t *testing.T) {
 	s := &Service{status: Status{State: StateIdle}}
-	if err := s.ApplyUpdate(); !errors.Is(err, ErrNotReady) {
+	if err := s.ApplyUpdate("ru"); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("ApplyUpdate() error = %v, want ErrNotReady", err)
 	}
 }
@@ -701,7 +701,7 @@ func TestApplyUpdateNotReady(t *testing.T) {
 func TestApplyUpdateRollsBackOnCacheDirFailure(t *testing.T) {
 	s := &Service{dir: "", status: Status{State: StateReady}, readyPath: "somewhere"}
 
-	err := s.ApplyUpdate()
+	err := s.ApplyUpdate("ru")
 	if !errors.Is(err, ErrEmptyConfigDir) {
 		t.Fatalf("ApplyUpdate() error = %v, want ErrEmptyConfigDir", err)
 	}

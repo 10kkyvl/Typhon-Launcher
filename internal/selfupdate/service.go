@@ -778,7 +778,7 @@ func (s *Service) CancelDownload() error {
 	return nil
 }
 
-func (s *Service) ApplyUpdate() error {
+func (s *Service) ApplyUpdate(language string) error {
 	if err := s.acquire(); err != nil {
 		return err
 	}
@@ -829,6 +829,7 @@ func (s *Service) ApplyUpdate() error {
 	}
 
 	spec := updateSpec{
+		Language:      language,
 		InstallerPath: readyPath,
 		InstallDir:    installDir,
 		ParentPID:     os.Getpid(),

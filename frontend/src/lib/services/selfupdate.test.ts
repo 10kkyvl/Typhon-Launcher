@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyLanguage } from '../i18n';
+
+afterEach(() => applyLanguage('ru'));
 
 const bindings = {
   GetStatus: vi.fn(),
@@ -49,12 +52,14 @@ describe('selfupdate service calls', () => {
     await expect(downloadUpdate()).resolves.toEqual(ready);
   });
 
-  it('calls ApplyUpdate through the backend', async () => {
+  it('passes the selected language to the separate update worker', async () => {
     const { applyUpdate } = await import('./selfupdate');
+    applyLanguage('en');
     bindings.ApplyUpdate.mockResolvedValueOnce(undefined);
 
     await expect(applyUpdate()).resolves.toBeUndefined();
     expect(bindings.ApplyUpdate).toHaveBeenCalledTimes(1);
+    expect(bindings.ApplyUpdate).toHaveBeenCalledWith('en');
   });
 
   it('calls DismissUpdate through the backend', async () => {

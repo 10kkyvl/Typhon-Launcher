@@ -1,5 +1,16 @@
+import { locale } from '../i18n/locale';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
+
+export function initNativeLanguage() {
+  if (!inWails) return () => {};
+  let queue = Promise.resolve();
+  return locale.subscribe((language) => {
+    queue = queue.then(() => AppService.SetUILanguage(language)).catch((err) => {
+      console.warn('Could not synchronize native UI language', err);
+    });
+  });
+}
 
 export interface AppInfo {
   version: string;

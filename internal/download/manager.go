@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/dialogtext"
+
 	// classicio must be initialized before anacrolix storage reads
 	// TORRENT_STORAGE_DEFAULT_FILE_IO: mmap file IO never releases mappings,
 	// which keeps files locked on Windows.
@@ -392,12 +394,14 @@ func (m *Manager) Get(id string) (Download, error) {
 	return snapshot(d), nil
 }
 
-func (m *Manager) AddTorrentSelectFile() (string, error) {
+func (m *Manager) AddTorrentSelectFile(language string) (string, error) {
+	labels := dialogtext.For(language)
 	dialog := application.Get().Dialog.OpenFile().
-		SetTitle("Выберите torrent-файл").
+		SetTitle(labels.TorrentTitle).
+		SetMessage(labels.TorrentTitle).
 		CanChooseFiles(true).
-		AddFilter("Torrent-файлы (*.torrent)", "*.torrent").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.Torrents, "*.torrent").
+		AddFilter(labels.AllFiles, "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		slog.Warn("select torrent file", "error", err)

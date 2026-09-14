@@ -14,7 +14,7 @@ import (
 	"typhon/internal/wine"
 )
 
-func SelectGameExecutable(title, installDir, current string) (string, error) {
+func SelectGameExecutable(title, installDir, current, language string) (string, error) {
 	//nolint:gosec // G703: local user-selected game/helper path; no network path input or privileged filesystem access.
 	info, err := os.Stat(installDir)
 	if err != nil {
@@ -65,7 +65,7 @@ func SelectGameExecutable(title, installDir, current string) (string, error) {
 		return "", uierr.Wrap("library.executable_picker_failed", err)
 	}
 	//nolint:forbidigo // standalone UI/helper operation owns its lifetime; cancellation is handled by its dialog or cancel marker.
-	code, err := manager.Run(context.Background(), bottle, wine.Cmd{Path: winHelper, Args: []string{winResult, winInitial, title}})
+	code, err := manager.Run(context.Background(), bottle, wine.Cmd{Path: winHelper, Args: []string{winResult, winInitial, title, language}})
 	if err != nil {
 		return "", uierr.Wrap("library.executable_picker_failed", err)
 	}

@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
@@ -117,10 +119,10 @@ export async function setSavesDir(id: string, dir: string): Promise<LibraryGame>
 
 export async function selectExecutable(title: string): Promise<string> {
   if (!inWails) return '';
-  return await AppService.SelectExecutable(title);
+  return await AppService.SelectExecutable(title, get(locale));
 }
 
 export async function selectGameExecutable(title: string, installDir: string, current: string): Promise<string> {
   if (!inWails) return '';
-  return await AppService.SelectGameExecutable(title, installDir, current);
+  return await AppService.SelectGameExecutable(title, installDir, current, get(locale));
 }

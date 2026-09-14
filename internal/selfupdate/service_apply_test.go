@@ -41,7 +41,7 @@ func TestApplyUpdateStartsTheWorkerFromACopy(t *testing.T) {
 	}
 	t.Cleanup(func() { startWorker = restore })
 
-	if err := s.ApplyUpdate(); err != nil {
+	if err := s.ApplyUpdate("en"); err != nil {
 		t.Fatalf("ApplyUpdate() error = %v, want nil", err)
 	}
 
@@ -83,6 +83,9 @@ func TestApplyUpdateStartsTheWorkerFromACopy(t *testing.T) {
 	if spec.InstallDir != filepath.Dir(exe) {
 		t.Fatalf("spec.InstallDir = %q, want the directory the launcher runs from %q", spec.InstallDir, filepath.Dir(exe))
 	}
+	if spec.Language != "en" {
+		t.Fatalf("worker language = %q, want en", spec.Language)
+	}
 	if spec.Version != "1.2.3" {
 		t.Fatalf("spec.Version = %q, want %q: the worker names the version on screen", spec.Version, "1.2.3")
 	}
@@ -104,7 +107,7 @@ func TestApplyUpdateRollsBackWhenTheWorkerCannotStart(t *testing.T) {
 	startWorker = func(string, string) error { return wantErr }
 	t.Cleanup(func() { startWorker = restore })
 
-	if err := s.ApplyUpdate(); !errors.Is(err, wantErr) {
+	if err := s.ApplyUpdate("ru"); !errors.Is(err, wantErr) {
 		t.Fatalf("ApplyUpdate() error = %v, want %v", err, wantErr)
 	}
 	if s.busy {

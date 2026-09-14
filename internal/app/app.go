@@ -3,8 +3,10 @@ package app
 import (
 	"log/slog"
 	"runtime"
+	"sync/atomic"
 
 	"typhon/internal/devmock"
+	"typhon/internal/dialogtext"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 
@@ -22,10 +24,26 @@ type AppInfo struct {
 
 type Service struct {
 	settings *settings.Service
+	russian  atomic.Bool
 }
 
 func NewService(settingsService *settings.Service) *Service {
-	return &Service{settings: settingsService}
+	s := &Service{settings: settingsService}
+	s.SetUILanguage(settingsService.GetSettings().Language)
+	return s
+}
+
+// SetUILanguage receives the resolved webview locale; "system" is resolved there.
+func (s *Service) SetUILanguage(language string) {
+	s.russian.Store(language == "ru")
+}
+
+//wails:ignore
+func (s *Service) UILanguage() string {
+	if s.russian.Load() {
+		return "ru"
+	}
+	return "en"
 }
 
 func (s *Service) GetAppInfo() AppInfo {
@@ -68,12 +86,14 @@ func (s *Service) GetStorageInfoFor(path string) (platform.StorageInfo, error) {
 	return info, nil
 }
 
-func (s *Service) SelectExecutable(title string) (string, error) {
+func (s *Service) SelectExecutable(title, language string) (string, error) {
+	labels := dialogtext.For(language)
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle(title).
+		SetMessage(title).
 		CanChooseFiles(true).
-		AddFilter("Исполняемые файлы (*.exe)", "*.exe").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.Executables, "*.exe").
+		AddFilter(labels.AllFiles, "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		slog.Warn("select executable", "error", err)
@@ -84,22 +104,25 @@ func (s *Service) SelectExecutable(title string) (string, error) {
 
 // SelectGameExecutable opens the picker in the game's CrossOver bottle on
 // macOS. Other platforms keep using their native dialog.
-func (s *Service) SelectGameExecutable(title, installDir, current string) (string, error) {
+func (s *Service) SelectGameExecutable(title, installDir, current, language string) (string, error) {
+	labels := dialogtext.For(language)
 	if runtime.GOOS == "darwin" {
-		return platform.SelectGameExecutable(title, installDir, current)
+		return platform.SelectGameExecutable(title, installDir, current, language)
 	}
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle(title).
+		SetMessage(title).
 		SetDirectory(installDir).
 		CanChooseFiles(true).
-		AddFilter("Исполняемые файлы (*.exe)", "*.exe").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.Executables, "*.exe").
+		AddFilter(labels.AllFiles, "*.*")
 	return dialog.PromptForSingleSelection()
 }
 
 func (s *Service) SelectFolder(title string) (string, error) {
 	dialog := application.Get().Dialog.OpenFile().
 		SetTitle(title).
+		SetMessage(title).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
 	path, err := dialog.PromptForSingleSelection()

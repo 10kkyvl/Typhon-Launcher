@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
 import { appearanceOf } from '../profile/appearance';
 import { inWails } from './backend';
@@ -242,7 +244,7 @@ export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
 export async function pickAvatar(): Promise<AvatarImage> {
   if (!inWails) throw unauthenticated();
   try {
-    const image = (await AccountService.PickAvatar()) as unknown as AvatarImage | null;
+    const image = (await AccountService.PickAvatar(get(locale))) as unknown as AvatarImage | null;
     if (!image) throw new AccountError('server_error');
     return { data: image.data ?? '', mime: image.mime ?? '' };
   } catch (err) {

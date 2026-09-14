@@ -267,7 +267,7 @@ func (u *progressUI) createWindow() error {
 	if err != nil {
 		return err
 	}
-	windowTitle, err := windows.UTF16PtrFromString("Обновление Typhon")
+	windowTitle, err := windows.UTF16PtrFromString(u.title)
 	if err != nil {
 		return err
 	}

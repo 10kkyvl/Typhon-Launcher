@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"typhon/internal/uierr"
 
+	"typhon/internal/dialogtext"
 	"typhon/internal/download"
 	"typhon/internal/hashdir"
 	"typhon/internal/history"
@@ -22,6 +22,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -152,13 +153,15 @@ func (s *Service) List() []Job {
 	return out
 }
 
-func (s *Service) SelectTargetFolder() (string, error) {
+func (s *Service) SelectTargetFolder(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
 		return "", uierr.New("relocate.dialog_unavailable", "диалог недоступен")
 	}
 	dialog := app.Dialog.OpenFile().
-		SetTitle("Выберите папку назначения").
+		SetTitle(labels.TargetFolder).
+		SetMessage(labels.TargetFolder).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
 	path, err := dialog.PromptForSingleSelection()

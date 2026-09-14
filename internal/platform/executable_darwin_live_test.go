@@ -11,7 +11,7 @@ import (
 )
 
 func TestSelectGameExecutableRejectsMissingDirectory(t *testing.T) {
-	_, err := SelectGameExecutable("Pick", filepath.Join(t.TempDir(), "missing"), "")
+	_, err := SelectGameExecutable("Pick", filepath.Join(t.TempDir(), "missing"), "", "en")
 	if code := uierr.Code(err); code != "library.no_install_dir" {
 		t.Fatalf("code = %q, want library.no_install_dir; err=%v", code, err)
 	}
@@ -25,7 +25,7 @@ func TestSelectGameExecutableLive(t *testing.T) {
 	if dir == "" || want == "" {
 		t.Skip("set TYPHON_LIVE_PICKER_DIR and TYPHON_LIVE_PICKER_FILE")
 	}
-	got, err := SelectGameExecutable("Typhon executable picker test", dir, want)
+	got, err := SelectGameExecutable("Typhon executable picker test", dir, want, "en")
 	if err != nil {
 		t.Fatal(err)
 	}

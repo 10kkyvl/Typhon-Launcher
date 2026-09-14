@@ -78,7 +78,8 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	waitCtx, applyCtx, cancel := newWorkerContexts(context.Background())
 	defer cancel()
 
-	ui := newReporter(updateTitle(spec.Version), "Ожидание закрытия лаунчера…")
+	text := workerText(spec.Language)
+	ui := newReporter(text.title(spec.Version), text.waiting)
 	applyErr := runUpdate(waitCtx, applyCtx, spec, ui)
 
 	outcome := Outcome{Version: spec.Version, OK: applyErr == nil, FinishedAt: time.Now()}
@@ -94,20 +95,20 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	// A launcher that never quit is still on screen: relaunching would leave
 	// the user with two of them.
 	if errors.Is(applyErr, errParentStillRunning) {
-		ui.fail("Не удалось обновить Typhon", "Лаунчер не закрылся, обновление отменено.")
+		ui.fail(text.failed, text.parentRunning)
 		ui.wait()
 		return applyErr
 	}
 
 	if applyErr != nil {
-		ui.setStage("Не удалось обновить Typhon", "Возвращаем прежнюю версию. Подробности — в лаунчере.")
+		ui.setStage(text.failed, text.restoring)
 	} else {
-		ui.setStage(updateTitle(spec.Version), "Обновление установлено, запускаем Typhon…")
+		ui.setStage(text.title(spec.Version), text.restarting)
 	}
 
 	if err := relaunchLauncher(spec.RelaunchPath); err != nil {
 		slog.Error("selfupdate worker: relaunch failed", "path", spec.RelaunchPath, "error", err)
-		ui.fail("Не удалось запустить Typhon", "Лаунчер не запустился автоматически. Откройте Typhon из меню Пуск.")
+		ui.fail(text.launchFailed, text.openManually)
 		ui.wait()
 		return errors.Join(applyErr, err)
 	}
@@ -115,19 +116,13 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	return applyErr
 }
 
-func updateTitle(version string) string {
-	if version == "" {
-		return "Обновление Typhon"
-	}
-	return "Обновление Typhon до " + version
-}
-
 func runUpdate(waitCtx, applyCtx context.Context, spec updateSpec, ui stageReporter) error {
 	if err := waitForParentExit(waitCtx, spec.ParentPID); err != nil {
 		return err
 	}
 
-	ui.setStage(updateTitle(spec.Version), "Устанавливаем новую версию, лаунчер запустится сам.")
+	text := workerText(spec.Language)
+	ui.setStage(text.title(spec.Version), text.installing)
 
 	before, err := fileDigest(applyCtx, spec.RelaunchPath)
 	if err != nil {

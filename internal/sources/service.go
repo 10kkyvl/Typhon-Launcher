@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/dialogtext"
 	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/sources/feed"
@@ -344,16 +345,18 @@ func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
 	return s.previewWithCoverage(ctx, TypeFile, path, result)
 }
 
-func (s *Service) SelectFeedFile() (string, error) {
+func (s *Service) SelectFeedFile(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
 		return "", errNoDialog
 	}
 	path, err := app.Dialog.OpenFile().
-		SetTitle("Выберите файл фида").
+		SetTitle(labels.FeedTitle).
+		SetMessage(labels.FeedTitle).
 		CanChooseFiles(true).
-		AddFilter("Файл фида (*.json)", "*.json").
-		AddFilter("Все файлы", "*.*").
+		AddFilter(labels.Feeds, "*.json").
+		AddFilter(labels.AllFiles, "*.*").
 		PromptForSingleSelection()
 	if err != nil {
 		return "", fmt.Errorf("выбор файла фида: %w", err)

@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as SelfUpdateService } from '../../../bindings/typhon/internal/selfupdate';
 import { inWails } from './backend';
 
@@ -118,7 +120,7 @@ export async function downloadUpdate(): Promise<SelfUpdateStatus> {
 export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
-    await SelfUpdateService.ApplyUpdate();
+    await SelfUpdateService.ApplyUpdate(get(locale));
   } catch (err) {
     throw toSelfUpdateError(err);
   }

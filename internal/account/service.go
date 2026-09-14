@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/dialogtext"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -348,12 +350,14 @@ func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 	return user, nil
 }
 
-func (s *Service) PickAvatar() (AvatarImage, error) {
+func (s *Service) PickAvatar(language string) (AvatarImage, error) {
+	labels := dialogtext.For(language)
 	dialog := application.Get().Dialog.OpenFile().
-		SetTitle("Выберите аватар").
+		SetTitle(labels.AvatarTitle).
+		SetMessage(labels.AvatarTitle).
 		CanChooseFiles(true).
-		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)", "*.png;*.jpg;*.jpeg;*.webp;*.gif").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.AvatarImages, "*.png;*.jpg;*.jpeg;*.webp;*.gif").
+		AddFilter(labels.AllFiles, "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		slog.Warn("select avatar file", "error", err)
@@ -386,12 +390,14 @@ func (s *Service) UploadAvatar(encoded string, crop AvatarCrop) (CurrentUser, er
 	return user, nil
 }
 
-func (s *Service) PickCover() (AvatarImage, error) {
+func (s *Service) PickCover(language string) (AvatarImage, error) {
+	labels := dialogtext.For(language)
 	dialog := application.Get().Dialog.OpenFile().
-		SetTitle("Выберите обложку профиля").
+		SetTitle(labels.CoverTitle).
+		SetMessage(labels.CoverTitle).
 		CanChooseFiles(true).
-		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp)", "*.png;*.jpg;*.jpeg;*.webp").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.CoverImages, "*.png;*.jpg;*.jpeg;*.webp").
+		AddFilter(labels.AllFiles, "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		return AvatarImage{}, err

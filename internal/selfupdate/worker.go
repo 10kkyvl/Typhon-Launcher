@@ -28,6 +28,7 @@ const (
 )
 
 type updateSpec struct {
+	Language      string `json:"language,omitempty"`
 	InstallerPath string `json:"installerPath"`
 	InstallDir    string `json:"installDir"`
 	ParentPID     int    `json:"parentPid"`

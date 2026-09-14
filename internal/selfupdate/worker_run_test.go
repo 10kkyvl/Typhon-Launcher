@@ -128,10 +128,16 @@ func TestRunWorkerAppliesAndRelaunchesOnceParentExits(t *testing.T) {
 		ParentPID:     4242,
 		RelaunchPath:  target,
 		Version:       "2.0.0",
+		Language:      "en",
 	})
 
 	ui := &recordingReporter{}
-	if err := runWorker(specPath, func(string, string) stageReporter { return ui }); err != nil {
+	if err := runWorker(specPath, func(title, detail string) stageReporter {
+		if title != "Updating Typhon to 2.0.0" || detail != "Waiting for the launcher to close…" {
+			t.Fatalf("initial worker text = %q / %q", title, detail)
+		}
+		return ui
+	}); err != nil {
 		t.Fatalf("runWorker: %v", err)
 	}
 
@@ -154,7 +160,7 @@ func TestRunWorkerAppliesAndRelaunchesOnceParentExits(t *testing.T) {
 	if len(ui.failed) != 0 {
 		t.Fatalf("fail() called: %v", ui.failed)
 	}
-	if len(ui.stages) != 2 || !strings.Contains(ui.stages[1], "запускаем") {
+	if len(ui.stages) != 2 || !strings.Contains(ui.stages[1], "Starting Typhon") {
 		t.Fatalf("stages = %v, want install then relaunch", ui.stages)
 	}
 }
