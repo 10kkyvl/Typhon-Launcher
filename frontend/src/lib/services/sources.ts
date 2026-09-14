@@ -401,7 +401,7 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const payload = {
     snapshot: query.snapshot ?? '',
     hideLibrary: query.hideLibrary ?? false,
-    hideNotInterested: query.hideNotInterested ?? true,
+    hideNotInterested: query.hideNotInterested ?? false,
     excludeIds: query.excludeIds ?? [],
     revision: query.revision ?? 0,
     platform: query.platform ?? '',
