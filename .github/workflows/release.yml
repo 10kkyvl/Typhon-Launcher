@@ -59,14 +59,15 @@ jobs:
   macos:
     name: Build the macOS bundle
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          variant: production
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -136,14 +137,15 @@ jobs:
   windows:
     name: Build the Windows installer
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          variant: production
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -217,6 +219,26 @@ jobs:
         shell: bash
         run: wails3 task package
 
+      # Compile with the already-warm build job. Publication needs only this
+      # executable, not a second Go installation and a gigabyte of Go caches.
+      - name: Test and build the manifest signer
+        shell: bash
+        env:
+          CGO_ENABLED: "0"
+          GOARCH: amd64
+        run: |
+          go test ./cmd/signrelease
+          go build -trimpath -o bin/signrelease.exe ./cmd/signrelease
+
+      - name: Upload the manifest signer
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-release-tools
+          path: bin/signrelease.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
       - name: Verify the Windows binary carries no devmock code
         shell: bash
         run: |
@@ -256,9 +278,9 @@ jobs:
   release:
     name: Sign and publish both platforms
     needs: [macos, windows]
-    # signrelease currently imports the Wails desktop backend transitively.
-    # Keep its verified Windows environment without adding Linux GUI dependencies.
+    # Run the tested signer from this run's Windows build, without a Go SDK.
     runs-on: windows-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     env:
@@ -269,10 +291,15 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Download the tested manifest signer
+        uses: actions/download-artifact@v4
         with:
-          go-version-file: go.mod
+          name: typhon-release-tools
+          path: bin
+
+      - name: Verify the manifest signer
+        shell: bash
+        run: test -s bin/signrelease.exe
 
       - name: Determine release version
         id: version
@@ -318,7 +345,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          go run ./cmd/signrelease \
+          ./bin/signrelease.exe \
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
@@ -333,7 +360,7 @@ jobs:
           # at all. Those clients get their own signed manifest carrying just
           # the installer; the backend picks between the two by the version
           # the client sends in X-Typhon-Version.
-          go run ./cmd/signrelease \
+          ./bin/signrelease.exe \
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
