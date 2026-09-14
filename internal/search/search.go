@@ -1,6 +1,7 @@
 package search
 
 import (
+	"errors"
 	"sort"
 	"strings"
 
@@ -67,8 +68,7 @@ type installedGames interface {
 }
 
 type gameCatalog interface {
-	SearchGames(query string, limit int) []catalog.Game
-	GetGame(id string) (catalog.Game, error)
+	BrowseGames(catalog.GameQuery) (catalog.GamePage, error)
 }
 
 type releaseIndex interface {
@@ -95,33 +95,38 @@ type query struct {
 	normalized string
 }
 
-func (s *Service) Search(raw string) Result {
+func (s *Service) Search(raw string) (Result, error) {
 	trimmed := strings.Join(strings.Fields(raw), " ")
 	result := Result{Query: trimmed, Games: []GameHit{}, Releases: []ReleaseHit{}}
 	if len([]rune(trimmed)) < minQueryLen {
-		return result
+		return result, nil
 	}
 	q := query{raw: trimmed, lower: strings.ToLower(trimmed), normalized: titles.Normalize(trimmed)}
 
 	installed := s.installed()
 	entries := map[string]*entry{}
-	s.collectCatalog(entries, q)
-	collectInstalled(entries, installed, q)
-	unmatched, moreUnmatched := s.collectReleases(entries, installed, q)
+	total, err := s.collectCatalog(entries, q)
+	if err != nil {
+		return result, err
+	}
+	collectInstalled(entries, installed)
+	s.collectReleases(entries, q)
 
 	games := make([]GameHit, 0, len(entries))
+	seen := map[*entry]bool{}
 	for _, e := range entries {
-		games = append(games, e.hit)
+		if !seen[e] {
+			games = append(games, e.hit)
+			seen[e] = true
+		}
 	}
 	sortGames(games)
 	if len(games) > maxGames {
-		result.MoreGames = len(games) - maxGames
+		result.MoreGames = max(0, total-maxGames)
 		games = games[:maxGames]
 	}
 	result.Games = games
-	result.Releases = unmatched
-	result.MoreReleases = moreUnmatched
-	return result
+	return result, nil
 }
 
 func (s *Service) installed() []library.Game {
@@ -131,99 +136,56 @@ func (s *Service) installed() []library.Game {
 	return s.library.GetInstalledGames()
 }
 
-func (s *Service) collectCatalog(entries map[string]*entry, q query) {
+func (s *Service) collectCatalog(entries map[string]*entry, q query) (int, error) {
 	if s.catalog == nil {
-		return
+		return 0, errors.New("catalog backend unavailable")
 	}
-	for _, game := range s.catalog.SearchGames(q.raw, catalogScan) {
+	page, err := s.catalog.BrowseGames(catalog.GameQuery{Search: q.raw, Kind: "all", Page: 1, PageSize: catalogScan, Sort: "title"})
+	if err != nil {
+		return 0, err
+	}
+	for _, game := range page.Items {
 		e := ensure(entries, game.ID)
 		applyCatalog(e, game)
 		e.hit.Score = maxScore(e.hit.Score, q.score(game.Title, game.Aliases), scoreCatalogFuzzy)
+		for _, alias := range game.AliasIDs {
+			entries[alias] = e
+		}
 	}
+	return page.Total, nil
 }
 
-func collectInstalled(entries map[string]*entry, installed []library.Game, q query) {
+func collectInstalled(entries map[string]*entry, installed []library.Game) {
 	for _, game := range installed {
-		hit := q.score(game.Title, nil)
-		key := game.CanonicalGameID
-		if key == "" {
-			if hit == 0 {
-				continue
-			}
-			key = game.ID
+		if e := entries[game.CanonicalGameID]; e != nil {
+			applyInstalled(e, game)
 		}
-		e, known := entries[key]
-		if !known {
-			if hit == 0 {
-				continue
-			}
-			e = ensure(entries, key)
-		}
-		applyInstalled(e, game)
-		e.hit.Score = maxScore(e.hit.Score, hit)
 	}
 }
 
-func (s *Service) collectReleases(entries map[string]*entry, installed []library.Game, q query) ([]ReleaseHit, int) {
+func (s *Service) collectReleases(entries map[string]*entry, q query) {
 	if s.sources == nil || len([]rune(q.raw)) < minReleaseQueryLen {
-		return []ReleaseHit{}, 0
+		return
 	}
 	known := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.hit.CanonicalGameID != "" {
-			known = append(known, e.hit.CanonicalGameID)
-		}
+	for id := range entries {
+		known = append(known, id)
 	}
-	matches := s.sources.SearchReleaseMatches(q.raw, known, maxReleases)
-
+	// Only server-selected identities receive source annotations. Source titles
+	// and unmatched releases cannot introduce search results.
+	matches := s.sources.SearchReleaseMatches(q.raw, known, 0)
 	for gameID, info := range matches.Games {
-		e, seen := entries[gameID]
-		if !seen {
-			e = ensure(entries, gameID)
-			e.hit.ID = gameID
-			e.hit.CanonicalGameID = gameID
-			e.hit.Title = info.Title
-			s.fillFromCatalog(e, gameID, q)
-			for _, game := range installed {
-				if game.CanonicalGameID == gameID {
-					applyInstalled(e, game)
-				}
-			}
-			e.hit.Score = maxScore(e.hit.Score, scoreReleaseOnly)
+		if e := entries[gameID]; e != nil {
+			e.hit.Releases += info.Releases
+			e.hit.Sources += info.Sources
+			e.hit.LatestVersion = info.LatestVersion
 		}
-		e.hit.Releases = info.Releases
-		e.hit.Sources = info.Sources
-		e.hit.LatestVersion = info.LatestVersion
 	}
-
-	hits := make([]ReleaseHit, 0, len(matches.Unmatched))
-	for _, view := range matches.Unmatched {
-		hits = append(hits, ReleaseHit{
-			ID:         view.Release.ID,
-			SourceID:   view.Release.SourceID,
-			SourceName: view.SourceName,
-			Title:      view.Release.RawTitle,
-			Version:    view.Release.Version,
-			Size:       view.Release.Size,
-		})
-	}
-	return hits, matches.MoreUnmatched
-}
-
-func (s *Service) fillFromCatalog(e *entry, gameID string, q query) {
-	if s.catalog == nil {
-		return
-	}
-	game, err := s.catalog.GetGame(gameID)
-	if err != nil {
-		return
-	}
-	applyCatalog(e, game)
-	e.hit.Score = maxScore(e.hit.Score, q.score(game.Title, game.Aliases))
 }
 
 func applyCatalog(e *entry, game catalog.Game) {
 	e.hit.CanonicalGameID = game.ID
+	e.hit.Cover = game.CoverURL
 	if e.hit.ID == "" {
 		e.hit.ID = game.ID
 	}
@@ -242,9 +204,6 @@ func applyInstalled(e *entry, game library.Game) {
 	e.hit.ID = game.ID
 	e.hit.Installed = true
 	e.hit.Version = game.Version
-	if game.CanonicalGameID != "" {
-		e.hit.CanonicalGameID = game.CanonicalGameID
-	}
 	if game.Cover != "" {
 		e.hit.Cover = game.Cover
 	}

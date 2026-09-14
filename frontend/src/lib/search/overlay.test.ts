@@ -317,3 +317,18 @@ describe('SearchOverlay destroy', () => {
     expect(onState.mock.calls.length).toBe(callsBeforeDestroy);
   });
 });
+
+it('ignores an old server response during the next query debounce', async () => {
+  const pending = deferred<SearchResult>();
+  const search = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(makeResult([gameB], []));
+  const overlay = new SearchOverlay({ search, onState: () => {}, delay: 200 });
+  overlay.setQuery('gta');
+  await vi.advanceTimersByTimeAsync(200);
+  overlay.setQuery('portal');
+  pending.resolve(makeResult([gameA], []));
+  await Promise.resolve();
+  expect(overlay.snapshot.games).toEqual([]);
+  expect(overlay.snapshot.loading).toBe(true);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(overlay.snapshot.games).toEqual([gameB]);
+});
