@@ -35,6 +35,7 @@ const (
 
 	maxWarnings        = 10
 	previewCacheTTL    = 10 * time.Minute
+	sourceParseVersion = 1
 	refreshConcurrency = 2
 	refreshTimeout     = 3 * time.Minute
 	scheduleTick       = time.Minute
@@ -320,7 +321,7 @@ func (s *Service) TestSource(rawURL string) (Preview, error) {
 		slog.Warn("source test failed", "operation", "test", "host", redact.URL(normalized), "error", err)
 		return Preview{}, err
 	}
-	return s.preview(TypeURL, normalized, result), nil
+	return s.previewWithCoverage(ctx, TypeURL, normalized, result)
 }
 
 func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
@@ -340,7 +341,7 @@ func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
 		slog.Warn("source file test failed", "operation", "test", "error", err)
 		return Preview{}, err
 	}
-	return s.preview(TypeFile, path, result), nil
+	return s.previewWithCoverage(ctx, TypeFile, path, result)
 }
 
 func (s *Service) SelectFeedFile() (string, error) {
@@ -623,6 +624,9 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	src.Status = StatusUpdating
 	initial := len(s.releases[id]) == 0
 	cond := feed.Conditional{ETag: src.ETag, LastModified: src.LastModified}
+	if src.ParseVersion != sourceParseVersion {
+		cond = feed.Conditional{}
+	}
 	kind := src.Type
 	location := locationOf(src)
 	name := src.Name
@@ -642,10 +646,21 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.fail(id, err, scheduled, "stage", "fetch", "duration_ms", time.Since(started).Milliseconds(), "timeout_ms", refreshTimeout.Milliseconds())
 		return Summary{}, err
 	}
+	incoming := parseEntries(id, result.Feed.Entries, time.Now())
 	if result.NotModified {
-		return s.settle(id, nil, result, started, initial, true)
+		s.mu.Lock()
+		incoming = cloneReleases(s.releases[id])
+		s.mu.Unlock()
+		for _, r := range incoming {
+			reparseRelease(r)
+		}
 	}
-	return s.settle(id, parseEntries(id, result.Feed.Entries, time.Now()), result, started, initial, false)
+	matches, matchErr := s.resolveRemoteReleases(ctx, incoming)
+	if matchErr != nil {
+		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
+		return Summary{}, matchErr
+	}
+	return s.settle(id, incoming, result, started, initial, result.NotModified, matches)
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
@@ -724,7 +739,7 @@ func retryDelay(failures int, interval time.Duration) time.Duration {
 	return delay
 }
 
-func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool) (Summary, error) {
+func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved ...map[string]catalog.Match) (Summary, error) {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -737,15 +752,33 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	beforeFailures, hadFailures := s.failures[id]
 	beforeRetry, hadRetry := s.retryAt[id]
 	summary := Summary{SourceID: id, NotModified: notModified}
-	if !notModified {
+	if !notModified || (len(resolved) > 0 && len(resolved[0]) > 0) {
 		previous := s.releases[id]
-		list, mergeSummary := merge(previous, incoming, now, initial)
+		list := cloneReleases(previous)
+		mergeSummary := Summary{SourceID: id, NotModified: notModified}
+		if !notModified {
+			list, mergeSummary = merge(list, incoming, now, initial)
+		} else {
+			for _, r := range list {
+				reparseRelease(r)
+			}
+		}
 		mergeSummary.SourceID = id
 		summary = mergeSummary
 		if err := applyMatches(s.catalog, list); err != nil {
 			s.mu.Unlock()
 			s.fail(id, err, false)
 			return Summary{SourceID: id, Error: err.Error()}, err
+		}
+		if len(resolved) > 0 {
+			for _, r := range list {
+				if r.Locked || r.Ignored || r.MatchMethod == string(catalog.MethodOverride) {
+					continue
+				}
+				if match, ok := resolved[0][remoteQueryKey(r)]; ok {
+					assign(r, match)
+				}
+			}
 		}
 		s.releases[id] = list
 		if err := s.store.saveReleases(id, list); err != nil {
@@ -754,15 +787,18 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 			s.fail(id, err, false)
 			return Summary{SourceID: id, Error: err.Error()}, err
 		}
-		if result.Feed.Name != "" {
-			src.Name = result.Feed.Name
-		} else if src.Name == "" {
-			src.Name = displayName(src.Type, locationOf(src))
+		if !notModified {
+			if result.Feed.Name != "" {
+				src.Name = result.Feed.Name
+			} else if src.Name == "" {
+				src.Name = displayName(src.Type, locationOf(src))
+			}
+			src.FeedVersion = result.Feed.Version
+			src.ParseVersion = sourceParseVersion
+			src.Fingerprint = result.Feed.Fingerprint
+			src.Invalid = result.Feed.Invalid
+			src.Warnings = trimWarnings(result.Feed.Warnings)
 		}
-		src.FeedVersion = result.Feed.Version
-		src.Fingerprint = result.Feed.Fingerprint
-		src.Invalid = result.Feed.Invalid
-		src.Warnings = trimWarnings(result.Feed.Warnings)
 	}
 
 	matched, review, unmatched := counts(s.releases[id])

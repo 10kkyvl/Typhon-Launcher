@@ -61,7 +61,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesTitle': 'Sources',
   'transfers.sourcesSubtitle': 'Custom release sources',
   'transfers.sourcesAddAction': 'Add source',
-  'transfers.sourcesNotice': 'Added sources are processed on your device.',
+  'transfers.sourcesNotice': 'Sources are fetched on your device. Game titles are matched against the server catalog.',
   'transfers.sourcesEmptyTitle': 'No sources added yet',
   'transfers.sourcesEmptyDescription': 'Add your first source so Typhon can find game releases and updates.',
   'transfers.sourcesEmptyFilteredTitle': 'No sources with this status',

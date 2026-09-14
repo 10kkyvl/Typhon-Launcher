@@ -58,7 +58,7 @@ export const transfers = {
   'transfers.sourcesTitle': 'Источники',
   'transfers.sourcesSubtitle': 'Пользовательские источники релизов',
   'transfers.sourcesAddAction': 'Добавить источник',
-  'transfers.sourcesNotice': 'Добавленные источники обрабатываются на вашем устройстве.',
+  'transfers.sourcesNotice': 'Источники загружаются на вашем устройстве. Названия игр сопоставляются с серверным каталогом.',
   'transfers.sourcesEmptyTitle': 'Источники ещё не добавлены',
   'transfers.sourcesEmptyDescription': 'Добавьте первый источник, чтобы Typhon мог находить релизы игр и обновления.',
   'transfers.sourcesEmptyFilteredTitle': 'Источников с таким статусом нет',
