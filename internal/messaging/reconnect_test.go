@@ -76,7 +76,9 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
 					w.WriteHeader(http.StatusCreated)
-					_, _ = fmt.Fprint(w, `{"id":"1","clientId":"client","text":"while reconnecting"}`)
+					if _, err := fmt.Fprint(w, `{"id":"1","clientId":"client","text":"while reconnecting"}`); err != nil {
+						t.Errorf("write chat response: %v", err)
+					}
 					return
 				}
 				if r.URL.Path == "/v1/me" {
