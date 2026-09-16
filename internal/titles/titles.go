@@ -51,9 +51,9 @@ func (d *Dict) Parse(raw string) Parsed {
 		}
 		return bracket
 	})
-	s, rawVersion, version := extractVersion(s)
+	s, rawVersion, version := extractVersionNotes(s, d.versionBracketNote)
 	for {
-		cleaned, extra, _ := extractVersion(s)
+		cleaned, extra, _ := extractVersionNotes(s, d.versionBracketNote)
 		if extra == "" {
 			break
 		}
@@ -192,6 +192,12 @@ func extractDLCCount(s string) (string, int) {
 }
 
 func extractVersion(s string) (string, string, string) {
+	return extractVersionNotes(s, nil)
+}
+
+// versionLocation returns the submatch bounds of the release version, or nil.
+// Everything a feed writes after it is packaging, not the game's name.
+func versionLocation(s string) []int {
 	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
 
 	bestStart := -1
@@ -211,6 +217,14 @@ func extractVersion(s string) (string, string, string) {
 			bestLoc = loc
 		}
 	}
+	return bestLoc
+}
+
+// extractVersionNotes removes the version and the build notes that trail it.
+// note decides whether a bracket right behind the version belongs to it; a nil
+// note keeps every bracket, as inside a bracket there is nothing left to trail.
+func extractVersionNotes(s string, note func(string) bool) (string, string, string) {
+	bestLoc := versionLocation(s)
 	if bestLoc == nil {
 		return s, "", ""
 	}
@@ -219,14 +233,44 @@ func extractVersion(s string) (string, string, string) {
 	ver := s[bestLoc[2]:bestLoc[3]]
 	end := bestLoc[1]
 	for {
-		loc := reVersionContinuation.FindStringIndex(s[end:])
-		if loc == nil {
+		if loc := reVersionContinuation.FindStringIndex(s[end:]); loc != nil {
+			end += loc[1]
+			continue
+		}
+		loc := reVersionBracket.FindStringSubmatchIndex(s[end:])
+		if loc == nil || note == nil || !note(s[end+loc[2]:end+loc[3]]) {
 			break
 		}
 		end += loc[1]
 	}
 	newS := s[:bestLoc[0]] + " " + s[end:]
 	return newS, strings.TrimSpace(raw), ver
+}
+
+// versionBracketNote отвечает, принадлежит ли скобка сразу за версией самой
+// раздаче: «v1.0 (Release)», «v2.4.0 (1181)», «v1.16.0 (Chamfron)». Год, язык и
+// известные маркеры остаются тем проходам, которые опознают по ним игру.
+func (d *Dict) versionBracketNote(inner string) bool {
+	inner = strings.TrimSpace(inner)
+	if inner == "" {
+		return false
+	}
+	if _, ok := d.bracketMarker(inner); ok {
+		return false
+	}
+	for _, w := range reBracketSplit.Split(inner, -1) {
+		if w == "" {
+			continue
+		}
+		lw := strings.ToLower(w)
+		if reYear.MatchString(w) || reMulti.MatchString(w) || d.isLangCode(lw) {
+			return false
+		}
+		if d.archTokens[lw] != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
@@ -342,10 +386,9 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 		langs = append(langs, m)
 		return " "
 	})
-	s = d.reLangSingle.ReplaceAllStringFunc(s, func(m string) string {
-		langs = append(langs, strings.ToUpper(m))
-		return " "
-	})
+	cut, singles := d.cutLangSingle(s)
+	s = cut
+	langs = append(langs, singles...)
 	s = rePortable.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "portable")
 		return " "
@@ -354,6 +397,12 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 		tags = append(tags, "steam-rip")
 		return " "
 	})
+	if m := reByRepacker.FindStringSubmatchIndex(s); m != nil {
+		if slug := d.repackerSlug(s[m[2]:m[3]]); slug != "" {
+			tags = append(tags, slug)
+			s = s[:m[0]] + " "
+		}
+	}
 	s = reRepackBy.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "repack")
 		if parts := reMarkerRepack.FindStringSubmatch(m); parts != nil {
@@ -365,6 +414,47 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 	})
 
 	return s, langs, tags
+}
+
+// cutLangSingle снимает одиночный код языка. Код пишется теми же буквами, что и
+// слова названия: ARA — это и арабский, и первое слово «Ara: History Untold».
+// Поэтому одиночный код считается маркером раздачи только за разделителем или
+// в верхнем регистре рядом со словом в обычном, и никогда — в начале строки.
+func (d *Dict) cutLangSingle(s string) (string, []string) {
+	var langs []string
+	var out strings.Builder
+	last := 0
+	for _, loc := range d.reLangSingle.FindAllStringIndex(s, -1) {
+		if loc[0] == 0 || !langMarkerContext(s[:loc[0]], s[loc[0]:loc[1]]) {
+			continue
+		}
+		out.WriteString(s[last:loc[0]])
+		out.WriteString(" ")
+		langs = append(langs, strings.ToUpper(s[loc[0]:loc[1]]))
+		last = loc[1]
+	}
+	if len(langs) == 0 {
+		return s, nil
+	}
+	out.WriteString(s[last:])
+	return out.String(), langs
+}
+
+func langMarkerContext(prefix, token string) bool {
+	trimmed := strings.TrimRight(prefix, " \t")
+	if trimmed == "" {
+		return false
+	}
+	if strings.ContainsRune("|/,-+([", rune(trimmed[len(trimmed)-1])) ||
+		strings.HasSuffix(trimmed, "\u2014") || strings.HasSuffix(trimmed, "\u2013") {
+		return true
+	}
+	if token != strings.ToUpper(token) {
+		return false
+	}
+	fields := strings.Fields(trimmed)
+	previous := fields[len(fields)-1]
+	return previous != strings.ToUpper(previous)
 }
 
 func splitLangCombo(m string) []string {

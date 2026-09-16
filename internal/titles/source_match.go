@@ -13,6 +13,35 @@ var reMatchExtras = regexp.MustCompile(`(?i)\s+\+\s*(?:(?:(?:all|\d+)\s+)?(?:bon
 
 var reMatchNumberPair = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)
 
+// Всё, что фид дописывает за версией через «+», — состав раздачи: счётчики DLC,
+// бонусы, эмуляторы, выделенный сервер, фиксы. Игру это не меняет, а точному
+// сравнению имён в каталоге мешает. «+» до версии остаётся: он бывает частью
+// названия издания.
+func withoutPackagingTail(raw string) string {
+	version := versionLocation(raw)
+	if version == nil {
+		return raw
+	}
+	depth := 0
+	for i := range len(raw) {
+		switch raw[i] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth = max(0, depth-1)
+		case '+':
+			if depth > 0 || i == 0 || raw[i-1] != ' ' {
+				continue
+			}
+			rest := strings.TrimLeft(raw[i+1:], " ")
+			if i >= version[1] || len(raw)-len(rest) == version[0] {
+				return raw[:i]
+			}
+		}
+	}
+	return raw
+}
+
 var matchNumerals = []string{"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"}
 
 func matchNumeralValue(s string) int {
@@ -64,8 +93,11 @@ func MatchNames(raw string) []string {
 			}
 		}
 	}
-	return out
+	// Каталог принимает не больше шести написаний на раздачу.
+	return out[:min(len(out), maxMatchNames)]
 }
+
+const maxMatchNames = 6
 
 func matchNames(raw string) []string {
 	// Some feeds write the same sequel number twice: "2 (II)". Only
@@ -77,7 +109,7 @@ func matchNames(raw string) []string {
 		}
 		return pair
 	})
-	p := Parse(withoutMatchExtras(raw))
+	p := Parse(withoutMatchExtras(withoutPackagingTail(raw)))
 	base := p.Base
 	if strings.Contains(base, "/") {
 		parts := strings.Split(base, "/")
@@ -121,6 +153,32 @@ func matchNames(raw string) []string {
 	}
 	if base != "" && !identityEdition {
 		out = append(out, base)
+	}
+	if !identityEdition {
+		out = append(out, releaseFallbackNames(base)...)
+	}
+	return out
+}
+
+var reEditionTail = regexp.MustCompile(`(?i)^(.*\S)\s*[:,–—-]\s+\S.*\b(?:edition|bundle|collection|anthology)$`)
+
+// releaseFallbackNames отдаёт запасные написания для точного сравнения с
+// каталогом. Фид дописывает к названию перевод в скобке — «The Plucky Squire
+// (Отважный Паж)» — и имя сборки издания, которого у игры в каталоге нет:
+// «The Planet Crafter: Deluxe Bundle». Точное написание всё равно пробуется
+// первым, так что игра, которая действительно так называется, не теряется.
+func releaseFallbackNames(base string) []string {
+	var out []string
+	if m := reBracket.FindStringIndex(base); m != nil && m[1] == len(base) {
+		inner := base[m[0]+1 : m[1]-1]
+		head := strings.TrimSpace(base[:m[0]])
+		if head != "" && hasCyrillic(inner) != hasCyrillic(head) && matchNumeralValue(strings.TrimSpace(inner)) == 0 {
+			out = append(out, head)
+			base = head
+		}
+	}
+	if m := reEditionTail.FindStringSubmatch(base); m != nil {
+		out = append(out, m[1])
 	}
 	return out
 }

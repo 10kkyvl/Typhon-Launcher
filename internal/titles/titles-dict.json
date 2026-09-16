@@ -32,7 +32,10 @@
     "crack": "crack",
     "proper": "proper",
     "incl": "incl",
-    "gog": "gog"
+    "gog": "gog",
+    "license": "license",
+    "licensed": "license",
+    "лицензия": "license"
   },
   "editionPhrases": [
     "Deluxe Edition",
@@ -149,7 +152,18 @@
     "incl",
     "including",
     "with",
-    "и"
+    "и",
+    "bonus",
+    "bonuses",
+    "soundtrack",
+    "soundtracks",
+    "ost",
+    "osts",
+    "wallpaper",
+    "wallpapers",
+    "artbook",
+    "manual",
+    "content"
   ],
   "repackerPriority": [
     "fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade",
