@@ -208,3 +208,30 @@ func TestSourceMatchKeepsVersionedEditionMetadata(t *testing.T) {
 		t.Fatalf("names=%q, want edition and base", got)
 	}
 }
+
+func TestSourceMatchBilingualAndVersionedTitles(t *testing.T) {
+	for raw, want := range map[string][]string{
+		"Sniper Elite V2 Remastered — RePack от Igruha":                          {"Sniper Elite V2 Remastered"},
+		"Demolish & Build 2018 — RePack от Other's":                              {"Demolish & Build 2018"},
+		"Unbroken: The Awakening v.0.9.4.2.A [Архив] (Early Access)":             {"Unbroken: The Awakening"},
+		"Millennia v.1.0.26357.F [Папка игры] (2024)":                            {"Millennia"},
+		"UBOAT (2024.1 Patch 22) [Папка игры (Steam)] (2024)":                    {"UBOAT"},
+		"UBOAT (2025.1.1 Patch 4) [Папка игры (Steam)] (2024)":                   {"UBOAT"},
+		"Persona 4 Golden / Персона 4: Золотое издание [Папка игры] (2008-2020)": {"Persona 4 Golden"},
+		"Персона 4: Золотое издание / Persona 4 Golden [Папка игры] (2008-2020)": {"Persona 4 Golden"},
+		"HITMAN III / HITMAN World of Assassination":                             {"HITMAN III / HITMAN World of Assassination"},
+		"Game One / Game Two": {"Game One / Game Two"},
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+				t.Fatalf("names=%q, want %q", got, want)
+			}
+		})
+	}
+	// A patch-shaped bracket without a feed marker is not enough evidence
+	// for this source-only cleanup to remove the complete bracket.
+	const title = "Example (1.2 Patch 3)"
+	if got := withoutMatchBuildBrackets(title); got != title {
+		t.Fatalf("bracket without feed context removed: %q", got)
+	}
+}

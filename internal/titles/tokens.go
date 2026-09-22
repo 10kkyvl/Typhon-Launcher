@@ -15,7 +15,10 @@ func normKey(w string) string {
 // смешанный хвост («0.4.2f9», «1.34.0r20112»), части через подчёркивание
 // («1.25.8.27_5409») и иногда буквенный префикс («CL16601», «g1.06»).
 // Оборванная на первой же букве версия оставляла её хвост в названии игры.
-const verNumeric = `(?:\d+[a-zа-я]+[0-9][0-9a-zа-я._]*|\d+[a-zа-я]|\d+(?:[._][0-9][0-9a-zа-я]*){0,8})`
+// Dotted build branches are single letters or letter-number codes (.F,
+// .r40883.f). Keep edition words, languages and architecture tags separate.
+const verNumericPart = `(?:[0-9][0-9a-zа-я]*|[a-zа-я]\b|[abfr][0-9][0-9a-zа-я]*\b)`
+const verNumeric = `(?:\d+[a-zа-я]+[0-9][0-9a-zа-я._]*|\d+[a-zа-я]|\d+(?:[._]` + verNumericPart + `){0,8})`
 const verCode = `(?:[a-zа-я]{1,6}(?:\.[0-9a-zа-я]+)*\.[0-9][0-9a-zа-я]*(?:\.[0-9a-zа-я]+)*|[a-zа-я]{2,6}[-_:][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._:][0-9a-zа-я]+)*|[a-zа-я]{1,6}\d[0-9a-zа-я._]*)`
 const verNumber = `(?:` + verNumeric + `|` + verCode + `)`
 

@@ -63,3 +63,42 @@ func TestVersionContinuationDoesNotEatRepackerTags(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleVersionWordsPreserveGameIdentity(t *testing.T) {
+	for _, tc := range []struct{ raw, base, edition, version string }{
+		{"Sniper Elite V2 [v 1.13 + DLCs] (2012)", "Sniper Elite V2", "", "1.13"},
+		{"Sniper Elite V2 Remastered v1.0", "Sniper Elite V2", "Remastered", "1.0"},
+		{"Danganronpa V3: Killing Harmony", "Danganronpa V3: Killing Harmony", "", ""},
+		{"Micro Machines V4", "Micro Machines V4", "", ""},
+		{"V696", "V696", "", ""},
+		{"Demolish & Build 2018 — RePack от Other's", "Demolish & Build 2018", "", ""},
+		{"Demolish and Build 3 v1.2", "Demolish and Build 3", "", "1.2"},
+		{"Example – V2", "Example", "", "2"},
+		{"Example (V2)", "Example", "", "2"},
+		{"Example [V2]", "Example", "", "2"},
+		{"Example V1.2", "Example", "", "1.2"},
+		{"Example Build 2018", "Example", "", "2018"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			p := Parse(tc.raw)
+			if p.Base != tc.base || p.Edition != tc.edition || p.Version != tc.version {
+				t.Fatalf("title/version boundary: %+v", p)
+			}
+		})
+	}
+}
+
+func TestDottedBuildBranchesDoNotLeakIntoTitles(t *testing.T) {
+	for _, version := range []string{"0.9.4.2.A", "1.0.26357.F", "1.2.130.r40883.f", "2024.5.a.3", "2.1.0.A.24.1202.9377"} {
+		p := Parse("Example Deluxe Edition v" + version + " + 3 DLCs [RUS/ENG] (2024)")
+		if p.Base != "Example" || p.Version != version || p.Edition != "Deluxe Edition" || p.DLCCount != 3 || p.Year != 2024 || len(p.Languages) != 2 {
+			t.Fatalf("build branch changed release fields: %+v", p)
+		}
+	}
+	for _, suffix := range []string{".Deluxe.Edition", ".RUS", ".ENG", ".MULTi7", ".x64", ".x86", "-GOG", "-CODEX"} {
+		p := Parse("Example v1.2" + suffix)
+		if p.Version != "1.2" {
+			t.Fatalf("build branch consumed metadata in %q: %+v", suffix, p)
+		}
+	}
+}

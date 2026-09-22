@@ -23,8 +23,9 @@ var reMatchLayeredEdition = regexp.MustCompile(`(?i)\b((?:remastered|remaster|en
 // явным маркером раздачи; так обычный «Game 2 (III)» и настоящий подзаголовок
 // не исчезают из имени.
 var (
-	reMatchReleaseBracket = regexp.MustCompile(`(?i)^\s*v(?:[.\s]+(?:build|patch|update|hotfix)\b|[.\s]+necro\s+patch\b)`)
-	reMatchBuildIDBracket = regexp.MustCompile(`(?i)^(?:\d{5,}(?:[._-][0-9a-z]+)*|(?:\d+[._-]){2,}[0-9a-z]+(?:[._-][0-9a-z]+)*|[0-9a-f]{6,}|(?:alpha|beta)\s+\d+(?:[._-][0-9a-z]+)+|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[-/.][0-9a-z]+)*(?:\s+[a-z]+\d+)?)$`)
+	reMatchReleaseBracket      = regexp.MustCompile(`(?i)^\s*v(?:[.\s]+(?:build|patch|update|hotfix)\b|[.\s]+necro\s+patch\b)`)
+	reMatchBuildIDBracket      = regexp.MustCompile(`(?i)^(?:\d{5,}(?:[._-][0-9a-z]+)*|(?:\d+[._-]){2,}[0-9a-z]+(?:[._-][0-9a-z]+)*|[0-9a-f]{6,}|(?:alpha|beta)\s+\d+(?:[._-][0-9a-z]+)+|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[-/.][0-9a-z]+)*(?:\s+[a-z]+\d+)?)$`)
+	reMatchVersionPatchBracket = regexp.MustCompile(`(?i)^\d+(?:\.\d+)+\s+(?:patch|hotfix|update)\s+\d+$`)
 )
 
 func withoutMatchBuildBrackets(raw string) string {
@@ -39,7 +40,7 @@ func withoutMatchBuildBrackets(raw string) string {
 		bracket := raw[loc[0]:loc[1]]
 		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
 		remove := reMatchReleaseBracket.MatchString(inner)
-		if !remove && reMatchBuildIDBracket.MatchString(inner) {
+		if !remove && (reMatchBuildIDBracket.MatchString(inner) || reMatchVersionPatchBracket.MatchString(inner)) {
 			remove = matchReleaseMarkerAfter(raw[loc[1]:])
 		}
 		if remove {
@@ -174,8 +175,12 @@ func matchNames(raw string) []string {
 	base := p.Base
 	if strings.Contains(base, "/") {
 		parts := strings.Split(base, "/")
-		if len(parts) == 2 && hasCyrillic(parts[0]) && !hasCyrillic(parts[1]) {
-			base = strings.TrimSpace(parts[1])
+		if len(parts) == 2 && hasCyrillic(parts[0]) != hasCyrillic(parts[1]) {
+			if hasCyrillic(parts[0]) {
+				base = strings.TrimSpace(parts[1])
+			} else {
+				base = strings.TrimSpace(parts[0])
+			}
 		}
 	}
 	if hasCyrillic(base) {

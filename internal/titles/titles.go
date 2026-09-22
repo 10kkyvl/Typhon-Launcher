@@ -38,7 +38,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reBracket.ReplaceAllStringFunc(s, func(bracket string) string {
 		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
 		if reReleaseBracketStart.MatchString(inner) {
-			_, raw, version := extractVersion(inner)
+			_, raw, version := extractVersion("(" + inner + ")")
 			// In a metadata bracket, a separated V cannot be a title's Roman
 			// numeral. Retain its marker so the second extraction sees it too.
 			if raw != "" && raw[0] >= '0' && raw[0] <= '9' {
@@ -205,6 +205,21 @@ func versionLocation(s string) []int {
 	var bestLoc []int
 	for _, re := range patterns {
 		for _, loc := range re.FindAllStringSubmatchIndex(s, -1) {
+			prefix := strings.TrimSpace(s[:loc[0]])
+			// Build is also a title verb: Demolish & Build 2018. A
+			// conjunction is not a release marker, regardless of its number.
+			if re == reBuildVer && (strings.HasSuffix(prefix, "&") || strings.HasSuffix(strings.ToLower(prefix), " and")) {
+				continue
+			}
+			// V2/V3/V4 belong to titles such as Sniper Elite and Danganronpa.
+			// Keep a bare capital V-number in title text; brackets/separators
+			// still make it a release marker, and V1.2 remains a version.
+			if re == reVVer && s[loc[0]] == 'V' && loc[2] == loc[0]+1 {
+				last, _ := utf8.DecodeLastRuneInString(prefix)
+				if _, err := strconv.Atoi(s[loc[2]:loc[3]]); err == nil && !strings.ContainsRune("([{–—-|", last) {
+					continue
+				}
+			}
 			// A title token such as «V1RUZ» starts with the same bytes as a
 			// compact numeric version. Without a delimiter after the number this
 			// is a title word, not a release marker.
