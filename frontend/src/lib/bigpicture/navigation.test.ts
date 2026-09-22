@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { moveFocus, type BigPictureDirection } from './navigation';
+import { focusControl, moveFocus, type BigPictureDirection } from './navigation';
 
 interface FakeDocument {
   activeElement: FakeElement | null;
   defaultView: Pick<Window, 'requestAnimationFrame' | 'matchMedia'> | null;
+  documentElement?: { classList: { contains: (name: string) => boolean } };
 }
 
 interface FakeElement {
@@ -68,6 +69,34 @@ function move(document: FakeDocument, root: HTMLElement, direction: BigPictureDi
 }
 
 describe('moveFocus', () => {
+  it('keeps controls outside labelled shelves reachable in mixed pages', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const header = element(document, 0, 0, 'header');
+    header.attrs.set('data-bp-row', 'header');
+    const search = element(document, 0, 100, 'search');
+    const game = element(document, 0, 200, 'game');
+    const root = rootFor(document, [header, search, game]);
+    document.activeElement = header;
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(search);
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(game);
+    expect(moveFocus(root, 'up')).toBe(true);
+    expect(document.activeElement).toBe(search);
+  });
+
+  it('does not let a hidden page or inert dialog background steal focus after an async response', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const background = element(document, 0, 0, 'background');
+    background.attrs.set('inert', '');
+    const child = element(document, 0, 0, 'child'); child.parentElement = background;
+    const dialog = element(document, 100, 0, 'dialog');
+    document.activeElement = dialog;
+    focusControl(child as unknown as HTMLButtonElement);
+    expect(document.activeElement).toBe(dialog);
+    expect(moveFocus(rootFor(document, [child, dialog]), 'left')).toBe(false);
+    expect(document.activeElement).toBe(dialog);
+  });
   it('chooses the nearest button in the aligned row or column and scrolls it into view', () => {
     const document: FakeDocument = { activeElement: null, defaultView: null };
     const left = element(document, 0, 0, 'left');
@@ -236,6 +265,14 @@ describe('moveFocus', () => {
       requestAnimationFrame: (callback) => { callback(16); return 1; },
       matchMedia: () => ({ matches: true }) as MediaQueryList,
     } };
+    const card = element(document, 0, 100, 'card');
+    moveFocus(rootFor(document, [card]), 'down');
+    expect(card.scrollOptions[0]?.behavior).toBe('instant');
+  });
+
+  it('respects the launcher animation preference even when the OS allows motion', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null,
+      documentElement: { classList: { contains: (name) => name === 'no-anim' } } };
     const card = element(document, 0, 100, 'card');
     moveFocus(rootFor(document, [card]), 'down');
     expect(card.scrollOptions[0]?.behavior).toBe('instant');

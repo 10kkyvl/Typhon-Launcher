@@ -98,7 +98,7 @@ function isHidden(element: FocusableElement): boolean {
   let current: FocusableElement | null | undefined = element;
   while (current && !seen.has(current)) {
     seen.add(current);
-    if (isHiddenSelf(current)) return true;
+    if (isHiddenSelf(current) || isTrueAttribute(current, 'inert')) return true;
     current = current.parentElement;
   }
   return false;
@@ -222,7 +222,7 @@ const pendingReveals = new WeakMap<Document, object>();
 
 /** Focus without a browser jump, then reveal after the selected game's layout updates. */
 export function focusControl(element?: FocusableElement): void {
-  if (!element) return;
+  if (!element || !isFocusable(element)) return;
   try {
     element.focus?.({ preventScroll: true });
   } catch {
@@ -239,7 +239,8 @@ export function focusControl(element?: FocusableElement): void {
     // A newer key press or a dialog may already have moved focus elsewhere.
     if (document && (document.activeElement !== element || pendingReveals.get(document) !== request)) return;
     if (document) pendingReveals.delete(document);
-    const reducedMotion = view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
+      document?.documentElement?.classList?.contains('no-anim');
     try {
       element.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: reducedMotion ? 'instant' : 'smooth' });
     } catch {
@@ -339,7 +340,11 @@ export function moveFocus(root: HTMLElement, direction: BigPictureDirection): bo
 
   const current = rects[currentIndex];
   const vertical = direction === 'up' || direction === 'down';
-  let row = getAttribute(elements[currentIndex], 'data-bp-row') ?? undefined;
+  // A page may combine an explicitly ordered shelf with a geometric toolbar.
+  // Use row ordering only when it covers the entire scope, otherwise those
+  // unlabelled controls would be unreachable from the shelf.
+  const orderedRows = elements.every((element) => getAttribute(element, 'data-bp-row'));
+  let row = orderedRows ? getAttribute(elements[currentIndex], 'data-bp-row') ?? undefined : undefined;
   if (row && vertical) {
     // Shelf order stays stable while its scroller moves past the fixed header.
     const rows = [...new Set(elements.map((element) => getAttribute(element, 'data-bp-row')).filter(Boolean))];
