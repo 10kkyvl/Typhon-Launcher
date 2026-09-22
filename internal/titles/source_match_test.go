@@ -2,6 +2,7 @@ package titles
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -97,6 +98,31 @@ func TestReleaseBracketKeepsVersionLanguageAndDLCCount(t *testing.T) {
 	}
 }
 
+func TestPackageBracketRequiresClosedContentMarker(t *testing.T) {
+	for _, raw := range []string{
+		"Example (Patch Quest)",
+		"Example (Bonus Round)",
+		"Example (+ Patchwork)",
+		"Example (+ Other Game)",
+		"Example (DLC Quest)",
+	} {
+		if got := Parse(raw); got.Base != raw {
+			t.Fatalf("ordinary bracketed subtitle was removed: %q => %+v", raw, got)
+		}
+	}
+	for raw := range map[string]struct{}{
+		"Example (+ Bonus Content, MULTi8)":      {},
+		"Example (+ 3 DLCs + Bonus OST, MULTi8)": {},
+		"Example (+ Patch 3, MULTi8)":            {},
+		"Example (Patch 3) [Папка игры]":         {},
+		"Example (Build 12345) [Архив]":          {},
+	} {
+		if got := Parse(raw); got.Base != "Example" {
+			t.Fatalf("release package bracket remained in title: %q => %+v", raw, got)
+		}
+	}
+}
+
 func TestSourceMatchKeepsRemasterIdentityAndRepacker(t *testing.T) {
 	if got := MatchNames("Dark Souls Remastered v1.0"); len(got) != 1 || got[0] != "Dark Souls Remastered" {
 		t.Fatalf("remaster collapsed: %q", got)
@@ -139,6 +165,7 @@ func TestSourceMatchStripsMixedReleaseMetadata(t *testing.T) {
 		{"Revenge of the Savage Planet (2025-10-27-111237 Net6) [Папка игры] (2025)", []string{"Revenge of the Savage Planet"}},
 		{"Stygian: Outer Gods (32e14d5f) [Папка игры] (Early Access)", []string{"Stygian: Outer Gods"}},
 		{"StarRupture (0.1.1.112941-S) [Архив] (Early Access)", []string{"StarRupture"}},
+		{"SimCity 4 Deluxe Edition v.1.1.641 hotfix (25621) [GOG] (2003)", []string{"SimCity 4 Deluxe Edition", "SimCity 4"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {
@@ -169,6 +196,97 @@ func TestSourceMatchPreservesSequelNumbersAndRealBrackets(t *testing.T) {
 		t.Run(raw, func(t *testing.T) {
 			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
 				t.Fatalf("names=%q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestVersionSpaceKeepsStandaloneYear(t *testing.T) {
+	if got := Parse("Game v1.0 2023"); got.Base != "Game 2023" || got.Version != "1.0" {
+		t.Fatalf("standalone year was consumed as a build number: %+v", got)
+	}
+	if got := Parse("Game v1.0 185 531"); got.Base != "Game" || got.Version != "1.0" {
+		t.Fatalf("spaced build chain was not consumed: %+v", got)
+	}
+}
+
+func TestSourceMatchPreservesExecutableNamesAndClosedNumberPairs(t *testing.T) {
+	for raw, want := range map[string][]string{
+		"Hero.EXE":                        {"Hero EXE"},
+		"Dave.EXE":                        {"Dave EXE"},
+		"Hero.exe":                        {"Hero"},
+		"game.torrent":                    {"game"},
+		"Europa Universalis V (5) v1.0":   {"Europa Universalis V"},
+		"FATAL FRAME II (2) v1.0":         {"FATAL FRAME II"},
+		"A.I.L.A (AILA) v1.0":             {"A I L A"},
+		"Game 2 (III) Definitive Edition": {"Game 2 (III) Definitive Edition"},
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+				t.Fatalf("names=%q, want %q (parsed=%+v)", got, want, Parse(raw))
+			}
+		})
+	}
+}
+
+func TestSourceMatchKeepsPackageGuardsAndCommercialIdentity(t *testing.T) {
+	for raw, want := range map[string][]string{
+		"Supermarket Simulator Complete Pack v1.0":                                                        {"Supermarket Simulator Complete Pack", "Supermarket Simulator"},
+		"Some Game Ultimate Pack v1.0":                                                                    {"Some Game Ultimate Pack", "Some Game"},
+		"Some Game Collection v1.0":                                                                       {"Some Game Collection"},
+		"Game Remastered Collection v1.0":                                                                 {"Game Remastered Collection"},
+		"Need for Speed: The Run Limited Edition v1.1 + DLC":                                              {"Need for Speed: The Run Limited Edition", "Need for Speed: The Run"},
+		"Need for Speed: Most Wanted – Limited Edition – v1.0":                                            {"Need for Speed: Most Wanted – Limited Edition", "Need for Speed: Most Wanted"},
+		"Need for Speed: Most Wanted - Limited Edition v1.0":                                              {"Need for Speed: Most Wanted Limited Edition", "Need for Speed: Most Wanted"},
+		"Homura Hime: Soundtrack Bundle, v1.0.8 + Bonus OST":                                              {"Homura Hime: Soundtrack Bundle", "Homura Hime"},
+		"CarX Street: Year One Edition, v1.15.0 + 7 DLCs":                                                 {"CarX Street: Year One Edition", "CarX Street"},
+		"Succubus: The Worshipper Bundle [v 1.15.18327 + DLCs] (2021) RePack от Decepticon":               {"Succubus: The Worshipper Bundle", "Succubus"},
+		"X4: Foundations - Community of Planets Edition [v 7.50 + DLCs] (2018) RePack от Decepticon":      {"X4: Foundations Community of Planets Edition", "X4: Foundations"},
+		"Hitman: The Complete First Season - GOTY Edition [v 1.14.2 + DLC's] (2016) PC | RePack от xatab": {"Hitman: The Complete First Season GOTY Edition", "Hitman"},
+		"The Sims 3: The Complete Collection [1.67.2.024017] (2009-2013) PC | RePack by xatab":            {"The Sims 3: The Complete Collection", "The Sims 3"},
+		"Watchmen: The End is Nigh - Complete Collection — RePack от R.G. Механики":                       {"Watchmen: The End is Nigh Complete Collection", "Watchmen"},
+		"Cult of the Lamb: The One Who Waits Edition v1.0":                                                {"Cult of the Lamb: The One Who Waits Edition", "Cult of the Lamb"},
+		"Stand By v1.0":                                {"Stand By"},
+		"TMNT: The Cowabunga Collection v1.0":          {"TMNT: The Cowabunga Collection"},
+		"Beat 'Em Up Collection v1.0":                  {"Beat 'Em Up Collection"},
+		"Aliens Versus Predator 2 (+Primal Hunt) v1.0": {"Aliens Versus Predator 2 (+Primal Hunt)"},
+		"Example Game (Online)":                        {"Example Game (Online)"},
+		"Example Game (Multiplayer)":                   {"Example Game (Multiplayer)"},
+		"Crimson Tactics (v1.0 (Build 12345)":          {"Crimson Tactics"},
+		"Crimson Tactics: The Rise of The White Banner (v1.0.0b + Bonus Content, Selective Download - from 2.7 GB]": {"Crimson Tactics: The Rise of The White Banner"},
+		"Sackboy: A Big Adventure (+ 3 DLCs + Bonus OST + Online/LAN CoOp, MULTi8) [FitGirl Repack]":                {"Sackboy: A Big Adventure"},
+		"Klonoa: Phantasy Reverie Series (+ Special Bundle DLC + Bonus Content, MULTi10) [FitGirl Repack]":          {"Klonoa: Phantasy Reverie Series"},
+		"Снайпер Элит 2 (Sniper Elite V2) — RePack от xatab":                                                        {"Sniper Elite V2"},
+		"Ghostrunner 2 - Deluxe Edition [v 42294_40 + DLCs] (2023) RePack от Decepticon":                            {"Ghostrunner 2 Deluxe Edition", "Ghostrunner 2"},
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+				t.Fatalf("names=%q, want %q (parsed=%+v)", got, want, Parse(raw))
+			}
+		})
+	}
+	p := Parse("Hob [Steam + GOG] (2017)")
+	if !reflect.DeepEqual(p.Tags, []string{"gog", "steam-rip"}) {
+		t.Fatalf("source labels lost from package bracket: %+v", p)
+	}
+}
+
+func TestSourceMatchAddsSafePublisherFallback(t *testing.T) {
+	for raw, want := range map[string][]string{
+		"Cuphead (Studio MDHR) (RUS|ENG) RePack от xatab": {
+			"Cuphead (Studio MDHR)", "Cuphead",
+		},
+		"Assassin's Creed: Brotherhood (Ubisoft Entertainment) (RUS|RUS) [RePack] от xatab": {
+			"Assassin's Creed: Brotherhood (Ubisoft Entertainment)", "Assassin's Creed: Brotherhood",
+		},
+		"Call of Duty: WWII - Digital Deluxe Edition (Activision) (RUS|ENG) [RePack] от xatab": {
+			"Call of Duty: WWII Digital Deluxe Edition (Activision)", "Call of Duty: WWII Digital Deluxe Edition", "Call of Duty: WWII",
+		},
+		"Kingdom Come: Deliverance (All Stars)": {"Kingdom Come: Deliverance (All Stars)"},
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+				t.Fatalf("names=%q, want %q (parsed=%+v)", got, want, Parse(raw))
 			}
 		})
 	}
@@ -233,5 +351,36 @@ func TestSourceMatchBilingualAndVersionedTitles(t *testing.T) {
 	const title = "Example (1.2 Patch 3)"
 	if got := withoutMatchBuildBrackets(title); got != title {
 		t.Fatalf("bracket without feed context removed: %q", got)
+	}
+}
+
+func TestSourcePackagesNeverReplaceAnotherGameOrStandaloneAddon(t *testing.T) {
+	for raw, forbidden := range map[string]string{
+		"Age of Empires 2 - HD Edition Bundle — RePack от xatab":                                                        "Age of Empires 2",
+		"Sleeping Dogs: Definitive + Limited Editions Pack (24/30 DLCs)":                                                "Sleeping Dogs",
+		"Fallout 4: High Resolution Texture Pack (for v1.10.980.0+) [FitGirl Repack]":                                   "Fallout 4",
+		"Age of Empires IV: 4K HDR Video Pack (MULTi8) [FitGirl Repack]":                                                "Age of Empires IV",
+		"Middle-earth: Shadow of War - Definitive Edition - 4K Cinematics Pack Add-on for v1.21 GOG [FitGirl Repack]":   "Middle-earth: Shadow of War - Definitive Edition",
+		"Warhammer 40,000: Chaos Gate – Daemonhunters: Grand Master Edition, Build a7bc905 (20865149) + 5 DLCs/Bonuses": "Warhammer 40,000: Chaos Gate",
+		"Mafia II Enhanced Edition (2K Games) (ENG/RUS) [RePack] от xatab":                                              "Mafia II",
+		"Metro: Exodus - Gold & Enhanced Edition's [v 1.0.8.39|3.0.8.39 + DLCs] (2019-2021) RePack от Decepticon":       "Metro: Exodus",
+	} {
+		for _, name := range MatchNames(raw) {
+			if Normalize(name) == Normalize(forbidden) {
+				t.Errorf("%q offered unrelated/incomplete identity %q: %q", raw, forbidden, MatchNames(raw))
+			}
+		}
+	}
+	for _, raw := range []string{"Wild West Legacy: Digital Supporter Edition, v1.0", "Mafia 3: Digital Deluxe Edition – v1.09 GOG"} {
+		names := MatchNames(raw)
+		if len(names) != 2 || strings.HasSuffix(names[1], "Digital") {
+			t.Errorf("digital package left in game identity: %q -> %q", raw, names)
+		}
+	}
+	if got := Parse("Example Build a7bc905"); got.Base != "Example" || got.Version != "a7bc905" {
+		t.Fatalf("build hash left in title: %+v", got)
+	}
+	if got := Parse("Build Defaced"); got.Base != "Build Defaced" {
+		t.Fatalf("title word read as build hash: %+v", got)
 	}
 }
