@@ -3,7 +3,7 @@
   import { ArrowLeft, Clock, Download, Gamepad2, Menu, Monitor, Play, Square, Star, WifiOff, X } from '@lucide/svelte';
   import { buildShelves, resolveSelection, type ShelfID } from '../bigpicture/library';
   import { startBigPictureInput, type BigPictureCommand } from '../bigpicture/input';
-  import { moveFocus } from '../bigpicture/navigation';
+  import { focusControl, moveFocus } from '../bigpicture/navigation';
   import { exitBigPicture, restoreBigPictureWindow } from '../bigpicture/mode';
   import { createBigPictureSession } from '../bigpicture/session';
   import { launchGame, stopGame, type LibraryGame } from '../services/library';
@@ -54,8 +54,7 @@
   function focusKey(key: string, root = stage): boolean {
     const element = focusables(root).find((node) => node.dataset.bpFocus === key);
     if (!element) return false;
-    element.focus({ preventScroll: true });
-    element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    focusControl(element);
     return true;
   }
 
@@ -65,9 +64,8 @@
     if (lastCard && focusKey(lastCard)) return;
     const card = focusables(stage).find((node) => node.dataset.gameId === id);
     if (card) {
-      card.focus({ preventScroll: true });
-      card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-    } else focusables(stage)[0]?.focus();
+      focusControl(card);
+    } else focusControl(focusables(stage)[0]);
   }
 
   async function showPanel(next: Panel) {
@@ -78,7 +76,7 @@
     await tick();
     if (disposed) return;
     if (next) {
-      (dialog?.querySelector<HTMLButtonElement>('[data-bp-default]') ?? focusables(dialog)[0])?.focus();
+      focusControl(dialog?.querySelector<HTMLButtonElement>('[data-bp-default]') ?? focusables(dialog)[0]);
     } else if (!focusKey(focusBeforePanel)) await focusCard();
   }
 
@@ -117,7 +115,7 @@
       busy = '';
       await tick();
       if (!disposed && document.hasFocus()) {
-        if (panel) focusables(dialog)[0]?.focus();
+        if (panel) focusControl(focusables(dialog)[0]);
         else await focusCard();
       }
     }
@@ -137,7 +135,7 @@
     } finally {
       busy = '';
       await tick();
-      if (!disposed && panel) focusables(dialog)[0]?.focus();
+      if (!disposed && panel) focusControl(focusables(dialog)[0]);
     }
   }
 
@@ -177,7 +175,7 @@
     if (command === 'confirm') {
       const element = document.activeElement;
       if (element instanceof HTMLButtonElement && root.contains(element) && !element.disabled) element.click();
-      else focusables(root)[0]?.focus();
+      else focusControl(focusables(root)[0]);
       return;
     }
     moveFocus(root, command);
@@ -189,7 +187,7 @@
     if (nodes.length === 0) return;
     event.preventDefault();
     const index = nodes.indexOf(document.activeElement as HTMLButtonElement);
-    nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]?.focus();
+    focusControl(nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]);
   }
 
   $effect(() => {
@@ -234,10 +232,10 @@
       <div class="brand"><img src="/typhon.png" alt="Typhon" /><span>Big Picture</span></div>
       <div class="header-actions">
         {#if $isOffline}<span class="offline"><WifiOff size="20" />{msg('bp.offline')}</span>{/if}
-        <button data-bp-focus="downloads" class="utility" onclick={() => showPanel('downloads')} aria-label={msg('bp.downloads')}>
+        <button data-bp-focus="downloads" data-bp-row="header" class="utility" onclick={() => showPanel('downloads')} aria-label={msg('bp.downloads')}>
           <Download size="24" />{#if currentDownloads.length}<span>{currentDownloads.length}</span>{/if}
         </button>
-        <button data-bp-focus="menu" class="utility" onclick={() => showPanel('menu')} aria-label={msg('bp.menu')}><Menu size="26" /></button>
+        <button data-bp-focus="menu" data-bp-row="header" class="utility" onclick={() => showPanel('menu')} aria-label={msg('bp.menu')}><Menu size="26" /></button>
       </div>
     </header>
     <main>
@@ -251,11 +249,11 @@
             {#if selected.version}<span>{selected.version}</span>{/if}
           </div>
           <div class="hero-actions">
-            <button data-bp-focus="play" class="primary" disabled={!!busy} onclick={() => running ? showPanel('stop') : play()}>
+            <button data-bp-focus="play" data-bp-row="hero" class="primary" disabled={!!busy} onclick={() => running ? showPanel('stop') : play()}>
               {#if running}<Square size="23" fill="currentColor" />{:else}<Play size="24" fill="currentColor" />{/if}
               {busy === 'launch' ? msg('bp.starting') : running ? msg('ui.stop') : msg('ui.play')}
             </button>
-            <button data-bp-focus="details" class="secondary" onclick={() => showPanel('details')}>{msg('bp.details')}</button>
+            <button data-bp-focus="details" data-bp-row="hero" class="secondary" onclick={() => showPanel('details')}>{msg('bp.details')}</button>
           </div>
         </section>
         <div class="shelves">
@@ -265,7 +263,7 @@
               <div class="rail">
                 {#each shelf.games as game (game.id)}
                   {@const key = `${shelf.id}:${game.id}`}
-                  <button class="game" data-bp-focus={key} data-game-id={game.id} class:selected={selected?.id === game.id}
+                  <button class="game" data-bp-focus={key} data-bp-row={shelf.id} data-game-id={game.id} class:selected={selected?.id === game.id}
                     aria-label={game.title} onfocus={() => select(game, key)} onclick={() => { select(game, key); void showPanel('details'); }}>
                     <div class="cover"><Artwork src={(game.canonicalGameId ? $gameArt[game.canonicalGameId]?.cover : '') || game.cover} alt="" label={game.title} ratio="3 / 4" radius="12px" /></div>
                     <span class="game-title">{game.title}</span>
@@ -280,7 +278,7 @@
         <section class="empty">
           <Gamepad2 size="76" strokeWidth={1.2} />
           <h1>{msg('bp.emptyTitle')}</h1><p>{msg('bp.emptyText')}</p>
-          <button data-bp-focus="exit-empty" class="primary" disabled={exiting} onclick={leave}><Monitor size="24" />{msg('bp.exit')}</button>
+          <button data-bp-focus="exit-empty" data-bp-row="empty" class="primary" disabled={exiting} onclick={leave}><Monitor size="24" />{msg('bp.exit')}</button>
         </section>
       {/if}
     </main>
@@ -359,16 +357,18 @@
   .brand img { width: 37px; height: 37px; }
   .header-actions, .hero-meta, .hero-meta > span, .hero-actions, .offline { display: flex; align-items: center; gap: 20px; }
   .offline { gap: 9px; font-size: .85em; color: #c0c9d6; }
-  button { border-radius: 12px; transition: background 120ms, outline-color 120ms, transform 120ms; outline: 3px solid transparent; outline-offset: 5px; }
+  button { border-radius: 12px; transition: background 120ms, outline-color 120ms; outline: 3px solid transparent; outline-offset: 5px; }
   button:focus { outline-color: #f5f7ff; box-shadow: 0 0 0 7px var(--accent); }
   button:hover { background-color: #ffffff1a; }
   button:disabled { opacity: .6; cursor: wait; }
   .utility { min-height: 48px; min-width: 48px; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px; }
-  main { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scroll-padding: 20px; }
+  main { flex: 1; min-height: 0; overflow-y: auto; overflow-anchor: none; scrollbar-width: thin; scroll-padding: 20px; }
+  main, .rail, .download-list { scroll-behavior: smooth; }
   .hero { padding: clamp(20px, 4vh, 60px) 4vw 24px; min-height: 32vh; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 16px; }
   .eyebrow { display: flex; align-items: center; gap: 10px; color: #c7cfdf; text-transform: uppercase; font-size: .72em; letter-spacing: .12em; font-weight: 600; }
   .dot { flex: none; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
   h1 { max-width: 78%; font-size: clamp(32px, 4vw, 88px); letter-spacing: -.035em; line-height: 1.08; text-wrap: balance; overflow-wrap: anywhere; }
+  .hero h1 { height: 2.16em; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .hero-meta { min-height: 26px; font-size: .85em; color: #c7cfdf; }
   .hero-meta > span { gap: 8px; }
   .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 13px; min-height: 54px; padding: 13px 24px; font-size: 1em; font-weight: 550; }
@@ -383,7 +383,7 @@
   .rail { display: flex; gap: clamp(18px, 1.7vw, 34px); overflow-x: auto; padding: 17px 4vw 18px; scroll-padding-inline: 4vw; scrollbar-width: none; }
   .rail::-webkit-scrollbar { display: none; }
   .game { flex: 0 0 clamp(138px, 13vw, 290px); min-width: 0; text-align: left; align-self: flex-start; padding: 0; background: #111a27; position: relative; overflow: visible; }
-  .game:focus { transform: translateY(-3px); background: #243049; }
+  .game:focus { background: #243049; }
   .cover { overflow: hidden; border-radius: 12px 12px 0 0; }
   .game-title { display: block; padding: 12px 13px; font-size: .78em; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .running-badge { position: absolute; bottom: 48px; left: 8px; right: 8px; display: flex; align-items: center; gap: 7px; background: #0c132deb; border-radius: 5px; padding: 5px 8px; font-size: .6em; }
@@ -407,5 +407,5 @@
   @media (max-width: 1000px) { .input-device { display: none; } h1 { max-width: 90%; } }
   @media (max-height: 760px) { header { padding-top: 14px; }.hero { gap: 10px; padding-top: 16px; min-height: 27vh; } .hero-meta { min-height: 20px; }.game { flex-basis: clamp(122px, 12vw, 200px); } footer { height: 62px; }.stage { height: calc(100% - 62px); }.veil { bottom: 62px; } }
   @media (max-width: 650px) { .extra-hint { display: none !important; }.brand { font-size: 14px; } header { padding-inline: 20px; }.hero { padding-inline: 24px; }h1 { font-size: 30px; }.hero-actions { gap: 12px; }.primary, .secondary { min-width: 0; padding: 12px 18px; }.panel { padding: 24px; } }
-  @media (prefers-reduced-motion: reduce) { button { transition: none; }.game:focus { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } main, .rail, .download-list { scroll-behavior: auto; } }
 </style>

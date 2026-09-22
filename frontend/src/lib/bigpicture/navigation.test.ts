@@ -3,7 +3,7 @@ import { moveFocus, type BigPictureDirection } from './navigation';
 
 interface FakeDocument {
   activeElement: FakeElement | null;
-  defaultView: null;
+  defaultView: Pick<Window, 'requestAnimationFrame' | 'matchMedia'> | null;
 }
 
 interface FakeElement {
@@ -16,11 +16,12 @@ interface FakeElement {
   rect: { left: number; top: number; right: number; bottom: number; width: number; height: number };
   focused: number;
   scrolled: number;
+  scrollOptions: Array<ScrollIntoViewOptions | undefined>;
   getAttribute(name: string): string | null;
   getBoundingClientRect(): FakeElement['rect'];
   getClientRects(): ArrayLike<unknown>;
   focus(): void;
-  scrollIntoView(): void;
+  scrollIntoView(options?: ScrollIntoViewOptions): void;
 }
 
 function element(document: FakeDocument, left: number, top: number, name: string): FakeElement {
@@ -32,6 +33,7 @@ function element(document: FakeDocument, left: number, top: number, name: string
     rect: { left, top, right: left + 80, bottom: top + 50, width: 80, height: 50 },
     focused: 0,
     scrolled: 0,
+    scrollOptions: [],
     getAttribute(attribute) {
       return this.attrs.get(attribute) ?? null;
     },
@@ -45,8 +47,9 @@ function element(document: FakeDocument, left: number, top: number, name: string
       this.ownerDocument.activeElement = this;
       this.focused += 1;
     },
-    scrollIntoView() {
+    scrollIntoView(options) {
       this.scrolled += 1;
+      this.scrollOptions.push(options);
     },
   };
   value.attrs.set('data-bp-focus', name);
@@ -151,5 +154,90 @@ describe('moveFocus', () => {
     // is offset and therefore has no strict rectangle overlap.
     expect(move(document, root, 'down')).toBe(true);
     expect(document.activeElement).toBe(installedOnly);
+  });
+
+  it('visits the short middle row before the aligned card in a longer row, in both directions', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const first = [0, 100, 200].map((x) => element(document, x, 100, `recent-${x}`));
+    const middle = [0, 100].map((x) => element(document, x, 220, `favorite-${x}`));
+    const last = [0, 100, 200, 300, 400].map((x) => element(document, x, 340, `installed-${x}`));
+    [first, middle, last].forEach((row, index) => row.forEach((card) => card.attrs.set('data-bp-row', String(index))));
+    const root = rootFor(document, [...first, ...middle, ...last]);
+
+    document.activeElement = first[2];
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(middle[1]);
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(last[1]);
+
+    document.activeElement = last[2];
+    expect(moveFocus(root, 'up')).toBe(true);
+    expect(document.activeElement).toBe(middle[1]);
+    expect(moveFocus(root, 'up')).toBe(true);
+    expect(document.activeElement).toBe(first[1]);
+  });
+
+  it('does not treat focus lift or unequal button heights as another row', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const current = element(document, 200, 97, 'lifted');
+    const neighbour = element(document, 100, 100, 'same-row');
+    const lowerLeft = element(document, 0, 220, 'lower-left');
+    const lowerRight = element(document, 100, 220, 'lower-right');
+    lowerLeft.rect.bottom += 20;
+    lowerLeft.rect.height += 20;
+    const last = element(document, 200, 340, 'last');
+    const root = rootFor(document, [current, neighbour, lowerLeft, lowerRight, last]);
+
+    document.activeElement = current;
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(lowerRight);
+    document.activeElement = last;
+    expect(moveFocus(root, 'up')).toBe(true);
+    expect(document.activeElement).toBe(lowerRight);
+  });
+
+  it('keeps shelf order when scrolling puts the fixed header between their screen coordinates', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const header = element(document, 200, 0, 'menu');
+    const previousShelf = element(document, 100, -100, 'previous');
+    const currentShelf = element(document, 200, 100, 'current');
+    [header, previousShelf, currentShelf].forEach((card, index) => card.attrs.set('data-bp-row', String(index)));
+    const root = rootFor(document, [header, previousShelf, currentShelf]);
+    document.activeElement = currentShelf;
+
+    expect(moveFocus(root, 'up')).toBe(true);
+    expect(document.activeElement).toBe(previousShelf);
+    expect(moveFocus(root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(currentShelf);
+  });
+
+  it('reveals only the latest focused card after layout, with smooth scrolling', () => {
+    const frames: FrameRequestCallback[] = [];
+    const document: FakeDocument = { activeElement: null, defaultView: {
+      requestAnimationFrame: (callback) => frames.push(callback),
+      matchMedia: () => ({ matches: false }) as MediaQueryList,
+    } };
+    const first = element(document, 0, 100, 'first');
+    const second = element(document, 100, 100, 'second');
+    const root = rootFor(document, [first, second]);
+
+    moveFocus(root, 'right');
+    moveFocus(root, 'right');
+    moveFocus(root, 'left');
+    expect(document.activeElement).toBe(first);
+    expect(first.scrolled + second.scrolled).toBe(0);
+    frames.forEach((frame) => frame(16));
+    expect(second.scrolled).toBe(0);
+    expect(first.scrollOptions).toEqual([{ block: 'nearest', inline: 'nearest', behavior: 'smooth' }]);
+  });
+
+  it('respects reduced motion when revealing the focused card', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: {
+      requestAnimationFrame: (callback) => { callback(16); return 1; },
+      matchMedia: () => ({ matches: true }) as MediaQueryList,
+    } };
+    const card = element(document, 0, 100, 'card');
+    moveFocus(rootFor(document, [card]), 'down');
+    expect(card.scrollOptions[0]?.behavior).toBe('instant');
   });
 });

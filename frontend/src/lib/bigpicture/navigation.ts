@@ -164,9 +164,9 @@ function overlaps(startA: number, endA: number, startB: number, endB: number): b
 function directionCandidate(direction: BigPictureDirection, current: Rect, candidate: Rect): boolean {
   switch (direction) {
     case 'up':
-      return candidate.centerY < current.centerY - EPSILON;
+      return candidate.centerY < current.centerY - EPSILON && candidate.bottom <= current.top + EPSILON;
     case 'down':
-      return candidate.centerY > current.centerY + EPSILON;
+      return candidate.centerY > current.centerY + EPSILON && candidate.top >= current.bottom - EPSILON;
     case 'left':
       return candidate.centerX < current.centerX - EPSILON;
     case 'right':
@@ -218,7 +218,11 @@ function sortByDocumentOrder(elements: readonly FocusableElement[], rects: reado
     .map(({ element }) => element);
 }
 
-function focusElement(element: FocusableElement): void {
+const pendingReveals = new WeakMap<Document, object>();
+
+/** Focus without a browser jump, then reveal after the selected game's layout updates. */
+export function focusControl(element?: FocusableElement): void {
+  if (!element) return;
   try {
     element.focus?.({ preventScroll: true });
   } catch {
@@ -226,11 +230,25 @@ function focusElement(element: FocusableElement): void {
     element.focus?.();
   }
 
-  try {
-    element.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  } catch {
-    element.scrollIntoView?.();
-  }
+  const document = element.ownerDocument;
+  const view = document?.defaultView;
+  const request = {};
+  if (document) pendingReveals.set(document, request);
+
+  const reveal = () => {
+    // A newer key press or a dialog may already have moved focus elsewhere.
+    if (document && (document.activeElement !== element || pendingReveals.get(document) !== request)) return;
+    if (document) pendingReveals.delete(document);
+    const reducedMotion = view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    try {
+      element.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: reducedMotion ? 'instant' : 'smooth' });
+    } catch {
+      element.scrollIntoView?.();
+    }
+  };
+
+  if (view?.requestAnimationFrame) view.requestAnimationFrame(reveal);
+  else reveal();
 }
 
 function activeElementFor(root: FocusableElement): FocusableElement | null {
@@ -269,6 +287,7 @@ function candidatesFor(
   current: Rect,
   elements: readonly FocusableElement[],
   rects: readonly Rect[],
+  row?: string,
 ): Array<{ element: FocusableElement; rect: Rect; index: number; aligned: boolean; primary: number; cross: number }> {
   return elements
     .map((element, index) => ({
@@ -279,14 +298,18 @@ function candidatesFor(
       primary: primaryDistance(direction, current, rects[index]),
       cross: crossDistance(direction, current, rects[index]),
     }))
-    .filter(({ rect }) => directionCandidate(direction, current, rect));
+    .filter(({ element, rect }) => row
+      ? getAttribute(element, 'data-bp-row') === row &&
+        (direction === 'up' || direction === 'down' || directionCandidate(direction, current, rect))
+      : directionCandidate(direction, current, rect));
 }
 
 /**
  * Move focus among the visible, enabled controls marked with
  * `[data-bp-focus]` inside `root`.
  *
- * Controls are selected from the nearest aligned row/column first. At a
+ * Vertical movement visits the adjacent row before choosing its nearest card.
+ * Horizontal movement stays within the current row. At a
  * boundary the function leaves focus where it is and returns `false`; this
  * lets the shell decide whether a direction should scroll or do nothing.
  */
@@ -310,25 +333,35 @@ export function moveFocus(root: HTMLElement, direction: BigPictureDirection): bo
     const ordered = sortByDocumentOrder(elements, rects);
     const target = direction === 'up' || direction === 'left' ? ordered.at(-1) : ordered[0];
     if (!target) return false;
-    focusElement(target);
+    focusControl(target);
     return true;
   }
 
   const current = rects[currentIndex];
-  const candidates = candidatesFor(direction, current, elements, rects);
+  const vertical = direction === 'up' || direction === 'down';
+  let row = getAttribute(elements[currentIndex], 'data-bp-row') ?? undefined;
+  if (row && vertical) {
+    // Shelf order stays stable while its scroller moves past the fixed header.
+    const rows = [...new Set(elements.map((element) => getAttribute(element, 'data-bp-row')).filter(Boolean))];
+    row = rows[rows.indexOf(row) + (direction === 'down' ? 1 : -1)] ?? undefined;
+    if (!row) return false;
+  }
+  const candidates = candidatesFor(direction, current, elements, rects, row);
   if (candidates.length === 0) return false;
 
-  const aligned = candidates.filter((candidate) => candidate.aligned);
-  // Horizontal rails are independent rows. At their edge, jumping to a
-  // diagonally placed header or another rail is surprising; leave focus on
-  // the current card. Vertical movement may still use the nearest diagonal
-  // candidate when rows do not line up exactly.
-  if (aligned.length === 0 && (direction === 'left' || direction === 'right')) return false;
-  const pool = aligned.length > 0 ? aligned : candidates;
+  const nearest = candidates.reduce((a, b) => a.primary <= b.primary ? a : b);
+  // Alignment is only a preference within the next row, never a reason to
+  // skip a short shelf. Overlap keeps unequal-height buttons in the same row.
+  const pool = row ? candidates : vertical
+    ? candidates.filter(({ rect }) => overlaps(rect.top, rect.bottom, nearest.rect.top, nearest.rect.bottom))
+    : candidates.filter((candidate) => candidate.aligned);
   pool.sort((a, b) => {
-    // Aligned controls are ordered by travel distance first, then their
-    // cross-axis offset. For diagonal controls, the cross axis gets a higher
-    // weight so a nearby card in another row does not steal focus.
+    if (vertical) {
+      const alignment = Number(b.aligned) - Number(a.aligned);
+      if (alignment !== 0) return alignment;
+      const cross = a.cross - b.cross;
+      if (Math.abs(cross) > EPSILON) return cross;
+    }
     const primary = a.primary - b.primary;
     if (Math.abs(primary) > EPSILON) return primary;
     const cross = a.cross - b.cross;
@@ -338,6 +371,6 @@ export function moveFocus(root: HTMLElement, direction: BigPictureDirection): bo
 
   const target = pool[0]?.element;
   if (!target || target === elements[currentIndex]) return false;
-  focusElement(target);
+  focusControl(target);
   return true;
 }
