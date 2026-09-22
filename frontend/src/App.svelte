@@ -73,6 +73,10 @@
   });
 </script>
 
+{#if $bigPictureActive && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
+  <BigPictureShell />
+  <UpdateOverlay />
+{:else}
 {#key $locale}
   {#if $authState === 'bootstrapping'}
     <div class="boot">
@@ -81,9 +85,6 @@
   {:else if $showTelemetryConsent}
     <TelemetryConsentScreen />
   {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
-    {#if $bigPictureActive}
-      <BigPictureShell />
-    {:else}
       <AppShell>
         {#if $route.name === 'library'}
           <Library />
@@ -115,12 +116,12 @@
       </AppShell>
       <ReleaseNotesModal />
       <MoveGameModal />
-    {/if}
     <UpdateOverlay />
   {:else}
     <AuthScreen />
   {/if}
 {/key}
+{/if}
 
 <style>
   .boot {
