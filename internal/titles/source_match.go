@@ -13,6 +13,52 @@ var reMatchExtras = regexp.MustCompile(`(?i)\s+\+\s*(?:(?:(?:all|\d+)\s+)?(?:bon
 
 var reMatchNumberPair = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)
 
+// Некоторые фиды кладут номер сборки в отдельную скобку, не помечая его
+// словом Build: «Monster Train 2 (14193)» или «StarRupture
+// (0.1.1.112941-S)». Числовая скобка становится метаданными только рядом с
+// явным маркером раздачи; так обычный «Game 2 (III)» и настоящий подзаголовок
+// не исчезают из имени.
+var (
+	reMatchReleaseBracket = regexp.MustCompile(`(?i)^\s*v(?:[.\s]+(?:build|patch|update|hotfix)\b|[.\s]+necro\s+patch\b)`)
+	reMatchBuildIDBracket = regexp.MustCompile(`(?i)^(?:\d{5,}(?:[._-][0-9a-z]+)*|(?:\d+[._-]){2,}[0-9a-z]+(?:[._-][0-9a-z]+)*|[0-9a-f]{6,}|(?:alpha|beta)\s+\d+(?:[._-][0-9a-z]+)+|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[-/.][0-9a-z]+)*(?:\s+[a-z]+\d+)?)$`)
+)
+
+func withoutMatchBuildBrackets(raw string) string {
+	locations := reBracket.FindAllStringIndex(raw, -1)
+	if len(locations) == 0 {
+		return raw
+	}
+	var out strings.Builder
+	last := 0
+	for _, loc := range locations {
+		out.WriteString(raw[last:loc[0]])
+		bracket := raw[loc[0]:loc[1]]
+		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
+		remove := reMatchReleaseBracket.MatchString(inner)
+		if !remove && reMatchBuildIDBracket.MatchString(inner) {
+			remove = matchReleaseMarkerAfter(raw[loc[1]:])
+		}
+		if remove {
+			out.WriteByte(' ')
+		} else {
+			out.WriteString(bracket)
+		}
+		last = loc[1]
+	}
+	out.WriteString(raw[last:])
+	return out.String()
+}
+
+func matchReleaseMarkerAfter(s string) bool {
+	lower := strings.ToLower(s)
+	for _, marker := range []string{"папка игры", "архив", "early access", "repack", "steam-rip", "|"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // Всё, что фид дописывает за версией через «+», — состав раздачи: счётчики DLC,
 // бонусы, эмуляторы, выделенный сервер, фиксы. Игру это не меняет, а точному
 // сравнению имён в каталоге мешает. «+» до версии остаётся: он бывает частью
@@ -109,6 +155,7 @@ func matchNames(raw string) []string {
 		}
 		return pair
 	})
+	raw = withoutMatchBuildBrackets(raw)
 	p := Parse(withoutMatchExtras(withoutPackagingTail(raw)))
 	base := p.Base
 	if strings.Contains(base, "/") {

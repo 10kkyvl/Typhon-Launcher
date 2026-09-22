@@ -11,19 +11,24 @@ func normKey(w string) string {
 	return w
 }
 
-// Номер сборки в фидах носит буквенный суффикс («1.25h», «1.0.2.22714S») и
-// части через подчёркивание («1.25.8.27_5409»). Оборванная на первой же букве
-// версия оставляла её хвост в названии игры.
-const verNumber = `\d+(?:[._]\d+){0,6}[a-z]{0,2}`
+// Номер сборки в фидах носит буквенный суффикс («1.25h», «1.0.2.22714S»),
+// смешанный хвост («0.4.2f9», «1.34.0r20112»), части через подчёркивание
+// («1.25.8.27_5409») и иногда буквенный префикс («CL16601», «g1.06»).
+// Оборванная на первой же букве версия оставляла её хвост в названии игры.
+const verNumeric = `(?:\d+[a-zа-я]+[0-9][0-9a-zа-я._]*|\d+[a-zа-я]|\d+(?:[._][0-9][0-9a-zа-я]*){0,8})`
+const verCode = `(?:[a-zа-я]{1,6}(?:\.[0-9a-zа-я]+)*\.[0-9][0-9a-zа-я]*(?:\.[0-9a-zа-я]+)*|[a-zа-я]{2,6}[-_:][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._:][0-9a-zа-я]+)*|[a-zа-я]{1,6}\d[0-9a-zа-я._]*)`
+const verNumber = `(?:` + verNumeric + `|` + verCode + `)`
 
 var (
-	reBuildVer  = regexp.MustCompile(`(?i)\bbuild[.\-_ ]+(` + verNumber + `)\b`)
-	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.\-_ ]+(` + verNumber + `)\b`)
-	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.\-_ ]+(` + verNumber + `)\b`)
-	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.\-_ ]+(` + verNumber + `)\b`)
-	reVVer      = regexp.MustCompile(`(?i)\bv(?:[.]+\s*)?(` + verNumber + `)\b`)
+	reBuildVer       = regexp.MustCompile(`(?i)\bbuild[.#\-_ ]+(` + verNumeric + `|cl[._-]?\d+)`)
+	reUpdateVer      = regexp.MustCompile(`(?i)\bupdate[.#\-_ ]+(` + verNumeric + `)`)
+	rePatchVer       = regexp.MustCompile(`(?i)\bpatch[.#\-_ ]+(` + verNumeric + `)`)
+	reHotfixVer      = regexp.MustCompile(`(?i)\bhotfix[.#\-_ ]+(` + verNumeric + `)`)
+	reVVer           = regexp.MustCompile(`(?i)\bv(?:[.]+\s*)?(` + verNumeric + `)`)
+	reVVerCode       = regexp.MustCompile(`(?i)\bv[.]+\s*(` + verCode + `)`)
+	reVVerDirectCode = regexp.MustCompile(`(?i)\bv([brsuv]\d[0-9a-zа-я._]*)`)
 	// A separated V is ambiguous; extractVersion preserves title numerals.
-	reVVerSpace = regexp.MustCompile(`(?i)\bv\s+(` + verNumber + `)\b`)
+	reVVerSpace = regexp.MustCompile(`(?i)\bv\s+(` + verNumeric + `)`)
 	reRVer      = regexp.MustCompile(`(?i)\br(\d{4,6})\b`)
 	reDLCCount  = regexp.MustCompile(`(?i)\+\s*(\d+)\s*(?:dlc(?:'s|s)?|дополнени\p{L}*)`)
 
@@ -46,8 +51,9 @@ var (
 	// Якорь на начало сегмента — «repack» посреди названия маркером не считается.
 	reMarkerRepack = regexp.MustCompile(`(?i)^[\[(]?(re-?pack|ре-?пак|(?:steam|egs|epic|uplay|origin|gog|ea)[\s._-]?rip|rip|рип)[\])]?(?:[\s.:,_-]+|$)(?:(?:от|by|from)[\s.:,_-]*)?(.*)$`)
 
-	// Сборка продолжается ревизией через дефис: «v1.0.10.1-r82675-b2».
-	reVersionContinuation = regexp.MustCompile(`(?i)^\s*(?:/\s*(?:online\s*)?\d+(?:\.\d+)*(?:\s+online\b)?|\+\s*\d+(?:\.\d+)+|[-_:][a-z]{0,2}\d+(?:[._]\d+)*|\+\d{3,}(?:[._]\d+)*)`)
+	// Сборка продолжается ревизией через дефис или attached hash: «v1.0.10.1-r82675-b2»,
+	// «v1.0.0-5db267» и «v1.1.0+e0d30dc159».
+	reVersionContinuation = regexp.MustCompile(`(?i)^\s*(?:/\s*(?:online\s*)?\d+(?:\.\d+)*(?:\s+online\b)?|\+(?:\s*\d+(?:\.\d+)+|\d{3,}(?:[._-][0-9a-zа-я]+)*|[a-zа-я][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)|[-_:#][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)`)
 	reVersionBracket      = regexp.MustCompile(`^\s*\(([^()]*)\)`)
 	reReleaseBracketStart = regexp.MustCompile(`(?i)^(?:v[.\s]*\d|build[.\s]+\d|update[.\s]+\d|patch[.\s]+\d)`)
 	reRepackerBracket     = regexp.MustCompile(`(?i)^(fitgirl|dodi)\s+repack\b`)

@@ -106,3 +106,84 @@ func TestSourceMatchKeepsRemasterIdentityAndRepacker(t *testing.T) {
 		t.Fatalf("repacker lost: %+v", p)
 	}
 }
+
+func TestSourceMatchStripsMixedReleaseMetadata(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want []string
+	}{
+		{"Sacred 2 Remaster v.CL16601 [RePack Decepticon] (2025)", []string{"Sacred 2 Remaster"}},
+		{"Marvel’s Midnight Suns: Legendary Edition – Build CL-930465 + 8 DLCs/Bonuses", []string{"Marvel’s Midnight Suns Legendary Edition", "Marvel’s Midnight Suns"}},
+		{"Schedule I v.0.4.2f9 [Архив] (Early Access)", []string{"Schedule I"}},
+		{"AI Olympius v.0.9.15f2 [Архив] (Early Access)", []string{"AI Olympius"}},
+		{"Intravenous 2 v.1.4.6HF2 [Папка игры] (2024)", []string{"Intravenous 2"}},
+		{"Forts v.1.34.0r20112 [Архив] (2017)", []string{"Forts"}},
+		{"Vivat Slovakia v.1.0.1b16 [Архив] (2025)", []string{"Vivat Slovakia"}},
+		{"Cities: Skylines II v.1.3.5f1 [Папка игры] (2023)", []string{"Cities: Skylines II"}},
+		{"Keep Driving v.1.3.1.0с [Папка игры] (2025)", []string{"Keep Driving"}},
+		{"Risk of Rain 2 v.1.4.0#840 [Архив] (2020)", []string{"Risk of Rain 2"}},
+		{"Rue Valley v.1.0.0v2 [Папка игры] (2025)", []string{"Rue Valley"}},
+		{"Chernobylite v.48723s03dx12 [GOG] (2021) Лицензия", []string{"Chernobylite"}},
+		{"Quarterstaff v1.0.0-5db267 [Папка игры] (2025)", []string{"Quarterstaff"}},
+		{"Galacticare v1.1.0+e0d30dc159 [Папка игры] (2024)", []string{"Galacticare"}},
+		{"Unknown 9: Awakening [v Build 16687288 + DLCs] (2024) RePack от Decepticon", []string{"Unknown 9: Awakening"}},
+		{"Black Mesa: Definitive Edition [v Necro Patch.build.14113817] (2020) RePack от Decepticon", []string{"Black Mesa Definitive Edition"}},
+		{"Dragon Age: The Veilguard [v Build 16179329] (2024) RePack от Decepticon", []string{"Dragon Age: The Veilguard"}},
+		{"Immortal: Unchained [v Update.17 + DLCs] (2018) PC | RePack by xatab", []string{"Immortal: Unchained"}},
+		{"Warhammer: Chaosbane [v.Build 28.05.2020 ] (2019) PC | RePack by xatab", []string{"Warhammer: Chaosbane"}},
+		{"Bellwright (0.0.46961) [Папка игры] (Early Access)", []string{"Bellwright"}},
+		{"Monster Train 2 (14193) [Папка игры] (2025)", []string{"Monster Train 2"}},
+		{"Drive Beyond Horizons (20609719) [Папка игры] (Early Access)", []string{"Drive Beyond Horizons"}},
+		{"Skin Deep (2025.10.02.1017) [Архив] (2025)", []string{"Skin Deep"}},
+		{"Project Silverfish (Beta 0.3.8) [Папка игры] (Early Access)", []string{"Project Silverfish"}},
+		{"Revenge of the Savage Planet (2025-10-27-111237 Net6) [Папка игры] (2025)", []string{"Revenge of the Savage Planet"}},
+		{"Stygian: Outer Gods (32e14d5f) [Папка игры] (Early Access)", []string{"Stygian: Outer Gods"}},
+		{"StarRupture (0.1.1.112941-S) [Архив] (Early Access)", []string{"StarRupture"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			if got := MatchNames(tc.raw); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("names=%q, want %q (parsed=%+v)", got, tc.want, Parse(tc.raw))
+			}
+		})
+	}
+}
+
+func TestSourceMatchPreservesSequelNumbersAndRealBrackets(t *testing.T) {
+	cases := map[string][]string{
+		"Game 2 (III) Definitive Edition": {"Game 2 (III) Definitive Edition"},
+		"Hades 2":                         {"Hades 2"},
+		"Hades II":                        {"Hades II"},
+		"Monster Train 2 (2025) [Папка игры]": {"Monster Train 2"},
+		"Game (14193)":                          {"Game (14193)"},
+		"Kingdom Come: Deliverance (All Stars)": {"Kingdom Come: Deliverance (All Stars)"},
+		"Persona 3 Portable":                    {"Persona 3 Portable"},
+		"VA-11 Hall-A":                          {"VA 11 Hall A"},
+		"O.V.N.I. Abduction":                    {"O V N I Abduction"},
+		"V1RUZ":                                 {"V1RUZ"},
+		"Grisaia Phantom Trigger Vol.8":         {"Grisaia Phantom Trigger Vol 8"},
+		"NieR Replicant ver.1.22474487139":      {"NieR Replicant ver 1.22474487139"},
+		"SteamWorld Build v.1.0.4 [GOG] (2023)": {"SteamWorld Build"},
+	}
+	for raw, want := range cases {
+		t.Run(raw, func(t *testing.T) {
+			if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+				t.Fatalf("names=%q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestSourceMatchKeepsVersionedEditionMetadata(t *testing.T) {
+	lastOfUs := Parse("The Last of Us Part II Remastered v.1.0.10402.1014 + 1.0.10407.0714 [Папка игры] (2020-2025)")
+	if lastOfUs.Base != "The Last of Us Part II" || lastOfUs.Edition != "Remastered" || lastOfUs.Version != "1.0.10402.1014" || lastOfUs.Year != 2025 {
+		t.Fatalf("version continuation polluted edition metadata: %+v", lastOfUs)
+	}
+	grandma := Parse("Grandma, No! Deluxe Edition – v20250522R + Bonus Content")
+	if grandma.Base != "Grandma, No!" || grandma.Edition != "Deluxe Edition" || grandma.Version != "20250522R" {
+		t.Fatalf("compact letter-suffixed version lost edition metadata: %+v", grandma)
+	}
+	if got := MatchNames("Grandma, No! Deluxe Edition – v20250522R + Bonus Content"); !reflect.DeepEqual(got, []string{"Grandma, No! Deluxe Edition", "Grandma, No!"}) {
+		t.Fatalf("names=%q, want edition and base", got)
+	}
+}

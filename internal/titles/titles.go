@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 type Parsed struct {
@@ -198,26 +199,35 @@ func extractVersion(s string) (string, string, string) {
 // versionLocation returns the submatch bounds of the release version, or nil.
 // Everything a feed writes after it is packaging, not the game's name.
 func versionLocation(s string) []int {
-	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
+	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerCode, reVVerDirectCode, reVVerSpace, reRVer}
 
 	bestStart := -1
 	var bestLoc []int
 	for _, re := range patterns {
-		loc := re.FindStringSubmatchIndex(s)
-		if loc == nil {
-			continue
-		}
-		// In a fully lowercase title, a separated v is ambiguous with a
-		// Roman numeral. Keep the title token and extract only the number.
-		if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
-			loc[0] = loc[2]
-		}
-		if bestStart == -1 || loc[0] < bestStart {
-			bestStart = loc[0]
-			bestLoc = loc
+		for _, loc := range re.FindAllStringSubmatchIndex(s, -1) {
+			// A title token such as «V1RUZ» starts with the same bytes as a
+			// compact numeric version. Without a delimiter after the number this
+			// is a title word, not a release marker.
+			if re == reVVer && loc[3] < len(s) && unicode.IsLetter(mustDecodeRune(s[loc[3]:])) && !strings.ContainsAny(s[loc[2]:loc[3]], "._") {
+				continue
+			}
+			// In a fully lowercase title, a separated v is ambiguous with a
+			// Roman numeral. Keep the title token and extract only the number.
+			if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
+				loc[0] = loc[2]
+			}
+			if bestStart == -1 || loc[0] < bestStart {
+				bestStart = loc[0]
+				bestLoc = loc
+			}
 		}
 	}
 	return bestLoc
+}
+
+func mustDecodeRune(s string) rune {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
 }
 
 // extractVersionNotes removes the version and the build notes that trail it.
