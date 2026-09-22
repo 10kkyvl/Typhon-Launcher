@@ -319,6 +319,11 @@ export function moveFocus(root: HTMLElement, direction: BigPictureDirection): bo
   if (candidates.length === 0) return false;
 
   const aligned = candidates.filter((candidate) => candidate.aligned);
+  // Horizontal rails are independent rows. At their edge, jumping to a
+  // diagonally placed header or another rail is surprising; leave focus on
+  // the current card. Vertical movement may still use the nearest diagonal
+  // candidate when rows do not line up exactly.
+  if (aligned.length === 0 && (direction === 'left' || direction === 'right')) return false;
   const pool = aligned.length > 0 ? aligned : candidates;
   pool.sort((a, b) => {
     // Aligned controls are ordered by travel distance first, then their

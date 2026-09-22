@@ -1,6 +1,7 @@
 import type { Message } from '../../types';
 import type { MessageKey } from '../ru';
 import { common } from './common';
+import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
@@ -23,6 +24,7 @@ import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 
 export const en: Record<MessageKey, Message> = {
+  ...bigpicture,
   ...common,
   ...format,
   ...friends,

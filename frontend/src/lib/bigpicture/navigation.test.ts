@@ -132,4 +132,24 @@ describe('moveFocus', () => {
     expect(move(document, root, 'right')).toBe(true);
     expect(document.activeElement).toBe(visible);
   });
+
+  it('stays at a horizontal rail edge instead of jumping to another row or header', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const recentFirst = element(document, 0, 100, 'recent-first');
+    const recentLast = element(document, 100, 100, 'recent-last');
+    const installedOnly = element(document, 0, 220, 'installed-only');
+    const headerAction = element(document, 600, 0, 'header-action');
+    const root = rootFor(document, [headerAction, recentFirst, recentLast, installedOnly]);
+
+    document.activeElement = recentFirst;
+    expect(move(document, root, 'right')).toBe(true);
+    expect(document.activeElement).toBe(recentLast);
+    expect(move(document, root, 'right')).toBe(false);
+    expect(document.activeElement).toBe(recentLast);
+
+    // Vertical navigation still finds the nearest lower row when its column
+    // is offset and therefore has no strict rectangle overlap.
+    expect(move(document, root, 'down')).toBe(true);
+    expect(document.activeElement).toBe(installedOnly);
+  });
 });

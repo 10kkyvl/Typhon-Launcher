@@ -1,5 +1,6 @@
 import type { Message } from '../../types';
 import { common } from './common';
+import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
@@ -22,6 +23,7 @@ import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 
 export const ru = {
+  ...bigpicture,
   ...common,
   ...format,
   ...friends,
