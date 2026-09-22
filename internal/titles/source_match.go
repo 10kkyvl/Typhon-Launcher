@@ -13,6 +13,10 @@ var reMatchExtras = regexp.MustCompile(`(?i)\s+\+\s*(?:(?:(?:all|\d+)\s+)?(?:bon
 
 var reMatchNumberPair = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)
 
+// A commercial package can follow an identity-bearing edition. Keep the
+// remaster in fallback names even though Parse exposes the outer package.
+var reMatchLayeredEdition = regexp.MustCompile(`(?i)\b((?:remastered|remaster|enhanced|definitive|anniversary)(?:\s+edition)?|director['’]s\s+cut)\s+((?:digital\s+)?(?:deluxe|ultimate|gold|premium|complete|collector['’]?s|special)\s+edition)\b`)
+
 // Некоторые фиды кладут номер сборки в отдельную скобку, не помечая его
 // словом Build: «Monster Train 2 (14193)» или «StarRupture
 // (0.1.1.112941-S)». Числовая скобка становится метаданными только рядом с
@@ -156,7 +160,17 @@ func matchNames(raw string) []string {
 		return pair
 	})
 	raw = withoutMatchBuildBrackets(raw)
-	p := Parse(withoutMatchExtras(withoutPackagingTail(raw)))
+	cleaned := withoutMatchExtras(withoutPackagingTail(raw))
+	p := Parse(cleaned)
+	layeredEdition := ""
+	if parts := reMatchLayeredEdition.FindStringSubmatch(cleaned); parts != nil && strings.EqualFold(p.Edition, parts[2]) {
+		inner := Parse(strings.Replace(cleaned, parts[0], parts[1], 1))
+		// Bare "Enhanced" can already belong to the base title (Seven).
+		// Reconstruct only editions that Parse actually stripped from it.
+		if inner.Edition != "" {
+			layeredEdition, p = parts[0], inner
+		}
+	}
 	base := p.Base
 	if strings.Contains(base, "/") {
 		parts := strings.Split(base, "/")
@@ -189,6 +203,9 @@ func matchNames(raw string) []string {
 	}
 	base = expandGTA(base)
 	out := []string{}
+	if layeredEdition != "" {
+		out = append(out, strings.TrimSpace(base+" "+layeredEdition))
+	}
 	if p.Edition != "" {
 		out = append(out, strings.TrimSpace(base+" "+p.Edition))
 	}

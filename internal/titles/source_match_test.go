@@ -174,6 +174,27 @@ func TestSourceMatchPreservesSequelNumbersAndRealBrackets(t *testing.T) {
 	}
 }
 
+func TestSourceMatchKeepsRemasterInsideCommercialEdition(t *testing.T) {
+	raw := "Neverwinter Nights: Enhanced Edition Digital Deluxe Edition"
+	want := []string{"Neverwinter Nights Enhanced Edition Digital Deluxe Edition", "Neverwinter Nights Enhanced Edition"}
+	if got := MatchNames(raw); !reflect.DeepEqual(got, want) {
+		t.Fatalf("enhanced release fell back to original: %q", got)
+	}
+	if p := Parse(raw); p.Edition != "Digital Deluxe Edition" {
+		t.Fatalf("matching cleanup changed stored release edition: %+v", p)
+	}
+	for _, identity := range []string{"Remastered", "Definitive Edition", "Director's Cut"} {
+		got := MatchNames("Example " + identity + " Deluxe Edition v1.0")
+		want := []string{"Example " + identity + " Deluxe Edition", "Example " + identity}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s identity lost: %q", identity, got)
+		}
+	}
+	if got := MatchNames("Seven: Enhanced Collector’s Edition – v1.3.2 + Bonus Content"); !reflect.DeepEqual(got, []string{"Seven: Enhanced Collector’s Edition", "Seven: Enhanced"}) {
+		t.Fatalf("identity already in base title duplicated: %q", got)
+	}
+}
+
 func TestSourceMatchKeepsVersionedEditionMetadata(t *testing.T) {
 	lastOfUs := Parse("The Last of Us Part II Remastered v.1.0.10402.1014 + 1.0.10407.0714 [Папка игры] (2020-2025)")
 	if lastOfUs.Base != "The Last of Us Part II" || lastOfUs.Edition != "Remastered" || lastOfUs.Version != "1.0.10402.1014" || lastOfUs.Year != 2025 {
