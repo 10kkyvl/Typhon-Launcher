@@ -807,12 +807,12 @@
   .release-card:disabled { opacity: .6; cursor: default; }
   .release-card.unavailable { opacity: .4; }
   .release-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; }
-  .release-heading strong { overflow: hidden; font-size: 1.75rem; text-overflow: ellipsis; white-space: nowrap; }
+  .release-heading strong { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 1.75rem; }
   .new-badge { padding: .35rem .65rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 20%, var(--surface-1)); color: var(--accent); font-size: 1.1rem; font-weight: 800; }
   .release-name { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 1.35rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
   .release-edition { color: var(--text-3); font-size: 1.25rem; }
   .release-info { display: flex; flex-wrap: wrap; gap: .7rem 1.2rem; color: var(--text-3); font-size: 1.2rem; }
-  .release-source { max-width: 100%; overflow: hidden; color: var(--text-3); font-size: 1.2rem; text-overflow: ellipsis; white-space: nowrap; }
+  .release-source { max-width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--text-3); font-size: 1.2rem; }
   .release-cta { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-top: .3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--accent); font-size: 1.45rem; font-weight: 750; }
   .release-unavailable { color: var(--danger); font-size: 1.3rem; }
   .notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.4rem; border-radius: 1rem; background: var(--surface-2); color: var(--text-2); font-size: 1.4rem; }

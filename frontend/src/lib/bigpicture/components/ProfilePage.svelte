@@ -183,10 +183,10 @@
   .section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
   .section-title p { margin: .25rem 0 0; color: var(--text-3); font-size: .85em; }
   .section-title .bp-button { min-height: 2.9rem; padding: .6rem 1rem; }
-  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: clamp(.7rem, 1.2vw, 1.2rem); }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(18rem, 10em)), 1fr)); gap: clamp(.7rem, 1.2vw, 1.2rem); }
   .game-card { display: flex; flex-direction: column; gap: .5rem; width: 100%; padding: .65rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
   .cover { display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-md); }
-  .game-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+  .game-name { width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-weight: 650; line-height: 1.35; }
   .game-meta { color: var(--text-3); font-size: .8em; }
   .empty-games { min-height: 11rem; }
   .empty-games h3 { margin: .5rem 0 0; }

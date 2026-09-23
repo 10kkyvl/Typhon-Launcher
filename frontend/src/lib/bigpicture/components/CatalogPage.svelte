@@ -263,8 +263,9 @@
   .catalog-card:hover { border-color: var(--border); background: var(--surface-2); transform: translateY(-2px); }
   .cover { display: block; overflow: hidden; width: 100%; border-radius: 1.2rem; background: var(--surface-3); }
   .game-copy { display: flex; min-width: 0; flex-direction: column; gap: .45rem; padding: 0 .4rem .4rem; }
-  .game-copy strong { overflow: hidden; color: var(--text); font-size: 1.65rem; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { overflow: hidden; color: var(--text-3); font-size: 1.3rem; text-overflow: ellipsis; white-space: nowrap; }
+  .game-copy strong, .meta { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .game-copy strong { color: var(--text); font-size: 1.65rem; line-height: 1.25; }
+  .meta { color: var(--text-3); font-size: 1.3rem; }
   .bp-empty { display: flex; min-height: 28rem; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; border: 1px dashed var(--border); border-radius: 1.6rem; text-align: center; }
   .empty-mark { color: var(--accent); font-size: 5.5rem; }
   .bp-empty h2 { margin: 1rem 0 .5rem; font-size: 2.8rem; }

@@ -669,19 +669,19 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
   .tab.selected { color: var(--text); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); box-shadow: inset 0 -3px var(--accent); }
   .tab > span { min-width: 1.7em; padding: .1rem .4rem; border-radius: 99px; background: var(--surface-3); color: var(--text-3); text-align: center; font-size: .8em; }
   .friend-section, .request-section, .games-section { display: flex; flex-direction: column; gap: .8rem; }
-  .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: .75rem; }
+  .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(30rem, 13em)), 1fr)); gap: 1rem; }
   .person-card { display: flex; align-items: center; gap: .9rem; min-width: 0; width: 100%; padding: 1rem; border-radius: var(--radius-lg); text-align: left; color: var(--text); }
   .person-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: .13rem; }
-  .person-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .person-copy > span { color: var(--text-3); font-size: .82em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .person-copy > span.person-presence { color: var(--text-2); margin-top: .18rem; }
+  .person-copy strong, .person-copy > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .person-copy > span { color: var(--text-3); font-size: .82em; }
+  .person-copy > span.person-presence { color: var(--text-2); margin-top: .18rem; -webkit-line-clamp: 3; line-clamp: 3; }
   .person-card :global(.person-chevron) { flex: none; color: var(--text-3); }
   .request-section h2 > span { color: var(--text-3); font-weight: 500; }
   .request-list { display: flex; flex-direction: column; gap: .7rem; }
   .request-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; }
   .person-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .75rem; padding: .1rem; text-align: left; color: var(--text); border-radius: var(--radius-md); }
   .person-link > span { min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
-  .person-link strong, .person-link small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person-link strong, .person-link small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
   .person-link small { color: var(--text-3); }
   .person-link :global(svg:last-child) { margin-left: auto; color: var(--text-3); }
   .request-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
@@ -702,10 +702,10 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
   .bio-card { padding: 1.2rem 1.5rem; }
   .bio-card h2 { margin: 0 0 .3rem; font-size: 1.2em; }
   .bio-card p { margin: 0; color: var(--text-2); line-height: 1.5; white-space: pre-wrap; }
-  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: .8rem; }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(18rem, 10em)), 1fr)); gap: 1.2rem; }
   .game-card { display: flex; flex-direction: column; gap: .45rem; width: 100%; padding: .6rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
   .cover { display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-md); }
-  .game-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+  .game-name { width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-weight: 650; line-height: 1.35; }
   .game-meta { color: var(--text-3); font-size: .8em; }
   .consent-card { max-width: 78rem; padding: clamp(1.2rem, 2vw, 2.4rem); }
   .consent-card h2 { margin: 0 0 .7rem; font-size: clamp(1.4rem, 2.2vw, 2.5rem); }

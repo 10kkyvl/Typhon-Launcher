@@ -67,9 +67,11 @@
               {@const key = `${shelf.id}:${game.id}`}
               <button class="game" data-bp-focus={key} data-bp-row={shelf.id} data-game-id={game.id} data-bp-default={shelf === shelves[0] && game === shelf.games[0] ? '' : undefined}
                 aria-label={game.title} onfocus={() => { selectedId = game.id; lastCard = key; failure = ''; }} onclick={() => ongame(game.id)}>
-                <div class="cover"><Artwork src={(game.canonicalGameId ? $gameArt[game.canonicalGameId]?.cover : '') || game.cover} alt="" label={game.title} ratio="3 / 4" radius="12px" /></div>
-                <span class="game-title">{game.title}</span>
-                {#if $runningGames.has(game.id)}<span class="running-badge"><span class="dot"></span>{$t('bp.running')}</span>{/if}
+                <div class="cover">
+                  <Artwork src={(game.canonicalGameId ? $gameArt[game.canonicalGameId]?.cover : '') || game.cover} alt="" label={game.title} ratio="3 / 4" radius="12px" />
+                  {#if $runningGames.has(game.id)}<span class="running-badge"><span class="dot"></span>{$t('bp.running')}</span>{/if}
+                </div>
+                <span class="game-title"><span>{game.title}</span></span>
               </button>
             {/each}
           </div>
@@ -89,8 +91,8 @@
   .hero-meta { min-height: 26px; font-size: .85em; color: #c7cfdf; display: flex; align-items: center; gap: 20px; }.hero-meta > span { display: flex; align-items: center; gap: 8px; }
   .shelves { padding-bottom: 24px; }.shelf { margin-top: 22px; }.shelf h2 { display: flex; gap: 14px; align-items: center; padding: 0 4vw; font-size: 1.1em; }.shelf h2 > span { font-size: .7em; color: #8d9aaf; font-weight: 450; }
   .rail { display: flex; gap: clamp(18px, 1.7vw, 34px); overflow-x: auto; padding: 17px 4vw 18px; scroll-padding-inline: 4vw; scrollbar-width: none; scroll-behavior: smooth; }.rail::-webkit-scrollbar { display: none; }
-  .game { flex: 0 0 clamp(138px, 13vw, 290px); min-width: 0; text-align: left; align-self: flex-start; padding: 0; background: #111a27; position: relative; overflow: visible; }.game:focus { background: #243049; }.cover { overflow: hidden; border-radius: 12px 12px 0 0; }.game-title { display: block; padding: 12px 13px; font-size: .78em; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .running-badge { position: absolute; bottom: 48px; left: 8px; right: 8px; display: flex; align-items: center; gap: 7px; background: #0c132deb; border-radius: 5px; padding: 5px 8px; font-size: .6em; }
+  .game { flex: 0 0 clamp(138px, 13vw, 290px); min-width: 0; text-align: left; align-self: flex-start; padding: 0; background: #111a27; position: relative; overflow: visible; }.game:focus { background: #243049; }.cover { position: relative; overflow: hidden; border-radius: 12px 12px 0 0; }.game-title { display: block; padding: 12px 13px; font-size: .78em; font-weight: 550; line-height: 1.35; }.game-title > span { display: -webkit-box; min-height: 2.7em; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .running-badge { position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; align-items: center; gap: 7px; background: #0c132deb; border-radius: 5px; padding: 5px 8px; font-size: .6em; }
   @media (max-height: 760px) { .hero { gap: 10px; padding-top: 16px; min-height: 27vh; }.hero-meta { min-height: 20px; }.game { flex-basis: clamp(122px, 12vw, 200px); } }
   @media (prefers-reduced-motion: reduce) { .rail { scroll-behavior: auto; } }
 </style>
