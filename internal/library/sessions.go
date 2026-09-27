@@ -27,6 +27,7 @@ var (
 	errSessionProcessGone      = uierr.New("library.process_gone", "процесс игры больше не найден")
 	errSessionIdentityMismatch = uierr.New("library.process_identity_mismatch", "процесс с этим pid принадлежит другой программе")
 	errSessionIdentityUnknown  = uierr.New("library.process_identity_unknown", "время запуска процесса неизвестно, подтверждение невозможно")
+	errElevationDeclined       = uierr.New("library.elevation_declined", "игре нужны права администратора: запрос Windows отклонён")
 )
 
 func (s *Service) PlayGame(id string) error {
@@ -111,6 +112,9 @@ func (s *Service) PlayGame(id string) error {
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			return uierr.Wrap("library.launch_cancelled", context.Canceled)
+		}
+		if errors.Is(err, errElevationDeclined) {
+			return err
 		}
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
