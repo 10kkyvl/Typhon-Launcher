@@ -87,8 +87,11 @@ var reasons = map[string]bool{
 
 const reasonUnknown = "unknown"
 
+// gameIDPattern короче, чем у остальной телеметрии: сервер хранит
+// идентификатор в bigint и берёт не больше 18 цифр, а одна неверная строка
+// отклоняет весь отчёт.
 var (
-	gameIDPattern    = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+	gameIDPattern    = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
 	versionPattern   = regexp.MustCompile(`^[0-9][0-9A-Za-z._-]{0,31}$`)
 	crossOverPattern = regexp.MustCompile(`^[0-9]{1,4}(\.[0-9]{1,4}){0,2}$`)
 	osVersionPattern = regexp.MustCompile(`^[0-9]{1,3}\.[0-9]{1,3}$`)
@@ -134,7 +137,7 @@ func cleanCrossOver(s string) string {
 
 // shortOSVersion оставляет от версии системы только старшие две части: точный
 // номер сборки сужает круг машин, а про совместимость говорит не больше.
-func shortOSVersion(s string) string {
+func shortOSVersion(s string) (string, bool) {
 	s = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "macOS"))
 	s = strings.TrimSpace(s)
 	parts := strings.Split(s, ".")
@@ -146,9 +149,9 @@ func shortOSVersion(s string) string {
 	}
 	out := strings.Join(parts, ".")
 	if osVersionPattern.MatchString(out) {
-		return out
+		return out, true
 	}
-	return ""
+	return "", false
 }
 
 // chipFamily сводит строку бренда процессора к семейству. Сырая строка не
@@ -211,26 +214,71 @@ func (r Report) Empty() bool { return len(r.Games) == 0 }
 // buildReport переводит журнал в отчёт. resolve отвечает на вопрос, которого
 // журнал не знает: чем игра является в общем каталоге и какой сборкой она
 // установлена. Игра, про которую ответа нет, в отчёт не попадает.
-func (s *Service) buildReport(clientID, appVersion string, env Env, resolve func(localID string) (Build, bool)) Report {
-	all := s.All()
-	report := Report{
-		ClientID:   clientID,
-		AppVersion: appVersion,
-		Env: Env{
-			OSVersion: shortOSVersion(env.OSVersion),
-			CrossOver: cleanCrossOver(env.CrossOver),
-			Chip:      cleanChip(env.Chip),
-		},
-		Games: make([]GameReport, 0, len(all)),
+//
+// Второе значение ложно, когда у окружения нет версии macOS. Общая статистика
+// отвечает на вопрос, идёт ли игра под CrossOver, и без версии macOS сервер
+// отчёт не принимает. На Windows её нет в принципе: игра там запускается
+// нативно и про CrossOver ничего не говорит, поэтому отчёта с Windows нет.
+func (s *Service) buildReport(clientID, appVersion string, env Env, resolve func(localID string) (Build, bool)) (Report, bool) {
+	osVersion, ok := shortOSVersion(env.OSVersion)
+	if !ok {
+		return Report{}, false
 	}
+	all := s.All()
+	games := make([]GameReport, 0, len(all))
 	for _, st := range all {
 		build, ok := resolve(st.GameID)
 		if !ok {
 			continue
 		}
 		if g, ok := gameReport(st, build); ok {
-			report.Games = append(report.Games, g)
+			games = append(games, g)
 		}
 	}
-	return report
+	return Report{
+		ClientID:   clientID,
+		AppVersion: appVersion,
+		Env: Env{
+			OSVersion: osVersion,
+			CrossOver: cleanCrossOver(env.CrossOver),
+			Chip:      cleanChip(env.Chip),
+		},
+		Games: dedupeGames(games),
+	}, true
+}
+
+// dedupeGames сводит строки одной сборки в одну: сервер отклоняет отчёт
+// целиком, если сборка в нём повторяется, а так бывает, когда одна игра стоит
+// в библиотеке дважды. Одинаковые вердикты сливаются, противоречащие
+// выбрасываются: выбрать один из них молча значило бы соврать.
+func dedupeGames(games []GameReport) []GameReport {
+	type key struct{ gameID, repacker, version string }
+	keyOf := func(g GameReport) key { return key{g.GameID, g.Repacker, g.Version} }
+
+	index := make(map[key]int, len(games))
+	conflicts := make(map[key]bool)
+	out := make([]GameReport, 0, len(games))
+	for _, g := range games {
+		k := keyOf(g)
+		i, seen := index[k]
+		switch {
+		case !seen:
+			index[k] = len(out)
+			out = append(out, g)
+		case out[i].State != g.State:
+			conflicts[k] = true
+		case out[i].Reason != g.Reason:
+			out[i].Reason = reasonUnknown
+		}
+	}
+	if len(conflicts) == 0 {
+		return out
+	}
+	kept := out[:0]
+	for _, g := range out {
+		if !conflicts[keyOf(g)] {
+			kept = append(kept, g)
+		}
+	}
+	return kept
 }

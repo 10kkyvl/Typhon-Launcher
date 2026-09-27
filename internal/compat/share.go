@@ -45,6 +45,11 @@ type Sharer struct {
 	mu       sync.Mutex
 	lastSent string
 
+	// noReport пишет в лог один раз за запуск: на Windows отчёта не бывает
+	// по замыслу, а на маке без версии системы это сбой, который иначе ничем
+	// не виден — отказ от отправки молчит.
+	noReport sync.Once
+
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
@@ -150,7 +155,14 @@ func (s *Sharer) sendOnce(ctx context.Context) {
 	if !s.allowed() {
 		return
 	}
-	report := s.journal.buildReport(s.clientID, s.appVersion, s.env(), s.resolve)
+	env := s.env()
+	report, ok := s.journal.buildReport(s.clientID, s.appVersion, env, s.resolve)
+	if !ok {
+		s.noReport.Do(func() {
+			slog.Info("compat report not sent: no macOS version", "os", env.OSVersion)
+		})
+		return
+	}
 	if report.Empty() {
 		return
 	}

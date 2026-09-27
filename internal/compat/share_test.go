@@ -1,12 +1,15 @@
 package compat
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +61,9 @@ func newTestSharer(t *testing.T, allowed func() bool) (*Sharer, *Service, *recor
 
 	sharer, err := NewSharer(journal, stats, srv.URL, "client-uuid", "0.3.1", allowed,
 		func() Env { return Env{OSVersion: "15.6", CrossOver: "26.3", Chip: "Apple M4"} },
-		func(string) (Build, bool) { return Build{GameID: "232567", Repacker: "fitgirl"}, true })
+		func(localID string) (Build, bool) {
+			return Build{GameID: map[string]string{"g1": "232567", "g2": "1020"}[localID], Repacker: "fitgirl"}, true
+		})
 	if err != nil {
 		t.Fatalf("NewSharer: %v", err)
 	}
@@ -156,7 +161,7 @@ func TestFailedSendIsRetriedNextRound(t *testing.T) {
 	}
 	sharer, err := NewSharer(journal, NewStatsAt(filepath.Join(dir, "s.json")), srv.URL,
 		"c", "0.3.1", func() bool { return true },
-		func() Env { return Env{} },
+		func() Env { return Env{OSVersion: "15.6", Chip: "apple_m4"} },
 		func(string) (Build, bool) { return Build{GameID: "1"}, true })
 	if err != nil {
 		t.Fatalf("NewSharer: %v", err)
@@ -249,5 +254,42 @@ func TestStatsAreFetchedWithoutConsent(t *testing.T) {
 	sharer.refreshStats(context.Background())
 	if hits != 1 || stats.Len() != 1 {
 		t.Fatalf("запросов %d, строк %d", hits, stats.Len())
+	}
+}
+
+// Отказ от отправки не должен быть немым: на маке без версии системы иначе не
+// видно, почему статистика не уходит. Но и шуметь каждые десять минут ему
+// незачем — хватает одной строки за запуск.
+func TestSkippedReportIsLoggedOnce(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	srv, cs := newContractServer(t)
+	dir := t.TempDir()
+	journal, err := NewServiceAt(filepath.Join(dir, "compat.json"))
+	if err != nil {
+		t.Fatalf("NewServiceAt: %v", err)
+	}
+	journal.RecordSession("g1", 30*time.Minute, true)
+	sharer, err := NewSharer(journal, NewStatsAt(filepath.Join(dir, "compat-stats.json")), srv.URL,
+		"3f1c2b8e-4d5a-4f6b-9c7d-8e9f0a1b2c3d", "0.7.2",
+		func() bool { return true },
+		func() Env { return windowsEnv },
+		func(string) (Build, bool) { return Build{GameID: "376206"}, true })
+	if err != nil {
+		t.Fatalf("NewSharer: %v", err)
+	}
+
+	for range 3 {
+		sharer.sendOnce(context.Background())
+	}
+
+	if accepted, rejected := cs.snapshot(); len(accepted)+len(rejected) != 0 {
+		t.Fatalf("отправлено без версии macOS: принято %d, отклонено %v", len(accepted), rejected)
+	}
+	if n := strings.Count(logs.String(), "no macOS version"); n != 1 {
+		t.Fatalf("строк о пропуске %d, want 1:\n%s", n, logs.String())
 	}
 }
