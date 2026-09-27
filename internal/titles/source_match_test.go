@@ -2,6 +2,7 @@ package titles
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -66,11 +67,134 @@ func TestSourceReleaseMatchNames(t *testing.T) {
 		{"ГТА Сан Андреас (GTA San Andreas) — RePack от Igruha", []string{"Grand Theft Auto San Andreas"}},
 		{"Жизнь и Смерть", []string{"Жизнь и Смерть"}},
 		{"GoЯ", []string{"GoЯ"}},
+		{"Cuphead v1.3.9+DLC", []string{"Cuphead"}},
+		{"Hollow Knight v1.5.78.11833a+DLCs", []string{"Hollow Knight"}},
+		{"RimWorld v1.5.4409+allDLCs", []string{"RimWorld"}},
+		{"Bridge Constructor Portal v1.4-fix+DLC", []string{"Bridge Constructor Portal"}},
+		{"Kerbal Space Program v1.12.5.03190+DLCs", []string{"Kerbal Space Program"}},
+		{"Streets of Rogue v99i2+allDLC", []string{"Streets of Rogue"}},
+		{"Dead Age 2 v1.118-fix", []string{"Dead Age 2"}},
+		{"Eldest Souls v1.1.23f2", []string{"Eldest Souls"}},
+		{"Farlanders v1.2.1f2", []string{"Farlanders"}},
+		{"Combat Mission: Beyond Overlord v1.12RDNAfix", []string{"Combat Mission: Beyond Overlord"}},
+		{"Cooking Simulator 2: Better Together – v1.4.6717bcc", []string{"Cooking Simulator 2: Better Together"}},
+		{"Neon Abyss v1.5.0.0src+3DLC", []string{"Neon Abyss"}},
+		{"Clive Barker’s Undying v1.1hotfix", []string{"Clive Barker’s Undying"}},
+		{"Kingdoms and Castles v122r2a", []string{"Kingdoms and Castles"}},
+		{"SpongeBob SquarePants: Battle for Bikini Bottom – Rehydrated – Rev. 603296 (Build 1)", []string{"SpongeBob SquarePants: Battle for Bikini Bottom – Rehydrated"}},
+		{"Sugar Shack – v1.0.3-rev6153 + Windows 7 Fix", []string{"Sugar Shack"}},
+		{"Tank Squad – v1.0 Rev 12985", []string{"Tank Squad"}},
+		{"Police Chief Simulator – Rev.3871", []string{"Police Chief Simulator"}},
+		{"Resident Evil 2 v1.0 hotfix5", []string{"Resident Evil 2"}},
+		{"Blood West v4.6.2 rc3+DLC", []string{"Blood West"}},
+		{"NINJA GAIDEN: Ragebound (cs37823)", []string{"NINJA GAIDEN: Ragebound"}},
+		{"Cloudpunk – BuildID 6754726 + City of Ghosts DLC", []string{"Cloudpunk"}},
+		{
+			"Azur Lane Crosswave: Complete Deluxe Edition + All DLCs",
+			[]string{"Azur Lane Crosswave Complete Deluxe Edition", "Azur Lane Crosswave"},
+		},
+		{
+			"Lords of the Fallen GotY Edition",
+			[]string{"Lords of the Fallen GotY Edition", "Lords of the Fallen"},
+		},
+		{
+			"Kingdoms of Amalur: Re-Reckoning – FATE Edition – Version CS:13925/Update 11 + DLC + Bonus",
+			[]string{"Kingdoms of Amalur: Re Reckoning – FATE Edition", "Kingdoms of Amalur: Re Reckoning"},
+		},
+		// "Rev N" with a small number and only a space is the game's own
+		// subtitle, not a build revision: catalog names these games exactly
+		// this way.
+		{"Guilty Gear Xrd REV 2 + All DLC", []string{"Guilty Gear Xrd REV 2"}},
+		{"GUILTY GEAR Xrd REV 2 — v1.02 | Portable", []string{"GUILTY GEAR Xrd REV 2"}},
+		{"PayDay 2 – v1.102.954/Update 204.1 Hotfix + 106 DLCs", []string{"PayDay 2"}},
+		{
+			"A Total War Saga: Thrones of Britannia – v1.2.3 Build 13348.2970280 + DLC",
+			[]string{"A Total War Saga: Thrones of Britannia"},
+		},
+		{
+			"Deus Ex: Mankind Divided – Digital Deluxe Edition – v1.19 build 801.0 + All DLCs + Bonus Content (Re-repack)",
+			[]string{"Deus Ex: Mankind Divided Digital Deluxe Edition", "Deus Ex: Mankind Divided"},
+		},
+		{
+			"Men of War: Assault Squad GOTY Edition v2.05.15",
+			[]string{"Men of War: Assault Squad GOTY Edition", "Men of War: Assault Squad"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {
 			if got := MatchNames(tc.raw); !reflect.DeepEqual(got, tc.names) {
 				t.Fatalf("names=%q, want %q (parsed=%+v)", got, tc.names, Parse(tc.raw))
+			}
+		})
+	}
+}
+
+// The catalog match-releases endpoint rejects a whole batch of 100 queries if
+// any one of them carries more than 6 titles, so MatchNames must never grow
+// past that regardless of how many edition/fallback variants it can produce.
+func TestSourceMatchNamesNeverExceedsSix(t *testing.T) {
+	for _, raw := range []string{
+		"Triangle Strategy: Digital Deluxe Edition – BuildID 9842040 (Denuvoless) + Bonus ArtBook",
+		"Kingdoms of Amalur: Re-Reckoning – FATE Edition – Version CS:13925/Update 11 + DLC + Bonus",
+		"GTA 4 / Grand Theft Auto IV: The Complete Edition [v 1.2.0.43] (2010-2020) RePack от xatab",
+		"Azur Lane Crosswave: Complete Deluxe Edition + All DLCs",
+		"Niоh 2 The Complete Edition — RePack от Igruha",
+		"The Plucky Squire (Отважный Паж) v.1.50.15 [Папка игры] (2024)",
+	} {
+		if got := MatchNames(raw); len(got) > maxMatchNames {
+			t.Fatalf("MatchNames(%q) returned %d names, want at most %d: %q", raw, len(got), maxMatchNames, got)
+		}
+	}
+}
+
+// The version/build cleanup added for packaging junk must never eat a number
+// or Roman numeral that is actually part of the title.
+func TestSourceMatchKeepsRealTitleNumbers(t *testing.T) {
+	for _, raw := range []string{
+		"Construction Simulator 4",
+		"Yakuza 0",
+		"Cyberpunk 2077",
+		"The Order: 1886",
+		"Rise Eterna 2",
+		"Grand Tactician: The Civil War (1861-1865)",
+		"7 Days to Die",
+		"Ara: History Untold",
+		"Hades II",
+		"STAR FLEET II - Krellan Commander Version 2.0",
+		"V1RUZ",
+		"V1rus Killer",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			got := MatchNames(raw)
+			if len(got) != 1 || Normalize(got[0]) != Normalize(raw) {
+				t.Fatalf("MatchNames(%q) = %q, want the title unchanged", raw, got)
+			}
+		})
+	}
+}
+
+func TestSourceMatchDropsWordsButNeverCutsOne(t *testing.T) {
+	for _, raw := range []string{
+		"Crusader Kings v1.0 Revolution",
+		"Game v1.2 Fixed Edition",
+		"Hitman v1.0 Updated Edition",
+		"Builder v2.1 Buildings Pack",
+		"Racer v1.0 RCT Edition",
+		"Icewind Dale 2 Complete v2.01_fixes",
+		"Dead Age 2 v1.118-fix",
+		"Sugar Shack – v1.0.3-rev6153 + Windows 7 Fix",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			words := map[string]bool{}
+			for _, w := range strings.Fields(Normalize(raw)) {
+				words[w] = true
+			}
+			for _, name := range MatchNames(raw) {
+				for _, w := range strings.Fields(Normalize(name)) {
+					if !words[w] {
+						t.Fatalf("MatchNames(%q) = %q: %q is a cut word", raw, MatchNames(raw), w)
+					}
+				}
 			}
 		})
 	}

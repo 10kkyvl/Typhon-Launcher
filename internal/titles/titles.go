@@ -198,7 +198,7 @@ func extractVersion(s string) (string, string, string) {
 // versionLocation returns the submatch bounds of the release version, or nil.
 // Everything a feed writes after it is packaging, not the game's name.
 func versionLocation(s string) []int {
-	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
+	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reRevVerDot, reRevVerSpace, reReleaseVer, reCSVer, reVVer, reVVerSpace, reRVer}
 
 	bestStart := -1
 	var bestLoc []int

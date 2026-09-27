@@ -9,7 +9,9 @@ import (
 
 // Feed packaging notes do not identify a different catalog game. Keep this
 // cleanup in matching: Parse still extracts the release's versions/languages.
-var reMatchExtras = regexp.MustCompile(`(?i)\s+\+\s*(?:(?:(?:all|\d+)\s+)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
+// The "+" itself is sometimes glued straight onto the version with no space
+// ("v1.3.9+DLC"), so the space in front of it is optional, not required.
+var reMatchExtras = regexp.MustCompile(`(?i)\s*\+\s*(?:(?:all\s*|\d+\s*)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
 
 var reMatchNumberPair = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)
 
@@ -110,7 +112,10 @@ func matchNames(raw string) []string {
 		return pair
 	})
 	p := Parse(withoutMatchExtras(withoutPackagingTail(raw)))
-	base := p.Base
+	// Parse extracts the version on its own pass and can only expose a
+	// packaging tail glued to it ("v1.97+DLC") after removing the version,
+	// once whatever precedes "+" is no longer attached to it. Strip it again.
+	base := withoutMatchExtras(p.Base)
 	if strings.Contains(base, "/") {
 		parts := strings.Split(base, "/")
 		if len(parts) == 2 && hasCyrillic(parts[0]) && !hasCyrillic(parts[1]) {
