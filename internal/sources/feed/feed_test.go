@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,48 @@ func TestParseURIVariants(t *testing.T) {
 		if len(f.Entries) != 1 || len(f.Entries[0].URIs) != 1 {
 			t.Fatalf("case %d: got %+v", i, f)
 		}
+	}
+}
+
+func TestParseRepairsHTMLEscapedMagnets(t *testing.T) {
+	const hash = "4D7849873E596B6651572FECA5AF030558CF5A00"
+	const clean = "magnet:?xt=urn:btih:" + hash + "&tr=http%3A%2F%2Fbt3.t-ru.org%2Fann&dn=Hollow%20Knight"
+	for _, tc := range []struct {
+		name, uri, want string
+		warned          bool
+	}{
+		{"numeric entity", "magnet:?xt=urn:btih:" + hash + "&#038;tr=http%3A%2F%2Fbt3.t-ru.org%2Fann&#038;dn=Hollow%20Knight", clean, true},
+		{"named entity", "magnet:?xt=urn:btih:" + hash + "&amp;tr=http%3A%2F%2Fbt3.t-ru.org%2Fann&amp;dn=Hollow%20Knight", clean, true},
+		{"plain magnet", clean, clean, false},
+		{"fits the limit only once repaired", "magnet:?xt=urn:btih:" + hash + strings.Repeat("&#038;tr=udp%3A%2F%2Ftracker.example.org%3A6969%2Fannounce", 74) + "&#038;dn=Hollow%20Knight", "magnet:?xt=urn:btih:" + hash + strings.Repeat("&tr=udp%3A%2F%2Ftracker.example.org%3A6969%2Fannounce", 74) + "&dn=Hollow%20Knight", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{"downloads": []map[string]any{{"title": "Hollow Knight", "uris": []string{tc.uri}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			f, err := Parse(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(f.Entries) != 1 || len(f.Entries[0].URIs) != 1 || f.Entries[0].URIs[0] != tc.want {
+				t.Fatalf("uris: %+v", f.Entries)
+			}
+			u, err := url.Parse(f.Entries[0].URIs[0])
+			if err != nil || u.Fragment != "" || u.Query().Get("tr") == "" || u.Query().Get("dn") != "Hollow Knight" {
+				t.Fatalf("trackers or name lost: %+v %v", u, err)
+			}
+			if got, ok := MagnetInfoHash(f.Entries[0].URIs[0]); !ok || got != strings.ToLower(hash) {
+				t.Fatalf("info hash %q %v", got, ok)
+			}
+			warned := false
+			for _, w := range f.Warnings {
+				warned = warned || strings.Contains(w, "HTML")
+			}
+			if warned != tc.warned {
+				t.Fatalf("warnings %v", f.Warnings)
+			}
+		})
 	}
 }
 

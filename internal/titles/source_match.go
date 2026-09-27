@@ -9,7 +9,10 @@ import (
 
 // Feed packaging notes do not identify a different catalog game. Keep this
 // cleanup in matching: Parse still extracts the release's versions/languages.
-var reMatchExtras = regexp.MustCompile(`(?i)\s+\+\s*(?:(?:(?:all|\d+)\s+)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
+// The "+" and its count/"all" prefix are sometimes glued straight onto the
+// version with no space ("v1.3.9+DLC", "v99i2+allDLC"), so both spaces are
+// optional, not required.
+var reMatchExtras = regexp.MustCompile(`(?i)\s*\+\s*(?:(?:all\s*|\d+\s*)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
 
 var (
 	reMatchNumberPair      = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)

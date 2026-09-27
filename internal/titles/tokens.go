@@ -24,10 +24,19 @@ const verNumeric = `(?:\d+[a-zа-я]+[0-9][0-9a-zа-я._]*|\d+[a-zа-я]|\d+(?:[
 const verCode = `(?:[a-zа-я]{1,6}(?:\.[0-9a-zа-я]+)*\.[0-9][0-9a-zа-я]*(?:\.[0-9a-zа-я]+)*|[a-zа-я]{2,6}[-_:][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._:][0-9a-zа-я]+)*|[a-zа-я]{1,6}\d[0-9a-zа-я._]*)`
 
 var (
-	reBuildVer       = regexp.MustCompile(`(?i)\bbuild(?:id)?[.#\-_ ]+(` + verNumeric + `|cl[._-]?\d+|[a-f][0-9a-f]{6,39}\b)`)
-	reUpdateVer      = regexp.MustCompile(`(?i)\bupdate[.#\-_ ]+(` + verNumeric + `)`)
-	rePatchVer       = regexp.MustCompile(`(?i)\bpatch[.#\-_ ]+(` + verNumeric + `)`)
-	reHotfixVer      = regexp.MustCompile(`(?i)\bhotfix[.#\-_ ]+(` + verNumeric + `)`)
+	reBuildVer  = regexp.MustCompile(`(?i)\bbuild(?:id)?[.#\-_ ]+(` + verNumeric + `|cl[._-]?\d+|[a-f][0-9a-f]{6,39}\b)`)
+	reUpdateVer = regexp.MustCompile(`(?i)\bupdate[.#\-_ ]+(` + verNumeric + `)`)
+	rePatchVer  = regexp.MustCompile(`(?i)\bpatch[.#\-_ ]+(` + verNumeric + `)`)
+	reHotfixVer = regexp.MustCompile(`(?i)\bhotfix[.#\-_ ]+(` + verNumeric + `)`)
+	// "Rev"/"Revision" only counts as a build marker when it is glued to the
+	// number by punctuation ("Rev.3871", "Rev. 603296"). A bare space in
+	// front is as often the game's own subtitle ("Guilty Gear Xrd REV 2");
+	// that shape is left to the caller's continuation check instead.
+	reRevVerDot = regexp.MustCompile(`(?i)\brev(?:ision)?[.\-_]\s*(` + verNumeric + `)\b`)
+	// Changeset numbers are written glued ("cs37823") or with a colon, often
+	// behind the word "Version" ("Version CS:13925"). Three digits or more
+	// keep this off "CS2"/"CS:GO".
+	reCSVer          = regexp.MustCompile(`(?i)\b(?:version\s+)?cs[.\-_: ]*(\d{3,7})\b`)
 	reVVer           = regexp.MustCompile(`(?i)\bv(?:[.]+\s*)?(` + verNumeric + `)`)
 	reVVerCode       = regexp.MustCompile(`(?i)\bv[.]+\s*(` + verCode + `)`)
 	reVVerDirectCode = regexp.MustCompile(`(?i)\bv([brsuv]\d[0-9a-zа-я._]*)`)
@@ -62,11 +71,14 @@ var (
 
 	// Сборка продолжается ревизией через дефис или attached hash: «v1.0.10.1-r82675-b2»,
 	// «v1.0.0-5db267» и «v1.1.0+e0d30dc159». Точка в коде перед первой
-	// цифрой нужна для веток вроде «-PUBLIC.98466».
-	reVersionContinuation = regexp.MustCompile(`(?i)^\s*(?:/\s*(?:online\s*)?\d+(?:\.\d+)*(?:\s+online\b)?|\+(?:\s*\d+(?:\.\d+)+|\d{3,}(?:[._-][0-9a-zа-я]+)*|[a-zа-я][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)|[-_:#][0-9a-zа-я.]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)`)
+	// цифрой нужна для веток вроде «-PUBLIC.98466». Дробная часть URL иногда
+	// продолжается словом вместо числа: «.../13925/Update 11».
+	reVersionContinuation = regexp.MustCompile(`(?i)^\s*(?:/\s*(?:online\s*)?\d+(?:\.\d+)*(?:\s+online\b)?|/\s*(?:update|patch|hotfix|build(?:id)?)[.#\-_ ]+` + verNumeric + `|\+(?:\s*\d+(?:\.\d+)+|\d{3,}(?:[._-][0-9a-zа-я]+)*|[a-zа-я][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)|[-_:#][0-9a-zа-я.]*[0-9][0-9a-zа-я]*(?:[._-][0-9a-zа-я]+)*)`)
 	// Отдельные фиды ставят после версии ревизию, hotfix или bare branch:
-	// «v1.6.4528 rev1222», «v1.9.2 Hotfix/2021.04.29», «v.07-s r13031».
-	reVersionWordContinuation = regexp.MustCompile(`(?i)^\s*(?:(?:rev|r)\s*\d{1,6}\b|build(?:id)?[.#\-_ ]+\d[0-9a-zа-я._-]*|(?:update|patch|hotfix)[.#\-_ ]+\d[0-9a-zа-я._-]*|hotfix\d+|hotfix\s*(?:[/_-]\s*)\d+(?:[./]\d+)*)`)
+	// «v1.6.4528 rev1222», «v1.9.2 Hotfix/2021.04.29», «v.07-s r13031». Голый
+	// «fix»/«fixes» и «rc N» без номера сборки перед ними — тоже продолжение
+	// версии, а не отдельное слово названия: «v1.4-fix», «v4.6.2 rc3».
+	reVersionWordContinuation = regexp.MustCompile(`(?i)^\s*(?:(?:rev|r)\s*\d{1,6}\b|build(?:id)?[.#\-_ ]+\d[0-9a-zа-я._-]*|(?:update|patch|hotfix)[.#\-_ ]+\d[0-9a-zа-я._-]*|hotfix\d+|hotfix\s*(?:[/_-]\s*)\d+(?:[./]\d+)*|[-_]?fix(?:es)?\b|rc[.\-_ ]*\d+\b)`)
 	// После v-версии номер сборки иногда отделён пробелами: «v.1.2.0 185 531».
 	// Снимаются только трёхзначные и более числа, чтобы короткие части названия
 	// после версии не исчезали без явного признака сборки.
