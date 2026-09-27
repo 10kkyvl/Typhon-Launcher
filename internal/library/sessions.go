@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -264,13 +263,15 @@ func logExit(id, executable string, played time.Duration, err error) {
 	}
 }
 
+type exitCoder interface{ ExitCode() int }
+
 func exitCode(err error) (int, bool) {
 	if err == nil {
 		return 0, true
 	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		return exit.ExitCode(), true
+	var coder exitCoder
+	if errors.As(err, &coder) {
+		return coder.ExitCode(), true
 	}
 	return 0, false
 }
