@@ -228,6 +228,16 @@ func main() {
 		return
 	}
 
+	// При автозапуске и запуске из фонового процесса передавать нечего:
+	// ErrNoForegroundRight там — ожидаемый исход, а не сбой.
+	if err := platform.AllowForegroundHandoff(); err != nil {
+		if errors.Is(err, platform.ErrNoForegroundRight) {
+			slog.Debug("allow foreground handoff", "error", err)
+		} else {
+			slog.Warn("allow foreground handoff", "error", err)
+		}
+	}
+
 	// A shortcut with a broken argument must not keep the launcher from
 	// starting: the window opens as usual and the user can launch the game
 	// by hand, which is strictly better than refusing to start at all.
