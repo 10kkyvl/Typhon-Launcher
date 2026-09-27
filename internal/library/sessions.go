@@ -119,6 +119,17 @@ func (s *Service) PlayGame(id string) error {
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
 	}
+	// Запрос UAC держит запуск, пока пользователь не ответит, и «Остановить»,
+	// нажатое за это время, иначе проигрывало бы позднему «Да».
+	if ctxErr := ctx.Err(); ctxErr != nil && !s.closed {
+		s.mu.Unlock()
+		stopErr := stopLaunched(proc)
+		s.mu.Lock()
+		if stopErr == nil {
+			return uierr.Wrap("library.launch_cancelled", ctxErr)
+		}
+		slog.Error("stop game started after cancellation", "id", id, "error", stopErr)
+	}
 
 	started = true
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
@@ -261,6 +272,18 @@ func logExit(id, executable string, played time.Duration, err error) {
 	default:
 		slog.Info("game process exited", "id", id, "executable", executable, "after", after, "code", code)
 	}
+}
+
+func stopLaunched(proc gameProcess) error {
+	if err := proc.kill(); err != nil {
+		return fmt.Errorf("остановить игру: %w", err)
+	}
+	if err := proc.wait(); err != nil {
+		if _, exited := exitCode(err); !exited {
+			return fmt.Errorf("дождаться остановки игры: %w", err)
+		}
+	}
+	return nil
 }
 
 type exitCoder interface{ ExitCode() int }
