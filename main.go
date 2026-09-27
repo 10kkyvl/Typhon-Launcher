@@ -658,15 +658,27 @@ func main() {
 	})
 
 	if playRequested {
-		if err := libraryService.PlayGame(playID); err != nil {
-			slog.Error("play from shortcut", "id", playID, "error", err)
-			window.Show()
-		}
+		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
+		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
+		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			playFromShortcut(libraryService, playID, func() { window.Show() })
+		})
 	}
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
+	}
+}
+
+type gamePlayer interface {
+	PlayGame(id string) error
+}
+
+func playFromShortcut(player gamePlayer, id string, reveal func()) {
+	if err := player.PlayGame(id); err != nil {
+		slog.Error("play from shortcut", "id", id, "error", err)
+		reveal()
 	}
 }
 

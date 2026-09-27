@@ -294,6 +294,54 @@ describe('startBigPictureInput', () => {
     stop();
   });
 
+  it('polls rarely while the window is in the background and resumes on focus', () => {
+    const pad = gamepad();
+    pads = [pad];
+    let polls = 0;
+    vi.stubGlobal('navigator', { getGamepads: () => { polls += 1; return pads; } });
+    const commands: BigPictureCommand[] = [];
+    const stop = startBigPictureInput({ onCommand: (command) => commands.push(command), isEnabled: () => true });
+
+    browserDocument.hasFocus = () => false;
+    browserWindow.dispatch('blur');
+    polls = 0;
+    vi.advanceTimersByTime(1000);
+    expect(polls).toBeLessThanOrEqual(2);
+
+    pad.buttons[0].pressed = true;
+    vi.advanceTimersByTime(1000);
+    expect(commands).toEqual([]);
+
+    pad.buttons[0].pressed = false;
+    browserDocument.hasFocus = () => true;
+    browserWindow.dispatch('focus');
+    vi.advanceTimersByTime(16);
+    pad.buttons[0].pressed = true;
+    vi.advanceTimersByTime(16);
+    expect(commands).toEqual(['confirm']);
+    stop();
+  });
+
+  it('stops requesting animation frames while the window is in the background', () => {
+    const frames: FrameRequestCallback[] = [];
+    Object.assign(browserWindow, {
+      requestAnimationFrame: (callback: FrameRequestCallback) => frames.push(callback),
+      cancelAnimationFrame: () => {},
+    });
+    const stop = startBigPictureInput({ onCommand: () => {}, isEnabled: () => true });
+    expect(frames).toHaveLength(1);
+
+    browserDocument.hasFocus = () => false;
+    frames.shift()?.(0);
+    vi.advanceTimersByTime(2000);
+    expect(frames).toHaveLength(0);
+
+    browserDocument.hasFocus = () => true;
+    browserWindow.dispatch('focus');
+    expect(frames).toHaveLength(1);
+    stop();
+  });
+
   it('suppresses input while disabled and removes every callback on teardown', () => {
     const commands: BigPictureCommand[] = [];
     const devices: BigPictureDevice[] = [];
