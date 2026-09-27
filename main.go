@@ -27,6 +27,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/platform"
 	"typhon/internal/presence"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
@@ -183,6 +184,16 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	// При автозапуске и запуске из фонового процесса передавать нечего:
+	// ErrNoForegroundRight там — ожидаемый исход, а не сбой.
+	if err := platform.AllowForegroundHandoff(); err != nil {
+		if errors.Is(err, platform.ErrNoForegroundRight) {
+			slog.Debug("allow foreground handoff", "error", err)
+		} else {
+			slog.Warn("allow foreground handoff", "error", err)
+		}
 	}
 
 	// A shortcut with a broken argument must not keep the launcher from
