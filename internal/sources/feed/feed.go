@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -82,6 +83,7 @@ type warningCounter struct {
 	httpOnlyDropped  int
 	tooLongURI       int
 	uriListTruncated int
+	htmlEscapedURI   int
 	negativeSize     int
 	badSize          int
 	badDate          int
@@ -112,6 +114,9 @@ func (w warningCounter) build() []string {
 	}
 	if w.uriListTruncated > 0 {
 		out = append(out, fmt.Sprintf("%d записей: список URI обрезан до лимита %d", w.uriListTruncated, MaxURIsPerEntry))
+	}
+	if w.htmlEscapedURI > 0 {
+		out = append(out, fmt.Sprintf("%d magnet-ссылок пришли с HTML-экранированием (&#038;) — исправлено при чтении", w.htmlEscapedURI))
 	}
 	if w.negativeSize > 0 {
 		out = append(out, fmt.Sprintf("%d записей: отрицательный размер файла обнулён", w.negativeSize))
@@ -277,12 +282,20 @@ func Parse(data []byte) (Feed, error) {
 			if u == "" {
 				continue
 			}
+			lower := strings.ToLower(u)
+			// A feed exported from WordPress writes "&#038;" for "&": the "#" then
+			// starts a URL fragment and every tracker and the name are lost. The
+			// escaped form is longer, so the length limit applies after repair.
+			if strings.HasPrefix(lower, "magnet:") && (strings.Contains(u, "&#") || strings.Contains(lower, "&amp;")) {
+				u = html.UnescapeString(u)
+				lower = strings.ToLower(u)
+				wc.htmlEscapedURI++
+			}
 			if utf8.RuneCountInString(u) > MaxURILen {
 				wc.tooLongURI++
 				continue
 			}
 			consideredURIs++
-			lower := strings.ToLower(u)
 			if !strings.HasPrefix(lower, "magnet:") {
 				wc.nonMagnetDropped++
 				if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
