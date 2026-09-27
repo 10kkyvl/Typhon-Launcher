@@ -22,7 +22,6 @@ func normKey(w string) string {
 const verNumericPart = `(?:[0-9][0-9a-zа-я]*|[a-zа-я]\b|[abfr][0-9][0-9a-zа-я]*\b|(?:s|de|det|full|release)\b|(?:rc|hf|beta|alpha)[0-9][0-9a-zа-я._]*\b)`
 const verNumeric = `(?:\d+[a-zа-я]+[0-9][0-9a-zа-я._]*|\d+[a-zа-я]|\d+(?:[._]` + verNumericPart + `){0,8})`
 const verCode = `(?:[a-zа-я]{1,6}(?:\.[0-9a-zа-я]+)*\.[0-9][0-9a-zа-я]*(?:\.[0-9a-zа-я]+)*|[a-zа-я]{2,6}[-_:][0-9a-zа-я]*[0-9][0-9a-zа-я]*(?:[._:][0-9a-zа-я]+)*|[a-zа-я]{1,6}\d[0-9a-zа-я._]*)`
-const verNumber = `(?:` + verNumeric + `|` + verCode + `)`
 
 var (
 	reBuildVer       = regexp.MustCompile(`(?i)\bbuild(?:id)?[.#\-_ ]+(` + verNumeric + `|cl[._-]?\d+|[a-f][0-9a-f]{6,39}\b)`)
