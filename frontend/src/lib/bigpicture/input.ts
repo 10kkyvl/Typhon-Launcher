@@ -20,6 +20,8 @@ export interface StartBigPictureInputOptions {
 const DEADZONE = 0.25;
 const DIRECTION_REPEAT_DELAY_MS = 300;
 const DIRECTION_REPEAT_INTERVAL_MS = 100;
+const ACTIVE_POLL_INTERVAL_MS = 16;
+const INACTIVE_POLL_INTERVAL_MS = 500;
 
 type DirectionCommand = Extract<BigPictureCommand, 'up' | 'down' | 'left' | 'right'>;
 
@@ -590,9 +592,14 @@ export function startBigPictureInput(options: StartBigPictureInputOptions): () =
     if (observedGamepad && [...gamepads.values()].every((candidate) => !candidate.connected)) reportDevice('keyboard');
   }
 
+  // A game launched from Big Picture keeps this window open behind it. A
+  // frame callback there makes the WebView produce frames at display rate for
+  // the whole session and takes GPU time from the game, so an inactive window
+  // only checks now and then whether it got the focus back.
   function schedulePoll(): void {
     if (disposed || cancelPoll) return;
-    const animationFrame = getAnimationFrameSafe();
+    const active = documentIsActive();
+    const animationFrame = active ? getAnimationFrameSafe() : null;
     if (animationFrame) {
       let cancelled = false;
       const handle = animationFrame.request(() => {
@@ -615,7 +622,7 @@ export function startBigPictureInput(options: StartBigPictureInputOptions): () =
       cancelPoll = null;
       pollGamepads();
       schedulePoll();
-    }, 16);
+    }, active ? ACTIVE_POLL_INTERVAL_MS : INACTIVE_POLL_INTERVAL_MS);
     cancelPoll = () => {
       cancelled = true;
       clearTimeout(handle);
@@ -623,19 +630,26 @@ export function startBigPictureInput(options: StartBigPictureInputOptions): () =
     };
   }
 
+  function restartPoll(): void {
+    suspendInputs();
+    if (disposed) return;
+    cancelPoll?.();
+    schedulePoll();
+  }
+
   const eventTarget = (getWindowSafe() ?? getDocumentSafe()) as EventTarget | undefined;
   removeListeners.push(addListener(eventTarget, 'keydown', onKeyDown as EventListener));
   removeListeners.push(addListener(eventTarget, 'keyup', onKeyUp as EventListener));
-  removeListeners.push(addListener(eventTarget, 'blur', () => suspendInputs()));
+  removeListeners.push(addListener(eventTarget, 'blur', restartPoll));
   // Some WebViews restore the native window without delivering blur to the
   // page. Treat a subsequent focus as a fresh input session as well, so a
   // key held during the transition cannot replay a confirm command.
-  removeListeners.push(addListener(eventTarget, 'focus', () => suspendInputs()));
+  removeListeners.push(addListener(eventTarget, 'focus', restartPoll));
   removeListeners.push(addListener(eventTarget, 'gamepadconnected', onGamepadConnected));
   removeListeners.push(addListener(eventTarget, 'gamepaddisconnected', onGamepadDisconnected));
 
   const currentDocument = getDocumentSafe();
-  removeListeners.push(addListener(currentDocument, 'visibilitychange', () => suspendInputs()));
+  removeListeners.push(addListener(currentDocument, 'visibilitychange', restartPoll));
 
   pollGamepads();
   schedulePoll();
