@@ -37,10 +37,10 @@
     nextByPeer,
   } from '../stores/messaging';
   import { currentUser } from '../stores/user';
-  import { clockTime } from '../utils/format';
+  import { clockTime, shortDate } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
   import { REACTION_GLYPHS, REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
-  import { msg } from '../i18n';
+  import { msg, t } from '../i18n';
 
   let draft = $state('');
   let editDraft = $state('');
@@ -49,6 +49,7 @@
   let sending = $state(false);
   let error = $state('');
   let reactionMenu = $state<string | null>(null);
+  let now = $state(new Date());
   let lastRenderedLastMessage = '';
 
   const peer = $derived($activePeer);
@@ -76,10 +77,15 @@
     return message.senderId === $currentUser?.id;
   }
 
-  function time(iso: string): string {
+  function time(iso: string, current: Date, yesterdayLabel: string): string {
     const value = new Date(iso);
     if (Number.isNaN(value.getTime())) return '';
-    return clockTime(value);
+    const clock = clockTime(value);
+    if (value.toDateString() === current.toDateString()) return clock;
+    const yesterday = new Date(current);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const day = value.toDateString() === yesterday.toDateString() ? yesterdayLabel : shortDate(value);
+    return `${day}, ${clock}`;
   }
 
   function setComposer(value: string): void {
@@ -205,11 +211,16 @@
   });
 
   onMount(() => {
-    const updateFocus = () => setPanelVisible($chatOpen && !!peer);
+    const updateFocus = () => {
+      now = new Date();
+      setPanelVisible($chatOpen && !!peer);
+    };
+    const clockInterval = window.setInterval(() => { now = new Date(); }, 60_000);
     window.addEventListener('focus', updateFocus);
     window.addEventListener('blur', updateFocus);
     document.addEventListener('visibilitychange', updateFocus);
     return () => {
+      window.clearInterval(clockInterval);
       window.removeEventListener('focus', updateFocus);
       window.removeEventListener('blur', updateFocus);
       document.removeEventListener('visibilitychange', updateFocus);
@@ -272,7 +283,7 @@
                 <article class="message" class:failed={$failedMessages.has(message.clientId)} aria-busy={$pendingMessages.has(message.clientId)}>
                   <div class="message-meta">
                     <span>{isOwn(message) ? msg('social.chatYou') : displayName(peer)}</span>
-                    <time>{time(message.createdAt)}</time>
+                    <time datetime={message.createdAt}>{time(message.createdAt, now, $t('format.yesterday'))}</time>
                     {#if message.editedAt}<span class="edited">{msg('social.chatEdited')}</span>{/if}
                   </div>
                   {#if $editingMessageId === message.id}
@@ -398,8 +409,8 @@
   .message { position: relative; max-width: 86%; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 1.2rem 1.2rem 1.2rem 0.35rem; background: var(--surface-3); }
   .own .message { border-radius: 1.2rem 1.2rem 0.35rem 1.2rem; background: color-mix(in srgb, var(--accent) 18%, var(--surface-3)); }
   .message.failed { border-color: var(--danger); }
-  .message-meta { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; color: var(--text-3); font-size: 1rem; }
-  .message-meta time { opacity: 0.75; }
+  .message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; color: var(--text-3); font-size: 1rem; }
+  .message-meta time { opacity: 0.75; white-space: nowrap; }
   .edited { font-style: italic; }
   .message-text { margin: 0; color: var(--text); font-size: var(--font-sm); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
   .message-text a { color: var(--accent-text); text-decoration: underline; }

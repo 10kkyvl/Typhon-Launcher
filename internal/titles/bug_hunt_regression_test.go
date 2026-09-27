@@ -23,3 +23,82 @@ func TestRomanVIsNotParsedAsVersion(t *testing.T) {
 		t.Fatalf("lowercase spaced version = %q, want 0.250801", parsed.Version)
 	}
 }
+
+func TestVersionPatternRequiresNumericEvidence(t *testing.T) {
+	for _, input := range []string{"V.O.I.D", "Vigil.The.Longest.Night", "VA-11 Hall-A", "V1РУЗ", "Vecter2", "Vex3"} {
+		parsed := Parse(input)
+		if parsed.Version != "" || parsed.Base == "" {
+			t.Fatalf("Parse(%q) treated title text as version: base=%q version=%q", input, parsed.Base, parsed.Version)
+		}
+	}
+}
+
+func TestCompactLetterSuffixedVersionIsParsed(t *testing.T) {
+	parsed := Parse("Grandma, No! Deluxe Edition – v20250522R + Bonus Content")
+	if parsed.Version != "20250522R" || parsed.Base != "Grandma, No!" || parsed.Edition != "Deluxe Edition" {
+		t.Fatalf("compact release version was not parsed without losing edition: %+v", parsed)
+	}
+}
+
+func TestVersionContinuationKeepsPackagingAndDLCMarkers(t *testing.T) {
+	if parsed := Parse("Example Game v1.2 + All"); parsed.Version != "1.2" || parsed.Base != "Example Game + All" {
+		t.Fatalf("packaging text was consumed as version continuation: %+v", parsed)
+	}
+	if parsed := Parse("Example Game v1.2 + 123 DLCs"); parsed.Version != "1.2" || parsed.DLCCount != 123 || parsed.Base != "Example Game" {
+		t.Fatalf("DLC marker was consumed as version continuation: %+v", parsed)
+	}
+}
+
+func TestVersionContinuationDoesNotEatRepackerTags(t *testing.T) {
+	for raw, tag := range map[string]string{
+		"Example v1.0-GOG":   "gog",
+		"Example v1.0-CODEX": "codex",
+	} {
+		parsed := Parse(raw)
+		if parsed.Version != "1.0" || parsed.Base != "Example" {
+			t.Fatalf("packaging suffix changed title/version: Parse(%q)=%+v", raw, parsed)
+		}
+		if len(parsed.Tags) != 1 || parsed.Tags[0] != tag {
+			t.Fatalf("packaging suffix tag lost: Parse(%q)=%+v", raw, parsed)
+		}
+	}
+}
+
+func TestTitleVersionWordsPreserveGameIdentity(t *testing.T) {
+	for _, tc := range []struct{ raw, base, edition, version string }{
+		{"Sniper Elite V2 [v 1.13 + DLCs] (2012)", "Sniper Elite V2", "", "1.13"},
+		{"Sniper Elite V2 Remastered v1.0", "Sniper Elite V2", "Remastered", "1.0"},
+		{"Danganronpa V3: Killing Harmony", "Danganronpa V3: Killing Harmony", "", ""},
+		{"Micro Machines V4", "Micro Machines V4", "", ""},
+		{"V696", "V696", "", ""},
+		{"Demolish & Build 2018 — RePack от Other's", "Demolish & Build 2018", "", ""},
+		{"Demolish and Build 3 v1.2", "Demolish and Build 3", "", "1.2"},
+		{"Example – V2", "Example", "", "2"},
+		{"Example (V2)", "Example", "", "2"},
+		{"Example [V2]", "Example", "", "2"},
+		{"Example V1.2", "Example", "", "1.2"},
+		{"Example Build 2018", "Example", "", "2018"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			p := Parse(tc.raw)
+			if p.Base != tc.base || p.Edition != tc.edition || p.Version != tc.version {
+				t.Fatalf("title/version boundary: %+v", p)
+			}
+		})
+	}
+}
+
+func TestDottedBuildBranchesDoNotLeakIntoTitles(t *testing.T) {
+	for _, version := range []string{"0.9.4.2.A", "1.0.26357.F", "1.2.130.r40883.f", "2024.5.a.3", "2.1.0.A.24.1202.9377"} {
+		p := Parse("Example Deluxe Edition v" + version + " + 3 DLCs [RUS/ENG] (2024)")
+		if p.Base != "Example" || p.Version != version || p.Edition != "Deluxe Edition" || p.DLCCount != 3 || p.Year != 2024 || len(p.Languages) != 2 {
+			t.Fatalf("build branch changed release fields: %+v", p)
+		}
+	}
+	for _, suffix := range []string{".Deluxe.Edition", ".RUS", ".ENG", ".MULTi7", ".x64", ".x86", "-GOG", "-CODEX"} {
+		p := Parse("Example v1.2" + suffix)
+		if p.Version != "1.2" {
+			t.Fatalf("build branch consumed metadata in %q: %+v", suffix, p)
+		}
+	}
+}

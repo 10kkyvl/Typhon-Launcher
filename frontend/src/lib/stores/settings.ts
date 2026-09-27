@@ -34,22 +34,28 @@ let queued = 0;
 let confirmed: Settings | null = null;
 const fieldRevision = new Map<string, number>();
 
-export async function updateSettings(patch: Partial<Settings>) {
+function enqueueSettingsUpdate(patch: Partial<Settings>): Promise<boolean> {
   const before = get(settings);
   if (!before) {
     toast(msg('state.settingsNotLoaded'), 'danger');
-    return;
+    return Promise.resolve(false);
   }
   if (queued++ === 0) confirmed = { ...before };
   const mine = ++revision;
   for (const key of Object.keys(patch)) fieldRevision.set(key, mine);
   settings.set({ ...before, ...patch });
-  saving = saving.then(async () => {
-    const next = get(settings);
-    if (!next) return;
+
+  const operation = saving.then(async () => {
+    // Apply each patch to the last confirmed snapshot. A later optimistic
+    // update may already be visible in the store, but must not be included in
+    // this write or count as saved if this operation fails.
+    const base = confirmed ?? get(settings);
+    if (!base) return false;
+    const next = { ...base, ...patch };
     try {
       await saveSettings(next);
       confirmed = { ...next };
+      return true;
     } catch (err) {
       console.error('save settings', err);
       toast(msg('state.settingsSaveFailed'), 'danger');
@@ -58,7 +64,7 @@ export async function updateSettings(patch: Partial<Settings>) {
       // different field successfully while this one was in flight, and
       // that value must survive the rollback.
       const latest = get(settings);
-      if (!latest) return;
+      if (!latest) return false;
       const reverted: Settings = { ...latest };
       const target = reverted as unknown as Record<string, unknown>;
       const source = confirmed as unknown as Record<string, unknown>;
@@ -66,13 +72,26 @@ export async function updateSettings(patch: Partial<Settings>) {
         if (fieldRevision.get(key) === mine) target[key] = source[key];
       }
       settings.set(reverted);
+      return false;
     }
   }).catch((err) => {
     // Nothing above is expected to throw -- saveSettings is already caught --
     // but a rejected link would poison every later save in the chain.
     console.error('settings save chain', err);
+    return false;
   }).finally(() => { queued--; });
-  return saving;
+  saving = operation.then(() => undefined);
+  return operation;
+}
+
+/** Persist a settings patch and report whether the write succeeded. */
+export function updateSettingsResult(patch: Partial<Settings>): Promise<boolean> {
+  return enqueueSettingsUpdate(patch);
+}
+
+/** Existing callers rely on the toast-based, fire-and-forget result. */
+export async function updateSettings(patch: Partial<Settings>): Promise<void> {
+  await enqueueSettingsUpdate(patch);
 }
 
 export async function createLibrary(parent: string): Promise<Settings> {

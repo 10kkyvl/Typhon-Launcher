@@ -14,6 +14,7 @@
   import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
+  import { bigPictureActive } from '../bigpicture/mode';
 
   const status = $derived($selfUpdateStatus);
   const progress = $derived($selfUpdateProgress);
@@ -39,7 +40,7 @@
   </div>
 {/if}
 
-{#if downloading && !applying && $route.name !== 'settings'}
+{#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
   <div class="card">
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
@@ -51,7 +52,7 @@
     <ProgressBar value={pct} />
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
-{:else if outcome}
+{:else if outcome && !$bigPictureActive}
   <div class="card" class:card-danger={!outcome.ok}>
     <div class="row">
       {#if outcome.ok}

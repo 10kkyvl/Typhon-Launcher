@@ -2,8 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 const { play } = vi.hoisted(() => ({ play: vi.fn() }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play } }));
 vi.mock('./backend', () => ({ inWails: true }));
-import { playGame } from './library';
+import { launchGame, playGame } from './library';
 describe('launch cancellation at the UI boundary', () => {
+  it('reports a cancelled launch to callers that own a game session', async () => {
+    play.mockRejectedValueOnce(new Error('typhon:library.launch_cancelled: context canceled'));
+    await expect(launchGame('g')).resolves.toBe(false);
+  });
+  it('reports a successful native launch', async () => {
+    play.mockResolvedValueOnce(undefined);
+    await expect(launchGame('g')).resolves.toBe(true);
+  });
   it('silences a user cancellation', async () => {
     play.mockRejectedValueOnce(new Error('typhon:library.launch_cancelled: context canceled'));
     await expect(playGame('g')).resolves.toBeUndefined();

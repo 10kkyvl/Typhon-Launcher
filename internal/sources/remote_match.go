@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -58,11 +59,51 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (m
 	return out, nil
 }
 func remoteQueryKey(r *Release) string {
-	raw := r.RawTitle
-	if r.GameHint != "" {
-		raw = r.GameHint
+	return strings.Join(remoteReleaseNames(r), "\x00") + "|" + strconv.Itoa(r.Year)
+}
+
+var singleReleaseChapter = regexp.MustCompile(`^(?:chapter|episode) (?:[0-9]+|[ivxlcdm]+)$`)
+
+// A source's stable game hint can omit the chapter or edition that identifies
+// this particular release. Use the more specific title only when it extends
+// the same base name; unrelated download labels must not overrule the hint.
+func remoteReleaseNames(r *Release) []string {
+	if r.GameHint == "" {
+		return titles.MatchNames(r.RawTitle)
 	}
-	return strings.Join(titles.MatchNames(raw), "\x00") + "|" + strconv.Itoa(r.Year)
+	hinted := titles.MatchNames(r.GameHint)
+	raw, hint := titles.Parse(r.RawTitle), titles.Parse(r.GameHint)
+	base, hintedBase := titles.Normalize(raw.Base), titles.Normalize(hint.Base)
+	if base == hintedBase && raw.Edition != "" && hint.Edition == "" {
+		return titles.MatchNames(r.RawTitle)
+	}
+	tail, extends := strings.CutPrefix(base, hintedBase+" ")
+	if hintedBase == "" || !extends || hint.Edition != "" {
+		return hinted
+	}
+	// These suffixes distinguish a different release. MatchNames deliberately
+	// avoids falling back from a remaster to the original game.
+	if tail == "remaster" || tail == "remastered" {
+		return titles.MatchNames(r.RawTitle)
+	}
+	if tail != "enhanced" && !singleReleaseChapter.MatchString(tail) {
+		return hinted
+	}
+	// Episodic games can have either separate chapter cards or one series card.
+	// Bare Enhanced is also used for a base game's update. Prefer a specific
+	// known card while retaining the author's explicit hint in these cases.
+	names := titles.MatchNames(r.RawTitle)
+	seen := map[string]bool{}
+	for _, name := range names {
+		seen[titles.Normalize(name)] = true
+	}
+	for _, name := range hinted {
+		if !seen[titles.Normalize(name)] && len(names) < 6 {
+			names = append(names, name)
+			seen[titles.Normalize(name)] = true
+		}
+	}
+	return names
 }
 
 func remoteReleaseQueries(list []*Release) ([]string, []catalog.ReleaseQuery) {
@@ -73,16 +114,12 @@ func remoteReleaseQueries(list []*Release) ([]string, []catalog.ReleaseQuery) {
 		if r.Locked || r.Ignored || r.Availability == AvailabilityRemoved {
 			continue
 		}
-		key := remoteQueryKey(r)
+		names := remoteReleaseNames(r)
+		key := strings.Join(names, "\x00") + "|" + strconv.Itoa(r.Year)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		raw := r.RawTitle
-		if r.GameHint != "" {
-			raw = r.GameHint
-		}
-		names := titles.MatchNames(raw)
 		valid := names[:0]
 		for _, name := range names {
 			if len([]rune(name)) <= 200 && strings.TrimSpace(name) != "" {

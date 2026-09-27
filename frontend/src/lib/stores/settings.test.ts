@@ -21,7 +21,7 @@ vi.mock('../services/settings', () => ({
 }));
 
 const { getSettings, saveSettings } = await import('../services/settings');
-const { settings, initSettings, updateSettings } = await import('./settings');
+const { settings, initSettings, updateSettings, updateSettingsResult } = await import('./settings');
 
 function makeSettings(): Settings {
   return {
@@ -52,6 +52,22 @@ beforeEach(async () => {
 });
 
 describe('updateSettings', () => {
+  it('reports each write result without persisting later optimistic patches early', async () => {
+    const first = deferred<void>();
+    vi.mocked(saveSettings).mockImplementationOnce(() => first.promise);
+
+    const failing = updateSettingsResult({ uiScale: 1.2 });
+    const succeeding = updateSettingsResult({ animationsEnabled: false });
+    await Promise.resolve();
+    expect(vi.mocked(saveSettings).mock.calls[0][0]).toMatchObject({ uiScale: 1.2, animationsEnabled: true });
+
+    first.reject(new Error('disk full'));
+    expect(await failing).toBe(false);
+    expect(await succeeding).toBe(true);
+    expect(vi.mocked(saveSettings).mock.calls[1][0]).toMatchObject({ uiScale: 1, animationsEnabled: false });
+    expect(get(settings)).toMatchObject({ uiScale: 1, animationsEnabled: false });
+  });
+
   it('does not undo a field another call already saved', async () => {
     const first = deferred<void>();
     vi.mocked(saveSettings)

@@ -1,5 +1,10 @@
 import type { Message } from '../../types';
 import { common } from './common';
+import { bigpictureCatalog } from './bigpictureCatalog';
+import { bigpictureTransfers } from './bigpictureTransfers';
+import { bigpictureSettings } from './bigpictureSettings';
+import { bigpictureSocial } from './bigpictureSocial';
+import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
@@ -22,6 +27,11 @@ import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 
 export const ru = {
+  ...bigpictureCatalog,
+  ...bigpictureTransfers,
+  ...bigpictureSettings,
+  ...bigpictureSocial,
+  ...bigpicture,
   ...common,
   ...format,
   ...friends,
