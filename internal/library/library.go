@@ -110,6 +110,8 @@ type Service struct {
 	games         []Game
 	excluded      []string
 	running       map[string]*session
+	launching     map[string]struct{}
+	elevate       func(exe string, args []string, dir string) (launched, error)
 	onSession     func(gameID string, seconds int64)
 	watchers      []SessionWatcher
 	usageRecord   func(ev usagestats.Event)
@@ -133,8 +135,18 @@ type SessionWatcher interface {
 	SessionStopped(gameID string)
 }
 
+type gameProcess interface {
+	Kill() error
+}
+
+type launched struct {
+	process gameProcess
+	pid     uint32
+	wait    func() error
+}
+
 type session struct {
-	process   *os.Process // nil у сессии, обнаруженной в системе, а не запущенной нами
+	process   gameProcess // nil у сессии, обнаруженной в системе, а не запущенной нами
 	pid       uint32
 	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
 	startedAt time.Time // с этого момента считается наигранное время
@@ -166,6 +178,8 @@ func NewServiceAt(path string) (*Service, error) {
 		path:          path,
 		excludedPath:  excludedPath,
 		running:       map[string]*session{},
+		launching:     map[string]struct{}{},
+		elevate:       startElevated,
 		scan:          procs.List,
 		watchInterval: defaultWatchInterval,
 		now:           time.Now,
