@@ -68,11 +68,26 @@ function sanitize(text: string): string {
 
 const lastReportedAt = new Map<string, number>();
 
+// Eviction drops the first key a Map yields, which is the first one inserted
+// -- and Map.set on a key that already exists does not move it. Without the
+// delete below, an error that fires constantly keeps its original position and
+// is evicted as "oldest" while other errors fill the map, after which the very
+// next occurrence is reported again inside the dedupe window. Touching a key
+// therefore re-inserts it, on the suppressed path too, so the order really is
+// least-recently-used.
+function touch(key: string, at: number) {
+  lastReportedAt.delete(key);
+  lastReportedAt.set(key, at);
+}
+
 function shouldReport(key: string): boolean {
   const now = Date.now();
   const last = lastReportedAt.get(key);
-  if (last !== undefined && now - last < DEDUPE_WINDOW_MS) return false;
-  lastReportedAt.set(key, now);
+  if (last !== undefined && now - last < DEDUPE_WINDOW_MS) {
+    touch(key, last);
+    return false;
+  }
+  touch(key, now);
   if (lastReportedAt.size > MAX_TRACKED_KEYS) {
     const oldest = lastReportedAt.keys().next().value;
     if (oldest !== undefined) lastReportedAt.delete(oldest);

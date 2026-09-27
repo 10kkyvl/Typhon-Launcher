@@ -17,10 +17,32 @@ func OpenFolder(path string) error {
 	}
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("explorer.exe", path).Start()
+		return openFolderWindows(path)
 	case "darwin":
-		return exec.Command("open", path).Start()
+		exe, err := darwinOpenPath()
+		if err != nil {
+			return err
+		}
+		return exec.Command(exe, path).Start() //nolint:gosec // G204: путь до бинаря абсолютный и проверен (инвариант 33), path — существующий каталог, проверенный выше через os.Stat+IsDir
 	default:
-		return exec.Command("xdg-open", path).Start()
+		exe, err := exec.LookPath("xdg-open")
+		if err != nil {
+			return fmt.Errorf("resolve xdg-open: %w", err)
+		}
+		return exec.Command(exe, path).Start() //nolint:gosec // G204: путь до бинаря абсолютный и проверен (инвариант 33), path — существующий каталог, проверенный выше через os.Stat+IsDir
 	}
+}
+
+// darwinOpenPath резолвит абсолютный путь до /usr/bin/open (инвариант 33):
+// голое имя запускалось бы через PATH, который пользователь может подменить.
+func darwinOpenPath() (string, error) {
+	const path = "/usr/bin/open"
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("stat %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("not a file: %s", path)
+	}
+	return path, nil
 }

@@ -27,13 +27,24 @@ const (
 )
 
 type Origin struct {
-	ReleaseID    string  `json:"releaseId,omitempty"`
-	SourceID     string  `json:"sourceId,omitempty"`
-	GameID       string  `json:"gameId,omitempty"`
-	Version      string  `json:"version,omitempty"`
-	Purpose      Purpose `json:"purpose,omitempty"`
-	UpdatePlanID string  `json:"updatePlanId,omitempty"`
-	LibraryID    string  `json:"libraryId,omitempty"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	GameID            string     `json:"gameId,omitempty"`
+	Version           string     `json:"version,omitempty"`
+	Purpose           Purpose    `json:"purpose,omitempty"`
+	UpdatePlanID      string     `json:"updatePlanId,omitempty"`
+	LibraryID         string     `json:"libraryId,omitempty"`
+
+	// AutoInstall is a pointer because it has to outlive the global setting:
+	// the download starts now and finishes hours later, and the choice made in
+	// the dialog must survive the user flipping the setting in between. Nil
+	// means the setting decides.
+	AutoInstall *bool `json:"autoInstall,omitempty"`
+	// ElevateAhead is consumed the moment the download starts, so it needs no
+	// third state.
+	ElevateAhead bool `json:"elevateAhead,omitempty"`
 }
 
 type FileState struct {
@@ -67,6 +78,8 @@ type Download struct {
 	AddedAt       time.Time   `json:"addedAt"`
 	CompletedAt   *time.Time  `json:"completedAt"`
 	Error         string      `json:"error"`
+	Stalled       bool        `json:"stalled"`
+	StalledSince  *time.Time  `json:"stalledSince,omitempty"`
 }
 
 type TorrentInfo struct {
@@ -84,12 +97,58 @@ func occupiesSlot(s Status) bool {
 	return s == StatusDownloading || s == StatusVerifying || s == StatusMetadata
 }
 
+// ProgressUpdate carries only the fields a running download changes on every
+// tick — never Files, which stays fixed from the moment a download starts
+// until it is re-added or its selection changes. sample() emits this instead
+// of a full snapshot on every ordinary tick so that a torrent with tens of
+// thousands of files does not re-serialize its whole file list four times a
+// second; the full snapshot (with Files) still goes out on add, on file-list
+// changes and on completion through the existing eventUpdated/eventAdded/
+// eventCompleted events.
+type ProgressUpdate struct {
+	ID            string     `json:"id"`
+	Status        Status     `json:"status"`
+	Progress      float64    `json:"progress"`
+	Downloaded    int64      `json:"downloaded"`
+	DownloadSpeed int64      `json:"downloadSpeed"`
+	UploadSpeed   int64      `json:"uploadSpeed"`
+	ETASeconds    int64      `json:"etaSeconds"`
+	Seeders       int        `json:"seeders"`
+	Peers         int        `json:"peers"`
+	Stalled       bool       `json:"stalled"`
+	StalledSince  *time.Time `json:"stalledSince,omitempty"`
+}
+
+func progressOf(d *Download) ProgressUpdate {
+	p := ProgressUpdate{
+		ID:            d.ID,
+		Status:        d.Status,
+		Progress:      d.Progress,
+		Downloaded:    d.Downloaded,
+		DownloadSpeed: d.DownloadSpeed,
+		UploadSpeed:   d.UploadSpeed,
+		ETASeconds:    d.ETASeconds,
+		Seeders:       d.Seeders,
+		Peers:         d.Peers,
+		Stalled:       d.Stalled,
+	}
+	if d.StalledSince != nil {
+		at := *d.StalledSince
+		p.StalledSince = &at
+	}
+	return p
+}
+
 func snapshot(d *Download) Download {
 	out := *d
 	out.Files = append([]FileState(nil), d.Files...)
 	if d.CompletedAt != nil {
 		at := *d.CompletedAt
 		out.CompletedAt = &at
+	}
+	if d.StalledSince != nil {
+		at := *d.StalledSince
+		out.StalledSince = &at
 	}
 	return out
 }

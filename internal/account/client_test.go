@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,99 @@ func TestClientMe(t *testing.T) {
 	}
 	if user.Username != "egor" || user.ID != "u1" {
 		t.Fatalf("unexpected user: %+v", user)
+	}
+}
+
+func TestClientUploadCoverReturnsOwnedURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != APIPrefix+"/me/cover" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeJSON(t, w, http.StatusOK, CoverUpload{CoverURL: "https://cdn.test/profile-covers/u/file.webp"})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	got, err := c.UploadCover(context.Background(), []byte("RIFFxxxxWEBP"))
+	if err != nil {
+		t.Fatalf("UploadCover() error = %v", err)
+	}
+	if got.CoverURL == "" {
+		t.Fatal("UploadCover() returned an empty URL")
+	}
+}
+
+func TestClientUploadCoverOversizedRejectedLocally(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	_, err := c.UploadCover(context.Background(), make([]byte, maxCoverSize+1))
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeCoverTooLarge {
+		t.Fatalf("error = %v, want %q", err, CodeCoverTooLarge)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want local rejection", requests)
+	}
+}
+
+func TestClientUploadCoverMapsServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusUnsupportedMediaType, map[string]any{
+			"error": map[string]string{"code": CodeUnsupportedCover, "field": "cover", "message": "unsupported"},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("token"))
+	_, err := c.UploadCover(context.Background(), []byte("cover"))
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != CodeUnsupportedCover || apiErr.Field != "cover" {
+		t.Fatalf("error = %+v, want unsupported cover field", err)
+	}
+}
+
+func TestClientMeOldStyleProfileReplyGetsNewDefaults(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(`{
+			"id": "u1", "username": "egor", "displayName": "Egor", "email": "egor@example.com",
+			"createdAt": "2024-01-02T03:04:05Z",
+			"profile": {
+				"showStats": false, "showPlaying": true, "showActivity": true, "showOnline": true,
+				"showcase": ["favorites"]
+			}
+		}`)); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL, tokenOK("test-token"))
+	user, err := c.Me(context.Background())
+	if err != nil {
+		t.Fatalf("Me() error = %v", err)
+	}
+	if user.Profile.Visibility != VisibilityFriends {
+		t.Errorf("visibility = %q, want %q", user.Profile.Visibility, VisibilityFriends)
+	}
+	if !user.Profile.ShowPlaytime || !user.Profile.ShowLibrary {
+		t.Errorf("profile = %+v, want the two new toggles defaulted to true", user.Profile)
+	}
+	if user.Profile.ShowStats {
+		t.Errorf("profile = %+v, want showStats to keep the server's value (false)", user.Profile)
+	}
+	if user.Profile.Appearance != DefaultProfileAppearance() {
+		t.Errorf("appearance = %+v, want defaults for a legacy response", user.Profile.Appearance)
 	}
 }
 
@@ -208,7 +302,7 @@ func TestClientUndecodableSuccessBody(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for undecodable body, got user %+v", user)
 	}
-	if user != (CurrentUser{}) {
+	if !reflect.DeepEqual(user, CurrentUser{}) {
 		t.Fatalf("expected zero user on error, got %+v", user)
 	}
 }
@@ -282,7 +376,7 @@ func TestClientUploadAvatarSendsRawBytes(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL, tokenOK("upload-token"))
-	user, err := c.UploadAvatar(context.Background(), payload)
+	user, err := c.UploadAvatar(context.Background(), payload, AvatarCrop{})
 	if err != nil {
 		t.Fatalf("UploadAvatar() error = %v", err)
 	}
@@ -307,7 +401,7 @@ func TestClientUploadAvatarOversizedRejectedLocally(t *testing.T) {
 
 	c := newTestClient(t, srv.URL, tokenOK("t"))
 	oversized := make([]byte, maxAvatarSize+1)
-	_, err := c.UploadAvatar(context.Background(), oversized)
+	_, err := c.UploadAvatar(context.Background(), oversized, AvatarCrop{})
 	var accErr *Error
 	if !errors.As(err, &accErr) {
 		t.Fatalf("expected *Error, got %v", err)
@@ -329,7 +423,7 @@ func TestClientUploadAvatarEmptyRejectedLocally(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL, tokenOK("t"))
-	_, err := c.UploadAvatar(context.Background(), nil)
+	_, err := c.UploadAvatar(context.Background(), nil, AvatarCrop{})
 	var accErr *Error
 	if !errors.As(err, &accErr) {
 		t.Fatalf("expected *Error, got %v", err)
@@ -402,7 +496,7 @@ func TestClientEndpointsUseVersionedPathAndHeaders(t *testing.T) {
 			name:       "UploadAvatar",
 			wantMethod: http.MethodPut,
 			call: func(c *Client) (CurrentUser, error) {
-				return c.UploadAvatar(context.Background(), []byte{1, 2, 3})
+				return c.UploadAvatar(context.Background(), []byte{1, 2, 3}, AvatarCrop{})
 			},
 		},
 		{

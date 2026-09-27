@@ -21,6 +21,7 @@ type imagePayload struct {
 }
 
 type gameResponse struct {
+	SteamAppID  int64          `json:"steamAppId"`
 	ProviderID  string         `json:"providerId"`
 	Title       string         `json:"title"`
 	Summary     string         `json:"summary"`
@@ -30,6 +31,7 @@ type gameResponse struct {
 	Genres      []string       `json:"genres"`
 	Themes      []string       `json:"themes"`
 	Platforms   []string       `json:"platforms"`
+	GameType    string         `json:"gameType"`
 	Cover       *imagePayload  `json:"cover"`
 	Screenshots []imagePayload `json:"screenshots"`
 }

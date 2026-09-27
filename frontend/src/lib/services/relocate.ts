@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as RelocateService } from '../../../bindings/typhon/internal/relocate';
 import { inWails } from './backend';
 
@@ -58,5 +60,5 @@ export async function cancelMove(jobId: string): Promise<void> {
 
 export async function selectMoveTargetFolder(): Promise<string> {
   if (!inWails) return '';
-  return await RelocateService.SelectTargetFolder();
+  return await RelocateService.SelectTargetFolder(get(locale));
 }

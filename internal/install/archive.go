@@ -10,12 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 const copyBufferSize = 256 * 1024
 
 var (
-	errUnsupportedArchive = errors.New("формат архива не поддерживается, распакуйте вручную")
+	errUnsupportedArchive = uierr.New("install.unsupported_archive", "формат архива не поддерживается, распакуйте вручную")
 	errNoEstimate         = errors.New("не удалось определить размер распакованного архива")
 )
 
@@ -109,6 +111,12 @@ func skipEntry(archivePath, name string) {
 	slog.Warn("skip unsafe archive entry", "archive", archivePath, "entry", name)
 }
 
+// skipIrregular: распакованная игра, в которой не хватает файла, выглядит как
+// «не запускается», и молчащий пропуск не оставляет об этом ни следа.
+func skipIrregular(archivePath, name string) {
+	slog.Warn("skip non-regular archive entry", "archive", archivePath, "entry", name)
+}
+
 func writeEntry(ctx context.Context, target string, mode fs.FileMode, src io.Reader, rep *reporter, buf []byte) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
@@ -118,7 +126,15 @@ func writeEntry(ctx context.Context, target string, mode fs.FileMode, src io.Rea
 		return err
 	}
 	if err := copyStream(ctx, f, src, rep, buf); err != nil {
-		f.Close()
+		if cerr := f.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		if cerr := f.Close(); cerr != nil {
+			return fmt.Errorf("%w: close: %w", err, cerr)
+		}
 		return err
 	}
 	return f.Close()

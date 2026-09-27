@@ -2,12 +2,7 @@ package install
 
 import (
 	"context"
-	"errors"
-)
-
-var (
-	errElevationDeclined = errors.New("нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос")
-	errNoElevatedProcess = errors.New("процесс установщика с правами администратора не запустился")
+	"crypto/ed25519"
 )
 
 type runSpec struct {
@@ -22,8 +17,8 @@ type runSpec struct {
 	Background bool
 	Hidden     bool
 
-	// Поля ниже нужны только повышенному воркеру (runner_windows.go,
-	// worker_windows.go): без прав администратора процесс с установщиком
+	// Поля ниже нужны только повышенному воркеру (elevated.go, worker_run.go):
+	// без прав администратора процесс с установщиком
 	// лаунчеру не принадлежит, поэтому воркер получает не готовую команду, а
 	// данные, из которых сам строит и разведку компонентов, и основной прогон.
 	ID            string
@@ -35,19 +30,20 @@ type runSpec struct {
 	StatePath     string
 	InfPath       string
 	CancelPath    string
+
+	// Broker — уже поднятый повышенный процесс этой загрузки, если права
+	// запрашивали заранее. Есть он или нет, дальше всё одинаково: лаунчер
+	// кладёт задание и читает состояние из файлов, потому что процессом с
+	// правами администратора он не владеет ни в том, ни в другом случае.
+	Broker *brokerHandoff
+}
+
+type brokerHandoff struct {
+	Key  ed25519.PrivateKey
+	Dir  string
+	Gone <-chan struct{}
 }
 
 type runner interface {
 	run(ctx context.Context, spec runSpec) (int, error)
-}
-
-// discovery сводит runSpec к discoverySpec (worker.go), чтобы неэлевированный
-// путь запуска (processRunner.run, runner_windows.go) мог пользоваться той же
-// attemptDiscovery, что и повышенный воркер: разведка компонентов Inno не
-// должна была работать только под UAC (инвариант 28).
-func (s runSpec) discovery() discoverySpec {
-	return discoverySpec{
-		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.Dir, InfPath: s.InfPath, Options: s.Options,
-	}
 }

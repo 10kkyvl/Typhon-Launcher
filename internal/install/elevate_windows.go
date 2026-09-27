@@ -10,9 +10,15 @@ import (
 	"sync"
 	"syscall"
 
-	"typhon/internal/platform"
-
 	"golang.org/x/sys/windows"
+
+	"typhon/internal/platform"
+	"typhon/internal/uierr"
+)
+
+var (
+	errElevationDeclined = uierr.New("install.elevation_declined", "нужны права администратора: запрос Windows отклонён. Повторите действие и подтвердите запрос")
+	errNoElevatedProcess = uierr.New("install.no_elevated_process", "процесс установщика с правами администратора не запустился")
 )
 
 // CreateProcess никогда не поднимает UAC: для установщика с requireAdministrator
@@ -57,6 +63,13 @@ func (p *elevatedProc) close() {
 	p.handle = 0
 }
 
+func (p *elevatedProc) wait() (int, error) {
+	p.mu.Lock()
+	handle := p.handle
+	p.mu.Unlock()
+	return awaitProcess(handle)
+}
+
 func awaitProcess(handle windows.Handle) (int, error) {
 	event, err := windows.WaitForSingleObject(handle, windows.INFINITE)
 	if err != nil {
@@ -72,6 +85,12 @@ func awaitProcess(handle windows.Handle) (int, error) {
 	return int(code), nil
 }
 
+func workerStartError(path string, err error) error {
+	return elevationError(path, err)
+}
+
+func elevationSupported() bool { return true }
+
 func elevationParams(spec runSpec) string {
 	if spec.Tail != "" {
 		return spec.Tail
@@ -83,7 +102,7 @@ func elevationParams(spec runSpec) string {
 	return strings.Join(parts, " ")
 }
 
-func startElevated(spec runSpec) (*elevatedProc, error) {
+func startElevated(spec runSpec) (workerHandle, error) {
 	show := int32(windows.SW_SHOWNORMAL)
 	if spec.Hidden {
 		show = int32(windows.SW_HIDE)

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
+  import { msg } from '../i18n';
 
   let {
     value = $bindable(''),
-    placeholder = 'Поиск',
+    placeholder = msg('ui.search'),
     shortcut,
     loading = false,
     oninput,
@@ -34,7 +35,7 @@
     onkeydown={(event) => onkeydown?.(event)}
   />
   {#if loading}
-    <span class="spinner" aria-label="Поиск"></span>
+    <span class="spinner" aria-label={msg('ui.search')}></span>
   {:else if shortcut}
     <kbd>{shortcut}</kbd>
   {/if}

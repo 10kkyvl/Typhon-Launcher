@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,20 +26,35 @@ func TestDownloadRetriesAfterDroppedConnection(t *testing.T) {
 	shortBackoff(t)
 
 	data := bytes.Repeat([]byte("typhon-update"), 4096)
-	var requests atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		if requests.Add(1) == 1 {
+	half := len(data) / 2
+	var mu sync.Mutex
+	var requests []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.Header.Get("Range"))
+		n := len(requests)
+		mu.Unlock()
+
+		if n == 1 {
+			w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 			// Declaring the full length and sending half of it makes the
 			// server close the connection, which is what the client sees when
 			// a link drops mid-artifact.
-			if _, err := w.Write(data[:len(data)/2]); err != nil {
+			if _, err := w.Write(data[:half]); err != nil {
 				t.Logf("write half body: %v", err)
 			}
 			return
 		}
-		if _, err := w.Write(data); err != nil {
-			t.Logf("write body: %v", err)
+
+		rangeHdr := r.Header.Get("Range")
+		var start int
+		if _, err := fmt.Sscanf(rangeHdr, "bytes=%d-", &start); err != nil {
+			t.Fatalf("second request missing Range header: %q", rangeHdr)
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(data)-1, len(data)))
+		w.WriteHeader(http.StatusPartialContent)
+		if _, err := w.Write(data[start:]); err != nil {
+			t.Logf("write remainder: %v", err)
 		}
 	}))
 	defer srv.Close()
@@ -58,8 +75,11 @@ func TestDownloadRetriesAfterDroppedConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Download() error = %v, want nil", err)
 	}
-	if got := requests.Load(); got != 2 {
-		t.Fatalf("server saw %d requests, want 2", got)
+	if len(requests) != 2 {
+		t.Fatalf("server saw %d requests, want 2", len(requests))
+	}
+	if requests[1] != fmt.Sprintf("bytes=%d-", half) {
+		t.Fatalf("second request Range = %q, want bytes=%d-", requests[1], half)
 	}
 
 	got, err := os.ReadFile(path)
@@ -72,14 +92,17 @@ func TestDownloadRetriesAfterDroppedConnection(t *testing.T) {
 	if last := reported[len(reported)-1]; last != int64(len(data)) {
 		t.Fatalf("final progress report = %d, want %d", last, len(data))
 	}
-	var restarted bool
+	var sawHalf bool
 	for _, n := range reported {
-		if n == 0 {
-			restarted = true
+		if sawHalf && n < int64(half) {
+			t.Fatalf("progress %v dropped below %d after resuming", reported, half)
+		}
+		if n == int64(half) {
+			sawHalf = true
 		}
 	}
-	if !restarted {
-		t.Fatalf("progress reports %v never returned to zero: the bar keeps counting the abandoned attempt", reported)
+	if !sawHalf {
+		t.Fatalf("progress reports %v never reported the resumed offset %d", reported, half)
 	}
 	assertOnlyArtifact(t, destDir, "typhon-setup.exe")
 }

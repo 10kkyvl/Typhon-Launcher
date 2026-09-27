@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +77,34 @@ func (f *fakeStore) snapshot() (Credential, bool) {
 func statePathFor(t *testing.T) string {
 	t.Helper()
 	return filepath.Join(t.TempDir(), "account.json")
+}
+
+// unwritableStateDir returns a directory-shaped path under which a state
+// file's absence still reads as fs.ErrNotExist but a write into it fails.
+// On Windows, opening "<blocker file>/name" reports ERROR_PATH_NOT_FOUND,
+// which os maps to fs.ErrNotExist, and a write into it fails too, so the
+// classic blocker-file trick works end to end. On POSIX the same trick
+// makes a read return ENOTDIR instead — a real error load must not treat as
+// "start empty" — so a real directory with read+search but no write
+// permission (0500) is used instead: a lookup of an absent child still
+// returns ENOENT, while os.CreateTemp inside it fails with EACCES.
+func unwritableStateDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
+			t.Fatalf("write blocker file: %v", err)
+		}
+		return blocker
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, permission checks are not enforced")
+	}
+	dir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatalf("create unwritable dir: %v", err)
+	}
+	return dir
 }
 
 func startedService(t *testing.T, store CredentialStore, baseURL string) *Service {
@@ -540,6 +570,38 @@ func TestRegisterAndLoginStoreTheSession(t *testing.T) {
 	}
 }
 
+func TestLoginWithoutProfileInReplyDefaultsSettings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != APIPrefix+"/auth/login" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, http.StatusOK, map[string]any{
+			"user": map[string]any{
+				"id":       "u1",
+				"username": "playerone",
+			},
+			"token":     "fresh-token",
+			"expiresAt": time.Now().Add(time.Hour),
+		})
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{}
+	s := startedService(t, store, srv.URL)
+	user, err := s.Login(LoginInput{Identifier: "playerone", Password: "password"})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	want := DefaultProfileSettings()
+	if !reflect.DeepEqual(user.Profile, want) {
+		t.Errorf("user profile = %+v, want defaults %+v", user.Profile, want)
+	}
+	if got := s.CurrentProfileSettings(); !reflect.DeepEqual(got, want) {
+		t.Errorf("CurrentProfileSettings() = %+v, want defaults %+v", got, want)
+	}
+}
+
 func TestLoginRevokesSessionWhenCredentialWriteFails(t *testing.T) {
 	var logouts []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -665,6 +727,73 @@ func TestLogout(t *testing.T) {
 			t.Errorf("error = %v, want it to mention the delete failure", err)
 		}
 	})
+}
+
+func TestCurrentProfileSettingsFallsBackToDefaults(t *testing.T) {
+	store := &fakeStore{}
+	s := startedService(t, store, "http://127.0.0.1:0")
+	got := s.CurrentProfileSettings()
+	if !got.ShowStats || len(got.Showcase) != 1 || got.Showcase[0] != "favorites" {
+		t.Fatalf("settings = %+v, want defaults", got)
+	}
+}
+
+func TestCurrentProfileSettingsReturnsACopyOfShowcase(t *testing.T) {
+	store := &fakeStore{}
+	s := startedService(t, store, "http://127.0.0.1:0")
+	s.mu.Lock()
+	s.profile = cachedProfile{User: CurrentUser{ID: "u1", Profile: ProfileSettings{Showcase: []string{"favorites"}}}}
+	s.mu.Unlock()
+
+	got := s.CurrentProfileSettings()
+	got.Showcase[0] = "mutated"
+
+	again := s.CurrentProfileSettings()
+	if again.Showcase[0] != "favorites" {
+		t.Fatalf("CurrentProfileSettings() leaked its internal slice: %+v", again)
+	}
+}
+
+func TestUpdateProfileSendsProfileSettings(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/me":
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode: %v", err)
+			}
+			user := sampleUser()
+			user.Profile = ProfileSettings{ShowStats: false, ShowPlaying: true, ShowActivity: true, ShowOnline: true, Showcase: []string{"most_played"}}
+			writeJSON(t, w, http.StatusOK, user)
+		case r.URL.Path == "/v1/me":
+			writeJSON(t, w, http.StatusOK, sampleUser())
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	store := &fakeStore{cred: Credential{Token: "tok", Username: "playerone"}, present: true}
+	s := startedService(t, store, srv.URL)
+	if _, err := s.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	settings := ProfileSettings{ShowStats: false, ShowPlaying: true, ShowActivity: true, ShowOnline: true, Showcase: []string{"most_played"}}
+	got, err := s.UpdateProfile(Patch{Profile: &settings})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	profile, ok := body["profile"].(map[string]any)
+	if !ok || profile["showStats"] != false {
+		t.Fatalf("sent body = %v, want profile.showStats=false", body)
+	}
+	if _, present := body["username"]; present {
+		t.Fatalf("username must be omitted when unchanged: %v", body)
+	}
+	if got.Profile.ShowStats || s.CurrentProfileSettings().Showcase[0] != "most_played" {
+		t.Fatalf("cached settings = %+v, want the server reply", s.CurrentProfileSettings())
+	}
 }
 
 func TestServiceRejectsCallsBeforeStartup(t *testing.T) {

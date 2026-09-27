@@ -136,7 +136,7 @@ describe("metaLine", () => {
         genres: ["RPG", "Shooter"],
         platforms: ["Windows"],
       }),
-    ).toEqual(["2020", "CD Projekt RED", "RPG", "Windows"]);
+    ).toEqual(["2020", "CD Projekt RED", "Ролевые", "Windows"]);
   });
 
   it("leaves no gaps when fields are missing", () => {
@@ -315,8 +315,8 @@ describe("primaryAction", () => {
     ).toBe("update");
   });
 
-  it("offers Install for a game with releases", () => {
-    expect(primaryAction(status({ releaseCount: 3 })).kind).toBe("install");
+  it("offers Download for a game with releases and nothing on disk", () => {
+    expect(primaryAction(status({ releaseCount: 3 })).kind).toBe("download");
   });
 
   it("waits instead of guessing while releases load", () => {
@@ -382,6 +382,15 @@ describe("hubAction", () => {
       label: "Установить",
       disabled: false,
     });
+  });
+
+  it("keeps Download and Install apart for the same game", () => {
+    expect(hubAction(status({ releaseCount: 1 })).kind).toBe("download");
+    expect(
+      hubAction(
+        status({ releaseCount: 1, terminalDownload: { status: "completed" } }),
+      ).kind,
+    ).toBe("install-download");
   });
 
   it("prefers installing the completed download over fresh releases", () => {
@@ -537,9 +546,9 @@ describe("metaStatus", () => {
       want: "ready",
     },
     {
-      name: "keeps the card quiet for a matched game",
+      name: "offers retry when details of a matched game failed to load",
       input: { available: true, busy: false, match: "failed", resolved: true },
-      want: "ready",
+      want: "failed",
     },
     {
       name: "reports a lookup started by the card itself",
@@ -577,6 +586,12 @@ describe("metaStatus", () => {
       want: "ready",
     },
   ];
+
+  it('shows loading for an identified Steam game while its details are still arriving', () => {
+    expect(metaStatus({available: true, resolved: true, busy: true, match: 'idle'})).toBe('searching');
+    expect(metaStatus({available: true, resolved: true, busy: false, match: 'searching'})).toBe('searching');
+    expect(metaStatus({available: true, resolved: true, busy: false, match: 'idle'})).toBe('ready');
+  });
 
   for (const c of cases) {
     it(c.name, () => {

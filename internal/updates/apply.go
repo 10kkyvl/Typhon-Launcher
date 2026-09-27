@@ -16,6 +16,10 @@ import (
 	"typhon/internal/history"
 	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/platform"
+	"typhon/internal/settings"
+	"typhon/internal/sources"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
 
@@ -26,15 +30,25 @@ const (
 )
 
 var (
-	errDownloadFailed = errors.New("не удалось скачать данные обновления")
-	errInstallFailed  = errors.New("не удалось установить обновление")
-	errStagingEmpty   = errors.New("временная установка пуста")
-	errNoLaunchTarget = errors.New("исполняемый файл не найден после обновления")
-	errSwapFailed     = errors.New("не удалось заменить установленную версию")
-	errCarryOver      = errors.New("не удалось перенести пользовательские файлы из предыдущей версии")
+	errDownloadFailed = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
+	errInstallFailed  = uierr.New("updates.install_failed", "не удалось установить обновление")
+	errStagingEmpty   = uierr.New("updates.staging_empty", "временная установка пуста")
+	errNoLaunchTarget = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
+	errSwapFailed     = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
+	errCarryOver      = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
 
-	errUnavailablePrefetch = errors.New("предварительная загрузка недоступна для этой стратегии")
+	errUnavailablePrefetch = uierr.New("updates.prefetch_unavailable", "предварительная загрузка недоступна для этой стратегии")
+
+	errNoFreeSpaceForBackup = uierr.New("updates.no_free_space_for_backup", "недостаточно места для резервной копии перед обновлением")
+
+	errDownloadStalled = uierr.New("updates.download_stalled", "загрузка остановилась: нет сети или источников, повторите обновление позже")
 )
+
+// updateStallTimeout bounds how long an update job waits on a download that
+// reports StatusDownloading without making progress. The torrent client keeps
+// trying past this point; only the update job gives up, so Busy clears and
+// the user is not stuck on a job that will never finish on its own.
+var updateStallTimeout = 15 * time.Minute
 
 func (s *Service) StartUpdate(gameID string) error {
 	current, ok := s.snapshot(gameID)
@@ -56,6 +70,10 @@ func (s *Service) StartUpdate(gameID string) error {
 	ctx, started := s.beginJob(gameID)
 	if !started {
 		return errBusy
+	}
+	if err := s.validatePlan(gameID, *current.Plan); err != nil {
+		s.endJob(gameID)
+		return err
 	}
 
 	canonicalID := s.canonicalGameID(gameID)
@@ -202,9 +220,23 @@ func (s *Service) CancelUpdate(gameID string) error {
 }
 
 func (s *Service) runUpdate(ctx context.Context, plan UpdatePlan) error {
+	if err := s.validatePlan(plan.GameID, plan); err != nil {
+		return err
+	}
 	handler := s.strategyFor(plan.Strategy)
 	if handler == nil {
 		return errUpdateFailed
+	}
+	if plan.SavesPath != "" {
+		s.setStep(plan.GameID, StepBackup, "Снимок сохранений")
+	}
+	snapshot, err := s.backupSaves(ctx, plan)
+	if err != nil {
+		return err
+	}
+	if snapshot != "" {
+		slog.Info("saves snapshot taken", "game", plan.GameID, "from", plan.SavesPath, "path", snapshot)
+		s.mutate(plan.GameID, func(u *Update) { u.SavesBackup = snapshot })
 	}
 	return handler.Apply(ctx, plan)
 }
@@ -221,10 +253,10 @@ func (s *Service) downloadRelease(ctx context.Context, plan UpdatePlan, releaseI
 		return download.Download{}, errNoTarget
 	}
 	release, ok := s.releases.FindRelease(releaseID)
-	if !ok || len(release.URIs) == 0 {
+	if !ok || len(release.URIs) == 0 || !releaseBelongsToPlan(plan, release) {
 		return download.Download{}, errNoTarget
 	}
-	if existing, found := s.existingTask(plan.GameID, releaseID); found {
+	if existing, found := s.existingTask(plan, release, destination, inPlace, flat); found {
 		s.mutate(plan.GameID, func(u *Update) { u.DownloadID = existing.ID })
 		return existing, nil
 	}
@@ -237,13 +269,15 @@ func (s *Service) downloadRelease(ctx context.Context, plan UpdatePlan, releaseI
 		InPlace:     inPlace,
 		Verify:      inPlace,
 		Origin: download.Origin{
-			ReleaseID:    release.ID,
-			SourceID:     release.SourceID,
-			GameID:       s.canonicalGameID(plan.GameID),
-			Version:      releaseVersion(release),
-			Purpose:      download.PurposeUpdate,
-			UpdatePlanID: plan.ID,
-			LibraryID:    plan.GameID,
+			ReleaseID:         release.ID,
+			SourceID:          release.SourceID,
+			DistributionID:    release.DistributionID,
+			ReleaseUploadedAt: release.UploadedAt,
+			GameID:            s.canonicalGameID(plan.GameID),
+			Version:           releaseVersion(release),
+			Purpose:           download.PurposeUpdate,
+			UpdatePlanID:      plan.ID,
+			LibraryID:         plan.GameID,
 		},
 	})
 	if err != nil {
@@ -253,14 +287,31 @@ func (s *Service) downloadRelease(ctx context.Context, plan UpdatePlan, releaseI
 	return task, nil
 }
 
-func (s *Service) existingTask(gameID, releaseID string) (download.Download, bool) {
-	for _, task := range s.downloads.ByOrigin(gameID, download.PurposeUpdate) {
-		if task.Origin.ReleaseID != releaseID || task.Status == download.StatusFailed {
+func (s *Service) existingTask(plan UpdatePlan, release sources.Release, destination string, inPlace, flat bool) (download.Download, bool) {
+	for _, task := range s.downloads.ByOrigin(plan.GameID, download.PurposeUpdate) {
+		if task.Origin.ReleaseID != release.ID || task.Origin.SourceID != release.SourceID ||
+			(task.Origin.DistributionID != "" && task.Origin.DistributionID != release.DistributionID) || task.Origin.LibraryID != plan.GameID ||
+			task.Origin.Version != releaseVersion(release) || !sameDownloadDestination(task.Destination, destination) ||
+			task.InPlace != inPlace || task.Flat != flat ||
+			(task.Origin.ReleaseUploadedAt != nil && !samePlanTime(task.Origin.ReleaseUploadedAt, release.UploadedAt)) ||
+			task.Status == download.StatusFailed {
 			continue
+		}
+		if (task.Origin.DistributionID == "" && release.DistributionID != "") ||
+			(task.Origin.ReleaseUploadedAt == nil && release.UploadedAt != nil) {
+			// Legacy origins lack provenance fields. Reuse only with proof that
+			// this is the same payload, not a replaced revision of the same ID.
+			if release.InfoHash == "" || task.InfoHash == "" || !strings.EqualFold(task.InfoHash, release.InfoHash) {
+				continue
+			}
 		}
 		return task, true
 	}
 	return download.Download{}, false
+}
+
+func sameDownloadDestination(a, b string) bool {
+	return a == b || platform.SamePath(a, b)
 }
 
 // PrefetchUpdate downloads the update data without touching the installation.
@@ -281,6 +332,10 @@ func (s *Service) PrefetchUpdate(gameID string) error {
 	ctx, started := s.beginJob(gameID)
 	if !started {
 		return errBusy
+	}
+	if err := s.validatePlan(gameID, *current.Plan); err != nil {
+		s.endJob(gameID)
+		return err
 	}
 	plan := *current.Plan
 	s.mutate(gameID, func(u *Update) {
@@ -339,6 +394,8 @@ func (s *Service) prefetch(ctx context.Context, plan UpdatePlan) error {
 func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) error {
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
+	var lastProgress int64
+	var lastChange time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -358,6 +415,16 @@ func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) e
 				return errors.New(task.Error)
 			}
 			return errDownloadFailed
+		case download.StatusDownloading:
+			now := time.Now()
+			if lastChange.IsZero() || task.Downloaded != lastProgress {
+				lastProgress = task.Downloaded
+				lastChange = now
+				continue
+			}
+			if now.Sub(lastChange) >= updateStallTimeout {
+				return errDownloadStalled
+			}
 		}
 	}
 }
@@ -441,26 +508,26 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 	if err != nil {
 		return err
 	}
-	if err := swapDirectories(game.InstallDir, staging, previous); err != nil {
+	if err := s.swapDirectories(plan.GameID, game.InstallDir, staging, previous, plan.TargetVersion); err != nil {
 		slog.Error("swap install directory", "game", plan.GameID, "error", err)
 		return errSwapFailed
 	}
 
 	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), item.Executable, staging)
 	if err != nil {
-		if restoreErr := restoreDirectories(game.InstallDir, previous); restoreErr != nil {
-			slog.Error("restore previous version", "game", plan.GameID, "error", restoreErr)
-		}
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return err
 	}
 	if executable == "" {
 		slog.Error("no launch target after update", "game", plan.GameID)
-		if err := restoreDirectories(game.InstallDir, previous); err != nil {
-			slog.Error("restore previous version", "game", plan.GameID, "error", err)
-		}
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return errNoLaunchTarget
 	}
 
+	// carryOverExtras failing leaves .previous and the journal alone on
+	// purpose: the caller cannot decide here whether to roll back a
+	// partially migrated installation, so the journal stays and the next
+	// startup finishes the decision (invariant 9).
 	carried, err := carryOverExtras(ctx, previous, game.InstallDir)
 	if err != nil {
 		slog.Error("carry over user files", "game", plan.GameID, "path", previous, "error", err)
@@ -470,38 +537,177 @@ func (s *Service) applyFullRelease(ctx context.Context, plan UpdatePlan) error {
 		slog.Warn("user files not carried over", "game", plan.GameID, "bytes", carried.skipped, "limit", int64(carryOverLimit))
 		s.setStep(plan.GameID, StepCleanup, fmt.Sprintf("Не перенесено %d Б пользовательских файлов: превышен лимит", carried.skipped))
 	}
-	s.rememberPrevious(game, previous)
 
 	s.setStep(plan.GameID, StepCleanup, "")
-	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
+	if err := s.registerVersion(ctx, game, plan, executable, game.InstallDir); err != nil {
+		return err
+	}
+	if err := s.registerRollback(game, previous); err != nil {
+		return err
+	}
+	if err := s.clearJournal(plan.GameID); err != nil {
+		return err
+	}
+	s.settlePrevious(game.ID, previous)
+	return nil
 }
 
+// applyTorrentReuse writes new torrent pieces directly into the live install
+// (invariant 15), so it takes a verified full copy of the installation before
+// the first byte is written, journaled so a crash mid-download can restore it.
 func (s *Service) applyTorrentReuse(ctx context.Context, plan UpdatePlan) error {
 	game, ok := s.installedGame(plan.GameID)
 	if !ok {
 		return errNotTracked
 	}
 	s.setStep(plan.GameID, StepRecheck, "Проверка существующих файлов")
+	previous, err := s.backupInPlace(ctx, plan.GameID, game.InstallDir, plan.TargetVersion)
+	if err != nil {
+		return err
+	}
+
 	task, err := s.downloadRelease(ctx, plan, plan.TargetReleaseID, game.InstallDir, true, plan.ReuseFlat)
 	if err != nil {
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return err
 	}
 	s.setStep(plan.GameID, StepDownload, "Загрузка изменившихся данных")
 	if err := s.waitDownload(ctx, plan.GameID, task.ID); err != nil {
+		if stopErr := s.stopRepairDownload(task.ID); stopErr != nil {
+			return errors.Join(err, stopErr)
+		}
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return err
 	}
 
 	s.setStep(plan.GameID, StepVerify, "Проверка установки")
 	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
 	if err != nil {
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return err
 	}
 	if executable == "" {
+		s.undoSwapAndClear(plan.GameID, game.InstallDir, previous)
 		return errNoLaunchTarget
 	}
-	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
+
+	if err := s.registerVersion(ctx, game, plan, executable, game.InstallDir); err != nil {
+		return err
+	}
+	if err := s.registerRollback(game, previous); err != nil {
+		return err
+	}
+	if err := s.clearJournal(plan.GameID); err != nil {
+		return err
+	}
+	s.settlePrevious(game.ID, previous)
+	return nil
 }
 
+// backupInPlace takes a verified full copy of installDir before the caller's
+// first destructive write, and only then journals the operation: a crash
+// during the copy itself leaves installDir untouched, so nothing needs
+// recovering, while a crash after the journal is written is guaranteed a
+// complete, hashed backup to restore from (invariant 15).
+func (s *Service) backupInPlace(ctx context.Context, gameID, installDir, version string) (string, error) {
+	return s.backupInPlaceSuffix(ctx, gameID, installDir, version, "")
+}
+func (s *Service) backupInPlaceSuffix(ctx context.Context, gameID, installDir, version, suffix string) (string, error) {
+	previous, err := copyInstallAsideSuffix(ctx, installDir, suffix)
+	if err != nil {
+		return "", err
+	}
+	if err := s.setJournal(SwapJournal{
+		GameID:     gameID,
+		Kind:       JournalInplace,
+		InstallDir: installDir,
+		Previous:   previous,
+		Version:    version,
+		StartedAt:  time.Now(),
+	}); err != nil {
+		removeTree(previous)
+		return "", err
+	}
+	return previous, nil
+}
+
+// copyInstallAside takes the verified full copy every in-place strategy needs
+// before its first destructive write. A crash during the copy itself leaves
+// installDir untouched, so the copy is safe to redo from scratch on the next
+// attempt (invariant 15).
+func copyInstallAside(ctx context.Context, installDir string) (string, error) {
+	return copyInstallAsideSuffix(ctx, installDir, "")
+}
+func copyInstallAsideSuffix(ctx context.Context, installDir, suffix string) (string, error) {
+	previous, err := previousDir(installDir)
+	if err != nil {
+		return "", err
+	}
+	previous += suffix
+	total, err := install.DirSize(ctx, installDir)
+	if err != nil {
+		return "", err
+	}
+	if err := checkBackupFreeSpace(installDir, total); err != nil {
+		return "", err
+	}
+	removeTree(previous)
+	if err := install.CopyDirVerified(ctx, installDir, previous, nil); err != nil {
+		removeTree(previous)
+		return "", err
+	}
+	return previous, nil
+}
+
+// undoSwapAndClear rolls a swap or in-place write back to previous and only
+// then clears the journal, so a crash between the two still leaves the
+// journal for ServiceStartup to finish.
+func (s *Service) undoSwapAndClear(gameID, installDir, previous string) {
+	s.mu.Lock()
+	entry := s.journals[gameID]
+	var journal SwapJournal
+	if entry != nil {
+		journal = *entry
+	} else {
+		journal = SwapJournal{InstallDir: installDir, Previous: previous}
+	}
+	s.mu.Unlock()
+	if err := restoreSwapFiles(journal); err != nil {
+		slog.Error("restore previous version", "game", gameID, "error", err)
+		return
+	}
+
+	if err := s.clearJournal(gameID); err != nil {
+		slog.Error("clear swap journal", "game", gameID, "error", err)
+	}
+}
+
+func checkBackupFreeSpace(path string, needed int64) error {
+	if needed < 0 {
+		return errNoFreeSpaceForBackup
+	}
+	info, err := platform.GetStorageInfo(path)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errNoFreeSpaceForBackup, err)
+	}
+	//nolint:gosec // G115: needed >= 0 checked above, the int64->uint64 conversion is exact
+	if info.FreeBytes < uint64(needed) {
+		return errNoFreeSpaceForBackup
+	}
+	return nil
+}
+
+// applyPatchChain commits one patch at a time: each successfully merged patch
+// registers its own intermediate version before the next patch starts, so a
+// chain interrupted partway through never reports a version it did not fully
+// apply (invariant 14), and a retry after a crash resumes from the last
+// registered version instead of redoing the whole chain.
+//
+// Every patch merges into the live installation, so the chain takes the same
+// full copy the in-place strategies take (invariant 15). Unlike them it keeps
+// it as a rollback entry from the first patch on: a chain that stops halfway
+// leaves the game at an intermediate version nobody asked for, and the way
+// back to the version the player started with is that copy.
 func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	game, ok := s.installedGame(plan.GameID)
 	if !ok {
@@ -513,66 +719,165 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	}
 	defer removeTree(staging)
 
+	s.setStep(plan.GameID, StepBackup, "Резервная копия установки")
+	previous, err := copyInstallAside(ctx, game.InstallDir)
+	if err != nil {
+		return err
+	}
+	if err := s.registerRollback(game, previous); err != nil {
+		return err
+	}
+
+	touched, err := s.runPatchChain(ctx, plan, game, staging)
+	if err != nil {
+		if !touched {
+			s.forgetPrevious(plan.GameID)
+			removeTree(previous)
+		}
+		return err
+	}
+	s.settlePrevious(plan.GameID, previous)
+	return nil
+}
+
+// runPatchChain reports whether the installation still differs from the copy
+// taken before the chain, so a chain that failed without leaving anything
+// behind can drop that copy instead of offering the player a rollback to the
+// version they are already on.
+func (s *Service) runPatchChain(ctx context.Context, plan UpdatePlan, game library.Game, staging string) (touched bool, err error) {
+	backup := game.InstallDir + patchBackupSuffix
+	applied := 0
+	stopped := Patch{}
+
+	// A chain that dies halfway leaves the game on a version nobody asked
+	// for, so the failure has to say which patch it stopped on: the code the
+	// interface translates travels inside the message and survives the
+	// prefix (invariant 24).
+	defer func() {
+		if err != nil && stopped.ID != "" {
+			err = fmt.Errorf("патч %s → %s: %w", stopped.FromVersion, stopped.ToVersion, err)
+		}
+	}()
+
 	for _, patch := range plan.Patches {
+		stopped = patch
 		if err := ctx.Err(); err != nil {
-			return err
+			return applied > 0, err
 		}
 		if s.running(plan.GameID) {
-			return errGameRunning
+			return applied > 0, errGameRunning
 		}
 		s.setStep(plan.GameID, StepDownload, "Загрузка патча "+patch.FromVersion+" → "+patch.ToVersion)
 		task, err := s.downloadRelease(ctx, plan, patch.ReleaseID, s.config().DownloadsPath, false, false)
 		if err != nil {
-			return err
+			return applied > 0, err
 		}
 		if err := s.waitDownload(ctx, plan.GameID, task.ID); err != nil {
-			return err
+			return applied > 0, err
 		}
 
 		removeTree(staging)
 		s.setStep(plan.GameID, StepExtract, "Распаковка патча "+patch.ToVersion)
 		if _, err := s.installInto(ctx, task.ID, staging); err != nil {
-			return err
+			return applied > 0, err
 		}
 
 		s.setStep(plan.GameID, StepApplyPatch, "Применение патча "+patch.ToVersion)
-		if err := install.MergeDir(ctx, staging, game.InstallDir, nil); err != nil {
+		removeTree(backup)
+		if err := s.setJournal(SwapJournal{
+			GameID:     plan.GameID,
+			Kind:       JournalPatch,
+			InstallDir: game.InstallDir,
+			Previous:   backup,
+			Version:    patch.ToVersion,
+			Patch:      patch.ID,
+			StartedAt:  time.Now(),
+		}); err != nil {
+			return applied > 0, err
+		}
+		if err := install.MergeDirWithBackup(ctx, staging, game.InstallDir, backup, nil); err != nil {
 			slog.Error("apply patch", "game", plan.GameID, "patch", patch.ID, "error", err)
-			return errUpdateFailed
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, errUpdateFailed
 		}
 		removeTree(staging)
+
+		executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
+		if err != nil {
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, err
+		}
+		if executable == "" {
+			restored := s.undoPatch(plan.GameID, patch.ID, game.InstallDir, backup)
+			return applied > 0 || !restored, errNoLaunchTarget
+		}
+
+		releaseID := patch.ReleaseID
+		releaseUploadedAt := patch.UploadedAt
+		if patch.ToVersion == plan.TargetVersion {
+			releaseID = plan.TargetReleaseID
+			releaseUploadedAt = plan.TargetReleaseUploadedAt
+		}
+		if err := s.registerVersionAs(ctx, game, patch.ToVersion, releaseID, releaseUploadedAt, executable, game.InstallDir); err != nil {
+			return true, err
+		}
+		updated, ok := s.installedGame(plan.GameID)
+		if !ok {
+			return true, errNotTracked
+		}
+		game = updated
+		if err := s.clearJournal(plan.GameID); err != nil {
+			return true, err
+		}
+		removeTree(backup)
+		applied++
 		slog.Info("patch applied", "game", plan.GameID, "from", patch.FromVersion, "to", patch.ToVersion)
 	}
 
-	s.setStep(plan.GameID, StepVerify, "Проверка установки")
-	executable, err := resolveExecutable(ctx, game.InstallDir, relativeExecutable(game.InstallDir, game.Executable), "", "")
-	if err != nil {
-		return err
+	return applied > 0, nil
+}
+
+// undoPatch rolls the interrupted patch back and reports whether the
+// installation is back to its pre-patch state. A restore that itself failed
+// leaves files from the patch behind, and the copy taken before the chain is
+// then the only way back.
+func (s *Service) undoPatch(gameID, patchID, installDir, backup string) bool {
+	if err := install.RestoreMergeBackup(installDir, backup); err != nil {
+		slog.Error("restore patch backup", "game", gameID, "patch", patchID, "error", err)
+		return false
 	}
-	if executable == "" {
-		return errNoLaunchTarget
+	if err := s.clearJournal(gameID); err != nil {
+		slog.Error("clear patch journal", "game", gameID, "error", err)
 	}
-	return s.registerVersion(ctx, game, plan, executable, game.InstallDir)
+	return true
 }
 
 func (s *Service) registerVersion(ctx context.Context, game library.Game, plan UpdatePlan, executable, installDir string) error {
+	return s.registerVersionAs(ctx, game, plan.TargetVersion, plan.TargetReleaseID, plan.TargetReleaseUploadedAt, executable, installDir)
+}
+
+func (s *Service) registerVersionAs(ctx context.Context, game library.Game, version, releaseID string, releaseUploadedAt *time.Time, executable, installDir string) error {
 	if s.library == nil {
 		return errNoLibrary
 	}
 	sourceID := game.SourceID
+	distributionID := game.DistributionID
 	if s.releases != nil {
-		if release, ok := s.releases.FindRelease(plan.TargetReleaseID); ok {
+		if release, ok := s.releases.FindRelease(releaseID); ok {
 			sourceID = release.SourceID
+			distributionID = release.DistributionID
 		}
 	}
 	updated, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
-		ID:            game.ID,
-		Executable:    executable,
-		InstallDir:    installDir,
-		Version:       plan.TargetVersion,
-		VersionSource: string(VersionSourceRelease),
-		ReleaseID:     plan.TargetReleaseID,
-		SourceID:      sourceID,
+		ID:                game.ID,
+		Executable:        executable,
+		InstallDir:        installDir,
+		Version:           version,
+		VersionSource:     string(VersionSourceRelease),
+		ReleaseID:         releaseID,
+		SourceID:          sourceID,
+		DistributionID:    distributionID,
+		ReleaseUploadedAt: releaseUploadedAt,
 	})
 	if err != nil {
 		return err
@@ -583,22 +888,34 @@ func (s *Service) registerVersion(ctx context.Context, game library.Game, plan U
 }
 
 func (s *Service) rememberPrevious(game library.Game, path string) {
-	policy := s.config().KeepPreviousVersion
-	if policy == "off" {
+	if s.config().KeepPreviousVersion == settings.KeepPreviousOff {
 		removeTree(path)
 		return
 	}
-	entry := &Rollback{
-		GameID:     game.ID,
-		Path:       path,
-		InstallDir: game.InstallDir,
-		Executable: game.Executable,
-		Version:    game.Version,
-		ReleaseID:  game.ReleaseID,
-		SourceID:   game.SourceID,
-		CreatedAt:  time.Now(),
+	if err := s.registerRollback(game, path); err != nil {
+		slog.Error("register rollback", "game", game.ID, "error", err)
 	}
-	if policy == "24h" {
+}
+
+// registerRollback records the rollback entry whatever KeepPreviousVersion
+// says. A strategy writing into the live installation needs the copy for the
+// whole operation, so the policy decides only what happens to it once the
+// operation is over — that is settlePrevious, not this.
+func (s *Service) registerRollback(game library.Game, path string) error {
+	policy := s.config().KeepPreviousVersion
+	entry := &Rollback{
+		GameID:            game.ID,
+		Path:              path,
+		InstallDir:        game.InstallDir,
+		Executable:        game.Executable,
+		Version:           game.Version,
+		ReleaseID:         game.ReleaseID,
+		SourceID:          game.SourceID,
+		DistributionID:    game.DistributionID,
+		ReleaseUploadedAt: game.ReleaseUploadedAt,
+		CreatedAt:         time.Now(),
+	}
+	if policy == settings.KeepPreviousDay {
 		until := entry.CreatedAt.Add(previousKeepDuration)
 		entry.KeepUntil = &until
 	} else {
@@ -606,72 +923,98 @@ func (s *Service) rememberPrevious(game library.Game, path string) {
 	}
 
 	s.mu.Lock()
+	previous, had := s.rollbacks[game.ID]
 	s.rollbacks[game.ID] = entry
-	s.persistRollbacksLocked()
+	if err := s.persistRollbacksLocked(); err != nil {
+		if had {
+			s.rollbacks[game.ID] = previous
+		} else {
+			delete(s.rollbacks, game.ID)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks", "game", game.ID, "error", err)
+		return err
+	}
+	var beforeUpdate *Update
 	if u, ok := s.updates[game.ID]; ok {
+		before := *u
+		beforeUpdate = &before
 		u.CanRollback = true
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if beforeUpdate != nil {
+			*s.updates[game.ID] = *beforeUpdate
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", game.ID, "error", err)
+		return err
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
+	return nil
+}
+
+// settlePrevious applies KeepPreviousVersion to a copy that had to survive
+// the whole operation, once that operation is over.
+func (s *Service) settlePrevious(gameID, path string) {
+	if s.config().KeepPreviousVersion != settings.KeepPreviousOff {
+		return
+	}
+	s.forgetPrevious(gameID)
+	removeTree(path)
 }
 
 func (s *Service) Rollback(gameID string) error {
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
-	s.mu.Unlock()
 	if !ok {
+		s.mu.Unlock()
 		return errNoRollback
 	}
+	if s.closing || s.jobs[gameID] != nil || s.rollbackActive[gameID] || s.journals[gameID] != nil {
+		s.mu.Unlock()
+		return errBusy
+	}
+	copyEntry := *entry
+	entry = &copyEntry
+	if s.rollbackActive == nil {
+		s.rollbackActive = map[string]bool{}
+	}
+	s.rollbackActive[gameID] = true
+	s.wg.Add(1)
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); delete(s.rollbackActive, gameID); s.mu.Unlock(); s.wg.Done() }()
 	if s.running(gameID) {
 		return errGameRunning
 	}
-	if stat, err := os.Stat(entry.Path); err != nil || !stat.IsDir() {
-		s.forgetPrevious(gameID)
-		return errNoRollback
-	}
-
 	if entry.InstallDir == "" {
 		return errEmptyInstallDir
 	}
-	current, _ := s.installedGame(gameID)
-	replaced := entry.InstallDir + replacedSuffix
-	removeTree(replaced)
-	if _, err := os.Stat(entry.InstallDir); err == nil {
-		if err := os.Rename(entry.InstallDir, replaced); err != nil {
-			slog.Error("move failed install aside", "game", gameID, "error", err)
-			return errSwapFailed
-		}
+	current, found := s.installedGame(gameID)
+	if !found || filepath.Clean(current.InstallDir) != filepath.Clean(entry.InstallDir) {
+		return fmt.Errorf("%w: installation location changed", errSwapFailed)
 	}
-	if err := os.Rename(entry.Path, entry.InstallDir); err != nil {
-		slog.Error("restore previous version", "game", gameID, "error", err)
-		if renameErr := os.Rename(replaced, entry.InstallDir); renameErr != nil {
-			slog.Error("restore failed install", "game", gameID, "error", renameErr)
-		}
-		return errSwapFailed
+	if stat, err := os.Stat(entry.Path); err != nil || !stat.IsDir() {
+		return errNoRollback
 	}
-	removeTree(replaced)
+	j := SwapJournal{GameID: gameID, Kind: JournalRollback, InstallDir: entry.InstallDir, Staging: entry.Path, Previous: entry.InstallDir + replacedSuffix, Rollback: entry, StartedAt: time.Now()}
+	if exists(j.Previous) {
+		return fmt.Errorf("%w: previous rollback recovery is required", errSwapFailed)
+	}
+	if err := s.setJournal(j); err != nil {
+		return err
+	}
+	if err := s.finishRollback(j); err != nil {
+		return err
+	}
 	s.store.removeManifest(gameID)
-
-	restored := s.library != nil
-	if s.library != nil {
-		if _, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
-			ID:            gameID,
-			Executable:    entry.Executable,
-			InstallDir:    entry.InstallDir,
-			Version:       entry.Version,
-			VersionSource: string(VersionSourceRelease),
-			ReleaseID:     entry.ReleaseID,
-			SourceID:      entry.SourceID,
-		}); err != nil {
-			slog.Error("register rolled back version", "game", gameID, "error", err)
-			restored = false
-		}
-	}
-	s.forgetPrevious(gameID)
-	if restored {
-		if err := s.BuildManifest(gameID); err != nil {
-			slog.Warn("manifest after rollback", "game", gameID, "error", err)
-		}
+	s.mu.Lock()
+	manifestCtx := s.ctx
+	s.mu.Unlock()
+	if game, ok := s.installedGame(gameID); ok && manifestCtx != nil {
+		s.runManifest(manifestCtx, game)
 	}
 
 	snap, _ := s.mutate(gameID, func(u *Update) {
@@ -703,28 +1046,80 @@ func (s *Service) Rollback(gameID string) error {
 }
 
 func (s *Service) forgetPrevious(gameID string) {
-	s.mu.Lock()
-	delete(s.rollbacks, gameID)
-	s.persistRollbacksLocked()
-	if u, ok := s.updates[gameID]; ok {
-		u.CanRollback = false
-	}
-	s.persistLocked()
-	s.mu.Unlock()
+	s.forgetRollbackBestEffort(gameID)
+	s.updateFieldsBestEffort(gameID, func(u *Update) { u.CanRollback = false })
 }
 
-func swapDirectories(current, staging, previous string) error {
-	removeTree(previous)
-	if _, err := os.Stat(current); err == nil {
-		if err := os.Rename(current, previous); err != nil {
-			return err
+// swapDirectories journals before any rename and retains an older rollback
+// until the new installation and its rollback metadata are committed.
+func (s *Service) swapDirectories(gameID, current, staging, previous, version string) error {
+	j := SwapJournal{GameID: gameID, Kind: JournalSwap, InstallDir: current, Staging: staging, Previous: previous, Version: version, StartedAt: time.Now()}
+	if _, err := os.Stat(previous); err == nil {
+		j.RetainedPrevious = previous + ".retained"
+		if exists(j.RetainedPrevious) {
+			// Older builds cleared the journal before best-effort cleanup.
+			// Reclaim an orphan only after reserving it in a cleanup journal;
+			// any unfinished transaction prevents this reservation.
+			if err := s.setJournal(SwapJournal{GameID: gameID, Kind: JournalCleanup, RetainedPrevious: j.RetainedPrevious}); err != nil {
+				return err
+			}
+			if err := s.clearJournal(gameID); err != nil {
+				return err
+			}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := s.setJournal(j); err != nil {
+		return err
+	}
+	undo := func(cause error) error {
+		if err := restoreSwapFiles(j); err != nil {
+			return errors.Join(cause, err)
+		}
+		if err := s.clearJournal(gameID); err != nil {
+			return errors.Join(cause, err)
+		}
+		return cause
+	}
+	if j.RetainedPrevious != "" {
+		if err := os.Rename(previous, j.RetainedPrevious); err != nil {
+			return undo(err)
 		}
 	}
-	if err := os.Rename(staging, current); err != nil {
-		if restoreErr := os.Rename(previous, current); restoreErr != nil {
-			slog.Error("restore install directory", "path", current, "error", restoreErr)
+	if _, err := os.Stat(current); err == nil {
+		if err := os.Rename(current, previous); err != nil {
+			return undo(err)
 		}
-		return err
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return undo(err)
+	}
+	if err := os.Rename(staging, current); err != nil {
+		return undo(err)
+	}
+	return nil
+}
+
+// An older rollback is retained until the replacement has been registered.
+// Presence of retained distinguishes the old .previous from the current
+// version renamed aside by this transaction.
+func restoreSwapFiles(j SwapJournal) error {
+	shifted := j.RetainedPrevious != "" && exists(j.RetainedPrevious)
+	if j.RetainedPrevious == "" || shifted {
+		if exists(j.Previous) {
+			if err := restoreDirectories(j.InstallDir, j.Previous); err != nil {
+				return err
+			}
+		} else if !exists(j.InstallDir) && exists(j.Staging) {
+			if err := os.Rename(j.Staging, j.InstallDir); err != nil {
+				return err
+			}
+		}
+	}
+	if shifted {
+		if err := os.Rename(j.RetainedPrevious, j.Previous); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -745,6 +1140,153 @@ func restoreDirectories(current, previous string) error {
 	}
 	removeTree(broken)
 	return nil
+}
+
+const journalMissingRenameText = "Обновление прервано: файлы новой версии на месте, повторите обновление, чтобы зарегистрировать её"
+
+// recoverJournals finishes or rolls back every multi-rename operation left in
+// flight by a crash. It runs once from ServiceStartup, before any new job
+// can register another journal for the same game.
+func (s *Service) recoverJournals() {
+	s.mu.Lock()
+	journals := make([]SwapJournal, 0, len(s.journals))
+	for _, j := range s.journals {
+		journals = append(journals, *j)
+	}
+	s.mu.Unlock()
+
+	for _, j := range journals {
+		if j.Kind == JournalInplace && s.downloads != nil {
+			stopped := true
+			for _, purpose := range []download.Purpose{download.PurposeRepair, download.PurposeUpdate} {
+				for _, task := range s.downloads.ByOrigin(j.GameID, purpose) {
+					if task.InPlace {
+						if err := s.stopRepairDownload(task.ID); err != nil {
+							s.failJournalRecovery(j, err)
+							stopped = false
+							break
+						}
+					}
+				}
+			}
+			if !stopped {
+				continue
+			}
+		}
+		switch j.Kind {
+		case JournalCleanup:
+			if err := s.clearJournal(j.GameID); err != nil {
+				s.failJournalRecovery(j, err)
+			}
+		case JournalRollback:
+			if err := s.finishRollback(j); err != nil {
+				s.failJournalRecovery(j, err)
+			}
+		case JournalSwap:
+			s.recoverSwapJournal(j)
+		case JournalPatch:
+			s.recoverPatchJournal(j)
+		case JournalInplace:
+			s.recoverInplaceJournal(j)
+		default:
+			slog.Error("unknown swap journal kind", "game", j.GameID, "kind", j.Kind)
+		}
+	}
+}
+
+func (s *Service) recoverPatchJournal(j SwapJournal) {
+	if err := install.RestoreMergeBackup(j.InstallDir, j.Previous); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	if err := s.restoreJournalMetadata(j); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	if err := s.clearJournal(j.GameID); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	msg := fmt.Sprintf("Обновление прервано на патче до %s; предыдущая версия восстановлена", j.Version)
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
+		u.State = StateFailed
+		u.Error = msg
+		u.Step = ""
+		u.Progress = 0
+	})
+}
+
+func (s *Service) recoverInplaceJournal(j SwapJournal) {
+	if exists(j.Previous) {
+		if err := restoreDirectories(j.InstallDir, j.Previous); err != nil {
+			s.failJournalRecovery(j, err)
+			return
+		}
+		if !strings.HasSuffix(j.Previous, ".repair") {
+			s.forgetRollbackBestEffort(j.GameID)
+		}
+	}
+	if err := s.restoreJournalMetadata(j); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	if err := s.clearJournal(j.GameID); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
+		u.State = StateFailed
+		u.Error = interruptedUpdateText
+		u.Step = ""
+		u.Progress = 0
+	})
+}
+
+func (s *Service) recoverSwapJournal(j SwapJournal) {
+	msg := interruptedUpdateText
+	if !exists(j.Previous) && !exists(j.InstallDir) && exists(j.Staging) {
+		msg = journalMissingRenameText
+	}
+	if err := restoreSwapFiles(j); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	if err := s.restoreSwapRollbackMetadata(j); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+
+	removeTree(j.Staging)
+	if err := s.restoreJournalMetadata(j); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	if err := s.clearJournal(j.GameID); err != nil {
+		s.failJournalRecovery(j, err)
+		return
+	}
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) {
+		u.State = StateFailed
+		u.Error = msg
+		u.Step = ""
+		u.Progress = 0
+	})
+}
+
+// failJournalRecovery logs and surfaces the error without clearing the
+// journal: the journal is the only record that this operation is unfinished,
+// so a recovery step that itself fails must leave it for the next start.
+func (s *Service) failJournalRecovery(j SwapJournal, err error) {
+	slog.Error("recover swap journal", "game", j.GameID, "kind", j.Kind, "error", err)
+	s.updateFieldsBestEffort(j.GameID, func(u *Update) { u.Error = err.Error() })
+}
+
+func exists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func resolveExecutable(ctx context.Context, installDir, relative, installed, staging string) (string, error) {
@@ -961,4 +1503,12 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 		return
 	}
 	rec(ev)
+}
+
+func (s *Service) restoreJournalMetadata(j SwapJournal) error {
+	if j.Original == nil || s.library == nil {
+		return nil
+	}
+	_, err := s.library.ApplyInstalledUpdate(*j.Original)
+	return err
 }

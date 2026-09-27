@@ -3,13 +3,16 @@ package settings
 type Portable struct {
 	Theme                    *string  `json:"theme,omitempty"`
 	UIScale                  *float64 `json:"uiScale,omitempty"`
+	Language                 *string  `json:"language,omitempty"`
 	AnimationsEnabled        *bool    `json:"animationsEnabled,omitempty"`
 	MinimizeToTray           *bool    `json:"minimizeToTray,omitempty"`
 	DiscordRichPresence      *bool    `json:"discordRichPresence,omitempty"`
+	PresenceAutoAway         *bool    `json:"presenceAutoAway,omitempty"`
 	SeedAfterDownload        *bool    `json:"seedAfterDownload,omitempty"`
 	UploadWhileDownloading   *bool    `json:"uploadWhileDownloading,omitempty"`
 	InstallCleanupPolicy     *string  `json:"installCleanupPolicy,omitempty"`
 	AutoInstall              *bool    `json:"autoInstall,omitempty"`
+	ElevateAhead             *bool    `json:"elevateAhead,omitempty"`
 	SourceRefreshInterval    *string  `json:"sourceRefreshInterval,omitempty"`
 	VerifyAfterInstall       *bool    `json:"verifyAfterInstall,omitempty"`
 	InstallSkipShortcuts     *bool    `json:"installSkipShortcuts,omitempty"`
@@ -27,13 +30,16 @@ func PortableOf(s Settings) Portable {
 	return Portable{
 		Theme:                    &s.Theme,
 		UIScale:                  &s.UIScale,
+		Language:                 &s.Language,
 		AnimationsEnabled:        &s.AnimationsEnabled,
 		MinimizeToTray:           &s.MinimizeToTray,
 		DiscordRichPresence:      &s.DiscordRichPresence,
+		PresenceAutoAway:         &s.PresenceAutoAway,
 		SeedAfterDownload:        &s.SeedAfterDownload,
 		UploadWhileDownloading:   &s.UploadWhileDownloading,
 		InstallCleanupPolicy:     &s.InstallCleanupPolicy,
 		AutoInstall:              &s.AutoInstall,
+		ElevateAhead:             &s.ElevateAhead,
 		SourceRefreshInterval:    &s.SourceRefreshInterval,
 		VerifyAfterInstall:       &s.VerifyAfterInstall,
 		InstallSkipShortcuts:     &s.InstallSkipShortcuts,
@@ -51,13 +57,16 @@ func PortableOf(s Settings) Portable {
 func ApplyPortable(s Settings, p Portable) Settings {
 	applyString(&s.Theme, p.Theme)
 	applyFloat(&s.UIScale, p.UIScale)
+	applyString(&s.Language, p.Language)
 	applyBool(&s.AnimationsEnabled, p.AnimationsEnabled)
 	applyBool(&s.MinimizeToTray, p.MinimizeToTray)
 	applyBool(&s.DiscordRichPresence, p.DiscordRichPresence)
+	applyBool(&s.PresenceAutoAway, p.PresenceAutoAway)
 	applyBool(&s.SeedAfterDownload, p.SeedAfterDownload)
 	applyBool(&s.UploadWhileDownloading, p.UploadWhileDownloading)
 	applyString(&s.InstallCleanupPolicy, p.InstallCleanupPolicy)
 	applyBool(&s.AutoInstall, p.AutoInstall)
+	applyBool(&s.ElevateAhead, p.ElevateAhead)
 	applyString(&s.SourceRefreshInterval, p.SourceRefreshInterval)
 	applyBool(&s.VerifyAfterInstall, p.VerifyAfterInstall)
 	applyBool(&s.InstallSkipShortcuts, p.InstallSkipShortcuts)

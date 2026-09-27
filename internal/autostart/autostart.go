@@ -62,3 +62,22 @@ func (s *Service) Apply(enabled bool) error {
 	}
 	return nil
 }
+
+// platformManager позволяет ОС-специфичному файлу этого пакета подставить в
+// ForPlatform собственную реализацию Manager вместо fallback. Нужно только
+// на macOS: см. autostart_darwin.go. На остальных платформах остаётся
+// тождественной функцией.
+var platformManager = func(fallback Manager) Manager { return fallback }
+
+// ForPlatform возвращает Manager, который должен получить NewService на
+// текущей платформе. Обычно это fallback без изменений (например,
+// wails.Autostart) — кроме macOS, где встроенный в Wails механизм
+// (SMAppService) требует стабильной подписи приложения. У Typhon подписи
+// нет и не будет (ad-hoc codesign в build/darwin/Taskfile.yml), и без
+// стабильного Team ID SMAppService теряет идентичность приложения между
+// пересборками — включая каждое самообновление. Поэтому на macOS
+// используется LaunchAgent-реализация из autostart_darwin.go, а fallback
+// игнорируется.
+func ForPlatform(fallback Manager) Manager {
+	return platformManager(fallback)
+}

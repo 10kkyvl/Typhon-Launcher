@@ -39,7 +39,12 @@ const (
 
 type Kind string
 
-const KindInstaller Kind = "installer"
+const (
+	// KindInstaller — установщик, который сам кладёт файлы на место (Windows).
+	KindInstaller Kind = "installer"
+	// KindBundle — архив с приложением, которое лаунчер подменяет сам (macOS).
+	KindBundle Kind = "bundle"
+)
 
 type Artifact struct {
 	OS     string `json:"os"`
@@ -110,6 +115,9 @@ type stored struct {
 }
 
 func PublicKey() (ed25519.PublicKey, error) {
+	if key, ok, err := overridePublicKey(); err != nil || ok {
+		return key, err
+	}
 	raw, err := base64.StdEncoding.DecodeString(publicKeyBase64)
 	if err != nil {
 		return nil, ErrBadPublicKey
@@ -122,7 +130,7 @@ func PublicKey() (ed25519.PublicKey, error) {
 
 func (a Artifact) Validate() error {
 	switch a.Kind {
-	case KindInstaller:
+	case KindInstaller, KindBundle:
 	default:
 		return ErrUnsupportedKind
 	}

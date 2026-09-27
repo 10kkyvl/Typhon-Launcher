@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -24,18 +25,19 @@ type fakeCatalog struct {
 	games []catalog.Game
 }
 
-func (f fakeCatalog) SearchGames(query string, limit int) []catalog.Game {
-	needle := strings.ToLower(query)
+func (f fakeCatalog) BrowseGames(q catalog.GameQuery) (catalog.GamePage, error) {
+	needle := strings.ToLower(q.Search)
 	out := make([]catalog.Game, 0, len(f.games))
 	for _, game := range f.games {
 		if contains(game.Title, needle) || containsAny(game.Aliases, needle) {
 			out = append(out, game)
 		}
 	}
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
+	total := len(out)
+	if q.PageSize > 0 && len(out) > q.PageSize {
+		out = out[:q.PageSize]
 	}
-	return out
+	return catalog.GamePage{Items: out, Total: total}, nil
 }
 
 func (f fakeCatalog) GetGame(id string) (catalog.Game, error) {
@@ -107,7 +109,7 @@ func TestEmptyQueryReturnsNothing(t *testing.T) {
 	)
 
 	for _, query := range []string{"", "   ", "\t\n"} {
-		result := s.Search(query)
+		result := mustSearch(t, s, query)
 		if len(result.Games) != 0 || len(result.Releases) != 0 {
 			t.Fatalf("query %q must return nothing, got %+v", query, result)
 		}
@@ -125,7 +127,7 @@ func TestSingleCharacterQueryFindsTitlesButSkipsReleases(t *testing.T) {
 		backend,
 	)
 
-	result := s.Search("p")
+	result := mustSearch(t, s, "p")
 
 	if len(result.Games) != 1 || result.Games[0].ID != "lib-1" {
 		t.Fatalf("expected the installed game, got %+v", result.Games)
@@ -142,7 +144,7 @@ func TestExactCanonicalTitleSearch(t *testing.T) {
 		noReleases(),
 	)
 
-	result := s.Search("Cyberpunk 2077")
+	result := mustSearch(t, s, "Cyberpunk 2077")
 
 	if len(result.Games) != 1 {
 		t.Fatalf("expected one hit, got %d", len(result.Games))
@@ -167,7 +169,7 @@ func TestAliasSearchFindsCanonicalGame(t *testing.T) {
 		noReleases(),
 	)
 
-	result := s.Search("cp2077")
+	result := mustSearch(t, s, "cp2077")
 
 	if len(result.Games) != 1 || result.Games[0].ID != "game-1" {
 		t.Fatalf("expected alias hit, got %+v", result.Games)
@@ -186,7 +188,7 @@ func TestMatchedReleasesAggregateUnderCanonicalGame(t *testing.T) {
 		}),
 	)
 
-	result := s.Search("cyberpunk")
+	result := mustSearch(t, s, "cyberpunk")
 
 	if len(result.Games) != 1 {
 		t.Fatalf("expected one game hit, got %d", len(result.Games))
@@ -206,20 +208,10 @@ func TestReleaseOnlyGameIsCreatedWithoutDuplicates(t *testing.T) {
 	})
 	s := NewService(fakeLibrary{}, fakeCatalog{}, backend)
 
-	result := s.Search("cyberpunk")
+	result := mustSearch(t, s, "cyberpunk")
 
-	if len(result.Games) != 1 {
-		t.Fatalf("expected a single game built from releases, got %d", len(result.Games))
-	}
-	hit := result.Games[0]
-	if hit.ID != "game-1" || hit.CanonicalGameID != "game-1" {
-		t.Fatalf("unexpected hit %+v", hit)
-	}
-	if hit.Title != "Cyberpunk 2077 Ultimate Edition" {
-		t.Fatalf("expected release title fallback, got %q", hit.Title)
-	}
-	if hit.Releases != 2 {
-		t.Fatalf("expected 2 releases, got %d", hit.Releases)
+	if len(result.Games) != 0 {
+		t.Fatalf("local entries leaked into server search: %+v", result)
 	}
 }
 
@@ -239,7 +231,7 @@ func TestInstalledGameMergesWithCanonicalHit(t *testing.T) {
 		backend,
 	)
 
-	result := s.Search("cyberpunk")
+	result := mustSearch(t, s, "cyberpunk")
 
 	if len(result.Games) != 1 {
 		t.Fatalf("expected one merged hit, got %+v", result.Games)
@@ -276,14 +268,10 @@ func TestInstalledGameMergesWithReleaseOnlyHit(t *testing.T) {
 		}),
 	)
 
-	result := s.Search("cyberpunk")
+	result := mustSearch(t, s, "cyberpunk")
 
-	if len(result.Games) != 1 {
-		t.Fatalf("expected one hit, got %+v", result.Games)
-	}
-	hit := result.Games[0]
-	if !hit.Installed || hit.ID != "lib-1" {
-		t.Fatalf("expected the installed game merged in, got %+v", hit)
+	if len(result.Games) != 0 {
+		t.Fatalf("local entries leaked into server search: %+v", result)
 	}
 }
 
@@ -294,10 +282,10 @@ func TestInstalledGameWithoutCanonicalIDIsFoundByTitle(t *testing.T) {
 		noReleases(),
 	)
 
-	result := s.Search("workers")
+	result := mustSearch(t, s, "workers")
 
-	if len(result.Games) != 1 || result.Games[0].ID != "lib-1" {
-		t.Fatalf("expected library game hit, got %+v", result.Games)
+	if len(result.Games) != 0 {
+		t.Fatalf("local entries leaked into server search: %+v", result)
 	}
 }
 
@@ -309,17 +297,10 @@ func TestUnmatchedReleasesStayInOwnSection(t *testing.T) {
 	}}
 	s := NewService(fakeLibrary{}, fakeCatalog{}, backend)
 
-	result := s.Search("Some Game")
+	result := mustSearch(t, s, "Some Game")
 
-	if len(result.Games) != 0 {
-		t.Fatalf("expected no game hits, got %+v", result.Games)
-	}
-	if len(result.Releases) != 1 || result.MoreReleases != 2 {
-		t.Fatalf("unexpected unmatched section %+v", result)
-	}
-	hit := result.Releases[0]
-	if hit.ID != "r1" || hit.SourceID != "src-1" || hit.SourceName != "Feed A" || hit.Title != "Some Game Build 1234" {
-		t.Fatalf("unexpected release hit %+v", hit)
+	if len(result.Games) != 0 || len(result.Releases) != 0 || result.MoreReleases != 0 {
+		t.Fatalf("source entries leaked into search: %+v", result)
 	}
 }
 
@@ -333,7 +314,7 @@ func TestAmbiguousCanonicalGamesStaySeparate(t *testing.T) {
 		noReleases(),
 	)
 
-	result := s.Search("Prey")
+	result := mustSearch(t, s, "Prey")
 
 	if len(result.Games) != 2 {
 		t.Fatalf("expected both games, got %+v", result.Games)
@@ -357,13 +338,13 @@ func TestRankingOrder(t *testing.T) {
 		}),
 	)
 
-	result := s.Search("doom")
+	result := mustSearch(t, s, "doom")
 
 	got := make([]string, 0, len(result.Games))
 	for _, hit := range result.Games {
 		got = append(got, hit.ID)
 	}
-	want := []string{"exact", "alias", "prefix", "substring", "release-only"}
+	want := []string{"exact", "alias", "prefix", "substring"}
 	if len(got) != len(want) {
 		t.Fatalf("expected %v, got %v", want, got)
 	}
@@ -381,10 +362,10 @@ func TestInstalledDoesNotOutrankBetterTitleMatch(t *testing.T) {
 		noReleases(),
 	)
 
-	result := s.Search("doom")
+	result := mustSearch(t, s, "doom")
 
-	if len(result.Games) != 2 {
-		t.Fatalf("expected two hits, got %+v", result.Games)
+	if len(result.Games) != 1 {
+		t.Fatalf("expected only server hit, got %+v", result.Games)
 	}
 	if result.Games[0].ID != "exact" {
 		t.Fatalf("exact title must outrank the installed substring match, got %q", result.Games[0].ID)
@@ -399,9 +380,9 @@ func TestRankingIsDeterministic(t *testing.T) {
 	}
 	s := NewService(fakeLibrary{}, fakeCatalog{games: games}, noReleases())
 
-	first := s.Search("test game")
+	first := mustSearch(t, s, "test game")
 	for range 10 {
-		next := s.Search("test game")
+		next := mustSearch(t, s, "test game")
 		if len(next.Games) != len(first.Games) {
 			t.Fatalf("result size changed: %d vs %d", len(next.Games), len(first.Games))
 		}
@@ -432,12 +413,12 @@ func TestResultsAreLimited(t *testing.T) {
 	}}
 	s := NewService(fakeLibrary{}, fakeCatalog{games: games}, backend)
 
-	result := s.Search("test")
+	result := mustSearch(t, s, "test")
 
 	if len(result.Games) != maxGames || result.MoreGames != 2 {
 		t.Fatalf("expected %d games and 2 more, got %d and %d", maxGames, len(result.Games), result.MoreGames)
 	}
-	if len(result.Releases) != maxReleases || result.MoreReleases != 3 {
+	if len(result.Releases) != 0 || result.MoreReleases != 0 {
 		t.Fatalf("expected %d releases and 3 more, got %d and %d", maxReleases, len(result.Releases), result.MoreReleases)
 	}
 }
@@ -451,20 +432,66 @@ func TestMissingCatalogMetadataFallsBackToReleaseTitle(t *testing.T) {
 		}),
 	)
 
-	result := s.Search("cyberpunk")
+	result := mustSearch(t, s, "cyberpunk")
 
-	if len(result.Games) != 1 {
-		t.Fatalf("expected one hit, got %+v", result.Games)
-	}
-	if result.Games[0].Title != "" || result.Games[0].ID != "game-1" {
-		t.Fatalf("expected a hit without panicking on missing metadata, got %+v", result.Games[0])
+	if len(result.Games) != 0 {
+		t.Fatalf("local entries leaked into server search: %+v", result)
 	}
 }
 
-func TestNilDependenciesAreSafe(t *testing.T) {
-	s := NewService(nil, nil, nil)
-	result := s.Search("cyberpunk")
-	if len(result.Games) != 0 || len(result.Releases) != 0 {
-		t.Fatalf("expected empty result, got %+v", result)
+func TestUnavailableCatalogDoesNotFallBackToLocalEntries(t *testing.T) {
+	s := NewService(fakeLibrary{games: []library.Game{{ID: "local", Title: "Cyberpunk"}}}, nil, noReleases())
+	result, err := s.Search("cyberpunk")
+	if err == nil || len(result.Games) != 0 {
+		t.Fatalf("result=%+v error=%v", result, err)
 	}
+}
+
+func mustSearch(t *testing.T, s *Service, query string) Result {
+	t.Helper()
+	result, err := s.Search(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+// Exercise the real catalog boundary: personal cached rows must never become
+// search membership, even while server results are persisted into that cache.
+func TestSearchUsesServerCatalogAndReportsFailure(t *testing.T) {
+	cat, err := catalog.NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.EnsureGame("GTA local repack", 0); err != nil {
+		t.Fatal(err)
+	}
+	remote := &searchRemote{}
+	cat.SetRemoteCatalog(remote)
+	s := NewService(nil, cat, withGames(map[string]sources.GameReleaseInfo{"local": {Title: "GTA source repack", Releases: 2}}))
+	got := mustSearch(t, s, "gta")
+	if len(got.Games) != 1 || got.Games[0].Title != "Grand Theft Auto V" || got.Games[0].Cover != "https://example.com/cover.jpg" {
+		t.Fatalf("unexpected server result: %+v", got)
+	}
+	if remote.query.Search != "gta" || remote.query.Kind != "all" {
+		t.Fatalf("query=%+v", remote.query)
+	}
+	remote.err = errors.New("server unavailable")
+	got = mustSearch(t, s, "gta") // exact server-page cache remains valid offline
+	if len(got.Games) != 1 {
+		t.Fatalf("offline page: %+v", got)
+	}
+	if _, err := s.Search("uncached"); err == nil {
+		t.Fatal("server failure hidden")
+	}
+}
+
+type searchRemote struct {
+	query catalog.GameQuery
+	err   error
+}
+
+func (r *searchRemote) Browse(_ context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
+	r.query = q
+	return catalog.GamePage{Items: []catalog.Game{{ID: "official", Title: "Grand Theft Auto V", Aliases: []string{"GTA V"}, CoverURL: "https://example.com/cover.jpg"}}, Total: 1}, r.err
 }

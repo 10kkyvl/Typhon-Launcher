@@ -1,4 +1,5 @@
 import type { GameHit, ReleaseHit, SearchResult } from '../services/search';
+import { errorCode, hasMessage, msg } from '../i18n';
 
 export const debounceMs = 220;
 
@@ -57,7 +58,7 @@ export class SearchOverlay {
     this.search = options.search;
     this.emit = options.onState;
     this.delay = options.delay ?? debounceMs;
-    this.errorText = options.errorText ?? 'Поиск недоступен';
+    this.errorText = options.errorText ?? msg('search.unavailable');
   }
 
   get snapshot(): OverlayState {
@@ -108,6 +109,7 @@ export class SearchOverlay {
   }
 
   private schedule(value: string) {
+    this.token++;
     clearTimeout(this.timer);
     this.timer = undefined;
     const trimmed = value.trim();
@@ -151,10 +153,11 @@ export class SearchOverlay {
       });
     } catch (err) {
       if (token !== this.token) return;
+      const code = errorCode(err);
       this.patch({
         loading: false,
         searched: true,
-        error: err instanceof Error && err.message ? err.message : this.errorText,
+        error: hasMessage(code) ? msg(code) : this.errorText,
         games: [],
         releases: [],
         moreGames: 0,

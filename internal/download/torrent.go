@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
@@ -25,7 +27,21 @@ const (
 	maxTorrentConns = 60
 )
 
-var errBadPaths = errors.New("недопустимые пути файлов в торренте")
+var errBadPaths = uierr.New("download.bad_paths", "недопустимые пути файлов в торренте")
+
+// errTorrentAlreadyAdded means Client.AddTorrentSpec merged the spec into an
+// existing *torrent.Torrent instead of creating a new one (its "new" return
+// value was false). MergeSpec documents that it ignores the Storage the spec
+// carried, so silently continuing here would hand back a *liveTorrent whose
+// storage field points at destination while the actual data goes wherever
+// the existing torrent was first added to. This is deliberately not
+// errHashBusy: that sentinel means the manager's own bookkeeping (engines,
+// jobs, pending, reservations) saw the hash as taken before touching the
+// client; reaching this instead means the client itself already tracks the
+// hash despite the manager believing it did not, which the reservations in
+// reuse.go are meant to prevent — this is the last line of defence, not the
+// expected path.
+var errTorrentAlreadyAdded = errors.New("torrent already tracked by the client for this infohash")
 
 type engineStats struct {
 	downloaded int64
@@ -57,19 +73,21 @@ type engineTorrent interface {
 }
 
 type client struct {
-	cl      *torrent.Client
-	down    *rate.Limiter
-	up      *rate.Limiter
-	metaDir string
+	cl         *torrent.Client
+	down       *rate.Limiter
+	up         *rate.Limiter
+	metaDir    string
+	completion storage.PieceCompletion
 }
 
-func newClient(cfg settings.Settings, metaDir string) (*client, error) {
-	tc := clientConfig(cfg, metaDir, listenPort)
+func newClient(cfg settings.Settings, metaDir string, completion storage.PieceCompletion) (*client, error) {
+	wrapped := nonClosingCompletion{completion}
+	tc := clientConfig(cfg, metaDir, listenPort, wrapped)
 	cl, err := torrent.NewClient(tc)
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, metaDir, 0)
+		tc = clientConfig(cfg, metaDir, 0, wrapped)
 		cl, err = torrent.NewClient(tc)
 	}
 	if err != nil {
@@ -77,10 +95,10 @@ func newClient(cfg settings.Settings, metaDir string) (*client, error) {
 		return nil, err
 	}
 	slog.Info("torrent client started", "port", cl.LocalPort())
-	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir}, nil
+	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir, completion: wrapped}, nil
 }
 
-func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.ClientConfig {
+func clientConfig(cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion) *torrent.ClientConfig {
 	tc := torrent.NewDefaultClientConfig()
 	tc.DataDir = dataDir
 	tc.ListenPort = port
@@ -88,7 +106,7 @@ func clientConfig(cfg settings.Settings, dataDir string, port int) *torrent.Clie
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)
-	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, storage.NewMapPieceCompletion())
+	tc.DefaultStorage = storage.NewFileWithCompletion(dataDir, completion)
 	return tc
 }
 
@@ -138,13 +156,13 @@ func (c *client) addMagnet(uri, destination string, opts storageOpts) (*liveTorr
 	return c.add(spec, destination, opts)
 }
 
-func newStorage(destination string, opts storageOpts) storage.ClientImplCloser {
+func newStorage(destination string, opts storageOpts, completion storage.PieceCompletion) storage.ClientImplCloser {
 	if !opts.flat && !opts.inPlace {
-		return storage.NewFileWithCompletion(destination, storage.NewMapPieceCompletion())
+		return storage.NewFileWithCompletion(destination, completion)
 	}
 	clientOpts := storage.NewFileClientOpts{
 		ClientBaseDir:   destination,
-		PieceCompletion: storage.NewMapPieceCompletion(),
+		PieceCompletion: completion,
 	}
 	if opts.flat {
 		clientOpts.FilePathMaker = func(o storage.FilePathMakerOpts) string {
@@ -161,13 +179,25 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
-	st := newStorage(destination, opts)
+	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
 
-	t, _, err := c.cl.AddTorrentSpec(spec)
+	t, isNew, err := c.cl.AddTorrentSpec(spec)
 	if err != nil {
-		st.Close()
+		if cerr := st.Close(); cerr != nil {
+			slog.Warn("close torrent storage", "error", cerr)
+		}
 		return nil, err
+	}
+	if !isNew {
+		// t.MergeSpec (called internally by AddTorrentSpec here) ignores the
+		// Storage this spec carried, so st was never wired to t: it is safe,
+		// and necessary, to close it ourselves rather than leave it attached
+		// to nothing.
+		if cerr := st.Close(); cerr != nil {
+			slog.Warn("close torrent storage", "error", cerr)
+		}
+		return nil, fmt.Errorf("%w: %s", errTorrentAlreadyAdded, t.InfoHash().HexString())
 	}
 	// AddTorrentOpts.DisallowData* are declared but never read by the engine,
 	// so a torrent starts fully enabled and has to be gated after it is added.

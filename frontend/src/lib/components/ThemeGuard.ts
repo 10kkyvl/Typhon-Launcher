@@ -1,4 +1,5 @@
 import { activeTheme, resetAppearance } from '../stores/theme';
+import { locale, msg } from '../i18n';
 
 function randomHostId(): string {
   const bytes = new Uint32Array(4);
@@ -53,7 +54,7 @@ export function mountThemeGuard(): () => void {
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = 'Сбросить оформление';
+  button.textContent = msg('ui.resetAppearance');
   button.style.display = 'none';
   button.addEventListener('click', () => {
     resetAppearance();
@@ -68,8 +69,13 @@ export function mountThemeGuard(): () => void {
     button.style.display = visible ? 'block' : 'none';
   });
 
+  const unsubscribeLocale = locale.subscribe(() => {
+    button.textContent = msg('ui.resetAppearance');
+  });
+
   return () => {
     unsubscribe();
+    unsubscribeLocale();
     observer.disconnect();
     host.remove();
   };

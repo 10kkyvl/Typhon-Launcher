@@ -72,10 +72,10 @@ tasks:
   build:frontend:
     label: build:frontend (DEV={{.DEV}} RUNNER={{.PACKAGE_MANAGER}})
     summary: Build the frontend project
-    # darwin:build:universal runs its per-arch builds as parallel deps, each of
-    # which depends on this task. Without run:once the two executions race:
-    # one regenerates frontend/bindings (-clean deletes it first) while the
-    # other's bundler is reading it, failing intermittently with
+    # Tasks that fan out into several builds pull this in as a parallel dep more
+    # than once. Without run:once the executions race: one regenerates
+    # frontend/bindings (-clean deletes it first) while the other's bundler is
+    # reading it, failing intermittently with
     # 'Could not resolve "./bindings/<pkg>"' (#4637).
     run: once
     dir: frontend

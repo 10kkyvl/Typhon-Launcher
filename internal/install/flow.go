@@ -41,7 +41,9 @@ func (s *Service) run(ctx context.Context, id string) {
 }
 
 func (s *Service) runPortable(ctx context.Context, id string, item Installation) error {
-	s.setStatus(id, StatusPreparing)
+	if err := s.setStatus(id, StatusPreparing); err != nil {
+		return err
+	}
 	partial := item.Destination + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
 		return err
@@ -49,15 +51,14 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	s.setStatus(id, StatusInstalling)
+	if err := s.setStatus(id, StatusInstalling); err != nil {
+		return err
+	}
 
 	report := func(p Progress) { s.updateProgress(id, p) }
 	var err error
-	if item.Mode == ModeMove {
-		err = MoveDir(ctx, item.ContentRoot, partial, report)
-	} else {
-		err = CopyDir(ctx, item.ContentRoot, partial, report)
-	}
+	// Keep the source until both the destination and library entry are committed.
+	err = CopyDirVerified(ctx, item.ContentRoot, partial, report)
 	if err == nil {
 		err = s.commit(ctx, partial, item.Destination)
 	}
@@ -65,11 +66,21 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 		s.cleanupPartial(partial)
 		return err
 	}
-	return s.finalize(ctx, id)
+	if err := s.finalize(ctx, id); err != nil {
+		return err
+	}
+	if item.Mode == ModeMove {
+		if err := removeInstalledSource(item.ContentRoot); err != nil {
+			slog.Warn("installed successfully, source cleanup incomplete", "path", item.ContentRoot, "error", err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) runArchive(ctx context.Context, id string, item Installation) error {
-	s.setStatus(id, StatusPreparing)
+	if err := s.setStatus(id, StatusPreparing); err != nil {
+		return err
+	}
 	partial := item.Destination + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
 		return err
@@ -77,7 +88,9 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	s.setStatus(id, StatusExtracting)
+	if err := s.setStatus(id, StatusExtracting); err != nil {
+		return err
+	}
 
 	err := ExtractArchive(ctx, item.ArchivePath, partial, func(p Progress) { s.updateProgress(id, p) })
 	if err == nil {
@@ -91,7 +104,17 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 }
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
-	s.setStatus(id, StatusPreparing)
+	// Брокер поднимается заранее (HandleDownloadStarted), пока лаунчер ещё не
+	// знает, какой веткой пойдёт эта установка: только runSilent реально
+	// отдаёт ему задание (brokerFor), а интерактивная ветка вообще к нему не
+	// обращается. Освобождать его нужно на любом выходе из этой функции, а
+	// не только из silent-ветки — иначе интерактивный репак, для которого
+	// брокер подняли заранее, держит процесс с правами администратора до
+	// закрытия лаунчера.
+	defer s.DropBroker(item.DownloadID)
+	if err := s.setStatus(id, StatusPreparing); err != nil {
+		return err
+	}
 	cfg := s.config()
 	roots := s.installRoots()
 	before, err := takeSnapshot(roots)
@@ -107,12 +130,17 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		return err
 	}
 	if item.Silent && item.Destination != "" {
+		if err := s.rememberInstallerDestination(id, item.Destination); err != nil {
+			return err
+		}
 		return s.runSilent(ctx, id, item, roots, before, beforeEntries, shell)
 	}
 	if item.Unattended {
 		return errNeedsUser
 	}
-	s.setStatus(id, StatusInstalling)
+	if err := s.setStatus(id, StatusInstalling); err != nil {
+		return err
+	}
 
 	for _, installer := range installerChain(item) {
 		spec := runSpec{Path: installer, Dir: item.WorkingDir}
@@ -147,12 +175,15 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	}
 	dest := pickInstallDir(dirs, candidates)
 	if dest != "" {
-		s.setDestination(id, dest)
+		if err := s.setDestination(id, dest); err != nil {
+			return err
+		}
 	}
-	s.setRemoval(id, dest, before, beforeEntries, item.Name)
+	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+		return err
+	}
 	s.dropShortcuts(ctx, id, shell, dest)
-	s.waitForUser(id, candidates)
-	return nil
+	return s.waitForUser(id, candidates)
 }
 
 func (s *Service) runSilent(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry, shell shellSnapshot) error {
@@ -162,6 +193,9 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
+	// DropBroker освобождается один раз для всей установки в runInstaller —
+	// дальше по цепочке установщиков этот же брокер ещё нужен.
+	handoff := s.brokerFor(item.DownloadID)
 	specs := make([]runSpec, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)
@@ -171,11 +205,14 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		spec.StatePath = statePath
 		spec.InfPath = infPath
 		spec.CancelPath = cancelPath
+		spec.Broker = handoff
 		specs = append(specs, spec)
 	}
-	s.setStatus(id, StatusInstalling)
+	if err := s.setStatus(id, StatusInstalling); err != nil {
+		return err
+	}
 
-	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal)
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath)
 	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
 	stop()
 	if runErr != nil {
@@ -190,7 +227,9 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		s.discardSilent(item, before, err)
 		return err
 	}
-	s.setRemoval(id, dest, before, beforeEntries, item.Name)
+	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+		return err
+	}
 	s.dropShortcuts(ctx, id, shell, dest)
 	return s.finalize(ctx, id)
 }
@@ -306,7 +345,9 @@ func (s *Service) silentDestination(ctx context.Context, id string, item Install
 		slog.Warn("remove empty install dir", "path", item.Destination, "error", err)
 	}
 	slog.Warn("installer ignored target directory", "id", id, "want", item.Destination, "got", found)
-	s.forceDestination(id, found)
+	if err := s.forceDestination(id, found); err != nil {
+		return "", err
+	}
 	return found, nil
 }
 
@@ -331,18 +372,29 @@ func (s *Service) discardSilent(item Installation, before fsSnapshot, cause erro
 	}
 }
 
-func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64) func() {
+func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	s.wg.Add(1)
+	done := make(chan struct{})
 	go func() {
 		defer s.wg.Done()
+		defer close(done)
 		ticker := time.NewTicker(installPollInterval)
 		defer ticker.Stop()
+		verifying := false
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if ctx.Err() != nil {
+					return
+				}
+				if !verifying && installerLogVerifying(logPath) {
+					if err := s.setInstallerVerifying(id); err == nil {
+						verifying = true
+					}
+				}
 				size, err := DirSize(ctx, dir)
 				if err != nil {
 					continue
@@ -351,7 +403,7 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 			}
 		}
 	}()
-	return cancel
+	return func() { cancel(); <-done }
 }
 
 func silentSpec(item Installation, installer, logPath string, opts installOptions) (runSpec, error) {
@@ -449,11 +501,32 @@ func decodeLogText(data []byte) string {
 	return strings.ReplaceAll(string(data), "\x00", "")
 }
 
+// rememberInstallerDestination persists an empty target before the installer can
+// write into it. Never claim an existing nonempty directory on a legacy retry.
+func (s *Service) rememberInstallerDestination(id, destination string) error {
+	if !destAvailable(destination) {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil || item.OwnedDestination == destination {
+		return nil
+	}
+	prev := item.OwnedDestination
+	item.OwnedDestination = destination
+	if err := s.persistLocked(); err != nil {
+		item.OwnedDestination = prev
+		return wrapPersistError(err)
+	}
+	return nil
+}
+
 // setRemoval выясняет, чем игру потом удалять: свежая запись в ветке Uninstall
 // даёт деинсталлятор, а отсутствие каталога в снимке до установки — право
 // удалить каталог целиком. Ошибка чтения реестра не превращается в «удалять
 // нечем»: она помечается UninstallUnknown, и UI предложит системный апплет.
-func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEntries map[string]uninstallEntry, name string) {
+func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEntries map[string]uninstallEntry, name string) error {
 	owned := false
 	if destination != "" {
 		_, existed := before.dirs[destination]
@@ -472,12 +545,19 @@ func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEn
 	defer s.mu.Unlock()
 	item := s.findLocked(id)
 	if item == nil {
-		return
+		return nil
 	}
-	item.Owned = owned
+	prevOwned, prevUninstall, prevUnknown := item.Owned, item.Uninstall, item.UninstallUnknown
+	item.Owned = owned || (destination != "" && samePath(item.OwnedDestination, destination))
 	item.Uninstall = uninstall
 	item.UninstallUnknown = unknown
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Owned = prevOwned
+		item.Uninstall = prevUninstall
+		item.UninstallUnknown = prevUnknown
+		return wrapPersistError(err)
+	}
+	return nil
 }
 
 func (s *Service) commitExtracted(ctx context.Context, partial, destination string) error {
@@ -497,7 +577,12 @@ func (s *Service) commitExtracted(ctx context.Context, partial, destination stri
 
 func (s *Service) commit(ctx context.Context, partial, destination string) error {
 	if entries, err := os.ReadDir(destination); err == nil && len(entries) == 0 {
-		os.Remove(destination)
+		// Best-effort: this only clears the way for the Rename below. If it
+		// fails, Rename fails too and falls back to MoveDir, which handles a
+		// non-empty (or still-present) destination on its own.
+		if err := os.Remove(destination); err != nil {
+			slog.Warn("remove empty destination before rename", "destination", destination, "error", err)
+		}
 	}
 	if err := os.Rename(partial, destination); err == nil {
 		return nil
@@ -515,7 +600,9 @@ func (s *Service) cleanupPartial(partial string) {
 }
 
 func (s *Service) finalize(ctx context.Context, id string) error {
-	s.setStatus(id, StatusVerifying)
+	if err := s.setStatus(id, StatusVerifying); err != nil {
+		return err
+	}
 	item, ok := s.snapshot(id)
 	if !ok {
 		return errNotFound
@@ -530,22 +617,25 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 		}
 		switch {
 		case HighConfidence(candidates):
-			s.setExecutable(id, candidates[0].Path, candidates)
+			if err := s.setExecutable(id, candidates[0].Path, candidates); err != nil {
+				return err
+			}
 		case item.Unattended:
 			executable := ""
 			if len(candidates) > 0 {
 				executable = candidates[0].Path
 			}
-			s.setExecutable(id, executable, candidates)
+			if err := s.setExecutable(id, executable, candidates); err != nil {
+				return err
+			}
 		default:
-			s.waitForUser(id, candidates)
-			return nil
+			return s.waitForUser(id, candidates)
 		}
 	}
-	return s.complete(id)
+	return s.complete(ctx, id)
 }
 
-func (s *Service) complete(id string) error {
+func (s *Service) complete(ctx context.Context, id string) error {
 	item, ok := s.snapshot(id)
 	if !ok {
 		return errNotFound
@@ -564,6 +654,12 @@ func (s *Service) complete(id string) error {
 			return err
 		}
 		game = registered
+		// Окружение запуска — то же удобство поверх установки, что и ярлык:
+		// если бутыль не завёлся, игра всё равно установлена, а попытка
+		// повторится при первом запуске.
+		if err := s.prepareRuntime(ctx, item.Destination, game.Executable); err != nil {
+			slog.Warn("prepare game runtime", "id", game.ID, "error", err)
+		}
 		if cfg.DesktopShortcuts {
 			// Ярлык — удобство поверх установки, а не её часть: рабочий
 			// стол может быть недоступен, и объявлять из-за этого
@@ -581,6 +677,7 @@ func (s *Service) complete(id string) error {
 		s.mu.Unlock()
 		return errNotFound
 	}
+	prev := snapshotOf(stored)
 	now := time.Now()
 	stored.Status = StatusCompleted
 	stored.GameID = game.ID
@@ -590,7 +687,11 @@ func (s *Service) complete(id string) error {
 	stored.CurrentFile = ""
 	stored.Error = ""
 	stored.CompletedAt = &now
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		*stored = prev
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	snap := snapshotOf(stored)
 	s.mu.Unlock()
 
@@ -645,19 +746,23 @@ func (s *Service) register(item Installation, version, source string) (library.G
 		title = item.Name
 	}
 	return s.library.RegisterInstalled(library.InstalledGame{
-		Title:            title,
-		Executable:       item.Executable,
-		InstallDir:       item.Destination,
-		Version:          version,
-		VersionSource:    source,
-		SourceDownloadID: item.DownloadID,
-		ReleaseID:        item.Origin.ReleaseID,
-		SourceID:         item.Origin.SourceID,
-		CanonicalGameID:  item.Origin.GameID,
-		InstallType:      string(item.Type),
-		Owned:            item.Owned,
-		Uninstall:        item.Uninstall,
-		UninstallUnknown: item.UninstallUnknown,
+		Title:             title,
+		Executable:        item.Executable,
+		InstallDir:        item.Destination,
+		Version:           version,
+		VersionSource:     source,
+		SourceDownloadID:  item.DownloadID,
+		ReleaseID:         item.Origin.ReleaseID,
+		SourceID:          item.Origin.SourceID,
+		DistributionID:    item.Origin.DistributionID,
+		ReleaseUploadedAt: item.Origin.ReleaseUploadedAt,
+		CanonicalGameID:   item.Origin.GameID,
+		Repacker:          s.repackerOf(item.Origin.ReleaseID),
+		ReleaseVersion:    item.Origin.Version,
+		InstallType:       string(item.Type),
+		Owned:             item.Owned,
+		Uninstall:         item.Uninstall,
+		UninstallUnknown:  item.UninstallUnknown,
 	})
 }
 
@@ -681,16 +786,34 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 	slog.Info("download data removed after install", "id", downloadID)
 }
 
-func (s *Service) setExecutable(id, executable string, candidates []Candidate) {
+// candidatePaths — то, что лаунчер предложил на выбор. Один только счётчик в
+// журнале не отвечает на первый вопрос разбора «игра не запускается»: что
+// именно было предложено и что из этого запускается.
+func candidatePaths(candidates []Candidate) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		out = append(out, fmt.Sprintf("%s (%.0f)", c.Path, c.Score))
+	}
+	return out
+}
+
+func (s *Service) setExecutable(id, executable string, candidates []Candidate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	item := s.findLocked(id)
 	if item == nil {
-		return
+		return nil
 	}
+	prevExecutable, prevCandidates := item.Executable, item.Candidates
 	item.Executable = executable
 	item.Candidates = candidates
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Executable = prevExecutable
+		item.Candidates = prevCandidates
+		return wrapPersistError(err)
+	}
+	slog.Info("install executable chosen", "id", id, "executable", executable, "candidates", len(candidates))
+	return nil
 }
 
 func (s *Service) installerLogPath(id string) string {
@@ -721,26 +844,35 @@ func (s *Service) workerCancelPath(id string) string {
 	return workerCancelPath(s.store.dir, id)
 }
 
-func (s *Service) forceDestination(id, destination string) {
+func (s *Service) forceDestination(id, destination string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	item := s.findLocked(id)
 	if item == nil || destination == "" {
-		return
+		return nil
 	}
+	prev := item.Destination
 	item.Destination = destination
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Destination = prev
+		return wrapPersistError(err)
+	}
+	return nil
 }
 
-func (s *Service) setDestination(id, destination string) {
+func (s *Service) setDestination(id, destination string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	item := s.findLocked(id)
 	if item == nil || item.Destination != "" {
-		return
+		return nil
 	}
 	item.Destination = destination
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Destination = ""
+		return wrapPersistError(err)
+	}
+	return nil
 }
 
 const (
@@ -751,7 +883,10 @@ const (
 func verifyInstall(item Installation) error {
 	if item.Destination != "" {
 		entries, err := os.ReadDir(item.Destination)
-		if err != nil || len(entries) == 0 {
+		if err != nil {
+			return fmt.Errorf("чтение папки установки: %w", err)
+		}
+		if len(entries) == 0 {
 			return errEmptyInstall
 		}
 	}
@@ -820,3 +955,5 @@ func pickInstallDir(dirs []string, candidates []Candidate) string {
 	}
 	return ""
 }
+
+var removeInstalledSource = os.RemoveAll

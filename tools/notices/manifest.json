@@ -181,7 +181,8 @@
       "license": "MIT",
       "source": "npm",
       "licenseFile": "LICENSE.md",
-      "note": "Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon."
+      "note": "Числится в devDependencies, но компилятор Svelte встраивает свои рантайм-хелперы прямо в бандл, поэтому код svelte фактически распространяется вместе с Typhon.",
+      "noteEn": "Listed in devDependencies, but the Svelte compiler inlines its runtime helpers straight into the bundle, so svelte code is in fact distributed together with Typhon."
     },
     {
       "name": "@wailsio/runtime",
@@ -190,7 +191,8 @@
       "source": "go",
       "licenseFile": "LICENSE",
       "licenseFrom": "github.com/wailsapp/wails/v3@v3.0.0-beta.10",
-      "note": "Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля."
+      "note": "Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля.",
+      "noteEn": "The package contains no LICENSE file of its own. Its package.json points at the repository github.com/wailsapp/wails, directory v3/internal/runtime/desktop/@wailsio/runtime — that is, it is published from the same repository as the Go module github.com/wailsapp/wails/v3. The verbatim license text of that module is reproduced here."
     },
     {
       "name": "Microsoft Edge WebView2 Runtime",
@@ -198,7 +200,18 @@
       "license": "Условия распространения Microsoft (не Go/npm-модуль)",
       "source": "manual",
       "manualReview": true,
-      "note": "Bootstrapper скачивается на этапе сборки и устанавливается инсталлятором Typhon. Это не Go- и не npm-модуль: собственного файла лицензии у него нет, распространение регулируется отдельными условиями Microsoft для WebView2 Runtime."
+      "note": "Bootstrapper скачивается на этапе сборки и устанавливается инсталлятором Typhon. Это не Go- и не npm-модуль: собственного файла лицензии у него нет, распространение регулируется отдельными условиями Microsoft для WebView2 Runtime.",
+      "noteEn": "The bootstrapper is downloaded at build time and installed by the Typhon installer. It is neither a Go nor an npm module: it has no license file of its own, and its distribution is governed by separate Microsoft terms for the WebView2 Runtime.",
+      "licenseEn": "Microsoft distribution terms (not a Go/npm module)"
+    },
+    {
+      "name": "Fluent Emoji (Microsoft)",
+      "version": "",
+      "license": "MIT",
+      "source": "file",
+      "licenseFile": "tools/notices/licenses/fluentui-emoji-LICENSE",
+      "note": "Не npm- и не Go-модуль: иконки реакций в `frontend/src/lib/components/reactions/` — это SVG в плоском стиле (flat) из репозитория https://github.com/microsoft/fluentui-emoji, вставленные в код инлайном. Дословный текст лицензии взят из файла `LICENSE` этого репозитория и хранится в `tools/notices/licenses/fluentui-emoji-LICENSE`.",
+      "noteEn": "Neither an npm nor a Go module: the reaction icons in `frontend/src/lib/components/reactions/` are flat-style SVGs from the https://github.com/microsoft/fluentui-emoji repository, inlined into the code. The verbatim license text is taken from that repository's `LICENSE` file and is stored in `tools/notices/licenses/fluentui-emoji-LICENSE`."
     }
   ]
 }

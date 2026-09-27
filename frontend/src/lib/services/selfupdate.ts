@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as SelfUpdateService } from '../../../bindings/typhon/internal/selfupdate';
 import { inWails } from './backend';
 
@@ -68,6 +70,7 @@ export class SelfUpdateError extends Error {
 function toSelfUpdateError(err: unknown): SelfUpdateError {
   if (err instanceof SelfUpdateError) return err;
   const raw = err instanceof Error ? err.message : String(err);
+  if (raw.includes('context canceled')) return new SelfUpdateError(raw, 'canceled');
   return new SelfUpdateError(raw);
 }
 
@@ -117,7 +120,16 @@ export async function downloadUpdate(): Promise<SelfUpdateStatus> {
 export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
-    await SelfUpdateService.ApplyUpdate();
+    await SelfUpdateService.ApplyUpdate(get(locale));
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function cancelDownload(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.CancelDownload();
   } catch (err) {
     throw toSelfUpdateError(err);
   }
@@ -127,15 +139,19 @@ export function emptyReleaseNotes(): ReleaseNotes {
   return { currentVersion: '', unseen: [], history: [] };
 }
 
+export function toReleaseNotes(value: unknown): ReleaseNotes {
+  const notes = value as Partial<ReleaseNotes> | null;
+  return {
+    currentVersion: notes?.currentVersion ?? '',
+    unseen: notes?.unseen ?? [],
+    history: notes?.history ?? [],
+  };
+}
+
 export async function getReleaseNotes(): Promise<ReleaseNotes> {
   if (!inWails) return emptyReleaseNotes();
   try {
-    const notes = (await SelfUpdateService.GetReleaseNotes()) as unknown as Partial<ReleaseNotes> | null;
-    return {
-      currentVersion: notes?.currentVersion ?? '',
-      unseen: notes?.unseen ?? [],
-      history: notes?.history ?? [],
-    };
+    return toReleaseNotes(await SelfUpdateService.GetReleaseNotes());
   } catch (err) {
     throw toSelfUpdateError(err);
   }

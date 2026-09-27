@@ -19,7 +19,11 @@ func writeZip(t *testing.T, path string, entries []zipEntry) {
 	if err != nil {
 		t.Fatalf("create zip: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Fatalf("close zip: %v", err)
+		}
+	}()
 	w := zip.NewWriter(f)
 	for _, e := range entries {
 		out, err := w.Create(e.name)
@@ -56,6 +60,7 @@ func mkText(t *testing.T, path, content string) {
 }
 
 func exists(path string) bool {
+	//nolint:gosec // G703: path is built by the test from t.TempDir(), not user input; gosec's taint pass flags it only on some runs
 	_, err := os.Stat(path)
 	return err == nil
 }

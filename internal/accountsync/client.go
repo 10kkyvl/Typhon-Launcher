@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	maxSyncResponseBytes = 1 << 20
+	maxSyncResponseBytes = 16 << 20
 	syncRequestTimeout   = 30 * time.Second
 	syncPath             = account.APIPrefix + "/me/sync"
 )
@@ -56,8 +56,14 @@ func (e *ServerError) Error() string {
 type wireGame struct {
 	IGDBID          int64      `json:"igdbId"`
 	Owned           bool       `json:"owned"`
+	Favorite        bool       `json:"favorite"`
+	FavoriteAt      *time.Time `json:"favoriteAt"`
+	Status          string     `json:"status"`
+	StatusAt        *time.Time `json:"statusAt"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`
 	PlaytimeSeconds int64      `json:"playtimeSeconds"`
+	Removed         bool       `json:"removed,omitempty"`
+	RemovedAt       *time.Time `json:"removedAt,omitempty"`
 }
 
 type snapshotBody struct {
@@ -134,6 +140,12 @@ func (c *httpClient) remove(ctx context.Context) error {
 
 func (c *httpClient) do(ctx context.Context, method string, reqBody, out any) error {
 	tok, err := c.resolveToken()
+	if pinned, ok := ctx.Value(syncTokenKey{}).(string); ok {
+		if err != nil || tok != pinned {
+			return ErrUnauthorized
+		}
+		tok = pinned
+	}
 	if err != nil {
 		return err
 	}
@@ -227,3 +239,5 @@ func decodeSyncError(status int, body io.Reader) error {
 		return &ValidationError{Code: env.Error.Code, Field: env.Error.Field}
 	}
 }
+
+type syncTokenKey struct{}

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
+import type { ProfileSettings } from '../services/account';
 
 vi.mock('../services/account', () => {
   class AccountError extends Error {
@@ -27,6 +28,17 @@ vi.mock('../services/account', () => {
   };
 });
 
+const DEFAULT_PROFILE: ProfileSettings = {
+  visibility: 'friends',
+  showOnline: true,
+  showPlaying: true,
+  showPlaytime: true,
+  showLibrary: true,
+  showActivity: true,
+  showStats: true,
+  showcase: ['favorites'],
+};
+
 function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'u1',
@@ -34,13 +46,24 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
     displayName: 'Egor',
     email: 'egor@example.com',
     avatarUrl: '',
+    bio: '',
+    profile: DEFAULT_PROFILE,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
   };
 }
 
 function emptyUser() {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+  return {
+    id: '',
+    username: '',
+    displayName: '',
+    email: '',
+    avatarUrl: '',
+    bio: '',
+    profile: DEFAULT_PROFILE,
+    createdAt: '',
+  };
 }
 
 async function loadModules() {
@@ -388,16 +411,16 @@ describe('saveAvatar', () => {
     const { accountMock, userStore } = await loadModules();
     vi.mocked(accountMock.uploadAvatar).mockResolvedValue(makeUser({ avatarUrl: 'https://cdn/avatar.webp' }));
 
-    await userStore.saveAvatar('QUJD');
+    await userStore.saveAvatar('QUJD', { x: 8, y: 16, size: 240 });
 
-    expect(accountMock.uploadAvatar).toHaveBeenCalledWith('QUJD');
+    expect(accountMock.uploadAvatar).toHaveBeenCalledWith('QUJD', { x: 8, y: 16, size: 240 });
     expect(get(userStore.currentUser)?.avatarUrl).toBe('https://cdn/avatar.webp');
   });
 
   it('refuses an empty payload', async () => {
     const { accountMock, userStore } = await loadModules();
 
-    await expect(userStore.saveAvatar('')).rejects.toMatchObject({ code: 'invalid_avatar' });
+    await expect(userStore.saveAvatar('', { x: 0, y: 0, size: 0 })).rejects.toMatchObject({ code: 'invalid_avatar' });
     expect(accountMock.uploadAvatar).not.toHaveBeenCalled();
   });
 
@@ -407,7 +430,7 @@ describe('saveAvatar', () => {
     userStore.currentUser.set(original);
     vi.mocked(accountMock.uploadAvatar).mockRejectedValue(new accountMock.AccountError('unsupported_avatar'));
 
-    await expect(userStore.saveAvatar('QUJD')).rejects.toMatchObject({ code: 'unsupported_avatar' });
+    await expect(userStore.saveAvatar('QUJD', { x: 0, y: 0, size: 240 })).rejects.toMatchObject({ code: 'unsupported_avatar' });
     expect(get(userStore.currentUser)).toEqual(original);
     expect(get(userStore.uploadingAvatar)).toBe(false);
   });
@@ -568,5 +591,23 @@ describe('offline mode and reconnect', () => {
     const settled = vi.mocked(accountMock.bootstrapSession).mock.calls.length;
     await vi.advanceTimersByTimeAsync(60000);
     expect(accountMock.bootstrapSession).toHaveBeenCalledTimes(settled + 1);
+  });
+});
+
+
+describe('profile customization session ownership', () => {
+  it('does not restore the previous account when saving finishes after an account switch', async () => {
+    const { accountMock, userStore } = await loadModules();
+    const first = makeUser();
+    const second = makeUser({ id: 'u2', username: 'other' });
+    userStore.currentUser.set(first);
+    let resolve!: (value: typeof first) => void;
+    vi.mocked(accountMock.updateProfile).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const pending = userStore.saveProfile({ bio: 'Updated' });
+    userStore.currentUser.set(second);
+    resolve({ ...first, bio: 'Updated' });
+    await expect(pending).rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(get(userStore.currentUser)).toEqual(second);
+    expect(get(userStore.savingProfile)).toBe(false);
   });
 });

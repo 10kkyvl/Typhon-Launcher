@@ -1,68 +1,173 @@
 <script lang="ts">
-  import { ArrowDownUp, ChevronDown, LayoutGrid, List } from '@lucide/svelte';
+  import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
+  import { Events } from '@wailsio/runtime';
+  import { createPagePrefetch } from '../../lib/catalog/prefetch';
+  import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
+  import { nextGenre } from '../../lib/catalog/filters';
+  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
+  import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
+  import { genreLabel, type Recommendation } from '../../lib/recommendations/display';
+  import { discoveryCache } from '../../lib/recommendations/cache';
+  import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
+  import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
+  import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
-  import { playGame, stopGame } from '../../lib/services/library';
-  import { queryCatalogGames, type CatalogGame } from '../../lib/services/sources';
-  import { installedGames, runningGames } from '../../lib/stores/library';
-  import { gameArt, gameInfo, loadArt, requestArt } from '../../lib/stores/metadata';
+  import { playGame, setFavorite, stopGame } from '../../lib/services/library';
+  import {
+    compatOnlyWorking,
+    queryCatalogGames,
+    type CatalogGame,
+    type CompatInfo,
+    type GenreFacet,
+    type Source,
+  } from '../../lib/services/sources';
+  import { inWails } from '../../lib/services/backend';
+  import { getAppInfo } from '../../lib/services/system';
+  import type { MetadataView } from '../../lib/services/metadata';
+  import { openGameMenu } from '../../lib/stores/gameMenu';
+  import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
+  import { gameArt, gameInfo } from '../../lib/stores/metadata';
   import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
-  import { plural } from '../../lib/utils/format';
-  import { inview } from '../../lib/utils/inview';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
 
-  type Sort = 'title' | 'year' | 'added';
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
+
+  type Sort = CatalogSort;
 
   const pageSize = 60;
+  const allGenres = msg('games.filterAll');
   const sortLabels: Record<Sort, string> = {
-    title: 'По алфавиту',
-    year: 'По году выхода',
-    added: 'По дате добавления',
+    title: msg('games.sortAlpha'),
+    year: msg('games.catalogSortNewest'),
+    popular: msg('games.catalogSortPopular'),
+    rating: msg('games.catalogSortRating'),
+    'for-you': msg('games.catalogSortForYou'),
+    auto: msg('games.catalogSortAuto'),
   };
 
   interface Snapshot {
+    preferenceKey: string;
+    catalogFallback: boolean;
+    discoveryFallback: boolean;
+    discoveryStale: boolean;
+    profile: ReturnType<typeof emptyProfile>;
+    snapshot: string;
+    sourceState: Source[] | undefined;
+    discovery: Recommendation[];
+    hideLibrary: boolean;
+    hideNotInterested: boolean;
     search: string;
+    genre: string;
     sort: Sort;
+    compatOnly: boolean;
     items: CatalogGame[];
     total: number;
     page: number;
     failed: boolean;
+    revision: number;
+    offline: boolean;
+    incomplete: boolean;
+    platform: string;
+    kind: string;
+    facets: GenreFacet[];
+    platforms: GenreFacet[];
   }
 
   const routeKey = currentRouteKey();
   const restored = recallRoute<Snapshot>(routeKey, 'catalog');
 
+  let sourceState = restored?.sourceState;
+  let snapshot = $state(restored?.snapshot ?? '');
+
   let search = $state(restored?.search ?? '');
-  let sort = $state<Sort>(restored?.sort ?? 'title');
+  let genre = $state(restored?.genre ?? '');
+  let sort = $state<Sort>(restored?.sort ?? 'auto');
+  let compatOnly = $state(restored?.compatOnly ?? false);
+  // Бейдж и фильтр имеют смысл только там, где игры идут через CrossOver: на
+  // Windows они запускаются нативно, и цифра «94% запускается» там ни о чём.
+  let compatRelevant = $state(false);
+  let compatByGame = $state<Record<string, CompatInfo>>({});
   let items = $state<CatalogGame[]>(restored?.items ?? []);
   let total = $state(restored?.total ?? 0);
   let page = $state(restored?.page ?? 0);
   let loading = $state(!restored);
   let appending = $state(false);
   let failed = $state(restored?.failed ?? false);
+  let backendOutdated = $state(false);
+  let revision = $state(restored?.revision ?? 0);
+  let offline = $state(restored?.offline ?? false);
+  let incomplete = $state(restored?.incomplete ?? false);
+  let facets = $state<GenreFacet[]>(restored?.facets ?? []);
+  let platforms = $state<GenreFacet[]>(restored?.platforms ?? []);
+  let platform = $state(restored?.platform ?? "");
+  let kind = $state(restored?.kind ?? "");
+
+  let preferenceKey = restored?.preferenceKey ?? '';
+  let preferences = $state(defaultPreferences());
+  let profile = $state(restored?.profile ?? emptyProfile());
+  let hideLibrary = $state(restored?.hideLibrary ?? false);
+  let hideNotInterested = $state(restored?.hideNotInterested ?? true);
+  let discovery = $state<Recommendation[]>(restored?.discovery ?? []);
+  let discoveryLoading = $state(false);
+  let catalogFallback = $state(restored?.catalogFallback ?? false);
+  let discoveryFallback = $state(restored?.discoveryFallback ?? false);
+  let discoveryStale = $state(restored?.discoveryStale ?? false);
+  const personalizationFallback = $derived(catalogFallback || (discoveryFallback && !discoveryStale));
+  let lastDismissed = $state<{ id: string; title: string } | null>(null);
+  let preferenceBusy = $state(false);
+  let ready = $state(false);
+  let reloadToken = 0;
+  let favoriteSeq = 0;
+  const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
+  const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
+  const displayedItems = $derived(catalogWithoutDiscovery(items, discoveryVisible ? discovery : []));
+
+  function personalQuery() {
+    return { stable: true, snapshot, hideLibrary, hideNotInterested };
+  }
+
+  function favoriteViewKey(): string {
+    return JSON.stringify({ search, genre, platform, kind, sort, compatOnly });
+  }
 
   let token = 0;
   let debounce: ReturnType<typeof setTimeout> | undefined;
-  const seen = new Set<string>();
-
-  function see(id: string) {
-    seen.add(id);
-    requestArt([id]);
-  }
+  let identityRefreshKey = '';
+  let identityRefreshRunning = false;
+  let identityRefreshToken = 0;
+  // Browse responses already contain list artwork. Loading full metadata for
+  // every visible card also changes provider identities while paging through
+  // the catalog; reserve that work for the game detail view.
 
   onDestroy(() => {
     clearTimeout(debounce);
+    token++;
+    reloadToken++;
     stashRoute(routeKey, 'catalog', {
+      revision, offline, incomplete, platform, kind, facets, platforms,
+      sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
       search,
+      genre,
       sort,
+      compatOnly,
       items: [...items],
       total,
       page,
@@ -73,28 +178,92 @@
   const installedByGame = $derived.by(() => {
     const map = new Map<string, string>();
     for (const game of $installedGames) {
-      if (game.canonicalGameId) map.set(game.canonicalGameId, game.id);
+      if (game.canonicalGameId) {
+        map.set(game.canonicalGameId, game.id);
+        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+      }
     }
     return map;
   });
 
+  const libraryByGame = $derived.by(() => {
+    const map = new Map<string, string>();
+    for (const game of $libraryGames) {
+      if (game.canonicalGameId) {
+        map.set(game.canonicalGameId, game.id);
+        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+      }
+    }
+    return map;
+  });
+
+  const favoriteByLibraryId = $derived.by(() => {
+    const map = new Map<string, boolean>();
+    for (const game of $libraryGames) map.set(game.id, Boolean(game.favorite));
+    return map;
+  });
+
+  const chips = $derived([allGenres, ...facets.filter((f) => f.count > 0).map((f) => f.label)]);
+
+  const prefetch = createPagePrefetch<Awaited<ReturnType<typeof queryCatalogGames>>>();
+
   async function fetchPage(next: number) {
     const current = ++token;
+    const requestedSources = get(sources);
     loading = true;
     appending = next > 1;
     try {
-      const result = await queryCatalogGames({ search, sort, page: next, pageSize });
+      const request = {
+        ...personalQuery(),
+        revision: next === 1 ? 0 : revision,
+        search,
+        genre, platform, kind,
+        sort,
+        compat: compatOnly ? compatOnlyWorking : '',
+        page: next,
+        pageSize,
+      };
+      const continuation = await loadCatalogContinuation(
+        request, items, queryCatalogGames,
+        () => prefetch.take(JSON.stringify(request), () => queryCatalogGames(request)),
+        () => current === token,
+        offline,
+      );
+      const { result, refreshed } = continuation;
       if (current !== token) return;
-      items = next === 1 ? result.items : [...items, ...result.items];
+      sourceState = requestedSources;
+      items = continuation.items;
+      compatByGame = next === 1 || refreshed ? (result.compat ?? {}) : { ...compatByGame, ...(result.compat ?? {}) };
       total = result.total;
       page = result.page;
       failed = false;
-      loadArt(result.items.map((game) => game.id));
-    } catch {
+      backendOutdated = false;
+      facets = result.facets ?? [];
+      platforms = result.platforms ?? [];
+      revision = result.revision ?? 0;
+      snapshot = result.snapshot ?? '';
+      if (next === 1 || refreshed) catalogFallback = result.personalizationFallback ?? false;
+      else catalogFallback ||= result.personalizationFallback ?? false;
+      offline = result.offline ?? false;
+      incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
+      if (!offline && items.length < total) {
+        const upcoming = { ...request, page: page + 1, revision, snapshot };
+        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+      }
+    } catch (err) {
       if (current !== token) return;
+      backendOutdated = errorCode(err) === "catalog.backend_outdated";
+      prefetch.clear();
       if (next === 1) {
         items = [];
         total = 0;
+        page = 0;
+        revision = 0;
+        offline = false;
+        incomplete = false;
+        facets = [];
+        platforms = [];
+        compatByGame = {};
       }
       failed = true;
     } finally {
@@ -105,10 +274,190 @@
     }
   }
 
-  function reload() {
+  async function reload(refreshProfile = true) {
+    if (!ready) return;
+    const active = ++reloadToken;
+    token++;
+    identityRefreshRunning = false;
+    identityRefreshToken = 0;
+    prefetch.clear();
+    loading = true;
+    items = [];
+    total = 0;
     page = 0;
-    seen.clear();
-    fetchPage(1);
+    revision = 0;
+    snapshot = '';
+    catalogFallback = false;
+    // Pages own their frozen ranking and membership. The shelf may finish or
+    // revalidate later without changing the pagination request or its offsets.
+    await Promise.all([fetchPage(1), refreshDiscovery(active, { refreshProfile })]);
+  }
+
+  async function refreshDiscovery(active: number, { rotate = false, refreshProfile = false } = {}) {
+    const query = { search, genre, platform, kind, sort, compat: compatOnly ? compatOnlyWorking : '' };
+    const previousIDs = rotate ? discovery.map((item) => item.game.id) : [];
+    discoveryLoading = true;
+    if (refreshProfile) {
+      try {
+        const currentProfile = await getRecommendationProfile();
+        if (active !== reloadToken) return;
+        profile = currentProfile;
+      } catch {
+        if (active !== reloadToken) return;
+        discoveryFallback = true;
+      }
+    }
+    preferenceKey = JSON.stringify({ preferences, profile });
+    if (discoveryVisible) {
+      const key = JSON.stringify({ query, preferences, profile, library: get(libraryGames).map((game) => [
+        game.id, game.canonicalGameId, game.favorite, game.status, game.uninstalled, game.playtimeSeconds, game.lastPlayed,
+      ]) });
+      const { cached, refreshed } = discoveryCache.get(key, () => getDiscovery(query, previousIDs), rotate);
+      discovery = cached?.items ?? [];
+      discoveryFallback = cached?.fallback ?? false;
+      discoveryStale = false;
+      try {
+        if (refreshed) {
+          const result = await refreshed;
+          if (active !== reloadToken) return;
+          discovery = result.items;
+          discoveryFallback = result.fallback;
+          discoveryStale = result.fallback && Boolean(cached && !cached.fallback);
+        }
+      } catch {
+        if (active !== reloadToken) return;
+        discoveryFallback = true;
+        discoveryStale = Boolean(cached);
+      } finally {
+        if (active === reloadToken) discoveryLoading = false;
+      }
+    } else {
+      discovery = [];
+      discoveryLoading = false;
+      discoveryFallback = false;
+      discoveryStale = false;
+    }
+  }
+
+  function refreshPicks() {
+    if (!ready || discoveryLoading) return;
+    void refreshDiscovery(++reloadToken, { rotate: true });
+  }
+
+  function restoreChoices() {
+    sort = (preferences.defaultSort || 'auto') as Sort;
+    genre = preferences.genre;
+    platform = preferences.platform;
+    kind = preferences.kind;
+    compatOnly = preferences.compatOnly;
+    hideLibrary = preferences.hideLibrary;
+    hideNotInterested = preferences.hideNotInterested;
+  }
+
+  async function preferencesChanged() {
+    preferenceBusy = true;
+    try {
+      const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
+        platform, kind, compatOnly, hideLibrary, hideNotInterested };
+      await saveRecommendationPreferences(next);
+      preferences = next;
+      preferenceKey = JSON.stringify({ preferences, profile });
+      await reload();
+    } catch {
+      restoreChoices();
+      toast(msg('games.recommendationError'), 'danger');
+    } finally { preferenceBusy = false; }
+  }
+
+  function isDismissed(game: CatalogGame) {
+    return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
+  }
+
+  async function dismiss(game: CatalogGame, on = true) {
+    if (preferenceBusy) return;
+    preferenceBusy = true;
+    try {
+      await setNotInterested(game.id, on);
+      preferences = await getRecommendationPreferences();
+      lastDismissed = on ? { id: game.id, title: game.title } : null;
+      await reload();
+    } catch { toast(msg('games.recommendationError'), 'danger'); }
+    finally { preferenceBusy = false; }
+  }
+
+  async function undoDismissal() {
+    if (!lastDismissed) return;
+    await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false);
+  }
+
+  async function refreshLoadedPrefix(validateSnapshot = false) {
+    if (!inWails || identityRefreshRunning || page <= 0) return;
+    const current = ++token;
+    identityRefreshToken = current;
+    const targetPage = page;
+    identityRefreshRunning = true;
+    loading = true;
+    appending = false;
+    prefetch.clear();
+    try {
+      const request = {
+        ...personalQuery(), revision, search, genre, platform, kind, sort,
+        compat: compatOnly ? compatOnlyWorking : '',
+        page: targetPage, pageSize,
+      };
+      const prefix = validateSnapshot
+        ? await refreshCatalogSnapshot(request, items, compatByGame, queryCatalogGames, () => current === token, offline)
+        : await reloadCatalogPrefix(request, targetPage, queryCatalogGames, () => current === token);
+      if (current !== token) return;
+      sourceState = get(sources);
+      items = prefix.items;
+      compatByGame = prefix.compat;
+      total = prefix.result.total;
+      page = prefix.result.page;
+      failed = false;
+      backendOutdated = false;
+      facets = prefix.result.facets ?? [];
+      platforms = prefix.result.platforms ?? [];
+      revision = prefix.result.revision ?? 0;
+      snapshot = prefix.result.snapshot ?? '';
+      catalogFallback ||= prefix.result.personalizationFallback ?? false;
+      offline = prefix.result.offline ?? false;
+      incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
+      if (!offline && items.length < total) {
+        const upcoming = {
+          ...personalQuery(), revision,
+          search,
+          genre,
+          platform,
+          kind,
+          sort,
+          compat: compatOnly ? compatOnlyWorking : '',
+          page: page + 1,
+          pageSize,
+        };
+        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+      }
+    } catch {
+      if (current === token) prefetch.clear();
+    } finally {
+      if (identityRefreshToken === current) {
+        identityRefreshRunning = false;
+        if (current === token) {
+          loading = false;
+          appending = false;
+        }
+      }
+    }
+  }
+
+  function refreshForMetadata(game: CatalogGame | undefined) {
+    if (!game || page <= 0) return;
+    const item = items.find((candidate) => matchesCatalogIdentity(candidate, game));
+    if (!item || !identityEvidenceChanged(item, game)) return;
+    const key = `${item.id}:${identityFingerprint(game)}`;
+    if (key === identityRefreshKey) return;
+    identityRefreshKey = key;
+    void refreshLoadedPrefix();
   }
 
   function onSearch() {
@@ -119,167 +468,346 @@
   function onSort(value: Sort) {
     if (value === sort) return;
     sort = value;
-    reload();
+    void preferencesChanged();
+  }
+
+  function onGenre(label: string) {
+    const value = label === allGenres ? '' : label;
+    const next = nextGenre(genre, value);
+    if (next === genre) return;
+    genre = next;
+    void preferencesChanged();
+  }
+
+  function onCompatOnly() {
+    compatOnly = !compatOnly;
+    void preferencesChanged();
   }
 
   onMount(() => {
-    if (restored) requestArt(items.map((game) => game.id));
-    else reload();
+    let active = true;
+    void (async () => {
+      try {
+        const [saved, currentProfile] = await Promise.all([getRecommendationPreferences(), getRecommendationProfile()]);
+        if (!active) return;
+        preferences = saved;
+        profile = currentProfile;
+        restoreChoices();
+      } catch { discoveryFallback = true; }
+      if (!active) return;
+      ready = true;
+      const nextKey = JSON.stringify({ preferences, profile });
+      const reuse = restored && page > 0 && preferenceKey === nextKey;
+      preferenceKey = nextKey;
+      if (reuse) await Promise.all([refreshLoadedPrefix(true), refreshDiscovery(reloadToken)]);
+      else await reload(false);
+    })();
+    return () => { active = false; ready = false; };
   });
 
   onMount(() => {
-    const timer = setInterval(() => {
-      const missing = [...seen].filter((id) => !$gameArt[id]?.cover);
-      if (missing.length > 0) requestArt(missing);
-    }, 20000);
-    return () => clearInterval(timer);
+    if (!inWails) return;
+    return Events.On('metadata:updated', (event) => {
+      refreshForMetadata((event.data as MetadataView)?.game);
+    });
   });
 
-  function meta(game: CatalogGame) {
-    const bits: string[] = [];
-    if (game.releaseYear) bits.push(String(game.releaseYear));
-    if (game.developer) bits.push(game.developer);
-    return bits.join(' · ');
+  onMount(async () => {
+    try { compatRelevant = (await getAppInfo()).platform === 'darwin'; }
+    catch { compatRelevant = false; }
+  });
+
+  function catalogMeta(game: CatalogGame) {
+    const rating = game.rating != null && game.ratingCount != null && game.ratingCount > 0
+      ? msg('games.catalogRating', { rating: Math.round(game.rating), count: game.ratingCount }) : '';
+    return [game.developer, rating].filter(Boolean).join(' · ');
   }
+
+  function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
   async function toggleRun(libraryId: string) {
     try {
       if ($runningGames.has(libraryId)) await stopGame(libraryId);
       else await playGame(libraryId);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
-  const subtitle = $derived(
-    failed
-      ? 'Не удалось загрузить каталог'
-      : total === 0
-        ? ''
-        : `${total} ${plural(total, 'игра', 'игры', 'игр')} из подключённых источников`,
-  );
+  async function toggleFavorite(libraryId: string, current: boolean) {
+    const expected = {
+      favorite: ++favoriteSeq,
+      reload: reloadToken,
+      token,
+      view: favoriteViewKey(),
+    };
+    const isCurrent = () => expected.favorite === favoriteSeq && expected.reload === reloadToken
+      && expected.token === token && expected.view === favoriteViewKey();
+    try {
+      await setFavorite(libraryId, !current);
+      // Saving a heart updates the library store immediately. Keep the visible
+      // shelf and loaded pages frozen until an explicit refresh/filter change.
+    } catch (err) {
+      if (isCurrent()) toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
+    }
+  }
 </script>
 
-<PageHeader title="Все игры" {subtitle}>
-  {#snippet actions()}
-    <SegmentedControl
-      bind:value={$catalogView}
-      options={[
-        { id: 'grid', label: 'Сетка' },
-        { id: 'list', label: 'Список' },
-      ]}
-    >
-      {#snippet item(option)}
-        {#if option.id === 'grid'}
-          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-        {:else}
-          <List size="1.6rem" strokeWidth={1.8} />
-        {/if}
-      {/snippet}
-    </SegmentedControl>
-  {/snippet}
-</PageHeader>
+<Card surface="panel">
+  <PageHeader title={msg('games.allGamesTitle')} />
 
-<div class="toolbar">
-  <div class="search-slot">
-    <SearchInput bind:value={search} placeholder="Поиск по каталогу" loading={loading && !appending} oninput={onSearch} />
+  <div class="search-row">
+    <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
   </div>
-  <DropdownMenu
-    items={[
-      { id: 'title', label: sortLabels.title },
-      { id: 'year', label: sortLabels.year },
-      { id: 'added', label: sortLabels.added },
-    ]}
-    onselect={(id) => onSort(id as Sort)}
-  >
-    {#snippet trigger({ open, toggle })}
-      <button class="chip" class:open onclick={toggle}>
-        <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-        {sortLabels[sort]}
-        <ChevronDown size="1.4rem" strokeWidth={1.8} />
-      </button>
-    {/snippet}
-  </DropdownMenu>
-</div>
 
-{#if items.length === 0}
-  {#if loading}
-    <p class="muted">Загрузка каталога…</p>
-  {:else if failed}
-    <EmptyState
-      title="Каталог недоступен"
-      description="Не удалось получить список игр. Попробуйте обновить источники."
-    />
-  {:else if search.trim()}
-    <EmptyState title="Ничего не найдено" description="Измените запрос или добавьте источник с этой игрой." />
-  {:else}
-    <EmptyState
-      title="Каталог пуст"
-      description="Добавьте источник — игры из его фида появятся здесь."
-    />
-  {/if}
-{:else if $catalogView === 'grid'}
-  <div class="grid">
-    {#each items as game (game.id)}
-      {@const shown = $gameInfo[game.id] ?? game}
-      <div class="cell" use:inview={() => see(game.id)}>
-        <GameCard
-          id={game.id}
-          title={shown.title}
-          cover={$gameArt[game.id]?.cover ?? ''}
-          installed={installedByGame.has(game.id)}
-          running={$runningGames.has(installedByGame.get(game.id) ?? '')}
-          meta={meta(shown)}
-          onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
-        />
-      </div>
-    {/each}
-  </div>
-{:else}
-  <div class="list">
-    {#each items as game (game.id)}
-      {@const shown = $gameInfo[game.id] ?? game}
-      <button
-        class="list-row"
-        use:inview={() => see(game.id)}
-        onclick={() => navigate('game', { id: game.id })}
+  <fieldset class="filter-row" disabled={preferenceBusy || !ready}>
+    <div class="chips">
+      {#each chips as label (label)}
+        <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
+          {label === allGenres ? label : genreLabel(label)}
+        </Chip>
+      {/each}
+      <Chip variant="outline" selected={hideLibrary} onclick={() => { hideLibrary = !hideLibrary; void preferencesChanged(); }}>{msg('games.catalogHideLibrary')}</Chip>
+      <Chip variant="outline" selected={hideNotInterested} onclick={() => { hideNotInterested = !hideNotInterested; void preferencesChanged(); }}>{msg('games.catalogHideDismissed')}</Chip>
+      {#if compatRelevant}
+        <Chip
+          variant="outline"
+          selected={compatOnly}
+          title={msg('games.compatFilterHint')}
+          onclick={onCompatOnly}
+        >
+          {msg('games.compatFilterLabel')}
+        </Chip>
+      {/if}
+    </div>
+    <div class="controls">
+      <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
+        options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
+      <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
+        options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
+      <DropdownMenu
+        items={[
+          ...(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({ id, label: sortLabels[id] })),
+        ]}
+        onselect={(id) => onSort(id as Sort)}
       >
-        <div class="list-thumb">
-          <Artwork src={$gameArt[game.id]?.cover ?? ''} alt={shown.title} radius="var(--radius-xs)" />
-        </div>
-        <span class="list-title">{shown.title}</span>
-        <span class="list-meta">{meta(shown)}</span>
-        <span class="list-meta right">{installedByGame.has(game.id) ? 'Установлена' : ''}</span>
-      </button>
-    {/each}
-  </div>
-{/if}
+        {#snippet trigger({ open, toggle })}
+          <button class="sort" class:open onclick={toggle}>
+            <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+            {sortLabels[(effectiveSort || 'popular') as Sort]}
+            <ChevronDown size="1.4rem" strokeWidth={1.8} />
+          </button>
+        {/snippet}
+      </DropdownMenu>
+      <SegmentedControl
+        bind:value={$catalogView}
+        options={[
+          { id: 'grid', label: msg('games.viewGrid') },
+          { id: 'list', label: msg('games.viewList') },
+        ]}
+      >
+        {#snippet item(option)}
+          {#if option.id === 'grid'}
+            <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+          {:else}
+            <List size="1.6rem" strokeWidth={1.8} />
+          {/if}
+        {/snippet}
+      </SegmentedControl>
+    </div>
+  </fieldset>
 
-{#if items.length > 0 && items.length < total}
-  <div class="more">
-    <Button onclick={() => fetchPage(page + 1)} disabled={loading}>
-      {appending ? 'Загрузка…' : 'Показать ещё'}
-    </Button>
-    <span class="muted">Показано {items.length} из {total}</span>
-  </div>
-{/if}
+  {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
+  {:else if incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
+  {#if failed || offline}<Button onclick={() => void reload()}>{msg('games.catalogRetry')}</Button>{/if}
+
+  {#if lastDismissed}
+    <div class="dismissal" role="status"><span>{msg('games.recommendationDismissed', { title: lastDismissed.title })}</span>
+      <Button onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button></div>
+  {/if}
+  {#if personalizationFallback}<p class="muted" role="status">{msg('games.recommendationFallback')}</p>{/if}
+  {#if discoveryStale}<p class="muted" role="status">{msg('games.recommendationRefreshFailed')}</p>{/if}
+  {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
+  {#if discoveryVisible}
+    <RecommendationShelf title={msg('games.discoveryTitle')} items={discovery} loading={discoveryLoading || preferenceBusy}
+      emptyText={msg('games.recommendationEmpty')} onrefresh={refreshPicks} ondismiss={(item) => void dismiss(item.game)} />
+  {/if}
+
+  {#if displayedItems.length === 0}
+    {#if loading}
+      <p class="muted" role="status">{msg('games.catalogLoadingLabel')}</p>
+      <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
+        {#each Array(12) as _}
+          <div class="loading-item">
+            <div class="loading-skeleton loading-cover"></div>
+            <div class="loading-copy">
+              <div class="loading-skeleton loading-title"></div>
+              <div class="loading-skeleton loading-meta"></div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else if failed}
+      <EmptyState
+        title={msg('games.catalogUnavailableTitle')}
+        description={msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
+      />
+    {:else if discoveryVisible && discovery.length > 0}
+      <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>
+    {:else if search.trim() || genre || platform || kind || compatOnly}
+      <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
+    {:else}
+      <EmptyState
+        title={msg('games.catalogEmptyTitle')}
+        description={msg('games.catalogEmptyDescription')}
+      />
+    {/if}
+  {:else if $catalogView === 'grid'}
+    <div class="grid">
+      {#each displayedItems as game (game.id)}
+        {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
+        {@const libId = libraryByGame.get(game.id)}
+        {@const isFav = libId ? favoriteByLibraryId.get(libId) : false}
+        {@const isInstalled = installedByGame.has(game.id)}
+        <div class="cell">
+          <GameCard
+            id={game.id}
+            title={shown.title}
+            cover={game.coverUrl || $gameArt[game.id]?.cover || ''}
+            installed={isInstalled}
+            running={$runningGames.has(installedByGame.get(game.id) ?? '')}
+            meta={catalogMeta(shown)}
+            compat={compatRelevant ? compatByGame[game.id] : undefined}
+            onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
+          >
+            {#snippet footer()}
+              <span class="status" class:on={isInstalled}>
+                {#if isInstalled}
+                  <span class="dot"></span>{msg('games.gameInstalledWord')}
+                {:else}
+                  <Download size="1.3rem" strokeWidth={1.8} />{msg('games.gameNotInstalledWord')}
+                {/if}
+              </span>
+              <div class="actions">
+                <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+                  active={isDismissed(game)} size="sm" disabled={preferenceBusy}
+                  onclick={() => void dismiss(game, !isDismissed(game))}>
+                  {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+                </IconButton>
+              {#if libId}
+                  <IconButton
+                    label={isFav ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
+                    size="sm"
+                    active={isFav}
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      toggleFavorite(libId, Boolean(isFav));
+                    }}
+                  >
+                    <Heart size="1.5rem" strokeWidth={1.8} fill={isFav ? 'currentColor' : 'none'} />
+                  </IconButton>
+                  <IconButton
+                    label={msg('games.moreLabel')}
+                    size="sm"
+                    onclick={(event) => openGameMenu(event, libId)}
+                  >
+                    <EllipsisVertical size="1.5rem" strokeWidth={1.8} />
+                  </IconButton>
+              {/if}
+              </div>
+            {/snippet}
+          </GameCard>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="list">
+      {#each displayedItems as game (game.id)}
+        {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
+        <div class="list-entry">
+        <button
+          class="list-row"
+          onclick={() => navigate('game', { id: game.id })}
+        >
+          <div class="list-thumb">
+            <Artwork src={game.coverUrl || $gameArt[game.id]?.cover || ''} alt={shown.title} radius="var(--radius-xs)" />
+          </div>
+          <span class="list-title">{shown.title}</span>
+          <span class="list-meta">{listMeta(shown)}</span>
+          <span class="list-meta right">
+            {installedByGame.has(game.id) ? msg('games.gameInstalledWord') : msg('games.gameNotInstalledWord')}
+          </span>
+        </button>
+        <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+          active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
+          {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+        </IconButton></div>
+      {/each}
+    </div>
+  {/if}
+
+  {#if items.length > 0}
+    <div class="more">
+      {#if items.length < total}<Button onclick={() => fetchPage(page + 1)} disabled={loading}>
+        {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
+      </Button>{/if}
+      {#if failed}<span class="more-error" role="alert">{msg('games.catalogMoreFailed')}</span>{/if}
+      <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
+    </div>
+  {/if}
+</Card>
 
 <style>
-  .toolbar {
+  .dismissal { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); font-size: var(--font-sm); }
+  .profile-hint { margin-bottom: var(--space-5); }
+  .list-entry { display: flex; align-items: center; }
+  .list-entry .list-row { flex: 1; min-width: 0; }
+
+  .more-error { color: var(--danger); }
+  .catalog-skeleton { margin-top: var(--space-4); }
+  .loading-item { min-width: 0; }
+  .loading-cover { aspect-ratio: 3 / 4; border-radius: var(--radius-md); }
+  .loading-copy { margin-top: 0.9rem; }
+  .loading-title { height: 1.6rem; width: 75%; }
+  .loading-meta { height: 1.2rem; width: 45%; margin-top: 0.6rem; }
+  .loading-list { display: grid; gap: var(--space-3); }
+  .loading-list .loading-item { display: flex; align-items: center; gap: var(--space-3); }
+  .loading-list .loading-cover { width: 5rem; flex-shrink: 0; }
+  .loading-list .loading-copy { width: min(32rem, 60%); margin-top: 0; }
+
+  .search-row {
+    max-width: 46rem;
+    margin-bottom: var(--space-4);
+  }
+
+  .filter-row {
+    border: 0;
+    padding: 0;
+    min-width: 0;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--space-4);
-    margin-bottom: var(--space-5);
+    margin-bottom: var(--space-6);
     flex-wrap: wrap;
   }
 
-  .search-slot {
-    flex: 1;
-    min-width: 24rem;
-    max-width: 46rem;
+  .chips {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
   }
 
-  .chip {
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 1;
+    flex-wrap: wrap;
+  }
+
+  .sort {
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
@@ -295,8 +823,8 @@
       color var(--dur) var(--ease);
   }
 
-  .chip:hover,
-  .chip.open {
+  .sort:hover,
+  .sort.open {
     background: var(--hover);
     color: var(--text);
   }
@@ -309,6 +837,37 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
     gap: var(--space-6) var(--space-5);
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .status.on {
+    color: var(--text-2);
+  }
+
+  .dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--success);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
   }
 
   .list {
@@ -326,7 +885,7 @@
     transition: background var(--dur) var(--ease);
   }
 
-  .list-row + .list-row {
+  .list-entry + .list-entry {
     border-top: 1px solid var(--border);
   }
 
@@ -359,7 +918,7 @@
   }
 
   .list-meta.right {
-    min-width: 8rem;
+    min-width: 10rem;
     text-align: right;
   }
 

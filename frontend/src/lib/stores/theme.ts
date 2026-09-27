@@ -1,3 +1,4 @@
+import { updateSettings } from './settings';
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
@@ -12,13 +13,14 @@ import {
   type Theme,
 } from '../services/theme';
 import { applyTheme as applyThemeDom, clearTheme as clearThemeDom } from '../theme/apply';
-import { errorMessage } from '../utils/errors';
+import { themeErrorText } from '../theme/themeErrors';
 import { toast } from './toasts';
 
 export type ThemeMode = 'system' | 'theme';
 
 const CONFIRM_DELAY_MS = 5000;
 
+export const appearanceResetVersion = writable(0);
 export const activeTheme = writable<Theme | null>(null);
 export const themeList = writable<Theme[]>([]);
 export const themeMode = writable<ThemeMode>('theme');
@@ -38,7 +40,7 @@ function scheduleConfirm(id: string) {
   confirmTimer = setTimeout(() => {
     confirmTimer = null;
     if (get(activeTheme)?.id !== id) return;
-    confirmThemeRequest(id).catch((err) => toast(errorMessage(err), 'danger'));
+    confirmThemeRequest(id).catch((err) => toast(themeErrorText(err), 'danger'));
   }, CONFIRM_DELAY_MS);
 }
 
@@ -55,7 +57,7 @@ export async function refreshThemes() {
   try {
     themeList.set(await listThemes());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -71,7 +73,7 @@ export async function selectTheme(id: string) {
     setActive(applied);
     scheduleConfirm(applied.id);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -82,19 +84,24 @@ function onSystemChange() {
 }
 
 export async function resetAppearance() {
+  appearanceResetVersion.update(value => value + 1);
   cancelConfirm();
+  const previous = get(activeTheme);
+  // Keep the emergency reset usable even when custom CSS hides the interface.
   clearThemeDom();
   try {
     await resetThemeRequest();
+    await updateSettings({ accentColor: '', tintLogo: false });
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    if (previous) setActive(previous);
+    toast(themeErrorText(err), 'danger');
     return;
   }
   try {
     const applied = await fetchActiveTheme();
     setActive(applied);
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 }
 
@@ -106,7 +113,7 @@ export async function initTheme() {
   try {
     setActive(await fetchActiveTheme());
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(themeErrorText(err), 'danger');
   }
 
   if (!inWails) return;

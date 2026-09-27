@@ -1,5 +1,8 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service } from '../../../bindings/typhon/internal/theme';
 import type { Theme as BindingTheme } from '../../../bindings/typhon/internal/theme';
+import { msg } from '../i18n';
 import { inWails } from './backend';
 
 export type { BindingTheme };
@@ -54,7 +57,7 @@ function fromTheme(theme: Theme): BindingTheme {
 function fallbackTheme(): Theme {
   return {
     id: 'dark',
-    name: 'Тёмная',
+    name: msg('state.themeFallbackName'),
     base: 'dark',
     tokens: {},
     css: '',
@@ -116,10 +119,10 @@ export async function resetTheme(): Promise<void> {
 
 export async function selectThemeFile(): Promise<string> {
   if (!inWails) return '';
-  return await Service.SelectThemeFile();
+  return await Service.SelectThemeFile(get(locale));
 }
 
 export async function selectExportPath(): Promise<string> {
   if (!inWails) return '';
-  return await Service.SelectExportPath();
+  return await Service.SelectExportPath(get(locale));
 }

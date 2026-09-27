@@ -11,6 +11,12 @@ const (
 	confidenceExactEdition   = 1.0
 	confidenceUnknownEdition = 0.85
 	confidenceLanguageMiss   = 0.9
+	confidenceSmallerRelease = 0.5
+
+	// A download this much smaller than the installed game is a different kind of
+	// build, not the same game one version on. Repacks compress hard, so the
+	// ratio stays well clear of what an honest repack achieves.
+	smallReleaseRatio = 4
 )
 
 func Compatible(installed InstalledGame, r sources.Release) CompatibilityResult {
@@ -20,20 +26,32 @@ func Compatible(installed InstalledGame, r sources.Release) CompatibilityResult 
 	target := titles.Normalize(r.Edition)
 	switch {
 	case current != "" && target != "" && current != target:
-		return CompatibilityResult{Confidence: 0, Reasons: []string{"edition: " + r.Edition}}
+		return CompatibilityResult{Confidence: 0, Reasons: []string{"different_edition"}}
 	case current == "" && target != "":
 		result.Confidence = confidenceUnknownEdition
-		result.Reasons = append(result.Reasons, "edition: "+r.Edition)
+		result.Reasons = append(result.Reasons, "edition_unverified")
 	case current != "" && target == "":
 		result.Confidence = confidenceUnknownEdition
-		result.Reasons = append(result.Reasons, "edition unknown")
+		result.Reasons = append(result.Reasons, "edition_unknown")
 	}
 
 	if len(installed.Languages) > 0 && len(r.Languages) > 0 && !sharesLanguage(installed.Languages, r.Languages) {
 		result.Confidence *= confidenceLanguageMiss
-		result.Reasons = append(result.Reasons, "language: "+strings.Join(r.Languages, ", "))
+		result.Reasons = append(result.Reasons, "different_language")
+	}
+
+	if muchSmaller(installed.SizeBytes, r.Size) {
+		result.Confidence *= confidenceSmallerRelease
+		result.Reasons = append(result.Reasons, "release_much_smaller")
 	}
 	return result
+}
+
+func muchSmaller(installedBytes, releaseBytes int64) bool {
+	if installedBytes <= 0 || releaseBytes <= 0 {
+		return false
+	}
+	return releaseBytes*smallReleaseRatio < installedBytes
 }
 
 func sharesLanguage(a, b []string) bool {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -334,20 +335,21 @@ func TestCopyDirRecreatesSymlink(t *testing.T) {
 	}
 }
 
-func TestMergeDirRecreatesSymlinkOverExisting(t *testing.T) {
+func TestMergeDirWithBackupRecreatesSymlinkOverExisting(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "real.txt"), "alpha")
 	mkSymlink(t, filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt"))
 	dst := filepath.Join(tmp, "dst")
 	mkText(t, filepath.Join(dst, "link.txt"), "stale regular file")
+	backup := filepath.Join(tmp, "backup")
 
-	err := MergeDir(context.Background(), src, dst, nil)
+	err := MergeDirWithBackup(context.Background(), src, dst, backup, nil)
 	if errors.Is(err, errSymlinkPrivilege) {
 		t.Skipf("symlink creation requires a privilege this account lacks: %v", err)
 	}
 	if err != nil {
-		t.Fatalf("MergeDir: %v", err)
+		t.Fatalf("MergeDirWithBackup: %v", err)
 	}
 	info, lerr := os.Lstat(filepath.Join(dst, "link.txt"))
 	if lerr != nil {
@@ -355,6 +357,9 @@ func TestMergeDirRecreatesSymlinkOverExisting(t *testing.T) {
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("link.txt was not replaced by a symlink, mode = %v", info.Mode())
+	}
+	if data, err := os.ReadFile(filepath.Join(backup, "link.txt")); err != nil || string(data) != "stale regular file" {
+		t.Fatalf("backup of replaced link.txt = %q, err = %v", data, err)
 	}
 }
 
@@ -389,14 +394,15 @@ func TestCopyDirRejectsNonRegularNonSymlink(t *testing.T) {
 	}
 }
 
-func TestMergeDirRejectsNonRegularNonSymlink(t *testing.T) {
+func TestMergeDirWithBackupRejectsNonRegularNonSymlink(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	mkUnixSocket(t, filepath.Join(src, "weird.sock"))
 	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
 
-	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNonRegular) {
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); !errors.Is(err, errNonRegular) {
 		t.Fatalf("err = %v, want errNonRegular", err)
 	}
 }
@@ -426,13 +432,14 @@ func TestCopyDirRejectsSourceInsideDestination(t *testing.T) {
 	}
 }
 
-func TestMergeDirRejectsNestedPaths(t *testing.T) {
+func TestMergeDirWithBackupRejectsNestedPaths(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src")
 	mkText(t, filepath.Join(src, "a.txt"), "alpha")
 	dst := filepath.Join(src, "nested", "dst")
+	backup := filepath.Join(tmp, "backup")
 
-	if err := MergeDir(context.Background(), src, dst, nil); !errors.Is(err, errNestedPaths) {
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); !errors.Is(err, errNestedPaths) {
 		t.Fatalf("err = %v, want errNestedPaths", err)
 	}
 }
@@ -507,6 +514,194 @@ func TestCopyFileProducesReadableFileAfterSync(t *testing.T) {
 	}
 	if len(got) != 512*1024 {
 		t.Fatalf("copied size = %d, want %d", len(got), 512*1024)
+	}
+}
+
+func TestMergeDirWithBackupBacksUpReplacedAndRecordsAdded(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(src, "added.txt"), "brand new")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+	mkText(t, filepath.Join(dst, "untouched.txt"), "keep me")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "replaced.txt")); err != nil || string(data) != "new content" {
+		t.Fatalf("replaced.txt = %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "added.txt")); err != nil || string(data) != "brand new" {
+		t.Fatalf("added.txt = %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "untouched.txt")); err != nil || string(data) != "keep me" {
+		t.Fatalf("untouched.txt damaged: %q, err = %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(backup, "replaced.txt")); err != nil || string(data) != "old content" {
+		t.Fatalf("backup of replaced.txt = %q, err = %v", data, err)
+	}
+	list, err := os.ReadFile(filepath.Join(backup, "added.list"))
+	if err != nil {
+		t.Fatalf("read added.list: %v", err)
+	}
+	if string(list) != "added.txt\n" {
+		t.Fatalf("added.list = %q", list)
+	}
+}
+
+func TestMergeDirWithBackupNeverRemovesWithoutBackup(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "a.txt"), "new")
+	mkText(t, filepath.Join(dst, "a.txt"), "old")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	// The only acceptable states at any point are: original file present,
+	// backup present, or the merged file present — never neither.
+	if _, err := os.Stat(filepath.Join(dst, "a.txt")); err != nil {
+		t.Fatal("a.txt missing from dst after merge")
+	}
+	if _, err := os.Stat(filepath.Join(backup, "a.txt")); err != nil {
+		t.Fatal("a.txt missing from backup after merge")
+	}
+}
+
+func TestRestoreMergeBackupUndoesCrashedMerge(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(src, "added.txt"), "brand new")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+	mkText(t, filepath.Join(dst, "untouched.txt"), "keep me")
+
+	original := map[string]string{
+		"replaced.txt":  "old content",
+		"untouched.txt": "keep me",
+	}
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	// Simulate a crash mid-merge: an unfinished .typhon-tmp left behind.
+	if err := os.WriteFile(filepath.Join(dst, "added.txt.typhon-tmp"), []byte("half written"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("RestoreMergeBackup: %v", err)
+	}
+	for name, want := range original {
+		if data, err := os.ReadFile(filepath.Join(dst, name)); err != nil || string(data) != want {
+			t.Fatalf("%s = %q, err = %v, want %q", name, data, err, want)
+		}
+	}
+	if exists(filepath.Join(dst, "added.txt")) {
+		t.Fatal("added.txt was not removed on restore")
+	}
+	if exists(filepath.Join(dst, "added.txt.typhon-tmp")) {
+		t.Fatal("leftover tmp file was not removed on restore")
+	}
+	if exists(backup) {
+		t.Fatal("backup directory must be gone after a full restore")
+	}
+}
+
+func TestRestoreMergeBackupIsIdempotent(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	backup := filepath.Join(tmp, "backup")
+	mkText(t, filepath.Join(src, "replaced.txt"), "new content")
+	mkText(t, filepath.Join(dst, "replaced.txt"), "old content")
+
+	if err := MergeDirWithBackup(context.Background(), src, dst, backup, nil); err != nil {
+		t.Fatalf("MergeDirWithBackup: %v", err)
+	}
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("first RestoreMergeBackup: %v", err)
+	}
+	if err := RestoreMergeBackup(dst, backup); err != nil {
+		t.Fatalf("second RestoreMergeBackup on an already-restored tree: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "replaced.txt")); err != nil || string(data) != "old content" {
+		t.Fatalf("replaced.txt = %q, err = %v", data, err)
+	}
+}
+
+// TestForEachAddedLineStreamsWithoutLoadingWholeFile закрывает находку:
+// RestoreMergeBackup читал mergeAddedList целиком через os.ReadFile, а
+// затем конвертировал []byte в string — вторая полная копия списка,
+// живущая одновременно с первой, пока идёт откат. На патче с десятками
+// тысяч новых файлов это заметный пик памяти на один откат без всякой
+// пользы: список читается по одному пути за раз.
+//
+// Тест меряет прирост живой (после runtime.GC()) кучи в момент, когда
+// колбэк вызван на середине списка, относительно кучи до вызова. У
+// потокового чтения этот прирост ограничен размером буфера сканера
+// (килобайты), а не размером всего файла: старая реализация держит живыми
+// и []byte из os.ReadFile, и получившуюся строку, и слайс подстрок
+// strings.Split — все они остаются в области видимости на протяжении
+// всего цикла, то есть прирост кучи в середине цикла обязан быть порядка
+// размера файла. Абсолютный порог (fileSize/4) достаточно далёк от обоих
+// значений, чтобы не зависеть от шума GC.
+func TestForEachAddedLineStreamsWithoutLoadingWholeFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, mergeAddedList)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	const lineCount = 100000
+	line := []byte(strings.Repeat("a", 60) + "\n")
+	for i := 0; i < lineCount; i++ {
+		if _, err := f.Write(line); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	fileSize := info.Size()
+
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	var peakDelta uint64
+	seen := 0
+	err = forEachAddedLine(path, func(rel string) error {
+		seen++
+		if seen == lineCount/2 {
+			runtime.GC()
+			var mid runtime.MemStats
+			runtime.ReadMemStats(&mid)
+			if mid.HeapAlloc > before.HeapAlloc {
+				peakDelta = mid.HeapAlloc - before.HeapAlloc
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("forEachAddedLine: %v", err)
+	}
+	if seen != lineCount {
+		t.Fatalf("seen = %d, want %d", seen, lineCount)
+	}
+	if threshold := float64(fileSize) / 4; float64(peakDelta) > threshold {
+		t.Fatalf("heap growth mid-scan = %d bytes (file size %d), want under %.0f: the whole file (or a full copy of it) looks still live, want streaming that only ever holds a small window",
+			peakDelta, fileSize, threshold)
 	}
 }
 

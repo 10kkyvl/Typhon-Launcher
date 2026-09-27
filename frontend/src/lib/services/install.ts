@@ -133,6 +133,25 @@ export function isExternal(type: InstallType) {
   return externalTypes.includes(type);
 }
 
+const installerExtensions = ['.exe', '.msi'];
+
+// Mirrors install.InstallerLikely: before the files exist their names are all
+// there is, and this only decides whether asking for administrator rights up
+// front is worth offering.
+export function installerLikely(paths: string[]): boolean {
+  return paths.some((path) => installerExtensions.some((ext) => path.toLowerCase().endsWith(ext)));
+}
+
+export interface ElevateAheadOffer {
+  elevationSupported: boolean;
+  autoInstall: boolean;
+  paths: string[];
+}
+
+export function offerElevateAhead(offer: ElevateAheadOffer): boolean {
+  return offer.elevationSupported && offer.autoInstall && installerLikely(offer.paths);
+}
+
 export async function listInstallations(): Promise<Installation[]> {
   if (!inWails) return [];
   return ((await InstallService.List()) ?? []) as unknown as Installation[];

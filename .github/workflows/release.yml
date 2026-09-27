@@ -47,26 +47,27 @@ on:
         required: false
         default: ""
 
+# Do not interrupt an in-progress publication or let two releases race on latest.
+concurrency:
+  group: launcher-release
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
-  release:
-    name: Build, sign and publish the Windows release
-    runs-on: windows-latest
-    env:
-      TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
-      S3_RELEASES_BUCKET: ${{ secrets.S3_RELEASES_BUCKET }}
-      MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
-      RELEASE_NOTES: ${{ inputs.notes }}
+  macos:
+    name: Build the macOS bundle
+    runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          variant: production
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -75,9 +76,88 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install wails3 CLI
-        shell: bash
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.10
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: v3.0.0-beta.17
+
+      - name: Verify tag matches VERSION
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$version" ]; then
+            echo "tag v$tag does not match VERSION ($version)" >&2
+            exit 1
+          fi
+
+      # Только arm64. Универсальный бандл macOS 26 встречает окном «Support
+      # Ending for Intel-Based Apps»: система ругается на x86_64-слайс даже
+      # тогда, когда приложение стартует нативно. Tahoe — последняя macOS для
+      # интеловых маков, поэтому слайс убран, а не спрятан. Раннер macos-latest
+      # сам arm64, так что задача собирает нативно.
+      - name: Package the arm64 bundle
+        env:
+          CGO_ENABLED: "1"
+        run: wails3 task darwin:package:zip
+
+      - name: Verify the bundle is arm64 and carries no devmock code
+        run: |
+          set -euo pipefail
+          exe="bin/typhon.app/Contents/MacOS/typhon"
+          if [ ! -s "$exe" ]; then
+            echo "$exe is missing or empty" >&2
+            exit 1
+          fi
+          expected="$(tr -d ' \t\r\n' < VERSION)"
+          for key in CFBundleShortVersionString CFBundleVersion; do
+            actual=$(/usr/libexec/PlistBuddy -c "Print :$key" bin/typhon.app/Contents/Info.plist)
+            [ "$actual" = "$expected" ] || { echo "$key=$actual, expected $expected" >&2; exit 1; }
+          done
+          archs="$(lipo -archs "$exe")"
+          if [ "$archs" != "arm64" ]; then
+            echo "bundle must be arm64 only, got: $archs" >&2
+            exit 1
+          fi
+          if LC_ALL=C grep -q "TYPHON_DEVMOCK_ENABLED" "$exe"; then
+            echo "devmock marker found in the release bundle" >&2
+            exit 1
+          fi
+
+      - name: Upload the bundle for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-darwin-arm64
+          path: bin/typhon-darwin-arm64.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  windows:
+    name: Build the Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          variant: production
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Wails CLI
+        uses: ./.github/actions/setup-wails
+        with:
+          version: v3.0.0-beta.17
 
       - name: Install NSIS
         shell: pwsh
@@ -134,13 +214,47 @@ jobs:
             exit 1
           fi
 
-      - name: Build application
-        shell: bash
-        run: wails3 task build
-
-      - name: Package installer
+      # Packaging already builds the application. Verify that same binary below.
+      - name: Build and package installer
         shell: bash
         run: wails3 task package
+
+      # Compile with the already-warm build job. Publication needs only this
+      # executable, not a second Go installation and a gigabyte of Go caches.
+      - name: Test and build the manifest signer
+        shell: bash
+        env:
+          CGO_ENABLED: "0"
+          GOARCH: amd64
+        run: |
+          go test ./cmd/signrelease
+          go build -trimpath -o bin/signrelease.exe ./cmd/signrelease
+
+      - name: Upload the manifest signer
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-release-tools
+          path: bin/signrelease.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Verify the Windows binary carries no devmock code
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="bin/typhon.exe"
+          if [ ! -s "$exe" ]; then
+            echo "$exe is missing or empty" >&2
+            exit 1
+          fi
+          # The marker string exists only in files compiled with the devmock
+          # tag (internal/devmock/enabled_devmock.go); a release binary must
+          # not contain it.
+          if grep -c "TYPHON_DEVMOCK_ENABLED" "$exe" >/dev/null; then
+            echo "$exe contains the devmock marker; the release was built with the devmock tag" >&2
+            exit 1
+          fi
 
       - name: Verify installer artifact
         shell: bash
@@ -152,18 +266,106 @@ jobs:
             exit 1
           fi
 
+      - name: Upload the installer for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-windows-amd64
+          path: bin/typhon-amd64-installer.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  release:
+    name: Sign and publish both platforms
+    needs: [macos, windows]
+    # Run the tested signer from this run's Windows build, without a Go SDK.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TYPHON_RELEASE_PRIVATE_KEY: ${{ secrets.TYPHON_RELEASE_PRIVATE_KEY }}
+      S3_RELEASES_BUCKET: ${{ secrets.S3_RELEASES_BUCKET }}
+      MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
+      RELEASE_NOTES: ${{ inputs.notes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Download the tested manifest signer
+        uses: actions/download-artifact@v4
+        with:
+          name: typhon-release-tools
+          path: bin
+
+      - name: Verify the manifest signer
+        shell: bash
+        run: test -s bin/signrelease.exe
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          if [ -z "$version" ]; then
+            echo "VERSION file is empty" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download the Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: typhon-windows-amd64
+          path: bin
+
+      - name: Verify the Windows artifact
+        shell: bash
+        run: test -s bin/typhon-amd64-installer.exe
+
+      - name: Download the macOS bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: typhon-darwin-arm64
+          path: bin
+
+      - name: Verify the macOS artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="bin/typhon-darwin-arm64.zip"
+          if [ ! -s "$bundle" ]; then
+            echo "$bundle is missing or empty" >&2
+            exit 1
+          fi
+
       - name: Build and sign the self-update manifest
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          go run ./cmd/signrelease \
+          ./bin/signrelease.exe \
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe" \
+            -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
+
+          # A launcher older than 0.5.0 validates every artifact in the
+          # manifest and knows only kind=installer, so the macOS bundle makes
+          # it reject the whole document as corrupt and no update is offered
+          # at all. Those clients get their own signed manifest carrying just
+          # the installer; the backend picks between the two by the version
+          # the client sends in X-Typhon-Version.
+          ./bin/signrelease.exe \
+            -version "$RELEASE_VERSION" \
+            -notes "$RELEASE_NOTES" \
+            -changelog CHANGELOG.md \
+            -base-url "$MANIFEST_BASE_URL" \
+            -out manifest-legacy.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
 
       - name: Publish installer and manifest to Garage over SSH
@@ -209,8 +411,17 @@ jobs:
             "s3://$bucket/launcher/releases/$version/typhon-amd64-installer.exe" \
             --endpoint-url http://127.0.0.1:3900
 
+          run_aws s3 cp /data/typhon-darwin-arm64.zip \
+            "s3://$bucket/launcher/releases/$version/typhon-darwin-arm64.zip" \
+            --endpoint-url http://127.0.0.1:3900
+
           run_aws s3 cp /data/manifest.json \
             "s3://$bucket/launcher/manifest.json" \
+            --endpoint-url http://127.0.0.1:3900 \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+          run_aws s3 cp /data/manifest-legacy.json \
+            "s3://$bucket/launcher/manifest-legacy.json" \
             --endpoint-url http://127.0.0.1:3900 \
             --cache-control "no-cache, no-store, must-revalidate"
 
@@ -220,7 +431,9 @@ jobs:
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
+            bin/typhon-darwin-arm64.zip \
             manifest.json \
+            manifest-legacy.json \
             publish-remote.sh \
             "$VPS_USER@$VPS_HOST:$remote_dir/"
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" \
@@ -248,3 +461,60 @@ jobs:
             -d '{"ref":"main"}'
 
           echo "asked $SITE_REPOSITORY to deploy $RELEASE_VERSION"
+
+      # Runs last on purpose: the launcher updates itself from the manifest
+      # published above, so a hiccup here must not fail a release that already
+      # shipped. The GitHub release is the second way to get the installer,
+      # for people who would rather download it from the repository.
+      - name: Publish the GitHub release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Prints the body of one "## <version> — <date>" entry: everything
+          # up to the next release heading.
+          entry() {
+            awk -v want="$1" '
+              /^## / {
+                if (found) exit
+                if ($2 == want) { found = 1; next }
+              }
+              found { print }
+            ' "$2"
+          }
+
+          ru="$(entry "$RELEASE_VERSION" CHANGELOG.md)"
+          en="$(entry "$RELEASE_VERSION" CHANGELOG.en.md)"
+
+          if [ -z "$(printf '%s' "$ru" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.md has no entry for $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          if [ -z "$(printf '%s' "$en" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.en.md has no entry for $RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          {
+            printf '## Что нового\n\n%s\n' "$ru"
+            printf '\n---\n\n'
+            printf "## What's new\n\n%s\n" "$en"
+            printf '\n---\n\n'
+            printf 'Windows 10+ x64. Скачайте `typhon-amd64-installer.exe` ниже.\n'
+            printf 'Установленный лаунчер обновится сам.\n\n'
+            printf 'Windows 10+ x64. Download `typhon-amd64-installer.exe` below.\n'
+            printf 'An installed launcher updates itself.\n\n'
+            printf 'macOS 13+ Apple Silicon: `typhon-darwin-arm64.zip`. Для Windows-игр нужен CrossOver.\n'
+            printf 'macOS 13+ Apple Silicon: download `typhon-darwin-arm64.zip`. Windows games require CrossOver.\n'
+          } > release-body.md
+
+          gh release create "$RELEASE_TAG" \
+            bin/typhon-amd64-installer.exe \
+            bin/typhon-darwin-arm64.zip \
+            --title "Typhon $RELEASE_VERSION" \
+            --notes-file release-body.md

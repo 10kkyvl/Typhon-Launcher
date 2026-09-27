@@ -2,7 +2,6 @@ package feed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,14 +9,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"typhon/internal/redact"
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrBadScheme      = errors.New("недопустимая схема URL: разрешены только http и https")
-	ErrTooLarge       = errors.New("размер ответа превышает допустимый лимит")
-	ErrBadContentType = errors.New("недопустимый Content-Type ответа")
+	ErrBadScheme      = uierr.New("sources.feed_bad_scheme", "недопустимая схема URL: разрешены только http и https")
+	ErrTooLarge       = uierr.New("sources.feed_too_large", "размер ответа превышает допустимый лимит")
+	ErrBadContentType = uierr.New("sources.feed_bad_content_type", "недопустимый Content-Type ответа")
+	ErrNoHost         = uierr.New("sources.feed_no_host", "URL не содержит хост")
+	ErrChallenge      = uierr.New("sources.feed_challenge", "источник закрыт защитой Cloudflare: скачайте файл фида в браузере и добавьте его кнопкой «Выбрать файл фида»")
 )
 
 type StatusError struct {
@@ -44,18 +47,22 @@ type Result struct {
 func ValidateURL(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return "", fmt.Errorf("некорректный URL: %w", err)
+		return "", uierr.Wrap("sources.feed_invalid_url", fmt.Errorf("некорректный URL: %w", err))
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return "", ErrBadScheme
 	}
 	if u.Host == "" {
-		return "", errors.New("URL не содержит хост")
+		return "", ErrNoHost
 	}
 	u.Scheme = scheme
 	u.Host = strings.ToLower(u.Host)
 	return u.String(), nil
+}
+
+func challenged(h http.Header) bool {
+	return strings.EqualFold(strings.TrimSpace(h.Get("cf-mitigated")), "challenge")
 }
 
 func acceptableContentType(ct string) bool {
@@ -78,7 +85,17 @@ func acceptableContentType(ct string) bool {
 	return false
 }
 
-func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditional) (Result, error) {
+func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditional) (result Result, err error) {
+	stage, status := "validate_url", 0
+	defer func() {
+		if err != nil {
+			var timeout time.Duration
+			if client != nil {
+				timeout = client.Timeout
+			}
+			err = &operationError{err: err, stage: stage, status: status, timeout: timeout}
+		}
+	}()
 	normalized, err := ValidateURL(raw)
 	if err != nil {
 		return Result{}, err
@@ -101,12 +118,22 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		req.Header.Set("If-Modified-Since", cond.LastModified)
 	}
 
+	stage = "http_request"
 	resp, err := client.Do(req)
 	if err != nil {
 		return Result{}, fmt.Errorf("ошибка запроса фида: %w", redact.Error(err))
 	}
-	defer resp.Body.Close()
+	// Close error is only logged, not returned: by the time it fires the body
+	// has already been fully read (or we're bailing out before reading it),
+	// so a failed close here doesn't lose any data the caller still needs.
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			slog.Warn("feed response body close failed", "host", redact.URL(normalized), "error", closeErr)
+		}
+	}()
 
+	status = resp.StatusCode
+	stage = "http_response"
 	etag := resp.Header.Get("ETag")
 	lastMod := resp.Header.Get("Last-Modified")
 
@@ -121,7 +148,11 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return Result{}, &StatusError{StatusCode: resp.StatusCode}
+		if challenged(resp.Header) {
+			slog.Warn("feed blocked by challenge", "host", redact.URL(normalized), "status", resp.StatusCode)
+			return Result{}, ErrChallenge
+		}
+		return Result{}, uierr.Wrap("sources.feed_bad_status", &StatusError{StatusCode: resp.StatusCode})
 	}
 
 	if !acceptableContentType(resp.Header.Get("Content-Type")) {
@@ -132,6 +163,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		return Result{}, ErrTooLarge
 	}
 
+	stage = "read_response"
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBytes+1))
 	if err != nil {
 		return Result{}, fmt.Errorf("ошибка чтения тела ответа: %w", err)
@@ -140,6 +172,7 @@ func Fetch(ctx context.Context, client *http.Client, raw string, cond Conditiona
 		return Result{}, ErrTooLarge
 	}
 
+	stage = "parse_feed"
 	parsed, err := Parse(body)
 	if err != nil {
 		return Result{}, err

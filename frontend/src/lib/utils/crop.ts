@@ -1,4 +1,3 @@
-export const outputSize = 512;
 export const minZoom = 1;
 export const maxZoom = 4;
 
@@ -14,6 +13,12 @@ export interface CropView {
 export interface CropSource {
   sx: number;
   sy: number;
+  size: number;
+}
+
+export interface CropRect {
+  x: number;
+  y: number;
   size: number;
 }
 
@@ -67,4 +72,14 @@ export function cropSource(view: CropView): CropSource {
 function bound(value: number, limit: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(Math.max(value, 0), Math.max(limit, 0));
+}
+
+export function cropRect(view: CropView): CropRect {
+  const source = cropSource(view);
+  const size = Math.round(source.size);
+  return {
+    x: Math.min(Math.round(source.sx), Math.max(view.width - size, 0)),
+    y: Math.min(Math.round(source.sy), Math.max(view.height - size, 0)),
+    size,
+  };
 }

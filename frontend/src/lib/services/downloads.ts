@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Manager } from '../../../bindings/typhon/internal/download';
 import { inWails } from './backend';
 
@@ -22,11 +24,15 @@ export type DownloadPurpose = 'update' | 'repair';
 export interface DownloadOrigin {
   releaseId?: string;
   sourceId?: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   gameId?: string;
   version?: string;
   purpose?: DownloadPurpose;
   updatePlanId?: string;
   libraryId?: string;
+  autoInstall?: boolean;
+  elevateAhead?: boolean;
 }
 
 export interface Download {
@@ -47,6 +53,8 @@ export interface Download {
   peers: number;
   files: FileState[];
   seeding: boolean;
+  stalled?: boolean;
+  stalledSince?: string | null;
   addedAt: string;
   completedAt: string | null;
   error: string;
@@ -82,6 +90,11 @@ export async function discardMetadata(infoHash: string): Promise<void> {
   await Manager.DiscardMetadata(infoHash);
 }
 
+export async function cancelFetchMetadata(source: string): Promise<void> {
+  if (!inWails) return;
+  await Manager.CancelFetchMetadata(source);
+}
+
 export async function startDownload(
   infoHash: string,
   destination: string,
@@ -108,7 +121,7 @@ export async function startDownloadFrom(
 
 export async function selectTorrentFile(): Promise<string> {
   if (!inWails) return '';
-  return await Manager.AddTorrentSelectFile();
+  return await Manager.AddTorrentSelectFile(get(locale));
 }
 
 export async function pauseDownload(id: string): Promise<void> {

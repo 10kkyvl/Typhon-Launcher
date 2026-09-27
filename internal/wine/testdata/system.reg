@@ -1,0 +1,18 @@
+WINE REGISTRY Version 2
+;; All keys relative to \\User\\S-1-5-21-0-0-0-1000
+
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CXHTML] 1788668830
+#time=1dd3db7fbed1500
+"DisplayName"="CrossOver HTML engine"
+"UninstallString"="iexplore -unregserver"
+"SystemComponent"=dword:00000001
+
+[Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Inno Setup 6_is1] 1788669175
+#time=1dd3db8c9c24a18
+"DisplayName"="Inno Setup version 6.7.3"
+"InstallLocation"="T:\\DemoGame\\InnoSetup\\"
+"UninstallString"="\"T:\\DemoGame\\InnoSetup\\unins000.exe\""
+"QuietUninstallString"="\"T:\\DemoGame\\InnoSetup\\unins000.exe\" /SILENT"
+
+[Software\\Classes\\.iss] 1788669175
+@="InnoSetupScriptFile"

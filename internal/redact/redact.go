@@ -53,7 +53,26 @@ func Error(err error) error {
 	}
 	var ue *url.Error
 	if !errors.As(err, &ue) {
-		return err
+		// Not every leaky error is a *url.Error: an fmt.Errorf that formats
+		// a URL, a path or a token into its own text carries exactly the
+		// same data and used to pass through untouched. Scrub the text and
+		// keep the original underneath, so errors.Is and errors.As still
+		// match what the caller wrapped.
+		scrubbed := Text(err.Error())
+		if scrubbed == err.Error() {
+			return err
+		}
+		return &scrubbedError{msg: scrubbed, err: err}
 	}
 	return &url.Error{Op: ue.Op, URL: URL(ue.URL), Err: ue.Err}
 }
+
+// scrubbedError shows scrubbed text while still unwrapping to the error it
+// replaced, so matching on the original sentinel keeps working.
+type scrubbedError struct {
+	msg string
+	err error
+}
+
+func (e *scrubbedError) Error() string { return e.msg }
+func (e *scrubbedError) Unwrap() error { return e.err }

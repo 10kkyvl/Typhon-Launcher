@@ -1,0 +1,168 @@
+# Fast checks on dev and PR merge results. Run `wails3 task check:local`
+# before pushing; full cross-platform checks remain available on demand.
+name: CI
+
+on:
+  push:
+    branches: [dev]
+    paths-ignore: ['README*.md', 'docs/**', '.github/screenshots/**']
+  pull_request:
+    paths-ignore: ['README*.md', 'docs/**', '.github/screenshots/**']
+  workflow_dispatch:
+    inputs:
+      full_checks:
+        description: Also run macOS builds/race tests and lint on all three platforms
+        type: boolean
+        default: false
+      lint_base:
+        description: Git revision for new Linux lint findings (full checks only)
+        default: origin/main
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ inputs.full_checks && 'full' || 'quick' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v3.0.0-beta.17
+
+jobs:
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: tests
+      - name: gofmt
+        shell: bash
+        run: bash scripts/check-format.sh
+      - name: go vet
+        run: go vet . ./internal/... ./cmd/... ./tools/...
+      - name: Build launcher and verify forbidden tags
+        shell: bash
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build -o "$RUNNER_TEMP/typhon.exe" .
+          bash scripts/check-build-tags.sh
+      - name: go test
+        run: go test ./...
+
+  frontend:
+    name: Frontend check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: frontend
+      - name: Install GTK and WebKit headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
+      - name: Generate bindings
+        run: wails3 task common:generate:bindings
+      - name: Verify the production tag guard
+        run: bash scripts/check-build-tags.sh
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Check, test and build
+        working-directory: frontend
+        run: |
+          npm run check
+          npm test
+          npm run build
+
+  macos-build:
+    name: macOS builds and package
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: production
+      - name: Build native and devmock launcher
+        run: |
+          go build -o /dev/null .
+          go build -tags devmock -o /dev/null .
+          bash scripts/check-build-tags.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: ./.github/actions/setup-wails
+        with:
+          version: ${{ env.WAILS_VERSION }}
+      - name: Package the macOS bundle
+        run: wails3 task darwin:package:zip
+
+  macos-race:
+    name: macOS race tests (${{ matrix.mode }})
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: macos-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [plain, devmock]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: race-${{ matrix.mode }}
+      - name: Run race tests
+        env:
+          CGO_ENABLED: "1"
+          MODE: ${{ matrix.mode }}
+        run: |
+          if [ "$MODE" = devmock ]; then
+            go test -race -tags devmock ./...
+          else
+            go test -race ./...
+          fi
+
+  lint:
+    name: Full lint (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-go
+        with:
+          variant: lint
+      - name: Install GTK and WebKit headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
+      - uses: ./.github/actions/setup-lint
+      - name: Check platform baselines
+        shell: bash
+        env:
+          LINT_BASE: ${{ inputs.lint_base }}
+        run: bash scripts/check-local.sh lint

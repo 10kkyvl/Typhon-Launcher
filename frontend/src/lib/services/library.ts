@@ -1,26 +1,40 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
+import { errorCode } from '../i18n/errors';
+import { markError } from '../game/markMessages';
+
+export { markError };
 
 export interface LibraryGame {
   id: string;
   title: string;
   executable: string;
   launchArgs?: string[];
+  requiresSteam?: boolean | null;
   installDir: string;
   cover: string;
   version: string;
   sizeBytes: number;
+  sizeUnknown?: boolean;
   lastPlayed: string | null;
   playtimeSeconds: number;
   installedAt: string;
   releaseId?: string;
   sourceId?: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   canonicalGameId?: string;
   source?: string;
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;
+  favorite?: boolean;
+  favoriteAt?: string | null;
+  status?: string;
+  statusAt?: string | null;
 }
 
 export interface SavesResult {
@@ -58,7 +72,9 @@ export async function setExecutable(id: string, executable: string): Promise<Lib
 
 export async function playGame(id: string): Promise<void> {
   if (!inWails) throw unavailable();
-  await LibraryService.PlayGame(id);
+  try { await LibraryService.PlayGame(id); } catch (err) {
+    if (errorCode(err) !== 'library.launch_cancelled') throw err;
+  }
 }
 
 export async function stopGame(id: string): Promise<void> {
@@ -76,6 +92,21 @@ export async function removeShortcut(id: string): Promise<void> {
   await LibraryService.RemoveShortcut(id);
 }
 
+export async function setFavorite(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;
+}
+
+export async function setRequiresSteam(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetRequiresSteam(id, on)) as unknown as LibraryGame;
+}
+
+export async function setStatus(id: string, status: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetStatus(id, status)) as unknown as LibraryGame;
+}
+
 export async function locateSaves(id: string): Promise<SavesResult> {
   if (!inWails) throw unavailable();
   return (await LibraryService.LocateSaves(id)) as unknown as SavesResult;
@@ -88,5 +119,10 @@ export async function setSavesDir(id: string, dir: string): Promise<LibraryGame>
 
 export async function selectExecutable(title: string): Promise<string> {
   if (!inWails) return '';
-  return await AppService.SelectExecutable(title);
+  return await AppService.SelectExecutable(title, get(locale));
+}
+
+export async function selectGameExecutable(title: string, installDir: string, current: string): Promise<string> {
+  if (!inWails) return '';
+  return await AppService.SelectGameExecutable(title, installDir, current, get(locale));
 }

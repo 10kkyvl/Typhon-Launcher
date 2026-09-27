@@ -77,6 +77,42 @@ describe('themeVars', () => {
   });
 });
 
+describe('themeDisplayName', () => {
+  it('shows a built-in theme label in the interface language, not the stored Russian name', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Тёмная', builtIn: true }))).toBe('Dark');
+  });
+
+  it('shows the russian label for the same built-in theme in the russian locale', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('ru');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Тёмная', builtIn: true }))).toBe('Тёмная');
+  });
+
+  it('translates every built-in preset id, not just dark', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'light', name: 'Светлая', builtIn: true }))).toBe('Light');
+    expect(themeDisplayName(baseTheme({ id: 'contrast', name: 'Высокий контраст', builtIn: true }))).toBe(
+      'High contrast',
+    );
+  });
+
+  it('leaves an imported theme name untouched in any locale, even one shaped like a preset id', async () => {
+    const { locale } = await import('../i18n');
+    locale.set('en');
+    const { themeDisplayName } = await import('./apply');
+    expect(themeDisplayName(baseTheme({ id: 'my-import', name: 'Моя тема', builtIn: false }))).toBe('Моя тема');
+    // builtIn: false must win over an id that happens to match a preset —
+    // the check has to gate on builtIn first, not look up the id blindly.
+    expect(themeDisplayName(baseTheme({ id: 'dark', name: 'Моя тёмная', builtIn: false }))).toBe('Моя тёмная');
+  });
+});
+
 describe('applyTheme / clearTheme', () => {
   it('creates the style element once and reuses it on repeated applies', async () => {
     const { fakeDocument, elements } = createFakeDocument();
@@ -131,5 +167,45 @@ describe('applyTheme / clearTheme', () => {
     expect(elements.get('typhon-theme')?.textContent).toBe('');
 
     vi.unstubAllGlobals();
+  });
+});
+
+it('keeps a personal accent through theme edits, recalculates on switch, and restores original tokens on cancel/reset', async () => {
+  const { fakeDocument, rootProps, elements } = createFakeDocument();
+  vi.stubGlobal('document', fakeDocument);
+  const { applyTheme, applyPersonalAccent } = await import('./apply');
+  const dark = baseTheme({ tokens: { '--bg': '#111111', '--accent': '#6875e8', '--danger': '#ff0000' }, css: ':root { --accent: red !important; }' });
+  applyTheme(dark);
+  applyPersonalAccent('#FFFF00');
+  const darkAccent = rootProps.get('--accent');
+  applyPersonalAccent('#FF');
+  expect(rootProps.get('--accent')).toBe(darkAccent);
+  expect(darkAccent).not.toBe('#6875e8');
+  expect(rootProps.get('--danger')).toBe('#ff0000');
+  applyTheme({ ...dark, name: 'Edited' });
+  expect(rootProps.get('--accent')).toBe(darkAccent);
+  applyTheme(baseTheme({ base: 'light', tokens: { '--bg': '#ffffff', '--accent': '#1125d8' } }));
+  expect(rootProps.get('--accent')).not.toBe(darkAccent);
+  applyPersonalAccent('');
+  expect(rootProps.get('--accent')).toBe('#1125d8');
+  expect(rootProps.has('--accent-on')).toBe(false);
+  expect(dark.tokens?.['--accent']).toBe('#6875e8');
+  applyTheme(dark);
+  expect(elements.get('typhon-theme')?.textContent).toBe(dark.css);
+  vi.unstubAllGlobals();
+});
+
+describe('personal accent without a loaded theme', () => {
+  it('applies and resets the selected accent against the base stylesheet after ActiveTheme fails', async () => {
+    const { fakeDocument, rootProps } = createFakeDocument();
+    vi.stubGlobal('document', fakeDocument);
+    const { applyPersonalAccent, displayedAccent } = await import('./apply');
+    const { get } = await import('svelte/store');
+    applyPersonalAccent('#E45D87');
+    expect(rootProps.get('--accent')).toMatch(/^#[0-9a-f]{6}$/);
+    expect(get(displayedAccent)).toBe('#E45D87');
+    applyPersonalAccent('');
+    expect(rootProps.has('--accent')).toBe(false);
+    expect(get(displayedAccent)).toBe('#6673F2');
   });
 });

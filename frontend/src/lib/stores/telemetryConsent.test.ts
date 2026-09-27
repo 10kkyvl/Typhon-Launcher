@@ -21,7 +21,7 @@ vi.mock('../services/settings', () => ({
 
 const { getSettings, saveConsent } = await import('../services/settings');
 const { settings, initSettings } = await import('./settings');
-const { showTelemetryConsent, respondTelemetryConsent } = await import('./telemetryConsent');
+const { showTelemetryConsent, respondTelemetryConsent, currentTelemetryConsent } = await import('./telemetryConsent');
 
 function makeSettings(telemetryConsentVersion: number): Settings {
   return {
@@ -54,14 +54,22 @@ describe('telemetryConsent', () => {
     expect(get(showTelemetryConsent)).toBe(true);
   });
 
-  it('не требует согласия повторно, когда telemetryConsentVersion больше нуля', async () => {
-    await load(1);
+  it('не требует согласия повторно, когда ответ дан на текущую версию', async () => {
+    await load(currentTelemetryConsent);
     expect(get(showTelemetryConsent)).toBe(false);
+  });
+
+  // Ответ, данный на старый текст, покрывает только то, что тот текст описывал.
+  // Вторая версия добавила отчёт о совместимости с чипом и версией системы, и
+  // растянуть на него согласие первой значило бы собрать их без спроса.
+  it('спрашивает заново, когда ответ дан на прошлую версию текста', async () => {
+    await load(currentTelemetryConsent - 1);
+    expect(get(showTelemetryConsent)).toBe(true);
   });
 
   it('принятие сохраняет ответ с ожидаемыми аргументами и обновляет стор', async () => {
     await load(0);
-    const saved = makeSettings(1);
+    const saved = makeSettings(currentTelemetryConsent);
     saved.anonymousUsageStats = true;
     saved.anonymousDiagnostics = true;
     vi.mocked(saveConsent).mockResolvedValue(saved);
@@ -76,7 +84,7 @@ describe('telemetryConsent', () => {
 
   it('отказ тоже фиксируется как ответ, а не просто закрывает экран', async () => {
     await load(0);
-    const saved = makeSettings(1);
+    const saved = makeSettings(currentTelemetryConsent);
     saved.anonymousUsageStats = false;
     saved.anonymousDiagnostics = false;
     vi.mocked(saveConsent).mockResolvedValue(saved);

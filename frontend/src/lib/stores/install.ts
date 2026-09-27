@@ -7,6 +7,7 @@ import {
   type InstallStatus,
   type InstallType,
 } from '../services/install';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const installations = writable<Installation[]>([]);
@@ -22,28 +23,34 @@ export const installationsByDownload = derived(installations, ($items) => {
   return map;
 });
 
-export const installStatusLabels: Record<InstallStatus, string> = {
-  pending: 'В очереди',
-  preparing: 'Подготовка',
-  installing: 'Установка',
-  extracting: 'Распаковка',
-  verifying: 'Проверка',
-  waiting_for_user: 'Требуется действие',
-  completed: 'Установлено',
-  failed: 'Ошибка',
-  cancelled: 'Отменено',
-  interrupted: 'Прервано',
-};
+export function installStatusLabels(status: InstallStatus): string {
+  const labels: Record<InstallStatus, string> = {
+    pending: msg('state.installStatusPending'),
+    preparing: msg('state.installStatusPreparing'),
+    installing: msg('state.installStatusInstalling'),
+    extracting: msg('state.installStatusExtracting'),
+    verifying: msg('state.installStatusVerifying'),
+    waiting_for_user: msg('state.installStatusWaitingForUser'),
+    completed: msg('state.installStatusCompleted'),
+    failed: msg('common.error'),
+    cancelled: msg('state.installStatusCancelled'),
+    interrupted: msg('state.installStatusInterrupted'),
+  };
+  return labels[status];
+}
 
-export const installTypeLabels: Record<InstallType, string> = {
-  portable: 'Портативная игра',
-  archive_zip: 'ZIP-архив',
-  archive_7z: '7z-архив',
-  archive_rar: 'RAR-архив',
-  exe_installer: 'Установщик (EXE)',
-  msi_installer: 'Установщик (MSI)',
-  unknown: 'Неизвестный пакет',
-};
+export function installTypeLabels(type: InstallType): string {
+  const labels: Record<InstallType, string> = {
+    portable: msg('state.installTypePortable'),
+    archive_zip: msg('state.installTypeArchiveZip'),
+    archive_7z: msg('state.installTypeArchive7z'),
+    archive_rar: msg('state.installTypeArchiveRar'),
+    exe_installer: msg('state.installTypeExeInstaller'),
+    msi_installer: msg('state.installTypeMsiInstaller'),
+    unknown: msg('state.installTypeUnknown'),
+  };
+  return labels[type];
+}
 
 const activeStatuses: InstallStatus[] = ['pending', 'preparing', 'installing', 'extracting', 'verifying'];
 
@@ -74,12 +81,12 @@ export async function initInstalls() {
   Events.On('install:completed', (event) => {
     const item = event.data as Installation;
     upsertInstallation(item);
-    toast(`Игра «${item.name}» установлена`, 'success');
+    toast(msg('state.installCompletedToast', { name: item.name }), 'success');
   });
   Events.On('install:failed', (event) => {
     const item = event.data as Installation;
     upsertInstallation(item);
-    toast(`Ошибка установки «${item.name}»: ${item.error}`, 'danger');
+    toast(msg('state.installFailedToast', { name: item.name, error: item.error }), 'danger');
   });
   Events.On('install:cancelled', (event) => {
     upsertInstallation(event.data as Installation);

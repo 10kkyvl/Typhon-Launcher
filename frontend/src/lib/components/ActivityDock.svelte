@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { ChevronUp, Download, Pause, Play, Wrench } from '@lucide/svelte';
+  import { ChevronUp, Download, FileCheck, Pause, Play, Wrench } from '@lucide/svelte';
   import { stageLabel, movePercent } from '../relocate/moveText';
   import type { MoveJob } from '../services/relocate';
   import { activity, type ActivityItem } from '../stores/activity';
   import { pause, resume } from '../stores/downloads';
   import { activeMove } from '../stores/relocate';
   import { navigate } from '../stores/router';
-  import { bytesSize, truncateMiddle } from '../utils/format';
+  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
+  import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
@@ -30,7 +31,7 @@
       key: `move:${job.id}`,
       kind: 'install',
       downloadId: job.id,
-      name: job.title || 'Библиотека',
+      name: job.title || msg('ui.library'),
       status: stageLabel(job.stage),
       detail: moveDetail(job),
       progress: movePercent(job) / 100,
@@ -61,10 +62,6 @@
     return 'var(--accent)';
   }
 
-  function pct(value: number) {
-    return Math.floor(Math.min(1, Math.max(0, value)) * 100);
-  }
-
   function toggle() {
     if (expanded) {
       pinned = false;
@@ -88,6 +85,10 @@
   function open(item: ActivityItem) {
     pinned = false;
     dismissed = false;
+    if (item.kind === 'verify') {
+      navigate('game', { id: item.downloadId });
+      return;
+    }
     // Переносы не показываются на странице загрузок: их прогресс живёт в
     // настройках библиотеки, и отправлять туда клик — единственный переход,
     // который не заканчивается пустой страницей.
@@ -130,8 +131,8 @@
     {#if expanded}
       <div class="panel">
         <div class="panel-head">
-          <span class="panel-title">Активность</span>
-          <button class="panel-link" onclick={openDownloads}>Все загрузки</button>
+          <span class="panel-title">{msg('ui.activity')}</span>
+          <button class="panel-link" onclick={openDownloads}>{msg('ui.allDownloads')}</button>
         </div>
         <div class="rows">
           {#each items as item (item.key)}
@@ -150,6 +151,8 @@
               <span class="row-icon" class:attention={item.attention}>
                 {#if item.kind === 'install'}
                   <Wrench size="1.6rem" strokeWidth={1.8} />
+                {:else if item.kind === 'verify'}
+                  <FileCheck size="1.6rem" strokeWidth={1.8} />
                 {:else}
                   <Download size="1.6rem" strokeWidth={1.8} />
                 {/if}
@@ -157,9 +160,9 @@
               <span class="row-body">
                 <span class="row-head">
                   <span class="row-name">{item.name}</span>
-                  <span class="row-pct">{pct(item.progress)}%</span>
+                  {#if !item.indeterminate}<span class="row-pct">{progressPercent(item.progress)}%</span>{/if}
                 </span>
-                <ProgressBar value={pct(item.progress)} color={toneColor(item.tone)} height={3} />
+                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} color={toneColor(item.tone)} height={3} />
                 <span class="row-foot">
                   <span class="row-status">{item.status}</span>
                   {#if item.detail}
@@ -170,7 +173,7 @@
               <span class="row-controls">
                 {#if item.pausable}
                   <IconButton
-                    label="Пауза"
+                    label={msg('ui.pause')}
                     size="sm"
                     onclick={(e) => {
                       e.stopPropagation();
@@ -181,7 +184,7 @@
                   </IconButton>
                 {:else if item.resumable}
                   <IconButton
-                    label="Продолжить"
+                    label={msg('common.continue')}
                     size="sm"
                     onclick={(e) => {
                       e.stopPropagation();
@@ -222,7 +225,7 @@
       {#if items.length > 1}
         <span class="pill-more">+{items.length - 1}</span>
       {/if}
-      <span class="pill-pct">{pct(summary.progress)}%</span>
+      {#if !summary.primary.indeterminate}<span class="pill-pct">{progressPercent(summary.progress)}%</span>{/if}
       <span class="pill-chevron" class:down={expanded}>
         <ChevronUp size="1.6rem" strokeWidth={1.8} />
       </span>

@@ -11,10 +11,12 @@
     type ReleaseView,
   } from '../services/sources';
   import { errorMessage } from '../stores/sources';
+  import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -32,6 +34,7 @@
   let query = $state('');
   let searchResults = $state<CatalogGame[]>([]);
   let searching = $state(false);
+  let searchError = $state('');
   let submitting = $state(false);
   let searchToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -40,6 +43,10 @@
     const isOpen = open;
     const current = release;
     untrack(() => {
+      clearTimeout(searchTimer);
+      searchToken += 1;
+      searching = false;
+      searchError = '';
       selectedGameId = null;
       query = '';
       searchResults = [];
@@ -61,19 +68,24 @@
 
   function onQueryInput() {
     clearTimeout(searchTimer);
+    const token = ++searchToken;
+    searching = false;
+    searchError = '';
     const value = query.trim();
     if (!value) {
       searchResults = [];
       return;
     }
     searchTimer = setTimeout(async () => {
-      const token = ++searchToken;
       searching = true;
       try {
         const result = await searchGames(value);
         if (token === searchToken) searchResults = result;
-      } catch {
-        if (token === searchToken) searchResults = [];
+      } catch (err) {
+        if (token === searchToken) {
+          searchResults = [];
+          searchError = errorMessage(err);
+        }
       } finally {
         if (token === searchToken) searching = false;
       }
@@ -85,11 +97,11 @@
     submitting = true;
     try {
       await confirmMatch(release.release.id, selectedGameId);
-      toast('Сопоставление сохранено, похожие релизы будут сопоставляться автоматически', 'success');
+      toast(msg('modals.releaseMatchSaved'), 'success');
       open = false;
       onchanged?.();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(metadataErrorText(err, errorMessage(err)), 'danger');
     } finally {
       submitting = false;
     }
@@ -100,7 +112,7 @@
     submitting = true;
     try {
       await ignoreRelease(release.release.id, true);
-      toast('Релиз проигнорирован');
+      toast(msg('modals.releaseMatchIgnored'));
       open = false;
       onchanged?.();
     } catch (err) {
@@ -111,40 +123,40 @@
   }
 </script>
 
-<Modal bind:open title="Сопоставление релиза" width="56rem">
+<Modal bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
   {#if release}
     <div class="sections">
       <section class="block">
         <div class="rows">
           <div class="row">
-            <span class="key">Исходное название</span>
+            <span class="key">{msg('modals.releaseMatchRawTitle')}</span>
             <span class="value">{release.release.rawTitle}</span>
           </div>
           <div class="row">
-            <span class="key">Нормализованное название</span>
+            <span class="key">{msg('modals.releaseMatchNormalizedTitle')}</span>
             <span class="value">{release.release.normalizedTitle}</span>
           </div>
           <div class="row">
-            <span class="key">Источник</span>
+            <span class="key">{msg('modals.releaseMatchSource')}</span>
             <span class="value">{release.sourceName}</span>
           </div>
           <div class="row">
-            <span class="key">Размер</span>
+            <span class="key">{msg('modals.releaseMatchSize')}</span>
             <span class="value">{bytesSize(release.release.size)}</span>
           </div>
           <div class="row">
-            <span class="key">Загружено</span>
+            <span class="key">{msg('modals.releaseMatchUploaded')}</span>
             <span class="value">{relativeDate(release.release.uploadedAt)}</span>
           </div>
         </div>
       </section>
 
       <section class="block">
-        <h4>Кандидаты</h4>
+        <h4>{msg('modals.releaseMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <p class="muted">Поиск кандидатов…</p>
+          <p class="muted">{msg('modals.releaseMatchSearchingCandidates')}</p>
         {:else if candidates.length === 0}
-          <p class="muted">Автоматических кандидатов не найдено. Найдите игру вручную.</p>
+          <p class="muted">{msg('modals.releaseMatchNoCandidates')}</p>
         {:else}
           <div class="candidates">
             {#each candidates as candidate (candidate.gameId)}
@@ -169,10 +181,13 @@
       </section>
 
       <section class="block">
-        <h4>Поиск вручную</h4>
-        <input class="input" type="text" placeholder="Название игры" bind:value={query} oninput={onQueryInput} />
+        <h4>{msg('modals.releaseMatchManualSearch')}</h4>
+        <input class="input" type="text" placeholder={msg('modals.releaseMatchNamePlaceholder')} bind:value={query} oninput={onQueryInput} />
         {#if searching}
-          <p class="muted">Поиск…</p>
+          <p class="muted">{msg('modals.releaseMatchSearching')}</p>
+        {:else if searchError}
+          <p class="muted" role="alert">{searchError}</p>
+          <Button size="sm" onclick={onQueryInput}>{msg('common.retry')}</Button>
         {:else if searchResults.length > 0}
           <div class="candidates">
             {#each searchResults as game (game.id)}
@@ -197,9 +212,9 @@
   {/if}
 
   {#snippet footer()}
-    <Button variant="danger" disabled={submitting} onclick={ignore}>Игнорировать</Button>
-    <Button onclick={() => (open = false)}>Отмена</Button>
-    <Button variant="primary" disabled={!selectedGameId || submitting} onclick={confirm}>Подтвердить</Button>
+    <Button variant="danger" disabled={submitting} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
+    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button variant="primary" disabled={!selectedGameId || submitting} onclick={confirm}>{msg('modals.releaseMatchConfirm')}</Button>
   {/snippet}
 </Modal>
 

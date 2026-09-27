@@ -29,14 +29,32 @@ var reservedNames = map[string]bool{
 	"LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
 }
 
-// Remove удаляет файл ярлыка. Отсутствие файла уже является нужным конечным
+// Remove удаляет ярлык. Отсутствие пути уже является нужным конечным
 // состоянием, поэтому fs.ErrNotExist ошибкой не считается.
+//
+// Lstat, а не Stat: ярлык на диске может быть как файлом (.lnk на Windows),
+// так и каталогом-бандлом (.app на macOS). Если это каталог — удаляем
+// рекурсивно; если обычный файл или симлинк — удаляем сам путь, не переходя
+// по симлинку, иначе RemoveAll на символической ссылке снёс бы содержимое
+// каталога, на который она указывает, а не саму ссылку.
 func Remove(path string) error {
-	err := os.Remove(path)
-	if err == nil || errors.Is(err, fs.ErrNotExist) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	return fmt.Errorf("shortcut: удаление %s: %w", path, err)
+	if err != nil {
+		return fmt.Errorf("shortcut: удаление %s: %w", path, err)
+	}
+	if info.IsDir() {
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("shortcut: удаление %s: %w", path, err)
+		}
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("shortcut: удаление %s: %w", path, err)
+	}
+	return nil
 }
 
 func FileName(title string) (string, error) {
@@ -44,7 +62,7 @@ func FileName(title string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base + ".lnk", nil
+	return base + shortcutExt, nil
 }
 
 func sanitizeBaseName(title string) (string, error) {

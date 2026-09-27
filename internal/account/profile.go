@@ -33,6 +33,7 @@ func loadProfile(path string) (cachedProfile, error) {
 	if err != nil {
 		return cachedProfile{}, err
 	}
+	loaded.User = withProfileDefaults(loaded.User)
 	return loaded, nil
 }
 
@@ -88,6 +89,7 @@ func (s *Service) forgetProfile() error {
 	s.mu.Lock()
 	s.profile = cachedProfile{}
 	s.profileEpoch++
+	s.syncToken, s.syncUserID = "", ""
 	path := s.profilePath
 	s.mu.Unlock()
 
@@ -118,4 +120,24 @@ func (s *Service) rememberProfile(ctx context.Context, user CurrentUser) error {
 	}
 
 	return s.setProfile(epoch, next)
+}
+
+//wails:ignore
+func (s *Service) SyncAccountID(token string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if token == "" || token != s.syncToken {
+		return ""
+	}
+	return s.syncUserID
+}
+
+func (s *Service) bindSyncIdentity(token, id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, err := s.token()
+	if err != nil || current != token {
+		return
+	}
+	s.syncToken, s.syncUserID = token, id
 }

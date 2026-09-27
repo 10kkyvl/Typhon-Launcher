@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"typhon/internal/catalog"
 	"typhon/internal/library"
@@ -195,12 +196,17 @@ func TestScanPrefersMarkerOverDirectoryName(t *testing.T) {
 	f := newFixture(t)
 	dir := installedGame(t, f.root, "Portal")
 	renamed := filepath.Join(f.root, "totally different name")
+	uploadedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	if err := library.WriteMarker(dir, library.Marker{
-		GameID:          "stale-id",
-		Title:           "Portal",
-		Executable:      "Portal.exe",
-		CanonicalGameID: "canon-1",
-		Version:         "1.4",
+		GameID:            "stale-id",
+		Title:             "Portal",
+		Executable:        "Portal.exe",
+		CanonicalGameID:   "canon-1",
+		Version:           "1.4",
+		ReleaseID:         "release-a",
+		SourceID:          "source-a",
+		DistributionID:    "distribution-a",
+		ReleaseUploadedAt: &uploadedAt,
 	}); err != nil {
 		t.Fatalf("write marker: %v", err)
 	}
@@ -216,6 +222,10 @@ func TestScanPrefersMarkerOverDirectoryName(t *testing.T) {
 	}
 	if game.CanonicalGameID != "canon-1" || game.Version != "1.4" {
 		t.Fatalf("game = %+v, want the identity from the marker", game)
+	}
+	if game.ReleaseID != "release-a" || game.SourceID != "source-a" || game.DistributionID != "distribution-a" ||
+		game.ReleaseUploadedAt == nil || !game.ReleaseUploadedAt.Equal(uploadedAt) {
+		t.Fatalf("game lost marker provenance: %+v", game)
 	}
 	if !strings.EqualFold(game.Executable, filepath.Join(renamed, "Portal.exe")) {
 		t.Fatalf("executable = %q, want the marker path resolved against the new folder", game.Executable)

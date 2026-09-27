@@ -11,10 +11,12 @@ import {
   setSourceEnabled,
   type Source,
 } from '../services/sources';
+import { sourceErrorText } from '../sources/sourceErrors';
 import { errorMessage } from '../utils/errors';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
-export { errorMessage };
+export { errorMessage, sourceErrorText };
 
 export const sources = writable<Source[]>([]);
 export const refreshingAll = writable(false);
@@ -60,11 +62,11 @@ export async function initSources() {
   Events.On('source:error', (event) => {
     const { name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
-    toast(`Ошибка источника «${name}»: ${message}`, 'danger');
+    toast(msg('state.sourcesErrorToast', { name, message }), 'danger');
   });
   Events.On('release:added', (event) => {
     const { count } = event.data as ReleaseBatchEvent;
-    if (count > 0) toast(`Новых записей: ${count}`);
+    if (count > 0) toast(msg('state.sourcesNewEntries', { count }));
   });
 }
 
@@ -72,9 +74,16 @@ export async function refresh(id: string) {
   try {
     const summary = await refreshSource(id);
     await reload();
-    toast(`Записей: ${summary.entries}, новых: ${summary.added}, на проверку: ${summary.review}`, 'success');
+    toast(
+      msg('state.sourcesRefreshResult', {
+        entries: summary.entries,
+        added: summary.added,
+        review: summary.review,
+      }),
+      'success',
+    );
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 
@@ -84,7 +93,7 @@ export async function refreshAll() {
     await refreshAllSources();
     await reload();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   } finally {
     refreshingAll.set(false);
   }
@@ -95,7 +104,7 @@ export async function toggle(id: string, enabled: boolean) {
     await setSourceEnabled(id, enabled);
     await reload();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 
@@ -104,7 +113,7 @@ export async function remove(id: string) {
     await removeSourceRequest(id);
     sources.update((list) => list.filter((s) => s.id !== id));
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(sourceErrorText(err), 'danger');
   }
 }
 

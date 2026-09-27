@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"typhon/internal/account"
 	"typhon/internal/accountsync"
@@ -15,7 +18,10 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/compat"
+	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
+	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/download"
@@ -25,21 +31,29 @@ import (
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
+	"typhon/internal/messaging"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/online"
 	"typhon/internal/platform"
+	"typhon/internal/playlog"
 	"typhon/internal/presence"
+	"typhon/internal/profile"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
+	"typhon/internal/social"
 	"typhon/internal/sources"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
+	"typhon/internal/titles"
+	"typhon/internal/titlesdict"
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/wine"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -56,6 +70,7 @@ const discordClientID = "1541194395964014623"
 const singleInstanceID = "com.typhon.launcher"
 
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
+var errNoBrokerDir = errors.New("--install-broker требует путь к каталогу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 var errNoPlayTarget = errors.New("--play требует идентификатор игры")
 
@@ -115,6 +130,11 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
+	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[social.FriendsPage](social.EventFriends)
+	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
+	application.RegisterEvent[messaging.Event](messaging.EventName)
+	application.RegisterEvent[messaging.OpenEvent]("chat:open")
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -147,6 +167,14 @@ func main() {
 	}
 
 	registerLocalIdentity()
+	if devmock.Enabled {
+		slog.Warn("devmock build: Windows-only subsystems are mocked", "marker", devmock.Banner())
+	}
+	// Отсутствие CrossOver — не повод не стартовать: каталог и загрузки
+	// работают и без него, а установка и запуск отдадут понятную ошибку.
+	if status := platform.Wine(); status.Required {
+		slog.Info("wine runtime", "installed", status.Installed, "version", status.Version)
+	}
 
 	// diagService is assigned once the identity/telemetry block below
 	// constructs it; the defer reads the variable itself at panic time, not
@@ -171,6 +199,20 @@ func main() {
 			slog.Error("install worker failed", "error", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--install-broker" {
+		if len(os.Args) < 4 {
+			slog.Error("install broker failed", "error", errNoBrokerDir)
+			os.Exit(1)
+		}
+		outcome, err := install.RunBroker(os.Args[2], os.Args[3])
+		if err != nil {
+			slog.Error("install broker failed", "outcome", string(outcome), "error", err)
+			os.Exit(1)
+		}
+		slog.Info("install broker finished", "outcome", string(outcome))
 		return
 	}
 
@@ -205,6 +247,10 @@ func main() {
 		playRequested = false
 	}
 
+	if err := titles.Ready(); err != nil {
+		fatal("load title dictionary", err)
+	}
+
 	settingsService, err := settings.NewService()
 	if err != nil {
 		fatal("start settings service", err)
@@ -226,6 +272,10 @@ func main() {
 	if err != nil {
 		fatal("start library service", err)
 	}
+	playlogService, err := playlog.NewService()
+	if err != nil {
+		fatal("start playlog service", err)
+	}
 	downloadManager, err := download.NewManager(settingsService)
 	if err != nil {
 		fatal("start download manager", err)
@@ -234,15 +284,46 @@ func main() {
 	if err != nil {
 		fatal("start install service", err)
 	}
+	titlesDictService, err := titlesdict.NewService()
+	if err != nil {
+		fatal("start title dictionary service", err)
+	}
 	catalogService, err := catalog.NewService()
 	if err != nil {
 		fatal("start catalog service", err)
 	}
+	// Recommendations consume a compact snapshot so catalog ranking stays
+	// independent from the library package and can rank the complete catalog
+	// before pagination. Session counts make a single short launch insufficient
+	// evidence of a preference.
+	catalogService.SetRecommendationLibrarySource(func() []catalog.RecommendationLibraryItem {
+		games := libraryService.GetGames()
+		sessions := playlogService.Since(time.Unix(0, 0))
+		counts := make(map[string]int, len(sessions))
+		for _, session := range sessions {
+			counts[session.GameID]++
+		}
+		items := make([]catalog.RecommendationLibraryItem, 0, len(games))
+		for _, game := range games {
+			items = append(items, catalog.RecommendationLibraryItem{
+				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID, Title: game.Title, Cover: game.Cover,
+				Favorite: game.Favorite, PlaytimeSeconds: game.PlaytimeSeconds,
+				Sessions: counts[game.ID], LastPlayed: game.LastPlayed,
+				Installed: !game.Uninstalled, Hidden: game.Archived,
+				ContinuePlaying: game.Status == library.StatusPlaying,
+			})
+		}
+		return items
+	})
+	libraryService.SetCanonicalIdentity(catalogService.SameGame)
 	sourcesService, err := sources.NewService(settingsService, catalogService)
 	if err != nil {
 		fatal("start sources service", err)
 	}
 	provider := metadataProvider(accountService)
+	if remote, ok := provider.(catalog.RemoteCatalog); ok {
+		catalogService.SetRemoteCatalog(remote)
+	}
 	metadataService, err := metadata.NewService(catalogService, provider)
 	if err != nil {
 		fatal("start metadata service", err)
@@ -263,6 +344,7 @@ func main() {
 	if err != nil {
 		fatal("start account sync service", err)
 	}
+	accountSyncService.SetAccountID(accountService.SyncAccountID)
 	discoveryService, err := discovery.NewService(settingsService, libraryService, catalogService, metadataService)
 	if err != nil {
 		fatal("start discovery service", err)
@@ -311,13 +393,76 @@ func main() {
 	lanService.SetHistoryRecorder(historyService.Record)
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
+	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
+	downloadManager.SetOnGone(installService.DropBroker)
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
+	libraryService.SetPlayRecorder(playlogService.Record)
+
+	var extraCompatServices []application.Service
+
+	// Журнал совместимости набирается сам из исходов запусков: без него
+	// каждый пользователь заново выясняет, какие игры на его машине не идут.
+	compatService, err := compat.NewService()
+	if err != nil {
+		fatal("start compat service", err)
+	}
+	libraryService.SetOutcomeRecorder(compatService.RecordSession)
+	libraryService.SetLaunchFailureRecorder(compatService.RecordLaunchFailure)
+	installService.SetRepackerResolver(func(releaseID string) string {
+		release, ok := sourcesService.FindRelease(releaseID)
+		if !ok {
+			return ""
+		}
+		return release.Repacker
+	})
+	// Общая статистика совместимости живёт рядом с журналом, но отдельно от
+	// него: журнал ведётся всегда, отчёты уходят только по согласию.
+	compatStats := compat.NewStatsAt(compatStatsPath(configDir))
+	compatSharer, err := newCompatSharer(compatService, compatStats, configDir,
+		settingsService, libraryService, catalogService)
+	if err != nil {
+		// Без общей статистики лаунчер полностью работоспособен: локальный
+		// журнал ведётся, каталог просто молчит про чужие машины.
+		slog.Error("start compat sharing", "error", err)
+	} else {
+		extraCompatServices = append(extraCompatServices, application.NewService(compatSharer))
+	}
+
+	// Каталог сам переводит свой идентификатор в идентификатор IGDB и спрашивает
+	// уже по нему: этот колбэк зовётся под мьютексом каталога, и обращение к
+	// каталогу изнутри повесило бы запрос намертво.
+	catalogService.SetCompatLookup(func(igdbID string) (int, int, bool) {
+		shared, ok := compatStats.Game(igdbID)
+		if !ok {
+			return 0, 0, false
+		}
+		return shared.Works, shared.Total, true
+	})
+
+	profileService := profile.NewService(libraryService, playlogService, func() []string {
+		return accountService.CurrentProfileSettings().Showcase
+	})
 	libraryService.AddSessionWatcher(presenceWatcher)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
+
+	resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
+	socialService, err := social.NewService(account.BaseURL(), accountService.SessionToken, socialSettings{settingsService}, resolveGameID)
+	if err != nil {
+		fatal("start social service", err)
+	}
+	messagingService, err := messaging.NewService(account.BaseURL(), accountService.SessionToken, func() bool { return settingsService.GetSettings().AccountSync })
+	if err != nil {
+		fatal("start messaging service", err)
+	}
+	onlineService, err := online.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID, settingsService)
+	if err != nil {
+		fatal("start online service", err)
+	}
+	libraryService.AddSessionWatcher(onlineService)
 
 	var extraServices []application.Service
 
@@ -328,7 +473,6 @@ func main() {
 	if err != nil {
 		slog.Error("load client identity", "error", err)
 	} else {
-		resolveGameID := func(catalogGameID string) string { return catalogService.IGDBIDOf(catalogGameID) }
 		heartbeatService, err := heartbeat.NewService(identity, resolveGameID)
 		if err != nil {
 			fatal("start presence", err)
@@ -353,6 +497,7 @@ func main() {
 		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
 		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
+		slog.SetDefault(slog.New(diagnostics.NewLogHandler(slog.Default().Handler(), diagnosticsService)))
 
 		libraryService.AddSessionWatcher(heartbeatService)
 		libraryService.SetUsageRecorder(usageService.Record)
@@ -375,10 +520,15 @@ func main() {
 		application.NewService(appService),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
+		application.NewService(socialService),
+		application.NewService(messagingService),
+		application.NewService(onlineService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
+		application.NewService(profileService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
+		application.NewService(titlesDictService),
 		application.NewService(catalogService),
 		application.NewService(sourcesService),
 		application.NewService(searchService),
@@ -388,6 +538,7 @@ func main() {
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),
+		application.NewService(compatService),
 		application.NewService(themeService),
 		application.NewService(lanService),
 		application.NewService(relocateService),
@@ -397,6 +548,7 @@ func main() {
 		application.NewService(selfupdateService),
 	}
 	services = append(services, extraServices...)
+	services = append(services, extraCompatServices...)
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -427,16 +579,19 @@ func main() {
 			Middleware: metadataService.Middleware,
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// С включённым сворачиванием в трей приложение обязано пережить
+			// закрытие окна: иначе крестик убивает лаунчер вместе с
+			// загрузками, а иконка в строке меню возвращать уже нечего.
+			ApplicationShouldTerminateAfterLastWindowClosed: !current.MinimizeToTray,
 		},
 	})
 
 	window := wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Typhon",
+		Title:            windowTitle(),
 		Width:            1440,
 		Height:           900,
-		MinWidth:         1000,
-		MinHeight:        680,
+		MinWidth:         1100,
+		MinHeight:        750,
 		Frameless:        true,
 		BackgroundColour: application.NewRGB(11, 16, 22),
 		// Started from a game shortcut the launcher stays out of the way, but
@@ -444,19 +599,22 @@ func main() {
 		// nobody can reopen leaves a process the user cannot reach.
 		Hidden: playRequested && current.MinimizeToTray,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
+			InvisibleTitleBarHeight: 55,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
 		URL: "/",
 	})
 
-	autostartService, err := autostart.NewService(wails.Autostart)
+	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
+	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
+	defer chatDesktop.Close()
+	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
 	}
 	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {
-		return newSystemTray(wails, trayController)
+		return newSystemTray(wails, trayController, appService.UILanguage)
 	}, wails.Quit)
 	if err != nil {
 		fatal("start tray controller", err)
@@ -491,7 +649,12 @@ func main() {
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if trayController.CloseRequested() {
 			event.Cancel()
+			return
 		}
+		// Трея нет — значит возвращать окно будет нечем. На macOS выход по
+		// закрытию последнего окна отключён ради трея, поэтому без этого
+		// вызова остался бы процесс без окна и без иконки.
+		wails.Quit()
 	})
 
 	if playRequested {
@@ -547,13 +710,14 @@ func (w windowControl) Focus() {
 	w.window.Focus()
 }
 
-func newSystemTray(wails *application.App, controller *tray.Controller) (tray.Tray, error) {
+func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {
+	labels := dialogtext.For(language())
 	menu := application.NewMenu()
-	menu.Add("Открыть Typhon").OnClick(func(*application.Context) {
+	openItem := menu.Add(labels.OpenTyphon).OnClick(func(*application.Context) {
 		controller.Open()
 	})
 	menu.AddSeparator()
-	menu.Add("Выход").OnClick(func(*application.Context) {
+	quitItem := menu.Add(labels.Quit).OnClick(func(*application.Context) {
 		controller.Quit()
 	})
 
@@ -562,6 +726,15 @@ func newSystemTray(wails *application.App, controller *tray.Controller) (tray.Tr
 	systemTray.SetTooltip("Typhon")
 	systemTray.SetMenu(menu)
 	systemTray.OnClick(controller.Open)
+	systemTray.OnRightClick(func() {
+		labels := dialogtext.For(language())
+		application.InvokeSync(func() {
+			openItem.SetLabel(labels.OpenTyphon)
+			quitItem.SetLabel(labels.Quit)
+			menu.Update()
+		})
+		systemTray.ShowMenu()
+	})
 	return systemTray, nil
 }
 
@@ -572,6 +745,71 @@ func metadataProvider(accountService *account.Service) metadata.Provider {
 		return nil
 	}
 	return client
+}
+
+// newCompatSharer собирает отправку статистики совместимости. Псевдоним для неё
+// заводится свой, а не берётся из installation.json: отчёт везёт список
+// установленных игр, версию системы и чип, и склеенный по общему
+// идентификатору с обычной телеметрией он давал бы профиль заметно жирнее, чем
+// каждая из них по отдельности.
+func newCompatSharer(
+	journal *compat.Service,
+	stats *compat.Stats,
+	configDir string,
+	settingsService *settings.Service,
+	libraryService *library.Service,
+	catalogService *catalog.Service,
+) (*compat.Sharer, error) {
+	identity, err := clientid.LoadAt(filepath.Join(configDir, "compat-client.json"))
+	if err != nil {
+		return nil, fmt.Errorf("compat client id: %w", err)
+	}
+	return compat.NewSharer(journal, stats, account.BaseURL(),
+		identity.InstallationID, app.Version,
+		func() bool { return settingsService.GetSettings().CompatReportsAllowed() },
+		compatEnv,
+		func(localID string) (compat.Build, bool) {
+			for _, g := range libraryService.GetGames() {
+				if g.ID != localID {
+					continue
+				}
+				return compat.Build{
+					GameID:   catalogService.IGDBIDOf(g.CanonicalGameID),
+					Repacker: g.Repacker,
+					Version:  g.ReleaseVersion,
+				}, true
+			}
+			return compat.Build{}, false
+		})
+}
+
+// compatStatsPath обычно указывает в каталог конфигурации. В devmock-сборке
+// TYPHON_DEVMOCK_COMPAT_STATS подменяет его готовым снимком: бейджи в каталоге
+// иначе нечем показать, пока агрегат не набрал порог наблюдений на живом
+// сервере.
+func compatStatsPath(configDir string) string {
+	if devmock.Enabled {
+		if path := os.Getenv("TYPHON_DEVMOCK_COMPAT_STATS"); path != "" {
+			slog.Info("devmock compat stats", "path", path)
+			return path
+		}
+	}
+	return filepath.Join(configDir, "compat-stats.json")
+}
+
+// compatEnv собирает окружение запуска. Сведение к тому, что можно отправлять,
+// делает сам compat: сюда попадают сырые значения, и это намеренно — так
+// вызывающему негде забыть их обезличить.
+func compatEnv() compat.Env {
+	env := compat.Env{}
+	if info, err := platform.GetSystemInfo(); err == nil {
+		env.OSVersion = info.OS
+		env.Chip = info.CPU
+	}
+	if rt, err := wine.Detect(); err == nil {
+		env.CrossOver = rt.Version
+	}
+	return env
 }
 
 func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, releaseID string) string {
@@ -587,4 +825,11 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 func fatal(stage string, err error) {
 	slog.Error("startup failed", "stage", stage, "err", err)
 	os.Exit(1)
+}
+
+func windowTitle() string {
+	if devmock.Enabled {
+		return "Typhon [devmock]"
+	}
+	return "Typhon"
 }

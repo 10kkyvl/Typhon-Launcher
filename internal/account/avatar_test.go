@@ -15,6 +15,7 @@ var (
 	pngBytes  = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4}
 	jpegBytes = []byte{0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4}
 	webpBytes = []byte{'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P', 1, 2}
+	gifBytes  = []byte{'G', 'I', 'F', '8', '9', 'a', 1, 2, 3, 4}
 )
 
 func writeTempFile(t *testing.T, name string, data []byte) string {
@@ -54,6 +55,7 @@ func TestReadAvatarImage(t *testing.T) {
 		{name: "png", path: writeTempFile(t, "a.png", pngBytes), mime: "image/png"},
 		{name: "jpeg", path: writeTempFile(t, "a.jpg", jpegBytes), mime: "image/jpeg"},
 		{name: "webp", path: writeTempFile(t, "a.webp", webpBytes), mime: "image/webp"},
+		{name: "gif", path: writeTempFile(t, "a.gif", gifBytes), mime: "image/gif"},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +96,7 @@ func TestDecodeAvatar(t *testing.T) {
 		name    string
 		encoded string
 		code    string
+		payload []byte
 	}{
 		{name: "empty", encoded: "", code: CodeInvalidAvatar},
 		{name: "not base64", encoded: "!!!not base64!!!", code: CodeInvalidAvatar},
@@ -101,6 +104,7 @@ func TestDecodeAvatar(t *testing.T) {
 		{name: "not an image", encoded: base64.StdEncoding.EncodeToString([]byte("plain text")), code: CodeUnsupportedAvatar},
 		{name: "oversized", encoded: base64.StdEncoding.EncodeToString(make([]byte, maxAvatarSize+1)), code: CodeAvatarTooLarge},
 		{name: "png", encoded: base64.StdEncoding.EncodeToString(pngBytes)},
+		{name: "gif", encoded: base64.StdEncoding.EncodeToString(gifBytes), payload: gifBytes},
 	}
 
 	for _, tt := range tests {
@@ -118,7 +122,11 @@ func TestDecodeAvatar(t *testing.T) {
 			if err != nil {
 				t.Fatalf("decodeAvatar() error = %v", err)
 			}
-			if string(data) != string(pngBytes) {
+			want := tt.payload
+			if want == nil {
+				want = pngBytes
+			}
+			if string(data) != string(want) {
 				t.Fatalf("unexpected payload %v", data)
 			}
 		})
@@ -143,7 +151,7 @@ func TestUploadAvatarSendsDecodedBytes(t *testing.T) {
 	defer srv.Close()
 
 	s := startedService(t, &fakeStore{cred: Credential{Token: "t"}, present: true}, srv.URL)
-	user, err := s.UploadAvatar(base64.StdEncoding.EncodeToString(pngBytes))
+	user, err := s.UploadAvatar(base64.StdEncoding.EncodeToString(pngBytes), AvatarCrop{})
 	if err != nil {
 		t.Fatalf("UploadAvatar() error = %v", err)
 	}
@@ -164,13 +172,39 @@ func TestUploadAvatarRejectsBadPayloadWithoutRequest(t *testing.T) {
 	defer srv.Close()
 
 	s := startedService(t, &fakeStore{cred: Credential{Token: "t"}, present: true}, srv.URL)
-	if _, err := s.UploadAvatar(base64.StdEncoding.EncodeToString([]byte("plain text"))); codeOf(t, err) != CodeUnsupportedAvatar {
+	if _, err := s.UploadAvatar(base64.StdEncoding.EncodeToString([]byte("plain text")), AvatarCrop{}); codeOf(t, err) != CodeUnsupportedAvatar {
 		t.Fatalf("expected %q", CodeUnsupportedAvatar)
 	}
-	if _, err := s.UploadAvatar(""); codeOf(t, err) != CodeInvalidAvatar {
+	if _, err := s.UploadAvatar("", AvatarCrop{}); codeOf(t, err) != CodeInvalidAvatar {
 		t.Fatalf("expected %q", CodeInvalidAvatar)
 	}
 	if requests != 0 {
 		t.Fatalf("expected zero requests, got %d", requests)
+	}
+}
+
+func TestUploadAvatarCarriesTheCropTheUserChose(t *testing.T) {
+	var query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		writeJSON(t, w, http.StatusOK, CurrentUser{ID: "u1", AvatarURL: "https://cdn/a.webp"})
+	}))
+	defer srv.Close()
+
+	s := startedService(t, &fakeStore{cred: Credential{Token: "t"}, present: true}, srv.URL)
+	encoded := base64.StdEncoding.EncodeToString(pngBytes)
+
+	if _, err := s.UploadAvatar(encoded, AvatarCrop{X: 120, Y: 40, Size: 300}); err != nil {
+		t.Fatalf("UploadAvatar() error = %v", err)
+	}
+	if query != "size=300&x=120&y=40" {
+		t.Fatalf("query = %q; want the chosen crop", query)
+	}
+
+	if _, err := s.UploadAvatar(encoded, AvatarCrop{}); err != nil {
+		t.Fatalf("UploadAvatar() error = %v", err)
+	}
+	if query != "" {
+		t.Fatalf("query = %q; want no crop at all", query)
 	}
 }

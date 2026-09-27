@@ -69,6 +69,8 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 		}
 		next.Cover = filepath.Join(newInstallDir, rel)
 	}
+	next.Uninstall.Command = rebaseUninstallCommand(next.Uninstall.Command, oldInstallDir, newInstallDir)
+	next.Uninstall.QuietCommand = rebaseUninstallCommand(next.Uninstall.QuietCommand, oldInstallDir, newInstallDir)
 	next.InstallDir = newInstallDir
 
 	*game = next
@@ -94,4 +96,28 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 		}
 	}
 	return next, nil
+}
+
+func rebaseUninstallCommand(command, oldRoot, newRoot string) string {
+	if oldRoot == "" {
+		return command
+	}
+	// Require a separator after the old directory to avoid matching sibling names.
+	for _, sep := range []string{"/", `\`} {
+		old := strings.TrimRight(oldRoot, `/\`) + sep
+		for start := 0; start < len(command); {
+			index := strings.Index(strings.ToLower(command[start:]), strings.ToLower(old))
+			if index < 0 {
+				break
+			}
+			index += start
+			if index == 0 || strings.ContainsRune("\"' =", rune(command[index-1])) {
+				command = command[:index] + strings.TrimRight(newRoot, `/\`) + sep + command[index+len(old):]
+				start = index + len(newRoot) + 1
+			} else {
+				start = index + len(old)
+			}
+		}
+	}
+	return command
 }

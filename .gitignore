@@ -8,6 +8,9 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/
 bin/
+# go build . в корне кладёт бинарь сюда; в репозиторий ему не надо
+/typhon
+/typhon.exe
 tmp/
 .task/
 frontend/bindings/
@@ -27,3 +30,6 @@ Thumbs.db
 typhon.exe
 docs/
 notices.exe
+
+# Скиллы проекта для Claude Code — в репозитории
+!.claude/skills/

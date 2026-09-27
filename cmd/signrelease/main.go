@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -31,8 +30,7 @@ var (
 	errMissingOut      = errors.New("signrelease: -out is required")
 	errEmptyPrivateKey = fmt.Errorf("signrelease: %s is not set", privateKeyEnv)
 	errBadPrivateKey   = errors.New("signrelease: private key must be a base64-encoded ed25519 seed (32 bytes) or private key (64 bytes)")
-	errManifestTooBig  = errors.New("signrelease: signed manifest exceeds the size limit")
-	errBadPublicKey    = errors.New("signrelease: private key did not produce an ed25519 public key")
+	errManifestTooBig  = selfupdate.ErrManifestTooLarge
 )
 
 type artifactSpec struct {
@@ -241,34 +239,10 @@ func decodePrivateKey(encoded string) (ed25519.PrivateKey, error) {
 	}
 }
 
-// signManifest marshals m exactly once, signs those raw bytes, and embeds
-// them verbatim in the SignedManifest — re-encoding the manifest after
-// signing would change its bytes and invalidate the signature.
 func signManifest(m selfupdate.Manifest, priv ed25519.PrivateKey) ([]byte, error) {
-	raw, err := json.Marshal(m)
+	out, err := selfupdate.SignManifest(m, priv)
 	if err != nil {
-		return nil, fmt.Errorf("signrelease: marshal manifest: %w", err)
-	}
-	sig := ed25519.Sign(priv, raw)
-	sm := selfupdate.SignedManifest{
-		KeyID:     selfupdate.KeyID,
-		Signature: base64.StdEncoding.EncodeToString(sig),
-		Manifest:  json.RawMessage(raw),
-	}
-	out, err := json.Marshal(sm)
-	if err != nil {
-		return nil, fmt.Errorf("signrelease: marshal signed manifest: %w", err)
-	}
-	if len(out) > selfupdate.MaxManifestSize {
-		return nil, fmt.Errorf("%w: %d > %d bytes", errManifestTooBig, len(out), selfupdate.MaxManifestSize)
-	}
-
-	pub, ok := priv.Public().(ed25519.PublicKey)
-	if !ok {
-		return nil, errBadPublicKey
-	}
-	if _, err := selfupdate.VerifyManifest(out, pub); err != nil {
-		return nil, fmt.Errorf("signrelease: self-verification failed: %w", err)
+		return nil, fmt.Errorf("signrelease: %w", err)
 	}
 	return out, nil
 }

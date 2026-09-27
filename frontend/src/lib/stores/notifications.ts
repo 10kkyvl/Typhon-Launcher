@@ -1,16 +1,23 @@
 import { derived, get, writable } from 'svelte/store';
 import { active } from './downloads';
+import { friendRequestNotification } from '../social/view';
 import { historyRecent } from './history';
+import { locale, msg } from '../i18n';
+import { sourceErrorText } from '../sources/sourceErrors';
+import { updateErrorText } from '../updates/updateErrors';
+import { statusReason } from '../services/selfupdateMessages';
+import { incomingCount, incomingPeak } from './social';
 import { installActive, installations } from './install';
 import { mergeNotifications } from '../notifications/merge';
 import { navigate, type RouteName } from './router';
 import { selfUpdateStatus } from './selfupdate';
 import type { SelfUpdateStatus } from '../services/selfupdate';
+import { progressPercent } from '../utils/format';
 import { sources } from './sources';
 import { updates } from './updates';
 
 function pct(value: number) {
-  return `${Math.round(value * 100)}%`;
+  return `${progressPercent(value)}%`;
 }
 
 export interface Notification {
@@ -56,10 +63,10 @@ function fingerprint(text: string): string {
 function launcherUpdateNotification(status: SelfUpdateStatus): Notification | null {
   const version = status.availableVersion ?? status.currentVersion;
   if (status.error || status.state === 'failed') {
-    const text = status.error || 'Не удалось проверить обновления';
+    const text = statusReason(status) || msg('state.notifUpdateCheckFailed');
     return {
-      id: `launcher-update-error:${version}:${fingerprint(text)}`,
-      title: 'Обновление лаунчера',
+      id: `launcher-update-error:${version}:${fingerprint(status.error || status.state)}`,
+      title: msg('state.notifLauncherUpdateTitle'),
       text,
       route: 'settings',
       terminal: false,
@@ -68,8 +75,8 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
   if (status.state === 'ready' && status.availableVersion) {
     return {
       id: `launcher-update-ready:${status.availableVersion}`,
-      title: 'Обновление лаунчера',
-      text: `Версия ${status.availableVersion} готова к установке`,
+      title: msg('state.notifLauncherUpdateTitle'),
+      text: msg('state.notifLauncherUpdateReady', { version: status.availableVersion }),
       route: 'settings',
       terminal: false,
     };
@@ -77,8 +84,8 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
   if (status.state === 'available' && status.availableVersion) {
     return {
       id: `launcher-update:${status.availableVersion}`,
-      title: 'Обновление лаунчера',
-      text: `Доступна версия ${status.availableVersion}`,
+      title: msg('state.notifLauncherUpdateTitle'),
+      text: msg('state.notifLauncherUpdateAvailable', { version: status.availableVersion }),
       route: 'settings',
       terminal: false,
     };
@@ -87,19 +94,31 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
 }
 
 const allNotifications = derived(
-  [active, installations, updates, sources, selfUpdateStatus, historyRecent],
-  ([$active, $installations, $updates, $sources, $selfUpdateStatus, $historyRecent]): Notification[] => {
+  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount, incomingPeak, locale],
+  ([
+    $active,
+    $installations,
+    $updates,
+    $sources,
+    $selfUpdateStatus,
+    $historyRecent,
+    $incomingCount,
+    $incomingPeak,
+  ]): Notification[] => {
     const items: Notification[] = [];
 
     const launcherUpdate = launcherUpdateNotification($selfUpdateStatus);
     if (launcherUpdate) items.push(launcherUpdate);
+
+    const friendRequests = friendRequestNotification($incomingCount, $incomingPeak);
+    if (friendRequests) items.push(friendRequests);
 
     for (const source of $sources) {
       if (!source.lastError) continue;
       items.push({
         id: `source:${source.id}:${fingerprint(source.lastError)}`,
         title: source.name,
-        text: source.lastError,
+        text: sourceErrorText(source.lastError),
         route: 'sources',
         terminal: false,
       });
@@ -110,7 +129,7 @@ const allNotifications = derived(
         items.push({
           id: `update-error:${update.gameId}:${fingerprint(update.error)}`,
           title: update.title,
-          text: `Обновление не удалось: ${update.error}`,
+          text: msg('state.notifUpdateFailed', { error: updateErrorText(update.error) }),
           route: 'installed',
           refId: update.gameId,
           terminal: true,
@@ -121,7 +140,7 @@ const allNotifications = derived(
         items.push({
           id: `update:${update.gameId}`,
           title: update.title,
-          text: `Обновление идёт — ${pct(update.progress)}`,
+          text: msg('state.notifUpdateInProgress', { percent: pct(update.progress) }),
           route: 'installed',
           terminal: false,
         });
@@ -131,7 +150,7 @@ const allNotifications = derived(
         items.push({
           id: `update-available:${update.gameId}`,
           title: update.title,
-          text: 'Доступно обновление',
+          text: msg('state.notifUpdateAvailable'),
           route: 'installed',
           terminal: false,
         });
@@ -143,7 +162,7 @@ const allNotifications = derived(
       items.push({
         id: `install:${install.id}`,
         title: install.name,
-        text: `Установка — ${pct(install.progress)}`,
+        text: msg('state.notifInstallProgress', { percent: pct(install.progress) }),
         route: 'downloads',
         terminal: false,
       });
@@ -153,7 +172,7 @@ const allNotifications = derived(
       items.push({
         id: `download:${download.id}`,
         title: download.name,
-        text: `Загрузка — ${pct(download.progress)}`,
+        text: msg('state.notifDownloadProgress', { percent: pct(download.progress) }),
         route: 'downloads',
         terminal: false,
       });

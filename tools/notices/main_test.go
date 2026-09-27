@@ -60,8 +60,25 @@ func TestValidateComponent(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "valid repository file component without a version",
+			c: Component{
+				Name: "Vendored Art", License: "MIT",
+				Source: "file", LicenseFile: "tools/notices/licenses/art-LICENSE",
+			},
+		},
+		{
 			name:    "unknown source",
 			c:       Component{Name: "mod", License: "MIT", Source: "cargo", Version: "1", LicenseFile: "LICENSE"},
+			wantErr: true,
+		},
+		{
+			name:    "repository file component with licenseFrom",
+			c:       Component{Name: "art", License: "MIT", Source: "file", LicenseFile: "LICENSE", LicenseFrom: "elsewhere"},
+			wantErr: true,
+		},
+		{
+			name:    "repository file component without a license file",
+			c:       Component{Name: "art", License: "MIT", Source: "file"},
 			wantErr: true,
 		},
 		{
@@ -117,6 +134,26 @@ func TestLicensePath(t *testing.T) {
 			want: filepath.Join("npm", "other-pkg", "LICENSE"),
 		},
 		{
+			name: "repository file",
+			c:    Component{Name: "Vendored Art", Source: "file", LicenseFile: "tools/notices/licenses/art-LICENSE"},
+			want: filepath.Join("repo", "tools", "notices", "licenses", "art-LICENSE"),
+		},
+		{
+			name:    "repository file escaping the repository",
+			c:       Component{Name: "Vendored Art", Source: "file", LicenseFile: "../../etc/passwd"},
+			wantErr: true,
+		},
+		{
+			name:    "absolute repository file",
+			c:       Component{Name: "Vendored Art", Source: "file", LicenseFile: string(filepath.Separator) + filepath.Join("etc", "passwd")},
+			wantErr: true,
+		},
+		{
+			name:    "empty repository file",
+			c:       Component{Name: "Vendored Art", Source: "file"},
+			wantErr: true,
+		},
+		{
 			name:    "unknown source",
 			c:       Component{Name: "foo", Source: "cargo"},
 			wantErr: true,
@@ -125,7 +162,7 @@ func TestLicensePath(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := licensePath(tc.c, "cache", "npm")
+			got, err := licensePath(tc.c, Roots{GoModCache: "cache", NpmRoot: "npm", RepoRoot: "repo"})
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
@@ -200,7 +237,7 @@ func TestBuildGroupsGroupsIdenticalTexts(t *testing.T) {
 		{Name: "vendor blob", License: "unknown", ManualReview: true, Note: "no local file"},
 	}
 
-	groups, manual, err := buildGroups(components, gomod, npm)
+	groups, manual, err := buildGroups(components, Roots{GoModCache: gomod, NpmRoot: npm})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -233,7 +270,7 @@ func TestBuildGroupsMissingLicenseFileFails(t *testing.T) {
 		{Name: "github.com/a/missing", Version: "v1.0.0", License: "MIT", Source: "go", LicenseFile: "LICENSE"},
 	}
 
-	_, _, err := buildGroups(components, gomod, npm)
+	_, _, err := buildGroups(components, Roots{GoModCache: gomod, NpmRoot: npm})
 	if err == nil {
 		t.Fatalf("expected error for missing license file, got nil")
 	}
@@ -275,11 +312,11 @@ func TestGenerateIsDeterministic(t *testing.T) {
 		]
 	}`)
 
-	first, err := generate(manifestPath, gomod, npm)
+	first, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: npm}, "ru")
 	if err != nil {
 		t.Fatalf("first generate: %v", err)
 	}
-	second, err := generate(manifestPath, gomod, npm)
+	second, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: npm}, "ru")
 	if err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
@@ -306,7 +343,7 @@ func TestGenerateMissingLicenseFileFails(t *testing.T) {
 		]
 	}`)
 
-	if _, err := generate(manifestPath, gomod, npm); err == nil {
+	if _, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: npm}, "ru"); err == nil {
 		t.Fatalf("expected error for missing license file, got nil")
 	}
 }
@@ -335,5 +372,167 @@ func TestLoadManifestRejectsCorruptJSON(t *testing.T) {
 
 	if _, err := loadManifest(path); err == nil {
 		t.Fatalf("expected error for corrupt manifest, got nil")
+	}
+}
+
+func TestGenerateReadsRepositoryLicense(t *testing.T) {
+	gomod := t.TempDir()
+	npm := t.TempDir()
+	repo := t.TempDir()
+	manifestDir := t.TempDir()
+
+	writeFile(t, filepath.Join(repo, "tools", "notices", "licenses", "art-LICENSE"), "VENDORED MIT TEXT\n")
+
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{
+		"components": [
+			{"name": "Vendored Art", "license": "MIT", "source": "file",
+			 "licenseFile": "tools/notices/licenses/art-LICENSE", "note": "восемь иконок из апстрима"}
+		]
+	}`)
+
+	out, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: npm, RepoRoot: repo}, "ru")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	text := string(out)
+	for _, want := range []string{
+		"| Vendored Art | - | MIT |",
+		"Примечание (Vendored Art): восемь иконок из апстрима",
+		"### MIT — Vendored Art",
+		"VENDORED MIT TEXT",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestGenerateMissingRepositoryLicenseFails(t *testing.T) {
+	manifestDir := t.TempDir()
+	repo := t.TempDir()
+
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{
+		"components": [
+			{"name": "Vendored Art", "license": "MIT", "source": "file", "licenseFile": "tools/notices/licenses/art-LICENSE"}
+		]
+	}`)
+
+	_, err := generate(manifestPath, Roots{GoModCache: t.TempDir(), NpmRoot: t.TempDir(), RepoRoot: repo}, "ru")
+	if err == nil {
+		t.Fatalf("expected error for a missing vendored license, got nil")
+	}
+	if !strings.Contains(err.Error(), "Vendored Art") {
+		t.Fatalf("error should name the component, got: %v", err)
+	}
+}
+
+func TestGenerateEnglishFrame(t *testing.T) {
+	gomod := t.TempDir()
+	npm := t.TempDir()
+	manifestDir := t.TempDir()
+
+	writeFile(t, filepath.Join(gomod, "github.com/a/one@v1.0.0", "LICENSE"), "MIT TEXT")
+	writeFile(t, filepath.Join(gomod, "github.com/a/two@v1.0.0", "LICENSE"), "MPL TEXT")
+
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{
+		"components": [
+			{"name": "github.com/a/one", "version": "v1.0.0", "license": "MIT", "source": "go", "licenseFile": "LICENSE",
+			 "note": "встраивается в бандл", "noteEn": "inlined into the bundle"},
+			{"name": "github.com/a/two", "version": "v1.0.0", "license": "MPL-2.0", "source": "go", "licenseFile": "LICENSE"},
+			{"name": "vendor blob", "license": "Условия Microsoft", "licenseEn": "Microsoft terms", "manualReview": true,
+			 "note": "отдельные условия", "noteEn": "separate terms"}
+		]
+	}`)
+
+	out, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: npm}, "en")
+	if err != nil {
+		t.Fatalf("generate en: %v", err)
+	}
+	text := string(out)
+
+	for _, want := range []string{
+		"# Typhon Third-Party Components",
+		"## Summary table",
+		"| Component | Version | License |",
+		"| vendor blob | - | Microsoft terms |",
+		"Note (github.com/a/one): inlined into the bundle",
+		"## Components with separate distribution terms",
+		"Declared license: Microsoft terms.",
+		"separate terms",
+		"## Appendix: license texts",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("english output does not contain %q:\n%s", want, text)
+		}
+	}
+	for _, r := range text {
+		if r >= 'А' && r <= 'я' {
+			t.Fatalf("english output contains cyrillic:\n%s", text)
+		}
+	}
+}
+
+func TestGenerateEnglishRequiresTranslatedNote(t *testing.T) {
+	gomod := t.TempDir()
+	manifestDir := t.TempDir()
+
+	writeFile(t, filepath.Join(gomod, "github.com/a/one@v1.0.0", "LICENSE"), "MIT TEXT")
+
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{
+		"components": [
+			{"name": "github.com/a/one", "version": "v1.0.0", "license": "MIT", "source": "go", "licenseFile": "LICENSE",
+			 "note": "только по-русски"}
+		]
+	}`)
+
+	_, err := generate(manifestPath, Roots{GoModCache: gomod, NpmRoot: t.TempDir()}, "en")
+	if err == nil {
+		t.Fatalf("expected an error for a note without noteEn, got nil")
+	}
+	if !strings.Contains(err.Error(), "noteEn") {
+		t.Fatalf("error should name the missing field, got: %v", err)
+	}
+}
+
+func TestGenerateEnglishRequiresTranslatedLicense(t *testing.T) {
+	manifestDir := t.TempDir()
+
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{
+		"components": [
+			{"name": "vendor blob", "license": "Условия Microsoft", "manualReview": true, "note": "x", "noteEn": "x"}
+		]
+	}`)
+
+	_, err := generate(manifestPath, Roots{GoModCache: t.TempDir(), NpmRoot: t.TempDir()}, "en")
+	if err == nil {
+		t.Fatalf("expected an error for a russian license without licenseEn, got nil")
+	}
+	if !strings.Contains(err.Error(), "licenseEn") {
+		t.Fatalf("error should name the missing field, got: %v", err)
+	}
+}
+
+func TestGenerateUnknownLanguageFails(t *testing.T) {
+	manifestDir := t.TempDir()
+	manifestPath := filepath.Join(manifestDir, "manifest.json")
+	writeFile(t, manifestPath, `{"components": []}`)
+
+	_, err := generate(manifestPath, Roots{GoModCache: t.TempDir(), NpmRoot: t.TempDir()}, "de")
+	if err == nil {
+		t.Fatalf("expected an error for an unknown language, got nil")
+	}
+}
+
+func TestDefaultOutput(t *testing.T) {
+	if got := defaultOutput("ru"); got != "THIRD_PARTY_NOTICES.md" {
+		t.Fatalf("defaultOutput(ru) = %q", got)
+	}
+	if got := defaultOutput("en"); got != "THIRD_PARTY_NOTICES.en.md" {
+		t.Fatalf("defaultOutput(en) = %q", got)
 	}
 }

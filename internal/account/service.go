@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
+
+	"typhon/internal/dialogtext"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -39,6 +42,8 @@ type Service struct {
 	guest        bool
 	profile      cachedProfile
 	profileEpoch uint64
+	syncToken    string
+	syncUserID   string
 	ctx          context.Context
 	cancel       context.CancelFunc
 
@@ -151,8 +156,11 @@ func (s *Service) Bootstrap() (State, error) {
 	}
 	defer cancel()
 
-	user, err := s.client.Me(ctx)
+	client := *s.client
+	client.token = func() (string, error) { return cred.Token, nil }
+	user, err := client.Me(ctx)
 	if err == nil {
+		s.bindSyncIdentity(cred.Token, user.ID)
 		if rememberErr := s.rememberProfile(ctx, user); rememberErr != nil {
 			return State{}, rememberErr
 		}
@@ -212,10 +220,6 @@ func (s *Service) signedOutState() State {
 }
 
 func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
-	if err := s.setGuest(false); err != nil {
-		return CurrentUser{}, err
-	}
-
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -226,14 +230,13 @@ func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	if err != nil {
 		return CurrentUser{}, err
 	}
+	if err := s.setGuest(false); err != nil {
+		return CurrentUser{}, err
+	}
 	return s.adopt(ctx, session)
 }
 
 func (s *Service) Login(input LoginInput) (CurrentUser, error) {
-	if err := s.setGuest(false); err != nil {
-		return CurrentUser{}, err
-	}
-
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
@@ -244,12 +247,16 @@ func (s *Service) Login(input LoginInput) (CurrentUser, error) {
 	if err != nil {
 		return CurrentUser{}, err
 	}
+	if err := s.setGuest(false); err != nil {
+		return CurrentUser{}, err
+	}
 	return s.adopt(ctx, session)
 }
 
 func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, error) {
 	saveErr := s.store.Save(Credential{Token: session.Token, Username: session.User.Username})
 	if saveErr == nil {
+		s.bindSyncIdentity(session.Token, session.User.ID)
 		if err := s.rememberProfile(ctx, session.User); err != nil {
 			// The credential is already stored, so the session is real: a cache failure only
 			// costs offline mode on the next launch and must not read as a failed sign-in.
@@ -259,6 +266,7 @@ func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, erro
 	}
 
 	slog.Error("store session credential", "error", saveErr)
+	//nolint:contextcheck // инвариант 19: отзыв обязан дойти до сервера и тогда, когда ctx входа уже отменён — иначе на бэкенде останется живая сессия, токен которой мы только что не смогли сохранить; requestContext строит контекст от s.ctx со своим таймаутом
 	if err := s.revoke(session.Token); err != nil {
 		slog.Error("revoke session after failed credential write", "error", err)
 	}
@@ -315,6 +323,17 @@ func (s *Service) GetCurrentUser() (CurrentUser, error) {
 	return s.client.Me(ctx)
 }
 
+//wails:ignore
+func (s *Service) CurrentProfileSettings() ProfileSettings {
+	profile := s.currentProfile()
+	if profile.User.ID == "" {
+		return DefaultProfileSettings()
+	}
+	settings := profile.User.Profile
+	settings.Showcase = slices.Clone(settings.Showcase)
+	return settings
+}
+
 func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
@@ -331,12 +350,14 @@ func (s *Service) UpdateProfile(patch Patch) (CurrentUser, error) {
 	return user, nil
 }
 
-func (s *Service) PickAvatar() (AvatarImage, error) {
+func (s *Service) PickAvatar(language string) (AvatarImage, error) {
+	labels := dialogtext.For(language)
 	dialog := application.Get().Dialog.OpenFile().
-		SetTitle("Выберите аватар").
+		SetTitle(labels.AvatarTitle).
+		SetMessage(labels.AvatarTitle).
 		CanChooseFiles(true).
-		AddFilter("Изображения (*.png, *.jpg, *.jpeg, *.webp)", "*.png;*.jpg;*.jpeg;*.webp").
-		AddFilter("Все файлы", "*.*")
+		AddFilter(labels.AvatarImages, "*.png;*.jpg;*.jpeg;*.webp;*.gif").
+		AddFilter(labels.AllFiles, "*.*")
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		slog.Warn("select avatar file", "error", err)
@@ -348,7 +369,7 @@ func (s *Service) PickAvatar() (AvatarImage, error) {
 	return readAvatarImage(path)
 }
 
-func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
+func (s *Service) UploadAvatar(encoded string, crop AvatarCrop) (CurrentUser, error) {
 	data, err := decodeAvatar(encoded)
 	if err != nil {
 		return CurrentUser{}, err
@@ -359,7 +380,7 @@ func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	defer cancel()
-	user, err := s.client.UploadAvatar(ctx, data)
+	user, err := s.client.UploadAvatar(ctx, data, crop)
 	if err != nil {
 		return CurrentUser{}, err
 	}
@@ -367,6 +388,37 @@ func (s *Service) UploadAvatar(encoded string) (CurrentUser, error) {
 		return CurrentUser{}, err
 	}
 	return user, nil
+}
+
+func (s *Service) PickCover(language string) (AvatarImage, error) {
+	labels := dialogtext.For(language)
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle(labels.CoverTitle).
+		SetMessage(labels.CoverTitle).
+		CanChooseFiles(true).
+		AddFilter(labels.CoverImages, "*.png;*.jpg;*.jpeg;*.webp").
+		AddFilter(labels.AllFiles, "*.*")
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		return AvatarImage{}, err
+	}
+	if path == "" {
+		return AvatarImage{}, nil
+	}
+	return readCoverImage(path)
+}
+
+func (s *Service) UploadCover(encoded string) (CoverUpload, error) {
+	data, err := decodeCover(encoded)
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	defer cancel()
+	return s.client.UploadCover(ctx, data)
 }
 
 func (s *Service) RemoveAvatar() (CurrentUser, error) {

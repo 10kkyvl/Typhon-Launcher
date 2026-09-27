@@ -2,7 +2,7 @@ import { Service as TelemetryLogService } from '../../../bindings/typhon/interna
 import type { EntryView as RawEntry } from '../../../bindings/typhon/internal/telemetrylog/models';
 import { inWails } from './backend';
 
-export type SentDataKind = 'diagnostics' | 'usagestats' | '';
+export type SentDataKind = 'diagnostics' | 'usagestats' | 'compat' | '';
 
 export interface SentDataEntry {
   kind: SentDataKind;

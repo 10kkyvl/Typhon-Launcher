@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -29,12 +30,9 @@ type AddRequest struct {
 //
 //wails:ignore
 func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error) {
-	cl, base, err := m.engine()
+	cl, _, err := m.engine()
 	if err != nil {
 		return Download{}, err
-	}
-	if ctx == nil {
-		ctx = base
 	}
 	destination := strings.TrimSpace(req.Destination)
 	if destination == "" {
@@ -57,9 +55,18 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		return Download{}, err
 	}
 	infoHash := mi.HashInfoBytes().HexString()
-	if m.hashBusy(infoHash) {
+	if !m.reserveHash(infoHash) {
 		return Download{}, errDuplicateTask
 	}
+	// Ownership of the reservation moves to spawnSettleLocked's goroutine
+	// when req.Verify is set (its engine is not recorded in m.engines until
+	// settleRestored runs); every other exit below releases it directly.
+	transferred := false
+	defer func() {
+		if !transferred {
+			m.releaseHash(infoHash)
+		}
+	}()
 
 	files := fileStates(&info, nil)
 	needed, err := requiredBytes(files)
@@ -76,7 +83,7 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	lt, err := cl.addMetainfo(mi, destination, opts)
 	if err != nil {
 		slog.Error("add torrent", "operation", "start_task", "error", err)
-		return Download{}, errors.New("не удалось добавить торрент")
+		return Download{}, fmt.Errorf("не удалось добавить торрент: %w", err)
 	}
 
 	name := strings.TrimSpace(req.Name)
@@ -115,7 +122,15 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	if !req.Verify {
 		m.engines[d.ID] = lt
 	}
-	m.persistLocked()
+	if err := m.persistLocked(); err != nil {
+		m.items = m.items[:len(m.items)-1]
+		if !req.Verify {
+			delete(m.engines, d.ID)
+		}
+		m.mu.Unlock()
+		lt.drop()
+		return Download{}, fmt.Errorf("добавить загрузку: %w", err)
+	}
 	m.recordUsage(usagestats.Event{
 		Type:      usagestats.TypeDownloadStarted,
 		Timestamp: time.Now(),
@@ -125,8 +140,19 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	})
 	snap := snapshot(d)
 	if req.Verify {
-		m.spawnSettleLocked(d.ID, lt)
+		if err := m.spawnSettleLocked(d.ID, infoHash, lt); err != nil { //nolint:contextcheck // инвариант 19: verify-джоба живёт под wg/ctx владельца-Manager, а не под ctx запроса AddTask, который может завершиться раньше неё
+			m.items = m.items[:len(m.items)-1]
+			if perr := m.persistLocked(); perr != nil {
+				slog.Error("persist download rollback", "download_id", d.ID, "error", perr)
+			}
+			m.mu.Unlock()
+			lt.drop()
+			return Download{}, fmt.Errorf("добавить загрузку: %w", err)
+		}
+		transferred = true
 	} else {
+		transferred = true
+		delete(m.reserved, infoHash)
 		m.schedule()
 	}
 	m.mu.Unlock()
@@ -137,22 +163,31 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 	return snap, nil
 }
 
-func (m *Manager) spawnSettleLocked(id string, lt *liveTorrent) {
+// spawnSettleLocked hands a freshly added torrent to a background job that
+// verifies it before the download joins the schedule. It takes over the
+// infohash reservation the caller holds (released once beginJob resolves,
+// since m.jobs[id] or the item's removal then covers hashBusyLocked on its
+// own) and returns an error instead of starting the goroutine if the manager
+// has no live ctx to run it under (invariant 20: no context.Background
+// fallback in a service).
+func (m *Manager) spawnSettleLocked(id, infoHash string, lt *liveTorrent) error {
 	ctx := m.ctx
 	if ctx == nil {
-		ctx = context.Background()
+		return errNoClient
 	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer m.releaseHash(infoHash)
 		jobCtx, started := m.beginJob(ctx, id)
 		if !started {
 			lt.drop()
 			return
 		}
 		defer m.endJob(id)
-		m.settleRestored(jobCtx, restoreJob{id: id}, lt, lt.t.Info())
+		m.settleRestored(jobCtx, restoreJob{id: id, infoHash: infoHash}, lt, lt.t.Info())
 	}()
+	return nil
 }
 
 // ByOrigin returns the downloads started for a given game and purpose.

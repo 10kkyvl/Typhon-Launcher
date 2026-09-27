@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"strconv"
 	"time"
 
 	"typhon/internal/catalog"
@@ -38,6 +39,7 @@ const (
 )
 
 type Source struct {
+	ParseVersion  int        `json:"parseVersion,omitempty"`
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
 	Type          Type       `json:"type"`
@@ -52,6 +54,7 @@ type Source struct {
 	ETag          string     `json:"etag,omitempty"`
 	LastModified  string     `json:"lastModified,omitempty"`
 	FeedVersion   int        `json:"feedVersion"`
+	Insecure      bool       `json:"insecure,omitempty"`
 	Entries       int        `json:"entries"`
 	Invalid       int        `json:"invalid"`
 	Matched       int        `json:"matched"`
@@ -69,8 +72,10 @@ const (
 )
 
 type Release struct {
+	GameHint        string         `json:"gameHint,omitempty"`
 	ID              string         `json:"id"`
 	SourceID        string         `json:"sourceId"`
+	DistributionID  string         `json:"distributionId,omitempty"`
 	Kind            Kind           `json:"kind,omitempty"`
 	RawTitle        string         `json:"rawTitle"`
 	Title           string         `json:"title"`
@@ -95,6 +100,7 @@ type Release struct {
 	MatchStatus     catalog.Status `json:"matchStatus"`
 	MatchConfidence float64        `json:"matchConfidence"`
 	MatchMethod     string         `json:"matchMethod"`
+	MatchEpoch      uint64         `json:"matchEpoch,omitempty"`
 	Availability    Availability   `json:"availability"`
 	Locked          bool           `json:"locked,omitempty"`
 	Ignored         bool           `json:"ignored,omitempty"`
@@ -105,6 +111,17 @@ type Release struct {
 }
 
 func (r *Release) identity() string {
+	if r.DistributionID != "" {
+		prefix := "distribution:" + strconv.Itoa(len(r.DistributionID)) + ":" + r.DistributionID
+		if r.Kind == KindPatch {
+			return prefix + "|patch|" + r.FromVersion + "|" + r.ToVersion
+		}
+		return prefix + "|release"
+	}
+	return r.legacyIdentity()
+}
+
+func (r *Release) legacyIdentity() string {
 	if r.InfoHash != "" {
 		return "hash:" + r.InfoHash
 	}
@@ -169,6 +186,10 @@ type Preview struct {
 	FeedVersion int      `json:"feedVersion"`
 	Entries     int      `json:"entries"`
 	Invalid     int      `json:"invalid"`
+	Games       int      `json:"games"`
+	Known       int      `json:"known"`
+	Unknown     int      `json:"unknown"`
+	Insecure    bool     `json:"insecure,omitempty"`
 	Warnings    []string `json:"warnings,omitempty"`
 	Fingerprint string   `json:"fingerprint"`
 	Duplicate   bool     `json:"duplicate"`
@@ -189,6 +210,7 @@ type Summary struct {
 	New         int    `json:"new"`
 	NotModified bool   `json:"notModified"`
 	DurationMs  int64  `json:"durationMs"`
+	Error       string `json:"error,omitempty"`
 }
 
 type Details struct {
@@ -213,10 +235,12 @@ type ReleaseBatch struct {
 }
 
 type DownloadRequest struct {
-	URI       string `json:"uri"`
-	Name      string `json:"name"`
-	ReleaseID string `json:"releaseId"`
-	SourceID  string `json:"sourceId"`
-	GameID    string `json:"gameId"`
-	Version   string `json:"version"`
+	URI               string     `json:"uri"`
+	Name              string     `json:"name"`
+	ReleaseID         string     `json:"releaseId"`
+	SourceID          string     `json:"sourceId"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	GameID            string     `json:"gameId"`
+	Version           string     `json:"version"`
 }

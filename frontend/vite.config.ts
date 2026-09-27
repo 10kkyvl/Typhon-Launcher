@@ -25,4 +25,7 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [svelte(), wails("./bindings"), keepDist()],
+  test: {
+    setupFiles: ["./vitest.setup.ts"],
+  },
 });

@@ -16,7 +16,7 @@ func extractSevenZip(ctx context.Context, archivePath, dest string, rep *reporte
 	if err != nil {
 		return errUnsupportedArchive
 	}
-	defer rc.Close()
+	defer closeReadOnly(archivePath, rc)
 
 	buf := make([]byte, copyBufferSize)
 	for _, entry := range rc.File {
@@ -25,6 +25,7 @@ func extractSevenZip(ctx context.Context, archivePath, dest string, rep *reporte
 		}
 		info := entry.FileInfo()
 		if !info.IsDir() && !info.Mode().IsRegular() {
+			skipIrregular(archivePath, entry.Name)
 			continue
 		}
 		target, err := safeJoin(dest, entry.Name)
@@ -44,7 +45,7 @@ func extractSevenZip(ctx context.Context, archivePath, dest string, rep *reporte
 			return errUnsupportedArchive
 		}
 		err = writeEntry(ctx, target, info.Mode(), src, rep, buf)
-		src.Close()
+		closeReadOnly(entry.Name, src)
 		if err != nil {
 			return err
 		}
@@ -57,7 +58,7 @@ func estimateSevenZip(archivePath string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer rc.Close()
+	defer closeReadOnly(archivePath, rc)
 
 	var total int64
 	for _, entry := range rc.File {

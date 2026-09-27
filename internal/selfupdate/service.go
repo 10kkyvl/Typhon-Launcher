@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -27,12 +27,31 @@ const (
 	eventReleaseNotes = "launcher:release_notes"
 )
 
-var checkInterval = 6 * time.Hour
+// checkInterval is how often a running launcher asks whether a release went
+// out. Someone sitting in the launcher when a version ships should hear
+// about it in minutes, not hours; the manifest is a few kilobytes served
+// with no-store, so the backend does not notice the difference.
+var checkInterval = 15 * time.Minute
 
-var errNoUpdateChecked = errors.New("selfupdate: check for an update before downloading")
+// checkRetryBase is the first pause after a failed quiet check, doubling on
+// every further failure up to checkInterval. The check at startup fails for
+// a boring reason more often than not: the launcher autostarted before the
+// network came up. Waiting a whole interval for the next attempt would leave
+// the user without the update for as long as they stay in.
+var checkRetryBase = 30 * time.Second
+
+var errNoUpdateChecked = uierr.New("selfupdate.check_first", "selfupdate: check for an update before downloading")
 
 // startWorker is a seam for tests: the real one spawns a detached process.
 var startWorker = startUpdateWorker
+
+// onCheckJoined lets a test observe a second caller attaching to the check in
+// flight, the moment that decides whether it shares one request or starts its own.
+var onCheckJoined = func() {}
+
+// onQuietCheckDone lets a test observe a background check finishing, once
+// its status is committed and before the schedule decides on the next one.
+var onQuietCheckDone = func() {}
 
 type Service struct {
 	mu     sync.Mutex
@@ -41,10 +60,14 @@ type Service struct {
 	store  *Store
 	notes  *notesStore
 	status Status
-	busy   bool
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	// busy covers download, apply and dismiss. A manifest check is tracked
+	// separately in check so a user action can cancel it instead of bouncing off.
+	busy           bool
+	check          *checkCall
+	downloadCancel context.CancelFunc
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 
 	currentVersion  string
 	pendingArtifact *Artifact
@@ -60,7 +83,11 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: resolve config dir: %w", err)
 	}
-	client, err := NewClient(account.BaseURL())
+	base, err := manifestBaseURL()
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: resolve manifest url: %w", err)
+	}
+	client, err := NewClient(base)
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: create client: %w", err)
 	}
@@ -196,7 +223,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 	s.mu.Lock()
 	keepVersion := ""
-	if s.status.State == StateReady {
+	if s.status.State == StateReady || s.status.State == StateAvailable {
 		keepVersion = s.status.AvailableVersion
 	}
 	s.mu.Unlock()
@@ -213,7 +240,11 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	cancel := s.cancel
+	download := s.downloadCancel
 	s.mu.Unlock()
+	if download != nil {
+		download()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -354,25 +385,52 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 	})
 }
 
+// nextCheckDelay is the pause before the next quiet check after failures
+// consecutive failed ones: the regular interval after a success, exponential
+// backoff from checkRetryBase capped at that interval otherwise.
+func nextCheckDelay(failures int) time.Duration {
+	if failures <= 0 {
+		return checkInterval
+	}
+	delay := checkRetryBase
+	for i := 1; i < failures && delay < checkInterval; i++ {
+		delay *= 2
+	}
+	if delay > checkInterval {
+		return checkInterval
+	}
+	return delay
+}
+
 func (s *Service) periodicCheck() {
 	defer s.wg.Done()
-	s.checkQuiet()
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
+	failures := 0
 	for {
+		if s.checkQuiet() {
+			failures = 0
+		} else {
+			failures++
+		}
+		onQuietCheckDone()
+		timer := time.NewTimer(nextCheckDelay(failures))
 		select {
 		case <-s.ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
-			s.checkQuiet()
+		case <-timer.C:
 		}
 	}
 }
 
-func (s *Service) checkQuiet() {
-	if _, err := s.CheckForUpdate(s.ctx); err != nil {
+// checkQuiet runs one background check and reports whether it got an
+// answer. A cancelled check counts as no answer too: the user preempted it
+// with a download or a dismiss, and the schedule simply asks again.
+func (s *Service) checkQuiet() bool {
+	if _, err := s.runCheck(s.ctx, false); err != nil {
 		slog.Debug("periodic selfupdate check", "error", err)
+		return false
 	}
+	return true
 }
 
 func (s *Service) GetStatus() Status {
@@ -450,23 +508,114 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 	return status, st, nil
 }
 
+// checkCall is one manifest check in flight. Every caller that arrives
+// while it runs joins it instead of starting a second request, and a user
+// action that needs the service cancels it rather than waiting it out.
+type checkCall struct {
+	done   chan struct{}
+	cancel context.CancelFunc
+	loud   bool
+	status Status
+	err    error
+}
+
+func clearError(status Status) Status {
+	status.Error = ""
+	status.ErrorCode = ""
+	return status
+}
+
 func (s *Service) CheckForUpdate(ctx context.Context) (Status, error) {
+	return s.runCheck(ctx, true)
+}
+
+// runCheck serialises manifest checks. The periodic check is quiet: nobody
+// asked for it, so a blocked network must not paint the banner red and hide
+// an update that is already downloaded. A loud caller joining a quiet check
+// turns it loud, since that caller is now waiting for the answer.
+func (s *Service) runCheck(ctx context.Context, loud bool) (Status, error) {
 	s.mu.Lock()
 	if s.busy {
 		s.mu.Unlock()
 		return Status{}, ErrBusy
 	}
-	s.busy = true
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.busy = false
+	if call := s.check; call != nil {
+		if loud {
+			call.loud = true
+		}
 		s.mu.Unlock()
-	}()
+		onCheckJoined()
+		select {
+		case <-call.done:
+			return call.status, call.err
+		case <-ctx.Done():
+			return s.GetStatus(), ctx.Err()
+		}
+	}
+	checkCtx, cancel := context.WithCancel(ctx)
+	call := &checkCall{done: make(chan struct{}), cancel: cancel, loud: loud}
+	s.check = call
+	s.mu.Unlock()
+
+	status, err := s.doCheck(checkCtx, call)
+	cancel()
+
+	s.mu.Lock()
+	call.status, call.err = status, err
+	s.check = nil
+	s.mu.Unlock()
+	close(call.done)
+	return status, err
+}
+
+// acquire claims the service for a download, apply or dismiss. A manifest
+// check still in flight is cancelled and waited out: it only reads, and the
+// user's click matters more than a request that may be hanging on a blocked
+// network for the next half minute.
+func (s *Service) acquire() error {
+	for {
+		s.mu.Lock()
+		if s.busy {
+			s.mu.Unlock()
+			return ErrBusy
+		}
+		call := s.check
+		if call == nil {
+			s.busy = true
+			s.mu.Unlock()
+			return nil
+		}
+		s.mu.Unlock()
+		call.cancel()
+		<-call.done
+	}
+}
+
+func (s *Service) release() {
+	s.mu.Lock()
+	s.busy = false
+	s.mu.Unlock()
+}
+
+func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) {
+	// A cancelled check was preempted by the user or by shutdown: nobody is
+	// waiting for a failure, and a quiet failure belongs in the log only.
+	fail := func(code string, err error) (Status, error) {
+		if ctx.Err() != nil {
+			return s.GetStatus(), err
+		}
+		s.mu.Lock()
+		loud := call.loud
+		s.mu.Unlock()
+		if !loud {
+			return s.GetStatus(), err
+		}
+		return s.setError(code, err), err
+	}
 
 	m, err := s.client.FetchManifest(ctx)
 	if err != nil {
-		return s.setError("manifest", err), err
+		return fail("manifest", err)
 	}
 
 	art, artErr := m.ArtifactFor(runtime.GOOS, runtime.GOARCH)
@@ -484,8 +633,7 @@ func (s *Service) CheckForUpdate(ctx context.Context) (Status, error) {
 
 	status, newStored, buildErr := s.buildCheckStatus(current, readyPath, readyArtifact, m, art, artErr, newer, newerErr)
 	if buildErr != nil {
-		s.commitStatus(status)
-		return status, buildErr
+		return fail(status.ErrorCode, buildErr)
 	}
 
 	if err := s.store.Save(newStored); err != nil {
@@ -519,14 +667,23 @@ func (s *Service) CheckForUpdate(ctx context.Context) (Status, error) {
 }
 
 func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
-	s.mu.Lock()
-	if s.busy {
-		s.mu.Unlock()
-		return Status{}, ErrBusy
+	if err := s.acquire(); err != nil {
+		return Status{}, err
 	}
+	defer s.release()
+
+	s.mu.Lock()
 	if s.status.State == StateReady {
-		status := s.status
+		// The installer is already on disk: whatever went wrong before this
+		// click is over, and an error left in the status would keep the UI on
+		// the failure banner with no way to install.
+		status := clearError(s.status)
+		changed := status != s.status
+		s.status = status
 		s.mu.Unlock()
+		if changed {
+			emit(eventStatus, status)
+		}
 		return status, nil
 	}
 	if s.pendingArtifact == nil {
@@ -536,71 +693,104 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		emit(eventStatus, status)
 		return status, errNoUpdateChecked
 	}
-	s.busy = true
 	art := *s.pendingArtifact
 	version := s.pendingVersion
+	base := clearError(s.status)
+	base.State = StateAvailable
+	base.TotalBytes = 0
+	base.DownloadedBytes = 0
+	downloading := base
+	downloading.State = StateDownloading
+	downloading.TotalBytes = art.Size
+	s.status = downloading
+	dlCtx, cancel := context.WithCancel(ctx)
+	s.downloadCancel = cancel
 	s.mu.Unlock()
 	defer func() {
+		cancel()
 		s.mu.Lock()
-		s.busy = false
+		s.downloadCancel = nil
 		s.mu.Unlock()
 	}()
+	emit(eventStatus, downloading)
+
+	failed := func(err error) (Status, error) {
+		// Cancelled by the user, by shutdown or by the caller going away:
+		// not a failure anyone needs to see.
+		if dlCtx.Err() != nil {
+			s.commitStatus(base)
+			return base, err
+		}
+		status := errorStatus(base, "download", err)
+		s.commitStatus(status)
+		return status, err
+	}
 
 	destDir, err := VersionDir(s.dir, version)
 	if err == nil {
 		err = os.MkdirAll(destDir, 0o755)
 	}
 	if err != nil {
-		return s.setError("download", err), err
+		return failed(err)
 	}
 
 	onProgress := func(downloaded int64) {
 		emit(eventProgress, Progress{Version: version, TotalBytes: art.Size, DownloadedBytes: downloaded})
 	}
 
-	path, err := s.client.Download(ctx, art, destDir, onProgress)
+	path, err := s.client.Download(dlCtx, art, destDir, onProgress)
 	if err != nil {
-		return s.setError("download", err), err
+		return failed(err)
 	}
 
-	current := s.GetStatus()
 	newStored := stored{
-		AvailableVersion: current.AvailableVersion,
-		Notes:            current.Notes,
-		PublishedAt:      current.PublishedAt,
-		CheckedAt:        current.CheckedAt,
+		AvailableVersion: base.AvailableVersion,
+		Notes:            base.Notes,
+		PublishedAt:      base.PublishedAt,
+		CheckedAt:        base.CheckedAt,
 		Artifact:         &art,
 		ReadyPath:        path,
 	}
 	if err := s.store.Save(newStored); err != nil {
-		return Status{}, err
+		return failed(err)
 	}
 
+	ready := base
+	ready.State = StateReady
+	ready.TotalBytes = art.Size
+	ready.DownloadedBytes = art.Size
 	s.mu.Lock()
-	s.status.State = StateReady
-	s.status.TotalBytes = art.Size
-	s.status.DownloadedBytes = art.Size
+	s.status = ready
 	s.readyPath = path
 	s.readyArtifact = &art
-	status := s.status
 	s.mu.Unlock()
-	emit(eventStatus, status)
-	return status, nil
+	emit(eventStatus, ready)
+	return ready, nil
 }
 
-func (s *Service) ApplyUpdate() error {
+func (s *Service) CancelDownload() error {
 	s.mu.Lock()
-	if s.busy {
-		s.mu.Unlock()
-		return ErrBusy
+	cancel := s.downloadCancel
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
+	return nil
+}
+
+func (s *Service) ApplyUpdate(language string) error {
+	if err := s.acquire(); err != nil {
+		return err
+	}
+	s.mu.Lock()
 	if s.status.State != StateReady {
+		s.busy = false
 		s.mu.Unlock()
 		return ErrNotReady
 	}
 	readyPath := s.readyPath
 	version := s.status.AvailableVersion
-	s.busy = true
+	s.status = clearError(s.status)
 	s.status.State = StateApplying
 	applying := s.status
 	s.mu.Unlock()
@@ -639,6 +829,7 @@ func (s *Service) ApplyUpdate() error {
 	}
 
 	spec := updateSpec{
+		Language:      language,
 		InstallerPath: readyPath,
 		InstallDir:    installDir,
 		ParentPID:     os.Getpid(),
@@ -665,24 +856,19 @@ func (s *Service) ApplyUpdate() error {
 }
 
 func (s *Service) DismissUpdate() error {
-	s.mu.Lock()
-	if s.busy {
-		s.mu.Unlock()
-		return ErrBusy
+	if err := s.acquire(); err != nil {
+		return err
 	}
+	defer s.release()
+
+	s.mu.Lock()
 	readyPath := s.readyPath
 	if readyPath == "" {
 		s.mu.Unlock()
 		return ErrNotReady
 	}
-	s.busy = true
 	current := s.status
 	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.busy = false
-		s.mu.Unlock()
-	}()
 
 	newStored := stored{
 		AvailableVersion: current.AvailableVersion,
@@ -695,6 +881,9 @@ func (s *Service) DismissUpdate() error {
 	}
 
 	s.mu.Lock()
+	s.status = clearError(s.status)
+	s.status.TotalBytes = 0
+	s.status.DownloadedBytes = 0
 	if current.AvailableVersion != "" {
 		s.status.State = StateAvailable
 	} else {
@@ -756,10 +945,18 @@ func (s *Service) releaseNotesView() (ReleaseNotes, error) {
 	if err != nil {
 		return ReleaseNotes{}, fmt.Errorf("selfupdate: select unseen release notes: %w", err)
 	}
+	// Both RPC responses and events must encode empty lists as [], not null.
+	if unseen == nil {
+		unseen = []ReleaseNote{}
+	}
+	history := notes.Releases
+	if history == nil {
+		history = []ReleaseNote{}
+	}
 	return ReleaseNotes{
 		CurrentVersion: currentVersion,
 		Unseen:         unseen,
-		History:        notes.Releases,
+		History:        history,
 	}, nil
 }
 

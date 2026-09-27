@@ -55,6 +55,13 @@ func (w *rateWindow) rate() int64 {
 type rateState struct {
 	down *rateWindow
 	up   *rateWindow
+
+	// stall tracking: lastDownloaded/lastChange record the last time
+	// Downloaded grew, independent of the rate windows above (which decay
+	// over defaultRateSpan and would otherwise forget a stall as soon as
+	// old samples age out).
+	lastDownloaded int64
+	lastChange     time.Time
 }
 
 func newRateState() *rateState {

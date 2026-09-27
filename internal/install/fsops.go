@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"typhon/internal/hashdir"
 	"typhon/internal/platform"
+	"typhon/internal/uierr"
 )
 
 // errnoPrivilegeNotHeld is Windows ERROR_PRIVILEGE_NOT_HELD, the error
@@ -22,12 +24,12 @@ import (
 const errnoPrivilegeNotHeld = syscall.Errno(1314)
 
 var (
-	errDestExists       = errors.New("путь назначения уже существует")
-	errNotDir           = errors.New("источник не является папкой")
-	errCopyVerify       = errors.New("копирование завершилось с ошибкой проверки")
-	errNonRegular       = errors.New("неподдерживаемый тип файла в источнике")
-	errSymlinkPrivilege = errors.New("нет прав на создание символических ссылок")
-	errNestedPaths      = errors.New("источник и назначение не должны быть вложены друг в друга")
+	errDestExists       = uierr.New("install.dest_exists", "путь назначения уже существует")
+	errNotDir           = uierr.New("install.not_dir", "источник не является папкой")
+	errCopyVerify       = uierr.New("install.copy_verify_failed", "копирование завершилось с ошибкой проверки")
+	errNonRegular       = uierr.New("install.non_regular_file", "неподдерживаемый тип файла в источнике")
+	errSymlinkPrivilege = uierr.New("install.symlink_privilege", "нет прав на создание символических ссылок")
+	errNestedPaths      = uierr.New("install.nested_paths", "источник и назначение не должны быть вложены друг в друга")
 )
 
 func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
@@ -92,7 +94,17 @@ func CopyDir(ctx context.Context, src, dst string, onProgress func(Progress)) er
 	return nil
 }
 
-func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
+const (
+	mergeTmpSuffix   = ".typhon-tmp"
+	mergeAddedList   = "added.list"
+	mergeAddedFileMd = 0o644
+)
+
+// MergeDirWithBackup applies src on top of dst the way a patch does, but
+// never removes a target file before a copy of it (or a record that it did
+// not exist) is safely rented aside in backup: RestoreMergeBackup can then
+// undo the merge after a crash at any point (invariant 13).
+func MergeDirWithBackup(ctx context.Context, src, dst, backup string, onProgress func(Progress)) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
@@ -104,6 +116,9 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 		return err
 	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(backup, 0o755); err != nil {
 		return err
 	}
 
@@ -131,10 +146,10 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		if err := backupBeforeReplace(target, backup, rel); err != nil {
+			return err
+		}
 		if d.Type()&fs.ModeSymlink != 0 {
-			if err := removeExisting(target); err != nil {
-				return err
-			}
 			return copySymlink(path, target)
 		}
 		if !d.Type().IsRegular() {
@@ -144,11 +159,12 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 		if err != nil {
 			return err
 		}
-		if err := removeExisting(target); err != nil {
+		rep.setFile(rel)
+		tmp := target + mergeTmpSuffix
+		if err := copyFile(ctx, path, tmp, entry.Mode(), rep, buf); err != nil {
 			return err
 		}
-		rep.setFile(rel)
-		return copyFile(ctx, path, target, entry.Mode(), rep, buf)
+		return os.Rename(tmp, target)
 	})
 	if walkErr != nil {
 		return walkErr
@@ -157,9 +173,126 @@ func MergeDir(ctx context.Context, src, dst string, onProgress func(Progress)) e
 	return nil
 }
 
+// backupBeforeReplace moves target out of the way before MergeDirWithBackup
+// overwrites it, or, when target does not exist yet, records rel in
+// added.list so RestoreMergeBackup knows to delete it rather than look for
+// a backup that was never made.
+func backupBeforeReplace(target, backup, rel string) error {
+	if _, err := os.Lstat(target); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return appendAddedList(backup, rel)
+		}
+		return err
+	}
+	backupPath := filepath.Join(backup, rel)
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(target, backupPath)
+}
+
+func appendAddedList(backup, rel string) error {
+	f, err := os.OpenFile(filepath.Join(backup, mergeAddedList), os.O_APPEND|os.O_CREATE|os.O_WRONLY, mergeAddedFileMd)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(rel + "\n"); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	if err := f.Sync(); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	return f.Close()
+}
+
+// forEachAddedLine читает mergeAddedList по одной строке вместо того, чтобы
+// грузить его в память целиком: os.ReadFile плюс конвертация []byte→string
+// держали живыми две полные копии списка одновременно (сам буфер чтения и
+// копию под string(data), от которой strings.Split берёт подстроки) — на
+// патче с десятками тысяч новых файлов это заметный пик памяти на один
+// откат ради списка, который в любом случае обрабатывается по одному пути.
+func forEachAddedLine(path string, fn func(rel string) error) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("close added list", "path", path, "error", cerr)
+		}
+	}()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		rel := scanner.Text()
+		if rel == "" {
+			continue
+		}
+		if err := fn(rel); err != nil {
+			return err
+		}
+	}
+	return scanner.Err()
+}
+
+// RestoreMergeBackup undoes a MergeDirWithBackup call, whether it finished,
+// failed partway, or the process crashed mid-copy. It is idempotent: a
+// second call on an already-restored (or half-restored) backup completes
+// without touching what a prior call already fixed.
+func RestoreMergeBackup(dst, backup string) error {
+	if _, err := os.Stat(backup); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	addedPath := filepath.Join(backup, mergeAddedList)
+	if err := forEachAddedLine(addedPath, func(rel string) error {
+		target := filepath.Join(dst, rel)
+		if err := removeExisting(target); err != nil {
+			return err
+		}
+		return removeExisting(target + mergeTmpSuffix)
+	}); err != nil {
+		return err
+	}
+
+	walkErr := filepath.WalkDir(backup, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(backup, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." || rel == mergeAddedList {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if err := removeExisting(target + mergeTmpSuffix); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		//nolint:gosec // G122: backup is written only by MergeDirWithBackup and read back only here, both on the same install; nothing else can retarget path between the walk's stat and this rename (invariant 13)
+		return os.Rename(path, target)
+	})
+	if walkErr != nil {
+		return walkErr
+	}
+	return os.RemoveAll(backup)
+}
+
 // removeExisting clears the way for a fresh write in MergeDir; the caller
 // writes the replacement right after, so a missing target is not an error.
 func removeExisting(target string) error {
+	//nolint:gosec // G703: target is built from a relative path produced by the caller's own WalkDir over the source tree and joined under dst, which MergeDirWithBackup has already checked against nesting (invariant 12)
 	if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -194,6 +327,16 @@ func checkNotNested(src, dst string) error {
 		return fmt.Errorf("%w: %s, %s", errNestedPaths, src, dst)
 	}
 	return nil
+}
+
+// CopyDirVerified copies src into dst and hashes both trees afterward, so a
+// caller that is about to do something destructive to src (or trust dst as a
+// safety backup) can rely on the copy instead of just on CopyDir returning nil.
+func CopyDirVerified(ctx context.Context, src, dst string, onProgress func(Progress)) error {
+	if err := CopyDir(ctx, src, dst, onProgress); err != nil {
+		return err
+	}
+	return verifyCopy(ctx, src, dst)
 }
 
 func MoveDir(ctx context.Context, src, dst string, onProgress func(Progress)) error {
@@ -243,7 +386,7 @@ func copyFile(ctx context.Context, src, dst string, mode fs.FileMode, rep *repor
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer closeReadOnly(src, in)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}

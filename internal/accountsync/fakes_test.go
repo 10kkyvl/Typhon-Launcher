@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -44,10 +45,12 @@ type fakeLibrary struct {
 	addErr      map[string]error
 	addCalls    []string
 	applyCalls  int
+	removeErr   map[string]error
+	removeCalls []string
 }
 
 func newFakeLibrary() *fakeLibrary {
-	return &fakeLibrary{games: map[string]Game{}, addErr: map[string]error{}}
+	return &fakeLibrary{games: map[string]Game{}, addErr: map[string]error{}, removeErr: map[string]error{}}
 }
 
 func (f *fakeLibrary) Snapshot() ([]Game, error) {
@@ -76,6 +79,10 @@ func (f *fakeLibrary) Apply(items []Game) error {
 			PlaytimeSeconds: it.PlaytimeSeconds,
 			Owned:           it.Owned,
 			LastPlayed:      it.LastPlayed,
+			Favorite:        it.Favorite,
+			FavoriteAt:      it.FavoriteAt,
+			Status:          it.Status,
+			StatusAt:        it.StatusAt,
 		}
 	}
 	return nil
@@ -92,10 +99,33 @@ func (f *fakeLibrary) Add(canonicalGameID, title string) error {
 	return nil
 }
 
+func (f *fakeLibrary) Remove(canonicalGameID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removeCalls = append(f.removeCalls, canonicalGameID)
+	if err, ok := f.removeErr[canonicalGameID]; ok {
+		return err
+	}
+	delete(f.games, canonicalGameID)
+	return nil
+}
+
 func (f *fakeLibrary) setLocal(canonicalID string, seconds int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.games[canonicalID] = Game{CanonicalGameID: canonicalID, PlaytimeSeconds: seconds}
+}
+
+func (f *fakeLibrary) setLocalGame(g Game) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.games[g.CanonicalGameID] = g
+}
+
+func (f *fakeLibrary) gameOf(canonicalID string) Game {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.games[canonicalID]
 }
 
 func (f *fakeLibrary) playtimeOf(canonicalID string) int64 {
@@ -164,6 +194,7 @@ type mockSyncServer struct {
 	putCalls  int
 	delCalls  int
 	putBodies []putRequest
+	putRaw    [][]byte
 	get       func(w http.ResponseWriter)
 	put       func(w http.ResponseWriter, req putRequest)
 	del       func(w http.ResponseWriter)
@@ -184,14 +215,20 @@ func newMockSyncServer(t *testing.T) *mockSyncServer {
 			}
 			fn(w)
 		case http.MethodPut:
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			var req putRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err := json.Unmarshal(raw, &req); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 			m.mu.Lock()
 			m.putCalls++
 			m.putBodies = append(m.putBodies, req)
+			m.putRaw = append(m.putRaw, raw)
 			fn := m.put
 			m.mu.Unlock()
 			if fn == nil {
@@ -285,7 +322,7 @@ func (h *harness) reopen() {
 
 func (h *harness) readState() syncState {
 	h.t.Helper()
-	st, err := newStore(h.dir).load()
+	st, err := h.service.store.load()
 	if err != nil {
 		h.t.Fatalf("read state: %v", err)
 	}
@@ -301,6 +338,15 @@ func stateEqual(a, b syncState) bool {
 	}
 	for id, g := range a.Games {
 		if b.Games[id] != g {
+			return false
+		}
+	}
+	if len(a.Removed) != len(b.Removed) {
+		return false
+	}
+	for id, at := range a.Removed {
+		bat, ok := b.Removed[id]
+		if !ok || !at.Equal(bat) {
 			return false
 		}
 	}

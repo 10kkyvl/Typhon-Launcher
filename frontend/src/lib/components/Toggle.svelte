@@ -70,6 +70,7 @@
   }
 
   .on .knob {
+    background: var(--accent-on, #fff);
     transform: translateX(1.8rem);
   }
 </style>

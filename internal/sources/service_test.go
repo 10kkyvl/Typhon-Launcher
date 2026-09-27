@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +19,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	slog.SetDefault(slog.New(slog.DiscardHandler))
 	os.Exit(m.Run())
 }
 
@@ -33,10 +32,11 @@ func magnetOf(seed string) string {
 }
 
 type feedEntry struct {
-	Title      string   `json:"title"`
-	URIs       []string `json:"uris"`
-	UploadDate string   `json:"uploadDate,omitempty"`
-	FileSize   int64    `json:"fileSize"`
+	DistributionID string   `json:"distributionId,omitempty"`
+	Title          string   `json:"title"`
+	URIs           []string `json:"uris"`
+	UploadDate     string   `json:"uploadDate,omitempty"`
+	FileSize       int64    `json:"fileSize"`
 }
 
 func feedBody(t *testing.T, name string, entries ...feedEntry) string {
@@ -77,7 +77,9 @@ func newFeedServer(t *testing.T, body string) *feedServer {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		fmt.Fprint(w, body)
+		if _, err := fmt.Fprint(w, body); err != nil {
+			t.Errorf("write feed response: %v", err)
+		}
 	}))
 	t.Cleanup(fs.server.Close)
 	return fs
@@ -133,6 +135,11 @@ func mustServiceAt(t testing.TB, dir string, cat *catalog.Service) *Service {
 	}
 	// The shipped client refuses loopback, which is where httptest listens.
 	s.client = &http.Client{Timeout: feed.FetchTimeout}
+	// context() refuses to run anything until ServiceStartup sets s.ctx
+	// (invariant 20 forbids a context.Background() fallback there), so tests
+	// that call RefreshSource/TestSource/refreshDue directly need one too.
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	return s
 }
 
@@ -159,7 +166,14 @@ func releasesOf(t *testing.T, s *Service, sourceID, status string) []ReleaseView
 }
 
 func TestAddSourceImportsReleases(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Cyberpunk 2077"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.AddGame(catalog.Game{Title: "The Witcher 3 Wild Hunt"}); err != nil {
+		t.Fatal(err)
+	}
+
 	server := newFeedServer(t, feedBody(t, "Example Source",
 		feedEntry{Title: "Cyberpunk.2077.Ultimate.Edition.v2.31", URIs: []string{magnetOf("aa")}, FileSize: 82 << 30},
 		feedEntry{Title: "The.Witcher.3.Wild.Hunt.Complete.Edition.v4.04", URIs: []string{magnetOf("bb")}, FileSize: 50 << 30},
@@ -306,7 +320,11 @@ func TestConfirmMatchIsRememberedOnRefresh(t *testing.T) {
 }
 
 func TestDuplicateInfoHashAcrossSources(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Shared Game"}); err != nil {
+		t.Fatal(err)
+	}
+
 	shared := magnetOf("dd")
 	first := newFeedServer(t, feedBody(t, "First", feedEntry{Title: "Shared Game v1.0", URIs: []string{shared}}))
 	second := newFeedServer(t, feedBody(t, "Second", feedEntry{Title: "Shared Game v1.0", URIs: []string{shared}}))
@@ -336,7 +354,11 @@ func TestDuplicateInfoHashAcrossSources(t *testing.T) {
 }
 
 func TestDifferentInfoHashesAreNotMerged(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Shared Game"}); err != nil {
+		t.Fatal(err)
+	}
+
 	server := newFeedServer(t, feedBody(t, "Example",
 		feedEntry{Title: "Shared Game v1.0", URIs: []string{magnetOf("aa")}},
 		feedEntry{Title: "Shared Game v1.0", URIs: []string{magnetOf("bb")}},
@@ -473,6 +495,50 @@ func TestRefreshFailureKeepsReleases(t *testing.T) {
 	}
 }
 
+func TestRefreshKeepsReleasesWhenSaveFails(t *testing.T) {
+	dir := t.TempDir()
+	cat := mustCatalog(t, dir)
+	s := mustServiceAt(t, dir, cat)
+	server := newFeedServer(t, feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+	))
+	src := addSource(t, s, server.url())
+
+	releasesPath := s.store.releasesPath(src.ID)
+	if err := os.Remove(releasesPath); err != nil {
+		t.Fatalf("remove releases file: %v", err)
+	}
+	if err := os.Mkdir(releasesPath, 0o755); err != nil {
+		t.Fatalf("block releases path: %v", err)
+	}
+
+	server.set(feedBody(t, "Example",
+		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+		feedEntry{Title: "Game Two v1.0", URIs: []string{magnetOf("bb")}},
+	), `"v2"`)
+
+	summary, err := s.RefreshSource(src.ID)
+	if err == nil {
+		t.Fatal("RefreshSource() error = nil, want the save failure")
+	}
+	if summary.Error == "" {
+		t.Fatalf("summary = %+v, want it to carry the error", summary)
+	}
+
+	items := releasesOf(t, s, src.ID, "all")
+	if len(items) != 1 {
+		t.Fatalf("releases = %d, want the previous single release kept", len(items))
+	}
+
+	stored, statErr := s.GetSource(src.ID)
+	if statErr != nil {
+		t.Fatal(statErr)
+	}
+	if stored.Health != HealthError || stored.LastError == "" {
+		t.Fatalf("source = %+v, want error health after the failed save", stored)
+	}
+}
+
 func TestInvalidEntriesAreSkipped(t *testing.T) {
 	s, _, _ := testService(t)
 	body := `{"name":"Example","version":1,"downloads":[
@@ -589,9 +655,13 @@ func TestIgnoreRelease(t *testing.T) {
 }
 
 func TestPrepareDownloadCarriesProvenance(t *testing.T) {
-	s, _, _ := testService(t)
+	s, cat, _ := testService(t)
+	if _, err := cat.AddGame(catalog.Game{Title: "Game One", ExternalIDs: catalog.ExternalIDs{IGDB: "123"}}); err != nil {
+		t.Fatal(err)
+	}
+	uploadedAt := "2026-09-09T12:00:00Z"
 	server := newFeedServer(t, feedBody(t, "Example",
-		feedEntry{Title: "Game One v1.0", URIs: []string{magnetOf("aa")}},
+		feedEntry{DistributionID: "game-one-main", Title: "Game One v1.0", URIs: []string{magnetOf("aa")}, UploadDate: uploadedAt},
 	))
 	src := addSource(t, s, server.url())
 	release := releasesOf(t, s, src.ID, "all")[0].Release
@@ -603,7 +673,8 @@ func TestPrepareDownloadCarriesProvenance(t *testing.T) {
 	if request.URI != release.URIs[0] {
 		t.Fatalf("uri = %q, want %q", request.URI, release.URIs[0])
 	}
-	if request.ReleaseID != release.ID || request.SourceID != src.ID {
+	if request.ReleaseID != release.ID || request.SourceID != src.ID || request.DistributionID != "game-one-main" ||
+		request.ReleaseUploadedAt == nil || request.ReleaseUploadedAt.Format(time.RFC3339) != uploadedAt {
 		t.Fatalf("request = %+v", request)
 	}
 	if request.GameID == "" || release.CanonicalGameID == nil || request.GameID != *release.CanonicalGameID {
@@ -634,11 +705,11 @@ func TestLargeFeedImport(t *testing.T) {
 	if src.Entries != total {
 		t.Fatalf("entries = %d, want %d", src.Entries, total)
 	}
-	if src.Matched != total {
-		t.Fatalf("matched = %d, want %d", src.Matched, total)
+	if src.Matched != 0 || src.Unmatched != total {
+		t.Fatalf("unmatched = %d, want %d", src.Unmatched, total)
 	}
-	if len(cat.ListGames()) != total {
-		t.Fatalf("catalog games = %d, want %d", len(cat.ListGames()), total)
+	if len(cat.ListGames()) != 0 {
+		t.Fatalf("source import created %d catalog games", len(cat.ListGames()))
 	}
 	if elapsed > 60*time.Second {
 		t.Fatalf("import took %s, too slow", elapsed)
@@ -767,6 +838,11 @@ func TestURLSourceFetchPathsRejectLocalAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sources service at %s: %v", dir, err)
 	}
+	// Deliberately not mustServiceAt: this test needs the shipped,
+	// loopback-refusing client, only with a context so TestSource/RefreshSource
+	// do not refuse for the unrelated reason of not being started.
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	fs := newFeedServer(t, feedBody(t, "Local", feedEntry{Title: "Game A", URIs: []string{magnetOf("a")}}))
 
 	if _, err := s.TestSource(fs.url()); !errors.Is(err, feed.ErrBlockedAddress) {
@@ -799,6 +875,8 @@ func TestSourceErrorHidesFeedURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new sources service at %s: %v", dir, err)
 	}
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	t.Cleanup(s.cancel)
 	const raw = "http://127.0.0.1:9/feed.json?token=s3cret"
 	if _, err := s.TestSource(raw); err == nil {
 		t.Fatal("expected the fetch to be rejected")

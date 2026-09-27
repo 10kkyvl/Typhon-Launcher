@@ -164,3 +164,15 @@ func TestFilterComponents(t *testing.T) {
 		})
 	}
 }
+
+func TestFitGirlVersionedVCComponents(t *testing.T) {
+	list := []string{"text", "vc_2019_x86", "vc_2019_x64", "vc_game_x64", "music"}
+	got, changed := filterComponents(list, installOptions{SkipExtras: true})
+	if !changed || strings.Join(got, ",") != "text,vc_game_x64,music" {
+		t.Fatalf("filtered = %v, changed %v", got, changed)
+	}
+	got, changed = filterComponents(list, installOptions{SkipShortcuts: true})
+	if changed || strings.Join(got, ",") != strings.Join(list, ",") {
+		t.Fatalf("redists removed without SkipExtras: %v", got)
+	}
+}

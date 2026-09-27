@@ -19,9 +19,12 @@ func TestListFindsCurrentProcess(t *testing.T) {
 	}
 	wantPath := filepath.Clean(self)
 
-	list, err := List(context.Background())
+	list, complete, err := List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
+	}
+	if !complete {
+		t.Fatal("List complete = false, want true for a normal enumeration")
 	}
 
 	//nolint:gosec // G115: os.Getpid() always fits uint32 on Windows
@@ -58,12 +61,15 @@ func TestListCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	list, err := List(ctx)
+	list, complete, err := List(ctx)
 	if err == nil {
 		t.Fatalf("List with canceled ctx returned nil error, want context.Canceled")
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("List error = %v, want context.Canceled", err)
+	}
+	if complete {
+		t.Fatal("List with canceled ctx returned complete = true, want false")
 	}
 	if list != nil {
 		t.Fatalf("List with canceled ctx returned %d entries, want nil result on error", len(list))
@@ -71,7 +77,7 @@ func TestListCanceledContext(t *testing.T) {
 }
 
 func TestListNoDuplicatePIDs(t *testing.T) {
-	list, err := List(context.Background())
+	list, _, err := List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -87,7 +93,7 @@ func TestListNoDuplicatePIDs(t *testing.T) {
 }
 
 func TestListHasReadablePaths(t *testing.T) {
-	list, err := List(context.Background())
+	list, _, err := List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

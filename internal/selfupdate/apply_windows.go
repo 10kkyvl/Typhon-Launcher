@@ -9,9 +9,14 @@ import (
 	"syscall"
 
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 )
 
-func Apply(ctx context.Context, installerPath, installDir string) error {
+var errInstallerPathUnsafe = uierr.New("selfupdate.installer_path_unsafe", "selfupdate: installer path cannot be quoted on a command line")
+
+// The target parameter is unused here: NSIS decides where the launcher binary
+// lands from installDir, the worker only checks afterwards that it changed.
+func Apply(ctx context.Context, installerPath, installDir, _ string) error {
 	dir, err := settings.ConfigDir()
 	if err != nil {
 		return err
@@ -44,7 +49,7 @@ func Apply(ctx context.Context, installerPath, installDir string) error {
 	cmd := exec.CommandContext(ctx, installerPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CmdLine: cmdLine}
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("selfupdate: run installer: %w", err)
+		return uierr.Wrap("selfupdate.installer_failed", fmt.Errorf("selfupdate: run installer: %w", err))
 	}
 	return nil
 }

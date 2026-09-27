@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { movePercent, moveSummary, stageLabel } from './moveText';
+import { applyLanguage } from '../i18n';
 import { bytesSize } from '../utils/format';
 import type { MoveJob } from '../services/relocate';
 
@@ -65,7 +66,7 @@ describe('moveSummary', () => {
     const summary = moveSummary(
       job({ stage: 'verify', phase: 'проверка', copiedBytes: totalBytes, totalBytes }),
     );
-    expect(summary).toBe('Проверка: проверка');
+    expect(summary).toBe('Проверка');
     expect(summary).not.toContain('100%');
   });
 
@@ -73,4 +74,12 @@ describe('moveSummary', () => {
     expect(moveSummary(job({ stage: 'prepare', phase: '' }))).toBe('Подготовка');
     expect(moveSummary(job({ stage: 'done', phase: '' }))).toBe('Готово');
   });
+});
+
+
+it('does not leak a persisted Russian phase in English', () => {
+  applyLanguage('en');
+  try {
+    expect(moveSummary(job({ stage: 'verify', phase: 'проверка' }))).toBe('Verifying');
+  } finally { applyLanguage('ru'); }
 });

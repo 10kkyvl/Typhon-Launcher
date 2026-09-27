@@ -1,5 +1,46 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
+import { appearanceOf } from '../profile/appearance';
 import { inWails } from './backend';
+import type { CropRect } from '../utils/crop';
+
+export const SHOWCASE_KINDS = ['favorites', 'recently_completed', 'most_played'] as const;
+export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
+
+export const VISIBILITIES = ['public', 'friends', 'private'] as const;
+export type Visibility = (typeof VISIBILITIES)[number];
+
+export interface ProfileAppearance {
+  theme: string;
+  accent: string;
+  coverUrl: string;
+  coverDim: number;
+  coverPosition: number;
+}
+
+export interface ProfileSettings {
+  appearance?: ProfileAppearance;
+  visibility: Visibility;
+  showOnline: boolean;
+  showPlaying: boolean;
+  showPlaytime: boolean;
+  showLibrary: boolean;
+  showActivity: boolean;
+  showStats: boolean;
+  showcase: ShowcaseKind[];
+}
+
+export const DEFAULT_PROFILE: ProfileSettings = {
+  visibility: 'friends',
+  showOnline: true,
+  showPlaying: true,
+  showPlaytime: true,
+  showLibrary: true,
+  showActivity: true,
+  showStats: true,
+  showcase: ['favorites'],
+};
 
 export interface CurrentUser {
   id: string;
@@ -7,6 +48,8 @@ export interface CurrentUser {
   displayName: string;
   email: string;
   avatarUrl: string;
+  bio: string;
+  profile: ProfileSettings;
   createdAt: string;
 }
 
@@ -18,6 +61,8 @@ export interface AvatarImage {
 export interface ProfilePatch {
   username?: string;
   displayName?: string;
+  bio?: string;
+  profile?: ProfileSettings;
 }
 
 export interface RegisterInput {
@@ -42,6 +87,7 @@ export interface BootstrapState {
 
 const KNOWN_CODES = new Set([
   'unauthenticated',
+  'sync_disabled',
   'invalid_credentials',
   'username_taken',
   'email_taken',
@@ -52,12 +98,26 @@ const KNOWN_CODES = new Set([
   'email_immutable',
   'launcher_outdated',
   'no_changes',
+  'cover_too_large',
+  'unsupported_cover',
+  'invalid_cover',
   'avatar_too_large',
   'unsupported_avatar',
   'invalid_avatar',
+  'invalid_profile',
+  'invalid_bio',
   'rate_limited',
   'bad_request',
   'request_blocked',
+  'user_not_found',
+  'unknown_game',
+  'already_friends',
+  'friend_limit',
+  'request_limit',
+  'block_limit',
+  'friend_self',
+  'no_request',
+  'not_friends',
   'internal',
   'network_error',
   'server_error',
@@ -74,6 +134,9 @@ const CODE_FIELDS: Record<string, string> = {
   avatar_too_large: 'avatar',
   unsupported_avatar: 'avatar',
   invalid_avatar: 'avatar',
+  invalid_profile: 'profile',
+  invalid_bio: 'bio',
+  friend_self: 'query',
 };
 
 export class AccountError extends Error {
@@ -88,7 +151,7 @@ export class AccountError extends Error {
   }
 }
 
-function toAccountError(err: unknown): AccountError {
+export function toAccountError(err: unknown): AccountError {
   if (err instanceof AccountError) return err;
   const raw = err instanceof Error ? err.message : String(err);
   if (KNOWN_CODES.has(raw)) return new AccountError(raw);
@@ -112,7 +175,16 @@ export async function bootstrapSession(): Promise<BootstrapState> {
 }
 
 function emptyUser(): CurrentUser {
-  return { id: '', username: '', displayName: '', email: '', avatarUrl: '', createdAt: '' };
+  return {
+    id: '',
+    username: '',
+    displayName: '',
+    email: '',
+    avatarUrl: '',
+    bio: '',
+    profile: DEFAULT_PROFILE,
+    createdAt: '',
+  };
 }
 
 export async function continueAsGuest(): Promise<void> {
@@ -163,7 +235,7 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
 export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UpdateProfile(patch)) as CurrentUser;
+    return (await AccountService.UpdateProfile({ ...patch, profile: patch.profile ? { ...patch.profile, appearance: appearanceOf(patch.profile.appearance) } : undefined })) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }
@@ -172,7 +244,7 @@ export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
 export async function pickAvatar(): Promise<AvatarImage> {
   if (!inWails) throw unauthenticated();
   try {
-    const image = (await AccountService.PickAvatar()) as unknown as AvatarImage | null;
+    const image = (await AccountService.PickAvatar(get(locale))) as unknown as AvatarImage | null;
     if (!image) throw new AccountError('server_error');
     return { data: image.data ?? '', mime: image.mime ?? '' };
   } catch (err) {
@@ -180,10 +252,10 @@ export async function pickAvatar(): Promise<AvatarImage> {
   }
 }
 
-export async function uploadAvatar(encoded: string): Promise<CurrentUser> {
+export async function uploadAvatar(encoded: string, crop: CropRect = { x: 0, y: 0, size: 0 }): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UploadAvatar(encoded)) as CurrentUser;
+    return (await AccountService.UploadAvatar(encoded, crop)) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }

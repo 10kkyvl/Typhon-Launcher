@@ -18,18 +18,20 @@ const (
 var errMarkerEmpty = errors.New("метка установки не содержит идентификатора")
 
 type Marker struct {
-	GameID          string    `json:"gameId"`
-	Title           string    `json:"title"`
-	Executable      string    `json:"executable,omitempty"`
-	Version         string    `json:"version,omitempty"`
-	VersionSource   string    `json:"versionSource,omitempty"`
-	ReleaseID       string    `json:"releaseId,omitempty"`
-	SourceID        string    `json:"sourceId,omitempty"`
-	CanonicalGameID string    `json:"canonicalGameId,omitempty"`
-	InstallType     string    `json:"installType,omitempty"`
-	Owned           bool      `json:"owned,omitempty"`
-	Uninstall       Uninstall `json:"uninstall,omitzero"`
-	InstalledAt     time.Time `json:"installedAt"`
+	GameID            string     `json:"gameId"`
+	Title             string     `json:"title"`
+	Executable        string     `json:"executable,omitempty"`
+	Version           string     `json:"version,omitempty"`
+	VersionSource     string     `json:"versionSource,omitempty"`
+	ReleaseID         string     `json:"releaseId,omitempty"`
+	SourceID          string     `json:"sourceId,omitempty"`
+	DistributionID    string     `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
+	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
+	InstallType       string     `json:"installType,omitempty"`
+	Owned             bool       `json:"owned,omitempty"`
+	Uninstall         Uninstall  `json:"uninstall,omitzero"`
+	InstalledAt       time.Time  `json:"installedAt"`
 }
 
 func MarkerPath(dir string) (string, error) {
@@ -77,18 +79,20 @@ func markerFor(game Game) Marker {
 		}
 	}
 	return Marker{
-		GameID:          game.ID,
-		Title:           game.Title,
-		Executable:      executable,
-		Version:         game.Version,
-		VersionSource:   game.VersionSource,
-		ReleaseID:       game.ReleaseID,
-		SourceID:        game.SourceID,
-		CanonicalGameID: game.CanonicalGameID,
-		InstallType:     game.InstallType,
-		Owned:           game.Owned,
-		Uninstall:       game.Uninstall,
-		InstalledAt:     game.InstalledAt,
+		GameID:            game.ID,
+		Title:             game.Title,
+		Executable:        executable,
+		Version:           game.Version,
+		VersionSource:     game.VersionSource,
+		ReleaseID:         game.ReleaseID,
+		SourceID:          game.SourceID,
+		DistributionID:    game.DistributionID,
+		ReleaseUploadedAt: game.ReleaseUploadedAt,
+		CanonicalGameID:   game.CanonicalGameID,
+		InstallType:       game.InstallType,
+		Owned:             game.Owned,
+		Uninstall:         game.Uninstall,
+		InstalledAt:       game.InstalledAt,
 	}
 }
 

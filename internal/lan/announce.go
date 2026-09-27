@@ -15,6 +15,8 @@ import (
 	"time"
 	"unicode"
 
+	"typhon/internal/uierr"
+
 	"golang.org/x/net/ipv4"
 	"golang.org/x/time/rate"
 )
@@ -40,11 +42,11 @@ var (
 	errAnnounceSourceAddr   = errors.New("lan: announce source address is not local")
 	errAnnounceBadJSON      = errors.New("lan: announce is not valid json")
 	errAnnounceVersion      = errors.New("lan: announce protocol version unsupported")
-	errAnnounceID           = errors.New("lan: announce id invalid")
+	errAnnounceID           = uierr.New("lan.invalid_peer_id", "lan: announce id invalid")
 	errAnnounceOwnID        = errors.New("lan: announce is from ourselves")
 	errAnnounceHost         = errors.New("lan: announce host invalid")
 	errAnnouncePort         = errors.New("lan: announce port invalid")
-	errAnnounceInfoHash     = errors.New("lan: announce infohash invalid")
+	errAnnounceInfoHash     = uierr.New("lan.invalid_info_hash", "lan: announce infohash invalid")
 	errAnnounceTitle        = errors.New("lan: announce title invalid")
 	errAnnounceVersionField = errors.New("lan: announce version field invalid")
 	errAnnounceGameID       = errors.New("lan: announce gameId invalid")

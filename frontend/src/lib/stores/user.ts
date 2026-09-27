@@ -16,6 +16,7 @@ import {
   type ProfilePatch,
   type RegisterInput,
 } from '../services/account';
+import type { CropRect } from '../utils/crop';
 
 export type AuthState = 'bootstrapping' | 'authenticated' | 'unauthenticated' | 'unavailable' | 'guest' | 'offline';
 export type AuthView = 'login' | 'register';
@@ -202,10 +203,13 @@ function onUnauthenticated(err: unknown) {
 export async function saveProfile(patch: ProfilePatch): Promise<void> {
   if (get(savingProfile)) return;
   savingProfile.set(true);
+  const owner = get(currentUser)?.id;
   try {
-    currentUser.set(await updateProfile(patch));
+    const updated = await updateProfile(patch);
+    if (get(currentUser)?.id !== owner) throw new AccountError('unauthenticated');
+    currentUser.set(updated);
   } catch (err) {
-    onUnauthenticated(err);
+    if (get(currentUser)?.id === owner) onUnauthenticated(err);
     throw err;
   } finally {
     savingProfile.set(false);
@@ -227,12 +231,12 @@ export async function chooseAvatar(): Promise<string> {
   }
 }
 
-export async function saveAvatar(encoded: string): Promise<void> {
+export async function saveAvatar(encoded: string, crop: CropRect): Promise<void> {
   if (!encoded) throw new AccountError('invalid_avatar');
   if (get(uploadingAvatar)) return;
   uploadingAvatar.set(true);
   try {
-    currentUser.set(await uploadAvatar(encoded));
+    currentUser.set(await uploadAvatar(encoded, crop));
   } catch (err) {
     onUnauthenticated(err);
     throw err;

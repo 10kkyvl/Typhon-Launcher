@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import { Service as SourcesService } from '../../../bindings/typhon/internal/sources';
 import { Service as CatalogService } from '../../../bindings/typhon/internal/catalog';
 import { inWails } from './backend';
@@ -21,6 +23,7 @@ export interface Source {
   lastError: string;
   fingerprint: string;
   feedVersion: number;
+  insecure?: boolean;
   entries: number;
   invalid: number;
   matched: number;
@@ -33,6 +36,7 @@ export interface Source {
 export interface Release {
   id: string;
   sourceId: string;
+  distributionId?: string;
   kind?: 'release' | 'patch';
   rawTitle: string;
   title: string;
@@ -108,6 +112,10 @@ export interface SourcePreview {
   feedVersion: number;
   entries: number;
   invalid: number;
+  games: number;
+  known: number;
+  unknown: number;
+  insecure?: boolean;
   warnings?: string[];
   fingerprint: string;
   duplicate: boolean;
@@ -147,16 +155,32 @@ export interface MatchCandidate {
   method: string;
 }
 
+export interface CatalogExternalIDs {
+  steam?: string;
+  igdb?: string;
+  gog?: string;
+  [provider: string]: string | undefined;
+}
+
 export interface CatalogGame {
   id: string;
   title: string;
   sortTitle: string;
+  coverUrl?: string;
+  serverId?: string;
+  externalIds?: CatalogExternalIDs;
+  providerLinks?: Record<string, string[]>;
+  aliasIds?: string[];
   releaseYear?: number;
   developer?: string;
   publisher?: string;
   aliases?: string[];
   provisional?: boolean;
   createdAt: string;
+  gameType?: string;
+  rating?: number;
+  ratingCount?: number;
+  popularitySource?: string;
   releaseDate?: string;
   summary?: string;
   genres?: string[];
@@ -167,18 +191,59 @@ export interface CatalogGame {
   metadataUpdatedAt?: string;
 }
 
+// Доля машин, на которых игра запустилась. Считается на сервере по одному
+// голосу с машины; долю выводит интерфейс, он же решает, показывать её или
+// сказать, что данных мало.
+export interface CompatInfo {
+  works: number;
+  total: number;
+}
+
+// CompatOnlyWorking повторяет значение из internal/catalog: фильтр применяется
+// в Go, до нарезки на страницы.
+export const compatOnlyWorking = 'works';
+
 export interface CatalogQuery {
+  stable?: boolean;
+  snapshot?: string;
+  hideLibrary?: boolean;
+  hideNotInterested?: boolean;
+  excludeIds?: string[];
+  revision?: number;
+  platform?: string;
+  kind?: string;
   search?: string;
+  genre?: string;
   sort?: string;
+  compat?: string;
   page?: number;
   pageSize?: number;
 }
 
 export interface CatalogPage {
+  personalizationFallback?: boolean;
+  snapshot?: string;
+  facets?: GenreFacet[];
+  platforms?: GenreFacet[];
+  revision?: number;
+  offline?: boolean;
+  providers?: {
+    provider: string;
+    complete: boolean;
+    updatedAt?: string;
+    records: number;
+    links?: {complete: boolean; processed: number; records: number; updatedAt?: string};
+  }[];
   items: CatalogGame[];
+  compat?: Record<string, CompatInfo>;
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface GenreFacet {
+  label: string;
+  count: number;
 }
 
 export interface ReleaseDownloadRequest {
@@ -186,6 +251,8 @@ export interface ReleaseDownloadRequest {
   name: string;
   releaseId: string;
   sourceId: string;
+  distributionId?: string;
+  releaseUploadedAt?: string;
   gameId: string;
   version?: string;
 }
@@ -231,7 +298,7 @@ export async function addSourceFile(path: string): Promise<Source> {
 
 export async function selectFeedFile(): Promise<string> {
   if (!inWails) throw unavailable();
-  return (await SourcesService.SelectFeedFile()) ?? '';
+  return (await SourcesService.SelectFeedFile(get(locale))) ?? '';
 }
 
 export function sourceLocation(source: Pick<Source, 'type' | 'url' | 'path'>): string {
@@ -317,7 +384,7 @@ export async function getRelease(releaseId: string): Promise<ReleaseView | null>
 
 export async function searchGames(query: string, limit = 20): Promise<CatalogGame[]> {
   if (!inWails) return [];
-  return ((await CatalogService.SearchGames(query, limit)) ?? []) as unknown as CatalogGame[];
+  return (await queryCatalogGames({ search: query, kind: 'all', page: 1, pageSize: limit })).items;
 }
 
 export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
@@ -333,9 +400,33 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
-  const payload = { search: query.search ?? '', sort: query.sort ?? '', page, pageSize };
-  const result = (await CatalogService.QueryGames(payload as never)) as unknown as CatalogPage;
-  return { ...result, items: result.items ?? [] };
+  const payload = {
+    snapshot: query.snapshot ?? '',
+    hideLibrary: query.hideLibrary ?? false,
+    hideNotInterested: query.hideNotInterested ?? false,
+    excludeIds: query.excludeIds ?? [],
+    revision: query.revision ?? 0,
+    platform: query.platform ?? '',
+    kind: query.kind ?? '',
+    search: query.search ?? '',
+    genre: query.genre ?? '',
+    sort: query.sort ?? '',
+    compat: query.compat ?? '',
+    page,
+    pageSize,
+  };
+  const result = (await CatalogService.BrowseGames(payload as never)) as unknown as CatalogPage;
+  return { ...result, items: result.items ?? [], compat: result.compat ?? {} };
+}
+
+export async function getGenreFacets(): Promise<GenreFacet[]> {
+  if (!inWails) return [];
+  return ((await CatalogService.GenreFacets()) ?? []) as unknown as GenreFacet[];
+}
+
+export async function openByIGDB(igdbId: number, title: string): Promise<CatalogGame> {
+  if (!inWails) throw unavailable();
+  return (await CatalogService.OpenByIGDB(String(igdbId), title)) as unknown as CatalogGame;
 }
 
 export async function getCatalogGames(ids: string[]): Promise<CatalogGame[]> {

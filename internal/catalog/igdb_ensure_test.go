@@ -154,3 +154,69 @@ func TestEnsureByIGDBWriteFailureRollsBackMemory(t *testing.T) {
 		t.Fatal("search should not find a rolled back game")
 	}
 }
+
+func TestOpenByIGDBReturnsExistingGame(t *testing.T) {
+	s := newTestService(t)
+	games := seed(t, s, Game{Title: "Cyberpunk 2077", ExternalIDs: ExternalIDs{IGDB: "1877"}})
+	existing := games[0]
+
+	got, err := s.OpenByIGDB("1877", "Cyberpunk 2077: Ultimate Edition")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if got.ID != existing.ID {
+		t.Fatalf("id = %q, want %q", got.ID, existing.ID)
+	}
+	if got.Title != existing.Title {
+		t.Fatalf("title = %q, want %q (a drifted title must not rename the catalog entry)", got.Title, existing.Title)
+	}
+	if len(s.ListGames()) != 1 {
+		t.Fatalf("games = %d, want 1", len(s.ListGames()))
+	}
+}
+
+func TestOpenByIGDBCreatesWhenMissing(t *testing.T) {
+	s := newTestService(t)
+	got, err := s.OpenByIGDB("1877", "Cyberpunk 2077")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatal("created game has no id, the page would have nothing to navigate to")
+	}
+	if got.ExternalIDs.IGDB != "1877" {
+		t.Fatalf("igdb id = %q, want 1877", got.ExternalIDs.IGDB)
+	}
+
+	again, err := s.OpenByIGDB("1877", "Cyberpunk 2077")
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if again.ID != got.ID {
+		t.Fatalf("second open created a duplicate: %s != %s", again.ID, got.ID)
+	}
+}
+
+func TestOpenByIGDBRejectsEmptyInput(t *testing.T) {
+	cases := []struct {
+		name   string
+		igdbID string
+		title  string
+		want   error
+	}{
+		{"empty igdb id", "", "Cyberpunk 2077", errEmptyIGDBID},
+		{"empty title", "1877", "  ", errEmptyCatalogTitle},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestService(t)
+			if _, err := s.OpenByIGDB(tc.igdbID, tc.title); !errors.Is(err, tc.want) {
+				t.Fatalf("OpenByIGDB(%q, %q) err = %v, want %v", tc.igdbID, tc.title, err, tc.want)
+			}
+			if len(s.ListGames()) != 0 {
+				t.Fatalf("games = %+v, want none created on rejected input", s.ListGames())
+			}
+		})
+	}
+}

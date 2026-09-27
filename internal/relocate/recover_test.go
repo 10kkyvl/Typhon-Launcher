@@ -56,6 +56,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StagePrepare, GameID: itemScreenshots, Source: src, Target: tgt, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		got := s.soleJob(t)
@@ -78,6 +87,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StagePrepare, GameID: itemScreenshots, Source: src, Target: tgt, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		if got := s.List(); len(got) != 0 {
@@ -98,6 +116,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCopy, GameID: itemScreenshots, Source: src, Target: tgt, Staging: staging, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		got := s.soleJob(t)
@@ -122,6 +149,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageVerify, GameID: itemScreenshots, Source: src, Target: tgt, Staging: staging, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		got := s.soleJob(t)
@@ -142,6 +178,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: itemScreenshots, Source: src, Target: tgt, Staging: tgt + ".staging", TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		if got := s.List(); len(got) != 0 {
@@ -165,6 +210,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: itemScreenshots, Source: src, Target: tgt, Staging: staging, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		if got := s.List(); len(got) != 0 {
@@ -189,6 +243,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: itemScreenshots, Source: src, Target: tgt, Staging: staging, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		got := s.soleJob(t)
@@ -217,6 +280,15 @@ func TestRecoverAtStage(t *testing.T) {
 
 		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCleanup, GameID: itemScreenshots, Source: src, Target: tgt, Renamed: true, TotalBytes: 4}
 		s := newRecoverTestService(t, job)
+		if job.Stage == StageCommit && exists(job.Source) {
+			m, err := hashdir.Build(context.Background(), job.Source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.st.saveManifest(job.ID, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		s.recoverJob(context.Background(), job)
 
 		if got := s.List(); len(got) != 0 {

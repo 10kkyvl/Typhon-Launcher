@@ -17,17 +17,19 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/catalog"
 	"typhon/internal/metadata"
 )
 
 const (
-	requestTimeout = 45 * time.Second
-	maxBodyBytes   = 4 << 20
-	defaultLimit   = 10
-	maxLimit       = 25
-	maxResolve     = 50
-	providerName   = "igdb"
-	maxRetryAfter  = 24 * time.Hour
+	requestTimeout  = 45 * time.Second
+	maxBodyBytes    = 4 << 20
+	defaultLimit    = 10
+	maxLimit        = 25
+	maxResolve      = 50
+	providerName    = "igdb"
+	maxRetryAfter   = 24 * time.Hour
+	maxBrowseGETURL = 6 << 10
 )
 
 var (
@@ -35,6 +37,14 @@ var (
 	ErrBadRequest = errors.New("сервер метаданных отклонил запрос")
 	ErrOutdated   = errors.New("лаунчер устарел, нужно обновление")
 )
+
+type httpStatusError struct {
+	status int
+	err    error
+}
+
+func (e *httpStatusError) Error() string { return e.err.Error() }
+func (e *httpStatusError) Unwrap() error { return e.err }
 
 type TokenFunc func() (string, error)
 
@@ -112,7 +122,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]metadat
 
 func (c *Client) Get(ctx context.Context, providerID string) (metadata.GameMetadata, error) {
 	providerID = strings.TrimSpace(providerID)
-	if !numeric(providerID) {
+	if !numeric(strings.TrimPrefix(providerID, "steam:")) {
 		return metadata.GameMetadata{}, fmt.Errorf("%w: некорректный идентификатор %q", ErrBadRequest, providerID)
 	}
 
@@ -183,6 +193,13 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 		Genres:      payload.Genres,
 		Themes:      payload.Themes,
 		Platforms:   payload.Platforms,
+		GameType:    strings.TrimSpace(payload.GameType),
+	}
+	if payload.SteamAppID > 0 {
+		meta.SteamAppID = strconv.FormatInt(payload.SteamAppID, 10)
+	}
+	if strings.HasPrefix(payload.ProviderID, "steam:") {
+		meta.SteamAppID = strings.TrimPrefix(payload.ProviderID, "steam:")
 	}
 	if payload.Cover != nil && payload.Cover.URL != "" {
 		meta.Cover = &metadata.ImageRef{URL: payload.Cover.URL, Width: payload.Cover.Width, Height: payload.Cover.Height}
@@ -209,6 +226,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
+	//nolint:gosec // G704: baseURL is validated in New; private callers build fixed routes with encoded query values.
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
 		return fmt.Errorf("собрать запрос метаданных: %w", err)
@@ -223,10 +241,13 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set("X-Typhon-Steam-Metadata", "1")
+	req.Header.Set("X-Typhon-Metadata-Language", metadata.Language(ctx))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", account.UserAgent)
 	req.Header.Set("X-Typhon-Version", app.Version)
 
+	//nolint:gosec // G704: the validated configured API origin is intentional; CheckRedirect validates schemes and strips credentials on cross-origin redirects.
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrUpstream, err)
@@ -250,20 +271,24 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, out
 func statusError(resp *http.Response, body io.Reader) error {
 	status := resp.StatusCode
 	code := decodeCode(body)
+	var err error
 	switch {
 	case status == http.StatusServiceUnavailable && code == "metadata_unavailable":
-		return fmt.Errorf("%w: провайдер не настроен на сервере", metadata.ErrNotConfigured)
+		err = fmt.Errorf("%w: провайдер не настроен на сервере", metadata.ErrNotConfigured)
+	case status == http.StatusConflict && code == "catalog_changed":
+		err = catalog.ErrCatalogChanged
 	case status == http.StatusNotFound:
-		return fmt.Errorf("%w: %d", metadata.ErrNoMatch, status)
+		err = fmt.Errorf("%w: %d", metadata.ErrNoMatch, status)
 	case status == http.StatusTooManyRequests:
-		return &metadata.RateLimitError{RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
+		err = &metadata.RateLimitError{RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
-		return fmt.Errorf("%w: %d %s", ErrBadRequest, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrBadRequest, status, code)
 	case status == http.StatusUpgradeRequired:
-		return fmt.Errorf("%w: %d %s", ErrOutdated, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrOutdated, status, code)
 	default:
-		return fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
+		err = fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
 	}
+	return &httpStatusError{status: status, err: err}
 }
 
 func parseRetryAfter(value string, now time.Time) time.Duration {
@@ -311,4 +336,79 @@ func numeric(s string) bool {
 		}
 	}
 	return true
+}
+
+func (c *Client) Browse(ctx context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
+	getPath := browseGETPath(q)
+	personal := q.Profile != "" || q.ExcludeLibrary != "" || q.ExcludeNotInterested != ""
+	if personal {
+		body, err := json.Marshal(newBrowseRequest(q))
+		if err != nil {
+			return catalog.GamePage{}, fmt.Errorf("собрать запрос каталога: %w", err)
+		}
+		var page catalog.GamePage
+		err = c.post(ctx, account.APIPrefix+"/catalog/games", body, &page)
+		if err == nil {
+			return validateBrowseProtocol(q, page)
+		}
+		var statusErr *httpStatusError
+		if !errors.As(err, &statusErr) || (statusErr.status != http.StatusNotFound && statusErr.status != http.StatusMethodNotAllowed) || len(c.baseURL+getPath) > maxBrowseGETURL {
+			return catalog.GamePage{}, err
+		}
+	}
+	var page catalog.GamePage
+	if err := c.get(ctx, getPath, &page); err != nil {
+		return catalog.GamePage{}, err
+	}
+	return validateBrowseProtocol(q, page)
+}
+
+func validateBrowseProtocol(q catalog.GameQuery, page catalog.GamePage) (catalog.GamePage, error) {
+	needsRanking := q.Sort == "popular" || q.Sort == "rating" || q.Sort == "for-you" || q.Sort == "auto"
+	if page.ProtocolVersion < 1 && (needsRanking || q.Kind == "game" || q.Profile != "" || q.ExcludeLibrary != "" || q.ExcludeNotInterested != "") {
+		return catalog.GamePage{}, catalog.ErrBackendOutdated
+	}
+	return page, nil
+}
+
+type browseRequest struct {
+	Compat               string `json:"compat"`
+	Search               string `json:"search"`
+	Genre                string `json:"genre"`
+	Platform             string `json:"platform"`
+	Kind                 string `json:"kind"`
+	Sort                 string `json:"sort"`
+	Page                 int    `json:"page"`
+	PageSize             int    `json:"pageSize"`
+	Revision             int64  `json:"revision"`
+	Profile              string `json:"profile,omitempty"`
+	ExcludeLibrary       string `json:"excludeLibrary,omitempty"`
+	ExcludeNotInterested string `json:"excludeNotInterested,omitempty"`
+}
+
+func newBrowseRequest(q catalog.GameQuery) browseRequest {
+	return browseRequest{Compat: q.Compat, Search: q.Search, Genre: q.Genre, Platform: q.Platform, Kind: q.Kind, Sort: q.Sort, Page: q.Page, PageSize: q.PageSize, Revision: q.Revision, Profile: q.Profile, ExcludeLibrary: q.ExcludeLibrary, ExcludeNotInterested: q.ExcludeNotInterested}
+}
+
+func browseGETPath(q catalog.GameQuery) string {
+	params := url.Values{"compat": {q.Compat}, "search": {q.Search}, "genre": {q.Genre}, "platform": {q.Platform}, "kind": {q.Kind}, "sort": {q.Sort}}
+	if q.Profile != "" {
+		params.Set("profile", q.Profile)
+	}
+	if q.ExcludeLibrary != "" {
+		params.Set("excludeLibrary", q.ExcludeLibrary)
+	}
+	if q.ExcludeNotInterested != "" {
+		params.Set("excludeNotInterested", q.ExcludeNotInterested)
+	}
+	if q.Page > 0 {
+		params.Set("page", strconv.Itoa(q.Page))
+	}
+	if q.PageSize > 0 {
+		params.Set("pageSize", strconv.Itoa(q.PageSize))
+	}
+	if q.Revision > 0 {
+		params.Set("revision", strconv.FormatInt(q.Revision, 10))
+	}
+	return account.APIPrefix + "/catalog/games?" + params.Encode()
 }

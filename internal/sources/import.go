@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -10,14 +11,18 @@ import (
 	"typhon/internal/titles"
 )
 
+// maxRemovedReleases bounds how many vanished-from-the-feed releases a
+// source keeps around in s.releases. See evictStaleRemoved for why they
+// cannot simply be dropped on removal.
+const maxRemovedReleases = 5000
+
 type matcher interface {
 	ResolveAll(queries []catalog.Query) []catalog.Match
-	Provision(queries []catalog.Query) map[string]catalog.Game
+	Epoch() uint64
 }
 
 func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Release {
-	out := make([]*Release, 0, len(entries))
-	seen := make(map[string]bool, len(entries))
+	parsedEntries := make([]*Release, 0, len(entries))
 	for _, e := range entries {
 		parsed := titles.Parse(e.Title)
 		kind := KindRelease
@@ -25,9 +30,13 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			kind = KindPatch
 		}
 		base, normalized := parsed.Base, parsed.Normalized
+		year := parsed.Year
 		if e.Game != "" {
 			hint := titles.Parse(e.Game)
 			base, normalized = hint.Base, hint.Normalized
+			if hint.Year != 0 {
+				year = hint.Year
+			}
 		}
 		version := parsed.Version
 		if e.ToVersion != "" {
@@ -35,6 +44,8 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		}
 		r := &Release{
 			SourceID:        sourceID,
+			GameHint:        e.Game,
+			DistributionID:  e.DistributionID,
 			Kind:            kind,
 			RawTitle:        e.Title,
 			Title:           base,
@@ -46,9 +57,9 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 			Sequence:        e.Sequence,
 			Edition:         parsed.Edition,
 			Languages:       parsed.Languages,
-			Year:            parsed.Year,
+			Year:            year,
 			Tags:            parsed.Tags,
-			Repacker:        repackerOf(parsed.Tags),
+			Repacker:        titles.Repacker(parsed.Tags),
 			DLCCount:        parsed.DLCCount,
 			Size:            e.Size,
 			SizeUnknown:     e.SizeUnknown,
@@ -66,6 +77,27 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 				break
 			}
 		}
+		parsedEntries = append(parsedEntries, r)
+	}
+
+	// A line identifier must point to one current full release (or one exact
+	// patch transition). If a feed assigns it to competing entries, treating
+	// either one as the installed distribution would be an unsafe guess.
+	distributionCounts := make(map[string]int, len(parsedEntries))
+	for _, r := range parsedEntries {
+		if r.DistributionID != "" {
+			distributionCounts[r.identity()]++
+		}
+	}
+	for _, r := range parsedEntries {
+		if r.DistributionID != "" && distributionCounts[r.identity()] > 1 {
+			r.DistributionID = ""
+		}
+	}
+
+	out := make([]*Release, 0, len(parsedEntries))
+	seen := make(map[string]bool, len(parsedEntries))
+	for _, r := range parsedEntries {
 		key := r.identity()
 		if seen[key] {
 			continue
@@ -76,26 +108,26 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 	return out
 }
 
-var repackerPriority = []string{"fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade"}
-
-func repackerOf(tags []string) string {
-	set := make(map[string]bool, len(tags))
-	for _, t := range tags {
-		set[t] = true
-	}
-	for _, p := range repackerPriority {
-		if set[p] {
-			return p
-		}
-	}
-	return ""
-}
-
 func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {
 	var summary Summary
 	index := make(map[string]*Release, len(existing))
+	legacyIndex := make(map[string]*Release, len(existing))
+	ambiguousLegacy := make(map[string]bool)
+	incomingLegacyCounts := make(map[string]int, len(incoming))
+	for _, r := range incoming {
+		incomingLegacyCounts[r.legacyIdentity()]++
+	}
 	for _, r := range existing {
 		index[r.identity()] = r
+		if r.DistributionID != "" {
+			continue
+		}
+		key := r.legacyIdentity()
+		if legacyIndex[key] != nil {
+			ambiguousLegacy[key] = true
+		} else {
+			legacyIndex[key] = r
+		}
 	}
 
 	present := make(map[string]bool, len(incoming))
@@ -104,6 +136,15 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		key := next.identity()
 		present[key] = true
 		current, ok := index[key]
+		// A source can add distributionId to an existing entry without
+		// changing its torrent. The exact former identity is the only safe
+		// migration path; title/game/repacker similarities are deliberately
+		// not used here.
+		if !ok && next.DistributionID != "" && incomingLegacyCounts[next.legacyIdentity()] == 1 &&
+			!ambiguousLegacy[next.legacyIdentity()] {
+			current = legacyIndex[next.legacyIdentity()]
+			ok = current != nil
+		}
 		if !ok {
 			next.ID = catalog.NewID()
 			next.New = !initial
@@ -120,8 +161,18 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		}
 		if changed(current, next) {
 			summary.Updated++
+			// Изменившийся заголовок или версия — другой запрос к каталогу,
+			// поэтому прошлый результат матчинга больше не действителен.
+			current.MatchEpoch = 0
+			if !current.Locked && current.NormalizedTitle != next.NormalizedTitle {
+				current.CanonicalGameID = nil
+				current.MatchStatus = ""
+				current.MatchMethod = ""
+			}
 		}
 		current.RawTitle = next.RawTitle
+		current.GameHint = next.GameHint
+		current.DistributionID = next.DistributionID
 		current.Kind = next.Kind
 		current.Title = next.Title
 		current.NormalizedTitle = next.NormalizedTitle
@@ -152,11 +203,53 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		r.Availability = AvailabilityRemoved
 		summary.Removed++
 	}
-	return merged, summary
+	return evictStaleRemoved(merged), summary
+}
+
+// evictStaleRemoved bounds how many AvailabilityRemoved releases a source
+// keeps once they pass maxRemovedReleases. They cannot be dropped the
+// moment a release goes missing from the feed: GetSourceDetails counts them
+// separately and SourceDetailsModal has a "removed" tab so a user can see
+// what disappeared from a source. But nothing ever deleted them either, and
+// feed.MaxEntries only caps a single parse pass — a source with churn
+// (releases leaving and returning over months) grew this list without any
+// upper bound. Evicting the oldest-by-LastSeenAt removed releases first
+// keeps the useful case (recent disappearances stay visible) while putting
+// a ceiling on memory; releases still available in the feed are never
+// touched by this, no matter how many removed ones pile up around them.
+func evictStaleRemoved(list []*Release) []*Release {
+	var removedIdx []int
+	for i, r := range list {
+		if r.Availability == AvailabilityRemoved {
+			removedIdx = append(removedIdx, i)
+		}
+	}
+	if len(removedIdx) <= maxRemovedReleases {
+		return list
+	}
+	sort.Slice(removedIdx, func(a, b int) bool {
+		return list[removedIdx[a]].LastSeenAt.Before(list[removedIdx[b]].LastSeenAt)
+	})
+	evict := make(map[int]bool, len(removedIdx)-maxRemovedReleases)
+	for _, idx := range removedIdx[:len(removedIdx)-maxRemovedReleases] {
+		evict[idx] = true
+	}
+	out := make([]*Release, 0, len(list)-len(evict))
+	for i, r := range list {
+		if evict[i] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func changed(current, next *Release) bool {
-	return current.RawTitle != next.RawTitle ||
+	return current.DistributionID != next.DistributionID ||
+		current.RawTitle != next.RawTitle ||
+		current.GameHint != next.GameHint ||
+		current.NormalizedTitle != next.NormalizedTitle ||
+		current.Year != next.Year ||
 		current.Kind != next.Kind ||
 		current.Version != next.Version ||
 		current.FromVersion != next.FromVersion ||
@@ -182,22 +275,31 @@ func sameTime(a, b *time.Time) bool {
 	}
 }
 
-func applyMatches(m matcher, list []*Release) {
+// applyMatches пропускает релиз, который уже матчился на текущей эпохе и с
+// тех пор не менялся: каталог и словарь те же, значит и ответ будет тот же.
+// Без этого каждый рефетч прогонял через fuzzy все нераспознанные записи —
+// на большом фиде это десятки тысяч сравнений впустую.
+func applyMatches(m matcher, list []*Release) error {
 	if m == nil {
-		return
+		return nil
 	}
+	epoch := m.Epoch()
 	targets := make([]*Release, 0, len(list))
 	for _, r := range list {
 		if r.Locked || r.Ignored {
 			continue
 		}
+		if r.MatchEpoch == epoch {
+			continue
+		}
 		if r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil && stableMatch(r.MatchMethod) {
+			r.MatchEpoch = epoch
 			continue
 		}
 		targets = append(targets, r)
 	}
 	if len(targets) == 0 {
-		return
+		return nil
 	}
 
 	keys := make([]string, len(targets))
@@ -217,38 +319,10 @@ func applyMatches(m matcher, list []*Release) {
 	for i, r := range targets {
 		match := matches[position[keys[i]]]
 		assign(r, match)
+		r.MatchEpoch = epoch
 	}
 
-	pending := make([]catalog.Query, 0)
-	pendingSeen := map[string]bool{}
-	for _, r := range targets {
-		if r.MatchStatus != catalog.StatusUnmatched || r.NormalizedTitle == "" {
-			continue
-		}
-		if pendingSeen[r.NormalizedTitle] {
-			continue
-		}
-		pendingSeen[r.NormalizedTitle] = true
-		pending = append(pending, catalog.Query{Title: r.Title, Normalized: r.NormalizedTitle, Year: r.Year})
-	}
-	if len(pending) == 0 {
-		return
-	}
-	provisioned := m.Provision(pending)
-	for _, r := range targets {
-		if r.MatchStatus != catalog.StatusUnmatched {
-			continue
-		}
-		game, ok := provisioned[r.NormalizedTitle]
-		if !ok {
-			continue
-		}
-		id := game.ID
-		r.CanonicalGameID = &id
-		r.MatchStatus = catalog.StatusMatched
-		r.MatchConfidence = 1
-		r.MatchMethod = string(catalog.MethodProvisional)
-	}
+	return nil
 }
 
 // Матч по псевдониму или похожести держится на данных каталога, а они
@@ -256,7 +330,7 @@ func applyMatches(m matcher, list []*Release) {
 // пересчитывается на каждом обновлении, точный и ручной — нет.
 func stableMatch(method string) bool {
 	switch catalog.Method(method) {
-	case catalog.MethodExactTitle, catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodProvisional:
+	case catalog.MethodExternalID, catalog.MethodOverride, catalog.MethodExactTitle:
 		return true
 	}
 	return false

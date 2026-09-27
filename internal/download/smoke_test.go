@@ -90,7 +90,9 @@ func TestSmokeSelectedFilesCompletion(t *testing.T) {
 	dest := t.TempDir()
 	m := startManager(t, cfg)
 	defer func() {
-		m.ServiceShutdown()
+		if err := m.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
 		time.Sleep(2 * time.Second)
 	}()
 

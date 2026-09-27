@@ -1,18 +1,20 @@
 <script lang="ts">
+  import '../../styles/zoom-slider.css';
   import { Minus, Plus } from '@lucide/svelte';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
   import {
     centerOffset,
     clampOffset,
     clampZoom,
     coverScale,
-    cropSource,
+    cropRect,
     maxZoom,
     minZoom,
-    outputSize,
     zoomAround,
+    type CropRect,
     type CropView,
   } from '../utils/crop';
 
@@ -27,7 +29,7 @@
     src: string;
     saving?: boolean;
     error?: string;
-    onsave: (encoded: string) => void;
+    onsave: (encoded: string, crop: CropRect) => void;
   } = $props();
 
   let image = $state<HTMLImageElement | undefined>(undefined);
@@ -113,24 +115,14 @@
 
   function save() {
     if (!image || !ready || saving) return;
-    const source = cropSource(view());
-    if (source.size <= 0) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      failed = true;
-      return;
-    }
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(image, source.sx, source.sy, source.size, source.size, 0, 0, outputSize, outputSize);
-    onsave(canvas.toDataURL('image/png').split(',')[1] ?? '');
+    const rect = cropRect(view());
+    const payload = src.split(',')[1] ?? '';
+    if (rect.size <= 0 || !payload) return;
+    onsave(payload, rect);
   }
 </script>
 
-<Modal bind:open title="Аватар" width="42rem">
+<Modal bind:open title={msg('modals.avatarCropTitle')} width="42rem">
   <div class="crop">
     <div
       class="stage"
@@ -161,37 +153,40 @@
     </div>
 
     <div class="zoom">
-      <IconButton size="sm" label="Отдалить" disabled={!ready || zoom <= minZoom} onclick={() => applyZoom(zoom - 0.25)}>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomOut')} disabled={!ready || zoom <= minZoom} onclick={() => applyZoom(zoom - 0.25)}>
         <Minus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
       <input
-        class="slider"
+        class="slider zoom-slider"
+        style:--zoom-progress={`${((zoom - minZoom) / (maxZoom - minZoom)) * 100}%`}
+        aria-valuetext={`${Math.round(zoom * 100)}%`}
         type="range"
         min={minZoom}
         max={maxZoom}
         step="0.01"
         value={zoom}
         disabled={!ready}
-        aria-label="Масштаб"
+        aria-label={msg('modals.avatarCropZoomLevel')}
         oninput={(e) => applyZoom(clampZoom(Number(e.currentTarget.value)))}
       />
-      <IconButton size="sm" label="Приблизить" disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
         <Plus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
+      <span class="zoom-value">{Math.round(zoom * 100)}%</span>
     </div>
 
     {#if failed}
-      <span class="error">Не удалось открыть изображение</span>
+      <span class="error">{msg('modals.avatarCropLoadFailed')}</span>
     {:else}
-      <span class="hint">Перетащите изображение и подберите масштаб — в профиле аватар показывается кружком</span>
+      <span class="hint">{msg('modals.avatarCropHint')}</span>
     {/if}
   </div>
 
   {#snippet footer()}
     {#if error}<span class="error foot-error">{error}</span>{/if}
-    <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>Отмена</Button>
+    <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!ready || saving} onclick={save}>
-      {saving ? 'Сохранение…' : 'Сохранить'}
+      {saving ? msg('modals.avatarCropSaving') : msg('common.save')}
     </Button>
   {/snippet}
 </Modal>
@@ -240,11 +235,15 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
   }
 
   .slider {
     flex: 1;
-    accent-color: var(--accent);
+    min-width: 0;
     cursor: pointer;
   }
 
@@ -252,6 +251,8 @@
     cursor: default;
     opacity: 0.5;
   }
+
+  .zoom-value { min-width: 4.2rem; color: var(--text-2); font-size: var(--font-xs); font-variant-numeric: tabular-nums; text-align: center; }
 
   .hint {
     font-size: var(--font-xs);

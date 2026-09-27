@@ -41,6 +41,10 @@ tasks:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
         msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
     cmds:
+      # Если по этому пути лежит не-объектный файл (например fat-бинарь от
+      # старой универсальной сборки), go build отказывается его перезаписывать:
+      # «not an object file». Убираем сами, иначе сборка ломается на ровном месте.
+      - rm -f "{{.OUTPUT}}"
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"'
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
@@ -85,34 +89,6 @@ tasks:
       DOCKER_MOUNTS:
         sh: 'wails3 tool docker-mounts'
 
-  build:universal:
-    summary: Builds darwin universal binary (arm64 + amd64)
-    deps:
-      - task: build
-        vars:
-          ARCH: amd64
-          OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-amd64"
-      - task: build
-        vars:
-          ARCH: arm64
-          OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
-    cmds:
-      - task: '{{if eq OS "darwin"}}build:universal:lipo:native{{else}}build:universal:lipo:go{{end}}'
-
-  build:universal:lipo:native:
-    summary: Creates universal binary using native lipo (macOS)
-    internal: true
-    cmds:
-      - lipo -create -output "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}-amd64" "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
-      - rm "{{.BIN_DIR}}/{{.APP_NAME}}-amd64" "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
-
-  build:universal:lipo:go:
-    summary: Creates universal binary using wails3 tool lipo (Linux/Windows)
-    internal: true
-    cmds:
-      - wails3 tool lipo -output "{{.BIN_DIR}}/{{.APP_NAME}}" -input "{{.BIN_DIR}}/{{.APP_NAME}}-amd64" -input "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
-      - rm -f "{{.BIN_DIR}}/{{.APP_NAME}}-amd64" "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
-
   package:
     summary: Packages the application into a `.app` bundle
     deps:
@@ -120,12 +96,19 @@ tasks:
     cmds:
       - task: create:app:bundle
 
-  package:universal:
-    summary: Packages darwin universal binary (arm64 + amd64)
+  package:zip:
+    summary: Packages the `.app` bundle into the zip the self-update downloads
     deps:
-      - task: build:universal
+      - task: package
+    platforms: [darwin]
     cmds:
-      - task: create:app:bundle
+      # ditto, а не zip: он единственный сохраняет ресурсные вилки, права и
+      # симлинки бандла так, как их ждёт macOS обратно при распаковке.
+      - rm -f "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+      - ditto -c -k --sequesterRsrc --keepParent "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.ARTIFACT_NAME}}"
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+      ARTIFACT_NAME: '{{.ARTIFACT_NAME | default (printf "typhon-darwin-%s.zip" (.ARCH | default ARCH))}}'
 
   package:dmg:
     summary: Packages the application into a styled `.dmg`

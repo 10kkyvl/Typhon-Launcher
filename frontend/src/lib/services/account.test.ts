@@ -157,3 +157,27 @@ describe('accountMessage', () => {
     expect(text).toContain('попыток');
   });
 });
+
+describe('uploadAvatar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sends the framed square along with the image', async () => {
+    const { uploadAvatar } = await import('./account');
+    bindings.UploadAvatar.mockResolvedValueOnce(user);
+
+    await uploadAvatar('QUJD', { x: 12, y: 34, size: 300 });
+
+    expect(bindings.UploadAvatar).toHaveBeenCalledWith('QUJD', { x: 12, y: 34, size: 300 });
+  });
+
+  it('leaves the square to the server when nothing was framed', async () => {
+    const { uploadAvatar } = await import('./account');
+    bindings.UploadAvatar.mockResolvedValueOnce(user);
+
+    await uploadAvatar('QUJD');
+
+    expect(bindings.UploadAvatar).toHaveBeenCalledWith('QUJD', { x: 0, y: 0, size: 0 });
+  });
+});

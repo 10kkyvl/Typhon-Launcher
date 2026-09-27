@@ -38,6 +38,7 @@ type Candidate struct {
 }
 
 type GameMetadata struct {
+	SteamAppID  string     `json:"steamAppId,omitempty"`
 	ProviderID  string     `json:"providerId"`
 	Title       string     `json:"title"`
 	Summary     string     `json:"summary"`
@@ -47,6 +48,7 @@ type GameMetadata struct {
 	Genres      []string   `json:"genres,omitempty"`
 	Themes      []string   `json:"themes,omitempty"`
 	Platforms   []string   `json:"platforms,omitempty"`
+	GameType    string     `json:"gameType,omitempty"`
 	Cover       *ImageRef  `json:"cover,omitempty"`
 	Screenshots []ImageRef `json:"screenshots,omitempty"`
 }

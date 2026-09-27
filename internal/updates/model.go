@@ -2,7 +2,9 @@ package updates
 
 import (
 	"time"
+
 	"typhon/internal/hashdir"
+	"typhon/internal/library"
 )
 
 type VersionSource string
@@ -45,6 +47,7 @@ const (
 )
 
 type InstalledGame struct {
+	InstalledAt       time.Time     `json:"installedAt"`
 	GameID            string        `json:"gameId"`
 	CanonicalGameID   string        `json:"canonicalGameId"`
 	Title             string        `json:"title"`
@@ -52,6 +55,8 @@ type InstalledGame struct {
 	Executable        string        `json:"executable"`
 	ReleaseID         string        `json:"releaseId"`
 	SourceID          string        `json:"sourceId"`
+	DistributionID    string        `json:"distributionId"`
+	ReleaseUploadedAt *time.Time    `json:"releaseUploadedAt"`
 	Version           string        `json:"version"`
 	VersionSource     VersionSource `json:"versionSource"`
 	VersionConfidence float64       `json:"versionConfidence"`
@@ -61,18 +66,20 @@ type InstalledGame struct {
 }
 
 type Patch struct {
-	ID            string    `json:"id"`
-	GameID        string    `json:"gameId"`
-	FromVersion   string    `json:"fromVersion"`
-	ToVersion     string    `json:"toVersion"`
-	FromReleaseID *string   `json:"fromReleaseId,omitempty"`
-	ToReleaseID   *string   `json:"toReleaseId,omitempty"`
-	ReleaseID     string    `json:"releaseId"`
-	SourceID      string    `json:"sourceId,omitempty"`
-	Title         string    `json:"title,omitempty"`
-	Size          int64     `json:"size"`
-	Priority      int       `json:"priority"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID             string     `json:"id"`
+	GameID         string     `json:"gameId"`
+	FromVersion    string     `json:"fromVersion"`
+	ToVersion      string     `json:"toVersion"`
+	FromReleaseID  *string    `json:"fromReleaseId,omitempty"`
+	ToReleaseID    *string    `json:"toReleaseId,omitempty"`
+	ReleaseID      string     `json:"releaseId"`
+	SourceID       string     `json:"sourceId,omitempty"`
+	DistributionID string     `json:"distributionId,omitempty"`
+	UploadedAt     *time.Time `json:"uploadedAt,omitempty"`
+	Title          string     `json:"title,omitempty"`
+	Size           int64      `json:"size"`
+	Priority       int        `json:"priority"`
+	CreatedAt      time.Time  `json:"createdAt"`
 }
 
 type CompatibilityResult struct {
@@ -88,6 +95,11 @@ type UpdateAvailability struct {
 	GameID             string `json:"gameId"`
 	InstalledReleaseID string `json:"installedReleaseId"`
 	TargetReleaseID    string `json:"targetReleaseId"`
+	SourceID           string `json:"sourceId,omitempty"`
+	DistributionID     string `json:"distributionId,omitempty"`
+
+	InstalledReleaseUploadedAt *time.Time `json:"installedReleaseUploadedAt,omitempty"`
+	TargetReleaseUploadedAt    *time.Time `json:"targetReleaseUploadedAt,omitempty"`
 
 	InstalledVersion string `json:"installedVersion"`
 	TargetVersion    string `json:"targetVersion"`
@@ -106,6 +118,7 @@ type UpdateAvailability struct {
 type StepKind string
 
 const (
+	StepBackup     StepKind = "backup"
 	StepDownload   StepKind = "download"
 	StepRecheck    StepKind = "recheck"
 	StepApplyPatch StepKind = "apply_patch"
@@ -130,8 +143,12 @@ type UpdatePlan struct {
 	ID     string `json:"id"`
 	GameID string `json:"gameId"`
 
-	InstalledReleaseID string `json:"installedReleaseId"`
-	TargetReleaseID    string `json:"targetReleaseId"`
+	InstalledReleaseID         string     `json:"installedReleaseId"`
+	TargetReleaseID            string     `json:"targetReleaseId"`
+	SourceID                   string     `json:"sourceId"`
+	DistributionID             string     `json:"distributionId,omitempty"`
+	InstalledReleaseUploadedAt *time.Time `json:"installedReleaseUploadedAt,omitempty"`
+	TargetReleaseUploadedAt    *time.Time `json:"targetReleaseUploadedAt,omitempty"`
 
 	InstalledVersion string `json:"installedVersion"`
 	TargetVersion    string `json:"targetVersion"`
@@ -143,12 +160,11 @@ type UpdatePlan struct {
 	ReusedBytes       int64 `json:"reusedBytes"`
 	RequiredDiskBytes int64 `json:"requiredDiskBytes"`
 
-	BackupRecommended bool `json:"backupRecommended"`
 	BackupAvailable   bool `json:"backupAvailable"`
-	BackupCreated     bool `json:"backupCreated"`
-	RequiresRestart   bool `json:"requiresRestart"`
 	RollbackAvailable bool `json:"rollbackAvailable"`
 	ReuseFlat         bool `json:"reuseFlat,omitempty"`
+
+	SavesPath string `json:"savesPath,omitempty"`
 
 	Patches []Patch `json:"patches,omitempty"`
 
@@ -184,3 +200,29 @@ const (
 type FileManifestEntry = hashdir.Entry
 
 type FileManifest = hashdir.Manifest
+
+const (
+	JournalRollback = "rollback"
+	JournalSwap     = "swap"
+	JournalPatch    = "patch"
+	JournalInplace  = "inplace"
+	JournalCleanup  = "cleanup"
+)
+
+// SwapJournal records a multi-rename filesystem operation before its first
+// destructive step, so ServiceStartup can finish or roll it back after a
+// crash instead of leaving the only copy of the install in an ambiguous state.
+type SwapJournal struct {
+	PreviousRollback *Rollback                `json:"previousRollback,omitempty"`
+	Rollback         *Rollback                `json:"rollback,omitempty"`
+	RetainedPrevious string                   `json:"retainedPrevious,omitempty"`
+	Original         *library.InstalledUpdate `json:"original,omitempty"`
+	GameID           string                   `json:"gameId"`
+	Kind             string                   `json:"kind"`
+	InstallDir       string                   `json:"installDir"`
+	Staging          string                   `json:"staging,omitempty"`
+	Previous         string                   `json:"previous"`
+	Version          string                   `json:"version"`
+	Patch            string                   `json:"patch,omitempty"`
+	StartedAt        time.Time                `json:"startedAt"`
+}

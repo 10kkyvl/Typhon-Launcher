@@ -8,14 +8,15 @@ import (
 )
 
 type entry struct {
-	game       Game
 	normalized string
 	aliases    []string
 	tokens     []string
+	matchable  bool
 }
 
 type index struct {
 	entries    []entry
+	games      []Game
 	byID       map[string]int
 	byTitle    map[string][]int
 	byAlias    map[string][]int
@@ -25,6 +26,7 @@ type index struct {
 
 func buildIndex(games []Game) *index {
 	idx := &index{
+		games:      games,
 		entries:    make([]entry, 0, len(games)),
 		byID:       make(map[string]int, len(games)),
 		byTitle:    make(map[string][]int, len(games)),
@@ -38,12 +40,18 @@ func buildIndex(games []Game) *index {
 	return idx
 }
 
+// matchable отделяет игры от DLC, бандлов и паков. Записи всех типов лежат в
+// индексах целиком: каталог, поиск по нему и ручной выбор игры показывают всё,
+// что пришло с бэкенда. Тип смотрит только автоматический матчинг (resolve) —
+// иначе репак прицепляется к дополнению, которое делит с игрой название.
+// Пустой тип считается игрой: у записей, которых бэкенд ещё не переливал, его
+// просто нет.
 func (idx *index) add(g Game) int {
 	normalized := titles.Normalize(g.Title)
 	e := entry{
-		game:       g,
 		normalized: normalized,
 		tokens:     titles.TokenSet(normalized),
+		matchable:  titles.IsGameType(g.GameType),
 	}
 	for _, alias := range g.Aliases {
 		normalizedAlias := titles.Normalize(alias)
@@ -90,7 +98,7 @@ func (idx *index) game(id string) (Game, bool) {
 	if !ok {
 		return Game{}, false
 	}
-	return idx.entries[pos].game, true
+	return idx.games[pos], true
 }
 
 func (idx *index) candidates(normalized string) []int {
@@ -173,14 +181,14 @@ func (idx *index) search(query string, limit int) []Game {
 		if found[a].score != found[b].score {
 			return found[a].score > found[b].score
 		}
-		return idx.entries[found[a].pos].game.SortTitle < idx.entries[found[b].pos].game.SortTitle
+		return idx.games[found[a].pos].SortTitle < idx.games[found[b].pos].SortTitle
 	})
 	if len(found) > limit {
 		found = found[:limit]
 	}
 	games := make([]Game, 0, len(found))
 	for _, item := range found {
-		games = append(games, idx.entries[item.pos].game)
+		games = append(games, idx.games[item.pos])
 	}
 	return games
 }

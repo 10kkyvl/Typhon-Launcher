@@ -2,6 +2,7 @@ import { derived, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { getGames, getRunningGames, type LibraryGame } from '../services/library';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
@@ -34,7 +35,7 @@ export async function initLibrary() {
       return next;
     });
     if (sessionSeconds >= 60) {
-      toast(`Сессия завершена: ${Math.round(sessionSeconds / 60)} мин`);
+      toast(msg('state.librarySessionEnded', { minutes: Math.round(sessionSeconds / 60) }));
     }
   });
 }

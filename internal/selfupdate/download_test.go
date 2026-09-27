@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -210,17 +212,38 @@ func TestDownloadCancelledDuringCopy(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	destDir := t.TempDir()
+	partialPath := filepath.Join(destDir, "typhon-setup.exe.partial")
 	go func() {
 		<-firstChunkSent
+		// The server flushing its half does not mean the client has read it
+		// yet: wait for bytes to actually land on disk so the cancel cannot
+		// race ahead of the copy and leave nothing to assert on below.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if info, err := os.Stat(partialPath); err == nil && info.Size() > 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("partial file never received bytes before the cancel")
+				break
+			}
+			runtime.Gosched()
+		}
 		cancel()
 	}()
 
-	destDir := t.TempDir()
 	_, err = c.Download(ctx, art, destDir, nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Download() error = %v, want context.Canceled", err)
 	}
-	assertDirEmpty(t, destDir)
+	info, statErr := os.Stat(filepath.Join(destDir, "typhon-setup.exe.partial"))
+	if statErr != nil {
+		t.Fatalf("stat partial after cancellation: %v", statErr)
+	}
+	if info.Size() == 0 {
+		t.Fatalf("partial file is empty after cancellation, want bytes written before the cancel")
+	}
 }
 
 func TestDownloadDestDirMissing(t *testing.T) {
@@ -328,7 +351,12 @@ func TestDownloadStalled(t *testing.T) {
 	half := len(full) / 2
 	release := make(chan struct{})
 
+	var mu sync.Mutex
+	var requests []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.Header.Get("Range"))
+		mu.Unlock()
 		if _, err := w.Write(full[:half]); err != nil {
 			return
 		}
@@ -365,7 +393,23 @@ func TestDownloadStalled(t *testing.T) {
 	if !errors.Is(err, ErrStalled) {
 		t.Fatalf("Download() error = %v, want ErrStalled", err)
 	}
-	assertDirEmpty(t, destDir)
+
+	info, statErr := os.Stat(filepath.Join(destDir, "typhon-setup.exe.partial"))
+	if statErr != nil {
+		t.Fatalf("stat partial after stall: %v", statErr)
+	}
+	if info.Size() == 0 {
+		t.Fatalf("partial file is empty after the stall, want the first stalled half kept")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requests) < 2 {
+		t.Fatalf("server saw %d requests, want at least 2", len(requests))
+	}
+	if requests[1] == "" {
+		t.Fatalf("second request had no Range header, want the retry to resume")
+	}
 }
 
 func TestDownloadOutlivesRequestTimeout(t *testing.T) {

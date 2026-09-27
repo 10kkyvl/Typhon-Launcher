@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -15,9 +16,13 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 )
 
 const (
+	// Ниже этого числа запросов накладные расходы на воркеров съедают выигрыш.
+	parallelResolveFloor = 256
+
 	gamesVersion     = 1
 	overridesVersion = 1
 	maxAliasLen      = 120
@@ -25,19 +30,32 @@ const (
 )
 
 var (
-	errNotFound          = errors.New("игра не найдена")
-	errEmptyIGDBID       = errors.New("не указан IGDB id")
-	errEmptyCatalogTitle = errors.New("укажите название игры")
+	errNotFound          = uierr.New("catalog.game_not_found", "игра не найдена")
+	errEmptyIGDBID       = uierr.New("catalog.no_igdb_id", "не указан IGDB id")
+	errEmptyCatalogTitle = uierr.New("catalog.no_title", "укажите название игры")
+	errDuplicateID       = uierr.New("catalog.duplicate_id", "игра с таким идентификатором уже есть")
+	errNothingToLearn    = uierr.New("catalog.nothing_to_learn", "нечего запоминать")
 )
 
 type Service struct {
-	mu            sync.Mutex
-	gamesPath     string
-	overridesPath string
-	games         []Game
-	overrides     []MatchOverride
-	overrideMap   map[string]string
-	idx           *index
+	redirects             map[string]string
+	remote                RemoteCatalog
+	mu                    sync.RWMutex
+	epoch                 uint64
+	gamesPath             string
+	overridesPath         string
+	recommendationPath    string
+	recommendationLoadErr error
+	games                 []Game
+	overrides             []MatchOverride
+	overrideMap           map[string]string
+	idx                   *index
+	compat                func(igdbID string) (works, total int, ok bool)
+	recommendationLibrary RecommendationLibrarySource
+	preferences           RecommendationPreferences
+	browseSnapshots       map[string]browseSnapshot
+	discoveryPages        map[string]GamePage
+	discoveryGames        map[string]discoveryGame
 }
 
 func NewService() (*Service, error) {
@@ -56,6 +74,7 @@ func NewServiceAt(dir string) (*Service, error) {
 	s := &Service{overrideMap: map[string]string{}}
 	s.gamesPath = filepath.Join(dir, "catalog.json")
 	s.overridesPath = filepath.Join(dir, "match_overrides.json")
+	s.recommendationPath = filepath.Join(dir, "recommendation.json")
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -68,6 +87,24 @@ func (s *Service) load() error {
 	}
 	if err := loadList(s.overridesPath, overridesVersion, &s.overrides); err != nil {
 		return fmt.Errorf("load match overrides: %w", err)
+	}
+	if err := loadList(filepath.Join(filepath.Dir(s.gamesPath), "catalog-redirects.json"), 1, &s.redirects); err != nil {
+		return err
+	}
+	if err := s.loadRecommendations(); err != nil {
+		s.recommendationLoadErr = err
+		s.preferences = defaultRecommendationPreferences()
+		slog.Warn("recommendation preferences unavailable; using general catalog", "error", err)
+	}
+	known := map[string]bool{}
+	for _, g := range s.games {
+		known[g.ID] = true
+	}
+	for old := range s.redirects {
+		target := s.resolveIDLocked(old)
+		if !known[old] || target == "" || !known[target] {
+			return fmt.Errorf("invalid catalog redirect %q", old)
+		}
 	}
 	games, changed := sanitize(s.games)
 	s.games = games
@@ -89,8 +126,25 @@ func loadList(path string, version int, out any) error {
 	return err
 }
 
+// rebuildLocked двигает эпоху: любое изменение каталога или переопределений
+// может изменить исход матчинга, и по эпохе потребители понимают, что прошлый
+// результат больше не действителен.
 func (s *Service) rebuildLocked() {
+	for i := range s.games {
+		s.games[i].Genres = canonicalGenres(s.games[i].Genres)
+	}
+	s.epoch++
 	s.idx = buildIndex(s.games)
+	for old := range s.redirects {
+		target := s.resolveIDLocked(old)
+		if pos, ok := s.idx.byID[target]; ok {
+			if oldPos, exists := s.idx.byID[old]; exists && oldPos != pos {
+				s.idx.entries[oldPos].matchable = false
+			}
+			s.idx.byID[old] = pos
+		}
+	}
+
 	s.overrideMap = make(map[string]string, len(s.overrides))
 	for _, o := range s.overrides {
 		if o.Pattern == "" || o.GameID == "" {
@@ -104,28 +158,89 @@ func (s *Service) persistGamesLocked() error {
 	if s.gamesPath == "" {
 		return errors.New("catalog path unavailable")
 	}
-	return storage.Save(s.gamesPath, gamesVersion, s.games)
+	if err := storage.Save(s.gamesPath, gamesVersion, s.games); err != nil {
+		return uierr.Wrap("catalog.save_failed", err)
+	}
+	return nil
 }
 
 func (s *Service) persistOverridesLocked() error {
 	if s.overridesPath == "" {
 		return errors.New("match overrides path unavailable")
 	}
-	return storage.Save(s.overridesPath, overridesVersion, s.overrides)
+	if err := storage.Save(s.overridesPath, overridesVersion, s.overrides); err != nil {
+		return uierr.Wrap("catalog.save_failed", err)
+	}
+	return nil
+}
+
+// addToIndexLocked добавляет игру в индекс, не пересобирая его целиком, и
+// двигает эпоху: новая запись меняет исход матчинга ровно так же, как её
+// правка через rebuildLocked.
+//
+// Индекс не хранит вторую копию Game на запись — idx.games ссылается на тот
+// же бэкинг-массив, что и s.games. Append в s.games (вызывающей стороной, до
+// этого вызова) мог его перевыделить, поэтому ссылку внутри индекса нужно
+// обновлять здесь же: иначе idx.games останется смотреть на СТАРЫЙ массив, а
+// позиции, которые idx.add только что завёл, окажутся вне его длины.
+func (s *Service) addToIndexLocked(game Game) {
+	s.idx.games = s.games
+	s.idx.add(game)
+	s.epoch++
+}
+
+// Epoch — версия того, от чего зависит матчинг: содержимого каталога и
+// активного словаря названий. Числа сворачиваются в одно через FNV-1a, чтобы
+// в релизе хранилось одно поле, а не два: сравнивается оно только на
+// равенство, порядок и разница значений смысла не имеют.
+//
+//wails:ignore
+func (s *Service) Epoch() uint64 {
+	s.mu.RLock()
+	catalogEpoch := s.epoch
+	s.mu.RUnlock()
+
+	const (
+		offset = 14695981039346656037
+		prime  = 1099511628211
+	)
+	h := uint64(offset)
+	for _, part := range [2]uint64{catalogEpoch, titles.Generation()} {
+		for i := 0; i < 8; i++ {
+			h ^= (part >> (8 * i)) & 0xff
+			h *= prime
+		}
+	}
+	if h == 0 {
+		// Ноль в релизе означает «не матчилось», поэтому эпоха его не занимает.
+		return 1
+	}
+	return h
 }
 
 func (s *Service) ListGames() []Game {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return append([]Game(nil), s.games...)
 }
 
 func (s *Service) GetGame(id string) (Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var err error
+	id, err = s.promoteDiscoveryGameLocked(id)
+	if err != nil {
+		return Game{}, err
+	}
 	game, ok := s.idx.game(id)
 	if !ok {
 		return Game{}, errNotFound
+	}
+	game.AliasIDs = nil
+	for _, other := range s.games {
+		if other.ID != game.ID && s.sameGameLocked(other.ID, game.ID) {
+			game.AliasIDs = append(game.AliasIDs, other.ID)
+		}
 	}
 	return game, nil
 }
@@ -134,8 +249,8 @@ func (s *Service) SearchGames(query string, limit int) []Game {
 	if limit <= 0 {
 		limit = defaultSearchCap
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.idx.search(query, limit)
 }
 
@@ -147,24 +262,70 @@ func (s *Service) ListOverrides() []MatchOverride {
 
 //wails:ignore
 func (s *Service) Resolve(q Query) Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.idx.resolve(normalizeQuery(q), s.overrideMap)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return conservativeMatch(s.idx.resolve(normalizeQuery(q), s.overrideMap), s.remote != nil)
 }
 
+// ResolveAll — самая тяжёлая операция каталога: пачка на 20 тысяч названий
+// против каталога на 50 тысяч игр считается около двух с половиной секунд в
+// один поток. Резолв идёт воркерами по числу ядер, результат кладётся в
+// заранее выделенный слайс по индексу запроса — порядок не зависит от
+// планировщика.
+//
+// Читательский лок держится всё это время, а не снимается после снимка
+// указателя: индекс дописывается на месте (AddGame, Provision), поэтому
+// снимок не защищает от одновременной записи — это ловил
+// TestResolveAllRacesWithCatalogWrites. Записи в каталог редки и коротки, а
+// чтения из UI друг друга больше не блокируют.
+//
 //wails:ignore
 func (s *Service) ResolveAll(queries []Query) []Match {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	out := make([]Match, len(queries))
-	for i, q := range queries {
-		out[i] = s.idx.resolve(normalizeQuery(q), s.overrideMap)
+	if len(queries) == 0 {
+		return out
 	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	idx, overrides := s.idx, s.overrideMap
+
+	workers := runtime.NumCPU()
+	if workers > len(queries) {
+		workers = len(queries)
+	}
+	if workers <= 1 || len(queries) < parallelResolveFloor {
+		for i, q := range queries {
+			out[i] = conservativeMatch(idx.resolve(normalizeQuery(q), overrides), s.remote != nil)
+		}
+		return out
+	}
+
+	// Воркеров ровно workers, и каждый забирает свой непрерывный кусок — это
+	// и есть ограничение параллелизма. errgroup здесь не нужен: resolve только
+	// читает индекс и не может дать ошибку, а его Wait возвращал бы значение,
+	// которое некуда девать.
+	var wg sync.WaitGroup
+	chunk := (len(queries) + workers - 1) / workers
+	for start := 0; start < len(queries); start += chunk {
+		end := start + chunk
+		if end > len(queries) {
+			end = len(queries)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := start; i < end; i++ {
+				out[i] = conservativeMatch(idx.resolve(normalizeQuery(queries[i]), overrides), s.remote != nil)
+			}
+		}()
+	}
+	wg.Wait()
 	return out
 }
 
 //wails:ignore
-func (s *Service) Provision(queries []Query) map[string]Game {
+func (s *Service) Provision(queries []Query) (map[string]Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -179,28 +340,35 @@ func (s *Service) Provision(queries []Query) map[string]Game {
 			continue
 		}
 		if positions := s.idx.byTitle[q.Normalized]; len(positions) > 0 {
-			out[q.Normalized] = s.idx.entries[positions[0]].game
+			game := s.idx.games[positions[0]]
+			canonical := s.resolveIDLocked(game.ID)
+			if canonicalGame, ok := s.idx.game(canonical); ok {
+				game = canonicalGame
+			}
+			out[q.Normalized] = game
 			continue
 		}
 		game := newGame(q)
 		s.games = append(s.games, game)
-		s.idx.add(game)
+		s.addToIndexLocked(game)
 		out[q.Normalized] = game
 		created++
 	}
 	if created > 0 {
 		if err := s.persistGamesLocked(); err != nil {
-			slog.Error("save catalog", "error", err)
+			s.games = s.games[:len(s.games)-created]
+			s.rebuildLocked()
+			return nil, fmt.Errorf("save catalog: %w", err)
 		}
 		slog.Info("catalog games provisioned", "created", created, "total", len(s.games))
 	}
-	return out
+	return out, nil
 }
 
 func (s *Service) AddGame(game Game) (Game, error) {
 	game.Title = strings.TrimSpace(game.Title)
 	if game.Title == "" {
-		return Game{}, errors.New("укажите название игры")
+		return Game{}, errEmptyCatalogTitle
 	}
 	if game.ID == "" {
 		game.ID = NewID()
@@ -215,10 +383,10 @@ func (s *Service) AddGame(game Game) (Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.idx.byID[game.ID]; exists {
-		return Game{}, errors.New("игра с таким идентификатором уже есть")
+		return Game{}, errDuplicateID
 	}
 	s.games = append(s.games, game)
-	s.idx.add(game)
+	s.addToIndexLocked(game)
 	if err := s.persistGamesLocked(); err != nil {
 		return Game{}, err
 	}
@@ -227,7 +395,10 @@ func (s *Service) AddGame(game Game) (Game, error) {
 
 //wails:ignore
 func (s *Service) EnsureGame(title string, year int) (Game, error) {
-	games := s.Provision([]Query{{Title: title, Year: year}})
+	games, err := s.Provision([]Query{{Title: title, Year: year}})
+	if err != nil {
+		return Game{}, err
+	}
 	normalized := titles.Normalize(title)
 	game, ok := games[normalized]
 	if !ok {
@@ -240,7 +411,7 @@ func (s *Service) EnsureGame(title string, year int) (Game, error) {
 func (s *Service) LearnMatch(normalized, gameID string) error {
 	normalized = strings.TrimSpace(normalized)
 	if normalized == "" || gameID == "" {
-		return errors.New("нечего запоминать")
+		return errNothingToLearn
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -249,7 +420,9 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 	if !ok {
 		return errNotFound
 	}
-	game := s.idx.entries[pos].game
+	game := s.idx.games[pos]
+
+	previousOverrides := append([]MatchOverride(nil), s.overrides...)
 
 	replaced := false
 	for i := range s.overrides {
@@ -264,6 +437,7 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 		s.overrides = append(s.overrides, MatchOverride{Pattern: normalized, GameID: gameID, CreatedAt: time.Now()})
 	}
 	if err := s.persistOverridesLocked(); err != nil {
+		s.overrides = previousOverrides
 		return fmt.Errorf("save overrides: %w", err)
 	}
 
@@ -272,9 +446,14 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 			if s.games[i].ID != gameID {
 				continue
 			}
+			previousAliases := s.games[i].Aliases
 			s.games[i].Aliases = append(s.games[i].Aliases, normalized)
 			if err := s.persistGamesLocked(); err != nil {
-				slog.Error("save catalog", "error", err)
+				s.games[i].Aliases = previousAliases
+				s.overrides = previousOverrides
+				revertErr := s.persistOverridesLocked()
+				s.rebuildLocked()
+				return errors.Join(fmt.Errorf("save catalog: %w", err), revertErr)
 			}
 			break
 		}
@@ -383,11 +562,15 @@ func (s *Service) TitleOf(id string) string {
 
 //wails:ignore
 func (s *Service) IGDBIDOf(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.igdbIDLocked(id)
+}
+
+func (s *Service) igdbIDLocked(id string) string {
 	if id == "" {
 		return ""
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	game, ok := s.idx.game(id)
 	if !ok {
 		return ""
@@ -413,7 +596,7 @@ func (s *Service) gameByIGDBLocked(igdbID string) (Game, bool) {
 	if !ok {
 		return Game{}, false
 	}
-	return s.idx.entries[pos].game, true
+	return s.idx.games[pos], true
 }
 
 //wails:ignore
@@ -452,6 +635,10 @@ func (s *Service) EnsureByIGDB(igdbID, title string) (Game, error) {
 	return game, nil
 }
 
+func (s *Service) OpenByIGDB(igdbID, title string) (Game, error) {
+	return s.EnsureByIGDB(igdbID, title)
+}
+
 //wails:ignore
 func (s *Service) LookupByTitle(title string) (Game, bool) {
 	normalized := titles.Normalize(title)
@@ -472,5 +659,72 @@ func (s *Service) LookupByTitle(title string) (Game, bool) {
 	if len(positions) == 0 {
 		return Game{}, false
 	}
-	return s.idx.entries[positions[0]].game, true
+	game := s.idx.games[positions[0]]
+	canonical := s.resolveIDLocked(game.ID)
+	if canonicalGame, ok := s.idx.game(canonical); ok {
+		game = canonicalGame
+	}
+	return game, true
+}
+
+func (s *Service) resolveIDLocked(id string) string {
+	seen := map[string]bool{}
+	for s.redirects[id] != "" {
+		if seen[id] {
+			return ""
+		}
+		seen[id] = true
+		id = s.redirects[id]
+	}
+	return id
+}
+
+//wails:ignore
+func (s *Service) SameGame(a, b string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sameGameLocked(a, b)
+}
+func (s *Service) sameGameLocked(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a = s.resolveIDLocked(a)
+	b = s.resolveIDLocked(b)
+	if a == b {
+		return true
+	}
+	x, xok := s.idx.game(a)
+	y, yok := s.idx.game(b)
+	if !xok || !yok {
+		return false
+	}
+	if x.ExternalIDs.IGDB != "" && y.ExternalIDs.IGDB != "" {
+		if x.ExternalIDs.IGDB == y.ExternalIDs.IGDB {
+			return true
+		}
+		for _, id := range x.ProviderLinks["igdb"] {
+			if id == y.ExternalIDs.IGDB {
+				return true
+			}
+		}
+		for _, id := range y.ProviderLinks["igdb"] {
+			if id == x.ExternalIDs.IGDB {
+				return true
+			}
+		}
+		return false
+	}
+	linked := func(g, other Game) bool {
+		if other.ExternalIDs.IGDB != "" {
+			return false
+		}
+		for _, id := range g.ProviderLinks["steam"] {
+			if id == other.ExternalIDs.Steam && id != "" {
+				return true
+			}
+		}
+		return false
+	}
+	return linked(x, y) || linked(y, x)
 }

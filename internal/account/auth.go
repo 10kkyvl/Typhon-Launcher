@@ -79,6 +79,7 @@ func (c *Client) authRequest(ctx context.Context, path string, in any, wantStatu
 	if session.Token == "" {
 		return Session{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("%s returned an empty token", path)}
 	}
+	session.User = withProfileDefaults(session.User)
 	return session, nil
 }
 

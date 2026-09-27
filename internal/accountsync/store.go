@@ -1,10 +1,12 @@
 package accountsync
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"time"
 
 	"typhon/internal/storage"
 )
@@ -17,6 +19,8 @@ type gameState struct {
 }
 
 type syncState struct {
+	Owner      string               `json:"owner,omitempty"`
+	Tombstones map[string]time.Time `json:"tombstones,omitempty"`
 	// DeviceID identifies this installation to the account-sync backend only.
 	// It must never come from or be compared with clientid's installation id:
 	// that id is deliberately pseudonymous and unlinked from any account, and
@@ -24,14 +28,20 @@ type syncState struct {
 	DeviceID         string               `json:"deviceId"`
 	SettingsRevision int64                `json:"settingsRevision"`
 	Games            map[string]gameState `json:"games"`
+	// Removed holds this device's unconfirmed deletions, keyed by IGDB id.
+	// An entry stays here from the moment the game disappears from the
+	// local library until the server accepts a push carrying it, so an
+	// offline removal survives a restart and is retried on the next sync.
+	Removed map[string]time.Time `json:"removed"`
 }
 
 func emptyState() syncState {
-	return syncState{Games: map[string]gameState{}}
+	return syncState{Games: map[string]gameState{}, Removed: map[string]time.Time{}}
 }
 
 type store struct {
-	dir string
+	dir   string
+	owner string
 }
 
 func newStore(dir string) *store {
@@ -41,6 +51,9 @@ func newStore(dir string) *store {
 func (s *store) path() string {
 	if s.dir == "" {
 		return ""
+	}
+	if s.owner != "" {
+		return filepath.Join(s.dir, fmt.Sprintf("sync-%x.json", sha256.Sum256([]byte(s.owner))))
 	}
 	return filepath.Join(s.dir, "sync.json")
 }
@@ -60,6 +73,9 @@ func (s *store) load() (syncState, error) {
 	}
 	if st.Games == nil {
 		st.Games = map[string]gameState{}
+	}
+	if st.Removed == nil {
+		st.Removed = map[string]time.Time{}
 	}
 	return st, nil
 }

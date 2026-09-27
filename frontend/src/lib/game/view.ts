@@ -1,3 +1,5 @@
+import { msg } from '../i18n';
+import { genreLabel } from '../metadata/labels';
 import type { MediaAsset, MetadataMatch, MetadataView } from '../services/metadata';
 
 const blanks = new Set(['', '-', '--', '—', 'n/a', 'na', 'null', 'undefined', 'unknown', 'неизвестно']);
@@ -56,9 +58,11 @@ export interface MetaStatusInput {
 }
 
 export function metaStatus(input: MetaStatusInput): MetaStatus {
-  if (!input.available || input.resolved) return 'ready';
+  if (!input.available) return 'ready';
   if (input.busy || input.match === 'searching') return 'searching';
-  if (input.match === 'unmatched' || input.match === 'failed' || input.match === 'skipped') return input.match;
+  if (input.match === 'failed') return 'failed';
+  if (input.resolved) return 'ready';
+  if (input.match === 'unmatched' || input.match === 'skipped') return input.match;
   return 'ready';
 }
 
@@ -80,7 +84,7 @@ export function metaLine(input: MetaLineInput): string[] {
   };
   push(input.year);
   push(clean(input.developer) || input.publisher);
-  push(input.genres?.[0]);
+  push(input.genres?.[0] ? genreLabel(input.genres[0]) : '');
   push(input.platforms?.[0]);
   return parts;
 }
@@ -164,7 +168,7 @@ export type PrimaryKind =
   | 'play'
   | 'stop'
   | 'update'
-  | 'install'
+  | 'download'
   | 'progress'
   | 'resolving'
   | 'unavailable'
@@ -179,6 +183,7 @@ export interface PrimaryAction {
 }
 
 export interface BusyState {
+  indeterminate?: boolean;
   label: string;
   progress: number;
 }
@@ -196,14 +201,14 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   if (status.busy) {
     return { kind: 'progress', label: status.busy.label, disabled: true, progress: status.busy.progress };
   }
-  if (status.running) return { kind: 'stop', label: 'Остановить', disabled: false };
+  if (status.running) return { kind: 'stop', label: msg('games.stop'), disabled: false };
   if (status.installed) {
-    if (status.updateAvailable) return { kind: 'update', label: 'Обновить', disabled: false };
-    return { kind: 'play', label: 'Играть', disabled: false };
+    if (status.updateAvailable) return { kind: 'update', label: msg('common.refresh'), disabled: false };
+    return { kind: 'play', label: msg('games.play'), disabled: false };
   }
-  if (status.releaseCount > 0) return { kind: 'install', label: 'Установить', disabled: false };
-  if (status.releasesLoading) return { kind: 'resolving', label: 'Проверяем загрузки…', disabled: true };
-  return { kind: 'unavailable', label: 'Нет доступных загрузок', disabled: true };
+  if (status.releaseCount > 0) return { kind: 'download', label: msg('games.primaryDownload'), disabled: false };
+  if (status.releasesLoading) return { kind: 'resolving', label: msg('games.primaryResolving'), disabled: true };
+  return { kind: 'unavailable', label: msg('games.primaryUnavailable'), disabled: true };
 }
 
 export type TerminalDownloadStatus = 'failed' | 'completed';
@@ -220,9 +225,9 @@ export function hubAction(status: HubStatus): PrimaryAction {
   if (status.installed || status.running || status.busy) return primaryAction(status);
   if (status.terminalDownload) {
     if (status.terminalDownload.status === 'failed') {
-      return { kind: 'retry-download', label: 'Повторить загрузку', disabled: false };
+      return { kind: 'retry-download', label: msg('games.hubRetryDownload'), disabled: false };
     }
-    return { kind: 'install-download', label: 'Установить', disabled: false };
+    return { kind: 'install-download', label: msg('games.primaryInstall'), disabled: false };
   }
   return primaryAction(status);
 }
@@ -245,14 +250,14 @@ export function cancelFreesDisk(status: TerminalDownloadStatus): boolean {
 }
 
 export function busyState(
-  entries: (({ active: boolean; label: string; progress: number }) | null | undefined)[],
+  entries: (({ active: boolean; label: string; progress: number; indeterminate?: boolean }) | null | undefined)[],
 ): BusyState | null {
   for (const entry of entries) {
     if (!entry || !entry.active) continue;
     const label = clean(entry.label);
     if (!label) continue;
     const progress = Number.isFinite(entry.progress) ? Math.min(1, Math.max(0, entry.progress)) : 0;
-    return { label, progress };
+    return { label, progress, ...(entry.indeterminate ? { indeterminate: true } : {}) };
   }
   return null;
 }

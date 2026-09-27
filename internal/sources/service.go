@@ -9,14 +9,18 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/dialogtext"
 	"typhon/internal/redact"
 	"typhon/internal/settings"
 	"typhon/internal/sources/feed"
+	"typhon/internal/titles"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -24,12 +28,15 @@ import (
 const (
 	eventUpdated        = "source:updated"
 	eventError          = "source:error"
+	eventDegraded       = "source:degraded"
 	eventReleaseAdded   = "release:added"
 	eventReleaseRemoved = "release:removed"
 	eventReleaseMatched = "release:matched"
 	eventReleaseReview  = "release:needs-review"
 
 	maxWarnings        = 10
+	previewCacheTTL    = 10 * time.Minute
+	sourceParseVersion = 1
 	refreshConcurrency = 2
 	refreshTimeout     = 3 * time.Minute
 	scheduleTick       = time.Minute
@@ -37,12 +44,27 @@ const (
 )
 
 var (
-	errSourceNotFound = errors.New("источник не найден")
-	errSourceBusy     = errors.New("источник уже обновляется")
-	errSourceDisabled = errors.New("источник отключён")
-	errSourceExists   = errors.New("этот источник уже добавлен")
-	errNoDialog       = errors.New("диалог выбора файла недоступен")
+	errSourceNotFound = uierr.New("sources.source_not_found", "источник не найден")
+	errSourceBusy     = uierr.New("sources.source_busy", "источник уже обновляется")
+	errSourceDisabled = uierr.New("sources.source_disabled", "источник отключён")
+	errSourceExists   = uierr.New("sources.source_exists", "этот источник уже добавлен")
+	errNoDialog       = uierr.New("sources.dialog_unavailable", "диалог выбора файла недоступен")
+
+	// errServiceNotStarted is a plain error, not a uierr code: it can only
+	// happen if a caller reaches into the service before ServiceStartup runs
+	// (invariant 20 forbids a context.Background() fallback instead), which
+	// wails never does in production. It is deliberately left out of the
+	// sources.* UI error table that TestErrorCodesMatchTheFrontendTable checks.
+	errServiceNotStarted = errors.New("sources: service not started")
 )
+
+// degradedStatus is the source:degraded event payload. It stays unexported
+// with no accessor method: adding either would change the wails bindings
+// generated for Service, which is not allowed here.
+type degradedStatus struct {
+	Degraded bool   `json:"degraded"`
+	Message  string `json:"message"`
+}
 
 type Service struct {
 	mu       sync.Mutex
@@ -59,6 +81,8 @@ type Service struct {
 	retryAt    map[string]time.Time
 	sem        chan struct{}
 	onChanged  func()
+	status     degradedStatus
+	cached     *cachedFeed
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -72,6 +96,15 @@ func NewService(settingsService *settings.Service, cat *catalog.Service) (*Servi
 		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newServiceAt(dir, settingsService, cat)
+}
+
+// NewServiceAt builds a source service whose state is isolated under dir.
+// It is useful for integration checks and other hosts that provide their own
+// configuration root instead of the desktop application's global one.
+//
+//wails:ignore
+func NewServiceAt(dir string, cat *catalog.Service) (*Service, error) {
+	return newServiceAt(dir, nil, cat)
 }
 
 func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Service) (*Service, error) {
@@ -106,14 +139,9 @@ func (s *Service) load() error {
 			item.Type = TypeURL
 		}
 		s.sources = append(s.sources, &item)
-		stored, err := s.store.loadReleases(item.ID)
+		list, err := s.store.loadReleases(item.ID)
 		if err != nil {
 			return err
-		}
-		list := make([]*Release, 0, len(stored))
-		for i := range stored {
-			r := stored[i]
-			list = append(list, &r)
 		}
 		s.releases[item.ID] = list
 	}
@@ -132,11 +160,12 @@ func (s *Service) totalReleases() int {
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	startupCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.ctx, s.cancel = startupCtx, cancel
 	s.mu.Unlock()
 	s.wg.Add(1)
-	go s.schedule()
+	go s.scheduleLoop(startupCtx)
 	return nil
 }
 
@@ -155,6 +184,72 @@ func (s *Service) ServiceShutdown() error {
 func emit(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
+	}
+}
+
+// markDegradedLocked records a persist failure and notifies the frontend.
+// The caller must hold s.mu.
+func (s *Service) markDegradedLocked(err error) {
+	s.status = degradedStatus{Degraded: true, Message: err.Error()}
+	emit(eventDegraded, s.status)
+}
+
+// clearDegradedLocked resets a previously recorded persist failure once a
+// save succeeds again. It only emits when the status actually changes, so a
+// healthy service does not fire source:degraded on every successful save.
+// The caller must hold s.mu.
+func (s *Service) clearDegradedLocked() {
+	if !s.status.Degraded {
+		return
+	}
+	s.status = degradedStatus{}
+	emit(eventDegraded, s.status)
+}
+
+// cachedFeed держит фид, который только что разобрали для превью, чтобы
+// «Сохранить» не качало те же десятки мегабайт второй раз. Запись одна:
+// превью — это шаг мастера добавления, а не фон.
+type cachedFeed struct {
+	kind     Type
+	location string
+	result   feed.Result
+	at       time.Time
+}
+
+func (s *Service) rememberFeedLocked(kind Type, location string, result feed.Result) {
+	s.cached = &cachedFeed{kind: kind, location: location, result: result, at: time.Now()}
+}
+
+// takeCachedFeed отдаёт разобранный фид ровно один раз: повторное обновление
+// источника обязано сходить в сеть, иначе оно показывало бы старое содержимое.
+func (s *Service) takeCachedFeed(kind Type, location string) (feed.Result, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cached := s.cached
+	if cached == nil {
+		return feed.Result{}, false
+	}
+	if cached.kind != kind || !sameLocationValue(kind, cached.location, location) {
+		return feed.Result{}, false
+	}
+	s.cached = nil
+	if time.Since(cached.at) > previewCacheTTL {
+		return feed.Result{}, false
+	}
+	return cached.result, true
+}
+
+// pruneExpiredPreview drops the cached preview once it is older than
+// previewCacheTTL, even if nothing ever calls takeCachedFeed again. It runs
+// off scheduleLoop's existing once-a-minute ticker instead of a dedicated
+// timer per preview: the cache holds at most one entry, so there is nothing
+// to iterate, and reusing the ticker that is already there means TestSource
+// never has to spin up a goroutine just to expire its own cache slot later.
+func (s *Service) pruneExpiredPreview(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cached != nil && now.Sub(s.cached.at) > previewCacheTTL {
+		s.cached = nil
 	}
 }
 
@@ -215,7 +310,11 @@ func (s *Service) TestSource(rawURL string) (Preview, error) {
 	if err != nil {
 		return Preview{}, err
 	}
-	ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
+	base, ok := s.context()
+	if !ok {
+		return Preview{}, errServiceNotStarted
+	}
+	ctx, cancel := context.WithTimeout(base, refreshTimeout)
 	defer cancel()
 
 	result, err := feed.Fetch(ctx, s.client, normalized, feed.Conditional{})
@@ -223,7 +322,7 @@ func (s *Service) TestSource(rawURL string) (Preview, error) {
 		slog.Warn("source test failed", "operation", "test", "host", redact.URL(normalized), "error", err)
 		return Preview{}, err
 	}
-	return s.preview(TypeURL, normalized, result), nil
+	return s.previewWithCoverage(ctx, TypeURL, normalized, result)
 }
 
 func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
@@ -231,7 +330,11 @@ func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
 	if err != nil {
 		return Preview{}, err
 	}
-	ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
+	base, ok := s.context()
+	if !ok {
+		return Preview{}, errServiceNotStarted
+	}
+	ctx, cancel := context.WithTimeout(base, refreshTimeout)
 	defer cancel()
 
 	result, err := feed.ReadFile(ctx, path)
@@ -239,19 +342,21 @@ func (s *Service) TestSourceFile(rawPath string) (Preview, error) {
 		slog.Warn("source file test failed", "operation", "test", "error", err)
 		return Preview{}, err
 	}
-	return s.preview(TypeFile, path, result), nil
+	return s.previewWithCoverage(ctx, TypeFile, path, result)
 }
 
-func (s *Service) SelectFeedFile() (string, error) {
+func (s *Service) SelectFeedFile(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
 		return "", errNoDialog
 	}
 	path, err := app.Dialog.OpenFile().
-		SetTitle("Выберите файл фида").
+		SetTitle(labels.FeedTitle).
+		SetMessage(labels.FeedTitle).
 		CanChooseFiles(true).
-		AddFilter("Файл фида (*.json)", "*.json").
-		AddFilter("Все файлы", "*.*").
+		AddFilter(labels.Feeds, "*.json").
+		AddFilter(labels.AllFiles, "*.*").
 		PromptForSingleSelection()
 	if err != nil {
 		return "", fmt.Errorf("выбор файла фида: %w", err)
@@ -277,9 +382,15 @@ func (s *Service) preview(kind Type, location string, result feed.Result) Previe
 	if preview.Name == "" {
 		preview.Name = displayName(kind, location)
 	}
+	if kind == TypeURL {
+		preview.Insecure = insecureURL(location)
+	}
+	preview.Games, preview.Known = s.catalogCoverage(result.Feed.Entries)
+	preview.Unknown = preview.Games - preview.Known
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.rememberFeedLocked(kind, location, result)
 	for _, src := range s.sources {
 		if sameLocation(src, kind, location) || (src.Fingerprint != "" && src.Fingerprint == preview.Fingerprint) {
 			preview.Duplicate = true
@@ -287,6 +398,49 @@ func (s *Service) preview(kind Type, location string, result feed.Result) Previe
 		}
 	}
 	return preview
+}
+
+// catalogCoverage считает, сколько разных игр в фиде и сколько из них уже есть
+// в каталоге. Считается по уникальным нормализованным названиям: фид на 20
+// тысяч записей обычно описывает вчетверо меньше игр, и «1200 игр, 340 у вас
+// уже есть» — это ответ про игры, а не про строки.
+func (s *Service) catalogCoverage(entries []feed.Entry) (games, known int) {
+	if len(entries) == 0 {
+		return 0, 0
+	}
+	queries := make([]catalog.Query, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		parsed := titles.Parse(e.Title)
+		if e.Game != "" {
+			parsed = titles.Parse(e.Game)
+		}
+		if parsed.Normalized == "" {
+			continue
+		}
+		key := parsed.Normalized
+		if parsed.Year > 0 {
+			key += "|" + strconv.Itoa(parsed.Year)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		queries = append(queries, catalog.Query{Title: parsed.Base, Normalized: parsed.Normalized, Year: parsed.Year})
+	}
+	if len(queries) == 0 || s.catalog == nil {
+		return len(queries), 0
+	}
+	for _, match := range s.catalog.ResolveAll(queries) {
+		if match.Status == catalog.StatusMatched {
+			known++
+		}
+	}
+	return len(queries), known
+}
+
+func insecureURL(raw string) bool {
+	return strings.HasPrefix(strings.ToLower(raw), "http://")
 }
 
 func (s *Service) AddSource(rawURL string) (Source, error) {
@@ -326,6 +480,7 @@ func (s *Service) addSource(kind Type, location string) (Source, error) {
 		src.Path = location
 	} else {
 		src.URL = location
+		src.Insecure = insecureURL(location)
 	}
 	s.sources = append(s.sources, src)
 	s.releases[src.ID] = nil
@@ -398,7 +553,11 @@ func (s *Service) SetSourceEnabled(id string, enabled bool) error {
 }
 
 func (s *Service) RefreshSource(id string) (Summary, error) {
-	ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
+	base, ok := s.context()
+	if !ok {
+		return Summary{}, errServiceNotStarted
+	}
+	ctx, cancel := context.WithTimeout(base, refreshTimeout)
 	defer cancel()
 	return s.refresh(ctx, id, false)
 }
@@ -437,13 +596,14 @@ func (s *Service) RefreshAll() []Summary {
 	return results
 }
 
-func (s *Service) context() context.Context {
+// context returns the service's running context. It reports ok=false
+// instead of substituting context.Background() when ServiceStartup has not
+// run yet (invariant 20): callers refuse the operation in that case rather
+// than run it under a context nothing will ever cancel.
+func (s *Service) context() (context.Context, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.ctx != nil {
-		return s.ctx
-	}
-	return context.Background()
+	return s.ctx, s.ctx != nil
 }
 
 func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summary, error) {
@@ -467,6 +627,9 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	src.Status = StatusUpdating
 	initial := len(s.releases[id]) == 0
 	cond := feed.Conditional{ETag: src.ETag, LastModified: src.LastModified}
+	if src.ParseVersion != sourceParseVersion {
+		cond = feed.Conditional{}
+	}
 	kind := src.Type
 	location := locationOf(src)
 	name := src.Name
@@ -480,26 +643,46 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.mu.Unlock()
 	}()
 
-	slog.Info("source refresh started", "source_id", id, "name", name)
+	slog.Info("source refresh started", "source_id", id, "name", name, "source_type", string(kind), "scheduled", scheduled, "timeout_ms", refreshTimeout.Milliseconds())
 	result, err := s.fetchFeed(ctx, kind, location, cond)
 	if err != nil {
-		s.fail(id, err, scheduled)
+		s.fail(id, err, scheduled, "stage", "fetch", "duration_ms", time.Since(started).Milliseconds(), "timeout_ms", refreshTimeout.Milliseconds())
 		return Summary{}, err
 	}
+	incoming := parseEntries(id, result.Feed.Entries, time.Now())
 	if result.NotModified {
-		return s.settle(id, nil, result, started, initial, true), nil
+		s.mu.Lock()
+		incoming = cloneReleases(s.releases[id])
+		s.mu.Unlock()
+		for _, r := range incoming {
+			reparseRelease(r)
+		}
 	}
-	return s.settle(id, parseEntries(id, result.Feed.Entries, time.Now()), result, started, initial, false), nil
+	matches, matchErr := s.resolveRemoteReleases(ctx, incoming)
+	if matchErr != nil {
+		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
+		return Summary{}, matchErr
+	}
+	return s.settle(id, incoming, result, started, initial, result.NotModified, matches)
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
+	if result, ok := s.takeCachedFeed(kind, location); ok {
+		slog.Info("source feed served from the preview cache", "type", string(kind))
+		return result, nil
+	}
 	if kind == TypeFile {
 		return feed.ReadFile(ctx, location)
 	}
 	return feed.Fetch(ctx, s.client, location, cond)
 }
 
-func (s *Service) fail(id string, err error, scheduled bool) {
+// fail records that a refresh failed. A persist failure here rolls the
+// in-memory source and backoff bookkeeping back and marks the service
+// degraded instead of returning: fail's own callers already have a more
+// specific error to return (the fetch/merge failure that led here), and
+// replacing that with a persistence error would hide the actual cause.
+func (s *Service) fail(id string, err error, scheduled bool, diagnosticAttrs ...any) {
 	interval := refreshInterval(s.config())
 
 	s.mu.Lock()
@@ -508,18 +691,39 @@ func (s *Service) fail(id string, err error, scheduled bool) {
 		s.mu.Unlock()
 		return
 	}
+	before := *src
+	beforeFailures, hadFailures := s.failures[id]
+	beforeRetry, hadRetry := s.retryAt[id]
 	src.Health = HealthError
 	src.LastError = err.Error()
 	src.Status = statusOf(src)
 	s.failures[id]++
 	s.retryAt[id] = time.Now().Add(retryDelay(s.failures[id], interval))
 	if saveErr := s.store.saveSources(flatten(s.sources)); saveErr != nil {
-		slog.Error("save sources", "error", saveErr)
+		*src = before
+		if hadFailures {
+			s.failures[id] = beforeFailures
+		} else {
+			delete(s.failures, id)
+		}
+		if hadRetry {
+			s.retryAt[id] = beforeRetry
+		} else {
+			delete(s.retryAt, id)
+		}
+		s.markDegradedLocked(saveErr)
+		s.mu.Unlock()
+		slog.Error("persist source failure state", "source_id", id, "error", saveErr)
+		return
 	}
+	s.clearDegradedLocked()
 	snapshot := *src
+	attempts := s.failures[id]
 	s.mu.Unlock()
 
-	slog.Error("source refresh failed", "source_id", id, "name", snapshot.Name, "error", err)
+	attrs := []any{"source_id", id, "name", snapshot.Name, "error", err, "source_type", string(snapshot.Type), "scheduled", scheduled, "retry_attempt", attempts}
+	attrs = append(attrs, diagnosticAttrs...)
+	slog.Error("source refresh failed", attrs...)
 	emit(eventUpdated, snapshot)
 	emit(eventError, SourceError{SourceID: id, Name: snapshot.Name, Message: err.Error(), Scheduled: scheduled})
 }
@@ -538,34 +742,66 @@ func retryDelay(failures int, interval time.Duration) time.Duration {
 	return delay
 }
 
-func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool) Summary {
+func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved ...map[string]catalog.Match) (Summary, error) {
 	now := time.Now()
 
 	s.mu.Lock()
 	src := s.findLocked(id)
 	if src == nil {
 		s.mu.Unlock()
-		return Summary{}
+		return Summary{}, errSourceNotFound
 	}
+	beforeSrc := *src
+	beforeFailures, hadFailures := s.failures[id]
+	beforeRetry, hadRetry := s.retryAt[id]
 	summary := Summary{SourceID: id, NotModified: notModified}
-	if !notModified {
-		list, mergeSummary := merge(s.releases[id], incoming, now, initial)
+	if !notModified || (len(resolved) > 0 && len(resolved[0]) > 0) {
+		previous := s.releases[id]
+		list := cloneReleases(previous)
+		mergeSummary := Summary{SourceID: id, NotModified: notModified}
+		if !notModified {
+			list, mergeSummary = merge(list, incoming, now, initial)
+		} else {
+			for _, r := range list {
+				reparseRelease(r)
+			}
+		}
 		mergeSummary.SourceID = id
 		summary = mergeSummary
-		applyMatches(s.catalog, list)
+		if err := applyMatches(s.catalog, list); err != nil {
+			s.mu.Unlock()
+			s.fail(id, err, false)
+			return Summary{SourceID: id, Error: err.Error()}, err
+		}
+		if len(resolved) > 0 {
+			for _, r := range list {
+				if r.Locked || r.Ignored || r.MatchMethod == string(catalog.MethodOverride) {
+					continue
+				}
+				if match, ok := resolved[0][remoteQueryKey(r)]; ok {
+					assign(r, match)
+				}
+			}
+		}
 		s.releases[id] = list
 		if err := s.store.saveReleases(id, list); err != nil {
-			slog.Error("save releases", "source_id", id, "error", err)
+			s.releases[id] = previous
+			s.mu.Unlock()
+			s.fail(id, err, false)
+			return Summary{SourceID: id, Error: err.Error()}, err
 		}
-		if result.Feed.Name != "" {
-			src.Name = result.Feed.Name
-		} else if src.Name == "" {
-			src.Name = displayName(src.Type, locationOf(src))
+		if !notModified {
+			if result.Feed.Name != "" {
+				src.Name = result.Feed.Name
+			} else if src.Name == "" {
+				src.Name = displayName(src.Type, locationOf(src))
+			}
+			src.FeedVersion = result.Feed.Version
+			src.ParseVersion = sourceParseVersion
+			src.Fingerprint = result.Feed.Fingerprint
+			src.Invalid = result.Feed.Invalid
+			src.Warnings = trimWarnings(result.Feed.Warnings)
 		}
-		src.FeedVersion = result.Feed.Version
-		src.Fingerprint = result.Feed.Fingerprint
-		src.Invalid = result.Feed.Invalid
-		src.Warnings = trimWarnings(result.Feed.Warnings)
 	}
 
 	matched, review, unmatched := counts(s.releases[id])
@@ -590,8 +826,25 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	}
 	src.Status = statusOf(src)
 	if err := s.store.saveSources(flatten(s.sources)); err != nil {
-		slog.Error("save sources", "error", err)
+		// The releases for this source (if any were merged above) are
+		// already committed to disk; only the Source metadata computed from
+		// them rolls back here, so the two never disagree (invariant I.4).
+		*src = beforeSrc
+		if hadFailures {
+			s.failures[id] = beforeFailures
+		} else {
+			delete(s.failures, id)
+		}
+		if hadRetry {
+			s.retryAt[id] = beforeRetry
+		} else {
+			delete(s.retryAt, id)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return Summary{SourceID: id, Error: err.Error()}, fmt.Errorf("save sources: %w", err)
 	}
+	s.clearDegradedLocked()
 
 	summary.Name = src.Name
 	summary.Entries = src.Entries
@@ -633,7 +886,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	if summary.Added > 0 || summary.Updated > 0 || summary.Restored > 0 {
 		s.notifyChanged()
 	}
-	return summary
+	return summary, nil
 }
 
 //wails:ignore
@@ -643,30 +896,70 @@ func (s *Service) SetOnChanged(fn func()) {
 	s.onChanged = fn
 }
 
+// notifyChanged runs the onChanged callback in its own goroutine so a slow
+// listener (updates.HandleSourcesRefreshed walks every installed game)
+// cannot block settle. The goroutine is counted in s.wg and refuses to start
+// once the service is closing, so ServiceShutdown's wg.Wait() cannot return
+// while one is still in flight (invariant 19).
 func (s *Service) notifyChanged() {
 	s.mu.Lock()
 	notify := s.onChanged
-	s.mu.Unlock()
-	if notify != nil {
-		go notify()
+	if notify == nil || s.closing {
+		s.mu.Unlock()
+		return
 	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		notify()
+	}()
 }
 
+// schedule stays for tests that exercise the no-op-without-started-service
+// invariant (TestScheduleAndRefreshDueNoOpWithoutStartedService): it still
+// reads s.ctx via s.context() and refuses to run before ServiceStartup, the
+// same way the goroutine used to. ServiceStartup itself now launches
+// scheduleLoop directly with the ctx it just derived, so the real goroutine
+// chain threads ctx as an explicit parameter (invariant 21, contextcheck)
+// instead of re-fetching it from the receiver under s.mu.
 func (s *Service) schedule() {
+	ctx, ok := s.context()
+	if !ok {
+		s.wg.Done()
+		return
+	}
+	s.scheduleLoop(ctx)
+}
+
+func (s *Service) scheduleLoop(ctx context.Context) {
 	defer s.wg.Done()
 	ticker := time.NewTicker(scheduleTick)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-s.context().Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.refreshDue()
+			s.pruneExpiredPreview(time.Now())
+			s.runRefreshDue(ctx)
 		}
 	}
 }
 
+// refreshDue mirrors schedule above: kept for tests that call it directly on
+// a service whose ctx was set without going through ServiceStartup, still
+// refusing via s.context(). scheduleLoop calls runRefreshDue with its own
+// ctx directly instead of going through this fetch-from-receiver path.
 func (s *Service) refreshDue() {
+	ctx, ok := s.context()
+	if !ok {
+		return
+	}
+	s.runRefreshDue(ctx)
+}
+
+func (s *Service) runRefreshDue(ctx context.Context) {
 	interval := refreshInterval(s.config())
 	if interval <= 0 {
 		return
@@ -695,11 +988,11 @@ func (s *Service) refreshDue() {
 	for _, id := range due {
 		select {
 		case s.sem <- struct{}{}:
-		case <-s.context().Done():
+		case <-ctx.Done():
 			return
 		}
-		ctx, cancel := context.WithTimeout(s.context(), refreshTimeout)
-		if _, err := s.refresh(ctx, id, true); err != nil {
+		refreshCtx, cancel := context.WithTimeout(ctx, refreshTimeout)
+		if _, err := s.refresh(refreshCtx, id, true); err != nil {
 			slog.Warn("scheduled refresh failed", "source_id", id, "error", err)
 		}
 		cancel()
@@ -766,10 +1059,14 @@ func sameLocation(src *Source, kind Type, location string) bool {
 	if src.Type != kind {
 		return false
 	}
+	return sameLocationValue(kind, locationOf(src), location)
+}
+
+func sameLocationValue(kind Type, a, b string) bool {
 	if kind == TypeFile {
-		return samePath(src.Path, location)
+		return samePath(a, b)
 	}
-	return strings.EqualFold(src.URL, location)
+	return strings.EqualFold(a, b)
 }
 
 func samePath(a, b string) bool {

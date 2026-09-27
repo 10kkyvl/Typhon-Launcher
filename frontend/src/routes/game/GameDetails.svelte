@@ -1,12 +1,28 @@
 <script lang="ts">
-  import { BookmarkPlus, ChevronRight, Download, EllipsisVertical, FolderOpen, Play, Square } from '@lucide/svelte';
+  import { genreLabel, themeLabel } from '../../lib/metadata/labels';
+  import { revealImage } from '../../lib/utils/revealImage';
+  import { locale } from '../../lib/i18n/locale';
+  import {
+    BookmarkPlus,
+    ChevronRight,
+    Download,
+    EllipsisVertical,
+    FolderOpen,
+    HardDriveDownload,
+    Heart,
+    Play,
+    Square,
+  } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -16,8 +32,14 @@
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import Tabs from '../../lib/components/Tabs.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { releaseOrigin } from '../../lib/game/releases';
+  import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
     clean,
@@ -45,7 +67,16 @@
     type DownloadOrigin,
     type DownloadStatus,
   } from '../../lib/services/downloads';
-  import { addCatalogGame, createShortcut, playGame, removeShortcut, stopGame } from '../../lib/services/library';
+  import {
+    addCatalogGame,
+    createShortcut,
+    markError,
+    playGame,
+    removeShortcut,
+    setFavorite,
+    setRequiresSteam,
+    stopGame,
+  } from '../../lib/services/library';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -53,7 +84,7 @@
     refreshMetadata,
     type MetadataView,
   } from '../../lib/services/metadata';
-  import { openFolder } from '../../lib/services/settings';
+  import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
     getReleasesForGame,
@@ -62,6 +93,7 @@
     type CatalogGame,
     type ReleaseGroup,
   } from '../../lib/services/sources';
+  import { getWineStatus, type WineStatus } from '../../lib/services/system';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
@@ -69,19 +101,38 @@
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
+
+  function libraryErrorText(err: unknown, fallback: string): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg(code) : fallback;
+  }
 
   let { id }: { id: string } = $props();
 
   const localGame = $derived(
-    $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id),
+    $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
+  const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
+  let statusOpen = $state(false);
+  let wineStatus = $state<WineStatus | null>(null);
+  let requiresSteam = $state(true);
+  let requiresSteamSaving = $state(false);
+
+  $effect(() => {
+    if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
+  });
 
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
@@ -115,6 +166,7 @@
 
   let releaseGroups = $state<ReleaseGroup[]>([]);
   let releasesLoading = $state(false);
+  let releasesFailed = $state(false);
   let releaseToken = 0;
 
   let catalogGame = $state<CatalogGame | null>(null);
@@ -124,6 +176,7 @@
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
+    catalogGame = null;
     try {
       const found = await getCatalogGame(gameId);
       if (current !== catalogToken) return;
@@ -155,6 +208,8 @@
 
   let metaView = $state<MetadataView | null>(null);
   let metaToken = 0;
+  let metaEventVersion = 0;
+  let metaReading = $state(false);
   let metaRefreshing = $state(false);
   let metaSearching = $state(false);
   let metaSkipping = $state(false);
@@ -168,20 +223,29 @@
 
   async function loadMetaView(gameId: string) {
     const current = ++metaToken;
-    const view = await getMetadataView(gameId);
-    if (current !== metaToken) return;
-    metaView = preferView(metaView, view);
-    const started = await ensureMetadataFresh(gameId);
-    if (current !== metaToken || !started) return;
-    metaSearching = true;
+    const eventVersion = metaEventVersion;
+    metaReading = true;
+    try {
+      const view = await getMetadataView(gameId);
+      if (current !== metaToken) return;
+      if (eventVersion === metaEventVersion) metaView = preferView(metaView, view);
+      const started = await ensureMetadataFresh(gameId);
+      if (current !== metaToken || eventVersion !== metaEventVersion) return;
+      metaSearching = started || view.match === 'searching';
+    } finally {
+      if (current === metaToken) metaReading = false;
+    }
   }
 
   $effect(() => {
     const metaGameId = canonicalId;
+    $locale;
     untrack(() => {
       metaSearching = false;
+      metaView = null;
       if (!metaGameId) {
         metaToken++;
+        metaReading = false;
         metaView = null;
         return;
       }
@@ -189,11 +253,20 @@
     });
   });
 
+  onMount(async () => {
+    try {
+      wineStatus = await getWineStatus();
+    } catch (err) {
+      toast(markError(err, msg('games.errorWineStatusFailed')), 'danger');
+    }
+  });
+
   onMount(() => {
     return Events.On('metadata:updated', (event) => {
       const view = event.data as MetadataView;
       if (view.game?.id && view.game.id === canonicalId) {
-        metaSearching = false;
+        metaEventVersion++;
+        metaSearching = view.match === 'searching';
         metaView = preferView(metaView, view);
       }
     });
@@ -202,7 +275,7 @@
   const metaState = $derived(
     metaStatus({
       available: $metadataAvailable,
-      busy: metaSearching || metaRefreshing || metaSkipping,
+      busy: metaReading || metaSearching || metaRefreshing || metaSkipping,
       match: metaView?.match,
       resolved: metaView?.resolved,
     }),
@@ -210,12 +283,12 @@
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
-    clean(localGame?.title) || clean(catalogGame?.title) || clean(info?.title) || clean(anyOwnDownload?.name),
+    clean(info?.title) || clean(catalogGame?.title) || clean(localGame?.title) || clean(anyOwnDownload?.name),
   );
   const screenshots = $derived(metaView?.screenshots ?? []);
   const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
   const shots = $derived(galleryShots(screenshots, heroSrc));
-  const coverSrc = $derived(clean(metaView?.cover) || clean(localGame?.cover));
+  const coverSrc = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl) || clean(localGame?.cover));
   const showHero = $derived(Boolean(heroSrc) && !heroFailed);
 
   $effect(() => {
@@ -230,7 +303,7 @@
     if (!info) return '';
     if (info.releaseDate) {
       const date = new Date(info.releaseDate);
-      if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('ru-RU');
+      if (!Number.isNaN(date.getTime())) return numericDate(date);
     }
     return info.releaseYear ? String(info.releaseYear) : '';
   });
@@ -257,15 +330,15 @@
     }),
   );
 
-  const tags = $derived(tagList([info?.genres, info?.themes]));
+  const tags = $derived(tagList([info?.genres?.map(genreLabel), info?.themes?.map(themeLabel)]));
   const summary = $derived(summaryView(info?.summary ?? '', summaryExpanded));
 
   const gameFacts = $derived(
     facts([
-      { label: 'Дата выхода', value: releaseDateLabel },
-      { label: 'Разработчик', value: info?.developer },
-      { label: 'Издатель', value: info?.publisher },
-      { label: 'Платформы', value: joinLimited(platforms, 4), full: platforms.join(', ') },
+      { label: msg('games.detailFactReleaseDate'), value: releaseDateLabel },
+      { label: msg('games.detailFactDeveloper'), value: info?.developer },
+      { label: msg('games.detailFactPublisher'), value: info?.publisher },
+      { label: msg('games.detailFactPlatforms'), value: joinLimited(platforms, 4), full: platforms.join(', ') },
     ]),
   );
 
@@ -273,16 +346,27 @@
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
   );
 
+  let activeTab = $state('overview');
+
+  const tabs = $derived([
+    { id: 'overview', label: msg('games.detailTabOverview') },
+    ...(shots.length > 0 ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
+  ]);
+
+  $effect(() => {
+    if (activeTab === 'screenshots' && shots.length === 0) activeTab = 'overview';
+  });
+
   const installFacts = $derived.by(() => {
     if (!localGame || !installed) return [];
     const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
     return facts([
-      { label: 'Версия', value: localGame.version },
-      { label: 'Размер', value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
-      { label: 'Исполняемый файл', value: exe, full: localGame.executable, mono: true },
-      { label: 'Наиграно', value: playtime(localGame.playtimeSeconds) },
-      { label: 'Последний запуск', value: relativeDate(localGame.lastPlayed) },
-      { label: 'Добавлена', value: relativeDate(localGame.installedAt) },
+      { label: msg('games.detailFactVersion'), value: localGame.version },
+      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
+      { label: msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
+      { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
+      { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },
+      { label: msg('games.detailFactAdded'), value: relativeDate(localGame.installedAt) },
     ]);
   });
 
@@ -316,11 +400,11 @@
 
   const busy = $derived(
     busyState([
-      ownInstall ? { active: true, label: installStatusLabels[ownInstall.status], progress: ownInstall.progress } : null,
+      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: ownInstall.status === 'verifying' } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
-        ? { active: true, label: stepLabels[update.step ?? 'download'], progress: update.progress }
+        ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,
-      ownDownload ? { active: true, label: statusLabels[ownDownload.status], progress: ownDownload.progress } : null,
+      ownDownload ? { active: true, label: statusLabels(ownDownload.status), progress: ownDownload.progress } : null,
     ]),
   );
 
@@ -338,32 +422,35 @@
     }),
   );
 
-  const busyPercent = $derived(Math.round((busy?.progress ?? 0) * 100));
+  const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
   const menuItems = $derived([
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
-            { id: 'meta-refresh', label: metaRefreshing ? 'Обновление…' : 'Обновить метаданные' },
-            { id: 'meta-change', label: 'Сменить сопоставление' },
+            {
+              id: 'meta-refresh',
+              label: metaRefreshing ? msg('games.detailMetaRefreshingLabel') : msg('games.detailMetaRefreshLabel'),
+            },
+            { id: 'meta-change', label: msg('games.detailMetaChangeLabel') },
           ]
-        : [{ id: 'meta-find', label: 'Найти метаданные' }]
+        : [{ id: 'meta-find', label: msg('games.detailMetaFindLabel') }]
       : []),
     ...(installed
       ? [
           localGame?.shortcutPath
-            ? { id: 'shortcut-remove', label: 'Удалить ярлык с рабочего стола' }
-            : { id: 'shortcut-create', label: 'Создать ярлык на рабочем столе' },
+            ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
+            : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed ? [{ id: 'uninstall', label: 'Удалить с компьютера', danger: true, separator: true }] : []),
+    ...(installed ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }] : []),
     ...(localGame
-      ? [{ id: 'remove', label: 'Удалить из библиотеки', danger: true, separator: !installed }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed }]
       : []),
     ...(terminalDownload
       ? [
-          { id: 'remove-download', label: 'Удалить загрузку', danger: true, separator: true },
-          { id: 'discard-download', label: 'Удалить загрузку и файлы', danger: true },
+          { id: 'remove-download', label: msg('games.detailRemoveDownloadLabel'), danger: true, separator: true },
+          { id: 'discard-download', label: msg('games.detailDiscardDownloadLabel'), danger: true },
         ]
       : []),
   ]);
@@ -387,13 +474,47 @@
     } else if (actionId === 'meta-refresh') {
       refreshMeta();
     } else if (actionId === 'remove-download') {
-      removeTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: removeDownloadPrompt(terminalDownload.name), run: removeTerminalDownload };
+      }
     } else if (actionId === 'discard-download') {
-      discardTerminalDownload();
+      if (terminalDownload) {
+        pending = { prompt: discardDownloadPrompt(terminalDownload.name), run: discardTerminalDownload };
+      }
     } else if (actionId === 'shortcut-create') {
       createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
       removeDesktopShortcut();
+    }
+  }
+
+  async function mark(fn: () => Promise<unknown>, fallback: string) {
+    try {
+      await fn();
+    } catch (err) {
+      toast(markError(err, fallback), 'danger');
+    }
+  }
+
+  function toggleFavorite() {
+    const current = localGame;
+    if (!current) return;
+    void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
+  }
+
+  async function toggleRequiresSteam(on: boolean) {
+    const current = localGame;
+    if (!current || requiresSteamSaving) return;
+    const previous = current.requiresSteam !== false;
+    requiresSteamSaving = true;
+    try {
+      const updated = await setRequiresSteam(current.id, on);
+      if (localGame?.id === current.id) requiresSteam = updated.requiresSteam !== false;
+    } catch (err) {
+      if (localGame?.id === current.id) requiresSteam = previous;
+      toast(markError(err, msg('games.errorRequiresSteamFailed')), 'danger');
+    } finally {
+      if (localGame?.id === current.id) requiresSteamSaving = false;
     }
   }
 
@@ -402,7 +523,7 @@
     try {
       await createShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось создать ярлык', 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutCreateError')), 'danger');
     }
   }
 
@@ -411,18 +532,22 @@
     try {
       await removeShortcut(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить ярлык', 'danger');
+      toast(libraryErrorText(err, msg('games.detailShortcutRemoveError')), 'danger');
     }
   }
 
   async function refreshMeta() {
     if (!canonicalId || metaRefreshing) return;
     metaRefreshing = true;
+    const gameId = canonicalId;
+    const current = metaToken;
     try {
-      metaView = await refreshMetadata(canonicalId);
-      toast('Метаданные обновлены', 'success');
+      const view = await refreshMetadata(gameId);
+      if (gameId !== canonicalId || current !== metaToken) return;
+      metaView = view;
+      toast(msg('games.detailMetaRefreshedToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось обновить метаданные', 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
     } finally {
       metaRefreshing = false;
     }
@@ -431,10 +556,14 @@
   async function skipMeta() {
     if (!canonicalId || metaSkipping) return;
     metaSkipping = true;
+    const gameId = canonicalId;
+    const current = metaToken;
     try {
-      metaView = await dismissMetadataMatch(canonicalId);
+      const view = await dismissMetadataMatch(gameId);
+      if (gameId !== canonicalId || current !== metaToken) return;
+      metaView = view;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось отложить поиск метаданных', 'danger');
+      toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
     } finally {
       metaSkipping = false;
     }
@@ -448,6 +577,8 @@
   async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined) {
     const current = ++releaseToken;
     releasesLoading = true;
+    releasesFailed = false;
+    releaseGroups = [];
     try {
       const groups = canonicalGameId
         ? await getReleasesForGame(canonicalGameId)
@@ -456,9 +587,10 @@
           : [];
       if (current !== releaseToken) return;
       releaseGroups = groups;
+      releasesFailed = false;
     } catch {
       if (current !== releaseToken) return;
-      releaseGroups = [];
+      releasesFailed = true;
     } finally {
       if (current === releaseToken) releasesLoading = false;
     }
@@ -466,6 +598,7 @@
 
   $effect(() => {
     releaseKey;
+    $sources; // A feed can finish importing while this game is already open.
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
     untrack(() => {
@@ -474,6 +607,7 @@
   });
 
   let downloadModalOpen = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let downloadSource = $state('');
   let downloadOrigin = $state<DownloadOrigin | undefined>(undefined);
 
@@ -485,7 +619,7 @@
     try {
       await resumeDownload(terminalDownload.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось повторить загрузку', 'danger');
+      toast(installErrorText(err, msg('games.detailRetryDownloadError')), 'danger');
     }
   }
 
@@ -505,7 +639,7 @@
       await removeDownload(terminalDownload.id);
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку', 'danger');
+      toast(installErrorText(err, msg('games.detailRemoveDownloadError')), 'danger');
     }
   }
 
@@ -520,7 +654,7 @@
       await (freesDisk ? cancelDownload(id) : deleteDownloadData(id));
       leaveWithoutCard();
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось удалить загрузку и файлы', 'danger');
+      toast(installErrorText(err, msg('games.detailDiscardDownloadError')), 'danger');
     }
   }
 
@@ -528,14 +662,14 @@
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = { releaseId: request.releaseId, sourceId: request.sourceId, gameId: request.gameId };
+      downloadOrigin = releaseOrigin(request);
       downloadModalOpen = true;
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось подготовить загрузку', 'danger');
+      toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');
     }
   }
 
-  function startInstall() {
+  function startDownload() {
     if (availableGroups.length === 0) return;
     if (availableGroups.length === 1) {
       downloadRelease(availableGroups[0]);
@@ -549,7 +683,7 @@
     try {
       await playGame(localGame.id);
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось запустить игру', 'danger');
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
 
@@ -558,16 +692,16 @@
     try {
       await stopGame(localGame.id);
     } catch {
-      toast('Не удалось остановить игру', 'danger');
+      toast(msg('games.errorStopFailed'), 'danger');
     }
   }
 
   async function reveal() {
     if (!localGame) return;
     try {
-      await openFolder(localGame.installDir);
+      await openGameFolder(localGame.installDir, localGame.executable);
     } catch {
-      toast('Папка недоступна', 'danger');
+      toast(msg('games.errorFolderUnavailable'), 'danger');
     }
   }
 
@@ -578,9 +712,9 @@
     addingToLibrary = true;
     try {
       await addCatalogGame(canonicalId, title, coverSrc);
-      toast('Игра добавлена в библиотеку', 'success');
+      toast(msg('games.detailAddedToLibraryToast'), 'success');
     } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось добавить игру в библиотеку', 'danger');
+      toast(libraryErrorText(err, msg('games.detailAddToLibraryError')), 'danger');
     } finally {
       addingToLibrary = false;
     }
@@ -589,7 +723,7 @@
   function runPrimary() {
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
-    else if (primary.kind === 'install') startInstall();
+    else if (primary.kind === 'download') startDownload();
     else if (primary.kind === 'update') updateCard?.start();
     else if (primary.kind === 'retry-download') retryTerminalDownload();
     else if (primary.kind === 'install-download') installFromTerminalDownload();
@@ -606,28 +740,30 @@
 </script>
 
 {#if missing}
-  <EmptyState title="Игра не найдена" description="Возможно, она была удалена из библиотеки.">
+  <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
     {#snippet actions()}
-      <Button onclick={() => navigate('library')}>В библиотеку</Button>
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
     {/snippet}
   </EmptyState>
 {:else}
   <section class="hero" class:plain={!showHero}>
     <div class="art">
       {#if showHero}
-        <img src={heroSrc} alt="" draggable="false" onerror={() => (heroFailed = true)} />
+        {#key heroSrc}
+          <img src={heroSrc} class="media-reveal" use:revealImage alt="" decoding="async" draggable="false" onerror={() => (heroFailed = true)} />
+        {/key}
       {/if}
     </div>
     <div class="veil"></div>
 
     <nav class="breadcrumb">
       {#if installed}
-        <button class="crumb" onclick={() => navigate('installed')}>Установлено</button>
+        <button class="crumb" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</button>
       {:else}
-        <button class="crumb" onclick={() => navigate('library')}>Библиотека</button>
+        <button class="crumb" onclick={() => navigate('library')}>{msg('games.libraryWord')}</button>
       {/if}
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
-      <span class="crumb current">{title || 'Игра'}</span>
+      <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
     </nav>
 
     <div class="foot">
@@ -642,16 +778,19 @@
       <div class="ident">
         <div class="state">
           {#if running}
-            <StatusBadge kind="accent" label="Запущена" />
+            <StatusBadge kind="accent" label={msg('games.runningLabel')} />
           {:else if installed}
-            <StatusBadge kind="success" label="Установлено" dot={false} />
-          {:else if localGame}
-            <StatusBadge kind="neutral" label="Удалена с компьютера" dot={false} />
+            <StatusBadge kind="success" label={msg('games.installedStatusWord')} dot={false} />
+          {:else if localGame && wasInstalled}
+            <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
           {:else if title}
-            <StatusBadge kind="neutral" label="Не установлено" dot={false} />
+            <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
           {/if}
           {#if updateAvailable && !busy}
-            <StatusBadge kind="accent" label="Доступно обновление" />
+            <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
+          {/if}
+          {#if localGame?.status}
+            <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
           {/if}
         </div>
 
@@ -674,8 +813,8 @@
           {#if primary.kind === 'progress'}
             <div class="progress">
               <span class="progress-label">{primary.label}</span>
-              <ProgressBar value={busyPercent} />
-              <span class="progress-pct">{busyPercent}%</span>
+              <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} />
+              {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else}
             <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
@@ -683,8 +822,10 @@
                 <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
               {:else if primary.kind === 'stop'}
                 <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'install' || primary.kind === 'install-download'}
+              {:else if primary.kind === 'download'}
                 <Download size="1.6rem" strokeWidth={1.8} />
+              {:else if primary.kind === 'install-download'}
+                <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
               {/if}
               {primary.label}
             </Button>
@@ -693,21 +834,35 @@
           {#if primary.kind === 'update'}
             <Button size="lg" onclick={play}>
               <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-              Играть
+              {msg('games.play')}
             </Button>
           {/if}
 
           {#if !localGame && canonicalId}
             <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
               <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
-              Добавить в библиотеку
+              {msg('games.detailAddToLibraryButton')}
+            </Button>
+          {/if}
+
+          {#if localGame}
+            <IconButton
+              label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
+              active={Boolean(localGame.favorite)}
+              onclick={toggleFavorite}
+            >
+              <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+            </IconButton>
+
+            <Button size="lg" onclick={() => (statusOpen = true)}>
+              {msg('games.actionStatus', { status: statusLabel(localGame.status) })}
             </Button>
           {/if}
 
           {#if menuItems.length > 0}
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
-                <IconButton label="Ещё" onclick={toggle}>
+                <IconButton label={msg('games.moreLabel')} onclick={toggle}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -716,119 +871,164 @@
         </div>
 
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
-          <p class="note danger">{terminalDownload.error}</p>
-        {:else if localGame && !installed}
-          <p class="note">Игра удалена с компьютера — установите её снова из доступных загрузок.</p>
+          <p class="note danger">{installErrorText(terminalDownload.error)}</p>
+        {:else if localGame && !installed && wasInstalled}
+          <p class="note">
+            {primary.kind === 'install-download'
+              ? msg('games.detailUninstalledDownloadedNote')
+              : msg('games.detailUninstalledNote')}
+          </p>
         {/if}
       </div>
     </div>
   </section>
 
+  {#if tabs.length > 1}
+    <div class="tabs-wrap">
+      <Tabs {tabs} bind:value={activeTab} />
+    </div>
+  {/if}
+
   <div class="body">
     <div class="main">
-      {#if metaState === 'searching'}
-        <div class="meta-note" role="status">
-          <span class="spinner"></span>
-          <div class="meta-text">
-            <p class="meta-title">Ищем описание и обложку</p>
-            <p class="meta-hint">Сопоставляем «{title || 'игру'}» с базой IGDB — это занимает несколько секунд.</p>
-          </div>
-        </div>
-      {:else if metaState === 'unmatched' || metaState === 'failed'}
-        <div class="meta-note">
-          <div class="meta-text">
-            <p class="meta-title">
-              {metaState === 'unmatched' ? 'Не удалось подобрать описание' : 'Метаданные не загрузились'}
-            </p>
-            <p class="meta-hint">
-              {metaState === 'unmatched'
-                ? 'В базе IGDB нет однозначного совпадения. Выберите игру вручную или оставьте карточку как есть.'
-                : 'Сервис метаданных не ответил. Попробуйте ещё раз или выберите игру вручную.'}
-            </p>
-          </div>
-          <div class="meta-actions">
-            {#if metaState === 'failed'}
-              <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
-                {metaRefreshing ? 'Повторяем…' : 'Повторить'}
-              </Button>
-              <Button size="sm" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {:else}
-              <Button size="sm" variant="primary" onclick={() => openMatch('find')}>Выбрать вручную</Button>
-            {/if}
-            <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>Не искать</Button>
-          </div>
-        </div>
-      {/if}
-
-      {#if summary.text}
-        <p class="summary">{summary.text}</p>
-        {#if summary.expandable}
-          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
-            {summaryExpanded ? 'Свернуть' : 'Показать полностью'}
-          </button>
-        {/if}
-      {:else if !title || metaState === 'searching'}
-        <div class="skeleton line"></div>
-        <div class="skeleton line"></div>
-        <div class="skeleton line short"></div>
-      {/if}
-
-      {#if tags.length > 0}
-        <div class="tags">
-          {#each tags as tag (tag)}
-            <span class="tag">{tag}</span>
+      {#if activeTab === 'screenshots'}
+        <div
+          class="shots"
+          class:featured={shots.length >= 5}
+          class:one={shots.length === 1}
+          style:--cols={shotCols}
+        >
+          {#each shots as shot, index (shot.id)}
+            <button class="shot" onclick={() => openShot(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
+              <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
+            </button>
           {/each}
         </div>
-      {/if}
+      {:else}
+        {#if metaState === 'searching'}
+          <div class="meta-note" role="status">
+            <span class="spinner"></span>
+            <div class="meta-text">
+              <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
+              <p class="meta-hint">
+                {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
+              </p>
+            </div>
+          </div>
+        {:else if metaState === 'unmatched' || metaState === 'failed'}
+          <div class="meta-note">
+            <div class="meta-text">
+              <p class="meta-title">
+                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+              </p>
+              <p class="meta-hint">
+                {metaState === 'unmatched'
+                  ? msg('games.detailMetaUnmatchedHint')
+                  : msg('games.detailMetaFailedHint')}
+              </p>
+            </div>
+            <div class="meta-actions">
+              {#if metaState === 'failed'}
+                <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
+                  {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
+                </Button>
+                <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+              {:else}
+                <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+              {/if}
+              <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+            </div>
+          </div>
+        {/if}
 
-      {#if shots.length > 0}
-        <section class="section">
-          <h2 class="heading">Скриншоты</h2>
-          <div
-            class="shots"
-            class:featured={shots.length >= 5}
-            class:one={shots.length === 1}
-            style:--cols={shotCols}
-          >
-            {#each shots as shot, index (shot.id)}
-              <button class="shot" onclick={() => openShot(index)} aria-label="Открыть скриншот">
-                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-              </button>
+        {#if summary.text}
+          <p class="summary">{summary.text}</p>
+          {#if summary.expandable}
+            <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
+              {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
+            </button>
+          {/if}
+        {:else if !title || metaState === 'searching'}
+          <div aria-hidden="true">
+            <div class="skeleton line"></div>
+            <div class="skeleton line"></div>
+            <div class="skeleton line short"></div>
+          </div>
+        {/if}
+
+        {#if tags.length > 0}
+          <div class="tags">
+            {#each tags as tag (tag)}
+              <span class="tag">{tag}</span>
             {/each}
           </div>
-        </section>
-      {/if}
+        {/if}
 
-      {#if showUpdateCard && update}
-        <section class="section">
-          <UpdateCard bind:this={updateCard} {update} {running} />
-        </section>
-      {/if}
+        {#if showUpdateCard && update}
+          <section class="section">
+            <UpdateCard bind:this={updateCard} {update} {running} />
+          </section>
+        {/if}
 
-      {#if installed && localGame}
-        <section class="section">
-          <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-        </section>
-      {/if}
+        {#if installed && localGame}
+          <section class="section">
+            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+          </section>
 
-      {#if releasesLoading || releaseGroups.length > 0}
-        <section class="section">
-          <h2 class="heading">Доступные загрузки</h2>
-          <ReleaseList
-            groups={releaseGroups}
-            loading={releasesLoading}
-            currentReleaseId={localGame?.releaseId ?? ''}
-            updateReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-            ondownload={downloadRelease}
-          />
-        </section>
+          <section class="section">
+            <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
+            <div class="path">
+              <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
+              <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            </div>
+            <dl class="facts">
+              {#each installFacts as fact (fact.label)}
+                <div class="fact">
+                  <dt>{fact.label}</dt>
+                  <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+                </div>
+              {/each}
+            </dl>
+            {#if wineStatus?.required}
+              <div class="steam-row">
+                <div class="steam-row-text">
+                  <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
+                  <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
+                </div>
+                <Toggle
+                  bind:checked={requiresSteam}
+                  label={msg('games.detailSteamBottleLabel')}
+                  disabled={requiresSteamSaving}
+                  onchange={(on) => void toggleRequiresSteam(on)}
+                />
+              </div>
+            {/if}
+          </section>
+        {/if}
+
+        {#if catalogGame || localGame}
+          <section class="section">
+            <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+            {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+            {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
+            <ReleaseList
+              groups={releaseGroups}
+              loading={releasesLoading}
+              currentReleaseId={localGame?.releaseId ?? ''}
+              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
+              ondownload={downloadRelease}
+            />
+          </section>
+        {/if}
       {/if}
     </div>
 
     <aside class="side">
       {#if gameFacts.length > 0}
-        <section class="side-block">
-          <h2 class="heading sm">Об игре</h2>
+        <Card title={msg('games.detailAboutTitle')}>
           <dl class="facts">
             {#each gameFacts as fact (fact.label)}
               <div class="fact">
@@ -837,32 +1037,16 @@
               </div>
             {/each}
           </dl>
-        </section>
+        </Card>
       {/if}
 
-      {#if installed && localGame}
-        <section class="panel">
-          <h2 class="heading sm">Установка</h2>
-          <div class="path">
-            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
-            <IconButton label="Открыть папку" size="sm" onclick={reveal}>
-              <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          </div>
-          <dl class="facts">
-            {#each installFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-        </section>
-      {/if}
+      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
     </aside>
   </div>
 
   {#if localGame}
+    <GameStatusModal bind:open={statusOpen} game={localGame} />
+
     <RemoveGameModal
       bind:open={removeOpen}
       bind:mode={removeMode}
@@ -874,7 +1058,7 @@
     />
   {/if}
 
-  <Modal bind:open={pickerOpen} title="Выберите загрузку" width="86rem">
+  <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
     <ReleaseList
       groups={availableGroups}
       currentReleaseId={localGame?.releaseId ?? ''}
@@ -904,6 +1088,10 @@
   <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
 {/if}
 
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
+
 <style>
   .hero {
     position: relative;
@@ -929,7 +1117,6 @@
     height: 100%;
     object-fit: cover;
     object-position: 50% 28%;
-    animation: art-in 320ms var(--ease);
   }
 
   .hero.plain {
@@ -1008,6 +1195,7 @@
     width: clamp(11rem, 10vw, 16rem);
     flex-shrink: 0;
     margin-bottom: -3.6rem;
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
   }
@@ -1077,7 +1265,7 @@
     width: min(42rem, 100%);
     height: var(--control-lg);
     padding: 0 1.8rem;
-    border-radius: var(--cut) var(--radius-md) var(--radius-md) var(--radius-md);
+    border-radius: var(--radius-md);
     background: var(--surface-3);
   }
 
@@ -1106,6 +1294,10 @@
 
   .note.danger {
     color: var(--danger);
+  }
+
+  .tabs-wrap {
+    margin-bottom: var(--space-8);
   }
 
   .body {
@@ -1227,12 +1419,6 @@
     margin-bottom: var(--space-4);
   }
 
-  .heading.sm {
-    font-size: var(--font-md);
-    color: var(--text-2);
-    margin-bottom: var(--space-2);
-  }
-
   .shots {
     display: grid;
     grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
@@ -1271,12 +1457,6 @@
     gap: var(--space-8);
   }
 
-  .panel {
-    padding: var(--space-5);
-    background: var(--surface);
-    border-radius: var(--radius-lg);
-  }
-
   .path {
     display: flex;
     align-items: center;
@@ -1308,6 +1488,32 @@
     border-top: 1px solid var(--border);
   }
 
+  .steam-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .steam-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .steam-row-label {
+    font-size: var(--font-sm);
+    color: var(--text);
+  }
+
+  .steam-row-hint {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
   dt {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -1330,9 +1536,8 @@
   }
 
   .skeleton {
-    background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
-    background-size: 200% 100%;
-    animation: shimmer 1.4s linear infinite;
+    background: var(--surface-3);
+    animation: loading-breathe 1.6s ease-in-out 3;
     border-radius: var(--radius-sm);
   }
 
@@ -1344,19 +1549,6 @@
 
   .line.short {
     width: 40%;
-  }
-
-  @keyframes shimmer {
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @keyframes art-in {
-    from {
-      opacity: 0;
-      transform: scale(1.02);
-    }
   }
 
   @media (max-width: 1400px) {

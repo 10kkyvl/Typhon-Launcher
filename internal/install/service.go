@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"math"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/titles"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -48,29 +50,37 @@ const (
 const interruptedMessage = "установка была прервана"
 
 var (
-	errNotFound         = errors.New("установка не найдена")
-	errNoDownloads      = errors.New("менеджер загрузок недоступен")
-	errNotCompleted     = errors.New("загрузка ещё не завершена")
-	errBusy             = errors.New("установка этой загрузки уже выполняется")
-	errNoDestination    = errors.New("укажите папку установки")
-	errDestNotEmpty     = errors.New("папка установки уже существует и не пуста")
-	errUnknownType      = errors.New("тип пакета не распознан")
-	errUnavailable      = errors.New("недоступно для этой установки")
-	errExternalRuns     = errors.New("установщик запущен отдельно, дождитесь его завершения")
-	errInstallerFail    = errors.New("установщик завершился с ошибкой")
-	errNoExecutable     = errors.New("исполняемый файл не найден")
-	errOutsideInstall   = errors.New("файл находится вне папки установки")
-	errEmptyInstall     = errors.New("папка установки пуста")
-	errNoLibrary        = errors.New("библиотека недоступна")
-	errEmptyDestination = errors.New("каталог установки не задан")
-	errNeedsUser        = errors.New("этот пакет требует участия пользователя")
+	errNotFound         = uierr.New("install.not_found", "установка не найдена")
+	errNoDownloads      = uierr.New("install.no_downloads", "менеджер загрузок недоступен")
+	errNotCompleted     = uierr.New("install.not_completed", "загрузка ещё не завершена")
+	errBusy             = uierr.New("install.busy", "установка этой загрузки уже выполняется")
+	errNoDestination    = uierr.New("install.no_destination", "укажите папку установки")
+	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
+	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
+	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
+	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
+	errInstallerFail    = uierr.New("install.installer_failed", "установщик завершился с ошибкой")
+	errNoExecutable     = uierr.New("install.no_executable", "исполняемый файл не найден")
+	errOutsideInstall   = uierr.New("install.outside_install", "файл находится вне папки установки")
+	errEmptyInstall     = uierr.New("install.empty_install", "папка установки пуста")
+	errNoLibrary        = uierr.New("install.no_library", "библиотека недоступна")
+	errEmptyDestination = uierr.New("install.empty_destination", "каталог установки не задан")
+	errNeedsUser        = uierr.New("install.needs_user", "этот пакет требует участия пользователя")
 
-	errInstallerNoOutput = errors.New("установщик не создал файлов в папке установки")
+	// errNotStarted — вызов до ServiceStartup: контекста жизни сервиса ещё
+	// нет, начинать операцию нельзя (инвариант 20). Отдельная причина, а не
+	// errUnavailable: это не «недоступно для этой установки».
+	errNotStarted = errors.New("install service is not started")
+
+	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
 
 	// errInstallerNotConfirmedStopped значит, что процесс всё ещё может писать
 	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
-	errInstallerNotConfirmedStopped = errors.New("установщик не подтвердил остановку")
-	errInstallerStillRunning        = errors.New("установка ещё идёт в фоне: установщик с правами администратора не завершился")
+	errInstallerNotConfirmedStopped = uierr.New("install.installer_not_confirmed_stopped", "установщик не подтвердил остановку")
+	errInstallerStillRunning        = uierr.New("install.installer_still_running", "установка ещё идёт в фоне: установщик с правами администратора не завершился")
+
+	errFreeSpaceUnknown = uierr.New("install.free_space_unknown", "не удалось определить свободное место на диске")
+	errNotEnoughSpace   = uierr.New("install.not_enough_space", "недостаточно места на диске")
 )
 
 type downloadSource interface {
@@ -101,12 +111,22 @@ type Service struct {
 	store     *store
 	removals  *removalStore
 	runner    runner
+	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
+	// не прямой вызов: на macOS настоящая реализация заводит бутыль
+	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
+	// прогон тестов создаёт настоящие бутыли на машине разработчика.
+	prepareRuntime func(ctx context.Context, installDir, executable string) error
+	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
+	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
+	releaseRuntime func(installDir string) error
 
 	items      []*Installation
 	jobs       map[string]*job
+	brokers    map[string]*broker
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string
+	repacker   func(releaseID string) string
 	usage      func(usagestats.Event)
 
 	historyRecorder func(history.Record) error
@@ -142,14 +162,18 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	if dir == "" {
 		return nil, errors.New("installations path unavailable")
 	}
-	return &Service{
+	s := &Service{
 		settings:  settingsService,
 		store:     newStore(dir),
 		removals:  newRemovalStore(dir),
-		runner:    newRunner(),
 		jobs:      map[string]*job{},
+		brokers:   map[string]*broker{},
 		freeSpace: platform.GetStorageInfo,
-	}, nil
+	}
+	s.runner = newRunner(func() string { return s.config().GamesPath })
+	s.prepareRuntime = prepareRuntime
+	s.releaseRuntime = releaseRuntime
+	return s, nil
 }
 
 //wails:ignore
@@ -164,6 +188,17 @@ func (s *Service) SetTitleResolver(fn func(origin download.Origin) string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.title = fn
+}
+
+// SetRepackerResolver сообщает установке, чьей сборкой поставлена игра. Держать
+// это в библиотеке, а не смотреть в источники позже, приходится потому, что
+// релиз из фида пропадает при чистке, а игра остаётся.
+//
+//wails:ignore
+func (s *Service) SetRepackerResolver(fn func(releaseID string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repacker = fn
 }
 
 //wails:ignore
@@ -212,6 +247,19 @@ func (s *Service) titleOf(origin download.Origin) string {
 	return strings.TrimSpace(resolve(origin))
 }
 
+func (s *Service) repackerOf(releaseID string) string {
+	if releaseID == "" {
+		return ""
+	}
+	s.mu.Lock()
+	resolve := s.repacker
+	s.mu.Unlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(releaseID))
+}
+
 func (s *Service) nameFor(d download.Download) string {
 	if title := s.titleOf(d.Origin); title != "" {
 		return title
@@ -235,7 +283,7 @@ func emit(name string, data any) {
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	stale := make([]string, 0, 4)
+	staleItems := make([]Installation, 0, 4)
 	stored, err := s.store.load()
 	if err != nil {
 		cancel := s.cancel
@@ -245,67 +293,161 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		return err
 	}
 	resume := make([]string, 0, 2)
+	toFinalize := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
-		if transient(item.Status) {
-			if s.transientWorkerAlive(item.ID) {
+		wasTransient := transient(item.Status)
+		if wasTransient {
+			alive, done := s.transientWorkerStatus(item.ID)
+			switch {
+			case alive || done:
 				resume = append(resume, item.ID)
 				slog.Info("installation worker still running, resuming", "id", item.ID, "name", item.Name)
-			} else {
+			case crashFinalizable(item):
+				// .partial уже нет, Destination заполнен: commit() успел
+				// переименовать каталог до аварийного завершения, и запись
+				// осталась без регистрации в library, а не без файлов
+				// (finding 4) — StatusInterrupted здесь означал бы, что
+				// пользователь потерял уже установленную игру.
+				item.Status = StatusVerifying
+				toFinalize = append(toFinalize, item.ID)
+				slog.Info("installation committed before crash, finalizing", "id", item.ID, "name", item.Name)
+			default:
 				item.Status = StatusInterrupted
 				item.Error = interruptedMessage
 				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
 			}
 		}
-		if item.Destination != "" {
-			stale = append(stale, item.Destination+partialSuffix)
+		if wasTransient && item.Destination != "" {
+			staleItems = append(staleItems, item)
 		}
 		s.items = append(s.items, &item)
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
 	s.mu.Unlock()
 
 	s.wg.Add(1)
+	//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(); contextcheck не видит связь через поле структуры
 	go func() {
 		defer s.wg.Done()
-		sweepPartial(stale)
+		base, err := s.baseContext()
+		if err != nil {
+			// Недостижимо: s.ctx выставлен несколькими строками выше в этом же
+			// вызове и никогда не сбрасывается обратно в nil. Обрабатываем
+			// честно на случай, если это перестанет быть так.
+			slog.Error("startup sweep: service context unavailable", "error", err)
+			return
+		}
+		s.sweepPartial(base, staleItems)
 		s.sweepRemovals()
 	}()
 
+	base, err := s.baseContext()
+	if err != nil {
+		return err
+	}
 	for _, id := range resume {
 		//nolint:contextcheck // ctx унаследован от s.ctx (жизненный цикл сервиса, инварианты 19-20) через baseContext(), тот же приём, что spawnLocked уже использует для job-контекстов; contextcheck не видит связь через поле структуры
-		s.spawnResumeWatcher(s.baseContext(), id)
+		s.spawnResumeWatcher(base, id)
+	}
+	for _, id := range toFinalize {
+		//nolint:contextcheck // тот же приём, что и для spawnResumeWatcher выше
+		s.spawnFinalize(base, id, nil)
 	}
 	return nil
 }
 
-// transientWorkerAlive решает судьбу записи, пережившей перезапуск
-// лаунчера: os.FindProcess на Windows всегда "успешен" вне зависимости от
-// того, жив ли процесс, поэтому единственный источник правды — файл
-// состояния воркера (тот же, что пишет и читает runElevated) и
-// workerProcessAlive по записанному в нём PID. Ошибка чтения или проверки
-// не превращается в "жив" по умолчанию — только подтверждённая жизнь
-// оставляет запись в рабочем статусе.
-func (s *Service) transientWorkerAlive(id string) bool {
+// crashFinalizable отличает "commit() успел переименовать .partial в
+// Destination до краха" от настоящего прерывания: только у первого
+// Destination существует, непуст и .partial уже нет — тогда установку не
+// нужно переделывать, а нужно только дорегистрировать (finding 4).
+func crashFinalizable(item Installation) bool {
+	if !controlled(item.Type) || item.Destination == "" {
+		return false
+	}
+	if pathExists(item.Destination + partialSuffix) {
+		return false
+	}
+	empty, err := dirEmpty(item.Destination)
+	if err != nil || empty {
+		return false
+	}
+	return true
+}
+
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// spawnFinalize учтён в s.wg и работает по ctx жизни сервиса (инвариант 19),
+// как spawnResumeWatcher: pre, если задан, готовит файловую систему
+// (например, докатывает частично перенесённые файлы) перед тем, как
+// finalize() определит исполняемый файл и зарегистрирует игру.
+func (s *Service) spawnFinalize(ctx context.Context, id string, pre func(context.Context) error) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if pre != nil {
+			if err := pre(ctx); err != nil {
+				s.fail(id, err)
+				return
+			}
+		}
+		if err := s.finalize(ctx, id); err != nil {
+			s.fail(id, err)
+		}
+	}()
+}
+
+// transientWorkerStatus решает судьбу записи, пережившей перезапуск лаунчера:
+// os.FindProcess на Windows всегда "успешен" вне зависимости от того, жив ли
+// процесс, поэтому единственный источник правды — файл состояния воркера
+// (тот же, что пишет и читает runElevated) и workerProcessAlive по
+// записанному в нём PID. Done=true значит, что воркер уже дописал итог
+// (успех/провал/отмену) в файл до того, как лаунчер успел его прочитать —
+// такую запись нельзя считать "мёртвой без результата" и подменять
+// StatusInterrupted: итог должен дойти до записи так же, как если бы лаунчер
+// был жив всё это время (finishResumed разбирает Done по существу). Ошибка
+// чтения или проверки не превращается в "жив" по умолчанию — только
+// подтверждённая жизнь или подтверждённый Done оставляют запись в работе.
+func (s *Service) transientWorkerStatus(id string) (alive, done bool) {
 	statePath := s.workerStatePath(id)
 	state, found, err := readWorkerState(statePath)
 	if err != nil {
 		slog.Error("read worker state on startup", "id", id, "error", err)
-		return false
+		return false, false
 	}
-	if !found || state.Done {
-		return false
+	if !found {
+		return false, false
 	}
-	alive, err := workerProcessAlive(state.PID)
+	if state.Done {
+		return false, true
+	}
+	alive, err = workerProcessAlive(state.PID)
 	if err != nil {
 		slog.Error("check worker process on startup", "id", id, "pid", state.PID, "error", err)
-		return false
+		return false, false
 	}
-	return alive
+	return alive, false
 }
 
 // var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
 var resumeWatchPollInterval = 2 * time.Second
+
+// readWorkerStateForResume — шов для тестов: подделать транзиентный сбой
+// чтения state.json другого способа нет, а переживание такого сбоя и есть
+// проверяемое поведение watchResumedInstall.
+var readWorkerStateForResume = readWorkerState
 
 // spawnResumeWatcher принимает ctx от жизни сервиса: s.cancel() при
 // ServiceShutdown останавливает и наблюдателя, без чего s.wg.Wait() ждал бы
@@ -326,17 +468,33 @@ func (s *Service) spawnResumeWatcher(ctx context.Context, id string) {
 func (s *Service) watchResumedInstall(ctx context.Context, id, statePath string) {
 	ticker := time.NewTicker(resumeWatchPollInterval)
 	defer ticker.Stop()
+	stateReadFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			state, found, err := readWorkerState(statePath)
+			state, found, err := readWorkerStateForResume(statePath)
 			if err != nil {
+				// Воркер подменяет state.json переименованием, и на Windows
+				// чтение ровно в этот момент транзиентно падает — то же, что
+				// runElevated уже переживает через workerStateReadRetries.
+				// Здесь цена одной такой ошибки выше: единственное чтение
+				// решало судьбу установки, которую воркер на самом деле довёл
+				// до конца, и пользователь видел «прервана» вместо готовой
+				// игры. Сдаёмся только если чтение не проходит столько тиков
+				// подряд, сколько уже признано не транзиентным сбоем.
+				stateReadFailures++
+				if stateReadFailures < workerStateReadRetries {
+					slog.Warn("read worker state while resuming install, retrying",
+						"id", id, "attempt", stateReadFailures, "error", err)
+					continue
+				}
 				slog.Error("read worker state while resuming install", "id", id, "error", err)
 				s.interruptResumed(id)
 				return
 			}
+			stateReadFailures = 0
 			if found && state.Done {
 				s.finishResumed(ctx, id, state)
 				return
@@ -368,7 +526,14 @@ func (s *Service) interruptResumed(id string) {
 	}
 	item.Status = StatusInterrupted
 	item.Error = interruptedMessage
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		snap, wrapped := s.markPersistFailureLocked(item, err)
+		s.mu.Unlock()
+		slog.Error("persist interrupted installation", "id", id, "error", wrapped)
+		emit(eventFailed, snap)
+		emit(eventUpdated, snap)
+		return
+	}
 	snap := snapshotOf(item)
 	s.mu.Unlock()
 	slog.Info("resumed installation interrupted", "id", id, "name", snap.Name)
@@ -376,10 +541,9 @@ func (s *Service) interruptResumed(id string) {
 }
 
 // finishResumed завершает установку по итогу воркера, обнаруженного живым на
-// старте: происхождение каталога и запись деинсталлятора мы честно не
-// знаем (их выясняет setRemoval по снимку до установки, а снимка нет),
-// поэтому Owned=false и UninstallUnknown=true — явный неизвестный статус, а
-// не унаследованный от нулевого значения. Уборка ярлыков здесь не
+// старте: сохранённый OwnedDestination подтверждает происхождение каталога.
+// Без него оставляем Owned=false. Запись деинсталлятора без исходного снимка
+// неизвестна, поэтому UninstallUnknown=true. Уборка ярлыков здесь не
 // выполняется: baseline ярлыков снимался до старта установщика и тоже не
 // восстановим.
 func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
@@ -388,7 +552,7 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		// Cancel записал маркер и оставил статус рабочим именно ради этого
 		// момента: воркер подтвердил отмену через Cancelled, а не через
 		// текст ошибки, и запись должна дойти до "отменено", а не до "провал".
-		s.cancelResumed(id)
+		s.cancelResumed(ctx, id)
 		return
 	}
 	if state.Error != "" {
@@ -397,39 +561,54 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		return
 	}
 	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
-	s.markResumedOwnership(id)
+	if err := s.markResumedOwnership(id); err != nil {
+		s.fail(id, err)
+		return
+	}
 	if err := s.finalize(ctx, id); err != nil {
 		s.fail(id, err)
 	}
 }
 
-func (s *Service) cancelResumed(id string) {
+func (s *Service) cancelResumed(ctx context.Context, id string) {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
 		s.mu.Unlock()
 		return
 	}
-	partial := partialPath(item)
-	s.markCancelledLocked(item)
+	err := s.markCancelledLocked(item)
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	go sweepPartial([]string{partial})
+	if err != nil {
+		slog.Error("persist cancelled installation", "id", id, "error", err)
+		s.notifyFinished(snap)
+		return
+	}
+	go s.sweepPartialItem(ctx, snap)
 	s.notifyFinished(snap)
 }
 
-func (s *Service) markResumedOwnership(id string) {
+func (s *Service) markResumedOwnership(id string) error {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
 		s.mu.Unlock()
-		return
+		return nil
 	}
-	item.Owned = false
+	prevOwned, prevUninstall, prevUnknown := item.Owned, item.Uninstall, item.UninstallUnknown
+	item.Owned = item.Destination != "" && samePath(item.OwnedDestination, item.Destination)
 	item.UninstallUnknown = true
 	item.Uninstall = library.Uninstall{}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Owned = prevOwned
+		item.Uninstall = prevUninstall
+		item.UninstallUnknown = prevUnknown
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	s.mu.Unlock()
+	return nil
 }
 
 func (s *Service) ServiceShutdown() error {
@@ -447,25 +626,88 @@ func (s *Service) ServiceShutdown() error {
 	s.wg.Wait()
 
 	s.mu.Lock()
-	s.persistLocked()
+	err := s.persistLocked()
 	s.mu.Unlock()
-	return nil
+	return err
 }
 
-func sweepPartial(paths []string) {
-	for _, path := range paths {
-		if !strings.HasSuffix(path, partialSuffix) {
-			continue
-		}
-		if _, err := os.Stat(path); err != nil {
-			continue
-		}
-		if err := os.RemoveAll(path); err != nil {
-			slog.Warn("remove partial install", "path", path, "error", err)
-		} else {
-			slog.Info("removed partial install", "path", path)
-		}
+func (s *Service) sweepPartial(ctx context.Context, items []Installation) {
+	for _, item := range items {
+		s.sweepPartialItem(ctx, item)
 	}
+}
+
+// sweepPartialItem решает, можно ли стереть .partial записи, или он —
+// единственная копия данных пользователя (инвариант 9). ModeMove консумирует
+// ContentRoot первым же MoveDir: если он уже пропал, а .partial ещё жив,
+// значит крах случился между этим MoveDir и вторым, внутри commit() (он же
+// делает MoveDir(.partial -> Destination) при кросс-девайсном переносе) —
+// стирать в этом случае можно только Destination (недописанный второй
+// перенос), а .partial обязан быть докатан, а не стёрт.
+func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
+	partial := partialPath(&item)
+	if partial == "" {
+		return
+	}
+	if _, err := os.Stat(partial); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("stat partial install", "path", partial, "error", err)
+		}
+		return
+	}
+	if item.Mode == ModeMove && !pathExists(item.ContentRoot) {
+		s.recoverMovePartial(ctx, item, partial)
+		return
+	}
+	if err := os.RemoveAll(partial); err != nil {
+		slog.Warn("remove partial install", "path", partial, "error", err)
+		return
+	}
+	slog.Info("removed partial install", "path", partial)
+}
+
+// recoverMovePartial докатывает Move-режим портативной установки, прерванной
+// между MoveDir(ContentRoot -> partial) и commit(partial -> Destination):
+// ContentRoot уже удалён первым MoveDir, поэтому partial — единственная копия
+// данных. Destination либо недописан кросс-девайсным commit() (меньше
+// записей верхнего уровня — стираем и переносим заново), либо уже полная
+// копия, после которой процесс умер до RemoveAll(partial) — это проверяется
+// по хешу (инвариант 10), и тогда partial удаляется как дубликат. Любая
+// неясность оставляет оба каталога на месте: commitExtracted откажется
+// писать поверх занятого Destination, и ошибка дойдёт до UI.
+func (s *Service) recoverMovePartial(ctx context.Context, item Installation, partial string) {
+	slog.Info("recovering move-mode install after crash", "id", item.ID, "partial", partial)
+	s.spawnFinalize(ctx, item.ID, func(ctx context.Context) error {
+		if item.Destination != "" && pathExists(item.Destination) {
+			full, err := sameTopLevelCount(partial, item.Destination)
+			if err != nil {
+				return err
+			}
+			if !full {
+				if err := os.RemoveAll(item.Destination); err != nil {
+					return fmt.Errorf("remove half-written destination: %w", err)
+				}
+			} else if verifyErr := verifyCopy(ctx, partial, item.Destination); verifyErr == nil {
+				if err := os.RemoveAll(partial); err != nil {
+					return fmt.Errorf("remove duplicate partial: %w", err)
+				}
+				return nil
+			}
+		}
+		return s.commitExtracted(ctx, partial, item.Destination)
+	})
+}
+
+func sameTopLevelCount(a, b string) (bool, error) {
+	ea, err := os.ReadDir(a)
+	if err != nil {
+		return false, err
+	}
+	eb, err := os.ReadDir(b)
+	if err != nil {
+		return false, err
+	}
+	return len(ea) == len(eb), nil
 }
 
 func (s *Service) findLocked(id string) *Installation {
@@ -477,10 +719,33 @@ func (s *Service) findLocked(id string) *Installation {
 	return nil
 }
 
-func (s *Service) persistLocked() {
+// errPersistPrefix — единый текст для пользователя поверх любой причины
+// отказа persist (инвариант 28): каталог занят антивирусом, диск полон, нет
+// прав — деталь остаётся в %w, но заголовок один и тот же везде.
+const errPersistPrefix = "не удалось сохранить состояние установки"
+
+func wrapPersistError(err error) error {
+	return fmt.Errorf("%s: %w", errPersistPrefix, err)
+}
+
+func (s *Service) persistLocked() error {
 	if err := s.persistNowLocked(); err != nil {
 		slog.Error("persist installations", "error", err)
+		return err
 	}
+	return nil
+}
+
+// markPersistFailureLocked переводит запись в StatusFailed с текстом ошибки
+// persist: используется там, где вызывающий код сам не возвращает ошибку
+// наверх (событийные обработчики без родного "return err" — сработавший
+// таймер, воркер, довершающий себя после перезапуска), и единственный канал
+// до UI — сама запись и её событие (инвариант 5).
+func (s *Service) markPersistFailureLocked(item *Installation, err error) (Installation, error) {
+	wrapped := wrapPersistError(err)
+	item.Status = StatusFailed
+	item.Error = wrapped.Error()
+	return snapshotOf(item), wrapped
 }
 
 func (s *Service) persistNowLocked() error {
@@ -522,7 +787,11 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	base, err := s.baseContext()
+	if err != nil {
+		return PlanInfo{}, err
+	}
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return PlanInfo{}, err
 	}
@@ -560,7 +829,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 	s.mu.Unlock()
 
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	base, err := s.baseContext()
+	if err != nil {
+		return Installation{}, err
+	}
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return Installation{}, err
 	}
@@ -637,10 +910,27 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		s.mu.Unlock()
 		return Installation{}, errUnavailable
 	}
+	for _, existing := range s.items {
+		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
+			s.mu.Unlock()
+			return Installation{}, errBusy
+		}
+	}
 	s.items = append(s.items, item)
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		s.items = s.items[:len(s.items)-1]
+		s.mu.Unlock()
+		return Installation{}, wrapPersistError(err)
+	}
 	snap := snapshotOf(item)
-	s.spawnLocked(item.ID)
+	if err := s.spawnLocked(item.ID); err != nil {
+		// Запись уже записана как Pending: её подхватит Retry или следующий
+		// ServiceStartup — то же состояние, что и после падения процесса
+		// между persistLocked и стартом job.
+		s.mu.Unlock()
+		slog.Error("spawn install job right after starting it", "id", item.ID, "error", err)
+		return Installation{}, err
+	}
 	s.mu.Unlock()
 
 	slog.Info("install started", "id", item.ID, "name", item.Name, "type", item.Type, "mode", item.Mode)
@@ -683,17 +973,26 @@ func (s *Service) Cancel(id string) error {
 	// s.jobs для неё никогда не заводился), либо воркер уже мёртв. Проверка и
 	// решение — под тем же захватом, что статус (инвариант 17): без этого UI
 	// сказал бы "отменено" над установщиком, который продолжает писать.
-	if s.transientWorkerAlive(id) {
+	if alive, _ := s.transientWorkerStatus(id); alive {
 		err := writeWorkerCancel(s.workerCancelPath(id))
 		s.mu.Unlock()
 		return err
 	}
 
-	partial := partialPath(item)
-	s.markCancelledLocked(item)
+	err := s.markCancelledLocked(item)
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	go sweepPartial([]string{partial})
+	if err != nil {
+		return err
+	}
+	// Сам Cancel уже состоялся выше: подметание .partial — это уборка после
+	// него, а не его часть, поэтому недоступный контекст сервиса отменяет
+	// только уборку (инвариант 20), а не результат Cancel.
+	if base, err := s.baseContext(); err != nil {
+		slog.Warn("skip partial sweep after cancel, service not started", "id", snap.ID, "error", err)
+	} else {
+		go s.sweepPartialItem(base, snap)
+	}
 	s.notifyFinished(snap)
 	return nil
 }
@@ -724,14 +1023,28 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 		s.mu.Unlock()
 		return errNotFound
 	}
+	prevExecutable, prevDestination := item.Executable, item.Destination
 	item.Executable = executable
 	if item.Destination == "" {
 		item.Destination = filepath.Dir(executable)
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Executable = prevExecutable
+		item.Destination = prevDestination
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	s.mu.Unlock()
+	slog.Info("install executable confirmed", "id", id, "executable", executable)
 
-	if err := s.complete(id); err != nil {
+	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
+	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
+	// вместе с ним, а не висело после закрытия лаунчера.
+	confirmCtx, ctxErr := s.baseContext()
+	if ctxErr != nil {
+		return ctxErr
+	}
+	if err := s.complete(confirmCtx, id); err != nil {
 		s.fail(id, err)
 		return err
 	}
@@ -749,14 +1062,40 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	base, err := s.baseLocked()
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
 	// Проверка и решение — под одним и тем же захватом (инвариант 17): статус
 	// мог стать retryable по устаревшему прочтению (воркер, о котором
 	// ServiceStartup не успел узнать, ещё пишет по тем же детерминированным
 	// путям state/spec/cancel), и вызвать retry поверх него — поднять второго
 	// воркера на то же место.
-	if s.transientWorkerAlive(id) {
+	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
 		return errInstallerStillRunning
+	}
+	if crashFinalizable(snapshotOf(item)) {
+		// Тот же случай, что и в ServiceStartup (finding 4): .partial уже
+		// нет, Destination заполнен — файлы на месте, не хватает только
+		// регистрации. Запускать распаковку заново означало бы упасть на
+		// errDestExists поверх уже установленной игры.
+		prevStatus, prevError := item.Status, item.Error
+		item.Status = StatusVerifying
+		item.Error = ""
+		if err := s.persistLocked(); err != nil {
+			item.Status = prevStatus
+			item.Error = prevError
+			s.mu.Unlock()
+			return wrapPersistError(err)
+		}
+		snap := snapshotOf(item)
+		s.mu.Unlock()
+		s.spawnFinalize(base, id, nil)
+		slog.Info("install retried, finalizing already-committed install", "id", id, "name", snap.Name)
+		emit(eventUpdated, snap)
+		return nil
 	}
 	downloadID := item.DownloadID
 	kind := item.Type
@@ -770,7 +1109,7 @@ func (s *Service) Retry(id string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(s.baseContext(), sourceDir(d))
+	plan, err := Inspect(base, sourceDir(d))
 	if err != nil {
 		return err
 	}
@@ -805,7 +1144,7 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errNotFound
 	}
-	partial := partialPath(item)
+	prev := *item
 	item.Status = StatusPending
 	item.Error = ""
 	item.Progress = 0
@@ -832,14 +1171,22 @@ func (s *Service) Retry(id string) error {
 			item.Destination = destination
 		}
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		*item = prev
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	snap := snapshotOf(item)
 	s.mu.Unlock()
 
-	sweepPartial([]string{partial})
+	s.sweepPartialItem(base, snap)
 
 	s.mu.Lock()
-	s.spawnLocked(id)
+	if err := s.spawnLocked(id); err != nil {
+		s.mu.Unlock()
+		slog.Error("spawn install job right after retrying it", "id", id, "error", err)
+		return err
+	}
 	s.mu.Unlock()
 
 	slog.Info("install retried", "id", id, "name", snap.Name)
@@ -858,17 +1205,30 @@ func (s *Service) Dismiss(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
-	partial := partialPath(item)
+	snap := snapshotOf(item)
+	idx := -1
 	for i, existing := range s.items {
 		if existing.ID == id {
-			s.items = append(s.items[:i], s.items[i+1:]...)
+			idx = i
 			break
 		}
 	}
-	s.persistLocked()
+	removed := s.items[idx]
+	s.items = append(s.items[:idx], s.items[idx+1:]...)
+	if err := s.persistLocked(); err != nil {
+		s.items = append(s.items, removed)
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	s.mu.Unlock()
 
-	go sweepPartial([]string{partial})
+	// Сам Dismiss уже состоялся выше: подметание .partial — уборка после
+	// него, а не его часть (та же логика, что и в Cancel).
+	if base, err := s.baseContext(); err != nil {
+		slog.Warn("skip partial sweep after dismiss, service not started", "id", id, "error", err)
+	} else {
+		go s.sweepPartialItem(base, snap)
+	}
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	return nil
@@ -891,10 +1251,16 @@ func (s *Service) SetOnFinished(fn func(Installation)) {
 func (s *Service) notifyFinished(item Installation) {
 	s.mu.Lock()
 	notify := s.onFinished
-	s.mu.Unlock()
-	if notify != nil {
-		go notify(item)
+	if notify == nil || s.closing {
+		s.mu.Unlock()
+		return
 	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		notify(item)
+	}()
 }
 
 //wails:ignore
@@ -902,7 +1268,16 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 	if d.Origin.Purpose != download.PurposeRelease {
 		return
 	}
-	if !s.config().AutoInstall {
+	// Всё, что не дошло до Start, обязано снять брокера здесь: установка,
+	// ради которой его поднимали, уже не начнётся, а держать ради неё процесс
+	// с правами администратора до выхода из лаунчера нельзя.
+	started := false
+	defer func() {
+		if !started {
+			s.DropBroker(d.ID)
+		}
+	}()
+	if !autoInstallFor(d, s.config().AutoInstall) {
 		return
 	}
 	info, err := s.InspectDownload(d.ID)
@@ -914,7 +1289,12 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Info("auto install skipped", "id", d.ID, "type", info.Plan.Type)
 		return
 	}
-	if info.RequiredBytes > 0 && info.FreeBytes > 0 && info.FreeBytes < info.RequiredBytes {
+	// FreeBytes == 0 не отличается от любого другого значения ниже
+	// RequiredBytes: freeBytes (ниже по файлу) пробрасывает ошибку получения
+	// свободного места отдельно и никогда не подменяет её нулём, поэтому
+	// нулевой результат здесь всегда означает "том забит под ноль", а не
+	// "неизвестно". Проверка на FreeBytes > 0 глушила именно этот случай.
+	if info.RequiredBytes > 0 && info.FreeBytes < info.RequiredBytes {
 		slog.Warn("auto install skipped, not enough space", "id", d.ID,
 			"required", info.RequiredBytes, "free", info.FreeBytes)
 		return
@@ -924,6 +1304,7 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 		slog.Warn("auto install", "id", d.ID, "error", err)
 		return
 	}
+	started = true
 	slog.Info("auto install started", "id", item.ID, "download", d.ID, "name", item.Name)
 }
 
@@ -941,23 +1322,34 @@ func (s *Service) completedDownload(id string) (download.Download, error) {
 	return d, nil
 }
 
-// baseLocked отдаёт контекст жизни сервиса; до ServiceStartup (и в тестах,
-// которые его не вызывают) сервис живёт столько же, сколько процесс.
-func (s *Service) baseLocked() context.Context {
+// baseLocked отдаёт контекст жизни сервиса. До ServiceStartup (и в тестах,
+// которые его не вызывают) годного контекста нет: вызывающий обязан
+// отказаться от операции или не стартовать горутину, а не подставлять
+// context.Background(), который ServiceShutdown никогда не отменит
+// (инвариант 20). Требует удержания s.mu вызывающим.
+func (s *Service) baseLocked() (context.Context, error) {
 	if s.ctx == nil {
-		return context.Background()
+		return nil, errNotStarted
 	}
-	return s.ctx
+	return s.ctx, nil
 }
 
-func (s *Service) baseContext() context.Context {
+func (s *Service) baseContext() (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.baseLocked()
 }
 
-func (s *Service) spawnLocked(id string) {
-	ctx, cancel := context.WithCancel(s.baseLocked())
+// spawnLocked отказывается стартовать job, если сервис ещё не запущен
+// (инвариант 20): без s.ctx горутина получила бы контекст, который
+// ServiceShutdown не может отменить, и s.wg.Wait() рисковал бы зависнуть
+// в ожидании job'а, живущего дольше самого сервиса.
+func (s *Service) spawnLocked(id string) error {
+	base, err := s.baseLocked()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(base)
 	s.jobs[id] = &job{cancel: cancel}
 	s.wg.Add(1)
 	go func() {
@@ -965,6 +1357,7 @@ func (s *Service) spawnLocked(id string) {
 		defer s.endJob(id)
 		s.run(ctx, id)
 	}()
+	return nil
 }
 
 func (s *Service) endJob(id string) {
@@ -984,18 +1377,24 @@ func (s *Service) setExternal(id string, running bool) {
 	}
 }
 
-func (s *Service) setStatus(id string, status Status) {
+func (s *Service) setStatus(id string, status Status) error {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil || item.Status == status {
 		s.mu.Unlock()
-		return
+		return nil
 	}
+	prev := item.Status
 	item.Status = status
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Status = prev
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	snap := snapshotOf(item)
 	s.mu.Unlock()
 	emit(eventUpdated, snap)
+	return nil
 }
 
 func (s *Service) updateProgress(id string, p Progress) {
@@ -1006,6 +1405,10 @@ func (s *Service) updateProgress(id string, p Progress) {
 		return
 	}
 	next := ratio(p.BytesDone, p.BytesTotal)
+	// Directory size is an estimate, not confirmation that setup has exited.
+	if item.Status == StatusInstalling && next > 0.99 {
+		next = 0.99
+	}
 	moved := math.Abs(next-item.Progress) >= progressEpsilon ||
 		p.CurrentFile != item.CurrentFile ||
 		(p.BytesTotal <= 0 && p.BytesDone != item.BytesDone)
@@ -1024,16 +1427,23 @@ func (s *Service) updateProgress(id string, p Progress) {
 	emit(eventUpdated, snap)
 }
 
-func (s *Service) markCancelledLocked(item *Installation) {
+func (s *Service) markCancelledLocked(item *Installation) error {
 	item.Status = StatusCancelled
 	item.Error = ""
 	item.Progress = 0
 	item.CurrentFile = ""
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		snap, wrapped := s.markPersistFailureLocked(item, err)
+		slog.Error("persist cancelled installation", "id", item.ID, "error", err)
+		emit(eventFailed, snap)
+		emit(eventUpdated, snap)
+		return wrapped
+	}
 	snap := snapshotOf(item)
 	slog.Info("install cancelled", "id", item.ID, "name", item.Name)
 	emit(eventCancelled, snap)
 	emit(eventUpdated, snap)
+	return nil
 }
 
 func (s *Service) fail(id string, cause error) {
@@ -1053,7 +1463,9 @@ func (s *Service) fail(id string, cause error) {
 	case errors.Is(cause, errInstallerNotConfirmedStopped):
 		item.Status = StatusFailed
 		item.Error = cause.Error()
-		s.persistLocked()
+		if err := s.persistLocked(); err != nil {
+			slog.Error("persist failed installation", "id", id, "error", err)
+		}
 		snap := snapshotOf(item)
 		s.mu.Unlock()
 		slog.Error("install failed, installer still running", "id", id, "name", snap.Name, "error", cause)
@@ -1073,19 +1485,26 @@ func (s *Service) fail(id string, cause error) {
 		s.recordInstallFailure(id, snap, cause)
 	case j != nil && j.cancelled:
 		// пользовательская отмена — не провал, событие install_failed не шлём
-		s.markCancelledLocked(item)
+		err := s.markCancelledLocked(item)
 		snap := snapshotOf(item)
 		s.mu.Unlock()
+		if err != nil {
+			slog.Error("persist cancelled installation while failing job", "id", id, "error", err)
+		}
 		s.notifyFinished(snap)
 	case s.closing || errors.Is(cause, context.Canceled):
 		// лаунчер закрывается — событие всё равно не успеет улететь
-		s.persistLocked()
+		if err := s.persistLocked(); err != nil {
+			slog.Error("persist interrupted installation", "id", id, "error", err)
+		}
 		s.mu.Unlock()
 		slog.Info("install interrupted", "id", id, "name", item.Name)
 	default:
 		item.Status = StatusFailed
 		item.Error = cause.Error()
-		s.persistLocked()
+		if err := s.persistLocked(); err != nil {
+			slog.Error("persist failed installation", "id", id, "error", err)
+		}
 		snap := snapshotOf(item)
 		s.mu.Unlock()
 		slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
@@ -1127,23 +1546,32 @@ func (s *Service) recordInstallFailure(id string, snap Installation, cause error
 	}
 }
 
-func (s *Service) waitForUser(id string, candidates []Candidate) {
+func (s *Service) waitForUser(id string, candidates []Candidate) error {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
 		s.mu.Unlock()
-		return
+		return nil
 	}
+	prevStatus, prevCandidates, prevExecutable := item.Status, item.Candidates, item.Executable
 	item.Status = StatusWaitingForUser
 	item.Candidates = candidates
 	if len(candidates) > 0 && item.Executable == "" {
 		item.Executable = candidates[0].Path
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		item.Status = prevStatus
+		item.Candidates = prevCandidates
+		item.Executable = prevExecutable
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
 	snap := snapshotOf(item)
 	s.mu.Unlock()
-	slog.Info("install waiting for user", "id", id, "candidates", len(candidates))
+	slog.Info("install waiting for user", "id", id, "candidates", len(candidates),
+		"offered", candidatePaths(candidates))
 	emit(eventUpdated, snap)
+	return nil
 }
 
 func (s *Service) proposeDestination(gamesPath, name string) string {
@@ -1169,7 +1597,7 @@ func (s *Service) freeBytes(path string) (int64, error) {
 	}
 	info, err := s.freeSpace(path)
 	if err != nil {
-		return 0, fmt.Errorf("свободное место %s: %w", path, err)
+		return 0, fmt.Errorf("%w: %s: %w", errFreeSpaceUnknown, path, err)
 	}
 	if info.FreeBytes > math.MaxInt64 {
 		return math.MaxInt64, nil
@@ -1188,7 +1616,7 @@ func (s *Service) checkSpace(destination string, need int64) error {
 	if free >= need {
 		return nil
 	}
-	return fmt.Errorf("недостаточно места на диске: нужно %s, свободно %s", humanSize(need), humanSize(free))
+	return fmt.Errorf("%w: нужно %s, свободно %s", errNotEnoughSpace, humanSize(need), humanSize(free))
 }
 
 func (s *Service) installRoots() []string {
@@ -1320,4 +1748,24 @@ func newID() string {
 		return fmt.Sprintf("i%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buf)
+}
+
+// The external installer monitor must not replace cancellation or EXE selection.
+func (s *Service) setInstallerVerifying(id string) error {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil || item.Status != StatusInstalling {
+		s.mu.Unlock()
+		return nil
+	}
+	item.Status = StatusVerifying
+	if err := s.persistLocked(); err != nil {
+		item.Status = StatusInstalling
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
+	snap := snapshotOf(item)
+	s.mu.Unlock()
+	emit(eventUpdated, snap)
+	return nil
 }

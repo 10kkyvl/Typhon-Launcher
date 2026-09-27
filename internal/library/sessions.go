@@ -1,16 +1,17 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"time"
 
 	"typhon/internal/procs"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
 
@@ -21,103 +22,112 @@ type SessionEvent struct {
 }
 
 var (
-	errSessionNotRunning       = errors.New("игра не запущена")
-	errSessionCannotConfirm    = errors.New("не удалось подтвердить процесс игры")
-	errSessionProcessGone      = errors.New("процесс игры больше не найден")
-	errSessionIdentityMismatch = errors.New("процесс с этим pid принадлежит другой программе")
-	errSessionIdentityUnknown  = errors.New("время запуска процесса неизвестно, подтверждение невозможно")
-	errSessionLaunching        = errors.New("игра уже запускается")
-	errSessionGameRemoved      = errors.New("игра запущена, но пока шёл запрос прав её убрали из библиотеки: время не учтено")
-	errElevationDeclined       = errors.New("игре нужны права администратора: запрос Windows отклонён")
-	errElevatedNoProcess       = errors.New("процесс игры, запущенной с правами администратора, не получен от системы")
+	errSessionNotRunning       = uierr.New("library.not_running", "игра не запущена")
+	errSessionCannotConfirm    = uierr.New("library.cannot_confirm_process", "не удалось подтвердить процесс игры")
+	errSessionProcessGone      = uierr.New("library.process_gone", "процесс игры больше не найден")
+	errSessionIdentityMismatch = uierr.New("library.process_identity_mismatch", "процесс с этим pid принадлежит другой программе")
+	errSessionIdentityUnknown  = uierr.New("library.process_identity_unknown", "время запуска процесса неизвестно, подтверждение невозможно")
+	errElevationDeclined       = uierr.New("library.elevation_declined", "игре нужны права администратора: запрос Windows отклонён")
 )
 
 func (s *Service) PlayGame(id string) error {
 	s.mu.Lock()
-	if _, ok := s.running[id]; ok {
-		s.mu.Unlock()
-		return errors.New("игра уже запущена")
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionNotRunning
 	}
-	if _, ok := s.launching[id]; ok {
-		s.mu.Unlock()
-		return errSessionLaunching
+	if _, ok := s.running[id]; ok || s.starting[id] != nil {
+		return uierr.New("library.already_running", "игра уже запущена")
 	}
 	game := s.findLocked(id)
 	if game == nil {
-		s.mu.Unlock()
-		return errors.New("игра не найдена")
+		return uierr.New("library.game_not_found", "игра не найдена")
 	}
 	if game.Uninstalled {
-		s.mu.Unlock()
-		return errors.New("игра не установлена")
+		return uierr.New("library.not_installed", "игра не установлена")
 	}
 	if _, err := os.Stat(game.Executable); err != nil {
-		s.mu.Unlock()
-		return errors.New("исполняемый файл больше не существует")
+		return uierr.New("library.executable_missing", "исполняемый файл больше не существует")
 	}
 
-	exe := game.Executable
-	args := slices.Clone(game.LaunchArgs)
-	workDir, err := filepath.Abs(filepath.Dir(exe))
+	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
 	if err != nil {
-		s.mu.Unlock()
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
-
-	cmd := exec.Command(game.Executable, game.LaunchArgs...)
-	cmd.Dir = workDir
-	startErr := cmd.Start()
-	if startErr == nil {
-		//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
-		s.beginSessionLocked(id, game, launched{process: cmd.Process, pid: uint32(cmd.Process.Pid), wait: cmd.Wait})
-		s.mu.Unlock()
-		return nil
+	copyGame := *game
+	game = &copyGame
+	req := launch{
+		installDir: game.InstallDir,
+		executable: game.Executable,
+		args:       game.LaunchArgs,
+		workDir:    workDir,
+		shared:     game.UsesSharedBottle(),
 	}
-	if !needsElevation(startErr) {
-		s.mu.Unlock()
-		slog.Error("launch game", "id", id, "executable", exe, "error", startErr)
-		return fmt.Errorf("не удалось запустить игру: %w", startErr)
+	ctx := s.ctx
+	// Constructors are also used without startup by synchronous callers.
+	// A missing context must not start platform work.
+	if ctx == nil {
+		return errSessionCannotConfirm
 	}
-
-	// Окно UAC ждёт ответа пользователя сколько угодно: место занимается в
-	// launching, а мьютекс на время ожидания отпускается.
-	s.launching[id] = struct{}{}
-	elevate := s.elevate
-	s.mu.Unlock()
-
-	slog.Info("game requires elevation", "id", id, "executable", exe)
-	proc, elevErr := elevate(exe, args, workDir)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.launching, id)
-	if elevErr != nil {
-		slog.Error("launch game elevated", "id", id, "executable", exe, "error", elevErr)
-		return fmt.Errorf("не удалось запустить игру: %w", elevErr)
+	ctx, cancel := context.WithCancel(ctx)
+	if s.starting == nil {
+		s.starting = map[string]context.CancelFunc{}
 	}
-	game = s.findLocked(id)
-	if game == nil {
-		s.watchProcess(id, proc)
-		return errSessionGameRemoved
-	}
-	s.beginSessionLocked(id, game, proc)
-	return nil
-}
-
-func (s *Service) beginSessionLocked(id string, game *Game, proc launched) {
-	if current, ok := s.running[id]; ok {
-		// Детект по ОС успел открыть сессию, пока пользователь отвечал на
-		// UAC: событие старта уже ушло, осталось отдать сессии свой процесс.
-		if current.process == nil && current.pid == proc.pid {
-			current.process = proc.process
+	s.starting[id] = cancel
+	s.wg.Add(1)
+	defer s.wg.Done()
+	started := false
+	defer func() {
+		delete(s.starting, id)
+		if !started {
+			cancel()
 		}
-		s.watchProcess(id, proc)
-		return
+	}()
+	s.mu.Unlock()
+	err = s.prepare(ctx, req)
+	s.mu.Lock()
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return uierr.Wrap("library.launch_cancelled", context.Canceled)
+		}
+		slog.Error("prepare game runtime", "id", id, "installDir", game.InstallDir, "error", err)
+		// Не поднявшееся окружение — такой же несостоявшийся запуск, как и не
+		// стартовавший процесс. На macOS это вообще самая частая причина, по
+		// которой игра не идёт, и журнал, молчащий о ней, оставляет
+		// пользователя без единственной подсказки, которая у него была.
+		s.noteLaunchFailureLocked(id, "library.runtime_failed", err.Error())
+		return uierr.Wrap("library.runtime_failed", fmt.Errorf("не удалось подготовить окружение запуска: %w", err))
 	}
 
+	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return uierr.Wrap("library.launch_cancelled", err)
+		}
+		return err
+	}
+	s.mu.Unlock()
+	proc, err := s.start(ctx, req)
+	s.mu.Lock()
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return uierr.Wrap("library.launch_cancelled", context.Canceled)
+		}
+		if errors.Is(err, errElevationDeclined) {
+			return err
+		}
+		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
+		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
+		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
+	}
+
+	started = true
+	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
+	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: proc.process, pid: proc.pid, startedAt: startedAt, lastSeen: startedAt}
-	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid)
+	s.running[id] = &session{process: proc, pid: pid, startedAt: startedAt, lastSeen: startedAt}
+	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
+		"executable", game.Executable, "workDir", workDir)
 	for _, w := range s.watchers {
 		w.SessionStarted(*game)
 	}
@@ -129,29 +139,27 @@ func (s *Service) beginSessionLocked(id string, game *Game, proc launched) {
 		},
 	})
 	emit("game:started", SessionEvent{GameID: id})
-	s.watchProcess(id, proc)
-}
 
-func (s *Service) watchProcess(id string, proc launched) {
+	executable := game.Executable
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
-		if waitErr := proc.wait(); waitErr != nil {
-			slog.Debug("game process exited", "id", id, "error", waitErr)
-		}
+		defer cancel()
+		waitErr := proc.wait()
+		logExit(id, executable, s.now().Sub(startedAt), waitErr)
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
 		// закончилась (см. detectTick); закрывать её здесь при активном
 		// детекте — значит закрывать по смерти лаунчер-обёртки, а не игры.
 		s.mu.Lock()
 		closed := s.closed
 		watching := s.watching
-		current, ok := s.running[id]
 		s.mu.Unlock()
-		if closed || watching || !ok || current.pid != proc.pid {
+		if closed || watching {
 			return
 		}
-		s.finishSession(id, current.startedAt)
+		s.finishSession(id, startedAt)
 	}()
+	return nil
 }
 
 // ServiceShutdown отменяет цикл детекта процессов и ждёт его завершения, а
@@ -160,7 +168,11 @@ func (s *Service) watchProcess(id string, proc launched) {
 // игра должна пережить закрытие лаунчера, а не быть убитой вместе с ним.
 func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
+	s.closed = true
 	cancel := s.cancel
+	for _, stop := range s.starting {
+		stop()
+	}
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -174,14 +186,24 @@ func (s *Service) ServiceShutdown() error {
 
 func (s *Service) StopGame(id string) error {
 	s.mu.Lock()
+	if cancel := s.starting[id]; cancel != nil {
+		cancel()
+		s.mu.Unlock()
+		return nil
+	}
 	current, ok := s.running[id]
 	ctx := s.ctx
+	if ok {
+		// Ставим до убийства: сессию закроет чужая горутина, и к тому
+		// моменту отличить закрытие пользователем от падения будет нечем.
+		current.stoppedByUser = true
+	}
 	s.mu.Unlock()
 	if !ok {
 		return errSessionNotRunning
 	}
 	if current.process != nil {
-		if err := current.process.Kill(); err != nil {
+		if err := current.process.kill(); err != nil {
 			return fmt.Errorf("остановить игру: %w", err)
 		}
 		return nil
@@ -193,7 +215,7 @@ func (s *Service) StopGame(id string) error {
 	if ctx == nil {
 		return fmt.Errorf("%w: сервис ещё не запущен", errSessionCannotConfirm)
 	}
-	list, err := s.scan(ctx)
+	list, _, err := s.scan(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errSessionCannotConfirm, err)
 	}
@@ -224,6 +246,35 @@ func (s *Service) StopGame(id string) error {
 	return nil
 }
 
+// logExit — единственное место, где ОС говорит, почему игра закрылась. Без
+// кода выхода журнал сообщает только «сессия длилась 2 секунды», и отличить
+// не найденную библиотеку (0xC0000135) от вылета или от лаунчер-обёртки,
+// которая отдала работу другому процессу и вышла сама, нечем.
+func logExit(id, executable string, played time.Duration, err error) {
+	code, known := exitCode(err)
+	after := played.Round(time.Second)
+	switch {
+	case !known:
+		slog.Warn("game process wait failed", "id", id, "executable", executable, "after", after, "error", err)
+	case code != 0:
+		slog.Warn("game process exited with an error", "id", id, "executable", executable,
+			"after", after, "code", code, "codeHex", fmt.Sprintf("0x%08X", int64(code)&0xFFFFFFFF))
+	default:
+		slog.Info("game process exited", "id", id, "executable", executable, "after", after, "code", code)
+	}
+}
+
+func exitCode(err error) (int, bool) {
+	if err == nil {
+		return 0, true
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode(), true
+	}
+	return 0, false
+}
+
 func (s *Service) finishSession(id string, startedAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -235,17 +286,39 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		return
 	}
 
+	stoppedByUser := false
+	if current, ok := s.running[id]; ok {
+		stoppedByUser = current.stoppedByUser
+	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
 		w.SessionStopped(id)
 	}
-	seconds := int64(s.now().Sub(startedAt).Seconds())
+	endedAt := s.now()
+	seconds := int64(endedAt.Sub(startedAt).Seconds())
+	if s.onOutcome != nil {
+		note := s.onOutcome
+		played := endedAt.Sub(startedAt)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			note(id, played, stoppedByUser)
+		}()
+	}
 	if s.onSession != nil {
 		notify := s.onSession
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			notify(id, seconds)
+		}()
+	}
+	if s.playRecord != nil {
+		record := s.playRecord
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			record(id, startedAt, endedAt)
 		}()
 	}
 	game := s.findLocked(id)
@@ -261,6 +334,14 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 			DurationSeconds: seconds,
 		},
 	})
+	if game == nil {
+		for i := range s.archived {
+			if s.archived[i].ID == id {
+				game = &s.archived[i]
+				break
+			}
+		}
+	}
 	if game == nil {
 		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})
 		return
@@ -291,4 +372,18 @@ func (s *Service) findLocked(id string) *Game {
 		}
 	}
 	return nil
+}
+
+// noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
+// на всё время запуска, а журнал совместимости пишется в своей горутине.
+func (s *Service) noteLaunchFailureLocked(gameID, code, reason string) {
+	if s.onLaunchFail == nil {
+		return
+	}
+	note := s.onLaunchFail
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		note(gameID, code, reason)
+	}()
 }

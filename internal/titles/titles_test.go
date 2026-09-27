@@ -75,6 +75,40 @@ func TestParsePositive(t *testing.T) {
 			},
 		},
 		{
+			name: "dotted v prefix",
+			raw:  "Hollow Knight: Silksong v.1.0.29315 [Папка игры] (2025)",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Hollow Knight: Silksong")
+				want(t, "Version", p.Version, "1.0.29315")
+				if p.Year != 2025 {
+					t.Errorf("Year = %d, want 2025", p.Year)
+				}
+			},
+		},
+		{
+			name: "portable after pipe",
+			raw:  "Ex Voto — (Build 23638420) | Portable",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Normalized", p.Normalized, "ex voto")
+				mustContainStr(t, "Tags", p.Tags, "portable")
+			},
+		},
+		{
+			name: "portable in brackets",
+			raw:  "Celeste [Portable] (2019)",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Celeste")
+				mustContainStr(t, "Tags", p.Tags, "portable")
+			},
+		},
+		{
+			name: "russian folder bracket",
+			raw:  "Warhammer 40000 Space Marine 2 [Папка игры]",
+			check: func(t *testing.T, p Parsed) {
+				want(t, "Base", p.Base, "Warhammer 40000 Space Marine 2")
+			},
+		},
+		{
 			name: "prey year",
 			raw:  "Prey (2017) [MULTi9] v1.0",
 			check: func(t *testing.T, p Parsed) {
@@ -105,6 +139,7 @@ func TestParseNegative(t *testing.T) {
 		{"deluxe ski jump", "Deluxe Ski Jump 4", "Deluxe Ski Jump 4", true},
 		{"need for speed", "Need for Speed Most Wanted", "Need for Speed Most Wanted", true},
 		{"dirt rally dotted version", "DiRT Rally 2.0", "DiRT Rally 2.0", true},
+		{"persona portable", "Persona 3 Portable", "Persona 3 Portable", true},
 	}
 
 	for _, tc := range cases {
@@ -233,4 +268,69 @@ func mustContainStr(t *testing.T, field string, list []string, val string) {
 		}
 	}
 	t.Errorf("%s = %v, want to contain %q", field, list, val)
+}
+
+// Хвост версии, скобка сразу за версией и кириллический маркер репака — всё
+// это метаданные раздачи. Пока они оставались в названии, серверный каталог не
+// находил игру: он сверяет имена точным совпадением.
+func TestReleaseMetadataLeavesTheTitle(t *testing.T) {
+	cases := []struct {
+		name        string
+		raw         string
+		wantBase    string
+		wantVersion string
+	}{
+		{"буква в конце версии", "Within the Cosmos v.2.1.1a [Папка игры] (2025)", "Within the Cosmos", "2.1.1a"},
+		{"буква в конце длинной версии", "Gas Station Simulator v.1.0.2.22714S [Папка игры] (2021)", "Gas Station Simulator", "1.0.2.22714S"},
+		{"буква после минорной версии", "Way of the Hunter v.1.25h [GOG] (2022)", "Way of the Hunter", "1.25h"},
+		{"подчёркивание в версии", "Little Kitty, Big City v.1.25.8.27_5409 [Архив] (2024)", "Little Kitty, Big City", "1.25.8.27_5409"},
+		{"скобка сразу за версией", "Liminality – v1.0 (Release)", "Liminality", "1.0"},
+		{"номер сборки в скобке за версией", "Astral Ascent – v2.4.0 (1181)", "Astral Ascent", "2.4.0"},
+		{"кодовое имя в скобке за версией", "Crusader Kings III: Collection, v1.16.0 (Chamfron)", "Crusader Kings III: Collection", "1.16.0"},
+		{"дата в скобке за версией", "Caribbean Legend: Complete Edition, v1.3.0 (11.09.24)", "Caribbean Legend", "1.3.0"},
+		{"кириллический репак с именем", "Unravel (2016) PC | Репак от xatab", "Unravel", ""},
+		{"репак без имени", "Frontline Zed (2019) RePack от", "Frontline Zed", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Parse(tc.raw)
+			if p.Base != tc.wantBase {
+				t.Errorf("Base = %q, want %q", p.Base, tc.wantBase)
+			}
+			if p.Version != tc.wantVersion {
+				t.Errorf("Version = %q, want %q", p.Version, tc.wantVersion)
+			}
+		})
+	}
+}
+
+// Год в скобке — единственное, что отличает тёзок, поэтому скобка за версией
+// его не съедает.
+func TestVersionDoesNotSwallowTheYear(t *testing.T) {
+	p := Parse("Resident Evil 4 v1.0 (2005)")
+	if p.Base != "Resident Evil 4" || p.Year != 2005 {
+		t.Fatalf("Base = %q, Year = %d, want %q and 2005", p.Base, p.Year, "Resident Evil 4")
+	}
+}
+
+// Код языка совпадает с обычными словами: Ara — это и арабский, и первое слово
+// названия. Одиночный код — маркер только рядом с другими метаданными раздачи.
+func TestLanguageCodeDoesNotEatTitleWords(t *testing.T) {
+	for raw, want := range map[string]string{
+		"Ara: History Untold v.2.0.2.528 [Папка игры] (2024)": "Ara: History Untold",
+		"Ara: History Untold": "Ara: History Untold",
+		"Spa Simulator":       "Spa Simulator",
+	} {
+		if got := Parse(raw).Base; got != want {
+			t.Errorf("Parse(%q).Base = %q, want %q", raw, got, want)
+		}
+	}
+	// Настоящий языковой маркер по-прежнему снимается.
+	for _, raw := range []string{"Silent Hill 2 (2024) [RUS]", "Silent Hill 2 [ENG/RUS] v1.0", "Silent Hill 2 - Rus"} {
+		p := Parse(raw)
+		if p.Base != "Silent Hill 2" || len(p.Languages) == 0 {
+			t.Errorf("Parse(%q) = base %q langs %v", raw, p.Base, p.Languages)
+		}
+	}
 }

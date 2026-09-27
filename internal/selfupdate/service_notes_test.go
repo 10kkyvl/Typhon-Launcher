@@ -2,6 +2,7 @@ package selfupdate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -102,6 +103,33 @@ func TestAcknowledgeReleaseNotesPersists(t *testing.T) {
 	if len(view.Unseen) != 0 {
 		t.Fatalf("Unseen = %v, want nothing after acknowledging", versionsOf(view.Unseen))
 	}
+	assertNotesJSONArrays(t, view)
+}
+
+func assertNotesJSONArrays(t *testing.T, view ReleaseNotes) {
+	t.Helper()
+	raw, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"unseen", "history"} {
+		if value := fields[key]; len(value) == 0 || value[0] != '[' {
+			t.Fatalf("%s must be a JSON array in release notes responses/events: %s", key, raw)
+		}
+	}
+}
+
+func TestEmptyReleaseNotesJSONArrays(t *testing.T) {
+	s := newNotesService(t, t.TempDir(), "1.0.0")
+	view, err := s.GetReleaseNotes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNotesJSONArrays(t, view)
 }
 
 func TestAcknowledgeReleaseNotesKeepsMemoryOnFailedSave(t *testing.T) {

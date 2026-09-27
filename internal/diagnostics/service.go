@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -13,6 +16,7 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/clientid"
+	"typhon/internal/settings"
 	"typhon/internal/usagestats"
 
 	"github.com/google/uuid"
@@ -30,9 +34,12 @@ const (
 )
 
 type Service struct {
-	identity clientid.Identity
-	client   *client
-	enabled  func() bool
+	consentEpoch uint64
+
+	identity   clientid.Identity
+	client     *client
+	enabled    func() bool
+	pendingDir string
 
 	maxQueue       int
 	ratePerMinute  int
@@ -43,19 +50,40 @@ type Service struct {
 	flushTimeout   time.Duration
 	clock          func() time.Time
 
-	mu              sync.Mutex
-	queue           []reportPayload
-	disabled        bool
-	rateWindowStart time.Time
-	rateCount       int
-	seen            map[string]time.Time
+	mu sync.Mutex
+	// logUploadMu is deliberately separate from mu: a manual upload can spend
+	// time reading/compressing logs and waiting on the network, and must never
+	// hold the diagnostics queue lock while it does so. It also makes the
+	// single-flight guarantee true for callers outside the frontend.
+	logUploadMu         sync.Mutex
+	lastDeliveryWarning time.Time
+	queue               []reportPayload
+	breadcrumbs         []Breadcrumb
+	disabled            bool
+	rateWindowStart     time.Time
+	rateCount           int
+	seen                map[string]time.Time
+	sentPending         map[string]bool
+	ctx                 context.Context
 
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	kick   chan struct{}
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	kick      chan struct{}
+	logEvents chan capturedLog
 }
 
 func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
+	dir, err := settings.ConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config dir: %w", err)
+	}
+	return newServiceAt(dir, id, enabled)
+}
+
+func newServiceAt(configDir string, id clientid.Identity, enabled func() bool) (*Service, error) {
+	if configDir == "" {
+		return nil, errors.New("diagnostics config dir is empty")
+	}
 	if enabled == nil {
 		return nil, errors.New("enabled callback is nil")
 	}
@@ -70,6 +98,7 @@ func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
 		identity:       id,
 		client:         cl,
 		enabled:        enabled,
+		pendingDir:     pendingDirFrom(configDir),
 		maxQueue:       defaultMaxQueue,
 		ratePerMinute:  defaultRatePerMinute,
 		rateWindow:     defaultRateWindow,
@@ -80,17 +109,20 @@ func NewService(id clientid.Identity, enabled func() bool) (*Service, error) {
 		clock:          time.Now,
 		seen:           map[string]time.Time{},
 		kick:           make(chan struct{}, 1),
+		logEvents:      make(chan capturedLog, 32),
 	}, nil
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
+	s.ctx = runCtx
 	s.cancel = cancel
 	s.mu.Unlock()
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.loop(runCtx)
+	go s.captureLogs(runCtx)
 	return nil
 }
 
@@ -103,6 +135,15 @@ func (s *Service) ServiceShutdown() error {
 		cancel()
 	}
 	s.wg.Wait()
+	// The worker can select cancellation while errors are still buffered.
+	// Preserve those final errors before flushing the shutdown batch.
+	for remaining := len(s.logEvents); remaining > 0; remaining-- {
+		select {
+		case e := <-s.logEvents:
+			s.captureEvent(e, false)
+		default:
+		}
+	}
 
 	// ctx сервиса уже отменён; финальный флаш — best-effort с коротким
 	// собственным таймаутом, чтобы не блокировать остановку приложения.
@@ -117,11 +158,22 @@ func (s *Service) SetEnabled(on bool) {
 	s.mu.Lock()
 	s.disabled = !on
 	if !on {
+		s.consentEpoch++
+	}
+	dir := s.pendingDir
+	if !on {
 		s.queue = nil
+		s.breadcrumbs = nil
 		s.seen = map[string]time.Time{}
 		s.rateCount = 0
 	}
 	s.mu.Unlock()
+
+	if !on {
+		if err := removePendingDir(dir); err != nil {
+			slog.Warn("diagnostics: remove pending dir on opt-out", "error", err)
+		}
+	}
 }
 
 // Capture builds a Report from an error and enqueues it for send. The
@@ -133,7 +185,7 @@ func (s *Service) Capture(component, operation string, err error, fatal bool) {
 	if err == nil {
 		return
 	}
-	s.capture(component, operation, err.Error(), string(debug.Stack()), usagestats.Classify(err), fatal)
+	s.captureWithFields(component, operation, err.Error(), string(debug.Stack()), diagnosticCode(err), fatal, errorContext(err))
 }
 
 // CapturePanic builds a Fatal report from a recovered panic value and its
@@ -152,16 +204,29 @@ func (s *Service) CapturePanic(component string, recovered any, stack []byte) {
 // dropped, not surfaced as an error, because there is nothing the caller
 // can do about a scrub failure other than not send raw data.
 func (s *Service) ReportClientError(component, operation, message, stack string, fatal bool) error {
-	s.capture(component, operation, message, stack, usagestats.CodeNone, fatal)
+	s.capture(component, operation, message, stack, "frontend_error", fatal)
 	return nil
 }
 
 func (s *Service) capture(component, operation, message, stack, errorCode string, fatal bool) {
+	s.captureWithFields(component, operation, message, stack, errorCode, fatal, nil)
+}
+
+func (s *Service) captureWithFields(component, operation, message, stack, errorCode string, fatal bool, fields map[string]string) {
+	at := time.Now()
+	s.mu.Lock()
+	epoch := s.consentEpoch
+	details := s.detailsLocked(component, at, fields)
+	s.mu.Unlock()
+	s.captureEvent(capturedLog{epoch: epoch, component: component, operation: operation, message: message, stack: stack, code: errorCode, at: at, details: details}, fatal)
+}
+
+func (s *Service) captureEvent(e capturedLog, fatal bool) {
 	if !s.enabled() {
 		return
 	}
 	s.mu.Lock()
-	disabled := s.disabled
+	disabled := s.disabled || s.consentEpoch != e.epoch
 	s.mu.Unlock()
 	if disabled {
 		return
@@ -178,27 +243,42 @@ func (s *Service) capture(component, operation, message, stack, errorCode string
 		AppVersion: app.Version,
 		OS:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
-		Component:  component,
-		Operation:  operation,
-		ErrorCode:  errorCode,
-		Message:    message,
-		Stack:      stack,
-		Timestamp:  time.Now(),
+		Component:  e.component,
+		Operation:  e.operation,
+		ErrorCode:  e.code,
+		Message:    e.message,
+		Stack:      e.stack,
+		Timestamp:  e.at,
+		Details:    e.details,
 		Fatal:      fatal,
 	}
 
 	sanitized, err := sanitizeReport(report)
 	if err != nil {
-		slog.Warn("diagnostics: report dropped", "component", component, "operation", operation, "error", err)
+		slog.Warn("diagnostics: report dropped", "component", e.component, "operation", e.operation, "error", err)
 		return
 	}
 
 	fingerprint := Fingerprint(sanitized.ErrorCode, sanitized.Component, sanitized.Stack)
-	s.enqueue(toPayload(sanitized), fingerprint)
+	s.enqueueEpoch(toPayload(sanitized), fingerprint, e.epoch)
 }
 
 func (s *Service) enqueue(rp reportPayload, fingerprint string) {
 	s.mu.Lock()
+	epoch := s.consentEpoch
+	s.mu.Unlock()
+	s.enqueueEpoch(rp, fingerprint, epoch)
+}
+
+func (s *Service) enqueueEpoch(rp reportPayload, fingerprint string, epoch uint64) {
+	s.mu.Lock()
+	// capture() read the flag before sanitizing, which takes long enough for
+	// an opt-out to land in between. Re-check it now that the lock is held
+	// for the write itself.
+	if s.disabled || s.consentEpoch != epoch {
+		s.mu.Unlock()
+		return
+	}
 	now := s.clock()
 
 	if now.Sub(s.rateWindowStart) >= s.rateWindow {
@@ -263,17 +343,158 @@ func (s *Service) loop(ctx context.Context) {
 
 func (s *Service) flush(ctx context.Context) {
 	s.mu.Lock()
-	if s.disabled || len(s.queue) == 0 {
+	if s.disabled {
 		s.mu.Unlock()
 		return
 	}
+	epoch := s.consentEpoch
 	batch := s.queue
 	s.queue = nil
+	dir := s.pendingDir
 	s.mu.Unlock()
 
+	s.drainPendingEpoch(ctx, dir, epoch)
+
+	if len(batch) == 0 || !s.consentCurrent(epoch) {
+		return
+	}
 	if err := s.client.send(ctx, s.identity, batch); err != nil {
-		// Батч не возвращается в очередь: иначе при недоступном бэкенде
-		// очередь росла бы вечно и пережила бы последующий opt-out.
-		slog.Debug("diagnostics flush failed", "count", len(batch), "error", err)
+		// Батч не возвращается в живую очередь: иначе при недоступном
+		// бэкенде очередь росла бы вечно и пережила бы последующий
+		// opt-out. Он спиливается на диск и подхватывается следующим
+		// flush через drainPending.
+		s.logDeliveryFailure(err, len(batch))
+		if permanentDeliveryError(err) {
+			dir = filepath.Join(dir, "rejected")
+		}
+		if spillErr := savePending(dir, s.clock(), batch); spillErr != nil {
+			slog.Warn("diagnostics: spill failed batch to disk", "error", spillErr)
+		} else if !s.consentCurrent(epoch) {
+			// The user revoked consent while this batch was in flight. The
+			// spill recreated the directory opt-out had already removed
+			// (storage.Save does its own MkdirAll), so the last writer here
+			// has to clear it again -- otherwise the report waits on disk
+			// for the next opt-in.
+			if rmErr := removePendingDir(s.pendingDir); rmErr != nil {
+				slog.Warn("diagnostics: remove pending dir after opt-out race", "error", rmErr)
+			}
+		}
+	}
+}
+
+func (s *Service) consentCurrent(epoch uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.disabled && s.consentEpoch == epoch
+}
+func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint64) {
+	names, err := listPendingFiles(dir)
+	if err != nil {
+		slog.Warn("diagnostics: list pending files", "error", err)
+		return
+	}
+	s.keepSentOnly(names)
+	for _, name := range names {
+		if !s.consentCurrent(epoch) {
+			return
+		}
+		path := filepath.Join(dir, name)
+		if s.isSent(name) {
+			continue
+		}
+		batch, err := loadPending(path)
+		if err != nil {
+			// A file that could not be read at all is not a corrupt one: a
+			// lock, a permission or a failing disk hides a perfectly good
+			// report behind an OS error, and deleting it there destroys the
+			// only copy. Keep it and try again on the next flush.
+			var pathErr *fs.PathError
+			if errors.As(err, &pathErr) {
+				slog.Warn("diagnostics: keep unreadable pending file", "path", name, "error", err)
+				continue
+			}
+			slog.Warn("diagnostics: drop corrupt pending file", "path", name, "error", err)
+			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+				slog.Warn("diagnostics: remove corrupt pending file", "path", name, "error", rmErr)
+			}
+			continue
+		}
+		if err := s.client.send(ctx, s.identity, batch); err != nil {
+			s.logDeliveryFailure(err, len(batch))
+			if !permanentDeliveryError(err) {
+				return
+			}
+			// Keep bounded evidence locally, but let subsequent valid files through.
+			if saveErr := savePending(filepath.Join(dir, "rejected"), s.clock(), batch); saveErr != nil {
+				slog.Warn("diagnostics: quarantine failed", "error", saveErr)
+				continue
+			}
+			if !s.consentCurrent(epoch) {
+				if err := removePendingDir(dir); err != nil {
+					slog.Warn("diagnostics: remove pending after opt-out", "error", err)
+				}
+				return
+			}
+			if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+				slog.Warn("diagnostics: remove rejected pending file", "error", rmErr)
+			}
+			continue
+		}
+		if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			// The batch is on the server and the file is still on disk.
+			// Remember it: without this the next tick reads it again and
+			// duplicates the same report every twenty seconds for as long
+			// as the directory stays unwritable.
+			slog.Warn("diagnostics: remove sent pending file", "path", name, "error", rmErr)
+			s.markSent(name)
+		}
+	}
+}
+
+// The sent set only guards against re-reading a file this process already
+// delivered, so it is pruned down to what is still on disk on every drain and
+// never outlives the process.
+func (s *Service) keepSentOnly(names []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sentPending) == 0 {
+		return
+	}
+	live := make(map[string]bool, len(names))
+	for _, name := range names {
+		live[name] = true
+	}
+	for name := range s.sentPending {
+		if !live[name] {
+			delete(s.sentPending, name)
+		}
+	}
+}
+
+func (s *Service) isSent(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sentPending[name]
+}
+
+func (s *Service) markSent(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sentPending == nil {
+		s.sentPending = make(map[string]bool)
+	}
+	s.sentPending[name] = true
+}
+
+func (s *Service) logDeliveryFailure(err error, count int) {
+	s.mu.Lock()
+	now := s.clock()
+	emit := s.lastDeliveryWarning.IsZero() || now.Sub(s.lastDeliveryWarning) >= time.Minute
+	if emit {
+		s.lastDeliveryWarning = now
+	}
+	s.mu.Unlock()
+	if emit {
+		slog.Warn("diagnostics delivery failed", "component", "diagnostics", "count", count, "permanent", permanentDeliveryError(err), "error", err)
 	}
 }

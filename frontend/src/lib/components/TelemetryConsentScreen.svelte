@@ -1,11 +1,17 @@
 <script lang="ts">
   import { TriangleAlert } from '@lucide/svelte';
+  import { settings } from '../stores/settings';
   import { respondTelemetryConsent } from '../stores/telemetryConsent';
-  import { errorMessage } from '../utils/errors';
+  import { consentErrorText } from '../services/consentErrors';
   import Button from './Button.svelte';
   import Toggle from './Toggle.svelte';
+  import { msg } from '../i18n';
 
-  let usageStats = $state(false);
+  // На свежей установке статистика не отмечена — её включают отдельным
+  // действием. Но этот же экран показывается повторно, когда состав данных
+  // расширился, и там предвыбор обязан повторять прошлый ответ: иначе человек,
+  // у которого статистика была включена, соглашается — и молча её выключает.
+  let usageStats = $state(($settings?.telemetryConsentVersion ?? 0) > 0 && Boolean($settings?.anonymousUsageStats));
   let saving = $state(false);
   let error = $state('');
 
@@ -44,13 +50,25 @@
   ]
 }`;
 
+  // Пример отчёта о совместимости показывается рядом с остальными: экран
+  // обещает показать, что именно уходит, и обещание должно оставаться полным.
+  const compatReport = `{
+  "client_id": "9a4f1d20-5b8e-42c7-b1a3-77e0c9f2d834",
+  "app_version": "0.4.1",
+  "env": { "os_version": "15.6", "crossover": "26.3", "chip": "apple_m4" },
+  "games": [
+    { "game_id": "232567", "repacker": "fitgirl", "version": "1.0.28518",
+      "state": "works" }
+  ]
+}`;
+
   async function respond(diagnostics: boolean) {
     saving = true;
     error = '';
     try {
       await respondTelemetryConsent(usageStats, diagnostics);
     } catch (err) {
-      error = errorMessage(err);
+      error = consentErrorText(err);
     } finally {
       saving = false;
     }
@@ -67,36 +85,38 @@
 <div class="screen" role="dialog" aria-modal="true" aria-labelledby="consent-title">
   <div class="card">
     <div class="head">
-      <h3 id="consent-title">Отправлять анонимные отчёты об ошибках?</h3>
+      <h3 id="consent-title">{msg('modals.telemetryConsentTitle')}</h3>
     </div>
 
     <div class="body">
       <p class="text">
-        Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и
-        сетевые адреса удаляются перед отправкой.
+        {msg('modals.telemetryConsentIntro')}
       </p>
 
       <div class="row">
         <div class="row-text">
-          <span class="row-title">Ещё и статистика использования</span>
+          <span class="row-title">{msg('modals.telemetryConsentUsageTitle')}</span>
           <span class="row-note">
-            События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность,
-            объём и код ошибки. Экраны, нажатия и поведение в интерфейсе не отслеживаются.
+            {msg('modals.telemetryConsentUsageNote')}
           </span>
         </div>
-        <Toggle checked={usageStats} label="Анонимная статистика использования" onchange={(v) => (usageStats = v)} />
+        <Toggle checked={usageStats} label={msg('modals.telemetryConsentUsageToggleLabel')} onchange={(v) => (usageStats = v)} />
       </div>
 
       <details class="disclosure">
-        <summary>Что именно отправляется</summary>
+        <summary>{msg('modals.telemetryConsentDisclosureSummary')}</summary>
         <div class="examples">
           <div class="example">
-            <span class="example-label">Отчёт об ошибке</span>
+            <span class="example-label">{msg('modals.telemetryConsentErrorReportLabel')}</span>
             <pre class="example-pre">{errorReport}</pre>
           </div>
           <div class="example">
-            <span class="example-label">Событие статистики использования</span>
+            <span class="example-label">{msg('modals.telemetryConsentUsageEventLabel')}</span>
             <pre class="example-pre">{usageEvent}</pre>
+          </div>
+          <div class="example">
+            <span class="example-label">{msg('modals.telemetryConsentCompatReportLabel')}</span>
+            <pre class="example-pre">{compatReport}</pre>
           </div>
         </div>
       </details>
@@ -111,10 +131,10 @@
 
     <div class="foot">
       <Button size="lg" disabled={saving} onclick={() => respond(false)}>
-        {saving ? 'Сохранение…' : 'Не отправлять'}
+        {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentDecline')}
       </Button>
       <Button size="lg" disabled={saving} onclick={() => respond(true)}>
-        {saving ? 'Сохранение…' : 'Да, отправлять'}
+        {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentAccept')}
       </Button>
     </div>
   </div>
@@ -140,7 +160,7 @@
     flex-direction: column;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
     animation: rise var(--dur-panel) var(--ease);
   }

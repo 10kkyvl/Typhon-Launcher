@@ -10,13 +10,16 @@ import (
 var portableNames = []string{
 	"theme",
 	"uiScale",
+	"language",
 	"animationsEnabled",
 	"minimizeToTray",
 	"discordRichPresence",
+	"presenceAutoAway",
 	"seedAfterDownload",
 	"uploadWhileDownloading",
 	"installCleanupPolicy",
 	"autoInstall",
+	"elevateAhead",
 	"sourceRefreshInterval",
 	"verifyAfterInstall",
 	"installSkipShortcuts",
@@ -31,6 +34,7 @@ var portableNames = []string{
 }
 
 var localNames = []string{
+	"accentColor", "tintLogo",
 	"lanSharing",
 	"libraryPath",
 	"downloadsPath",
@@ -46,6 +50,7 @@ var localNames = []string{
 	"anonymousUsageStats",
 	"anonymousDiagnostics",
 	"telemetryConsentVersion",
+	"presenceStatus",
 }
 
 func jsonNames(v any) []string {
@@ -111,6 +116,7 @@ func TestPortableNeverCarriesLocalValues(t *testing.T) {
 		AnonymousUsageStats:   true,
 		AnonymousDiagnostics:  true,
 		Theme:                 "dark",
+		PresenceStatus:        "busy",
 	}
 
 	data, err := json.Marshal(PortableOf(s))
@@ -120,7 +126,7 @@ func TestPortableNeverCarriesLocalValues(t *testing.T) {
 	payload := string(data)
 
 	for _, forbidden := range []string{
-		`E:\TyphonLibrary`, "TyphonLibrary", "1234567", "7654321", "7",
+		`E:\TyphonLibrary`, "TyphonLibrary", "1234567", "7654321", "7", "busy",
 	} {
 		if strings.Contains(payload, forbidden) {
 			t.Errorf("в переносимых настройках оказалось локальное значение %q: %s", forbidden, payload)

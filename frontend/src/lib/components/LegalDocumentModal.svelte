@@ -3,6 +3,7 @@
   import { inWails } from '../services/backend';
   import { getLegalDocument, type LegalDocument } from '../services/legal';
   import Modal from './Modal.svelte';
+  import { msg } from '../i18n';
 
   type Inline = { kind: 'text' | 'bold' | 'code'; value: string };
   type Block =
@@ -158,8 +159,8 @@
       status = 'ready';
     } catch {
       errorText = inWails
-        ? 'Не удалось загрузить документ. Попробуйте ещё раз.'
-        : 'Правовые документы недоступны вне приложения.';
+        ? msg('modals.legalLoadFailed')
+        : msg('modals.legalUnavailableOutsideApp');
       status = 'error';
     }
   }
@@ -173,7 +174,7 @@
 
 <Modal bind:open {title} width="64rem">
   {#if status === 'loading' || status === 'idle'}
-    <p class="state-text">Загрузка документа…</p>
+    <p class="state-text">{msg('modals.legalLoading')}</p>
   {:else if status === 'error'}
     <p class="state-text error">{errorText}</p>
   {:else}

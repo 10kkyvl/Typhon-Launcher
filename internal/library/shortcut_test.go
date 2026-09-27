@@ -34,6 +34,18 @@ func (f *fakeShortcuts) DesktopDir() (string, error) {
 	return f.desktop, nil
 }
 
+// shortcutName спрашивает имя у того же кода, что и проверяемый сервис:
+// расширение зависит от платформы (.lnk в Windows, .app на macOS), и литерал
+// в ожидании ломался бы ровно там, где ярлыки и начинают работать иначе.
+func shortcutName(t *testing.T, title string) string {
+	t.Helper()
+	name, err := shortcut.FileName(title)
+	if err != nil {
+		t.Fatalf("shortcut.FileName(%q): %v", title, err)
+	}
+	return name
+}
+
 func (f *fakeShortcuts) FileName(title string) (string, error) {
 	if f.nameErr != nil {
 		return "", f.nameErr
@@ -87,7 +99,7 @@ func TestCreateShortcutWritesLinkAndRemembersPath(t *testing.T) {
 		t.Fatalf("create shortcut: %v", err)
 	}
 
-	want := filepath.Join(fake.desktop, "Half-Life 2.lnk")
+	want := filepath.Join(fake.desktop, shortcutName(t, "Half-Life 2"))
 	link, ok := fake.created[want]
 	if !ok {
 		t.Fatalf("shortcut not created at %s, got %v", want, fake.created)
@@ -192,7 +204,7 @@ func TestCreateShortcutReplacesRenamedLink(t *testing.T) {
 	if err := s.CreateShortcut(game.ID); err != nil {
 		t.Fatal(err)
 	}
-	old := filepath.Join(fake.desktop, "Half-Life 2.lnk")
+	old := filepath.Join(fake.desktop, shortcutName(t, "Half-Life 2"))
 
 	s.mu.Lock()
 	s.findLocked(game.ID).Title = "Half-Life 3"
@@ -201,7 +213,7 @@ func TestCreateShortcutReplacesRenamedLink(t *testing.T) {
 	if err := s.CreateShortcut(game.ID); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(fake.desktop, "Half-Life 3.lnk")
+	want := filepath.Join(fake.desktop, shortcutName(t, "Half-Life 3"))
 	if _, ok := fake.created[want]; !ok {
 		t.Fatalf("renamed shortcut not created: %v", fake.created)
 	}

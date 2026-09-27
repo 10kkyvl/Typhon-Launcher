@@ -21,6 +21,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -28,6 +29,17 @@ import (
 )
 
 const transferSampleInterval = 500 * time.Millisecond
+
+var (
+	errEmptyGameID          = uierr.New("lan.empty_game_id", "lan: empty game id")
+	errLibraryUnavailable   = uierr.New("lan.library_unavailable", "lan: library service unavailable")
+	errNoInstallDir         = uierr.New("lan.no_install_dir", "lan: game has no install directory")
+	errExeOutsideInstall    = uierr.New("lan.exe_outside_install", "lan: executable is outside the install directory")
+	errSharingDisabled      = uierr.New("lan.sharing_disabled", "lan: sharing is disabled")
+	errGamesPathUnavailable = uierr.New("lan.games_path_unavailable", "lan: games path unavailable")
+	errOfferNotFound        = uierr.New("lan.offer_not_found", "lan: offer not found or expired")
+	errUnknownTransfer      = uierr.New("lan.unknown_transfer", "lan: unknown transfer")
+)
 
 // transferState is one in-flight or finished Receive, guarded by runState.mu.
 type transferState struct {
@@ -362,10 +374,10 @@ func (s *Service) persistShare(sh Share) error {
 func (s *Service) Share(gameID string) (Share, error) {
 	gameID = strings.TrimSpace(gameID)
 	if gameID == "" {
-		return Share{}, errors.New("lan: empty game id")
+		return Share{}, errEmptyGameID
 	}
 	if s.lib == nil {
-		return Share{}, errors.New("lan: library service unavailable")
+		return Share{}, errLibraryUnavailable
 	}
 	game, err := s.lib.Find(gameID)
 	if err != nil {
@@ -373,10 +385,10 @@ func (s *Service) Share(gameID string) (Share, error) {
 	}
 	installDir := strings.TrimSpace(game.InstallDir)
 	if installDir == "" {
-		return Share{}, errors.New("lan: game has no install directory")
+		return Share{}, errNoInstallDir
 	}
 	if !platform.Inside(installDir, game.Executable) {
-		return Share{}, errors.New("lan: executable is outside the install directory")
+		return Share{}, errExeOutsideInstall
 	}
 	exeRel, err := filepath.Rel(installDir, game.Executable)
 	if err != nil {
@@ -387,7 +399,7 @@ func (s *Service) Share(gameID string) (Share, error) {
 	run := s.run
 	s.mu.Unlock()
 	if run == nil {
-		return Share{}, errors.New("lan: sharing is disabled")
+		return Share{}, errSharingDisabled
 	}
 
 	run.wg.Add(1)
@@ -583,24 +595,24 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		return Transfer{}, errAnnounceID
 	}
 	if s.lib == nil {
-		return Transfer{}, errors.New("lan: library service unavailable")
+		return Transfer{}, errLibraryUnavailable
 	}
 
 	s.mu.Lock()
 	run := s.run
 	s.mu.Unlock()
 	if run == nil {
-		return Transfer{}, errors.New("lan: sharing is disabled")
+		return Transfer{}, errSharingDisabled
 	}
 
 	gamesPath := strings.TrimSpace(s.gamesPath())
 	if gamesPath == "" {
-		return Transfer{}, errors.New("lan: games path unavailable")
+		return Transfer{}, errGamesPathUnavailable
 	}
 
 	offer, ok := run.table.find(peerID, infoHash, time.Now())
 	if !ok {
-		return Transfer{}, errors.New("lan: offer not found or expired")
+		return Transfer{}, errOfferNotFound
 	}
 
 	srcAddr, err := netip.ParseAddr(offer.Addr)
@@ -612,14 +624,12 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		return Transfer{}, fmt.Errorf("lan: infohash: %w", err)
 	}
 
-	dest := filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID))
-	if entries, err := os.ReadDir(dest); err == nil && len(entries) > 0 {
-		dest = filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID)+"-"+offer.InfoHash[:8])
-	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return Transfer{}, fmt.Errorf("lan: check destination %s: %w", dest, err)
+	if err := os.MkdirAll(gamesPath, 0o755); err != nil {
+		return Transfer{}, err
 	}
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return Transfer{}, fmt.Errorf("lan: create %s: %w", dest, err)
+	dest, err := reserveReceiveDirectory(filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID)), offer.InfoHash)
+	if err != nil {
+		return Transfer{}, err
 	}
 
 	t, err := run.cl.addForReceiving(hash, offer.Title, dest)
@@ -662,18 +672,34 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 	return tr, nil
 }
 
+func reserveReceiveDirectory(base, infoHash string) (string, error) {
+	dest := base
+	for suffix := 0; ; suffix++ {
+		if suffix > 0 {
+			dest = fmt.Sprintf("%s-%s-%d", base, infoHash[:8], suffix)
+		}
+		if err := os.Mkdir(dest, 0o755); err == nil {
+			break
+		} else if !errors.Is(err, fs.ErrExist) {
+			return "", fmt.Errorf("lan: create destination: %w", err)
+		}
+	}
+
+	return dest, nil
+}
+
 func (s *Service) Cancel(id string) error {
 	s.mu.Lock()
 	run := s.run
 	s.mu.Unlock()
 	if run == nil {
-		return errors.New("lan: sharing is disabled")
+		return errSharingDisabled
 	}
 	run.mu.Lock()
 	ts, ok := run.transfers[id]
 	run.mu.Unlock()
 	if !ok {
-		return errors.New("lan: unknown transfer")
+		return errUnknownTransfer
 	}
 	ts.cancel()
 	return nil
@@ -761,12 +787,12 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
 	exePath := filepath.Join(dest, filepath.FromSlash(offer.Exe))
 	if !platform.Inside(dest, exePath) {
-		s.finishTransfer(run, id, TransferFailed, errors.New("lan: received executable escapes destination"))
+		s.finishTransfer(run, id, TransferFailed, errExeOutsideInstall)
 		return
 	}
 	info, err := os.Stat(exePath)
 	if err != nil || info.IsDir() {
-		s.finishTransfer(run, id, TransferFailed, fmt.Errorf("lan: executable missing after transfer: %s", exePath))
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.executable_missing", fmt.Errorf("lan: executable missing after transfer: %s", exePath)))
 		return
 	}
 
@@ -778,7 +804,7 @@ func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, 
 		InstallType:   "lan",
 	})
 	if err != nil {
-		s.finishTransfer(run, id, TransferFailed, fmt.Errorf("lan: register game: %w", err))
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.register_game_failed", err))
 		return
 	}
 

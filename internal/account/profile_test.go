@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestLoadProfile(t *testing.T) {
 				}
 			},
 			want: cachedProfile{
-				User:      sampleUser(),
+				User:      withProfileDefaults(sampleUser()),
 				Avatar:    AvatarImage{Data: "YWJj", MIME: "image/png"},
 				AvatarURL: "https://cdn.example/a.png",
 			},
@@ -69,10 +70,89 @@ func TestLoadProfile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("loadProfile() error = %v", err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("loadProfile() = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadProfileAppliesDefaultsToLegacyCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user":      map[string]any{"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com", "createdAt": "2024-01-02T03:04:05Z"},
+		"avatar":    map[string]any{"data": "", "mime": ""},
+		"avatarUrl": "",
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.User.Profile.ShowStats || len(loaded.User.Profile.Showcase) != 1 {
+		t.Fatalf("profile = %+v, want defaults", loaded.User.Profile)
+	}
+}
+
+func TestLoadProfileAppliesDefaultsToOldStyleProfileCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user": map[string]any{
+			"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com",
+			"createdAt": "2024-01-02T03:04:05Z",
+			"profile": map[string]any{
+				"showStats":    false,
+				"showPlaying":  true,
+				"showActivity": true,
+				"showOnline":   true,
+				"showcase":     []string{"favorites"},
+			},
+		},
+		"avatar":    map[string]any{"data": "", "mime": ""},
+		"avatarUrl": "",
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.User.Profile
+	if got.Visibility != VisibilityFriends {
+		t.Errorf("visibility = %q, want %q", got.Visibility, VisibilityFriends)
+	}
+	if !got.ShowPlaytime || !got.ShowLibrary {
+		t.Errorf("profile = %+v, want the two new toggles defaulted to true", got)
+	}
+	if got.ShowStats {
+		t.Errorf("profile = %+v, want showStats to keep its cached value (false)", got)
+	}
+}
+
+func TestLoadProfilePreservesAppearanceWhenLegacyShowcaseIsMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := map[string]any{
+		"user": map[string]any{
+			"id": "u1", "username": "old", "displayName": "Old", "email": "o@example.com",
+			"profile": map[string]any{
+				"appearance": map[string]any{
+					"theme": "orbital", "accent": "#123456", "coverUrl": "https://cdn.test/profile-covers/u1/a.webp", "coverDim": 0, "coverPosition": 0,
+				},
+			},
+		},
+	}
+	if err := storage.Save(path, profileVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.User.Profile.Appearance.Theme != "orbital" || loaded.User.Profile.Appearance.CoverURL == "" || loaded.User.Profile.Appearance.CoverDim != 0 || loaded.User.Profile.Appearance.CoverPosition != 0 {
+		t.Fatalf("appearance = %+v, want legacy appearance preserved", loaded.User.Profile.Appearance)
 	}
 }
 
@@ -99,11 +179,7 @@ func TestForgetProfileNotExistIsNotError(t *testing.T) {
 }
 
 func TestSetProfileWriteFailureDropsCacheAndFile(t *testing.T) {
-	dir := t.TempDir()
-	blocker := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
-		t.Fatalf("write blocker file: %v", err)
-	}
+	blocker := unwritableStateDir(t)
 	profPath := filepath.Join(blocker, "profile.json")
 
 	s := &Service{profilePath: profPath, profile: cachedProfile{User: CurrentUser{ID: "stale"}}}

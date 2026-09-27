@@ -1,7 +1,12 @@
+<script module lang="ts">
+  let stack = $state<symbol[]>([]);
+</script>
+
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
+  import { msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -19,24 +24,42 @@
     footer?: Snippet;
   } = $props();
 
+  const id = Symbol();
+
+  // Fixed overlays must escape layout/size containment in settings and cards.
+  function portal(node: HTMLDivElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
+  $effect(() => {
+    if (!open) return;
+    untrack(() => { stack = [...stack, id]; });
+    return () => {
+      stack = stack.filter((entry) => entry !== id);
+    };
+  });
+
+  const topmost = $derived(stack.length === 0 || stack[stack.length - 1] === id);
+
   function close() {
     open = false;
     onclose?.();
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && stack[stack.length - 1] === id) close();
   }
 </script>
 
 <svelte:window onkeydown={open ? onKeydown : undefined} />
 
 {#if open}
-  <div class="overlay" role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
-    <div class="modal" style:width role="dialog" aria-modal="true" aria-label={title}>
+  <div class="overlay" use:portal inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
+    <div class="modal" style:width role="dialog" aria-modal={topmost} aria-label={title}>
       <div class="head">
         <h3>{title}</h3>
-        <IconButton label="Закрыть" size="sm" onclick={close}>
+        <IconButton label={msg('common.close')} size="sm" onclick={close}>
           <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>
@@ -71,7 +94,7 @@
     flex-direction: column;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--cut) var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
     animation: rise var(--dur-panel) var(--ease);
   }
@@ -80,7 +103,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.8rem 1.8rem 0 2.4rem;
+    padding: 1.8rem 1.8rem 1.6rem 2.4rem;
+    border-bottom: 1px solid var(--border);
   }
 
   h3 {

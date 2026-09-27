@@ -13,12 +13,32 @@ import {
   type Download,
   type DownloadStatus,
 } from '../services/downloads';
-import { errorMessage } from '../utils/errors';
+import { installErrorText } from '../install/installErrors';
+import { msg } from '../i18n';
 import { toast } from './toasts';
 
-export { errorMessage };
-
 export const downloads = writable<Download[]>([]);
+
+// DownloadProgress mirrors internal/download.ProgressUpdate: the fields a
+// running download changes every 250ms tick, without Files or anything else
+// that only changes on add, on a file-list change, or on completion — those
+// still arrive as a full Download through download:added/download:updated/
+// download:completed. Declared here rather than in bindings/ because the
+// generated bindings only know about wails-bound methods, not plain event
+// payload shapes.
+export interface DownloadProgress {
+  id: string;
+  status: DownloadStatus;
+  progress: number;
+  downloaded: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  etaSeconds: number;
+  seeders: number;
+  peers: number;
+  stalled: boolean;
+  stalledSince?: string | null;
+}
 
 export const downloadsById = derived(downloads, ($downloads) => {
   const map = new Map<string, Download>();
@@ -48,15 +68,18 @@ export const stats = derived(downloads, ($downloads) => ({
   queuedCount: $downloads.filter((d) => d.status === 'queued').length,
 }));
 
-export const statusLabels: Record<DownloadStatus, string> = {
-  queued: 'В очереди',
-  metadata: 'Получение метаданных',
-  downloading: 'Загрузка',
-  paused: 'Пауза',
-  verifying: 'Проверка файлов',
-  completed: 'Завершено',
-  failed: 'Ошибка',
-};
+export function statusLabels(status: DownloadStatus): string {
+  const labels: Record<DownloadStatus, string> = {
+    queued: msg('state.downloadsStatusQueued'),
+    metadata: msg('state.downloadsStatusMetadata'),
+    downloading: msg('common.loading'),
+    paused: msg('state.downloadsStatusPaused'),
+    verifying: msg('state.downloadsStatusVerifying'),
+    completed: msg('state.downloadsStatusCompleted'),
+    failed: msg('common.error'),
+  };
+  return labels[status];
+}
 
 function upsert(item: Download) {
   downloads.update((list) => {
@@ -66,6 +89,31 @@ function upsert(item: Download) {
     next[index] = item;
     return next;
   });
+}
+
+// mergeProgress folds a lightweight tick into the existing full record. An
+// id the store has no record for yet (webview reload, a race at startup
+// before the initial listDownloads() resolves) is dropped rather than
+// turned into a half-filled card: every field but the ones below would be
+// missing, and there is nothing here to fill them with.
+function mergeProgress(list: Download[], patch: DownloadProgress): Download[] {
+  const index = list.findIndex((d) => d.id === patch.id);
+  if (index < 0) return list;
+  const next = [...list];
+  next[index] = {
+    ...next[index],
+    status: patch.status,
+    progress: patch.progress,
+    downloaded: patch.downloaded,
+    downloadSpeed: patch.downloadSpeed,
+    uploadSpeed: patch.uploadSpeed,
+    etaSeconds: patch.etaSeconds,
+    seeders: patch.seeders,
+    peers: patch.peers,
+    stalled: patch.stalled,
+    stalledSince: patch.stalledSince ?? null,
+  };
+  return next;
 }
 
 async function refresh() {
@@ -79,20 +127,24 @@ export async function initDownloads() {
   Events.On('download:added', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`Загрузка «${item.name}» добавлена`);
+    toast(msg('state.downloadsAddedToast', { name: item.name }));
   });
   Events.On('download:updated', (event) => {
     upsert(event.data as Download);
   });
+  Events.On('download:progress', (event) => {
+    const patch = event.data as DownloadProgress;
+    downloads.update((list) => mergeProgress(list, patch));
+  });
   Events.On('download:completed', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`«${item.name}» загружена`, 'success');
+    toast(msg('state.downloadsCompletedToast', { name: item.name }), 'success');
   });
   Events.On('download:failed', (event) => {
     const item = event.data as Download;
     upsert(item);
-    toast(`Ошибка загрузки «${item.name}»: ${item.error}`, 'danger');
+    toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });
   Events.On('download:removed', (event) => {
     const { id } = event.data as { id: string };
@@ -104,7 +156,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (err) {
-    toast(errorMessage(err), 'danger');
+    toast(installErrorText(err), 'danger');
   }
 }
 

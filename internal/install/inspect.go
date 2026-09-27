@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"typhon/internal/download"
+	"typhon/internal/uierr"
 )
 
 const (
@@ -18,11 +18,11 @@ const (
 	dominantFraction = 0.8
 )
 
-var errNoSource = errors.New("папка загрузки недоступна")
-var errEmptySource = errors.New("папка загрузки пуста — файлы не были загружены")
-var errIncompleteSource = errors.New("загрузка не завершена — на диске остались только незавершённые файлы")
-var errUnrecognizedSource = errors.New("формат файла не распознан")
-var errMixedInstallers = errors.New("установщики набора разного типа")
+var errNoSource = uierr.New("install.no_source", "папка загрузки недоступна")
+var errEmptySource = uierr.New("install.empty_source", "папка загрузки пуста — файлы не были загружены")
+var errIncompleteSource = uierr.New("install.incomplete_source", "загрузка не завершена — на диске остались только незавершённые файлы")
+var errUnrecognizedSource = uierr.New("install.unrecognized_source", "формат файла не распознан")
+var errMixedInstallers = uierr.New("install.mixed_installers", "установщики набора разного типа")
 
 var junkExts = map[string]bool{
 	".nfo": true,

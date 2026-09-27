@@ -2,7 +2,7 @@ package selfupdate
 
 import (
 	"context"
-	"errors"
+	"crypto/ed25519"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,16 +12,27 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/app"
+	"typhon/internal/uierr"
 )
 
-var ErrManifestStatus = errors.New("selfupdate: manifest endpoint returned an error status")
+var ErrManifestStatus = uierr.New("selfupdate.manifest_status", "selfupdate: manifest endpoint returned an error status")
 
-var httpTimeout = 30 * time.Second
+// The manifest is a few kilobytes: on a blocked network the user should
+// learn within seconds that the check failed, not after half a minute.
+var httpTimeout = 15 * time.Second
 
 type Client struct {
 	baseURL        string
 	httpClient     *http.Client
 	downloadClient *http.Client
+	// key переопределяет ключ проверки подписи манифеста вместо вшитого
+	// прод-ключа из PublicKey(). Пустой (nil) — обычный режим, и это
+	// единственное состояние, в котором поле бывает в собранном лаунчере:
+	// заполнять его умеет только конструктор из тестов пакета. Ни
+	// экспортированного сеттера, ни переменной окружения тут нет намеренно —
+	// подменяемый снаружи ключ проверки подписи означал бы, что поддельный
+	// манифест можно подписать своим ключом и заставить клиента поверить.
+	key ed25519.PublicKey
 }
 
 func NewClient(baseURL string) (*Client, error) {
@@ -89,9 +100,15 @@ func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
 		return Manifest{}, ErrManifestTooLarge
 	}
 
-	key, err := PublicKey()
-	if err != nil {
-		return Manifest{}, err
+	// c.key непустой только у клиента, собранного newClientWithKey — то есть
+	// только в тестах пакета. Прод-путь всегда идёт через PublicKey().
+	key := c.key
+	if len(key) == 0 {
+		pub, perr := PublicKey()
+		if perr != nil {
+			return Manifest{}, perr
+		}
+		key = pub
 	}
 	return VerifyManifest(data, key)
 }

@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyLanguage } from '../i18n';
+
+afterEach(() => applyLanguage('ru'));
 
 const bindings = {
   GetStatus: vi.fn(),
@@ -6,6 +9,7 @@ const bindings = {
   DownloadUpdate: vi.fn(),
   ApplyUpdate: vi.fn(),
   DismissUpdate: vi.fn(),
+  CancelDownload: vi.fn(),
   GetOutcome: vi.fn(),
   GetReleaseNotes: vi.fn(),
   AcknowledgeReleaseNotes: vi.fn(),
@@ -48,12 +52,14 @@ describe('selfupdate service calls', () => {
     await expect(downloadUpdate()).resolves.toEqual(ready);
   });
 
-  it('calls ApplyUpdate through the backend', async () => {
+  it('passes the selected language to the separate update worker', async () => {
     const { applyUpdate } = await import('./selfupdate');
+    applyLanguage('en');
     bindings.ApplyUpdate.mockResolvedValueOnce(undefined);
 
     await expect(applyUpdate()).resolves.toBeUndefined();
     expect(bindings.ApplyUpdate).toHaveBeenCalledTimes(1);
+    expect(bindings.ApplyUpdate).toHaveBeenCalledWith('en');
   });
 
   it('calls DismissUpdate through the backend', async () => {
@@ -105,6 +111,25 @@ describe('selfupdate service errors', () => {
     const err = await applyUpdate().catch((e) => e);
     expect(err).toBeInstanceOf(SelfUpdateError);
     expect(err.code).toBe('not_ready');
+  });
+
+  it('maps a call cancelled by another action to code canceled', async () => {
+    const { SelfUpdateError, checkForUpdate } = await import('./selfupdate');
+    bindings.CheckForUpdate.mockRejectedValueOnce(
+      new Error('fetch manifest: Get "https://x/launcher/manifest": context canceled'),
+    );
+
+    const err = await checkForUpdate().catch((e) => e);
+    expect(err).toBeInstanceOf(SelfUpdateError);
+    expect(err.code).toBe('canceled');
+  });
+
+  it('calls CancelDownload through the backend', async () => {
+    const { cancelDownload } = await import('./selfupdate');
+    bindings.CancelDownload.mockResolvedValueOnce(undefined);
+
+    await expect(cancelDownload()).resolves.toBeUndefined();
+    expect(bindings.CancelDownload).toHaveBeenCalledTimes(1);
   });
 
   it('does not swallow a DismissUpdate failure', async () => {

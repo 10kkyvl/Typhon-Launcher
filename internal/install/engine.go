@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 type Engine string
@@ -26,11 +28,11 @@ const (
 )
 
 var (
-	errEmptyInstallerPath  = errors.New("путь до установщика не задан")
-	errNoSilent            = errors.New("установщик не поддерживает тихую установку")
-	errRelativeDestination = errors.New("путь установки должен быть абсолютным")
-	errInstallerCancelled  = errors.New("установка была отменена")
-	errInstallerBusy       = errors.New("в системе уже выполняется другая установка")
+	errEmptyInstallerPath  = uierr.New("install.empty_installer_path", "путь до установщика не задан")
+	errNoSilent            = uierr.New("install.no_silent", "установщик не поддерживает тихую установку")
+	errRelativeDestination = uierr.New("install.relative_destination", "путь установки должен быть абсолютным")
+	errInstallerCancelled  = uierr.New("install.installer_cancelled", "установка была отменена")
+	errInstallerBusy       = uierr.New("install.installer_busy", "в системе уже выполняется другая установка")
 	errEmptyInfPath        = errors.New("путь для inf-файла разведки не задан")
 )
 

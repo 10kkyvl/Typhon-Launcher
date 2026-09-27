@@ -14,6 +14,7 @@ export type AvailabilityKind = 'none' | 'update' | 'new_release';
 export type StrategyType = '' | 'full_release' | 'torrent_reuse' | 'patch_chain';
 export type VerifyMethod = 'pending' | 'torrent' | 'manifest' | 'unavailable';
 export type StepKind =
+  | 'backup'
   | 'download'
   | 'recheck'
   | 'apply_patch'
@@ -29,6 +30,10 @@ export interface UpdateAvailability {
   gameId: string;
   installedReleaseId: string;
   targetReleaseId: string;
+  sourceId?: string;
+  distributionId?: string;
+  installedReleaseUploadedAt?: string;
+  targetReleaseUploadedAt?: string;
   installedVersion: string;
   targetVersion: string;
   confidence: number;
@@ -55,6 +60,10 @@ export interface UpdatePlan {
   gameId: string;
   installedReleaseId: string;
   targetReleaseId: string;
+  sourceId: string;
+  distributionId?: string;
+  installedReleaseUploadedAt?: string;
+  targetReleaseUploadedAt?: string;
   installedVersion: string;
   targetVersion: string;
   strategy: StrategyType;
@@ -62,11 +71,9 @@ export interface UpdatePlan {
   downloadBytes: number;
   reusedBytes: number;
   requiredDiskBytes: number;
-  backupRecommended: boolean;
   backupAvailable: boolean;
-  backupCreated: boolean;
-  requiresRestart: boolean;
   rollbackAvailable: boolean;
+  savesPath?: string;
   confidence: number;
   createdAt: string;
 }
@@ -85,6 +92,7 @@ export interface Update {
   message?: string;
   error?: string;
   canRollback: boolean;
+  savesBackup?: string;
   checkedAt: string;
 }
 
@@ -99,6 +107,7 @@ export interface VerifyState {
   running: boolean;
   repairing: boolean;
   progress: number;
+  processedBytes: number;
   currentFile?: string;
   ratio: number;
   totalBytes: number;

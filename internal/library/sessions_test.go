@@ -3,8 +3,10 @@ package library
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,25 +18,26 @@ import (
 func TestPlayGameTracksSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
+	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+	s.AddSessionWatcher(watcher)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Session Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Session Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for len(s.GetRunningGames()) > 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("session never finished")
-		}
-		time.Sleep(50 * time.Millisecond)
+	select {
+	case <-watcher.stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("session never finished")
 	}
 
 	if s.GetInstalledGames()[0].LastPlayed == nil {
@@ -51,16 +54,11 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	if err := os.MkdirAll(gameDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(gameDir, "game.exe")
-	data, err := os.ReadFile(`C:\Windows\System32\cmd.exe`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(exe, data, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	exe := testPlaceExecutable(t, filepath.Join(gameDir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
+	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+	s.AddSessionWatcher(watcher)
 	game, err := s.AddGame(exe, "Nested Game")
 	if err != nil {
 		t.Fatal(err)
@@ -68,18 +66,16 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	s.mu.Lock()
 	stored := s.findLocked(game.ID)
 	stored.InstallDir = root
-	stored.LaunchArgs = []string{"/C", "cd > cwd.txt"}
+	stored.LaunchArgs = testPrintCwdArgs()
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for len(s.GetRunningGames()) > 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("session never finished")
-		}
-		time.Sleep(50 * time.Millisecond)
+	select {
+	case <-watcher.stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("session never finished")
 	}
 
 	if _, err := os.Stat(filepath.Join(gameDir, "cwd.txt")); err != nil {
@@ -102,12 +98,13 @@ func TestSessionWatcherSeesStartAndStop(t *testing.T) {
 	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
 	s.AddSessionWatcher(watcher)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Watcher Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Watcher Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -160,12 +157,13 @@ func TestAddSessionWatcherMultipleWatchersNotified(t *testing.T) {
 	s.AddSessionWatcher(first)
 	s.AddSessionWatcher(second)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Multi Watcher")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Multi Watcher")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -326,12 +324,13 @@ func TestAddSessionWatcherRaceWithSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Race Test")
+	exe, exitArgs := testExecutable(t)
+	game, err := s.AddGame(exe, "Race Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "exit"}
+	s.findLocked(game.ID).LaunchArgs = exitArgs
 	s.mu.Unlock()
 
 	tracker := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
@@ -397,13 +396,14 @@ func TestServiceShutdownWaitsForSessionCallbacks(t *testing.T) {
 func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Long Runner")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Long Runner")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
 	// ~3s child process that survives well past the assertion window below.
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 4 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(3)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -431,12 +431,13 @@ func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
 func TestPlayGameGoroutineSkipsPersistAfterShutdown(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Shutdown Race")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Shutdown Race")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 2 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(2)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -481,8 +482,8 @@ func TestStopGameExternalSessionRejectsMismatchedCreatedAt(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 4242, Path: exe, CreatedAt: created.Add(3 * time.Second)}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 4242, Path: exe, CreatedAt: created.Add(3 * time.Second)}}, true, nil
 	}
 	s.mu.Unlock()
 
@@ -504,7 +505,7 @@ func TestStopGameExternalSessionRejectsScanError(t *testing.T) {
 	scanErr := errors.New("enumerate failed")
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, scanErr }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, false, scanErr }
 	s.mu.Unlock()
 
 	err = s.StopGame(game.ID)
@@ -524,7 +525,7 @@ func TestStopGameExternalSessionRejectsMissingPID(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) { return nil, nil }
+	s.scan = func(context.Context) ([]procs.Process, bool, error) { return nil, true, nil }
 	s.mu.Unlock()
 
 	err = s.StopGame(game.ID)
@@ -541,7 +542,8 @@ func TestStopGameExternalSessionRejectsUnstartedService(t *testing.T) {
 		t.Fatal(err)
 	}
 	fakeExternalSession(s, game.ID, 4245, time.Now().Add(-time.Minute))
-	// ServiceStartup was never called, so s.ctx is still nil: StopGame must
+	s.ctx = nil
+	// ServiceStartup was never called, so s.ctx is nil: StopGame must
 	// refuse to confirm identity rather than pass a nil ctx to s.scan.
 
 	err = s.StopGame(game.ID)
@@ -561,8 +563,8 @@ func TestStopGameExternalSessionRejectsUnknownCreatedAt(t *testing.T) {
 
 	s.mu.Lock()
 	s.ctx = context.Background()
-	s.scan = func(context.Context) ([]procs.Process, error) {
-		return []procs.Process{{PID: 4246, Path: exe, CreatedAtUnknown: true}}, nil
+	s.scan = func(context.Context) ([]procs.Process, bool, error) {
+		return []procs.Process{{PID: 4246, Path: exe, CreatedAtUnknown: true}}, true, nil
 	}
 	s.mu.Unlock()
 
@@ -611,12 +613,13 @@ func TestFinishSessionPersistFailureRollsBackMemory(t *testing.T) {
 func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(`C:\Windows\System32\cmd.exe`, "Killable")
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Killable")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	s.findLocked(game.ID).LaunchArgs = []string{"/C", "ping -n 20 127.0.0.1 >nul"}
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(20)
 	s.mu.Unlock()
 
 	if err := s.PlayGame(game.ID); err != nil {
@@ -629,4 +632,236 @@ func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 	if s.IsRunning(game.ID) {
 		t.Fatal("session still running after StopGame")
 	}
+}
+
+func TestFinishSessionCallsPlayRecorder(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	base := time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC)
+	clock := base
+	s.now = func() time.Time { return clock }
+
+	var mu sync.Mutex
+	type rec struct {
+		id         string
+		start, end time.Time
+	}
+	var got []rec
+	s.SetPlayRecorder(func(gameID string, startedAt, endedAt time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, rec{gameID, startedAt, endedAt})
+	})
+
+	startedAt := base
+	s.mu.Lock()
+	s.running["orphan"] = &session{startedAt: startedAt, lastSeen: startedAt, external: true}
+	s.mu.Unlock()
+	clock = base.Add(90 * time.Second)
+	s.finishSession("orphan", startedAt)
+	s.wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 {
+		t.Fatalf("records = %d, want 1", len(got))
+	}
+	if got[0].id != "orphan" || !got[0].start.Equal(startedAt) || !got[0].end.Equal(clock) {
+		t.Fatalf("record = %+v, want orphan %s..%s", got[0], startedAt, clock)
+	}
+}
+
+// Журнал совместимости должен отличать «игру закрыли» от «игра упала»: по
+// одной длительности это не различить, а вывод получается противоположный.
+func TestSessionOutcomeMarksUserStop(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	type outcome struct {
+		played        time.Duration
+		stoppedByUser bool
+	}
+	got := make(chan outcome, 1)
+	s.SetOutcomeRecorder(func(_ string, played time.Duration, stoppedByUser bool) {
+		got <- outcome{played: played, stoppedByUser: stoppedByUser}
+	})
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	s.mu.Lock()
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(30)
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("play: %v", err)
+	}
+	if err := s.StopGame(game.ID); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+
+	select {
+	case o := <-got:
+		if !o.stoppedByUser {
+			t.Fatal("stoppedByUser = false после StopGame")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("исход сессии не записан")
+	}
+}
+
+// Неудачный запуск обязан попадать в журнал: именно из таких записей и
+// набирается список игр, которые не работают.
+func TestLaunchFailureIsRecorded(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	reasons := make(chan string, 1)
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, reason string) {
+		codes <- code
+		reasons <- reason
+	})
+	s.start = func(context.Context, launch) (gameProcess, error) {
+		return nil, errors.New("окружение не готово")
+	}
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("PlayGame: ожидалась ошибка")
+	}
+
+	select {
+	case reason := <-reasons:
+		if reason == "" {
+			t.Fatal("причина пустая")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("неудачный запуск не записан")
+	}
+
+	// Код нужен общей статистике: по тексту причины отказы не различить.
+	select {
+	case code := <-codes:
+		if code != "library.launch_failed" {
+			t.Fatalf("код отказа = %q, want library.launch_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("код отказа не записан")
+	}
+}
+
+// Не поднявшееся окружение запуска — тоже несостоявшийся запуск. На macOS это
+// самая частая причина, по которой игра не идёт: бутыль CrossOver не завёлся.
+// Журнал, молчащий об этом, оставляет пользователя без подсказки.
+func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	codes := make(chan string, 1)
+	s.SetLaunchFailureRecorder(func(_, code, _ string) { codes <- code })
+	s.prepare = func(context.Context, launch) error {
+		return errors.New("бутыль не завёлся")
+	}
+
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err == nil {
+		t.Fatal("PlayGame: ожидалась ошибка")
+	}
+
+	select {
+	case code := <-codes:
+		if code != "library.runtime_failed" {
+			t.Fatalf("код отказа = %q, want library.runtime_failed", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("отказ окружения не попал в журнал")
+	}
+}
+
+// Игра, закрывшаяся сама через секунду, — самая частая жалоба «не
+// запускается», и до этой записи журнал сообщал о ней только длительность
+// сессии: ни какой файл запущен, ни с каким кодом он вышел. Разбирать
+// присланные логи по такой записи нечем.
+func TestExitCodeReachesTheLog(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	s.findLocked(game.ID).LaunchArgs = testExitArgs(3)
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("PlayGame: %v", err)
+	}
+	s.sessionWG.Wait()
+
+	text := logs.String()
+	if !strings.Contains(text, "game process exited with an error") {
+		t.Fatalf("нет записи о ненулевом коде выхода:\n%s", text)
+	}
+	if !strings.Contains(text, "code=3") {
+		t.Fatalf("код выхода не записан:\n%s", text)
+	}
+	if !strings.Contains(text, "executable=") {
+		t.Fatalf("запущенный файл не записан:\n%s", text)
+	}
+}
+
+func TestStartLogsTheExecutable(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(exe, "Game")
+	if err != nil {
+		t.Fatalf("add game: %v", err)
+	}
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("PlayGame: %v", err)
+	}
+	s.sessionWG.Wait()
+
+	text := logs.String()
+	if !strings.Contains(text, `msg="game started"`) || !strings.Contains(text, "workDir=") {
+		t.Fatalf("запуск записан без файла и рабочей папки:\n%s", text)
+	}
+}
+
+func TestExitCodeOfAnUnknownError(t *testing.T) {
+	if code, known := exitCode(errors.New("не процесс")); known || code != 0 {
+		t.Fatalf("exitCode(другая ошибка) = %d, %v; want 0, false", code, known)
+	}
+	if code, known := exitCode(nil); !known || code != 0 {
+		t.Fatalf("exitCode(nil) = %d, %v; want 0, true", code, known)
+	}
+}
+
+type sessionLogSink struct {
+	mu   sync.Mutex
+	text strings.Builder
+}
+
+func (s *sessionLogSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.text.Write(p)
+}
+
+func (s *sessionLogSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.text.String()
+}
+
+func captureSessionLogs(t *testing.T) *sessionLogSink {
+	t.Helper()
+	sink := &sessionLogSink{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return sink
 }

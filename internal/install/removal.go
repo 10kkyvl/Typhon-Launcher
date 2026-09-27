@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/download"
 	"typhon/internal/library"
+	"typhon/internal/uierr"
 )
 
 type RemovalMethod string
@@ -30,17 +31,17 @@ const (
 )
 
 var (
-	errGameRunning        = errors.New("игра запущена, закройте её перед удалением")
-	errGameBusy           = errors.New("по этой игре идёт установка или обновление")
-	errRemoveSeeding      = errors.New("раздача активна, остановите её перед удалением")
-	errFilesLocked        = errors.New("файлы игры заняты другим процессом")
-	errUninstallCancelled = errors.New("удаление отменено в установщике")
-	errUninstallFailed    = errors.New("деинсталлятор завершился с ошибкой")
-	errNoUninstaller      = errors.New("деинсталлятор не найден")
-	errBadCommand         = errors.New("команда удаления записана неверно")
-	errUnsafeRemoval      = errors.New("этот каталог нельзя удалять целиком")
-	errNoLibraryAccess    = errors.New("библиотека недоступна")
-	errNothingToRemove    = errors.New("удалять с диска нечего")
+	errGameRunning        = uierr.New("install.game_running", "игра запущена, закройте её перед удалением")
+	errGameBusy           = uierr.New("install.game_busy", "по этой игре идёт установка или обновление")
+	errRemoveSeeding      = uierr.New("install.remove_seeding", "раздача активна, остановите её перед удалением")
+	errFilesLocked        = uierr.New("install.files_locked", "файлы игры заняты другим процессом")
+	errUninstallCancelled = uierr.New("install.uninstall_cancelled", "удаление отменено в установщике")
+	errUninstallFailed    = uierr.New("install.uninstall_failed", "деинсталлятор завершился с ошибкой")
+	errNoUninstaller      = uierr.New("install.no_uninstaller", "деинсталлятор не найден")
+	errBadCommand         = uierr.New("install.bad_command", "команда удаления записана неверно")
+	errUnsafeRemoval      = uierr.New("install.unsafe_removal", "этот каталог нельзя удалять целиком")
+	errNoLibraryAccess    = uierr.New("install.no_library_access", "библиотека недоступна")
+	errNothingToRemove    = uierr.New("install.nothing_to_remove", "удалять с диска нечего")
 )
 
 type RemovalInfo struct {
@@ -155,7 +156,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	}
 
 	if plan.method == RemovalInstaller {
-		if err := s.runUninstaller(s.baseContext(), plan); err != nil {
+		base, err := s.baseContext()
+		if err != nil {
+			return err
+		}
+		if err := s.runUninstaller(base, plan); err != nil {
 			return err
 		}
 	}
@@ -163,17 +168,38 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		if err := s.removeInstallDir(game.InstallDir); err != nil {
 			return err
 		}
+		// Окружение запуска живёт вместе с файлами: пережившее их бутыль —
+		// мусор, про который пользователь никогда не узнает. Но провал сноса
+		// не отменяет удаления игры, поэтому предупреждение, а не ошибка.
+		if err := s.releaseRuntime(game.InstallDir); err != nil {
+			slog.Warn("release game runtime", "id", gameID, "installDir", game.InstallDir, "error", err)
+		}
 	}
 
-	if err := s.forgetInstallations(gameID); err != nil {
-		return err
+	// forgetInstallations хранит только внутреннюю бухгалтерию сервиса
+	// (историю записей Installation), а не источник правды о самой игре —
+	// им остаётся library. Если файлы уже стёрты (deleteFiles=true), это
+	// точка невозврата: RemoveAll не откатить, и падение здесь не должно
+	// оставить запись библиотеки указывающей на удалённый каталог. Поэтому
+	// ошибку откладываем и всё равно доводим library.RemoveGame/MarkUninstalled
+	// до конца, а возвращаем её вызывающему уже после них — тот узнает о
+	// сбое, но библиотека не разойдётся с диском. Пока точка невозврата не
+	// пройдена (файлы не трогали), поведение прежнее: ошибка возвращается
+	// сразу, до всякой мутации библиотеки, и пользователь может просто
+	// повторить попытку.
+	forgetErr := s.forgetInstallations(gameID)
+	if forgetErr != nil && !deleteFiles {
+		return forgetErr
 	}
 	if opts.KeepInLibrary {
 		if err := s.library.MarkUninstalled(gameID); err != nil {
-			return err
+			return errors.Join(forgetErr, err)
 		}
 	} else if err := s.library.RemoveGame(gameID); err != nil {
-		return err
+		return errors.Join(forgetErr, err)
+	}
+	if forgetErr != nil {
+		return forgetErr
 	}
 	slog.Info("game removed", "id", gameID, "title", game.Title, "method", plan.method,
 		"files", deleteFiles, "kept", opts.KeepInLibrary)
@@ -207,7 +233,9 @@ func (s *Service) removalPlan(gameID string) (removalPlan, error) {
 		marker, err := library.ReadMarker(game.InstallDir)
 		switch {
 		case err == nil:
-			plan.owned = true
+			// Untyped markers can also have been written by relocation of a
+			// manually added folder; they do not authorize recursive deletion.
+			plan.owned = marker.Owned && marker.InstallType != ""
 			plan.installType = marker.InstallType
 			if plan.uninstall.Empty() {
 				plan.uninstall = marker.Uninstall

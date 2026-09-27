@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,21 +21,30 @@ import (
 const (
 	maxResponseBodySize = 1 << 20
 	maxAvatarSize       = 10 << 20
+	maxCoverSize        = 8 << 20
 	maxRedirects        = 5
 )
 
 type CurrentUser struct {
-	ID          string    `json:"id"`
-	Username    string    `json:"username"`
-	DisplayName string    `json:"displayName"`
-	Email       string    `json:"email"`
-	AvatarURL   string    `json:"avatarUrl"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string          `json:"id"`
+	Username    string          `json:"username"`
+	DisplayName string          `json:"displayName"`
+	Email       string          `json:"email"`
+	AvatarURL   string          `json:"avatarUrl"`
+	Bio         string          `json:"bio"`
+	Profile     ProfileSettings `json:"profile"`
+	CreatedAt   time.Time       `json:"createdAt"`
+}
+
+type CoverUpload struct {
+	CoverURL string `json:"coverUrl"`
 }
 
 type Patch struct {
-	Username    *string `json:"username,omitempty"`
-	DisplayName *string `json:"displayName,omitempty"`
+	Username    *string          `json:"username,omitempty"`
+	DisplayName *string          `json:"displayName,omitempty"`
+	Bio         *string          `json:"bio,omitempty"`
+	Profile     *ProfileSettings `json:"profile,omitempty"`
 }
 
 type errorEnvelope struct {
@@ -110,14 +120,57 @@ func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, e
 	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient)
 }
 
-func (c *Client) UploadAvatar(ctx context.Context, data []byte) (CurrentUser, error) {
+func (c *Client) UploadAvatar(ctx context.Context, data []byte, crop AvatarCrop) (CurrentUser, error) {
 	if len(data) == 0 {
 		return CurrentUser{}, &Error{Code: CodeInvalidAvatar}
 	}
 	if len(data) > maxAvatarSize {
 		return CurrentUser{}, &Error{Code: CodeAvatarTooLarge}
 	}
-	return c.doUser(ctx, http.MethodPut, APIPrefix+"/me/avatar", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+
+	path := APIPrefix + "/me/avatar"
+	if crop.Size > 0 {
+		query := url.Values{}
+		query.Set("x", strconv.Itoa(crop.X))
+		query.Set("y", strconv.Itoa(crop.Y))
+		query.Set("size", strconv.Itoa(crop.Size))
+		path += "?" + query.Encode()
+	}
+	return c.doUser(ctx, http.MethodPut, path, bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+}
+
+func (c *Client) UploadCover(ctx context.Context, data []byte) (CoverUpload, error) {
+	if len(data) == 0 {
+		return CoverUpload{}, &Error{Code: CodeInvalidCover}
+	}
+	if len(data) > maxCoverSize {
+		return CoverUpload{}, &Error{Code: CodeCoverTooLarge}
+	}
+	return c.doCover(ctx, http.MethodPut, APIPrefix+"/me/cover", bytes.NewReader(data), "application/octet-stream", c.uploadHTTP)
+}
+
+func (c *Client) doCover(ctx context.Context, method, path string, body io.Reader, contentType string, hc *http.Client) (CoverUpload, error) {
+	tok, err := c.resolveToken()
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	resp, err := c.do(ctx, method, path, body, contentType, hc, tok)
+	if err != nil {
+		return CoverUpload{}, err
+	}
+	defer closeBody(resp)
+	limited := io.LimitReader(resp.Body, maxResponseBodySize)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return CoverUpload{}, decodeError(resp.StatusCode, limited)
+	}
+	var result CoverUpload
+	if err := json.NewDecoder(limited).Decode(&result); err != nil || result.CoverURL == "" {
+		if err == nil {
+			err = errors.New("empty cover url")
+		}
+		return CoverUpload{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("decode cover response: %w", err)}
+	}
+	return result, nil
 }
 
 func (c *Client) RemoveAvatar(ctx context.Context) (CurrentUser, error) {
@@ -196,7 +249,7 @@ func (c *Client) doUser(
 	if err := json.NewDecoder(limited).Decode(&user); err != nil {
 		return CurrentUser{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("decode response body: %w", err)}
 	}
-	return user, nil
+	return withProfileDefaults(user), nil
 }
 
 func (c *Client) resolveToken() (string, error) {

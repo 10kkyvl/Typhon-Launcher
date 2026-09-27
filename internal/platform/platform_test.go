@@ -24,7 +24,10 @@ func TestGetStorageInfo(t *testing.T) {
 }
 
 func TestGetStorageInfoMissingPath(t *testing.T) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("user home dir: %v", err)
+	}
 	info, err := GetStorageInfo(home + string(os.PathSeparator) + "definitely-missing-dir-typhon")
 	if err != nil {
 		t.Fatal(err)

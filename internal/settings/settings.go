@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -27,6 +28,15 @@ const (
 	RefreshHalfDay  = "12h"
 	RefreshDaily    = "24h"
 
+	LanguageSystem = "system"
+	LanguageRU     = "ru"
+	LanguageEN     = "en"
+
+	PresenceOnline    = "online"
+	PresenceAway      = "away"
+	PresenceBusy      = "busy"
+	PresenceInvisible = "invisible"
+
 	KeepPreviousOff         = "off"
 	KeepPreviousFirstLaunch = "first_launch"
 	KeepPreviousDay         = "24h"
@@ -37,7 +47,17 @@ const (
 	// shows. A stored version of zero means the user has never been asked,
 	// which is a different state from having been asked and declined: the
 	// first is worth one prompt, the second must never be re-prompted.
-	CurrentTelemetryConsent = 1
+	//
+	// Version 2 added compatibility reports, which carry the chip family and
+	// the macOS version. Version 1 promised no hardware at all, so an answer
+	// given to it cannot cover them.
+	CurrentTelemetryConsent = 2
+
+	// legacyTelemetryConsent is the version a switch turned on by hand before
+	// the prompt existed answers. That is the version whose text the user
+	// acted on, and recording anything higher would hand the newer text an
+	// answer nobody gave it.
+	legacyTelemetryConsent = 1
 
 	dirGames       = "Games"
 	dirDownloads   = "Downloads"
@@ -45,15 +65,21 @@ const (
 )
 
 var (
-	ErrLibraryNotConfigured = errors.New("библиотека не настроена")
-	ErrLibraryPathRelative  = errors.New("путь библиотеки должен быть абсолютным")
-	ErrLibraryPathRoot      = errors.New("библиотека не может быть корнем диска")
-	ErrLibraryParentEmpty   = errors.New("не выбрана папка для библиотеки")
+	ErrLibraryNotConfigured = uierr.New("settings.library_not_configured", "библиотека не настроена")
+	ErrLibraryPathRelative  = uierr.New("settings.library_path_relative", "путь библиотеки должен быть абсолютным")
+	ErrLibraryPathRoot      = uierr.New("settings.library_path_root", "библиотека не может быть корнем диска")
+	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
 )
+
+// ErrCodeConsentSaveFailed marks a consent answer that could not be written.
+const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 
 type Settings struct {
 	Theme                  string  `json:"theme"`
+	AccentColor            string  `json:"accentColor"`
+	TintLogo               bool    `json:"tintLogo"`
 	UIScale                float64 `json:"uiScale"`
+	Language               string  `json:"language"`
 	LibraryPath            string  `json:"libraryPath"`
 	DownloadsPath          string  `json:"downloadsPath"`
 	GamesPath              string  `json:"gamesPath"`
@@ -70,6 +96,7 @@ type Settings struct {
 	SeedAfterDownload      bool    `json:"seedAfterDownload"`
 	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
 	AutoInstall            bool    `json:"autoInstall"`
+	ElevateAhead           bool    `json:"elevateAhead"`
 	SourceRefreshInterval  string  `json:"sourceRefreshInterval"`
 	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
 	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
@@ -84,6 +111,9 @@ type Settings struct {
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
 	LANSharing bool `json:"lanSharing"`
+
+	PresenceStatus   string `json:"presenceStatus"`
+	PresenceAutoAway bool   `json:"presenceAutoAway"`
 
 	AccountSync           bool `json:"accountSync"`
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
@@ -110,10 +140,19 @@ func (s Settings) DiagnosticsAllowed() bool {
 	return s.TelemetryConsentRecorded() && s.AnonymousDiagnostics
 }
 
+// CompatReportsAllowed gates the compatibility reports on the current consent
+// rather than on any recorded answer. An answer given to an older prompt stays
+// valid for what it covered, and covers nothing else: raising the version is
+// how the promise made in that older text keeps being kept.
+func (s Settings) CompatReportsAllowed() bool {
+	return s.TelemetryConsentVersion >= CurrentTelemetryConsent && s.AnonymousUsageStats
+}
+
 func Defaults() Settings {
 	return Settings{
 		Theme:                  "dark",
 		UIScale:                1,
+		Language:               LanguageSystem,
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
@@ -126,6 +165,7 @@ func Defaults() Settings {
 		SeedAfterDownload:      false,
 		InstallCleanupPolicy:   CleanupDelete,
 		AutoInstall:            false,
+		ElevateAhead:           false,
 		SourceRefreshInterval:  RefreshSixHours,
 		VerifyAfterInstall:     true,
 		InstallSkipShortcuts:   true,
@@ -140,6 +180,9 @@ func Defaults() Settings {
 		AllowTorrentReuse:        true,
 
 		LANSharing: false,
+
+		PresenceStatus:   PresenceOnline,
+		PresenceAutoAway: true,
 
 		AccountSync:           false,
 		SourcesNoticeAccepted: false,
@@ -194,11 +237,29 @@ func applyStoredConsent(s Settings, p consentProbe) Settings {
 	// — it is equally the shipped default nobody ever touched — so those
 	// installs see the prompt once.
 	if s.AnonymousUsageStats || s.AnonymousDiagnostics {
-		s.TelemetryConsentVersion = CurrentTelemetryConsent
+		s.TelemetryConsentVersion = legacyTelemetryConsent
 	} else {
 		s.TelemetryConsentVersion = 0
 	}
 	return s
+}
+
+func ValidLanguage(lang string) bool {
+	switch lang {
+	case LanguageSystem, LanguageRU, LanguageEN:
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidPresenceStatus(status string) bool {
+	switch status {
+	case PresenceOnline, PresenceAway, PresenceBusy, PresenceInvisible:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeLibraryPath(path string) (string, error) {
@@ -245,6 +306,12 @@ func legacyLibraryPath(gamesPath string) string {
 }
 
 func sanitize(s Settings) (Settings, error) {
+	if s.AccentColor != "" {
+		if len(s.AccentColor) != 7 || s.AccentColor[0] != '#' || strings.IndexFunc(s.AccentColor[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) >= 0 {
+			return Settings{}, errors.New("accent color must be #RRGGBB")
+		}
+		s.AccentColor = strings.ToUpper(s.AccentColor)
+	}
 	library, err := normalizeLibraryPath(s.LibraryPath)
 	if err != nil {
 		return Settings{}, err
@@ -279,6 +346,12 @@ func sanitize(s Settings) (Settings, error) {
 	default:
 		s.SourceRefreshInterval = RefreshSixHours
 	}
+	if !ValidLanguage(s.Language) {
+		s.Language = LanguageSystem
+	}
+	if !ValidPresenceStatus(s.PresenceStatus) {
+		s.PresenceStatus = PresenceOnline
+	}
 	switch s.KeepPreviousVersion {
 	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
 	default:
@@ -290,6 +363,9 @@ func sanitize(s Settings) (Settings, error) {
 var migrateConfigDirOnce sync.Once
 
 func ConfigDir() (string, error) {
+	if dir, err := configDirOverride(); dir != "" || err != nil {
+		return dir, err
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
@@ -458,7 +534,10 @@ func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
 	next.AnonymousDiagnostics = diagnostics
 	next.TelemetryConsentVersion = CurrentTelemetryConsent
 	if err := s.SaveSettings(next); err != nil {
-		return Settings{}, fmt.Errorf("save telemetry consent: %w", err)
+		// The consent screen closes only on a successful answer, so its error
+		// text is the one thing the user is left with. Give it a code the
+		// frontend can translate instead of a raw Go string.
+		return Settings{}, uierr.Wrap(ErrCodeConsentSaveFailed, fmt.Errorf("save telemetry consent: %w", err))
 	}
 	return s.GetSettings(), nil
 }
@@ -534,10 +613,10 @@ func createLibrary(root string) error {
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("создать папку %s: %w", dir, err)
+			return uierr.Wrap("settings.library_create_failed", fmt.Errorf("создать папку %s: %w", dir, err))
 		}
 		if err := checkWritable(dir); err != nil {
-			return err
+			return uierr.Wrap("settings.library_not_writable", err)
 		}
 	}
 	return nil

@@ -3,6 +3,7 @@
   import { get } from 'svelte/store';
   import { Check, FileUp } from '@lucide/svelte';
   import {
+    cancelFetchMetadata,
     discardMetadata,
     fetchMetadata,
     selectTorrentFile,
@@ -10,11 +11,14 @@
     type DownloadOrigin,
     type TorrentInfo,
   } from '../services/downloads';
+  import { offerElevateAhead } from '../services/install';
   import { selectFolder } from '../services/settings';
-  import { errorMessage } from '../stores/downloads';
+  import { appInfo, elevationSupported, type AppInfo } from '../services/system';
+  import { installErrorText } from '../install/installErrors';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
-  import { bytesSize, plural } from '../utils/format';
+  import { bytesSize } from '../utils/format';
+  import { msg } from '../i18n';
   import Button from './Button.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
@@ -31,6 +35,9 @@
   let destination = $state('');
   let selected = $state<boolean[]>([]);
   let starting = $state(false);
+  let autoInstall = $state(false);
+  let elevateAhead = $state(false);
+  let platform = $state<AppInfo | null>(null);
   let pendingHash = '';
   let token = 0;
 
@@ -40,9 +47,20 @@
   const selectedSize = $derived(
     (info?.files ?? []).reduce((sum, file, i) => (selected[i] ? sum + file.size : sum), 0),
   );
+  const selectedPaths = $derived((info?.files ?? []).filter((_, i) => selected[i]).map((file) => file.path));
+  const canElevateAhead = $derived(
+    offerElevateAhead({
+      elevationSupported: platform !== null && elevationSupported(platform),
+      autoInstall,
+      paths: selectedPaths,
+    }),
+  );
 
   function reset() {
     token++;
+    if (step === 'loading') {
+      cancelFetchMetadata(source);
+    }
     if (pendingHash) {
       discardMetadata(pendingHash);
       pendingHash = '';
@@ -61,7 +79,11 @@
     untrack(() => {
       reset();
       if (isOpen && ready) {
-        destination = get(settings)?.downloadsPath ?? '';
+        const current = get(settings);
+        destination = current?.downloadsPath ?? '';
+        autoInstall = current?.autoInstall ?? false;
+        elevateAhead = current?.elevateAhead ?? false;
+        loadPlatform();
         if (preset) {
           source = preset;
           proceed(preset);
@@ -69,6 +91,17 @@
       }
     });
   });
+
+  // A failed lookup hides the pre-elevation checkbox instead of guessing:
+  // without it the install waits for the user, which is the safe side.
+  async function loadPlatform() {
+    try {
+      platform = await appInfo();
+    } catch (err) {
+      platform = null;
+      toast(installErrorText(err), 'danger');
+    }
+  }
 
   async function proceed(value: string) {
     const current = ++token;
@@ -85,7 +118,7 @@
       step = 'files';
     } catch (err) {
       if (!open || current !== token) return;
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
       step = 'source';
     }
   }
@@ -97,16 +130,16 @@
       source = path;
       await proceed(path);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
   }
 
   async function browseDestination() {
     try {
-      const path = await selectFolder('Выберите папку загрузки');
+      const path = await selectFolder(msg('modals.addDownloadChooseFolder'));
       if (path) destination = path;
     } catch {
-      toast('Не удалось открыть диалог выбора папки', 'danger');
+      toast(msg('modals.addDownloadFolderDialogFailed'), 'danger');
     }
   }
 
@@ -115,11 +148,15 @@
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
     starting = true;
     try {
-      await startDownloadFrom(info.infoHash, destination, indices, origin ?? {});
+      await startDownloadFrom(info.infoHash, destination, indices, {
+        ...(origin ?? {}),
+        autoInstall,
+        elevateAhead: autoInstall && canElevateAhead && elevateAhead,
+      });
       pendingHash = '';
       open = false;
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(installErrorText(err), 'danger');
     }
     starting = false;
   }
@@ -128,28 +165,28 @@
 {#if !libraryReady}
   <LibrarySetupModal bind:open />
 {:else}
-<Modal bind:open title="Добавить загрузку" width={step === 'files' ? '62rem' : '48rem'}>
+<Modal bind:open title={msg('modals.addDownloadTitle')} width={step === 'files' ? '62rem' : '48rem'}>
   {#if step === 'source'}
     <div class="source">
       <label class="field">
-        <span class="field-label">Magnet-ссылка</span>
+        <span class="field-label">{msg('modals.addDownloadMagnetLabel')}</span>
         <input class="input" type="text" placeholder="magnet:?xt=urn:btih:…" bind:value={source} />
       </label>
       <div class="or">
         <span class="line"></span>
-        <span class="or-text">или</span>
+        <span class="or-text">{msg('modals.addDownloadOr')}</span>
         <span class="line"></span>
       </div>
       <Button onclick={pickTorrent}>
         <FileUp size="1.6rem" strokeWidth={1.8} />
-        Выбрать .torrent файл
+        {msg('modals.addDownloadPickTorrent')}
       </Button>
     </div>
   {:else if step === 'loading'}
     <div class="loading">
       <span class="spinner"></span>
-      <span class="loading-text">Получение метаданных…</span>
-      <span class="loading-note">Это может занять до полутора минут.</span>
+      <span class="loading-text">{msg('modals.addDownloadFetchingMetadata')}</span>
+      <span class="loading-note">{msg('modals.addDownloadFetchingNote')}</span>
     </div>
   {:else if info}
     <div class="files">
@@ -158,10 +195,10 @@
         <span class="torrent-size">{bytesSize(info.totalBytes)}</span>
       </div>
       <div class="dest">
-        <span class="field-label">Папка назначения</span>
+        <span class="field-label">{msg('modals.addDownloadDestinationLabel')}</span>
         <div class="dest-controls">
           <input class="input sm" type="text" readonly value={destination} />
-          <Button size="sm" onclick={browseDestination}>Обзор</Button>
+          <Button size="sm" onclick={browseDestination}>{msg('modals.addDownloadBrowse')}</Button>
         </div>
       </div>
       <div class="file-list">
@@ -180,20 +217,46 @@
           </button>
         {/each}
       </div>
+      <div class="options">
+        <button class="option" role="checkbox" aria-checked={autoInstall} onclick={() => (autoInstall = !autoInstall)}>
+          <span class="box" class:on={autoInstall}>
+            {#if autoInstall}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+          </span>
+          <span class="option-text">
+            <span class="option-label">{msg('modals.addDownloadAutoInstallLabel')}</span>
+            <span class="option-sub">{msg('modals.addDownloadAutoInstallSub')}</span>
+          </span>
+        </button>
+        {#if canElevateAhead}
+          <button
+            class="option nested"
+            role="checkbox"
+            aria-checked={elevateAhead}
+            onclick={() => (elevateAhead = !elevateAhead)}
+          >
+            <span class="box" class:on={elevateAhead}>
+              {#if elevateAhead}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+            </span>
+            <span class="option-text">
+              <span class="option-label">{msg('modals.addDownloadElevateAheadLabel')}</span>
+              <span class="option-sub">{msg('modals.addDownloadElevateAheadSub')}</span>
+            </span>
+          </button>
+        {/if}
+      </div>
     </div>
   {/if}
 
   {#snippet footer()}
     {#if step === 'source'}
-      <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>Продолжить</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>{msg('common.continue')}</Button>
     {:else if step === 'files'}
       <span class="summary">
-        Выбрано: {selectedCount}
-        {plural(selectedCount, 'файл', 'файла', 'файлов')}, {bytesSize(selectedSize)}
+        {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
-      <Button onclick={() => (open = false)}>Отмена</Button>
-      <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>Начать загрузку</Button>
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
 </Modal>
@@ -348,6 +411,7 @@
   }
 
   .box.on {
+    color: var(--accent-on, #fff);
     background: var(--accent);
     border-color: var(--accent);
   }
@@ -367,6 +431,51 @@
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease);
+  }
+
+  .option:hover {
+    background: var(--hover);
+  }
+
+  .option.nested {
+    margin-left: var(--space-5);
+  }
+
+  .option .box {
+    margin-top: 0.1rem;
+  }
+
+  .option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .option-label {
+    font-size: var(--font-sm);
+  }
+
+  .option-sub {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .summary {

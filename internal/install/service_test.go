@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/catalog"
 	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/sources"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -243,14 +245,37 @@ func newTestService(t *testing.T) (*Service, *fakeDownloads, *fakeRegistrar) {
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
+	if cond() {
+		return
 	}
-	t.Fatalf("timed out waiting for %s", what)
+	ticker := time.NewTicker(2 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(15 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if cond() {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+}
+
+// waitJobDone ждёт, пока горутина установки не снимет свою запись из s.jobs.
+// waitStatus для этого недостаточно: терминальный статус публикуется внутри
+// run, а endJob выполняется отложенно уже после его возврата, поэтому тест,
+// который сразу за статусом дёргает Retry или Start, попадает в это окно и
+// получает errUnavailable.
+func (s *Service) waitJobDone(t *testing.T, id string) {
+	t.Helper()
+	waitFor(t, "install job to be released", func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.jobs[id] == nil
+	})
 }
 
 func (s *Service) waitStatus(t *testing.T, id string, want Status) Installation {
@@ -281,7 +306,19 @@ func mustServiceAt(t testing.TB, dir string) *Service {
 	if err != nil {
 		t.Fatalf("new install service at %s: %v", dir, err)
 	}
+	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
+	// секунды и сотни мегабайт на каждую установку. Тестам этого не нужно, а
+	// оставлять после прогона настоящие бутыли на машине разработчика нельзя.
+	s.prepareRuntime = func(context.Context, string, string) error { return nil }
+	s.releaseRuntime = func(string) error { return nil }
 	return s
+}
+
+func TestNewServiceAtWiresRunner(t *testing.T) {
+	s := mustServiceAt(t, t.TempDir())
+	if s.runner == nil {
+		t.Fatal("runner = nil, want a wired runner")
+	}
 }
 
 func TestStoreRoundTrip(t *testing.T) {
@@ -528,10 +565,50 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	s, downloads, registrar := newTestService(t)
 	root := t.TempDir()
 	portableSource(t, root, "Game")
+	cat, err := catalog.NewServiceAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = cat.AddGame(catalog.Game{ID: "canon-1", Title: "Game", ExternalIDs: catalog.ExternalIDs{IGDB: "20"}}); err != nil {
+		t.Fatal(err)
+	}
+	src, err := sources.NewServiceAt(t.TempDir(), cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = src.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := src.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	feedPath := filepath.Join(t.TempDir(), "feed.json")
+	if err = os.WriteFile(feedPath, []byte(`{"version":1,"name":"Install flow fixture","downloads":[{"title":"Game v1.0 [Папка игры]","distributionId":"game-fitgirl","uploadDate":"2026-09-09T12:00:00Z","uris":["magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	added, err := src.AddSourceFile(feedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := src.GetReleasesForGame("canon-1")
+	if len(groups) != 1 {
+		t.Fatalf("catalog release groups %+v", groups)
+	}
+	request, err := src.PrepareDownload(groups[0].Release.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.SourceID != added.ID {
+		t.Fatal("selected source lost")
+	}
+	s.SetTitleResolver(func(origin download.Origin) string { return cat.TitleOf(origin.GameID) })
 	downloads.add("d1", "Game", root)
 	downloads.mu.Lock()
 	d := downloads.items["d1"]
-	d.Origin = download.Origin{ReleaseID: "rel-1", SourceID: "src-1", GameID: "canon-1"}
+	uploadedAt := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+	d.Origin = download.Origin{ReleaseID: request.ReleaseID, SourceID: request.SourceID, DistributionID: request.DistributionID, ReleaseUploadedAt: request.ReleaseUploadedAt, GameID: request.GameID, Version: request.Version}
 	downloads.items["d1"] = d
 	downloads.mu.Unlock()
 
@@ -540,7 +617,7 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if item.Origin.ReleaseID != "rel-1" {
+	if item.Origin.ReleaseID != request.ReleaseID {
 		t.Fatalf("installation origin = %+v", item.Origin)
 	}
 
@@ -549,7 +626,8 @@ func TestInstallKeepsDownloadProvenance(t *testing.T) {
 	if len(games) != 1 {
 		t.Fatalf("registered = %+v", games)
 	}
-	if games[0].ReleaseID != "rel-1" || games[0].SourceID != "src-1" || games[0].CanonicalGameID != "canon-1" {
+	if games[0].ReleaseID != request.ReleaseID || games[0].SourceID != request.SourceID || games[0].DistributionID != "game-fitgirl" ||
+		games[0].ReleaseUploadedAt == nil || !games[0].ReleaseUploadedAt.Equal(uploadedAt) || games[0].CanonicalGameID != "canon-1" || games[0].Version != request.Version {
 		t.Fatalf("registered game = %+v, want provenance from the download", games[0])
 	}
 }
@@ -748,7 +826,11 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("startup: %v", err)
 	}
-	defer s.ServiceShutdown()
+	defer func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	}()
 
 	items := s.List()
 	if len(items) != 2 {
@@ -802,7 +884,11 @@ func TestExeInstallerWaitsForConfirmation(t *testing.T) {
 	if len(games) != 1 || games[0].Executable != exe {
 		t.Fatalf("registered = %+v", games)
 	}
-	calls := (s.runner.(*fakeRunner)).calls()
+	runner, ok := s.runner.(*fakeRunner)
+	if !ok {
+		t.Fatalf("runner = %T, want *fakeRunner", s.runner)
+	}
+	calls := runner.calls()
 	if len(calls) != 1 || calls[0].Path != filepath.Join(dir, "setup.exe") {
 		t.Fatalf("runner calls = %+v", calls)
 	}
@@ -869,6 +955,7 @@ func TestRetryAfterFailure(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	s.waitStatus(t, item.ID, StatusCompleted)
+	s.waitJobDone(t, item.ID)
 
 	s.mu.Lock()
 	stored := s.findLocked(item.ID)
@@ -953,5 +1040,18 @@ func TestProposeDestinationAvoidsCollision(t *testing.T) {
 	got := s.proposeDestination(games, "Game")
 	if got != filepath.Join(games, "Game (2)") {
 		t.Fatalf("destination = %q", got)
+	}
+}
+
+// Подготовка окружения обязана быть подменяемой: иначе прогон тестов на
+// macOS создаёт настоящие бутыли CrossOver. Проверяем, что поле вообще есть
+// и по умолчанию заполнено.
+func TestNewServiceAtWiresRuntimePreparation(t *testing.T) {
+	s, err := newServiceAt(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("new install service: %v", err)
+	}
+	if s.prepareRuntime == nil {
+		t.Fatal("prepareRuntime = nil, want a wired preparation step")
 	}
 }

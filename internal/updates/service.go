@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -30,6 +32,7 @@ const (
 	eventCompleted = "update:completed"
 	eventFailed    = "update:failed"
 	eventRollback  = "update:rollback"
+	eventDegraded  = "update:degraded"
 
 	eventVerifyStarted   = "verify:started"
 	eventVerifyUpdated   = "verify:updated"
@@ -46,30 +49,41 @@ const (
 	stagingDirName        = ".staging"
 	previousSuffix        = ".previous"
 	replacedSuffix        = ".replaced"
+	patchBackupSuffix     = ".patch-backup"
 	interruptedUpdateText = "обновление было прервано"
 )
 
 var pollInterval = time.Second
 
 var (
-	errNotTracked = errors.New("для этой игры нет данных об обновлении")
+	errNotTracked = uierr.New("updates.not_tracked", "для этой игры нет данных об обновлении")
 
-	errEmptyInstallDir = errors.New("каталог установки не задан")
-	errNoPlan          = errors.New("сначала подготовьте план обновления")
-	errGameRunning     = errors.New("игра запущена — закройте её перед обновлением")
-	errBusy            = errors.New("операция уже выполняется")
-	errNoRollback      = errors.New("предыдущая версия недоступна")
-	errNoIdentity      = errors.New("проверка недоступна для этой установки")
-	errNoDownloads     = errors.New("менеджер загрузок недоступен")
-	errNoInstaller     = errors.New("установщик недоступен")
-	errNoLibrary       = errors.New("библиотека недоступна")
-	errUpdateFailed    = errors.New("не удалось применить обновление")
+	errEmptyInstallDir = uierr.New("updates.no_install_dir", "каталог установки не задан")
+	errNoPlan          = uierr.New("updates.no_plan", "сначала подготовьте план обновления")
+	errGameRunning     = uierr.New("updates.game_running", "игра запущена — закройте её перед обновлением")
+	errBusy            = uierr.New("updates.busy", "операция уже выполняется")
+	errNoRollback      = uierr.New("updates.no_rollback", "предыдущая версия недоступна")
+	errNoIdentity      = uierr.New("updates.no_identity", "проверка недоступна для этой установки")
+	errNoDownloads     = uierr.New("updates.no_downloads", "менеджер загрузок недоступен")
+	errNoInstaller     = uierr.New("updates.no_installer", "установщик недоступен")
+	errNoLibrary       = uierr.New("updates.no_library", "библиотека недоступна")
+	errUpdateFailed    = uierr.New("updates.update_failed", "не удалось применить обновление")
 )
+
+// degradedStatus is the update:degraded event payload. It stays unexported
+// with no accessor method: adding either would change the wails bindings
+// generated for Service, which is not allowed here.
+type degradedStatus struct {
+	Degraded bool   `json:"degraded"`
+	Message  string `json:"message"`
+}
 
 type librarySource interface {
 	GetInstalledGames() []library.Game
 	GetRunningGames() []string
 	ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error)
+	BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error)
+	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 }
 
 type releaseSource interface {
@@ -95,18 +109,22 @@ type job struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	settings  *settings.Service
-	library   librarySource
-	releases  releaseSource
-	downloads downloadSource
-	installs  installer
-	store     *store
+	checkMu        sync.Mutex
+	rollbackActive map[string]bool
+	mu             sync.Mutex
+	settings       *settings.Service
+	library        librarySource
+	releases       releaseSource
+	downloads      downloadSource
+	installs       installer
+	store          *store
 
 	updates       map[string]*Update
 	verifications map[string]*VerifyState
 	rollbacks     map[string]*Rollback
+	journals      map[string]*SwapJournal
 	history       []UpdateHistory
+	status        degradedStatus
 
 	jobs    map[string]*job
 	waiters map[string]chan install.Installation
@@ -160,6 +178,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		updates:       map[string]*Update{},
 		verifications: map[string]*VerifyState{},
 		rollbacks:     map[string]*Rollback{},
+		journals:      map[string]*SwapJournal{},
 		jobs:          map[string]*job{},
 		waiters:       map[string]chan install.Installation{},
 	}, nil
@@ -178,12 +197,31 @@ func emit(name string, data any) {
 	}
 }
 
+// markDegradedLocked records a persist failure and notifies the frontend.
+// The caller must hold s.mu.
+func (s *Service) markDegradedLocked(err error) {
+	s.status = degradedStatus{Degraded: true, Message: err.Error()}
+	emit(eventDegraded, s.status)
+}
+
+// clearDegradedLocked resets a previously recorded persist failure once a
+// save succeeds again. It only emits when the status actually changes, so a
+// healthy service does not fire update:degraded on every successful save.
+// The caller must hold s.mu.
+func (s *Service) clearDegradedLocked() {
+	if !s.status.Degraded {
+		return
+	}
+	s.status = degradedStatus{}
+	emit(eventDegraded, s.status)
+}
+
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	startupCtx, cancel := context.WithCancel(ctx)
+	s.ctx, s.cancel = startupCtx, cancel
 	storedUpdates, err := s.store.loadUpdates()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -191,7 +229,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedVerifications, err := s.store.loadVerifications()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -199,7 +236,6 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedRollbacks, err := s.store.loadRollbacks()
 	if err != nil {
-		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -207,7 +243,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	storedHistory, err := s.store.loadHistory()
 	if err != nil {
-		cancel := s.cancel
+		s.cancel = nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	storedJournals, err := s.store.loadJournals()
+	if err != nil {
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -223,6 +265,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 		item.Planning = false
 		item.Plan = nil
+		// Availability and plans are derived from mutable source data. Never
+		// expose a persisted offer before it has passed the current provenance
+		// checks in this process.
+		item.Availability = UpdateAvailability{Kind: KindNone, GameID: item.GameID}
+		if item.State == StateAvailable || item.State == StateReady {
+			item.State = StateIdle
+		}
 		s.updates[item.GameID] = &item
 	}
 	for _, v := range storedVerifications {
@@ -235,6 +284,10 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		entry := r
 		s.rollbacks[entry.GameID] = &entry
 	}
+	for _, j := range storedJournals {
+		entry := j
+		s.journals[entry.GameID] = &entry
+	}
 	s.history = storedHistory
 	interrupted := make([]string, 0, len(s.updates))
 	for _, u := range s.updates {
@@ -243,6 +296,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 	}
 	s.mu.Unlock()
+
+	s.recoverJournals()
 
 	for _, gameID := range interrupted {
 		if game, ok := s.installedGame(gameID); ok {
@@ -256,13 +311,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 
 	s.wg.Add(1)
-	go s.housekeeping()
+	go s.housekeeping(startupCtx)
 
 	if s.config().UpdateCheckAutomatically {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.checkAll(s.baseContext())
+			s.checkAll(startupCtx)
 		}()
 	}
 	return nil
@@ -283,49 +338,130 @@ func (s *Service) ServiceShutdown() error {
 	s.wg.Wait()
 
 	s.mu.Lock()
-	s.persistLocked()
+	err := s.persistLocked()
 	s.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("persist updates on shutdown: %w", err)
+	}
 	return nil
 }
 
-func (s *Service) baseContext() context.Context {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.ctx == nil {
-		return context.Background()
-	}
-	return s.ctx
-}
-
-func (s *Service) persistLocked() {
+func (s *Service) persistLocked() error {
 	list := make([]Update, 0, len(s.updates))
 	for _, u := range s.updates {
 		list = append(list, *u)
 	}
 	sortUpdates(list)
 	if err := s.store.saveUpdates(list); err != nil {
-		slog.Error("persist updates", "error", err)
+		return fmt.Errorf("save updates: %w", err)
 	}
+	return nil
 }
 
-func (s *Service) persistVerifyLocked() {
+func (s *Service) persistVerifyLocked() error {
 	list := make([]VerifyState, 0, len(s.verifications))
 	for _, v := range s.verifications {
 		list = append(list, *v)
 	}
 	if err := s.store.saveVerifications(list); err != nil {
-		slog.Error("persist verifications", "error", err)
+		return fmt.Errorf("save verifications: %w", err)
 	}
+	return nil
 }
 
-func (s *Service) persistRollbacksLocked() {
+func (s *Service) persistRollbacksLocked() error {
 	list := make([]Rollback, 0, len(s.rollbacks))
 	for _, r := range s.rollbacks {
 		list = append(list, *r)
 	}
 	if err := s.store.saveRollbacks(list); err != nil {
-		slog.Error("persist rollbacks", "error", err)
+		return fmt.Errorf("save rollbacks: %w", err)
 	}
+	return nil
+}
+
+func (s *Service) persistJournalsLocked() error {
+	list := make([]SwapJournal, 0, len(s.journals))
+	for _, j := range s.journals {
+		list = append(list, *j)
+	}
+	return s.store.saveJournals(list)
+}
+
+// setJournal persists a swap journal before the caller's first destructive
+// filesystem step. A persist failure must not leave a journal in memory that
+// disk recovery cannot see, so it is rolled back on error (invariant I.4).
+func (s *Service) setJournal(j SwapJournal) error {
+	if g, ok := s.installedGame(j.GameID); ok {
+		j.Original = &library.InstalledUpdate{ID: g.ID, Executable: g.Executable, InstallDir: g.InstallDir, Version: g.Version, VersionSource: g.VersionSource, ReleaseID: g.ReleaseID, SourceID: g.SourceID, DistributionID: g.DistributionID, ReleaseUploadedAt: g.ReleaseUploadedAt}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// An unfinished transaction owns its recovery paths until it is cleared.
+	// Replacing its journal would lose the only record of those files.
+	if s.journals[j.GameID] != nil {
+		return errBusy
+	}
+	if j.Kind == JournalSwap && s.rollbacks[j.GameID] != nil {
+		copyEntry := *s.rollbacks[j.GameID]
+		j.PreviousRollback = &copyEntry
+	}
+	entry := j
+	s.journals[j.GameID] = &entry
+	if err := s.persistJournalsLocked(); err != nil {
+		delete(s.journals, j.GameID)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) clearJournal(gameID string) error {
+	s.mu.Lock()
+	previous, ok := s.journals[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return nil
+	}
+	if previous.RetainedPrevious != "" && previous.Kind != JournalCleanup {
+		// The install is committed. Persist a cleanup-only phase before removing
+		// the retained backup: recovery must never undo the new install after
+		// some (or all) of that older backup has already been deleted.
+		cleanup := *previous
+		cleanup.Kind = JournalCleanup
+		s.journals[gameID] = &cleanup
+		if err := s.persistJournalsLocked(); err != nil {
+			s.journals[gameID] = previous
+			s.mu.Unlock()
+			return err
+		}
+		previous = &cleanup
+	}
+	s.mu.Unlock()
+	if previous.RetainedPrevious != "" {
+		if err := os.RemoveAll(previous.RetainedPrevious); err != nil {
+			slog.Warn("retained update backup cleanup deferred", "gameId", gameID, "error", err)
+			return nil
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.journals[gameID] == nil {
+		return nil
+	}
+	if s.journals[gameID] != previous {
+		return errBusy
+	}
+	delete(s.journals, gameID)
+	if err := s.persistJournalsLocked(); err != nil {
+		s.journals[gameID] = previous
+		if previous.Kind == JournalCleanup {
+			slog.Warn("update cleanup journal removal deferred", "gameId", gameID, "error", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func sortUpdates(list []Update) {
@@ -346,6 +482,11 @@ func (s *Service) snapshot(gameID string) (Update, bool) {
 	return *u, true
 }
 
+// mutate applies apply to the tracked update for gameID and persists the
+// result. A persist failure rolls the in-memory copy back to what apply
+// started from, marks the service degraded (update:degraded) and logs the
+// error: mutate has no caller that could act differently on the error than
+// log it, so the handling lives here once instead of at every call site.
 func (s *Service) mutate(gameID string, apply func(*Update)) (Update, bool) {
 	s.mu.Lock()
 	u, ok := s.updates[gameID]
@@ -353,12 +494,68 @@ func (s *Service) mutate(gameID string, apply func(*Update)) (Update, bool) {
 		s.mu.Unlock()
 		return Update{}, false
 	}
+	before := *u
 	apply(u)
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		*u = before
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", gameID, "error", err)
+		return before, true
+	}
+	s.clearDegradedLocked()
 	snap := *u
 	s.mu.Unlock()
 	emit(eventUpdated, snap)
 	return snap, true
+}
+
+// updateFieldsBestEffort is mutate for recovery code that runs once at
+// startup for many games in a row: a single unwritable state file must not
+// stop every other game's journal recovery, so a persist failure here rolls
+// the change back, marks the service degraded and logs, rather than
+// aborting ServiceStartup.
+func (s *Service) updateFieldsBestEffort(gameID string, apply func(*Update)) {
+	s.mu.Lock()
+	u, ok := s.updates[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	before := *u
+	apply(u)
+	if err := s.persistLocked(); err != nil {
+		*u = before
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist update", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
+}
+
+// forgetRollbackBestEffort removes gameID's kept-previous-version record and
+// persists it, rolling back and marking the service degraded on failure. See
+// updateFieldsBestEffort for why this stays a logged best effort rather than
+// a propagated error.
+func (s *Service) forgetRollbackBestEffort(gameID string) {
+	s.mu.Lock()
+	entry, ok := s.rollbacks[gameID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.rollbacks, gameID)
+	if err := s.persistRollbacksLocked(); err != nil {
+		s.rollbacks[gameID] = entry
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 // planProgress reports progress of a long planning step without persisting it:
@@ -391,7 +588,7 @@ func (s *Service) GetUpdates() []Update {
 func (s *Service) Busy(gameID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.jobs[gameID] != nil
+	return s.jobs[gameID] != nil || s.rollbackActive[gameID]
 }
 
 func (s *Service) GetUpdate(gameID string) (Update, error) {
@@ -440,16 +637,19 @@ func (s *Service) running(gameID string) bool {
 
 func installedOf(g library.Game) InstalledGame {
 	return InstalledGame{
-		GameID:          g.ID,
-		CanonicalGameID: g.CanonicalGameID,
-		Title:           g.Title,
-		InstallDir:      g.InstallDir,
-		Executable:      g.Executable,
-		ReleaseID:       g.ReleaseID,
-		SourceID:        g.SourceID,
-		Version:         g.Version,
-		VersionSource:   versionSourceOf(g.VersionSource),
-		SizeBytes:       g.SizeBytes,
+		InstalledAt:       g.InstalledAt,
+		GameID:            g.ID,
+		CanonicalGameID:   g.CanonicalGameID,
+		Title:             g.Title,
+		InstallDir:        g.InstallDir,
+		Executable:        g.Executable,
+		ReleaseID:         g.ReleaseID,
+		SourceID:          g.SourceID,
+		DistributionID:    g.DistributionID,
+		ReleaseUploadedAt: g.ReleaseUploadedAt,
+		Version:           g.Version,
+		VersionSource:     versionSourceOf(g.VersionSource),
+		SizeBytes:         g.SizeBytes,
 	}
 }
 
@@ -468,9 +668,17 @@ func versionSourceOf(raw string) VersionSource {
 	}
 }
 
-// CheckUpdates recomputes availability for every installed game.
+// CheckUpdates recomputes availability for every installed game. When the
+// service has not completed ServiceStartup yet there is no context to run
+// the check under, so it is skipped rather than run with a substitute
+// context (invariant 20): the caller still gets whatever was already known.
 func (s *Service) CheckUpdates() []Update {
-	s.checkAll(s.baseContext())
+	s.mu.Lock()
+	ctx := s.ctx
+	s.mu.Unlock()
+	if ctx != nil {
+		s.checkAll(ctx)
+	}
 	return s.GetUpdates()
 }
 
@@ -479,7 +687,9 @@ func (s *Service) CheckGame(gameID string) (Update, error) {
 	if !ok {
 		return Update{}, errNotTracked
 	}
-	s.check(game)
+	if err := s.check(game); err != nil {
+		return Update{}, err
+	}
 	u, ok := s.snapshot(gameID)
 	if !ok {
 		return Update{}, errNotTracked
@@ -488,6 +698,11 @@ func (s *Service) CheckGame(gameID string) (Update, error) {
 }
 
 func (s *Service) checkAll(ctx context.Context) {
+	s.checkMu.Lock()
+	defer s.checkMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 	if s.library == nil {
 		return
 	}
@@ -498,84 +713,204 @@ func (s *Service) checkAll(ctx context.Context) {
 			return
 		}
 		known[game.ID] = true
-		s.check(game)
+		if err := s.check(game); err != nil {
+			slog.Error("check update", "game", game.ID, "error", err)
+		}
 	}
 	s.prune(known)
 }
 
+// prune drops tracked updates and verifications for games no longer
+// installed. A persist failure rolls the deleted entries back into memory
+// instead of leaving them removed only in RAM (invariant I.4), marks the
+// service degraded and logs: prune runs from checkAll in the background, so
+// there is no caller left to hand the error to.
 func (s *Service) prune(known map[string]bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	removed := false
+	removedUpdates := map[string]*Update{}
+	removedVerifications := map[string]*VerifyState{}
 	for id := range s.updates {
 		if known[id] {
 			continue
 		}
-		delete(s.updates, id)
-		delete(s.verifications, id)
-		removed = true
+		removedUpdates[id] = s.updates[id]
+		if v, ok := s.verifications[id]; ok {
+			removedVerifications[id] = v
+		}
 	}
-	if removed {
-		s.persistLocked()
-		s.persistVerifyLocked()
-	}
-}
-
-func (s *Service) check(game library.Game) {
-	if s.releases == nil {
+	if len(removedUpdates) == 0 {
+		s.mu.Unlock()
 		return
 	}
-	installed := installedOf(game)
+	for id := range removedUpdates {
+		delete(s.updates, id)
+		delete(s.verifications, id)
+	}
+	restore := func() {
+		for id, u := range removedUpdates {
+			s.updates[id] = u
+		}
+		for id, v := range removedVerifications {
+			s.verifications[id] = v
+		}
+	}
+	if err := s.persistLocked(); err != nil {
+		restore()
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist pruned updates", "error", err)
+		return
+	}
+	if err := s.persistVerifyLocked(); err != nil {
+		restore()
+		if persistErr := s.persistLocked(); persistErr != nil {
+			slog.Error("restore updates on disk after failed verification prune", "error", persistErr)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist pruned verifications", "error", err)
+		return
+	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
+}
+
+// check resolves update availability for game and persists it. A persist
+// failure rolls the in-memory entry back to what it was before this call
+// (removing it entirely if check itself created it), marks the service
+// degraded and returns the error so CheckGame can surface it to the UI.
+func (s *Service) check(game library.Game) error {
+	if s.releases == nil {
+		return nil
+	}
 	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
+	game = s.bindLegacyDistribution(game, list)
+	installed := installedOf(game)
 	availability := ResolveUpdate(installed, list, PatchesFrom(list))
 	availability.GameID = game.ID
 
 	s.mu.Lock()
-	current, ok := s.updates[game.ID]
-	if !ok {
+	current, existed := s.updates[game.ID]
+	var before Update
+	if existed {
+		before = *current
+	} else {
 		current = &Update{GameID: game.ID}
 		s.updates[game.ID] = current
 	}
 	busy := current.State == StateDownloading || current.State == StateUpdating
 	previous := current.Availability
+	changed := availabilityChanged(previous, availability)
 	current.Title = game.Title
 	current.CheckedAt = time.Now()
 	current.CanRollback = s.rollbacks[game.ID] != nil
 	if !busy {
 		current.Availability = availability
-		if previous.TargetReleaseID != availability.TargetReleaseID {
+		if changed {
 			current.Plan = nil
+			current.DownloadID = ""
 			current.Error = ""
 		}
 		switch {
-		case availability.Available && current.State != StateReady:
+		case availability.Available && (current.State != StateReady || changed):
 			current.State = StateAvailable
 		case !availability.Available:
 			current.State = StateIdle
 			current.Plan = nil
 		}
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if existed {
+			*current = before
+		} else {
+			delete(s.updates, game.ID)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		return fmt.Errorf("persist update check for %s: %w", game.ID, err)
+	}
+	s.clearDegradedLocked()
 	snap := *current
 	s.mu.Unlock()
 
 	emit(eventUpdated, snap)
-	if !busy && availability.Available && previous.TargetReleaseID != availability.TargetReleaseID {
+	if !busy && availability.Available && changed {
 		slog.Info("update available", "game", game.ID, "kind", availability.Kind,
 			"from", availability.InstalledVersion, "to", availability.TargetVersion,
 			"strategy", availability.Strategy, "confidence", availability.Confidence)
 		emit(eventAvailable, snap)
 	}
+	return nil
+}
+
+func availabilityChanged(a, b UpdateAvailability) bool {
+	return a.Available != b.Available || a.Kind != b.Kind ||
+		a.InstalledReleaseID != b.InstalledReleaseID || a.InstalledVersion != b.InstalledVersion ||
+		a.TargetReleaseID != b.TargetReleaseID || a.TargetVersion != b.TargetVersion ||
+		a.SourceID != b.SourceID || a.DistributionID != b.DistributionID ||
+		!samePlanTime(a.InstalledReleaseUploadedAt, b.InstalledReleaseUploadedAt) ||
+		!samePlanTime(a.TargetReleaseUploadedAt, b.TargetReleaseUploadedAt)
+}
+
+func (s *Service) bindLegacyDistribution(game library.Game, releases []sources.Release) library.Game {
+	if game.SourceID == "" || game.ReleaseID == "" || s.library == nil ||
+		(game.DistributionID != "" && game.ReleaseUploadedAt != nil) {
+		return game
+	}
+	var match *sources.Release
+	for i := range releases {
+		r := &releases[i]
+		if r.ID != game.ReleaseID || r.SourceID != game.SourceID || r.DistributionID == "" ||
+			(game.DistributionID != "" && r.DistributionID != game.DistributionID) {
+			continue
+		}
+		if match != nil {
+			return game
+		}
+		match = r
+	}
+	if match == nil {
+		return game
+	}
+	var releaseUploadedAt *time.Time
+	if game.ReleaseUploadedAt == nil && game.Version == releaseVersion(*match) &&
+		(game.InstalledAt.IsZero() || match.UploadedAt == nil || !match.UploadedAt.After(game.InstalledAt)) {
+		releaseUploadedAt = match.UploadedAt
+	}
+	if game.DistributionID != "" && releaseUploadedAt == nil {
+		return game
+	}
+	bound, err := s.library.BindDistribution(game.ID, game.SourceID, game.ReleaseID, match.DistributionID, releaseUploadedAt)
+	if err != nil {
+		slog.Warn("bind legacy installation to distribution", "game", game.ID, "error", err)
+		return game
+	}
+	return bound
 }
 
 // HandleSourcesRefreshed re-resolves availability once new releases arrive.
+// The recheck runs in its own goroutine because it walks every installed
+// game, but that goroutine is counted in s.wg and refuses to start once the
+// service is closing or has no context yet, so ServiceShutdown never races a
+// check still writing state after it returns (invariant 19).
 //
 //wails:ignore
 func (s *Service) HandleSourcesRefreshed() {
 	if !s.config().UpdateCheckAutomatically {
 		return
 	}
-	go s.checkAll(s.baseContext())
+	s.mu.Lock()
+	if s.closing || s.ctx == nil {
+		s.mu.Unlock()
+		return
+	}
+	ctx := s.ctx
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		s.checkAll(ctx)
+	}()
 }
 
 // HandleInstallFinished routes installer results back to a waiting update job.
@@ -612,26 +947,46 @@ func (s *Service) HandleSessionEnded(gameID string, seconds int64) {
 	}
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
-	if !ok || !entry.AwaitLaunch {
+	if !ok || !entry.AwaitLaunch || s.rollbackActive[gameID] || s.journals[gameID] != nil {
 		s.mu.Unlock()
 		return
 	}
 	path := entry.Path
 	delete(s.rollbacks, gameID)
-	s.persistRollbacksLocked()
+	if err := s.persistRollbacksLocked(); err != nil {
+		s.rollbacks[gameID] = entry
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks after session end", "game", gameID, "error", err)
+		return
+	}
+	var beforeUpdate *Update
 	if u, tracked := s.updates[gameID]; tracked {
+		before := *u
+		beforeUpdate = &before
 		u.CanRollback = false
 	}
-	s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		// rollbacks.json already committed the removal above; restoring the
+		// in-memory entry here would only put memory out of sync with disk
+		// again, so only the update flag is rolled back (invariant I.4).
+		if beforeUpdate != nil {
+			*s.updates[gameID] = *beforeUpdate
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist updates after session end", "game", gameID, "error", err)
+		return
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
 
 	slog.Info("previous version removed after a successful launch", "game", gameID, "path", path)
 	removeTree(path)
 }
 
-func (s *Service) housekeeping() {
+func (s *Service) housekeeping(ctx context.Context) {
 	defer s.wg.Done()
-	ctx := s.baseContext()
 	ticker := time.NewTicker(housekeepingInterval)
 	defer ticker.Stop()
 	s.sweepPrevious()
@@ -645,24 +1000,64 @@ func (s *Service) housekeeping() {
 	}
 }
 
+// sweepPrevious removes kept-previous-version directories past their
+// KeepUntil deadline. A persist failure rolls the removed rollback entries
+// (and the update flags they cleared) back into memory and skips deleting
+// their directories, so a state file the disk refused to write never causes
+// a backup to be deleted while memory still thinks it exists.
 func (s *Service) sweepPrevious() {
 	now := time.Now()
 	var stale []string
 	s.mu.Lock()
+	removedRollbacks := map[string]*Rollback{}
+	changedUpdates := map[string]Update{}
 	for id, entry := range s.rollbacks {
+		if s.rollbackActive[id] || s.journals[id] != nil {
+			continue
+		}
 		if entry.KeepUntil == nil || now.Before(*entry.KeepUntil) {
 			continue
 		}
 		stale = append(stale, entry.Path)
+		removedRollbacks[id] = entry
 		delete(s.rollbacks, id)
 		if u, ok := s.updates[id]; ok {
+			changedUpdates[id] = *u
 			u.CanRollback = false
 		}
 	}
-	if len(stale) > 0 {
-		s.persistRollbacksLocked()
-		s.persistLocked()
+	if len(stale) == 0 {
+		s.mu.Unlock()
+		return
 	}
+	restore := func() {
+		for id, entry := range removedRollbacks {
+			s.rollbacks[id] = entry
+		}
+		for id, before := range changedUpdates {
+			if u, ok := s.updates[id]; ok {
+				*u = before
+			}
+		}
+	}
+	if err := s.persistRollbacksLocked(); err != nil {
+		restore()
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist rollbacks during sweep", "error", err)
+		return
+	}
+	if err := s.persistLocked(); err != nil {
+		restore()
+		if persistErr := s.persistRollbacksLocked(); persistErr != nil {
+			slog.Error("restore rollbacks on disk after failed sweep persist", "error", persistErr)
+		}
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
+		slog.Error("persist updates during sweep", "error", err)
+		return
+	}
+	s.clearDegradedLocked()
 	s.mu.Unlock()
 
 	for _, path := range stale {
@@ -671,18 +1066,32 @@ func (s *Service) sweepPrevious() {
 	}
 }
 
+// beginJob claims the job slot for gameID. It refuses instead of starting
+// when the service has not completed ServiceStartup yet (s.ctx is nil):
+// invariant 20 forbids substituting context.Background() here, so a job that
+// cannot be tied to the service's lifecycle simply does not start.
 func (s *Service) beginJob(gameID string) (context.Context, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closing || s.jobs[gameID] != nil {
+	pending := s.journals[gameID]
+	if s.closing || s.ctx == nil || s.jobs[gameID] != nil || s.rollbackActive[gameID] || (pending != nil && pending.Kind != JournalCleanup) {
+		s.mu.Unlock()
 		return nil, false
 	}
-	base := s.ctx
-	if base == nil {
-		base = context.Background()
-	}
-	ctx, cancel := context.WithCancel(base)
+	ctx, cancel := context.WithCancel(s.ctx)
 	s.jobs[gameID] = &job{cancel: cancel, done: make(chan struct{})}
+	s.mu.Unlock()
+	if pending != nil {
+		// Reserve the job while retrying cleanup so no other transaction can
+		// race its files. A released antivirus handle needs no app restart.
+		err := s.clearJournal(gameID)
+		s.mu.Lock()
+		blocked := err != nil || s.journals[gameID] != nil
+		s.mu.Unlock()
+		if blocked {
+			s.endJob(gameID)
+			return nil, false
+		}
+	}
 	return ctx, true
 }
 
@@ -707,22 +1116,33 @@ func (s *Service) cancelJob(gameID string) {
 	}
 }
 
+// appendHistory records entry in the update-history journal. A persist
+// failure rolls the journal back to its previous contents, marks the
+// service degraded and logs: appendHistory runs from the background update
+// goroutine, which has nothing more useful to do with the error than log it.
 func (s *Service) appendHistory(entry UpdateHistory) {
 	s.mu.Lock()
+	previous := append([]UpdateHistory(nil), s.history...)
 	s.history = append(s.history, entry)
 	if len(s.history) > maxHistory {
 		s.history = s.history[len(s.history)-maxHistory:]
 	}
 	list := append([]UpdateHistory(nil), s.history...)
-	s.mu.Unlock()
 	if err := s.store.saveHistory(list); err != nil {
+		s.history = previous
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
 		slog.Error("persist update history", "error", err)
+		return
 	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 func (s *Service) finishHistory(id, status, message string) {
 	now := time.Now()
 	s.mu.Lock()
+	previous := append([]UpdateHistory(nil), s.history...)
 	for i := range s.history {
 		if s.history[i].ID != id {
 			continue
@@ -733,10 +1153,15 @@ func (s *Service) finishHistory(id, status, message string) {
 		break
 	}
 	list := append([]UpdateHistory(nil), s.history...)
-	s.mu.Unlock()
 	if err := s.store.saveHistory(list); err != nil {
+		s.history = previous
+		s.markDegradedLocked(err)
+		s.mu.Unlock()
 		slog.Error("persist update history", "error", err)
+		return
 	}
+	s.clearDegradedLocked()
+	s.mu.Unlock()
 }
 
 func (s *Service) recheck(gameID string) {

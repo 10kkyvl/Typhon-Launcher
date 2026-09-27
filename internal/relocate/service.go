@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/dialogtext"
 	"typhon/internal/download"
 	"typhon/internal/hashdir"
 	"typhon/internal/history"
@@ -21,6 +22,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -31,9 +33,15 @@ const (
 	eventCompleted = "move:completed"
 	eventFailed    = "move:failed"
 	eventCancelled = "move:cancelled"
+	eventDegraded  = "move:degraded"
 
 	progressThrottle = 250 * time.Millisecond
 )
+
+type degradedStatus struct {
+	Degraded bool   `json:"degraded"`
+	Message  string `json:"message"`
+}
 
 // busyChecker matches internal/install.Service.Busy and
 // internal/updates.Service.Busy.
@@ -54,6 +62,8 @@ type Service struct {
 	upd      busyChecker
 
 	historyRecord func(history.Record) error
+
+	status degradedStatus
 
 	// afterItem is a test-only hook, invoked synchronously right after a
 	// library-move queue item settles, so tests can call Cancel exactly
@@ -143,13 +153,15 @@ func (s *Service) List() []Job {
 	return out
 }
 
-func (s *Service) SelectTargetFolder() (string, error) {
+func (s *Service) SelectTargetFolder(language string) (string, error) {
+	labels := dialogtext.For(language)
 	app := application.Get()
 	if app == nil {
-		return "", errors.New("диалог недоступен")
+		return "", uierr.New("relocate.dialog_unavailable", "диалог недоступен")
 	}
 	dialog := app.Dialog.OpenFile().
-		SetTitle("Выберите папку назначения").
+		SetTitle(labels.TargetFolder).
+		SetMessage(labels.TargetFolder).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
 	path, err := dialog.PromptForSingleSelection()
@@ -179,10 +191,10 @@ func (s *Service) context() (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closing {
-		return nil, errors.New("операция переноса недоступна: сервис завершает работу")
+		return nil, uierr.New("relocate.shutting_down", "операция переноса недоступна: сервис завершает работу")
 	}
 	if s.ctx == nil {
-		return nil, errors.New("операция переноса недоступна: сервис ещё не запущен")
+		return nil, uierr.New("relocate.not_ready", "операция переноса недоступна: сервис ещё не запущен")
 	}
 	return s.ctx, nil
 }
@@ -231,7 +243,7 @@ func (s *Service) registerJob(job Job) error {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
-		return errors.New("операция переноса недоступна: сервис завершает работу")
+		return uierr.New("relocate.shutting_down", "операция переноса недоступна: сервис завершает работу")
 	}
 	if err := s.conflictsLocked(job.GameID, job.Source, job.Target); err != nil {
 		s.mu.Unlock()
@@ -314,8 +326,23 @@ func (s *Service) libraryConflictLocked() error {
 	return nil
 }
 
-func (s *Service) removeJob(id string) {
+func cloneJobs(jobs []Job) []Job {
+	out := make([]Job, len(jobs))
+	for i, j := range jobs {
+		out[i] = j.clone()
+	}
+	return out
+}
+
+// removeJob drops id from the journal. On a persist failure the in-memory
+// jobs are rolled back to their state before the call and the service enters
+// a degraded state (surfaced by move:degraded): a completed job that a
+// failed persist leaves behind in the on-disk journal is picked back up by
+// recoverAll on the next startup (see recover.go), which is why the removal
+// itself must not be allowed to silently drift from disk.
+func (s *Service) removeJob(id string) error {
 	s.mu.Lock()
+	previous := cloneJobs(s.jobs)
 	for i := range s.jobs {
 		if s.jobs[i].ID == id {
 			s.jobs = append(s.jobs[:i:i], s.jobs[i+1:]...)
@@ -323,17 +350,26 @@ func (s *Service) removeJob(id string) {
 		}
 	}
 	if err := s.persistJournalLocked(); err != nil {
+		s.jobs = previous
+		s.status = degradedStatus{Degraded: true, Message: err.Error()}
+		s.mu.Unlock()
 		slog.Error("persist moves journal after cleanup", "job", id, "error", err)
+		emit(eventDegraded, s.status)
+		return fmt.Errorf("persist moves journal after cleanup: %w", err)
 	}
+	s.status = degradedStatus{}
 	delete(s.lastTx, id)
 	s.mu.Unlock()
+	return nil
 }
 
 // transition mutates a job, stamps UpdatedAt, persists the whole journal
 // and emits the event matching the new stage. Every stage change goes
 // through here so the on-disk journal never lags behind what a crash needs
 // to see (invariant 9): progress-only updates use setProgress instead,
-// which does not hit disk.
+// which does not hit disk. job is a pointer into s.jobs, so a failed persist
+// is undone by restoring the pre-mutation snapshot on that same pointer: a
+// bare return would leave memory ahead of what made it to disk.
 func (s *Service) transition(id string, stage Stage, mutate func(*Job)) (Job, error) {
 	s.mu.Lock()
 	job := s.findJobLocked(id)
@@ -341,6 +377,7 @@ func (s *Service) transition(id string, stage Stage, mutate func(*Job)) (Job, er
 		s.mu.Unlock()
 		return Job{}, ErrJobNotFound
 	}
+	previous := job.clone()
 	if mutate != nil {
 		mutate(job)
 	}
@@ -348,9 +385,13 @@ func (s *Service) transition(id string, stage Stage, mutate func(*Job)) (Job, er
 	job.UpdatedAt = time.Now()
 	snap := job.clone()
 	if err := s.persistJournalLocked(); err != nil {
+		*job = previous
+		s.status = degradedStatus{Degraded: true, Message: err.Error()}
 		s.mu.Unlock()
-		return Job{}, err
+		emit(eventDegraded, s.status)
+		return Job{}, fmt.Errorf("persist move transition: %w", err)
 	}
+	s.status = degradedStatus{}
 	s.mu.Unlock()
 	emit(eventForStage(stage), snap)
 	return snap, nil
@@ -450,6 +491,9 @@ func downloadUnfinished(status download.Status) bool {
 func (s *Service) checkBusy(gameID string) error {
 	if s.lib != nil && s.lib.IsRunning(gameID) {
 		return fmt.Errorf("%s: %w", gameID, ErrGameRunning)
+	}
+	if keeper, ok := s.upd.(interface{ HasRollback(string) bool }); ok && keeper.HasRollback(gameID) {
+		return fmt.Errorf("%s: %w", gameID, ErrRollbackAvailable)
 	}
 	if s.upd != nil && s.upd.Busy(gameID) {
 		return fmt.Errorf("%s: %w", gameID, ErrUpdateBusy)
@@ -645,7 +689,12 @@ func (s *Service) completeJob(jobID string) {
 	job.Stage = StageDone
 	job.UpdatedAt = time.Now()
 	emit(eventCompleted, job.clone())
-	s.removeJob(jobID)
+	if err := s.removeJob(jobID); err != nil {
+		// Logged and surfaced via move:degraded inside removeJob already;
+		// completeJob runs at the tail of a background goroutine with no
+		// synchronous caller left to hand the error to.
+		return
+	}
 }
 
 func (s *Service) repointGame(_ context.Context, job Job) error {
@@ -690,6 +739,9 @@ func (s *Service) runPipeline(ctx context.Context, jobID, source, target string,
 		return s.cancelJob(jobID)
 	}
 
+	if err := removeEmptyTarget(target); err != nil {
+		return s.failOrCancel(jobID, err)
+	}
 	if renameErr := os.Rename(source, target); renameErr == nil {
 		if _, err := s.transition(jobID, StageRepoint, func(j *Job) {
 			j.Renamed = true
@@ -769,7 +821,12 @@ func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target strin
 	if _, err := s.transition(jobID, StageCommit, nil); err != nil {
 		return err
 	}
+	if err := removeEmptyTarget(target); err != nil {
+		removeStaging(staging)
+		return s.failOrCancel(jobID, err)
+	}
 	if err := os.Rename(staging, target); err != nil {
+		removeStaging(staging)
 		return s.failOrCancel(jobID, err)
 	}
 	// The manifest stays on disk past this point: a crash recovery resuming
@@ -982,6 +1039,10 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir))
 	}
 	source = filepath.Clean(source)
+	if platform.Inside(root, source) {
+		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
+		return err
+	}
 	if err := s.checkBusy(gameID); err != nil {
 		return s.failOrCancel(jobID, err)
 	}
@@ -1171,4 +1232,18 @@ func (s *Service) applyLibrarySettings(jobID, root string) error {
 		return err
 	}
 	return nil
+}
+
+func removeEmptyTarget(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return ErrTargetNotEmpty
+	}
+	return os.Remove(path)
 }

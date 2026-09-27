@@ -19,7 +19,7 @@ func (s *Service) AddCatalogGame(canonicalGameID, title, cover string) (Game, er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.games {
-		if s.games[i].CanonicalGameID == canonicalGameID {
+		if s.sameCanonicalLocked(s.games[i].CanonicalGameID, canonicalGameID) {
 			return s.games[i], nil
 		}
 	}
@@ -40,4 +40,20 @@ func (s *Service) AddCatalogGame(canonicalGameID, title, cover string) (Game, er
 	slog.Info("catalog game added", "id", game.ID, "title", game.Title)
 	s.emitUpdated()
 	return game, nil
+}
+
+//wails:ignore
+func (s *Service) SetCanonicalIdentity(compare func(string, string) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sameCanonical = compare
+}
+func (s *Service) sameCanonicalLocked(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	return s.sameCanonical != nil && s.sameCanonical(a, b)
 }

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/uierr"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -182,6 +184,29 @@ func TestSaveConsentRecordsAnswerAndVersionTogether(t *testing.T) {
 
 // Declining is an answer and must be recorded as one, or the prompt returns on
 // the next launch and eventually wears the user down into accepting.
+// The consent screen has no other exit than a successful answer, so a failure
+// there is shown to the user verbatim unless it carries a code the frontend
+// can translate.
+func TestSaveConsentFailureCarriesAUICode(t *testing.T) {
+	dir := t.TempDir()
+	svc := mustServiceAt(t, filepath.Join(dir, "settings.json"))
+	// A regular file in the parent path fails on Windows as well as Unix,
+	// including when the tests run as root. Chmod is not a Windows ACL.
+	blocked := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("occupied"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc.path = filepath.Join(blocked, "settings.json")
+
+	_, err := svc.SaveConsent(true, true)
+	if err == nil {
+		t.Fatal("SaveConsent with an invalid parent path = nil, want an error")
+	}
+	if code := uierr.Code(err); code != ErrCodeConsentSaveFailed {
+		t.Fatalf("uierr.Code(err) = %q, want %q (raw text: %v)", code, ErrCodeConsentSaveFailed, err)
+	}
+}
+
 func TestSaveConsentRecordsARefusal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if _, err := mustServiceAt(t, path).SaveConsent(false, false); err != nil {
@@ -241,5 +266,61 @@ func TestConsentIsNotCarriedBetweenDevices(t *testing.T) {
 		if _, ok := fields[key]; ok {
 			t.Fatalf("portable settings carry %q between devices", key)
 		}
+	}
+}
+
+// Согласие второй версии — единственное, под которым можно слать отчёты о
+// совместимости: они везут чип и версию macOS, а первая версия обещала
+// обратное. Растянуть старый ответ на новые данные значит собрать их без спроса.
+func TestCompatReportsNeedCurrentConsent(t *testing.T) {
+	cases := []struct {
+		name    string
+		version int
+		usage   bool
+		want    bool
+	}{
+		{"не спрашивали", 0, true, false},
+		{"старое согласие", 1, true, false},
+		{"текущее согласие, статистика включена", CurrentTelemetryConsent, true, true},
+		{"текущее согласие, статистика выключена", CurrentTelemetryConsent, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := Settings{TelemetryConsentVersion: c.version, AnonymousUsageStats: c.usage}
+			if got := s.CompatReportsAllowed(); got != c.want {
+				t.Fatalf("CompatReportsAllowed = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// Старое согласие остаётся действительным для того, на что его давали: подъём
+// версии не должен молча выключать телеметрию, которая уже шла.
+func TestOldConsentStillAllowsUsageStats(t *testing.T) {
+	s := Settings{TelemetryConsentVersion: 1, AnonymousUsageStats: true}
+	if !s.UsageStatsAllowed() {
+		t.Fatal("UsageStatsAllowed = false, старое согласие должно продолжать действовать")
+	}
+	if !s.TelemetryConsentRecorded() {
+		t.Fatal("TelemetryConsentRecorded = false")
+	}
+}
+
+// Тумблер, включённый руками до появления вопроса, — это согласие первой
+// версии, а не текущей. Записать ему текущую значило бы вместе со старым
+// ответом выдать разрешение на чип и версию системы, которых тот текст обещал
+// не собирать.
+func TestConsentPredatingThePromptRecordsTheVersionItAnswered(t *testing.T) {
+	path := writeConfig(t, `{"anonymousUsageStats":true,"anonymousDiagnostics":false}`)
+
+	got := mustServiceAt(t, path).GetSettings()
+	if !got.UsageStatsAllowed() {
+		t.Fatal("UsageStatsAllowed = false, ответ первой версии должен действовать")
+	}
+	if got.CompatReportsAllowed() {
+		t.Fatal("отчёты о совместимости разрешены ответом, который их не покрывал")
+	}
+	if got.TelemetryConsentVersion != legacyTelemetryConsent {
+		t.Fatalf("TelemetryConsentVersion = %d, want %d", got.TelemetryConsentVersion, legacyTelemetryConsent)
 	}
 }

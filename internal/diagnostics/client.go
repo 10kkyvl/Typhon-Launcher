@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,27 +35,65 @@ func newTransport() *http.Transport {
 			Timeout: 10 * time.Second,
 		}).DialContext,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
+		ResponseHeaderTimeout: requestTimeout,
 		ExpectContinueTimeout: 5 * time.Second,
 	}
 }
 
 func newClient(baseURL string) (*client, error) {
+	return newClientWithTimeout(baseURL, requestTimeout)
+}
+
+// newClientWithTimeout is newClient with an overridable http.Client.Timeout.
+// The manual log upload in logsupload.go sends a body many times larger
+// than an error batch and needs more room on a slow connection than the
+// errors endpoint's fixed requestTimeout allows.
+func newClientWithTimeout(baseURL string, timeout time.Duration) (*client, error) {
 	base, err := account.ValidateBaseURL(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("validate diagnostics base url: %w", err)
 	}
+	transport := newTransport()
+	transport.ResponseHeaderTimeout = timeout
 	return &client{
 		baseURL: base,
 		httpClient: &http.Client{
-			Timeout:       requestTimeout,
-			Transport:     newTransport(),
+			Timeout:       timeout,
+			Transport:     transport,
 			CheckRedirect: account.CheckRedirect,
 		},
 	}, nil
 }
 
 func (c *client) send(ctx context.Context, id clientid.Identity, reports []reportPayload) error {
+	return c.sendVersion(ctx, id, reports, true)
+}
+
+func (c *client) sendVersion(ctx context.Context, id clientid.Identity, reports []reportPayload, withDetails bool) error {
+	// Repair persisted reports from clients that used CodeNone for frontend errors.
+	reports = append([]reportPayload(nil), reports...)
+	for i := range reports {
+		if !withDetails {
+			reports[i].Details = nil
+		}
+		if reports[i].ErrorCode == "" {
+			reports[i].ErrorCode = "unknown"
+			if reports[i].Component == "frontend" {
+				reports[i].ErrorCode = "frontend_error"
+			}
+		}
+	}
+	// Bound a flush even if a long outage accumulated more than one server batch.
+	if len(reports) > 20 {
+		for len(reports) > 0 {
+			n := min(len(reports), 20)
+			if err := c.sendVersion(ctx, id, reports[:n], withDetails); err != nil {
+				return err
+			}
+			reports = reports[n:]
+		}
+		return nil
+	}
 	path := account.APIPrefix + "/diagnostics/errors"
 	body, err := json.Marshal(batchPayload{
 		InstallationID: id.InstallationID,
@@ -66,6 +105,16 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 	})
 	if err != nil {
 		return fmt.Errorf("encode %s payload: %w", path, err)
+	}
+	if len(body) > 256<<10 {
+		if len(reports) < 2 {
+			return &deliveryError{status: 413, code: "batch_too_large"}
+		}
+		mid := len(reports) / 2
+		if err := c.sendVersion(ctx, id, reports[:mid], withDetails); err != nil {
+			return err
+		}
+		return c.sendVersion(ctx, id, reports[mid:], withDetails)
 	}
 	telemetrylog.Record(telemetrylog.KindDiagnostics, path, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
@@ -90,7 +139,40 @@ func (c *client) send(ctx context.Context, id clientid.Identity, reports []repor
 		if readErr != nil {
 			return fmt.Errorf("%s: status %d, read error body: %w", path, resp.StatusCode, readErr)
 		}
-		return fmt.Errorf("%s: unexpected status %d: %s", path, resp.StatusCode, string(data))
+		var envelope struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			return &deliveryError{status: resp.StatusCode, requestID: resp.Header.Get("X-Request-ID")}
+		}
+		// Old servers reject the optional field at JSON decoding, before any
+		// insert. Retry that specific response once with the legacy shape and
+		// identical IDs. Validation errors, throttling and outages never downgrade.
+		if withDetails && resp.StatusCode == http.StatusBadRequest && envelope.Error.Code == "bad_request" {
+			for _, report := range reports {
+				if report.Details != nil {
+					return c.sendVersion(ctx, id, reports, false)
+				}
+			}
+		}
+		return &deliveryError{status: resp.StatusCode, code: envelope.Error.Code, requestID: resp.Header.Get("X-Request-ID")}
 	}
 	return nil
+}
+
+// Only payload rejections are permanent. Throttling and server/auth availability
+// must retain the queued reports for a later attempt.
+type deliveryError struct {
+	status          int
+	code, requestID string
+}
+
+func (e *deliveryError) Error() string {
+	return fmt.Sprintf("diagnostics delivery: status=%d code=%q request_id=%q", e.status, e.code, e.requestID)
+}
+func permanentDeliveryError(err error) bool {
+	var e *deliveryError
+	return errors.As(err, &e) && (e.status == 400 || e.status == 413 || e.status == 422)
 }

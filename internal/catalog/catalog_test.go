@@ -160,6 +160,44 @@ func TestLearnMatchAppliesToNextResolve(t *testing.T) {
 	}
 }
 
+func TestLearnMatchRollsBackOverrideOnGamesPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	games := seed(t, s, Game{Title: "Cyberpunk 2077"})
+
+	path := filepath.Join(dir, "catalog.json")
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove catalog: %v", err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("block catalog path: %v", err)
+	}
+
+	normalized := titles.Parse("CP2077 Ultimate v2.31").Normalized
+	if err := s.LearnMatch(normalized, games[0].ID); err == nil {
+		t.Fatal("LearnMatch() error = nil, want the write failure")
+	}
+
+	if len(s.ListOverrides()) != 0 {
+		t.Fatalf("overrides = %+v, want rolled back", s.ListOverrides())
+	}
+	game, err := s.GetGame(games[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(game.Aliases) != 0 {
+		t.Fatalf("aliases = %v, want rolled back to none", game.Aliases)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "match_overrides.json"))
+	if err != nil {
+		t.Fatalf("read overrides file: %v", err)
+	}
+	if strings.Contains(string(data), normalized) {
+		t.Fatalf("overrides file still holds the rolled back pattern: %s", data)
+	}
+}
+
 func TestLearnMatchSurvivesRestart(t *testing.T) {
 	dir := t.TempDir()
 	s := mustServiceAt(t, dir)
@@ -186,7 +224,10 @@ func TestProvisionCreatesOncePerTitle(t *testing.T) {
 		query("Hades II Early Access"),
 		query("Stardew.Valley.v1.6"),
 	}
-	provisioned := s.Provision(queries)
+	provisioned, err := s.Provision(queries)
+	if err != nil {
+		t.Fatalf("Provision() error = %v", err)
+	}
 	if len(provisioned) != 3 {
 		t.Fatalf("provisioned keys = %d, want 3", len(provisioned))
 	}
@@ -201,7 +242,10 @@ func TestProvisionCreatesOncePerTitle(t *testing.T) {
 		}
 	}
 
-	again := s.Provision(queries)
+	again, err := s.Provision(queries)
+	if err != nil {
+		t.Fatalf("Provision() second call error = %v", err)
+	}
 	if len(s.ListGames()) != 3 {
 		t.Fatalf("games after second provision = %d, want 3", len(s.ListGames()))
 	}
@@ -214,12 +258,42 @@ func TestProvisionReusesExistingCatalogGame(t *testing.T) {
 	s := newTestService(t)
 	games := seed(t, s, Game{Title: "Cyberpunk 2077"})
 
-	provisioned := s.Provision([]Query{query("Cyberpunk 2077")})
+	provisioned, err := s.Provision([]Query{query("Cyberpunk 2077")})
+	if err != nil {
+		t.Fatalf("Provision() error = %v", err)
+	}
 	if got := provisioned[titles.Normalize("Cyberpunk 2077")]; got.ID != games[0].ID {
 		t.Fatalf("provisioned %s, want existing %s", got.ID, games[0].ID)
 	}
 	if len(s.ListGames()) != 1 {
 		t.Fatalf("games = %d, want 1", len(s.ListGames()))
+	}
+}
+
+func TestProvisionRollsBackGamesOnPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	seed(t, s, Game{Title: "Existing Game"})
+	before := s.ListGames()
+
+	path := filepath.Join(dir, "catalog.json")
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove catalog: %v", err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("block catalog path: %v", err)
+	}
+
+	if _, err := s.Provision([]Query{query("Hades II")}); err == nil {
+		t.Fatal("Provision() error = nil, want the write failure")
+	}
+
+	after := s.ListGames()
+	if len(after) != len(before) {
+		t.Fatalf("games = %d after failed provision, want unchanged %d", len(after), len(before))
+	}
+	if match := s.Resolve(query("Hades II")); match.Status != StatusUnmatched {
+		t.Fatalf("resolve after rollback = %+v, want unmatched", match)
 	}
 }
 

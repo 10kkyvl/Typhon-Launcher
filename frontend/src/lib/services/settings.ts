@@ -4,7 +4,10 @@ import { inWails } from './backend';
 
 export interface Settings {
   theme: string;
+  accentColor: string;
+  tintLogo: boolean;
   uiScale: number;
+  language: string;
   libraryPath: string;
   downloadsPath: string;
   gamesPath: string;
@@ -21,6 +24,7 @@ export interface Settings {
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
   autoInstall: boolean;
+  elevateAhead: boolean;
   sourceRefreshInterval: string;
   verifyAfterInstall: boolean;
   installSkipShortcuts: boolean;
@@ -38,13 +42,18 @@ export interface Settings {
   anonymousDiagnostics: boolean;
   telemetryConsentVersion: number;
   accountSync: boolean;
+  presenceStatus: string;
+  presenceAutoAway: boolean;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
 
 const fallbackDefaults: Settings = {
   theme: 'dark',
+  accentColor: '',
+  tintLogo: false,
   uiScale: 1,
+  language: 'system',
   libraryPath: '',
   downloadsPath: '',
   gamesPath: '',
@@ -61,6 +70,7 @@ const fallbackDefaults: Settings = {
   seedAfterDownload: false,
   installCleanupPolicy: 'delete',
   autoInstall: false,
+  elevateAhead: false,
   sourceRefreshInterval: '6h',
   verifyAfterInstall: true,
   installSkipShortcuts: true,
@@ -78,7 +88,17 @@ const fallbackDefaults: Settings = {
   anonymousDiagnostics: true,
   telemetryConsentVersion: 0,
   accountSync: false,
+  presenceStatus: 'online',
+  presenceAutoAway: true,
 };
+
+export const maxActiveDownloadOptions = [
+  { id: '1', label: '1' },
+  { id: '2', label: '2' },
+  { id: '3', label: '3' },
+  { id: '5', label: '5' },
+];
+
 
 export async function getSettings(): Promise<Settings> {
   if (inWails) {
@@ -123,4 +143,9 @@ export async function setupLibrary(parent: string): Promise<Settings> {
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+}
+
+export async function openGameFolder(path: string, executable: string): Promise<void> {
+ if (!inWails) throw new Error('unavailable in browser');
+ await AppService.OpenGameFolder(path, executable);
 }

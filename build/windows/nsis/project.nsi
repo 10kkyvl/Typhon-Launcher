@@ -71,7 +71,23 @@ ManifestDPIAware true
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uninstalling page
 
-!insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+!insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Russian"
+
+LangString StartMenuShortcut ${LANG_ENGLISH} "Start Menu shortcut"
+LangString StartMenuShortcut ${LANG_RUSSIAN} "Ярлык в меню Пуск"
+LangString DesktopShortcut ${LANG_ENGLISH} "Desktop shortcut"
+LangString DesktopShortcut ${LANG_RUSSIAN} "Ярлык на рабочем столе"
+LangString WindowsRequired ${LANG_ENGLISH} "Typhon requires Windows 10 (Server 2016) or later."
+LangString WindowsRequired ${LANG_RUSSIAN} "Для Typhon требуется Windows 10 (Server 2016) или новее."
+LangString ArchitectureNotSupported ${LANG_ENGLISH} "Typhon does not support this Windows architecture. Supported: ${ARCH}"
+LangString ArchitectureNotSupported ${LANG_RUSSIAN} "Typhon не поддерживает эту архитектуру Windows. Поддерживаются: ${ARCH}"
+LangString InstallingWebView ${LANG_ENGLISH} "Installing WebView2 Runtime"
+LangString InstallingWebView ${LANG_RUSSIAN} "Установка WebView2 Runtime"
+
+!define WAILS_WIN10_REQUIRED "$(WindowsRequired)"
+!define WAILS_ARCHITECTURE_NOT_SUPPORTED "$(ArchitectureNotSupported)"
+!define WAILS_INSTALL_WEBVIEW_DETAILPRINT "$(InstallingWebView)"
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
@@ -151,14 +167,14 @@ Section "-Core"
     ${EndIf}
 SectionEnd
 
-Section "Start Menu shortcut" SecStartMenu
+Section "$(StartMenuShortcut)" SecStartMenu
     ${If} $PrevInstallDir != ""
         Return
     ${EndIf}
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 SectionEnd
 
-Section "Desktop shortcut" SecDesktop
+Section "$(DesktopShortcut)" SecDesktop
     ${If} $PrevInstallDir != ""
         Return
     ${EndIf}

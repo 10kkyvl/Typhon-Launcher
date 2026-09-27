@@ -1,26 +1,26 @@
 :root {
   --ui-scale: 1;
 
-  --bg: #0b0f14;
-  --bg-sidebar: #0a0d12;
-  --surface: #10161d;
-  --surface-2: #141b23;
-  --surface-3: #19212b;
-  --surface-4: #1f2933;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.1);
-  --hover: rgba(255, 255, 255, 0.04);
-  --hover-strong: rgba(255, 255, 255, 0.07);
+  --bg: #0a0f15;
+  --bg-sidebar: #0a0f15;
+  --surface: #11171f;
+  --surface-2: #141c25;
+  --surface-3: #1c242f;
+  --surface-4: #242c38;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --hover: rgba(255, 255, 255, 0.045);
+  --hover-strong: rgba(255, 255, 255, 0.075);
 
   --text: #eef2f6;
   --text-2: #9ba6b2;
   --text-3: #657180;
 
-  --accent: #6875e8;
-  --accent-hover: #7a86f0;
-  --accent-subtle: rgba(104, 117, 232, 0.14);
-  --accent-text: #9ea8f6;
-  --accent-ring: rgba(104, 117, 232, 0.5);
+  --accent: #6673f2;
+  --accent-hover: #7480f7;
+  --accent-subtle: rgba(102, 115, 242, 0.15);
+  --accent-text: #9aa4f7;
+  --accent-ring: rgba(102, 115, 242, 0.5);
 
   --success: #65b883;
   --success-subtle: rgba(101, 184, 131, 0.13);
@@ -32,8 +32,8 @@
   --radius-xs: 0.4rem;
   --radius-sm: 0.6rem;
   --radius-md: 0.8rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.2rem;
+  --radius-lg: 1.2rem;
+  --radius-xl: 1.6rem;
   --cut: 0.2rem;
 
   --space-1: 0.4rem;

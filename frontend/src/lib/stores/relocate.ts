@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { moveErrorText } from '../relocate/moveMessages';
 import { inWails } from '../services/backend';
 import { listMoves, type MoveJob } from '../services/relocate';
+import { msg } from '../i18n';
 import { libraryGames } from './library';
 import { toast } from './toasts';
 
@@ -51,12 +52,20 @@ export async function initMoves() {
   Events.On('move:completed', (event) => {
     const job = event.data as MoveJob;
     upsertMove(job);
-    toast(`«${job.title || 'Библиотека'}» перенесена`, 'success');
+    toast(
+      job.title
+        ? msg('state.relocateTransferredNamed', { title: job.title })
+        : msg('state.relocateTransferredLibrary'),
+      'success',
+    );
   });
   Events.On('move:failed', (event) => {
     const job = event.data as MoveJob;
     upsertMove(job);
-    toast(moveErrorText(job.error, `Не удалось перенести «${job.title || 'библиотеку'}»`), 'danger');
+    const fallback = job.title
+      ? msg('state.relocateFailedNamed', { title: job.title })
+      : msg('state.relocateFailedLibrary');
+    toast(moveErrorText(job.error, fallback), 'danger');
   });
   Events.On('move:cancelled', (event) => upsertMove(event.data as MoveJob));
 }

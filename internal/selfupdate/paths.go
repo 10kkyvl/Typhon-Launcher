@@ -1,14 +1,15 @@
 package selfupdate
 
 import (
-	"errors"
 	"path/filepath"
 	"strings"
+
+	"typhon/internal/uierr"
 )
 
 var (
-	ErrEmptyConfigDir     = errors.New("selfupdate: config dir is empty")
-	ErrInvalidVersionPath = errors.New("selfupdate: version is not a safe path component")
+	ErrEmptyConfigDir     = uierr.New("selfupdate.empty_config_dir", "selfupdate: config dir is empty")
+	ErrInvalidVersionPath = uierr.New("selfupdate.invalid_version_path", "selfupdate: version is not a safe path component")
 )
 
 const pathInvalidChars = `/\:*?"<>|`
