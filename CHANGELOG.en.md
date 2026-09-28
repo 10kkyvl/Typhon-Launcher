@@ -6,6 +6,25 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.8.0 — 2026-09-28
+Steam-style game reviews and a fullscreen Big Picture mode for playing with a controller. Games started from shortcuts or requiring administrator rights now launch as expected.
+
+### Added
+- Game pages now have reviews: recommend a game or not, write a few words, mark other reviews as helpful and report spam. The sidebar shows the overall score, like “Very Positive, 92% of 120 reviews”
+- You can write a review once your account is a day old and you have played the game for at least 30 minutes through Typhon. If it is too early, the launcher tells you how long is left and opens the form by itself when the time comes
+- To keep reviews free of spam, you can post a new review once every 2 minutes and no more than 5 a day; links and the same text on different games are not accepted. A review reported by five people is hidden until a moderator checks it
+- Big Picture mode: the “Big Picture mode” button in the top bar turns the launcher into a fullscreen, controller-friendly interface. It has your library, the catalog, downloads, friends, profile and settings — find, install and launch a game without leaving the couch
+- Big Picture works with Xbox and PlayStation controllers: A selects, B goes back, the bumpers switch sections. When you quit a game, the window comes back to where you launched it from
+- In chat, older messages show when they were sent next to the time: “Yesterday” or the date
+
+### Fixed
+- Games that need administrator rights now launch through the usual Windows prompt — before, such a game just failed to start with an error
+- A game started from Typhon launches the same way a double-click in Explorer does — before, it inherited the launcher’s own environment and console, so some games behaved differently than on a normal start
+- A game shortcut on the desktop starts the game even when Typhon was closed — before, it only opened the launcher window
+- A game started from a shortcut while Typhon sits in the tray opens on top of other windows instead of somewhere behind them
+- More releases from sources find their game in the catalog: names with versions, build tags, repacker notes and DLC lists are read correctly. Before, some games had no downloads on their page
+- Refreshing a large source no longer fails as a whole because of one failed part — matches already found are kept and the source shows a warning
+
 ## 0.7.2 — 2026-09-15
 More reliable chat, more accurate release matching, and more complete interface translations.
 
