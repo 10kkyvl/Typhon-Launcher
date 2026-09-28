@@ -106,12 +106,14 @@ closes», не «Downloads were not stopping anymore». Секции `Added`/`Ch
 
 ## 6. Поднять версию
 
-Четыре места, их сверяет `TestVersionSourcesMatch` в `internal/app/version_test.go`:
+Шесть мест, их сверяет `TestVersionSourcesMatch` в `internal/app/version_test.go`:
 
 - `VERSION`
 - `internal/app/app.go` — `var Version`
 - `build/config.yml` — `info.version`
 - `build/windows/info.json` — `fixed.file_version` и `info.0000.ProductVersion`
+- `build/darwin/Info.plist` и `build/darwin/Info.dev.plist` — `CFBundleShortVersionString` и
+  `CFBundleVersion`
 
 ## 7. Проверить перед тегом
 
