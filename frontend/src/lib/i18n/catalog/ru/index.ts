@@ -17,6 +17,7 @@ import { modals } from './modals';
 import { ui } from './ui';
 import { social } from './social';
 import { games } from './games';
+import { reviews } from './reviews';
 import { transfers } from './transfers';
 import { state } from './state';
 import { errInstall } from './errInstall';
@@ -45,6 +46,7 @@ export const ru = {
   ...ui,
   ...social,
   ...games,
+  ...reviews,
   ...transfers,
   ...state,
   ...errInstall,
@@ -57,4 +59,4 @@ export const ru = {
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };
+export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };
