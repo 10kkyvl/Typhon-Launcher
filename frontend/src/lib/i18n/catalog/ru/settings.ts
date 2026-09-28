@@ -190,7 +190,7 @@ export const settings = {
   'settings.appearanceSavedToast': 'Тема «{name}» сохранена',
   'settings.appearanceDeleteConfirm': 'Удалить тему «{name}»?',
   'settings.appearanceDeleteTitle': 'Удалить тему',
-  'settings.appearanceResetConfirm': 'Вернуть встроенную тёмную тему и сбросить личный акцент и окраску значка?',
+  'settings.appearanceResetConfirm': 'Вернуть встроенную тёмную тему, сбросить личный акцент и окраску значка и удалить все ваши темы, включая импортированные? Отменить это нельзя.',
   'settings.appearanceDeletedToast': 'Тема «{name}» удалена',
   'settings.appearanceImportedToast': 'Тема «{name}» импортирована',
   'settings.appearanceExportedToast': 'Тема «{name}» экспортирована',
