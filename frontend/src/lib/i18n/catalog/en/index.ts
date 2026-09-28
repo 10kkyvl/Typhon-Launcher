@@ -1,6 +1,11 @@
 import type { Message } from '../../types';
 import type { MessageKey } from '../ru';
 import { common } from './common';
+import { bigpictureCatalog } from './bigpictureCatalog';
+import { bigpictureTransfers } from './bigpictureTransfers';
+import { bigpictureSettings } from './bigpictureSettings';
+import { bigpictureSocial } from './bigpictureSocial';
+import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
@@ -13,6 +18,7 @@ import { modals } from './modals';
 import { ui } from './ui';
 import { social } from './social';
 import { games } from './games';
+import { reviews } from './reviews';
 import { transfers } from './transfers';
 import { state } from './state';
 import { errInstall } from './errInstall';
@@ -23,6 +29,11 @@ import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 
 export const en: Record<MessageKey, Message> = {
+  ...bigpictureCatalog,
+  ...bigpictureTransfers,
+  ...bigpictureSettings,
+  ...bigpictureSocial,
+  ...bigpicture,
   ...common,
   ...format,
   ...friends,
@@ -36,6 +47,7 @@ export const en: Record<MessageKey, Message> = {
   ...ui,
   ...social,
   ...games,
+  ...reviews,
   ...transfers,
   ...state,
   ...errInstall,
@@ -46,4 +58,4 @@ export const en: Record<MessageKey, Message> = {
   ...errLogs,
 };
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };
+export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };

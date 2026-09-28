@@ -1,14 +1,39 @@
 package sources
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"typhon/internal/sources/feed"
 )
+
+type slogRecord struct {
+	level slog.Level
+	msg   string
+}
+
+type captureLogHandler struct {
+	mu      *sync.Mutex
+	records *[]slogRecord
+}
+
+func (h captureLogHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h captureLogHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	*h.records = append(*h.records, slogRecord{level: r.Level, msg: r.Message})
+	return nil
+}
+
+func (h captureLogHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h captureLogHandler) WithGroup(string) slog.Handler      { return h }
 
 func writeFeedFile(t *testing.T, path, body string) string {
 	t.Helper()
@@ -232,5 +257,42 @@ func TestTestSourceFilePreview(t *testing.T) {
 	}
 	if !again.Duplicate {
 		t.Fatal("preview must report duplicate after adding")
+	}
+}
+
+func TestRefreshFileSourceMissingFeedLogsAtWarn(t *testing.T) {
+	s, _, _ := testService(t)
+	path := feedFile(t, "Local", feedEntry{Title: "Some Game v1.0", URIs: []string{magnetOf("aa")}})
+	src := addSourceFile(t, s, path)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove feed file: %v", err)
+	}
+
+	var mu sync.Mutex
+	var records []slogRecord
+	prev := slog.Default()
+	slog.SetDefault(slog.New(captureLogHandler{mu: &mu, records: &records}))
+	defer slog.SetDefault(prev)
+
+	if _, err := s.RefreshSource(src.ID); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("error = %v, want %v", err, os.ErrNotExist)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	var sawWarn bool
+	for _, rec := range records {
+		if rec.msg != "source refresh failed" {
+			continue
+		}
+		if rec.level == slog.LevelError {
+			t.Fatalf("missing feed file logged at %v, want Warn", rec.level)
+		}
+		if rec.level == slog.LevelWarn {
+			sawWarn = true
+		}
+	}
+	if !sawWarn {
+		t.Fatalf("no Warn-level \"source refresh failed\" record among %+v", records)
 	}
 }

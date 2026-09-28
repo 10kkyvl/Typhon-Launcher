@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 type Parsed struct {
@@ -37,7 +38,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reBracket.ReplaceAllStringFunc(s, func(bracket string) string {
 		inner := strings.TrimSpace(bracket[1 : len(bracket)-1])
 		if reReleaseBracketStart.MatchString(inner) {
-			_, raw, version := extractVersion(inner)
+			_, raw, version := extractVersion("(" + inner + ")")
 			// In a metadata bracket, a separated V cannot be a title's Roman
 			// numeral. Retain its marker so the second extraction sees it too.
 			if raw != "" && raw[0] >= '0' && raw[0] <= '9' {
@@ -51,15 +52,15 @@ func (d *Dict) Parse(raw string) Parsed {
 		}
 		return bracket
 	})
-	s, rawVersion, version := extractVersion(s)
+	s, rawVersion, version := extractVersionNotes(s, d.versionBracketNote)
 	for {
-		cleaned, extra, _ := extractVersion(s)
+		cleaned, extra, _ := extractVersionNotes(s, d.versionBracketNote)
 		if extra == "" {
 			break
 		}
 		s = cleaned
 	}
-	s = reBonusSuffix.ReplaceAllString(s, " ")
+	s = stripBonusSuffix(s)
 	s, dlcCount := extractDLCCount(s)
 	s, year, bracketLangs, bracketTags := d.extractBrackets(s)
 	for {
@@ -104,6 +105,9 @@ func (d *Dict) Parse(raw string) Parsed {
 	tags = append(tags, bracketTags...)
 	tags = append(tags, dashTags...)
 	tags = append(tags, scanTags...)
+	if hasHotfixAfterVersion(raw) {
+		tags = append(tags, "hotfix")
+	}
 	tags = uniqueSortedLower(tags)
 
 	return Parsed{
@@ -119,6 +123,17 @@ func (d *Dict) Parse(raw string) Parsed {
 	}
 }
 
+func hasHotfixAfterVersion(raw string) bool {
+	loc := versionLocation(raw)
+	if loc == nil {
+		return false
+	}
+	if reHotfixWord.MatchString(raw[loc[0]:loc[1]]) {
+		return true
+	}
+	return reHotfixWord.MatchString(raw[loc[1]:])
+}
+
 // extractMarkers снимает маркеры раздачи: то, что источник дописывает за «|»
 // или за последним длинным тире — «Portable», «Архив», «P2P», «GOG»,
 // «RePack от xatab». Сегмент выбрасывается только целиком опознанным: «| Season
@@ -126,7 +141,9 @@ func (d *Dict) Parse(raw string) Parsed {
 func (d *Dict) extractMarkers(s string) (string, []string) {
 	var tags []string
 
-	parts := strings.Split(s, "|")
+	// A language list such as (RUS|ENG) is part of the title metadata bracket;
+	// only a top-level pipe starts a source marker segment.
+	parts := splitTopLevelPipes(s)
 	kept := parts[:1:1]
 	for _, seg := range parts[1:] {
 		found, ok := d.markerSegment(seg)
@@ -152,6 +169,27 @@ func (d *Dict) extractMarkers(s string) (string, []string) {
 	}
 
 	return s, tags
+}
+
+func splitTopLevelPipes(s string) []string {
+	parts := []string{}
+	start, depth := 0, 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[', '(', '{':
+			depth++
+		case ']', ')', '}':
+			if depth > 0 {
+				depth--
+			}
+		case '|':
+			if depth == 0 {
+				parts = append(parts, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(parts, s[start:])
 }
 
 // markerSegment опознаёт один сегмент маркера. Пустой сегмент — это висящий
@@ -191,26 +229,104 @@ func extractDLCCount(s string) (string, int) {
 	return newS, n
 }
 
+func stripBonusSuffix(s string) string {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[', '(', '{':
+			depth++
+		case ']', ')', '}':
+			if depth > 0 {
+				depth--
+			}
+		case '+':
+			if depth != 0 || i == 0 || !unicode.IsSpace(rune(s[i-1])) {
+				continue
+			}
+			if reBonusSuffix.MatchString(s[i:]) {
+				return s[:i] + " "
+			}
+		}
+	}
+	return s
+}
+
 func extractVersion(s string) (string, string, string) {
-	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reVVer, reVVerSpace, reRVer}
+	return extractVersionNotes(s, nil)
+}
+
+// versionLocation returns the submatch bounds of the release version, or nil.
+// Everything a feed writes after it is packaging, not the game's name.
+func versionLocation(s string) []int {
+	patterns := []*regexp.Regexp{reBuildVer, reUpdateVer, rePatchVer, reHotfixVer, reRevVerDot, reCSVer, reVVer, reVVerCode, reVVerDirectCode, reVVerSpace, reRVer}
 
 	bestStart := -1
 	var bestLoc []int
 	for _, re := range patterns {
-		loc := re.FindStringSubmatchIndex(s)
-		if loc == nil {
-			continue
-		}
-		// In a fully lowercase title, a separated v is ambiguous with a
-		// Roman numeral. Keep the title token and extract only the number.
-		if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
-			loc[0] = loc[2]
-		}
-		if bestStart == -1 || loc[0] < bestStart {
-			bestStart = loc[0]
-			bestLoc = loc
+		for _, loc := range re.FindAllStringSubmatchIndex(s, -1) {
+			prefix := strings.TrimSpace(s[:loc[0]])
+			// A build hash must contain a number; a word like "defaced" can
+			// be a real title after the verb Build.
+			if re == reBuildVer && !strings.ContainsAny(s[loc[2]:loc[3]], "0123456789") {
+				continue
+			}
+			// Build is also a title verb: Demolish & Build 2018. A
+			// conjunction is not a release marker, regardless of its number.
+			if re == reBuildVer && (strings.HasSuffix(prefix, "&") || strings.HasSuffix(strings.ToLower(prefix), " and")) {
+				continue
+			}
+			// V2/V3/V4 belong to titles such as Sniper Elite and Danganronpa.
+			// Keep a bare capital V-number in title text; brackets/separators
+			// still make it a release marker, and V1.2 remains a version.
+			if re == reVVer && s[loc[0]] == 'V' && loc[2] == loc[0]+1 {
+				last, _ := utf8.DecodeLastRuneInString(prefix)
+				if _, err := strconv.Atoi(s[loc[2]:loc[3]]); err == nil && !strings.ContainsRune("([{–—-|", last) {
+					continue
+				}
+			}
+			// A title token such as «V1RUZ» starts with the same bytes as a
+			// compact numeric version. Without a delimiter after the number this
+			// is a title word, not a release marker.
+			if re == reVVer && loc[3] < len(s) && unicode.IsLetter(mustDecodeRune(s[loc[3]:])) && !strings.ContainsAny(s[loc[2]:loc[3]], "._") {
+				continue
+			}
+			// In a fully lowercase title, a separated v is ambiguous with a
+			// Roman numeral. Keep the title token and extract only the number.
+			if re == reVVerSpace && (s[loc[0]] == 'V' || s[:loc[0]] == strings.ToLower(s[:loc[0]])) {
+				loc[0] = loc[2]
+			}
+			if bestStart == -1 || loc[0] < bestStart {
+				bestStart = loc[0]
+				bestLoc = loc
+			}
 		}
 	}
+	// «v.Build 123» and «(v. Build 123)» are one release marker. The build
+	// regexp starts at Build, so extend only a lowercase v prefix; an uppercase
+	// V before Build can still be a title's Roman numeral.
+	if bestLoc != nil {
+		prefix := s[:bestLoc[0]]
+		if loc := reVersionPrefix.FindStringIndex(prefix); loc != nil && len(s) > bestLoc[0] && !unicode.IsDigit(mustDecodeRune(s[bestLoc[0]:])) {
+			// reVersionPrefix includes the separating space/bracket in its
+			// match; extend from the lowercase v itself.
+			if v := strings.LastIndex(prefix[loc[0]:loc[1]], "v"); v >= 0 {
+				bestLoc[0] = loc[0] + v
+			}
+		}
+	}
+	return bestLoc
+}
+
+func mustDecodeRune(s string) rune {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
+}
+
+// extractVersionNotes removes the version and the build notes that trail it.
+// note decides whether a bracket right behind the version belongs to it; a nil
+// note keeps every bracket, as inside a bracket there is nothing left to trail.
+func extractVersionNotes(s string, note func(string) bool) (string, string, string) {
+	bestLoc := versionLocation(s)
 	if bestLoc == nil {
 		return s, "", ""
 	}
@@ -219,14 +335,63 @@ func extractVersion(s string) (string, string, string) {
 	ver := s[bestLoc[2]:bestLoc[3]]
 	end := bestLoc[1]
 	for {
-		loc := reVersionContinuation.FindStringIndex(s[end:])
-		if loc == nil {
+		if loc := reVersionContinuation.FindStringIndex(s[end:]); loc != nil {
+			end += loc[1]
+			continue
+		}
+		if loc := reVersionWordContinuation.FindStringIndex(s[end:]); loc != nil {
+			end += loc[1]
+			continue
+		}
+		if loc := reVersionSpaceContinuation.FindStringIndex(s[end:]); loc != nil {
+			// A single four-digit year after a version is usually release-date
+			// context, not a spaced build number. Keep it in the title so the
+			// year-aware matcher can still inspect the original source. Number
+			// chains such as "185 531" remain release metadata.
+			if fields := strings.Fields(s[end+loc[0] : end+loc[1]]); len(fields) == 1 && reYear.MatchString(fields[0]) {
+				break
+			}
+			end += loc[1]
+			continue
+		}
+		if loc := reVersionLetterContinuation.FindStringIndex(s[end:]); loc != nil {
+			end += loc[1]
+			continue
+		}
+		loc := reVersionBracket.FindStringSubmatchIndex(s[end:])
+		if loc == nil || note == nil || !note(s[end+loc[2]:end+loc[3]]) {
 			break
 		}
 		end += loc[1]
 	}
 	newS := s[:bestLoc[0]] + " " + s[end:]
 	return newS, strings.TrimSpace(raw), ver
+}
+
+// versionBracketNote отвечает, принадлежит ли скобка сразу за версией самой
+// раздаче: «v1.0 (Release)», «v2.4.0 (1181)», «v1.16.0 (Chamfron)». Год, язык и
+// известные маркеры остаются тем проходам, которые опознают по ним игру.
+func (d *Dict) versionBracketNote(inner string) bool {
+	inner = strings.TrimSpace(inner)
+	if inner == "" {
+		return false
+	}
+	if _, ok := d.bracketMarker(inner); ok {
+		return false
+	}
+	for _, w := range reBracketSplit.Split(inner, -1) {
+		if w == "" {
+			continue
+		}
+		lw := strings.ToLower(w)
+		if reYear.MatchString(w) || reMulti.MatchString(w) || d.isLangCode(lw) {
+			return false
+		}
+		if d.archTokens[lw] != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
@@ -250,6 +415,11 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 		}
 		if found, ok := d.bracketMarker(inner); ok {
 			tags = append(tags, found...)
+			return " "
+		}
+		if packageLangs, packageTags, ok := d.packageBracket(inner); ok {
+			langs = append(langs, packageLangs...)
+			tags = append(tags, packageTags...)
 			return " "
 		}
 		// A service phrase can share a bracket with a known release
@@ -327,6 +497,87 @@ func (d *Dict) extractBrackets(s string) (string, int, []string, []string) {
 	return result, year, langs, tags
 }
 
+// packageBracket recognizes a parenthesized download composition such as
+// "(+ 3 DLCs + Bonus OST, MULTi8)". It needs an explicit content marker, a
+// release decorator, or a source marker. A bare "Online", "Multiplayer", or
+// "+ Other Game" parenthetical remains part of the title.
+func (d *Dict) packageBracket(inner string) ([]string, []string, bool) {
+	if !rePackageBracket.MatchString(inner) {
+		return nil, nil, false
+	}
+	lower := strings.ToLower(inner)
+	contentMarker := packageContentMarker(inner)
+	releaseMarker := rePackageReleaseMarker.MatchString(inner) && versionLocation(inner) != nil
+	sourceMarker := reMulti.MatchString(inner) || strings.Contains(lower, "repack") || strings.Contains(lower, "steam-rip") || strings.Contains(lower, "архив") || strings.Contains(lower, "папка игры") || strings.Contains(lower, "folder")
+	for _, word := range strings.FieldsFunc(inner, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune("+,/|", r)
+	}) {
+		norm := Normalize(word)
+		if _, ok := d.markerPhrase(norm); ok || norm == "steam" {
+			sourceMarker = true
+		}
+	}
+	if !contentMarker && !releaseMarker && !sourceMarker {
+		return nil, nil, false
+	}
+	_, langs, tags := d.extractLangAndDashTags(inner)
+	// Mixed source labels such as "Steam + GOG" are a package bracket rather
+	// than a title subtitle. The generic bracket parser used to retain both
+	// source tags; preserve that behavior while still allowing unknown bundle
+	// words to disappear with the bracket.
+	for _, word := range strings.FieldsFunc(inner, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune("+,/|", r)
+	}) {
+		norm := Normalize(word)
+		if tag, ok := d.markerPhrase(norm); ok {
+			tags = append(tags, tag)
+		}
+		if norm == "steam" {
+			tags = append(tags, "steam-rip")
+		}
+	}
+	for _, marker := range []struct {
+		needle string
+		tag    string
+	}{
+		{"dlc", "dlc"},
+		{"update", "update"},
+		{"patch", "patch"},
+		{"hotfix", "hotfix"},
+		{"windows 7 fix", "windows-7-fix"},
+	} {
+		if strings.Contains(lower, marker.needle) {
+			tags = append(tags, marker.tag)
+		}
+	}
+	return langs, tags, true
+}
+
+var (
+	// These markers describe a download composition only in their closed
+	// package forms. A substring check would incorrectly remove real bracketed
+	// subtitles such as "Patch Quest", "Bonus Round" and "+ Patchwork".
+	rePackageDLCCount = regexp.MustCompile(`(?i)\b\d+\s+dlc(?:'s|s)?\b`)
+	rePackageDLCBare  = regexp.MustCompile(`(?i)(?:^|[+,/])\s*dlc(?:'s|s)?\s*(?:[,/+]\s*|$)`)
+	rePackageBonus    = regexp.MustCompile(`(?i)\bbonus\s+(?:content|dlc(?:'s|s)?|osts?|soundtracks?|wallpapers?|extras?)\b`)
+	rePackageAudio    = regexp.MustCompile(`(?i)(?:^|[+])\s*(?:osts?|soundtracks?)\s*(?:[,/+]\s*|$)`)
+	rePackagePatchVer = regexp.MustCompile(`(?i)\b(?:patch|update|hotfix)\s*[#._-]?\s*\d+(?:[./]\d+)*\b`)
+	rePackageVersion  = regexp.MustCompile(`(?i)\bversion\s+\d+(?:[._-]\d+)*\b`)
+	rePackageBuild    = regexp.MustCompile(`(?i)\bbuild(?:id)?[.#_ -]*\d+\b`)
+	rePackageFixed    = regexp.MustCompile(`(?i)\b(?:windows\s+7\s+fix|denuvoless|compressed)\b`)
+)
+
+func packageContentMarker(inner string) bool {
+	return rePackageDLCCount.MatchString(inner) ||
+		rePackageDLCBare.MatchString(inner) ||
+		rePackageBonus.MatchString(inner) ||
+		rePackageAudio.MatchString(inner) ||
+		rePackagePatchVer.MatchString(inner) ||
+		rePackageVersion.MatchString(inner) ||
+		rePackageBuild.MatchString(inner) ||
+		rePackageFixed.MatchString(inner)
+}
+
 func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 	var langs []string
 	var tags []string
@@ -342,10 +593,9 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 		langs = append(langs, m)
 		return " "
 	})
-	s = d.reLangSingle.ReplaceAllStringFunc(s, func(m string) string {
-		langs = append(langs, strings.ToUpper(m))
-		return " "
-	})
+	cut, singles := d.cutLangSingle(s)
+	s = cut
+	langs = append(langs, singles...)
 	s = rePortable.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "portable")
 		return " "
@@ -354,6 +604,12 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 		tags = append(tags, "steam-rip")
 		return " "
 	})
+	if m := reByRepacker.FindStringSubmatchIndex(s); m != nil {
+		if slug := d.repackerSlug(s[m[2]:m[3]]); slug != "" {
+			tags = append(tags, slug)
+			s = s[:m[0]] + " "
+		}
+	}
 	s = reRepackBy.ReplaceAllStringFunc(s, func(m string) string {
 		tags = append(tags, "repack")
 		if parts := reMarkerRepack.FindStringSubmatch(m); parts != nil {
@@ -363,8 +619,59 @@ func (d *Dict) extractLangAndDashTags(s string) (string, []string, []string) {
 		}
 		return " "
 	})
+	// A few feeds put the known repacker after a standalone attribution
+	// ("[RePack] от xatab"), which is not covered when the bracket and the
+	// attribution are separated. Strip only a name present in the closed
+	// repacker dictionary; an unknown "by" can still be title text.
+	if m := reTrailingAttribution.FindStringSubmatchIndex(s); m != nil && m[2] >= 0 {
+		if slug := d.repackerSlug(s[m[2]:m[3]]); slug != "" {
+			tags = append(tags, slug)
+			s = s[:m[0]] + " "
+		}
+	}
 
 	return s, langs, tags
+}
+
+// cutLangSingle снимает одиночный код языка. Код пишется теми же буквами, что и
+// слова названия: ARA — это и арабский, и первое слово «Ara: History Untold».
+// Поэтому одиночный код считается маркером раздачи только за разделителем или
+// в верхнем регистре рядом со словом в обычном, и никогда — в начале строки.
+func (d *Dict) cutLangSingle(s string) (string, []string) {
+	var langs []string
+	var out strings.Builder
+	last := 0
+	for _, loc := range d.reLangSingle.FindAllStringIndex(s, -1) {
+		if loc[0] == 0 || !langMarkerContext(s[:loc[0]], s[loc[0]:loc[1]]) {
+			continue
+		}
+		out.WriteString(s[last:loc[0]])
+		out.WriteString(" ")
+		langs = append(langs, strings.ToUpper(s[loc[0]:loc[1]]))
+		last = loc[1]
+	}
+	if len(langs) == 0 {
+		return s, nil
+	}
+	out.WriteString(s[last:])
+	return out.String(), langs
+}
+
+func langMarkerContext(prefix, token string) bool {
+	trimmed := strings.TrimRight(prefix, " \t")
+	if trimmed == "" {
+		return false
+	}
+	if strings.ContainsRune("|/,-+([", rune(trimmed[len(trimmed)-1])) ||
+		strings.HasSuffix(trimmed, "\u2014") || strings.HasSuffix(trimmed, "\u2013") {
+		return true
+	}
+	if token != strings.ToUpper(token) {
+		return false
+	}
+	fields := strings.Fields(trimmed)
+	previous := fields[len(fields)-1]
+	return previous != strings.ToUpper(previous)
 }
 
 func splitLangCombo(m string) []string {

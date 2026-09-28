@@ -49,6 +49,99 @@ func TestUnreadableLegacyMarkerDoesNotDropLocalOwnership(t *testing.T) {
 	}
 }
 
+type lateProcess struct {
+	killErr error
+	exit    chan struct{}
+	killed  bool
+	waited  bool
+}
+
+func (p *lateProcess) pid() int { return 4242 }
+
+func (p *lateProcess) kill() error {
+	p.killed = true
+	if p.killErr != nil {
+		return p.killErr
+	}
+	close(p.exit)
+	return nil
+}
+
+func (p *lateProcess) wait() error {
+	<-p.exit
+	p.waited = true
+	return nil
+}
+
+func TestStopDuringStartStopsTheLateGame(t *testing.T) {
+	tests := []struct {
+		name        string
+		killErr     error
+		wantErr     bool
+		wantRunning bool
+	}{
+		{name: "stopped", wantErr: true},
+		{name: "kill fails", killErr: errors.New("access denied"), wantRunning: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			game, err := service.AddGame(tempGameExe(t), "Game")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			service.ctx = ctx
+			service.prepare = func(context.Context, launch) error { return nil }
+			proc := &lateProcess{killErr: tc.killErr, exit: make(chan struct{})}
+			watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
+			service.AddSessionWatcher(watcher)
+			entered := make(chan struct{})
+			service.start = func(ctx context.Context, _ launch) (gameProcess, error) {
+				close(entered)
+				<-ctx.Done()
+				return proc, nil
+			}
+			done := make(chan error, 1)
+			go func() { done <- service.PlayGame(game.ID) }()
+			<-entered
+			if err := service.StopGame(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if tc.wantErr && (!errors.Is(err, context.Canceled) || uierr.Code(err) != "library.launch_cancelled") {
+					t.Fatalf("error = %v, want coded cancellation", err)
+				}
+				if !tc.wantErr && err != nil {
+					t.Fatalf("error = %v, want the running game to be tracked", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("PlayGame did not return after cancellation")
+			}
+			if !proc.killed {
+				t.Fatal("a game started after Stop was left running")
+			}
+			if tc.killErr == nil && !proc.waited {
+				t.Fatal("stopped game was not waited for")
+			}
+			if got := service.IsRunning(game.ID); got != tc.wantRunning {
+				t.Fatalf("IsRunning = %v, want %v", got, tc.wantRunning)
+			}
+			if !tc.wantRunning {
+				return
+			}
+			close(proc.exit)
+			select {
+			case <-watcher.stopped:
+			case <-time.After(5 * time.Second):
+				t.Fatal("tracked game session did not finish after the game exited")
+			}
+		})
+	}
+}
+
 func TestStopDuringPrepareReturnsCodedCancellation(t *testing.T) {
 	for _, returnCancellation := range []bool{true, false} {
 		t.Run(fmt.Sprint(returnCancellation), func(t *testing.T) {

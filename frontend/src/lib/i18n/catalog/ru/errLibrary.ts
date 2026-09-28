@@ -24,6 +24,7 @@ export const errLibrary = {
   'library.runtime_failed': 'не удалось подготовить окружение запуска',
   'library.launch_cancelled': 'запуск отменён',
   'library.launch_failed': 'не удалось запустить игру',
+  'library.elevation_declined': 'игре нужны права администратора: запрос Windows отклонён',
   'library.shortcut_unsupported': 'ярлыки поддерживаются только в Windows',
   'library.no_shortcut_executable': 'у игры не задан исполняемый файл',
   'library.shortcut_bad_id': 'идентификатор игры непригоден для командной строки',

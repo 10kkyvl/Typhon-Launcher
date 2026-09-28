@@ -199,3 +199,31 @@ func TestParseKeepsMeaningfulParentheses(t *testing.T) {
 		})
 	}
 }
+
+// Маркер раздачи приходит и в скобках, и по-русски, и без слова «repack»:
+// «[RePack] от xatab», «| Rip от xatab», «| Репак от Igruha».
+func TestMarkerSegmentVariants(t *testing.T) {
+	cases := map[string]string{
+		"Call of Duty: Modern Warfare 2 (2009) PC | [RePack] от xatab": "Call of Duty: Modern Warfare 2",
+		"Sniper Elite 3 (2014) PC | Rip от xatab":                      "Sniper Elite 3",
+		"Untitled Goose Game v.1.0.7 [EGS-Rip] (2019) PC | Лицензия":   "Untitled Goose Game",
+		"Tempest Rising v.1.5.1+51229 [Папка игры] (2025)":             "Tempest Rising",
+		// «+5 DLC's» — счётчик дополнений, а не хвост номера сборки.
+		"Farming Simulator 17 [v 1.5.3.1 +5 DLC's] (2016) PC | RePack от xatab": "Farming Simulator 17",
+	}
+	for raw, want := range cases {
+		if got := Parse(raw).Base; got != want {
+			t.Errorf("Parse(%q).Base = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+// Сегмент маркера опознаётся целиком: слово названия, кончающееся на «rip»,
+// маркером не становится.
+func TestMarkerSegmentKeepsTitleWords(t *testing.T) {
+	for _, raw := range []string{"Road Trip — Trip", "Game | Grip"} {
+		if got := Parse(raw).Base; got != raw {
+			t.Errorf("Parse(%q).Base = %q", raw, got)
+		}
+	}
+}

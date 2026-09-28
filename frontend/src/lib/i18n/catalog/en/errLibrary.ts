@@ -27,6 +27,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.runtime_failed': 'Could not prepare the launch environment',
   'library.launch_cancelled': 'Launch cancelled',
   'library.launch_failed': 'Could not start the game',
+  'library.elevation_declined': 'The game needs administrator rights: the Windows prompt was declined',
   'library.shortcut_unsupported': 'Shortcuts are only supported on Windows',
   'library.no_shortcut_executable': 'The game has no executable set',
   'library.shortcut_bad_id': 'This game id is unsafe for a command line',

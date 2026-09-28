@@ -71,10 +71,18 @@ export async function setExecutable(id: string, executable: string): Promise<Lib
 }
 
 export async function playGame(id: string): Promise<void> {
+  await launchGame(id);
+}
+
+// Keep cancellation distinguishable for surfaces that own the return from a game.
+// Existing callers of playGame still treat a dismissed native prompt as a no-op.
+export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
   try { await LibraryService.PlayGame(id); } catch (err) {
     if (errorCode(err) !== 'library.launch_cancelled') throw err;
+    return false;
   }
+  return true;
 }
 
 export async function stopGame(id: string): Promise<void> {

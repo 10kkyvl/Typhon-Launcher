@@ -244,14 +244,23 @@ func TestSourceFailureCarriesContext(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if _, err := sourceService.AddSourceFile(filepath.Join(t.TempDir(), "missing.json")); err == nil {
-		t.Fatal("expected file error")
+	broken := filepath.Join(t.TempDir(), "broken.json")
+	if err := os.WriteFile(broken, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	e := <-s.logEvents
+	if _, err := sourceService.AddSourceFile(broken); err == nil {
+		t.Fatal("expected feed error")
+	}
+	var e capturedLog
+	select {
+	case e = <-s.logEvents:
+	case <-time.After(10 * time.Second):
+		t.Fatal("source failure was not captured")
+	}
 	s.captureEvent(e, false)
 	report := s.queue[0]
 	fields := report.Details.Context
-	if report.ErrorCode != "not_found" || fields["source_type"] != "file" || fields["stage"] != "open_file" || fields["retry_attempt"] != "1" || fields["scheduled"] != "false" || fields["duration_ms"] == "" {
+	if fields["source_type"] != "file" || fields["stage"] != "parse_feed" || fields["retry_attempt"] != "1" || fields["scheduled"] != "false" || fields["duration_ms"] == "" {
 		t.Fatalf("source context: %+v", report)
 	}
 	for _, message := range []string{"source added", "source refresh started"} {

@@ -55,6 +55,12 @@ func TestSourceRefreshReparsesMetadataAndPersistsOfficialGameGroups(t *testing.T
 		{"Age of Empires 3 (III) Definitive Edition — RePack от Igruha", "Age of Empires III Definitive Edition", "Age of Empires III: Definitive Edition", "55057"},
 		{"Dаys Gone Remastered — RePack от Igruha", "Days Gone Remastered", "Days Gone Remastered", "test-days"},
 		{"Tomb Raider IV-VI Remastered (19/09/2025) [Папка игры] (2025)", "Tomb Raider IV VI Remastered", "Tomb Raider IV•V•VI Remastered", "test-tomb"},
+		{"Sniper Elite V2 [v 1.13 + DLCs] (2012)", "Sniper Elite V2", "Sniper Elite V2", "3078"},
+		{"Micro Machines V4 — RePack от Fenixx", "Micro Machines V4", "Micro Machines V4", "8512"},
+		{"Demolish & Build 2018 — RePack от Other's", "Demolish & Build 2018", "Demolish & Build 2018", "90102"},
+		{"Millennia v.1.0.26357.F [Папка игры] (2024)", "Millennia", "Millennia", "267837"},
+		{"UBOAT (2024.1 Patch 22) [Папка игры (Steam)] (2024)", "UBOAT", "UBoat", "32283"},
+		{"Persona 4 Golden / Персона 4: Золотое издание [Папка игры] (2008-2020)", "Persona 4 Golden", "Persona 4 Golden", "2985"},
 	}
 	entries := make([]feedEntry, 0, len(cases))
 	remote := &sourceMatchRemote{games: map[string]catalog.Game{}}
@@ -126,6 +132,11 @@ func TestRemoteMatchingRepairsLegacyLinksOn304AndPreservesManualChoices(t *testi
 		t.Fatalf("rematch not durable: %+v", disk[0])
 	}
 	remote.err = errors.New("temporary server failure")
+	s.mu.Lock()
+	for _, r := range s.releases[src.ID] {
+		r.RemoteMatch = nil
+	}
+	s.mu.Unlock()
 	if _, err := s.RefreshSource(src.ID); err == nil {
 		t.Fatal("network failure hidden")
 	}

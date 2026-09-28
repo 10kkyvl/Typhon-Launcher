@@ -43,16 +43,19 @@ func TestCleanVersionDropsAnythingUnexpected(t *testing.T) {
 
 func TestShortOSVersionKeepsTwoComponents(t *testing.T) {
 	cases := map[string]string{
-		"15.6.1":     "15.6",
-		"15.6":       "15.6",
-		"macOS 15.6": "15.6",
-		"26":         "26.0",
-		"":           "",
-		"неизвестно": "",
+		"15.6.1":                       "15.6",
+		"15.6":                         "15.6",
+		"macOS 15.6":                   "15.6",
+		"26":                           "26.0",
+		"":                             "",
+		"неизвестно":                   "",
+		"darwin":                       "",
+		"Windows 10 Pro (build 19045)": "",
 	}
 	for in, want := range cases {
-		if got := shortOSVersion(in); got != want {
-			t.Errorf("shortOSVersion(%q) = %q, want %q", in, got, want)
+		got, ok := shortOSVersion(in)
+		if got != want || ok != (want != "") {
+			t.Errorf("shortOSVersion(%q) = %q, %v, want %q", in, got, ok, want)
 		}
 	}
 }
@@ -147,7 +150,7 @@ func TestReportCarriesNothingIdentifying(t *testing.T) {
 	s.RecordLaunchFailure("g1", "library.launch_failed", `не найден бутыль /Users/egorripa/Library/Application Support/Typhon/bottles/x`)
 	s.RecordSession("g2", 30*time.Minute, true)
 
-	report := s.buildReport("client-uuid", "0.3.1",
+	report, ok := s.buildReport("client-uuid", "0.3.1",
 		Env{OSVersion: "15.6", CrossOver: "26.3", Chip: "apple_m4"},
 		func(localID string) (Build, bool) {
 			switch localID {
@@ -158,6 +161,9 @@ func TestReportCarriesNothingIdentifying(t *testing.T) {
 			}
 			return Build{}, false
 		})
+	if !ok {
+		t.Fatal("отчёт не собрался")
+	}
 
 	raw, err := json.Marshal(report)
 	if err != nil {
@@ -188,7 +194,11 @@ func TestReportCarriesNothingIdentifying(t *testing.T) {
 // сообщает, что на этой машине стоит лаунчер такой-то версии.
 func TestEmptyJournalMakesNoReport(t *testing.T) {
 	s := newTestService(t)
-	report := s.buildReport("client-uuid", "0.3.1", Env{}, func(string) (Build, bool) { return Build{}, false })
+	report, ok := s.buildReport("client-uuid", "0.3.1", Env{OSVersion: "15.6", Chip: "apple_m4"},
+		func(string) (Build, bool) { return Build{}, false })
+	if !ok {
+		t.Fatal("отчёт не собрался")
+	}
 	if len(report.Games) != 0 {
 		t.Fatalf("игр в отчёте %d, want 0", len(report.Games))
 	}
@@ -203,14 +213,52 @@ func TestRawBrandStringIsNarrowedOnItsWay(t *testing.T) {
 	s := newTestService(t)
 	s.RecordSession("g1", 30*time.Minute, true)
 
-	report := s.buildReport("c", "0.3.1",
+	report, ok := s.buildReport("c", "0.3.1",
 		Env{OSVersion: "macOS 15.6.1", CrossOver: "26.3", Chip: "Apple M4"},
 		func(string) (Build, bool) { return Build{GameID: "232567"}, true })
+	if !ok {
+		t.Fatal("отчёт не собрался")
+	}
 
 	if report.Env.Chip != "apple_m4" {
 		t.Fatalf("Chip = %q, want apple_m4", report.Env.Chip)
 	}
 	if report.Env.OSVersion != "15.6" {
 		t.Fatalf("OSVersion = %q, want 15.6", report.Env.OSVersion)
+	}
+}
+
+func TestDedupeGamesLeavesOneRowPerBuild(t *testing.T) {
+	works := GameReport{GameID: "1", Repacker: "dodi", Version: "1.0", State: string(StateWorks)}
+	crashed := GameReport{GameID: "1", Repacker: "dodi", Version: "1.0", State: string(StateBroken), Reason: "launch_failed"}
+	missing := crashed
+	missing.Reason = "executable_missing"
+	other := GameReport{GameID: "2", Repacker: RepackerUnknown, State: string(StateWorks)}
+	otherVersion := works
+	otherVersion.Version = "1.1"
+
+	cases := []struct {
+		name string
+		in   []GameReport
+		want []GameReport
+	}{
+		{"без повторов", []GameReport{works, other}, []GameReport{works, other}},
+		{"другая версия — другая сборка", []GameReport{works, otherVersion}, []GameReport{works, otherVersion}},
+		{"один вердикт дважды", []GameReport{works, other, works}, []GameReport{works, other}},
+		{"противоречие выбрасывает сборку", []GameReport{works, other, crashed}, []GameReport{other}},
+		{"разные причины отказа", []GameReport{crashed, missing}, []GameReport{{GameID: "1", Repacker: "dodi", Version: "1.0", State: string(StateBroken), Reason: reasonUnknown}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := dedupeGames(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("dedupeGames = %+v, want %+v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("dedupeGames = %+v, want %+v", got, tc.want)
+				}
+			}
+		})
 	}
 }

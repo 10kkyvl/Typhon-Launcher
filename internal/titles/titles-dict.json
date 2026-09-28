@@ -12,7 +12,8 @@
     "win32": "win32",
     "64bit": "64bit",
     "32bit": "32bit",
-    "pc": "pc"
+    "pc": "pc",
+    "рс": "pc"
   },
   "releaseTags": {
     "dlc": "dlc",
@@ -32,7 +33,10 @@
     "crack": "crack",
     "proper": "proper",
     "incl": "incl",
-    "gog": "gog"
+    "gog": "gog",
+    "license": "license",
+    "licensed": "license",
+    "лицензия": "license"
   },
   "editionPhrases": [
     "Deluxe Edition",
@@ -55,6 +59,7 @@
     "Collector's Edition",
     "Digital Deluxe Edition",
     "Digital Deluxe",
+    "Complete Deluxe Edition",
     "Remastered"
   ],
   "releasePhraseTags": {
@@ -149,7 +154,18 @@
     "incl",
     "including",
     "with",
-    "и"
+    "и",
+    "bonus",
+    "bonuses",
+    "soundtrack",
+    "soundtracks",
+    "ost",
+    "osts",
+    "wallpaper",
+    "wallpapers",
+    "artbook",
+    "manual",
+    "content"
   ],
   "repackerPriority": [
     "fitgirl", "dodi", "elamigos", "xatab", "kaoskrew", "masquerade",

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 	attrs := append([]slog.Attr(nil), h.attrs...)
 	r.Attrs(func(a slog.Attr) bool { attrs = append(attrs, a); return true })
 	fields := contextFields(attrs)
+	fromDHT := false
 	var read func(slog.Attr)
 	read = func(a slog.Attr) {
 		a.Value = a.Value.Resolve()
@@ -75,6 +77,12 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 			e.component = a.Value.String()
 		case "operation":
 			e.operation = a.Value.String()
+		case "names":
+			// anacrolix names its DHT logger "dht"; its bootstrap failures are
+			// the user's DNS, not a launcher fault.
+			if names, ok := a.Value.Any().([]string); ok {
+				fromDHT = slices.Contains(names, "dht")
+			}
 		case "err", "error":
 			if cause, ok := a.Value.Any().(error); ok {
 				e.code = diagnosticCode(cause)
@@ -106,7 +114,7 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 		return err
 	}
 	e.epoch = h.service.consentEpoch
-	if r.Level >= slog.LevelError {
+	if r.Level >= slog.LevelError && !fromDHT {
 		e.details = h.service.detailsLocked(e.component, e.at, fields)
 		select {
 		case h.service.logEvents <- e:

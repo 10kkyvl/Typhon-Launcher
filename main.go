@@ -41,6 +41,7 @@ import (
 	"typhon/internal/profile"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
+	"typhon/internal/reviews"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -226,6 +227,16 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	// При автозапуске и запуске из фонового процесса передавать нечего:
+	// ErrNoForegroundRight там — ожидаемый исход, а не сбой.
+	if err := platform.AllowForegroundHandoff(); err != nil {
+		if errors.Is(err, platform.ErrNoForegroundRight) {
+			slog.Debug("allow foreground handoff", "error", err)
+		} else {
+			slog.Warn("allow foreground handoff", "error", err)
+		}
 	}
 
 	// A shortcut with a broken argument must not keep the launcher from
@@ -454,6 +465,11 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(onlineService)
 
+	reviewsService, err := reviews.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID)
+	if err != nil {
+		fatal("start reviews service", err)
+	}
+
 	var extraServices []application.Service
 
 	// Битый или недоступный installation.json — не повод не пускать пользователя
@@ -513,6 +529,7 @@ func main() {
 		application.NewService(socialService),
 		application.NewService(messagingService),
 		application.NewService(onlineService),
+		application.NewService(reviewsService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
@@ -648,15 +665,27 @@ func main() {
 	})
 
 	if playRequested {
-		if err := libraryService.PlayGame(playID); err != nil {
-			slog.Error("play from shortcut", "id", playID, "error", err)
-			window.Show()
-		}
+		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
+		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
+		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			playFromShortcut(libraryService, playID, func() { window.Show() })
+		})
 	}
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
+	}
+}
+
+type gamePlayer interface {
+	PlayGame(id string) error
+}
+
+func playFromShortcut(player gamePlayer, id string, reveal func()) {
+	if err := player.PlayGame(id); err != nil {
+		slog.Error("play from shortcut", "id", id, "error", err)
+		reveal()
 	}
 }
 

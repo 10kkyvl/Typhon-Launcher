@@ -2,6 +2,8 @@
   import { onDestroy } from 'svelte';
   import { initNativeLanguage } from './lib/services/system';
   import AppShell from './lib/components/AppShell.svelte';
+  import BigPictureShell from './lib/components/BigPictureShell.svelte';
+  import { bigPictureActive } from './lib/bigpicture/mode';
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
@@ -71,6 +73,10 @@
   });
 </script>
 
+{#if $bigPictureActive && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
+  <BigPictureShell />
+  <UpdateOverlay />
+{:else}
 {#key $locale}
   {#if $authState === 'bootstrapping'}
     <div class="boot">
@@ -79,42 +85,43 @@
   {:else if $showTelemetryConsent}
     <TelemetryConsentScreen />
   {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
-    <AppShell>
-      {#if $route.name === 'library'}
-        <Library />
-      {:else if $route.name === 'catalog'}
-        <Catalog />
-      {:else if $route.name === 'game'}
-        <GameDetails id={$route.params.id} />
-      {:else if $route.name === 'downloads'}
-        <Downloads />
-      {:else if $route.name === 'sources'}
-        <Sources />
-      {:else if $route.name === 'installed'}
-        <Installed />
-      {:else if $route.name === 'history'}
-        <History />
-      {:else if $route.name === 'lan'}
-        <Lan />
-      {:else if $route.name === 'friends'}
-        <Friends tab={$route.params.tab} />
-      {:else if $route.name === 'activity'}
-        <Activity />
-      {:else if $route.name === 'user'}
-        <UserProfile username={$route.params.username} />
-      {:else if $route.name === 'profile'}
-        <Profile />
-      {:else if $route.name === 'settings'}
-        <Settings tab={$route.params.tab} />
-  {/if}
-    </AppShell>
+      <AppShell>
+        {#if $route.name === 'library'}
+          <Library />
+        {:else if $route.name === 'catalog'}
+          <Catalog />
+        {:else if $route.name === 'game'}
+          <GameDetails id={$route.params.id} />
+        {:else if $route.name === 'downloads'}
+          <Downloads />
+        {:else if $route.name === 'sources'}
+          <Sources />
+        {:else if $route.name === 'installed'}
+          <Installed />
+        {:else if $route.name === 'history'}
+          <History />
+        {:else if $route.name === 'lan'}
+          <Lan />
+        {:else if $route.name === 'friends'}
+          <Friends tab={$route.params.tab} />
+        {:else if $route.name === 'activity'}
+          <Activity />
+        {:else if $route.name === 'user'}
+          <UserProfile username={$route.params.username} />
+        {:else if $route.name === 'profile'}
+          <Profile />
+        {:else if $route.name === 'settings'}
+          <Settings tab={$route.params.tab} />
+        {/if}
+      </AppShell>
+      <ReleaseNotesModal />
+      <MoveGameModal />
     <UpdateOverlay />
-    <ReleaseNotesModal />
-    <MoveGameModal />
   {:else}
     <AuthScreen />
   {/if}
 {/key}
+{/if}
 
 <style>
   .boot {

@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 type ReleaseQuery struct {
@@ -16,6 +17,19 @@ type ReleaseMatcher interface {
 	MatchReleases(context.Context, []ReleaseQuery) ([]ReleaseMatch, error)
 }
 
+// Failed positions in the results are zero values, not misses.
+type PartialMatchError struct {
+	Failed []int
+	Total  int
+	Err    error
+}
+
+func (e *PartialMatchError) Error() string {
+	return fmt.Sprintf("%d of %d release queries failed: %v", len(e.Failed), e.Total, e.Err)
+}
+
+func (e *PartialMatchError) Unwrap() error { return e.Err }
+
 const MethodServerTitle Method = "server_title"
 
 //wails:ignore
@@ -26,13 +40,25 @@ func (s *Service) HasReleaseMatcher() bool {
 	return ok
 }
 
+//wails:ignore
+func (s *Service) HasGame(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.idx.game(id)
+	return ok
+}
+
 // ResolveSourceQueries performs network work outside the catalog/source locks
 // and persists official identities before any release can reference them.
 //
 //wails:ignore
 func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQuery) ([]Match, error) {
 	resolved, err := s.PreviewSourceQueries(ctx, queries)
-	if err != nil {
+	var partial *PartialMatchError
+	switch {
+	case err == nil:
+	case errors.As(err, &partial):
+	default:
 		return nil, err
 	}
 	s.mu.Lock()
@@ -64,13 +90,13 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 		out[i] = single(g, scoreExactTitle, MethodServerTitle)
 	}
 	if changed {
-		if err = s.persistGamesLocked(); err != nil {
+		if persistErr := s.persistGamesLocked(); persistErr != nil {
 			s.games = previous
-			return nil, err
+			return nil, persistErr
 		}
 		s.rebuildLocked()
 	}
-	return out, nil
+	return out, err
 }
 
 // PreviewSourceQueries checks coverage without adding games to the local store.
@@ -87,11 +113,15 @@ func (s *Service) PreviewSourceQueries(ctx context.Context, queries []ReleaseQue
 		return nil, errors.New("catalog release matcher unavailable")
 	}
 	resolved, err := remote.MatchReleases(ctx, queries)
-	if err != nil {
+	var partial *PartialMatchError
+	switch {
+	case err == nil:
+	case errors.As(err, &partial):
+	default:
 		return nil, err
 	}
 	if len(resolved) != len(queries) {
 		return nil, errors.New("incomplete catalog release match response")
 	}
-	return resolved, nil
+	return resolved, err
 }

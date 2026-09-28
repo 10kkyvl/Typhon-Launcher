@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -27,6 +26,7 @@ var (
 	errSessionProcessGone      = uierr.New("library.process_gone", "процесс игры больше не найден")
 	errSessionIdentityMismatch = uierr.New("library.process_identity_mismatch", "процесс с этим pid принадлежит другой программе")
 	errSessionIdentityUnknown  = uierr.New("library.process_identity_unknown", "время запуска процесса неизвестно, подтверждение невозможно")
+	errElevationDeclined       = uierr.New("library.elevation_declined", "игре нужны права администратора: запрос Windows отклонён")
 )
 
 func (s *Service) PlayGame(id string) error {
@@ -112,9 +112,23 @@ func (s *Service) PlayGame(id string) error {
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			return uierr.Wrap("library.launch_cancelled", context.Canceled)
 		}
+		if errors.Is(err, errElevationDeclined) {
+			return err
+		}
 		slog.Error("launch game", "id", id, "executable", game.Executable, "error", err)
 		s.noteLaunchFailureLocked(id, "library.launch_failed", err.Error())
 		return uierr.Wrap("library.launch_failed", fmt.Errorf("не удалось запустить игру: %w", err))
+	}
+	// Запрос UAC держит запуск, пока пользователь не ответит, и «Остановить»,
+	// нажатое за это время, иначе проигрывало бы позднему «Да».
+	if ctxErr := ctx.Err(); ctxErr != nil && !s.closed {
+		s.mu.Unlock()
+		stopErr := stopLaunched(proc)
+		s.mu.Lock()
+		if stopErr == nil {
+			return uierr.Wrap("library.launch_cancelled", ctxErr)
+		}
+		slog.Error("stop game started after cancellation", "id", id, "error", stopErr)
 	}
 
 	started = true
@@ -260,13 +274,27 @@ func logExit(id, executable string, played time.Duration, err error) {
 	}
 }
 
+func stopLaunched(proc gameProcess) error {
+	if err := proc.kill(); err != nil {
+		return fmt.Errorf("остановить игру: %w", err)
+	}
+	if err := proc.wait(); err != nil {
+		if _, exited := exitCode(err); !exited {
+			return fmt.Errorf("дождаться остановки игры: %w", err)
+		}
+	}
+	return nil
+}
+
+type exitCoder interface{ ExitCode() int }
+
 func exitCode(err error) (int, bool) {
 	if err == nil {
 		return 0, true
 	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		return exit.ExitCode(), true
+	var coder exitCoder
+	if errors.As(err, &coder) {
+		return coder.ExitCode(), true
 	}
 	return 0, false
 }

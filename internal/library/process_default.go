@@ -1,4 +1,4 @@
-//go:build !devmock && !darwin
+//go:build !devmock && !darwin && !windows
 
 package library
 

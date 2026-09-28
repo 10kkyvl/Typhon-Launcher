@@ -3,6 +3,7 @@
     Bell,
     ChevronLeft,
     ChevronRight,
+    Gamepad2,
     Minus,
     Square,
     Users,
@@ -20,6 +21,7 @@
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
+  import { enterBigPicture } from '../bigpicture/mode';
   import Artwork from './Artwork.svelte';
   import IconButton from './IconButton.svelte';
   import SearchInput from './SearchInput.svelte';
@@ -29,6 +31,15 @@
   let results = $state(initialState());
   let resultsBox = $state<HTMLElement | undefined>(undefined);
   let notificationsOpen = $state(false);
+  let enteringBigPicture = $state(false);
+
+  async function openBigPicture() {
+    if (enteringBigPicture) return;
+    enteringBigPicture = true;
+    try { await enterBigPicture(); }
+    catch { toast(msg('bp.enterError'), 'danger'); }
+    finally { enteringBigPicture = false; }
+  }
 
   const overlay = new SearchOverlay({
     search: searchAll,
@@ -212,6 +223,9 @@
   </div>
 
   <div class="no-drag right">
+    <IconButton label={msg('bp.enter')} disabled={enteringBigPicture} onclick={openBigPicture}>
+      <Gamepad2 size="1.9rem" strokeWidth={1.8} />
+    </IconButton>
     <div class="icon-slot" use:clickOutside={() => (notificationsOpen = false)}>
       <IconButton label={msg('ui.notifications')} active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
         <Bell size="1.8rem" strokeWidth={1.8} />

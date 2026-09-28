@@ -108,6 +108,16 @@ type Release struct {
 	FirstSeenAt     time.Time      `json:"firstSeenAt"`
 	LastSeenAt      time.Time      `json:"lastSeenAt"`
 	CreatedAt       time.Time      `json:"createdAt"`
+	RemoteMatch     *RemoteMatch   `json:"remoteMatch,omitempty"`
+}
+
+type RemoteMatch struct {
+	Key        string         `json:"key"`
+	At         time.Time      `json:"at"`
+	Status     catalog.Status `json:"status"`
+	GameID     string         `json:"gameId,omitempty"`
+	Confidence float64        `json:"confidence,omitempty"`
+	Method     string         `json:"method,omitempty"`
 }
 
 func (r *Release) identity() string {
