@@ -134,9 +134,8 @@ func TestSourceMatcherBoundsParallelBatchesAndPreservesOrder(t *testing.T) {
 	}
 }
 
-func TestSourceMatcherCancelsOtherBatchesOnFailure(t *testing.T) {
+func TestSourceMatcherKeepsOtherBatchesOnTransientFailure(t *testing.T) {
 	entered := make(chan struct{}, 3)
-	var cancelled atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Queries []catalog.ReleaseQuery `json:"queries"`
@@ -147,18 +146,21 @@ func TestSourceMatcherCancelsOtherBatchesOnFailure(t *testing.T) {
 		}
 		entered <- struct{}{}
 		if body.Queries[0].Titles[0] == "0" {
-			for range 3 {
-				select {
-				case <-entered:
-				case <-r.Context().Done():
-					return
-				}
+			for range 2 {
+				<-entered
 			}
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		<-r.Context().Done()
-		cancelled.Add(1)
+		matches := make([]catalog.ReleaseMatch, len(body.Queries))
+		for i, q := range body.Queries {
+			matches[i].Game = &catalog.Game{ID: q.Titles[0]}
+		}
+		if err := json.NewEncoder(w).Encode(struct {
+			Matches []catalog.ReleaseMatch `json:"matches"`
+		}{matches}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	client, err := New(server.URL, func() (string, error) { return "", nil })
@@ -172,12 +174,25 @@ func TestSourceMatcherCancelsOtherBatchesOnFailure(t *testing.T) {
 		queries[i].Titles = []string{fmt.Sprint(i)}
 	}
 	got, err := client.MatchReleases(ctx, queries)
-	if got != nil || !errors.Is(err, ErrUpstream) || ctx.Err() != nil {
-		t.Fatalf("partial results=%v error=%v context=%v", got, err, ctx.Err())
+	var partial *catalog.PartialMatchError
+	if !errors.As(err, &partial) {
+		t.Fatalf("error = %v, want *catalog.PartialMatchError", err)
 	}
-	server.Close()
-	if cancelled.Load() != 2 {
-		t.Fatalf("cancelled requests=%d", cancelled.Load())
+	if partial.Total != 500 || len(partial.Failed) != 100 {
+		t.Fatalf("partial = %+v", partial)
+	}
+	for _, idx := range partial.Failed {
+		if idx < 0 || idx >= 100 {
+			t.Fatalf("failed index %d outside the failing batch [0,100)", idx)
+		}
+	}
+	for i, match := range got {
+		if i < 100 {
+			continue
+		}
+		if match.Game == nil || match.Game.ID != fmt.Sprint(i) {
+			t.Fatalf("query %d received %+v, want a successful match", i, match.Game)
+		}
 	}
 }
 func TestSourceMatcherRequiresUpdatedBackend(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -657,13 +658,20 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		for _, r := range incoming {
 			reparseRelease(r)
 		}
+	} else {
+		// Freshly parsed releases carry no cache; without this any changed
+		// feed body would re-query every release.
+		s.mu.Lock()
+		previous := s.releases[id]
+		s.mu.Unlock()
+		carryRemoteMatchForward(previous, incoming)
 	}
-	matches, matchErr := s.resolveRemoteReleases(ctx, incoming)
+	matches, partial, matchErr := s.resolveRemoteReleases(ctx, incoming)
 	if matchErr != nil {
 		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
 		return Summary{}, matchErr
 	}
-	return s.settle(id, incoming, result, started, initial, result.NotModified, matches)
+	return s.settle(id, incoming, result, started, initial, result.NotModified, matches, partial)
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
@@ -723,7 +731,12 @@ func (s *Service) fail(id string, err error, scheduled bool, diagnosticAttrs ...
 
 	attrs := []any{"source_id", id, "name", snapshot.Name, "error", err, "source_type", string(snapshot.Type), "scheduled", scheduled, "retry_attempt", attempts}
 	attrs = append(attrs, diagnosticAttrs...)
-	slog.Error("source refresh failed", attrs...)
+	// A deleted feed file is the user's setup, not a launcher fault: keep it out of error reports.
+	logFail := slog.Error
+	if snapshot.Type == TypeFile && errors.Is(err, fs.ErrNotExist) {
+		logFail = slog.Warn
+	}
+	logFail("source refresh failed", attrs...)
 	emit(eventUpdated, snapshot)
 	emit(eventError, SourceError{SourceID: id, Name: snapshot.Name, Message: err.Error(), Scheduled: scheduled})
 }
@@ -742,7 +755,7 @@ func retryDelay(failures int, interval time.Duration) time.Duration {
 	return delay
 }
 
-func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved ...map[string]catalog.Match) (Summary, error) {
+func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved map[string]resolvedRemoteMatch, partial *catalog.PartialMatchError) (Summary, error) {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -755,7 +768,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	beforeFailures, hadFailures := s.failures[id]
 	beforeRetry, hadRetry := s.retryAt[id]
 	summary := Summary{SourceID: id, NotModified: notModified}
-	if !notModified || (len(resolved) > 0 && len(resolved[0]) > 0) {
+	if !notModified || len(resolved) > 0 {
 		previous := s.releases[id]
 		list := cloneReleases(previous)
 		mergeSummary := Summary{SourceID: id, NotModified: notModified}
@@ -778,8 +791,22 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 				if r.Locked || r.Ignored || r.MatchMethod == string(catalog.MethodOverride) {
 					continue
 				}
-				if match, ok := resolved[0][remoteQueryKey(r)]; ok {
-					assign(r, match)
+				key := remoteQueryKey(r)
+				rm, ok := resolved[key]
+				if !ok {
+					continue
+				}
+				assign(r, rm.Match)
+				// Only a server answer restarts the TTL, or cache hits would never expire.
+				if rm.fresh {
+					r.RemoteMatch = &RemoteMatch{
+						Key:        key,
+						At:         now,
+						Status:     rm.Status,
+						GameID:     rm.GameID,
+						Confidence: rm.Confidence,
+						Method:     string(rm.Method),
+					}
 				}
 			}
 		}
@@ -823,6 +850,10 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 		src.Health = HealthWarning
 	} else {
 		src.Health = HealthHealthy
+	}
+	if partial != nil {
+		src.Health = HealthWarning
+		src.LastError = fmt.Sprintf("не удалось сопоставить %d из %d названий: %v", len(partial.Failed), partial.Total, partial.Err)
 	}
 	src.Status = statusOf(src)
 	if err := s.store.saveSources(flatten(s.sources)); err != nil {
@@ -869,6 +900,14 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 		"new", summary.New,
 		"notModified", notModified,
 		"ms", summary.DurationMs)
+	if partial != nil {
+		slog.Warn("source refresh matched some releases only",
+			"source_id", id,
+			"name", snapshot.Name,
+			"failed", len(partial.Failed),
+			"total", partial.Total,
+			"cause", partial.Err)
+	}
 
 	emit(eventUpdated, snapshot)
 	if summary.Added > 0 {

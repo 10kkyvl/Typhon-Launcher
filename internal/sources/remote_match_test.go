@@ -132,6 +132,11 @@ func TestRemoteMatchingRepairsLegacyLinksOn304AndPreservesManualChoices(t *testi
 		t.Fatalf("rematch not durable: %+v", disk[0])
 	}
 	remote.err = errors.New("temporary server failure")
+	s.mu.Lock()
+	for _, r := range s.releases[src.ID] {
+		r.RemoteMatch = nil
+	}
+	s.mu.Unlock()
 	if _, err := s.RefreshSource(src.ID); err == nil {
 		t.Fatal("network failure hidden")
 	}

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"typhon/internal/account"
@@ -13,50 +15,139 @@ import (
 	"typhon/internal/metadata"
 )
 
+const maxTransientBatchFailures = 3
+
 func (c *Client) MatchReleases(ctx context.Context, queries []catalog.ReleaseQuery) ([]catalog.ReleaseMatch, error) {
 	// Large feeds need hundreds of batches. Keep a small bounded window in
 	// flight so network latency does not consume the source refresh deadline.
-	// Results retain query order, and no partial match set escapes on failure.
+	// A transient batch failure costs only that batch; a fatal one aborts all.
 	out := make([]catalog.ReleaseMatch, len(queries))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var workers sync.WaitGroup
-	var once sync.Once
-	var firstErr error
+
+	batchCount := (len(queries) + 99) / 100
+	var (
+		mu               sync.Mutex
+		fatalErr         error
+		firstTransient   error
+		transientCount   int
+		succeededBatches int
+		failedIdx        = map[int]bool{}
+	)
+	var stopDispatch atomic.Bool
+
+	markFailed := func(start int) {
+		end := min(start+100, len(queries))
+		for i := start; i < end; i++ {
+			failedIdx[i] = true
+		}
+	}
+
 	jobs := make(chan int)
-	for range min(3, (len(queries)+99)/100) {
+	var workers sync.WaitGroup
+	for range min(3, batchCount) {
 		workers.Go(func() {
 			for start := range jobs {
-				if ctx.Err() != nil {
-					return
+				if ctx.Err() != nil || stopDispatch.Load() {
+					mu.Lock()
+					markFailed(start)
+					mu.Unlock()
+					continue
 				}
 				batch := queries[start:min(start+100, len(queries))]
 				matches, err := c.matchReleaseBatch(ctx, batch)
-				if err != nil {
-					once.Do(func() { firstErr = err; cancel() })
-					return
+				if err == nil {
+					copy(out[start:], matches)
+					mu.Lock()
+					succeededBatches++
+					mu.Unlock()
+					continue
 				}
-				copy(out[start:], matches)
+				mu.Lock()
+				markFailed(start)
+				fatal := fatalBatchError(err)
+				if fatal {
+					if fatalErr == nil {
+						fatalErr = err
+					}
+				} else {
+					if firstTransient == nil {
+						firstTransient = err
+					}
+					transientCount++
+				}
+				if fatal || transientCount >= maxTransientBatchFailures {
+					stopDispatch.Store(true)
+				}
+				mu.Unlock()
+				if fatal {
+					cancel()
+				}
 			}
 		})
 	}
+
+	next := 0
 dispatch:
-	for start := 0; start < len(queries); start += 100 {
+	for next < len(queries) {
+		if stopDispatch.Load() {
+			break
+		}
 		select {
-		case jobs <- start:
+		case jobs <- next:
+			next += 100
 		case <-ctx.Done():
 			break dispatch
 		}
 	}
 	close(jobs)
 	workers.Wait()
-	if firstErr != nil {
-		return nil, firstErr
+
+	mu.Lock()
+	defer mu.Unlock()
+	for start := next; start < len(queries); start += 100 {
+		markFailed(start)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+
+	if fatalErr != nil {
+		return nil, fatalErr
 	}
-	return out, nil
+	if succeededBatches == 0 {
+		if firstTransient != nil {
+			return nil, firstTransient
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	if len(failedIdx) == 0 {
+		return out, nil
+	}
+	failed := make([]int, 0, len(failedIdx))
+	for i := range failedIdx {
+		failed = append(failed, i)
+	}
+	sort.Ints(failed)
+	cause := firstTransient
+	if cause == nil {
+		cause = ctx.Err()
+	}
+	return out, &catalog.PartialMatchError{Failed: failed, Total: len(queries), Err: cause}
+}
+
+func fatalBatchError(err error) bool {
+	if errors.Is(err, catalog.ErrBackendOutdated) || errors.Is(err, ErrOutdated) || errors.Is(err, ErrBadRequest) {
+		return true
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	var status *httpStatusError
+	if errors.As(err, &status) && (status.status == http.StatusUnauthorized || status.status == http.StatusForbidden) {
+		return true
+	}
+	return false
 }
 
 func (c *Client) matchReleaseBatch(ctx context.Context, batch []catalog.ReleaseQuery) ([]catalog.ReleaseMatch, error) {

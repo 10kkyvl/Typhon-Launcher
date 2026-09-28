@@ -2,6 +2,8 @@ package sources
 
 import (
 	"context"
+	"errors"
+	"hash/crc32"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,6 +13,30 @@ import (
 	"typhon/internal/sources/feed"
 	"typhon/internal/titles"
 )
+
+const (
+	remoteMatchTTL       = 24 * time.Hour
+	remoteMatchJitterMax = 12 * time.Hour
+)
+
+// Stable per key, so a large feed does not expire in a single refresh.
+func remoteMatchJitter(key string) time.Duration {
+	seconds := crc32.ChecksumIEEE([]byte(key)) % uint32(remoteMatchJitterMax/time.Second)
+	return time.Duration(seconds) * time.Second
+}
+
+func remoteMatchFresh(rm *RemoteMatch, key string, now time.Time) bool {
+	if rm == nil || rm.Key != key {
+		return false
+	}
+	age := now.Sub(rm.At)
+	return age >= 0 && age < remoteMatchTTL+remoteMatchJitter(key)
+}
+
+type resolvedRemoteMatch struct {
+	catalog.Match
+	fresh bool
+}
 
 func cloneReleases(list []*Release) []*Release {
 	out := make([]*Release, len(list))
@@ -40,23 +66,89 @@ func reparseRelease(r *Release) {
 	r.Repacker = titles.Repacker(p.Tags)
 }
 
-func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (map[string]catalog.Match, error) {
-	if s.catalog == nil || !s.catalog.HasReleaseMatcher() {
-		return nil, nil
+func carryRemoteMatchForward(previous, incoming []*Release) {
+	byIdentity := make(map[string]*Release, len(previous))
+	for _, r := range previous {
+		byIdentity[r.identity()] = r
 	}
-	keys, queries := remoteReleaseQueries(list)
+	for _, r := range incoming {
+		if prev, ok := byIdentity[r.identity()]; ok {
+			r.RemoteMatch = prev.RemoteMatch
+		}
+	}
+}
+
+func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (map[string]resolvedRemoteMatch, *catalog.PartialMatchError, error) {
+	if s.catalog == nil || !s.catalog.HasReleaseMatcher() {
+		return nil, nil, nil
+	}
+	now := time.Now()
+	out := make(map[string]resolvedRemoteMatch)
+	byKey := map[string]*Release{}
+	cached := map[string]*RemoteMatch{}
+	for _, r := range list {
+		if r.Locked || r.Ignored || r.Availability == AvailabilityRemoved {
+			continue
+		}
+		key := remoteQueryKey(r)
+		if _, ok := byKey[key]; !ok {
+			byKey[key] = r
+		}
+		if _, ok := cached[key]; !ok && remoteMatchFresh(r.RemoteMatch, key, now) {
+			cached[key] = r.RemoteMatch
+		}
+	}
+
+	verified := map[string]bool{}
+	for _, rm := range cached {
+		if rm.GameID == "" {
+			continue
+		}
+		if _, checked := verified[rm.GameID]; !checked {
+			verified[rm.GameID] = s.catalog.HasGame(rm.GameID)
+		}
+	}
+
+	needsQuery := make([]*Release, 0, len(byKey))
+	for key, r := range byKey {
+		rm, isCached := cached[key]
+		if isCached && (rm.GameID == "" || verified[rm.GameID]) {
+			out[key] = resolvedRemoteMatch{Match: catalog.Match{
+				Status:     rm.Status,
+				GameID:     rm.GameID,
+				Confidence: rm.Confidence,
+				Method:     catalog.Method(rm.Method),
+			}}
+			continue
+		}
+		needsQuery = append(needsQuery, r)
+	}
+
+	keys, queries := remoteReleaseQueries(needsQuery)
 	if len(queries) == 0 {
-		return nil, nil
+		return out, nil, nil
 	}
 	matches, err := s.catalog.ResolveSourceQueries(ctx, queries)
-	if err != nil {
-		return nil, err
+	var partial *catalog.PartialMatchError
+	switch {
+	case err == nil:
+	case errors.As(err, &partial):
+	default:
+		return nil, nil, err
 	}
-	out := make(map[string]catalog.Match, len(keys))
+	failed := map[int]bool{}
+	if partial != nil {
+		for _, i := range partial.Failed {
+			failed[i] = true
+		}
+	}
 	for i, key := range keys {
-		out[key] = matches[i]
+		if failed[i] {
+			continue
+		}
+		out[key] = resolvedRemoteMatch{Match: matches[i], fresh: true}
 	}
-	return out, nil
+	return out, partial, nil
 }
 func remoteQueryKey(r *Release) string {
 	return strings.Join(remoteReleaseNames(r), "\x00") + "|" + strconv.Itoa(r.Year)
