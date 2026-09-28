@@ -121,6 +121,22 @@ const KNOWN_CODES = new Set([
   'internal',
   'network_error',
   'server_error',
+  'account_muted',
+  'review_not_found',
+  'review_too_short',
+  'review_too_long',
+  'review_low_effort',
+  'review_links',
+  'review_duplicate',
+  'review_not_played',
+  'review_account_too_new',
+  'review_own',
+  'review_post_cooldown',
+  'review_daily_limit',
+  'review_repost_cooldown',
+  'review_edit_cooldown',
+  'review_report_limit',
+  'review_bad_reason',
 ]);
 
 const CODE_FIELDS: Record<string, string> = {
@@ -137,6 +153,12 @@ const CODE_FIELDS: Record<string, string> = {
   invalid_profile: 'profile',
   invalid_bio: 'bio',
   friend_self: 'query',
+  review_too_short: 'body',
+  review_too_long: 'body',
+  review_low_effort: 'body',
+  review_links: 'body',
+  review_duplicate: 'body',
+  review_bad_reason: 'reason',
 };
 
 export class AccountError extends Error {

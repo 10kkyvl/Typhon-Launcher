@@ -41,6 +41,7 @@ import (
 	"typhon/internal/profile"
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
+	"typhon/internal/reviews"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -464,6 +465,11 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(onlineService)
 
+	reviewsService, err := reviews.NewService(account.BaseURL(), accountService.SessionToken, resolveGameID)
+	if err != nil {
+		fatal("start reviews service", err)
+	}
+
 	var extraServices []application.Service
 
 	// Битый или недоступный installation.json — не повод не пускать пользователя
@@ -523,6 +529,7 @@ func main() {
 		application.NewService(socialService),
 		application.NewService(messagingService),
 		application.NewService(onlineService),
+		application.NewService(reviewsService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),

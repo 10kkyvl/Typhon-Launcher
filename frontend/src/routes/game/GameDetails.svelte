@@ -37,6 +37,8 @@
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import GameReviews from './GameReviews.svelte';
+  import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
@@ -705,6 +707,10 @@
     }
   }
 
+  function scrollToReviews() {
+    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   let addingToLibrary = $state(false);
 
   async function addToLibrary() {
@@ -1023,6 +1029,8 @@
             />
           </section>
         {/if}
+
+        <GameReviews canonicalGameId={canonicalId ?? ''} />
       {/if}
     </div>
 
@@ -1040,6 +1048,7 @@
         </Card>
       {/if}
 
+      <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={scrollToReviews} />
       <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
     </aside>
   </div>
