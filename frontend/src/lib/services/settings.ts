@@ -34,6 +34,8 @@ export interface Settings {
   updateAutoDownload: boolean;
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
+  saveBackupAfterSession: boolean;
+  saveBackupLimit: number;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
   lanSharing: boolean;
@@ -80,6 +82,8 @@ const fallbackDefaults: Settings = {
   updateAutoDownload: false,
   updateAutoInstall: false,
   updateSaveBackup: true,
+  saveBackupAfterSession: true,
+  saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
   lanSharing: false,

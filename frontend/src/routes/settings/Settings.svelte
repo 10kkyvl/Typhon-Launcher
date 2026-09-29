@@ -11,6 +11,7 @@
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
+  import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import { msg } from '../../lib/i18n';
@@ -700,6 +701,30 @@
               checked={current?.updateSaveBackup ?? true}
               label={msg('settings.downloadsSaveBackupToggle')}
               onchange={(v) => set({ updateSaveBackup: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.saveBackupAfterSession ?? true}
+              label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
+              onchange={(v) => set({ saveBackupAfterSession: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
+            </div>
+            <IntegerInput
+              value={current?.saveBackupLimit ?? 5}
+              min={1}
+              max={50}
+              label={msg('settings.downloadsSaveBackupLimitField')}
+              onchange={(n) => set({ saveBackupLimit: n })}
             />
           </div>
           <div class="row">

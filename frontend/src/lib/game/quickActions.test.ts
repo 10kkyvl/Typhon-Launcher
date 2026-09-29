@@ -24,6 +24,7 @@ describe('quickActions', () => {
       'status',
       'folder',
       'saves',
+      'saves-backups',
       'verify',
       'move',
       'shortcut-create',

@@ -102,3 +102,21 @@ export function sendLogsPrompt(): ConfirmPrompt {
     busy: msg('settings.aboutLogsSendingEllipsis'),
   };
 }
+
+export function restoreSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('saves.restoreTitle'),
+    text: msg('saves.restoreText'),
+    confirm: msg('saves.restore'),
+    busy: msg('saves.restoring'),
+  };
+}
+
+export function deleteSaveBackupPrompt(date: string): ConfirmPrompt {
+  return {
+    title: msg('saves.deleteTitle'),
+    text: msg('saves.deleteText', { date }),
+    confirm: msg('saves.delete'),
+    busy: msg('saves.deleting'),
+  };
+}

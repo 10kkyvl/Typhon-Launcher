@@ -1,9 +1,8 @@
 <script lang="ts">
-  import Button from './Button.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import GameStatusModal from './GameStatusModal.svelte';
-  import Modal from './Modal.svelte';
   import RemoveGameModal from './RemoveGameModal.svelte';
+  import SavesCandidatesModal from './SavesCandidatesModal.svelte';
   import { quickActions, type QuickAction } from '../game/quickActions';
   import {
     createShortcut,
@@ -17,17 +16,18 @@
     type LibraryGame,
     type SavesResult,
   } from '../services/library';
-  import { openGameFolder, openFolder, selectFolder } from '../services/settings';
+  import { openGameFolder, openFolder } from '../services/settings';
   import { openMoveGame } from '../game/actions/move';
+  import { chooseSavesDir } from '../game/actions/saves';
   import { share as shareLan, shares, unshare as unshareLan } from '../stores/lan';
   import { settings } from '../stores/settings';
   import { closeGameMenu, gameMenu } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
+  import { openSaveBackups } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
   import { errorMessage } from '../utils/errors';
-  import { truncateMiddle } from '../utils/format';
   import { msg } from '../i18n';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
@@ -75,6 +75,9 @@
         return guard(() => openGameFolder(current.installDir, current.executable));
       case 'saves':
         return openSaves(current);
+      case 'saves-backups':
+        openSaveBackups(current.id);
+        return;
       case 'verify':
         navigate('game', { id: current.id });
         return verify(current.id);
@@ -144,10 +147,8 @@
 
   async function pickSaves(current: LibraryGame) {
     await guard(async () => {
-      const dir = await selectFolder(msg('ui.savesDirDialogTitle', { title: current.title }));
-      if (!dir) return;
-      await setSavesDir(current.id, dir);
-      await openFolder(dir);
+      const dir = await chooseSavesDir(current.id, current.title);
+      if (dir) await openFolder(dir);
     });
   }
 
@@ -184,60 +185,15 @@
 {#if target}
   <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} />
 
-  <Modal bind:open={savesOpen} title={msg('ui.savesDirTitle')} width="52rem">
-    <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
-    <div class="candidates">
-      {#each savesCandidates as candidate (candidate)}
-        <button class="candidate" onclick={() => useCandidate(candidate)} title={candidate}>
-          {truncateMiddle(candidate, 70)}
-        </button>
-      {/each}
-    </div>
-    {#snippet footer()}
-      <Button onclick={() => (savesOpen = false)}>{msg('common.cancel')}</Button>
-      <Button
-        variant="primary"
-        onclick={() => {
-          const current = target;
-          savesOpen = false;
-          if (current) void pickSaves(current);
-        }}
-      >
-        {msg('ui.pickAnotherFolder')}
-      </Button>
-    {/snippet}
-  </Modal>
+  <SavesCandidatesModal
+    bind:open={savesOpen}
+    title={target.title}
+    candidates={savesCandidates}
+    onpick={useCandidate}
+    onbrowse={() => {
+      const current = target;
+      savesOpen = false;
+      if (current) void pickSaves(current);
+    }}
+  />
 {/if}
-
-<style>
-  .hint {
-    margin-bottom: var(--space-4);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
-  .candidates {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .candidate {
-    padding: 0.9rem 1.1rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    text-align: left;
-    transition:
-      background var(--dur-fast) var(--ease),
-      border-color var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .candidate:hover {
-    background: var(--hover-strong);
-    border-color: var(--border-strong);
-    color: var(--text);
-  }
-</style>

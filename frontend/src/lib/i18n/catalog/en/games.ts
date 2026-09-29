@@ -137,6 +137,7 @@ export const games: Record<GamesKey, Message> = {
   'games.actionStatus': 'Status: {status}',
   'games.actionRemoveLibrary': 'Remove from library',
   'games.actionOpenSaves': 'Open saves',
+  'games.actionSavesBackups': 'Saves…',
   'games.actionVerify': 'Verify files',
   'games.actionMove': 'Move to another drive',
   'games.actionLanUnshare': 'Stop sharing on the local network',
