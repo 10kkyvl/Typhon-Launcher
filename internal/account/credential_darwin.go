@@ -37,6 +37,10 @@ func newSystemCredentialStore() (CredentialStore, error) {
 	return keychainStore{service: keychainService, account: keychainAccount, run: runSecurity}, nil
 }
 
+func newNamedCredentialStore(name string) (CredentialStore, error) {
+	return keychainStore{service: name, account: name, run: runSecurity}, nil
+}
+
 func runSecurity(args []string, stdin string) (string, error) {
 	//nolint:gosec // G204: аргументы собирает сам пакет, пользовательских данных в них нет
 	cmd := exec.Command("/usr/bin/security", args...)

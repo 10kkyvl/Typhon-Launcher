@@ -78,24 +78,57 @@ type client struct {
 	up         *rate.Limiter
 	metaDir    string
 	completion storage.PieceCompletion
+
+	// gen is the manager's number for this client, set once it is installed.
+	gen uint64
+	// httpTrackersOnly is set for a client behind a proxy, which can carry
+	// nothing but HTTP trackers.
+	httpTrackersOnly bool
+	// filterTrackers rewrites the tracker list of every torrent before the
+	// engine sees it: a proxy drops what it cannot carry, an adapter has the
+	// host names of UDP trackers resolved through it.
+	filterTrackers func([][]string) [][]string
 }
 
-func newClient(cfg settings.Settings, metaDir string, completion storage.PieceCompletion) (*client, error) {
+func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
 	wrapped := nonClosingCompletion{completion}
-	tc := clientConfig(cfg, metaDir, listenPort, wrapped)
+	tc, attach, err := networkedConfig(ctx, cfg, metaDir, listenPort, wrapped, plan)
+	if err != nil {
+		closeDefaultStorage(tc)
+		return nil, err
+	}
 	cl, err := torrent.NewClient(tc)
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, metaDir, 0, wrapped)
+		tc, attach, err = networkedConfig(ctx, cfg, metaDir, 0, wrapped, plan)
+		if err != nil {
+			closeDefaultStorage(tc)
+			return nil, err
+		}
 		cl, err = torrent.NewClient(tc)
 	}
 	if err != nil {
 		closeDefaultStorage(tc)
 		return nil, err
 	}
-	slog.Info("torrent client started", "port", cl.LocalPort())
-	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir, completion: wrapped}, nil
+	attach.attach(cl)
+	slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
+	return &client{
+		cl:               cl,
+		down:             tc.DownloadRateLimiter,
+		up:               tc.UploadRateLimiter,
+		metaDir:          metaDir,
+		completion:       wrapped,
+		httpTrackersOnly: plan.mode == settings.NetworkProxy,
+		filterTrackers:   attach.trackers,
+	}, nil
+}
+
+func networkedConfig(ctx context.Context, cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion, plan netPlan) (*torrent.ClientConfig, netAttach, error) {
+	tc := clientConfig(cfg, dataDir, port, completion)
+	attach, err := applyNetwork(ctx, tc, plan)
+	return tc, attach, err
 }
 
 func clientConfig(cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion) *torrent.ClientConfig {
@@ -181,6 +214,11 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	}
 	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
+	var announce [][]string
+	if c.filterTrackers != nil {
+		announce = cloneTiers(spec.Trackers)
+		spec.Trackers = c.filterTrackers(spec.Trackers)
+	}
 
 	t, isNew, err := c.cl.AddTorrentSpec(spec)
 	if err != nil {
@@ -204,7 +242,7 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
-	return &liveTorrent{t: t, storage: st, flat: opts.flat}, nil
+	return &liveTorrent{t: t, storage: st, flat: opts.flat, announce: announce, gen: c.gen}, nil
 }
 
 func magnetSpec(uri string) (*torrent.TorrentSpec, error) {
@@ -249,6 +287,20 @@ type liveTorrent struct {
 	t       *torrent.Torrent
 	storage io.Closer
 	flat    bool
+
+	// announce is the tracker list as it came in, kept when the client had to
+	// drop trackers it cannot reach, so that the stored torrent still has them
+	// the day the proxy is switched off.
+	announce [][]string
+	gen      uint64
+}
+
+func (l *liveTorrent) metainfo() metainfo.MetaInfo {
+	mi := l.t.Metainfo()
+	if l.announce != nil {
+		mi.AnnounceList = cloneTiers(l.announce)
+	}
+	return mi
 }
 
 func (l *liveTorrent) setPriorities(selected []bool) {

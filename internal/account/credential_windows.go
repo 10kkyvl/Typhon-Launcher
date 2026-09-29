@@ -52,6 +52,10 @@ func newSystemCredentialStore() (CredentialStore, error) {
 	return newWindowsCredentialStore(storeTarget)
 }
 
+func newNamedCredentialStore(name string) (CredentialStore, error) {
+	return newWindowsCredentialStore(name)
+}
+
 func newWindowsCredentialStore(name string) (CredentialStore, error) {
 	target, err := windows.UTF16PtrFromString(name)
 	if err != nil {

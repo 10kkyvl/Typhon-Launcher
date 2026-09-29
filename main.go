@@ -86,6 +86,7 @@ func init() {
 	application.RegisterEvent[download.Download]("download:completed")
 	application.RegisterEvent[download.Download]("download:failed")
 	application.RegisterEvent[download.RemovedEvent]("download:removed")
+	application.RegisterEvent[download.NetworkState]("download:network")
 	application.RegisterEvent[install.Installation]("install:started")
 	application.RegisterEvent[install.Installation]("install:updated")
 	application.RegisterEvent[install.Installation]("install:completed")

@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"os"
+	"strings"
 )
 
 var ErrNoCredential = errors.New("no stored credential")
@@ -29,6 +30,16 @@ func NewCredentialStore() (CredentialStore, error) {
 		return nil, err
 	}
 	return envCredentialStore{inner: inner}, nil
+}
+
+// NewNamedCredentialStore opens a store under its own name, separate from the
+// account token. Unlike NewCredentialStore it is not overridden by
+// TYPHON_API_TOKEN: that variable names the account token and nothing else.
+func NewNamedCredentialStore(name string) (CredentialStore, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, errors.New("credential store name is empty")
+	}
+	return newNamedCredentialStore(name)
 }
 
 func (s envCredentialStore) Load() (Credential, error) {

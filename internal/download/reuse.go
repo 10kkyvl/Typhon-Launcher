@@ -216,10 +216,10 @@ func chooseMapping(info *metainfo.Info, root string) mapping {
 
 func (m *Manager) engine() (*client, context.Context, error) {
 	m.mu.Lock()
-	cl, ctx, closing := m.client, m.ctx, m.closing
+	cl, ctx, closing, noClient := m.client, m.ctx, m.closing, m.noClientLocked()
 	m.mu.Unlock()
 	if cl == nil || closing || ctx == nil {
-		return nil, nil, errNoClient
+		return nil, nil, noClient
 	}
 	return cl, ctx, nil
 }
@@ -259,11 +259,19 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 	case <-ctx.Done():
 		lt.drop()
 		return nil, ctx.Err()
+	case <-cl.cl.Closed():
+		// The client was closed under this wait, which only a change of the
+		// network does; the caller's context knows nothing of it.
+		lt.drop()
+		return nil, errNetworkDown
 	case <-time.After(metadataTimeout):
 		lt.drop()
+		if cl.httpTrackersOnly {
+			return nil, errNoMetadataProxy
+		}
 		return nil, errNoMetadata
 	}
-	mi := lt.t.Metainfo()
+	mi := lt.metainfo()
 	lt.drop()
 	hash := spec.InfoHash.HexString()
 	if err := m.store.saveMetainfo(hash, &mi); err != nil {

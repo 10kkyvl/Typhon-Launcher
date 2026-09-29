@@ -115,12 +115,18 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		lt.drop()
 		return Download{}, errNoClient
 	}
+	if m.client != cl {
+		m.mu.Unlock()
+		lt.drop()
+		return Download{}, errNetworkDown
+	}
 	m.items = append(m.items, d)
 	if err := m.store.saveMetainfo(infoHash, mi); err != nil {
 		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
 	}
 	if !req.Verify {
 		m.engines[d.ID] = lt
+		m.markVerifiedLocked(d.ID)
 	}
 	if err := m.persistLocked(); err != nil {
 		m.items = m.items[:len(m.items)-1]
@@ -175,6 +181,7 @@ func (m *Manager) spawnSettleLocked(id, infoHash string, lt *liveTorrent) error 
 	if ctx == nil {
 		return errNoClient
 	}
+	gen := m.gen
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -185,7 +192,7 @@ func (m *Manager) spawnSettleLocked(id, infoHash string, lt *liveTorrent) error 
 			return
 		}
 		defer m.endJob(id)
-		m.settleRestored(jobCtx, restoreJob{id: id, infoHash: infoHash}, lt, lt.t.Info())
+		m.settleRestored(jobCtx, restoreJob{id: id, infoHash: infoHash, gen: gen}, lt, lt.t.Info())
 	}()
 	return nil
 }

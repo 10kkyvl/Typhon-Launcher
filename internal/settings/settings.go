@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -45,6 +48,18 @@ const (
 	MinSaveBackupLimit     = 1
 	MaxSaveBackupLimit     = 50
 
+	NetworkDirect    = "direct"
+	NetworkInterface = "interface"
+	NetworkProxy     = "proxy"
+
+	ProxySOCKS5 = "socks5"
+	ProxyHTTP   = "http"
+
+	maxNetworkInterfaceLen = 256
+	maxProxyHostLen        = 253
+	maxProxyLabelLen       = 63
+	maxProxyUsernameLen    = 255
+
 	LibraryFolderName = "TyphonLibrary"
 
 	// CurrentTelemetryConsent is the version of the consent prompt this build
@@ -73,6 +88,15 @@ var (
 	ErrLibraryPathRelative  = uierr.New("settings.library_path_relative", "путь библиотеки должен быть абсолютным")
 	ErrLibraryPathRoot      = uierr.New("settings.library_path_root", "библиотека не может быть корнем диска")
 	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
+
+	ErrNetworkModeInvalid       = uierr.New("settings.network_mode_invalid", "неизвестный режим сети")
+	ErrNetworkInterfaceRequired = uierr.New("settings.network_interface_required", "не выбран сетевой адаптер")
+	ErrNetworkInterfaceInvalid  = uierr.New("settings.network_interface_invalid", "недопустимое имя сетевого адаптера")
+	ErrProxyTypeInvalid         = uierr.New("settings.proxy_type_invalid", "неизвестный тип прокси")
+	ErrProxyHostRequired        = uierr.New("settings.proxy_host_required", "не указан адрес прокси")
+	ErrProxyHostInvalid         = uierr.New("settings.proxy_host_invalid", "недопустимый адрес прокси")
+	ErrProxyPortInvalid         = uierr.New("settings.proxy_port_invalid", "порт прокси должен быть от 1 до 65535")
+	ErrProxyUsernameInvalid     = uierr.New("settings.proxy_username_invalid", "недопустимое имя пользователя прокси")
 )
 
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
@@ -118,6 +142,13 @@ type Settings struct {
 	SaveBackupLimit        int  `json:"saveBackupLimit"`
 
 	LANSharing bool `json:"lanSharing"`
+
+	NetworkMode      string `json:"networkMode"`
+	NetworkInterface string `json:"networkInterface"`
+	ProxyType        string `json:"proxyType"`
+	ProxyHost        string `json:"proxyHost"`
+	ProxyPort        int    `json:"proxyPort"`
+	ProxyUsername    string `json:"proxyUsername"`
 
 	PresenceStatus   string `json:"presenceStatus"`
 	PresenceAutoAway bool   `json:"presenceAutoAway"`
@@ -190,6 +221,9 @@ func Defaults() Settings {
 		SaveBackupLimit:        DefaultSaveBackupLimit,
 
 		LANSharing: false,
+
+		NetworkMode: NetworkDirect,
+		ProxyType:   ProxySOCKS5,
 
 		PresenceStatus:   PresenceOnline,
 		PresenceAutoAway: true,
@@ -315,6 +349,81 @@ func legacyLibraryPath(gamesPath string) string {
 	return root
 }
 
+func validProxyHost(host string) bool {
+	if host == "" || len(host) > maxProxyHostLen {
+		return false
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.Zone() == ""
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > maxProxyLabelLen || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func hasControl(text string) bool {
+	return strings.IndexFunc(text, unicode.IsControl) >= 0
+}
+
+// sanitizeNetwork never repairs a value: a mode or an address that is not
+// understood must stop the save, because falling back to direct would send
+// torrent traffic outside the tunnel the user asked for.
+func sanitizeNetwork(s Settings) (Settings, error) {
+	s.NetworkInterface = strings.TrimSpace(s.NetworkInterface)
+	s.ProxyHost = strings.TrimSpace(s.ProxyHost)
+	s.ProxyUsername = strings.TrimSpace(s.ProxyUsername)
+
+	switch s.NetworkMode {
+	case NetworkDirect, NetworkInterface, NetworkProxy:
+	default:
+		return Settings{}, fmt.Errorf("%w: %q", ErrNetworkModeInvalid, s.NetworkMode)
+	}
+
+	if s.NetworkMode == NetworkInterface && s.NetworkInterface == "" {
+		return Settings{}, ErrNetworkInterfaceRequired
+	}
+	if len(s.NetworkInterface) > maxNetworkInterfaceLen || hasControl(s.NetworkInterface) || !utf8.ValidString(s.NetworkInterface) {
+		return Settings{}, ErrNetworkInterfaceInvalid
+	}
+
+	switch s.ProxyType {
+	case ProxySOCKS5, ProxyHTTP:
+	case "":
+		if s.NetworkMode == NetworkProxy {
+			return Settings{}, ErrProxyTypeInvalid
+		}
+	default:
+		return Settings{}, fmt.Errorf("%w: %q", ErrProxyTypeInvalid, s.ProxyType)
+	}
+
+	if s.ProxyHost == "" && s.NetworkMode == NetworkProxy {
+		return Settings{}, ErrProxyHostRequired
+	}
+	if s.ProxyHost != "" && !validProxyHost(s.ProxyHost) {
+		return Settings{}, ErrProxyHostInvalid
+	}
+
+	if s.ProxyPort < 0 || s.ProxyPort > 65535 || (s.ProxyPort == 0 && s.NetworkMode == NetworkProxy) {
+		return Settings{}, ErrProxyPortInvalid
+	}
+
+	if len(s.ProxyUsername) > maxProxyUsernameLen || hasControl(s.ProxyUsername) ||
+		strings.ContainsRune(s.ProxyUsername, ':') || !utf8.ValidString(s.ProxyUsername) {
+		return Settings{}, ErrProxyUsernameInvalid
+	}
+	return s, nil
+}
+
 func sanitize(s Settings) (Settings, error) {
 	if s.AccentColor != "" {
 		if len(s.AccentColor) != 7 || s.AccentColor[0] != '#' || strings.IndexFunc(s.AccentColor[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) >= 0 {
@@ -328,6 +437,10 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	s.LibraryPath = library
 	s = derivePaths(s)
+	s, err = sanitizeNetwork(s)
+	if err != nil {
+		return Settings{}, err
+	}
 	if s.UIScale < 0.9 || s.UIScale > 1.25 {
 		s.UIScale = 1
 	}
