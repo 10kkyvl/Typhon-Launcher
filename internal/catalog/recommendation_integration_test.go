@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,7 @@ func TestCorruptRecommendationStateKeepsCatalogAvailableWithoutOverwriting(t *te
 		t.Fatalf("damaged recommendation state was reported as empty: %v", err)
 	}
 	s.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "official", Title: "Available game"}}, Total: 1}})
-	page, err := s.BrowseGames(GameQuery{Sort: "auto", Page: 1})
+	page, err := s.BrowseGames(context.Background(), GameQuery{Sort: "auto", Page: 1})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("general catalog unavailable: %+v %v", page, err)
 	}
@@ -120,7 +121,7 @@ func TestDiscoveryRefreshDoesNotExpandRemoteMembershipExclusions(t *testing.T) {
 	})
 	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "fresh", Title: "Fresh game", Genres: []string{"Strategy"}}}}}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{RefreshExcludeIDs: []string{skip}, Limit: 1})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{RefreshExcludeIDs: []string{skip}, Limit: 1})
 	if len(result.Items) != 1 || !strings.Contains(remote.got.ExcludeLibrary, owned) || strings.Contains(remote.got.ExcludeNotInterested, skip) || containsString(remote.got.ExcludeIDs, skip) {
 		t.Fatalf("refresh exclusion leaked into remote membership query: %+v %+v", result, remote.got)
 	}

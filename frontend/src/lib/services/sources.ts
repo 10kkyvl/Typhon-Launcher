@@ -1,4 +1,5 @@
 import { get } from 'svelte/store';
+import { CancelError } from '@wailsio/runtime';
 import { locale } from '../i18n/locale';
 import { Service as SourcesService } from '../../../bindings/typhon/internal/sources';
 import { Service as CatalogService } from '../../../bindings/typhon/internal/catalog';
@@ -396,7 +397,7 @@ export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
   }
 }
 
-export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPage> {
+export async function queryCatalogGames(query: CatalogQuery, signal?: AbortSignal): Promise<CatalogPage> {
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 60;
   if (!inWails) return { items: [], total: 0, page, pageSize };
@@ -415,8 +416,13 @@ export async function queryCatalogGames(query: CatalogQuery): Promise<CatalogPag
     page,
     pageSize,
   };
-  const result = (await CatalogService.BrowseGames(payload as never)) as unknown as CatalogPage;
+  const call = CatalogService.BrowseGames(payload as never);
+  const result = (await (signal ? call.cancelOn(signal) : call)) as unknown as CatalogPage;
   return { ...result, items: result.items ?? [], compat: result.compat ?? {} };
+}
+
+export function isCancelledRequest(err: unknown): boolean {
+  return err instanceof CancelError;
 }
 
 export async function getGenreFacets(): Promise<GenreFacet[]> {

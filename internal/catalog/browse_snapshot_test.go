@@ -112,7 +112,7 @@ func TestAutoBrowseBuildsRecommendationProfileFromOneLibrarySnapshot(t *testing.
 		}
 	})
 	s.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "remote", Title: "Remote"}}}})
-	if _, err = s.BrowseGames(GameQuery{Sort: "auto", Page: 1}); err != nil {
+	if _, err = s.BrowseGames(context.Background(), GameQuery{Sort: "auto", Page: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 1 {
@@ -137,7 +137,7 @@ func TestPopularContinuationWithoutSnapshotRemainsAvailable(t *testing.T) {
 	}
 	remote := &remoteFixture{page: GamePage{Items: []Game{{ID: "second", Title: "Second"}}, Page: 2, PageSize: 1}}
 	s.SetRemoteCatalog(remote)
-	page, err := s.BrowseGames(GameQuery{Sort: "popular", Page: 2, PageSize: 1})
+	page, err := s.BrowseGames(context.Background(), GameQuery{Sort: "popular", Page: 2, PageSize: 1})
 	if err != nil || len(page.Items) != 1 || remote.calls != 1 {
 		t.Fatalf("popular continuation = %+v, err=%v, calls=%d", page, err, remote.calls)
 	}
@@ -163,14 +163,14 @@ func TestPersonalizationFailurePinsGeneralFallbackForNextPage(t *testing.T) {
 	}
 	remote := &fallbackSnapshotRemote{}
 	s.SetRemoteCatalog(remote)
-	first, err := s.BrowseGames(GameQuery{Sort: "for-you", Page: 1, PageSize: 1})
+	first, err := s.BrowseGames(context.Background(), GameQuery{Sort: "for-you", Page: 1, PageSize: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !first.PersonalizationFallback || first.Snapshot == "" || len(first.Items) != 1 {
 		t.Fatalf("fallback: %+v", first)
 	}
-	next, err := s.BrowseGames(GameQuery{Sort: "for-you", Page: 2, PageSize: 1, Snapshot: first.Snapshot, Revision: first.Revision})
+	next, err := s.BrowseGames(context.Background(), GameQuery{Sort: "for-you", Page: 2, PageSize: 1, Snapshot: first.Snapshot, Revision: first.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}

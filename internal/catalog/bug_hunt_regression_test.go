@@ -76,7 +76,7 @@ func TestBrowseKeepsLearnedAliasAndLocalSteamOnIncompleteProvider(t *testing.T) 
 		Providers: []IndexStatus{{Provider: "igdb", Complete: true}, {Provider: "steam", Complete: false}},
 	}}
 	service.SetRemoteCatalog(remote)
-	page, err := service.BrowseGames(GameQuery{})
+	page, err := service.BrowseGames(context.Background(), GameQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +115,10 @@ func TestBrowseKeepsLocalSteamAcrossPagesAndRestart(t *testing.T) {
 		Providers: []IndexStatus{{Provider: "igdb", Complete: true}, {Provider: "steam", Complete: true}},
 	}}
 	service.SetRemoteCatalog(remote)
-	if _, err := service.BrowseGames(GameQuery{}); err != nil {
+	if _, err := service.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.BrowseGames(GameQuery{}); err != nil {
+	if _, err := service.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := service.GetGame("local")
@@ -132,7 +132,7 @@ func TestBrowseKeepsLocalSteamAcrossPagesAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restarted.BrowseGames(GameQuery{}); err != nil {
+	if _, err := restarted.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err = restarted.GetGame("local")
@@ -167,7 +167,7 @@ func TestCorrectedProviderClaimClearsDurableLocalEvidence(t *testing.T) {
 			},
 		}},
 	}})
-	if _, err = service.BrowseGames(GameQuery{}); err != nil {
+	if _, err = service.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	wrong, err := service.GetGame("wrong")
@@ -177,7 +177,7 @@ func TestCorrectedProviderClaimClearsDurableLocalEvidence(t *testing.T) {
 	if wrong.ExternalIDs.Steam != "" || wrong.LocalExternalIDs.Steam != "" {
 		t.Fatalf("corrected claim left stale local evidence: %+v", wrong)
 	}
-	if _, err = service.BrowseGames(GameQuery{}); err != nil {
+	if _, err = service.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	wrong, err = service.GetGame("wrong")
@@ -196,7 +196,13 @@ func TestBrowseDoesNotPersistUnchangedRemotePage(t *testing.T) {
 	}
 	remote := &remoteRegressionFixture{page: GamePage{Items: []Game{{ID: "server", Title: "Stable", ExternalIDs: ExternalIDs{IGDB: "1"}}}}}
 	service.SetRemoteCatalog(remote)
-	if _, err := service.BrowseGames(GameQuery{}); err != nil {
+	if _, err := service.BrowseGames(context.Background(), GameQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	// "server" matches nothing saved, so the browse above only previewed it;
+	// open the card to make it durable, then verify that browsing an
+	// unchanged page afterwards does not rewrite catalog.json.
+	if _, err := service.GetGame("server"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(service.gamesPath)
@@ -207,7 +213,7 @@ func TestBrowseDoesNotPersistUnchangedRemotePage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.BrowseGames(GameQuery{}); err != nil {
+	if _, err := service.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(service.gamesPath)
@@ -237,14 +243,14 @@ func TestOfflineBrowseDropsPartialRemoteResponseBeforeLoadingCache(t *testing.T)
 	}}
 	service.SetRemoteCatalog(remote)
 	query := GameQuery{}
-	if _, err = service.BrowseGames(query); err != nil {
+	if _, err = service.BrowseGames(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
 	// Simulate a backend that returned a partially decoded response together
 	// with its error. The stale Compat value must not bleed into the cache load.
 	remote.page.Compat = map[string]CompatInfo{"partial-only": {Works: 1, Total: 10}}
 	remote.err = errors.New("backend unavailable")
-	offline, err := service.BrowseGames(query)
+	offline, err := service.BrowseGames(context.Background(), query)
 	if err != nil || !offline.Offline {
 		t.Fatalf("offline page = %+v, err = %v", offline, err)
 	}

@@ -21,7 +21,7 @@ type CatalogFetcher = (query: {
   pageSize: number;
   snapshot: string;
   revision: number;
-}) => Promise<CatalogPage>;
+}, signal?: AbortSignal) => Promise<CatalogPage>;
 
 /** Keeps the active catalog snapshot and exact retry request together. */
 export class CatalogController {
@@ -49,14 +49,14 @@ export class CatalogController {
     this.pageSize = pageSize;
     this.retryPage = page;
     const firstPage = page === 1;
-    const ticket = this.requests.begin();
+    const { ticket, signal } = this.requests.beginRequest();
     return this.finishRequest(ticket, firstPage, this.fetchPage({
       ...filters,
       page,
       pageSize,
       snapshot: firstPage ? '' : this.snapshot,
       revision: firstPage ? 0 : this.revision,
-    }));
+    }, signal));
   }
 
   retry(): Promise<CatalogLoadResult> {

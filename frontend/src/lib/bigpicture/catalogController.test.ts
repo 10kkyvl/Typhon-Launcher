@@ -30,12 +30,14 @@ describe('CatalogController', () => {
     await expect(controller.load(changedFilters, 1)).resolves.toMatchObject({ kind: 'error', catalogChanged: false });
     await expect(controller.retry()).resolves.toMatchObject({ kind: 'page', firstPage: true });
 
-    expect(fetchPage).toHaveBeenNthCalledWith(2, {
-      ...changedFilters, page: 1, pageSize: 24, snapshot: '', revision: 0,
-    });
-    expect(fetchPage).toHaveBeenNthCalledWith(3, {
-      ...changedFilters, page: 1, pageSize: 24, snapshot: '', revision: 0,
-    });
+    expect(fetchPage).toHaveBeenNthCalledWith(2,
+      { ...changedFilters, page: 1, pageSize: 24, snapshot: '', revision: 0 },
+      expect.any(AbortSignal),
+    );
+    expect(fetchPage).toHaveBeenNthCalledWith(3,
+      { ...changedFilters, page: 1, pageSize: 24, snapshot: '', revision: 0 },
+      expect.any(AbortSignal),
+    );
   });
 
   it('discards a changed catalog snapshot and retries from page one', async () => {
@@ -50,12 +52,14 @@ describe('CatalogController', () => {
     await expect(controller.load(filters, 3)).resolves.toMatchObject({ kind: 'error', catalogChanged: true });
     await controller.retry();
 
-    expect(fetchPage).toHaveBeenNthCalledWith(2, {
-      ...filters, page: 2, pageSize: 24, snapshot: 'snapshot-a', revision: 2,
-    });
-    expect(fetchPage).toHaveBeenNthCalledWith(4, {
-      ...filters, page: 1, pageSize: 24, snapshot: '', revision: 0,
-    });
+    expect(fetchPage).toHaveBeenNthCalledWith(2,
+      { ...filters, page: 2, pageSize: 24, snapshot: 'snapshot-a', revision: 2 },
+      expect.any(AbortSignal),
+    );
+    expect(fetchPage).toHaveBeenNthCalledWith(4,
+      { ...filters, page: 1, pageSize: 24, snapshot: '', revision: 0 },
+      expect.any(AbortSignal),
+    );
   });
 
   it('keeps the latest response and its snapshot when earlier catalog requests finish late', async () => {
@@ -73,8 +77,39 @@ describe('CatalogController', () => {
     await expect(oldLoad).resolves.toEqual({ kind: 'stale' });
     await controller.load(currentFilters, 2);
 
-    expect(fetchPage).toHaveBeenLastCalledWith({
-      ...currentFilters, page: 2, pageSize: 24, snapshot: 'current-snapshot', revision: 5,
-    });
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      { ...currentFilters, page: 2, pageSize: 24, snapshot: 'current-snapshot', revision: 5 },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('aborts the previous in-flight request when a new one starts', async () => {
+    const first = deferred<CatalogPage>();
+    const fetchPage = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce(page(2, 'snapshot', 1));
+    const controller = new CatalogController(fetchPage);
+
+    void controller.load(filters, 1);
+    const [, firstSignal] = fetchPage.mock.calls[0] as [unknown, AbortSignal];
+    expect(firstSignal.aborted).toBe(false);
+
+    await controller.load(filters, 2);
+
+    expect(firstSignal.aborted).toBe(true);
+    first.resolve(page(1, 'irrelevant', 1));
+  });
+
+  it('does not surface a cancelled request as a visible error', async () => {
+    const { CancelError } = await import('@wailsio/runtime');
+    const fetchPage = vi.fn((_query, signal?: AbortSignal) => new Promise<CatalogPage>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new CancelError('Promise cancelled.')));
+    }));
+    const controller = new CatalogController(fetchPage);
+
+    const stalePage = controller.load(filters, 1);
+    const [, firstSignal] = fetchPage.mock.calls[0] as [unknown, AbortSignal];
+    void controller.load(filters, 2);
+
+    expect(firstSignal.aborted).toBe(true);
+    await expect(stalePage).resolves.toEqual({ kind: 'stale' });
   });
 });

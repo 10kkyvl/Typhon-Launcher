@@ -39,21 +39,25 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 }
 
 // BrowseGames is the public catalog. Local games are a personal/cache store,
-// never the membership source for a successful online response.
-func (s *Service) BrowseGames(q GameQuery) (GamePage, error) {
-	return s.browseGames(q, true)
+// never the membership source for a successful online response. Wails
+// supplies ctx for every bound call without changing the JS signature; a
+// canceled ctx (the frontend navigated away, or the promise was aborted)
+// must abort the backend request and leave no trace in catalog.json or the
+// offline page cache.
+func (s *Service) BrowseGames(ctx context.Context, q GameQuery) (GamePage, error) {
+	return s.browseGames(ctx, q, true)
 }
 
-func (s *Service) browseGames(q GameQuery, durable bool) (GamePage, error) {
+func (s *Service) browseGames(ctx context.Context, q GameQuery, durable bool) (GamePage, error) {
 	var prepareErr error
 	q, prepareErr = s.prepareBrowseSnapshot(q)
 	if prepareErr != nil {
 		return GamePage{}, prepareErr
 	}
-	return s.browsePreparedGames(q, durable)
+	return s.browsePreparedGames(ctx, q, durable)
 }
 
-func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, error) {
+func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable bool) (GamePage, error) {
 	snapshot := q.Snapshot
 	q.Snapshot = ""
 	s.mu.RLock()
@@ -83,8 +87,7 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 			return s.previewRemotePage(cached), nil
 		}
 	}
-	//nolint:forbidigo // Wails RPC entry point: this service has no lifecycle context; each request is bounded and canceled on return.
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	var page GamePage
 	var err error
@@ -121,6 +124,13 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 		if errors.Is(err, ErrCatalogChanged) {
 			return GamePage{}, uierr.Wrap("catalog.changed", err)
 		}
+		// An explicitly canceled request must not fall back to silently serving
+		// stale offline data: the caller asked to stop, not to substitute a
+		// cached answer. A plain timeout (DeadlineExceeded) is unaffected and
+		// still falls through to the offline cache below.
+		if errors.Is(err, context.Canceled) {
+			return GamePage{}, err
+		}
 		if !durable {
 			return GamePage{}, err
 		}
@@ -155,10 +165,18 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 		return s.previewRemotePage(page), nil
 	}
 	s.mu.Lock()
-	previous := append([]Game(nil), s.games...)
 	complete := remoteProviderCompleteness(page.Providers)
 	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	claims := make([]Game, len(page.Items))
+	// touched remembers, per position in s.games, the value it had before this
+	// call mutated it — the first time it is mutated, never a later one. It is
+	// the rollback log for persistGamesLocked failing (invariant: memory only
+	// moves after persist succeeds) and it replaces copying and diffing the
+	// entire multi-thousand-game slice on every browsed page: a page touches a
+	// handful of existing records at most, so this stays O(page), not O(catalog).
+	touched := map[int]Game{}
+	changed := false
+	now := time.Now()
 	for i, g := range page.Items {
 		// LocalExternalIDs is a private durability detail. A remote response
 		// must never be able to inject it, and it must not leak through the
@@ -172,14 +190,28 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 		if pos >= 0 {
 			old := s.games[pos]
 			g.ID = old.ID
-			g = mergeRemoteGame(old, g, complete)
+			merged := mergeRemoteGame(old, g, complete)
+			merged.Genres = canonicalGenres(merged.Genres)
 			unindexRemoteGame(old, pos, byServer, byIGDB, bySteam)
-			s.games[pos] = g
+			if !reflect.DeepEqual(old, merged) {
+				if _, ok := touched[pos]; !ok {
+					touched[pos] = old
+				}
+				s.games[pos] = merged
+				s.updateIndexAtLocked(pos, old)
+				changed = true
+			}
+			g = merged
+			indexRemoteGame(g, pos, byServer, byIGDB, bySteam)
 		} else {
-			s.games = append(s.games, g)
-			pos = len(s.games) - 1
+			// A page item that matches nothing already saved is a preview, exactly
+			// like a discovery candidate: shown to the user, but committed to
+			// catalog.json only by GetGame (the first durable interaction). Adding
+			// it here unconditionally is the bug this rewrite fixes — every page
+			// scrolled past used to grow the catalog forever.
+			g.Genres = canonicalGenres(g.Genres)
+			s.rememberBrowsedGameLocked(g, now)
 		}
-		indexRemoteGame(g, pos, byServer, byIGDB, bySteam)
 		if c, ok := page.Compat[g.ServerID]; ok && g.ID != g.ServerID {
 			delete(page.Compat, g.ServerID)
 			page.Compat[g.ID] = c
@@ -188,10 +220,8 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 		g.LocalExternalIDs = ExternalIDs{}
 		page.Items[i] = g
 	}
-	s.reconcileRemotePageLinksLocked(claims)
-	changed := !reflect.DeepEqual(previous, s.games)
-	if changed {
-		s.rebuildLocked()
+	if s.reconcileRemotePageLinksLocked(claims, touched) {
+		changed = true
 	}
 	pageAliases := s.remotePageAliasesLocked(page.Items)
 	for i := range page.Items {
@@ -199,8 +229,11 @@ func (s *Service) browsePreparedGames(q GameQuery, durable bool) (GamePage, erro
 	}
 	if changed {
 		if err = s.persistGamesLocked(); err != nil {
-			s.games = previous
-			s.rebuildLocked()
+			for pos, old := range touched {
+				current := s.games[pos]
+				s.games[pos] = old
+				s.updateIndexAtLocked(pos, current)
+			}
 			s.mu.Unlock()
 			return GamePage{}, err
 		}
@@ -224,8 +257,13 @@ func (s *Service) HasRemoteCatalog() bool {
 }
 
 // A new authoritative claim invalidates stale claims on other visited games,
-// even when those other games are outside the current result page.
-func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game) {
+// even when those other games are outside the current result page. touched
+// records, for every position this call mutates, the value it had before any
+// mutation in this browse call — see browsePreparedGames — so a position
+// already touched by the merge loop above is not overwritten with an
+// intermediate value here. It reports whether it changed anything, so the
+// caller can decide whether to persist without a full-slice diff.
+func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, touched map[int]Game) bool {
 	claimed := map[string]bool{}
 	igdbClaims := map[string]bool{}
 	currentServers := map[string]bool{}
@@ -254,7 +292,9 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game) {
 			}
 		}
 	}
+	changedAny := false
 	for i, old := range s.games {
+		before := old
 		if (old.ServerID != "" && currentServers[old.ServerID]) || old.ExternalIDs.IGDB == "" || currentIGDB[old.ExternalIDs.IGDB] {
 			continue
 		}
@@ -298,7 +338,13 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game) {
 		links["igdb"] = keptIGDB
 		old.ProviderLinks = links
 		s.games[i] = old
+		if _, ok := touched[i]; !ok {
+			touched[i] = before
+		}
+		s.updateIndexAtLocked(i, before)
+		changedAny = true
 	}
+	return changedAny
 }
 
 func remoteProviderCompleteness(statuses []IndexStatus) map[string]bool {

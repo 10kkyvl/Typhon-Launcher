@@ -25,7 +25,7 @@ type fakeCatalog struct {
 	games []catalog.Game
 }
 
-func (f fakeCatalog) BrowseGames(q catalog.GameQuery) (catalog.GamePage, error) {
+func (f fakeCatalog) BrowseGames(_ context.Context, q catalog.GameQuery) (catalog.GamePage, error) {
 	needle := strings.ToLower(q.Search)
 	out := make([]catalog.Game, 0, len(f.games))
 	for _, game := range f.games {
@@ -441,7 +441,7 @@ func TestMissingCatalogMetadataFallsBackToReleaseTitle(t *testing.T) {
 
 func TestUnavailableCatalogDoesNotFallBackToLocalEntries(t *testing.T) {
 	s := NewService(fakeLibrary{games: []library.Game{{ID: "local", Title: "Cyberpunk"}}}, nil, noReleases())
-	result, err := s.Search("cyberpunk")
+	result, err := s.Search(t.Context(), "cyberpunk")
 	if err == nil || len(result.Games) != 0 {
 		t.Fatalf("result=%+v error=%v", result, err)
 	}
@@ -449,7 +449,7 @@ func TestUnavailableCatalogDoesNotFallBackToLocalEntries(t *testing.T) {
 
 func mustSearch(t *testing.T, s *Service, query string) Result {
 	t.Helper()
-	result, err := s.Search(query)
+	result, err := s.Search(t.Context(), query)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +481,7 @@ func TestSearchUsesServerCatalogAndReportsFailure(t *testing.T) {
 	if len(got.Games) != 1 {
 		t.Fatalf("offline page: %+v", got)
 	}
-	if _, err := s.Search("uncached"); err == nil {
+	if _, err := s.Search(t.Context(), "uncached"); err == nil {
 		t.Fatal("server failure hidden")
 	}
 }

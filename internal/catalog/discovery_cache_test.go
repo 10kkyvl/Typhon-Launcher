@@ -16,8 +16,8 @@ func TestDiscoveryPreviewDoesNotWriteAndOpeningPickPersists(t *testing.T) {
 	}
 	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "pick", Title: "Pick", Genres: []string{"Strategy"}}, {ID: "other", Title: "Other", Genres: []string{"Indie"}}}}}
 	s.SetRemoteCatalog(remote)
-	first := s.GetDiscovery(DiscoveryQuery{Limit: 1})
-	second := s.GetDiscovery(DiscoveryQuery{Limit: 1, RefreshExcludeIDs: []string{first.Items[0].Game.ID}})
+	first := s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 1})
+	second := s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 1, RefreshExcludeIDs: []string{first.Items[0].Game.ID}})
 	if len(first.Items) != 1 || len(second.Items) != 1 || first.Items[0].Game.ID == second.Items[0].Game.ID || remote.calls != 1 {
 		t.Fatalf("refresh=%+v calls=%d", second, remote.calls)
 	}
@@ -55,7 +55,7 @@ func TestDiscoveryOfflineWorkingFilterAndRefreshBackfill(t *testing.T) {
 		}
 		return 1, 5, true
 	})
-	result := s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Compat: CompatOnlyWorking}, RefreshExcludeIDs: []string{"works"}})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Compat: CompatOnlyWorking}, RefreshExcludeIDs: []string{"works"}})
 	if !result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "works" {
 		t.Fatalf("offline working picks=%+v", result)
 	}

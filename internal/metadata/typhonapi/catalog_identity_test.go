@@ -1,6 +1,7 @@
 package typhonapi
 
 import (
+	"context"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -25,12 +26,22 @@ func TestBrowseHTTPPreservesNewProviderLinkAndDeveloper(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.SetRemoteCatalog(client)
-	first, err := svc.BrowseGames(catalog.GameQuery{})
+	first, err := svc.BrowseGames(context.Background(), catalog.GameQuery{})
 	if err != nil || len(first.Items) != 2 {
 		t.Fatalf("first=%+v err=%v", first, err)
 	}
+	// A browsed page no longer writes unopened games to catalog.json (they sit
+	// in a temporary cache until GetGame commits one). Opening both cards here
+	// is what makes them durable, matching what triggers persistence in the
+	// running launcher: a click, not a glance at the list.
+	if _, err := svc.GetGame("canonical"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetGame("steam-home"); err != nil {
+		t.Fatal(err)
+	}
 	linked.Store(true)
-	page, err := svc.BrowseGames(catalog.GameQuery{})
+	page, err := svc.BrowseGames(context.Background(), catalog.GameQuery{})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("linked=%+v err=%v", page, err)
 	}

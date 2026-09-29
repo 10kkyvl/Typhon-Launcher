@@ -34,7 +34,7 @@ func TestPersonalizedBrowseDoesNotRetryAfterDeadline(t *testing.T) {
 	}
 	remote := &deadlineRemote{}
 	svc.SetRemoteCatalog(remote)
-	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("deadline error = %v, want context.DeadlineExceeded", err)
 	}
 	if remote.calls != 1 {
@@ -56,7 +56,7 @@ func TestPersonalizedBrowseDoesNotRetryAfterCancellation(t *testing.T) {
 	}
 	remote := &canceledRemote{}
 	svc.SetRemoteCatalog(remote)
-	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.Canceled) {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{Sort: "for-you", Page: 1}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation error = %v, want context.Canceled", err)
 	}
 	if remote.calls != 1 {
@@ -94,7 +94,7 @@ func TestPersonalizedFallbackInheritsOriginalDeadline(t *testing.T) {
 	}
 	remote := &fallbackDeadlineRemote{}
 	svc.SetRemoteCatalog(remote)
-	if _, err = svc.BrowseGames(GameQuery{Sort: "for-you", Page: 1}); err == nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{Sort: "for-you", Page: 1}); err == nil {
 		t.Fatal("fallback deadline error was swallowed")
 	}
 	if remote.calls != 2 {
@@ -116,20 +116,20 @@ func TestRemotePagesDoNotExposePrivateGamesAndKeepOfflineCache(t *testing.T) {
 	remote := &remoteFixture{page: GamePage{Items: []Game{{ID: "server", Title: "Official (Edition)", ExternalIDs: ExternalIDs{IGDB: "12"}}}, Total: 1, Page: 1, PageSize: 60, Revision: 2}}
 	svc.SetRemoteCatalog(remote)
 	q := GameQuery{Page: 1, PageSize: 60}
-	page, err := svc.BrowseGames(q)
+	page, err := svc.BrowseGames(context.Background(), q)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != "server" {
 		t.Fatalf("remote page %+v %v", page, err)
 	}
 	remote.err = errors.New("network down")
-	page, err = svc.BrowseGames(q)
+	page, err = svc.BrowseGames(context.Background(), q)
 	if err != nil || !page.Offline || page.Items[0].Title != "Official (Edition)" {
 		t.Fatalf("offline cache %+v %v", page, err)
 	}
-	if _, err = svc.BrowseGames(GameQuery{Search: "uncached"}); err == nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{Search: "uncached"}); err == nil {
 		t.Fatal("uncached network failure reported as empty success")
 	}
 	remote.err = ErrCatalogChanged
-	if _, err = svc.BrowseGames(q); !errors.Is(err, ErrCatalogChanged) {
+	if _, err = svc.BrowseGames(context.Background(), q); !errors.Is(err, ErrCatalogChanged) {
 		t.Fatal("revision conflict hidden by cache")
 	}
 	if uierr.Code(err) != "catalog.changed" {
@@ -150,23 +150,26 @@ func TestLateProviderLinkAndCorrectionKeepLocalReferences(t *testing.T) {
 	}
 	remote := &remoteFixture{page: GamePage{Items: []Game{{ID: "igdb-home", Title: "11F", ExternalIDs: ExternalIDs{IGDB: "22", Steam: "11"}, ProviderLinks: map[string][]string{"steam": {"11", "12"}}}}, Total: 1}}
 	svc.SetRemoteCatalog(remote)
-	page, err := svc.BrowseGames(GameQuery{})
+	page, err := svc.BrowseGames(context.Background(), GameQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if page.Items[0].ID == old.ID {
 		t.Fatal("Steam home ID reassigned to another provider")
 	}
-	if !svc.SameGame(old.ID, "igdb-home") {
-		t.Fatal("confirmed link not resolved")
-	}
+	// "igdb-home" matches nothing already saved, so the browsed page only
+	// previews it; GetGame is the first durable interaction and is what makes
+	// it (and the confirmed link) resolvable through SameGame.
 	detail, err := svc.GetGame("igdb-home")
 	if err != nil || len(detail.AliasIDs) != 1 || detail.AliasIDs[0] != old.ID {
 		t.Fatalf("detail aliases: %+v %v", detail, err)
 	}
+	if !svc.SameGame(old.ID, "igdb-home") {
+		t.Fatal("confirmed link not resolved")
+	}
 	remote.page.Items[0].ProviderLinks = nil
 	remote.page.Items[0].ExternalIDs.Steam = ""
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	if svc.SameGame(old.ID, "igdb-home") {
@@ -180,7 +183,12 @@ func TestPartialRemoteCacheDoesNotConfirmTitleIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "one", Title: "Same Name", ExternalIDs: ExternalIDs{IGDB: "11"}}}}})
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	// "one" matches nothing saved yet, so the browsed page only previews it;
+	// Resolve only ever sees durable catalog entries, so open the card first.
+	if _, err = svc.GetGame("one"); err != nil {
 		t.Fatal(err)
 	}
 	if got := svc.Resolve(Query{Title: "Same Name"}); got.Status != StatusReview || got.GameID != "" {
@@ -205,7 +213,12 @@ func TestCorrectedProviderClaimInvalidatesAnUnvisitedOldCard(t *testing.T) {
 		}
 	}
 	svc.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "correct", Title: "Correct game", ExternalIDs: ExternalIDs{IGDB: "2", Steam: "11"}, ProviderLinks: map[string][]string{"steam": {"11"}}}}}})
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	// "correct" matches nothing saved, so the browsed page only previews it;
+	// open the card to make it (and the reconciliation below) durable.
+	if _, err = svc.GetGame("correct"); err != nil {
 		t.Fatal(err)
 	}
 	if svc.SameGame("steam", "wrong") || !svc.SameGame("steam", "correct") {
@@ -234,7 +247,7 @@ func TestProviderMergeUndoInvalidatesCachedIGDBAlias(t *testing.T) {
 		t.Fatal("fixture merge missing")
 	}
 	svc.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "old", Title: "Old", ExternalIDs: ExternalIDs{IGDB: "1"}, ProviderLinks: map[string][]string{"igdb": {"1"}}}}}})
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
 	if svc.SameGame("old", "target") {

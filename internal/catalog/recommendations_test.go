@@ -106,7 +106,7 @@ func TestDiscoveryExcludesLibraryDismissedAndKnownAddons(t *testing.T) {
 	if err := s.SetNotInterested(games[1].ID, true); err != nil {
 		t.Fatal(err)
 	}
-	result := s.GetDiscovery(DiscoveryQuery{Limit: 5})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 5})
 	if len(result.Items) == 0 {
 		t.Fatal("discovery returned no eligible games")
 	}
@@ -153,7 +153,7 @@ func TestDiscoveryContentKindsMatchBackendGroups(t *testing.T) {
 		return got
 	}
 
-	all := ids(s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Kind: "all"}, Limit: 5}))
+	all := ids(s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Kind: "all"}, Limit: 5}))
 	for _, i := range []int{1, 4} {
 		if !all[games[i].ID] {
 			t.Fatalf("kind=all omitted %q: %+v", games[i].Title, all)
@@ -164,7 +164,7 @@ func TestDiscoveryContentKindsMatchBackendGroups(t *testing.T) {
 		Game{Title: "Soundtrack", Genres: []string{"Indie"}, GameType: "Soundtrack"},
 		Game{Title: "Tool", Genres: []string{"Action"}, GameType: "Tool"},
 	)
-	allSoundtrack := ids(allSoundtrackService.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Kind: "all"}, Limit: 5}))
+	allSoundtrack := ids(allSoundtrackService.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Kind: "all"}, Limit: 5}))
 	if !allSoundtrack[soundtrackGames[0].ID] || allSoundtrack[soundtrackGames[1].ID] {
 		t.Fatalf("kind=all soundtrack grouping = %+v", allSoundtrack)
 	}
@@ -172,7 +172,7 @@ func TestDiscoveryContentKindsMatchBackendGroups(t *testing.T) {
 		t.Fatal("kind=all included software-like content")
 	}
 
-	dlc := ids(s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Kind: "dlc"}, Limit: 5}))
+	dlc := ids(s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Kind: "dlc"}, Limit: 5}))
 	for _, i := range []int{1, 2, 3} {
 		if !dlc[games[i].ID] {
 			t.Fatalf("kind=dlc omitted %q: %+v", games[i].Title, dlc)
@@ -182,16 +182,16 @@ func TestDiscoveryContentKindsMatchBackendGroups(t *testing.T) {
 		t.Fatalf("kind=dlc leaked another content group: %+v", dlc)
 	}
 
-	demo := ids(s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Kind: "demo"}, Limit: 5}))
+	demo := ids(s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Kind: "demo"}, Limit: 5}))
 	if !demo[games[4].ID] || len(demo) != 1 {
 		t.Fatalf("kind=demo = %+v", demo)
 	}
-	soundtrack := ids(s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{Kind: "soundtrack"}, Limit: 5}))
+	soundtrack := ids(s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{Kind: "soundtrack"}, Limit: 5}))
 	if !soundtrack[games[5].ID] || !soundtrack[games[6].ID] || len(soundtrack) != 2 {
 		t.Fatalf("kind=soundtrack = %+v", soundtrack)
 	}
 
-	defaultKinds := ids(s.GetDiscovery(DiscoveryQuery{Limit: 5}))
+	defaultKinds := ids(s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 5}))
 	if defaultKinds[games[1].ID] || defaultKinds[games[4].ID] || defaultKinds[games[5].ID] {
 		t.Fatalf("default discovery exposed add-on content: %+v", defaultKinds)
 	}
@@ -200,7 +200,7 @@ func TestDiscoveryContentKindsMatchBackendGroups(t *testing.T) {
 		Game{Title: "Unknown type", Genres: []string{"Puzzle"}, GameType: "mystery"},
 		Game{Title: "DLC", Genres: []string{"Action"}, GameType: "DLC"},
 	)
-	unknownDefault := ids(unknownService.GetDiscovery(DiscoveryQuery{Limit: 1}))
+	unknownDefault := ids(unknownService.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 1}))
 	if !unknownDefault[unknownGames[0].ID] {
 		t.Fatal("unknown content type was treated as an add-on")
 	}
@@ -337,7 +337,7 @@ func TestDiscoveryUsesRemoteCandidatesBeforeLocalFallback(t *testing.T) {
 	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem {
 		return []RecommendationLibraryItem{{CanonicalGameID: owned.ID, LibraryID: "owned"}}
 	})
-	result := s.GetDiscovery(DiscoveryQuery{GameQuery: GameQuery{HideLibrary: true, HideNotInterested: true, ExcludeIDs: []string{"00000000-0000-0000-0000-000000000222"}}, Limit: 1})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{GameQuery: GameQuery{HideLibrary: true, HideNotInterested: true, ExcludeIDs: []string{"00000000-0000-0000-0000-000000000222"}}, Limit: 1})
 	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != local.ID {
 		t.Fatalf("remote discovery = %+v, fallback=%v", result.Items, result.Fallback)
 	}
@@ -355,7 +355,7 @@ func TestDiscoveryRefreshBackfillsFromSameRemoteCandidatesWithoutSecondFetch(t *
 	old := Game{ID: "old-candidate", Title: "Previously shown", Genres: []string{"Strategy"}}
 	remote := &recommendationRemote{page: GamePage{Items: []Game{old, {ID: "fresh-candidate", Title: "Fresh candidate", Genres: []string{"Action"}}}}}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{RefreshExcludeIDs: []string{old.ID}, Limit: 2})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{RefreshExcludeIDs: []string{old.ID}, Limit: 2})
 	if result.Fallback || len(result.Items) != 2 {
 		t.Fatalf("refresh result = %+v, fallback=%v", result.Items, result.Fallback)
 	}
@@ -388,7 +388,7 @@ func TestDiscoveryRefreshBackfillPreservesHardExclusionsOffline(t *testing.T) {
 	remote := &recommendationRemote{page: GamePage{}}
 	remote.err = errors.New("offline")
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{
 		GameQuery:         GameQuery{ExcludeIDs: []string{explicit.ID}},
 		RefreshExcludeIDs: []string{dismissed.ID, explicit.ID, owned.ID},
 		Limit:             3,
@@ -406,7 +406,7 @@ func TestDiscoveryRefreshKeepsExplicitExclusionsDuringBackfill(t *testing.T) {
 	old := Game{ID: "old-candidate", Title: "Previously shown", Genres: []string{"Strategy"}}
 	remote := &recommendationRemote{page: GamePage{Items: []Game{old, {ID: "fresh-candidate", Title: "Fresh candidate", Genres: []string{"Action"}}}}}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{
 		GameQuery:         GameQuery{ExcludeIDs: []string{old.ID}},
 		RefreshExcludeIDs: []string{old.ID},
 		Limit:             2,
@@ -440,7 +440,7 @@ func TestDiscoveryFetchesBoundedContinuationForExplainableCandidates(t *testing.
 		2: {{ID: "suitable", Title: "Suitable", Genres: []string{"Strategy"}}},
 	}}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{Limit: 1})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 1})
 	if result.Fallback || len(result.Items) != 1 || result.Items[0].Game.ID != "suitable" {
 		t.Fatalf("bounded remote discovery = %+v, fallback=%v", result.Items, result.Fallback)
 	}
@@ -463,7 +463,7 @@ func TestDiscoveryStopsAfterTwoSmallCandidatePages(t *testing.T) {
 		}
 	}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{})
 	if result.Fallback || len(result.Items) != 0 || len(remote.queries) != 2 {
 		t.Fatalf("candidate budget not respected: %+v, requests=%d", result, len(remote.queries))
 	}
@@ -490,7 +490,7 @@ func TestDiscoveryUsesOneLibrarySnapshotForProfileAndExclusions(t *testing.T) {
 	})
 	remote := &recommendationRemote{page: GamePage{Items: []Game{{ID: "pick", Title: "Pick", Genres: []string{"Strategy"}}}}}
 	s.SetRemoteCatalog(remote)
-	result := s.GetDiscovery(DiscoveryQuery{Limit: 1})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{Limit: 1})
 	if calls != 1 || result.Fallback || len(result.Items) != 1 || result.Profile.EvidenceGames != 1 {
 		t.Fatalf("incoherent discovery evidence: %+v, library calls=%d", result, calls)
 	}
@@ -502,7 +502,7 @@ func TestDiscoveryUsesOneLibrarySnapshotForProfileAndExclusions(t *testing.T) {
 func TestFailedDiscoveryReleasesBrowseSnapshot(t *testing.T) {
 	s := newTestService(t)
 	s.SetRemoteCatalog(&recommendationRemote{err: errors.New("offline")})
-	result := s.GetDiscovery(DiscoveryQuery{})
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{})
 	if !result.Fallback || len(s.browseSnapshots) != 0 {
 		t.Fatalf("failed preview leaked browse snapshot: %+v, snapshots=%d", result, len(s.browseSnapshots))
 	}
@@ -517,7 +517,7 @@ func TestDiscoveryPassesLargeLibraryButNotRefreshExclusionsToRemote(t *testing.T
 		owned[i] = RecommendationLibraryItem{CanonicalGameID: fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1000)}
 	}
 	s.SetRecommendationLibrarySource(func() []RecommendationLibraryItem { return owned })
-	result := s.GetDiscovery(DiscoveryQuery{
+	result := s.GetDiscovery(t.Context(), DiscoveryQuery{
 		GameQuery:         GameQuery{HideLibrary: true, HideNotInterested: true},
 		RefreshExcludeIDs: []string{"00000000-0000-0000-0000-000000000333"},
 		Limit:             1,

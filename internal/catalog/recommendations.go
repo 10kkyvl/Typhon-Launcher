@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -571,7 +572,7 @@ func topFacets(values map[string]float64) []RecommendationFacet {
 	return result
 }
 
-func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
+func (s *Service) GetDiscovery(ctx context.Context, q DiscoveryQuery) DiscoveryResult {
 	games, p, source, items, profile := s.recommendationSnapshotWithProfile()
 	limit := q.Limit
 	if limit <= 0 || limit > maxDiscoveryItems {
@@ -605,7 +606,7 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 		remoteQuery.Sort = "for-you"
 	}
 	remoteQuery = s.enrichRecommendationQueryWithSnapshot(remoteQuery, p, source, items, profile)
-	candidateGames, remoteOK := s.remoteDiscoveryGames(remoteQuery, func(candidateGames []Game) bool {
+	candidateGames, remoteOK := s.remoteDiscoveryGames(ctx, remoteQuery, func(candidateGames []Game) bool {
 		candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 		return len(diverseRecommendations(candidates, limit)) >= limit
 	})
@@ -650,7 +651,7 @@ func (s *Service) GetDiscovery(q DiscoveryQuery) DiscoveryResult {
 
 // q already carries the profile and exclusions used by the local ranker.
 // Freeze that same evidence without rescanning the library for the first page.
-func (s *Service) remoteDiscoveryGames(q GameQuery, enough func([]Game) bool) ([]Game, bool) {
+func (s *Service) remoteDiscoveryGames(ctx context.Context, q GameQuery, enough func([]Game) bool) ([]Game, bool) {
 	q.Page = 1
 	q.PageSize = discoveryPageSize
 	q.Revision = 0
@@ -660,7 +661,7 @@ func (s *Service) remoteDiscoveryGames(q GameQuery, enough func([]Game) bool) ([
 		delete(s.browseSnapshots, q.Snapshot)
 		s.mu.Unlock()
 	}()
-	page, err := s.browsePreparedGames(q, false)
+	page, err := s.browsePreparedGames(ctx, q, false)
 	if err != nil || page.Offline {
 		return nil, false
 	}
@@ -671,7 +672,7 @@ func (s *Service) remoteDiscoveryGames(q GameQuery, enough func([]Game) bool) ([
 		continuation.Snapshot = page.Snapshot
 		continuation.Revision = page.Revision
 		continuation.PageSize = q.PageSize
-		next, nextErr := s.browseGames(continuation, false)
+		next, nextErr := s.browseGames(ctx, continuation, false)
 		if nextErr != nil || next.Offline {
 			// The first page is still a valid, frozen result. Do not replace it
 			// with a different revision or turn a continuation failure into a

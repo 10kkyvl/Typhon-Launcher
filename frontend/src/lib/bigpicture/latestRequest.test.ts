@@ -47,4 +47,24 @@ describe('LatestRequestGate', () => {
 
     await expect(result).resolves.toEqual({ kind: 'stale' });
   });
+
+  it('aborts the previous request signal when a new one begins', () => {
+    const gate = new LatestRequestGate();
+    const first = gate.beginRequest();
+    expect(first.signal.aborted).toBe(false);
+
+    const second = gate.beginRequest();
+
+    expect(first.signal.aborted).toBe(true);
+    expect(second.signal.aborted).toBe(false);
+    expect(second.ticket).toBe(first.ticket + 1);
+  });
+
+  it('aborts a pending request signal on invalidate', () => {
+    const gate = new LatestRequestGate();
+    const { signal } = gate.beginRequest();
+    gate.invalidate();
+
+    expect(signal.aborted).toBe(true);
+  });
 });

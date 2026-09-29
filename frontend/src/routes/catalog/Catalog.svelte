@@ -27,8 +27,10 @@
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
   import {
     compatOnlyWorking,
+    isCancelledRequest,
     queryCatalogGames,
     type CatalogGame,
+    type CatalogQuery,
     type CompatInfo,
     type GenreFacet,
     type Source,
@@ -149,6 +151,7 @@
   }
 
   let token = 0;
+  let catalogAbort = new AbortController();
   let debounce: ReturnType<typeof setTimeout> | undefined;
   let identityRefreshKey = '';
   let identityRefreshRunning = false;
@@ -161,6 +164,7 @@
     clearTimeout(debounce);
     token++;
     reloadToken++;
+    catalogAbort.abort();
     stashRoute(routeKey, 'catalog', {
       revision, offline, incomplete, platform, kind, facets, platforms,
       sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
@@ -210,6 +214,7 @@
   async function fetchPage(next: number) {
     const current = ++token;
     const requestedSources = get(sources);
+    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
     loading = true;
     appending = next > 1;
     try {
@@ -224,8 +229,8 @@
         pageSize,
       };
       const continuation = await loadCatalogContinuation(
-        request, items, queryCatalogGames,
-        () => prefetch.take(JSON.stringify(request), () => queryCatalogGames(request)),
+        request, items, load,
+        () => prefetch.take(JSON.stringify(request), () => load(request)),
         () => current === token,
         offline,
       );
@@ -248,10 +253,10 @@
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
         const upcoming = { ...request, page: page + 1, revision, snapshot };
-        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
     } catch (err) {
-      if (current !== token) return;
+      if (current !== token || isCancelledRequest(err)) return;
       backendOutdated = errorCode(err) === "catalog.backend_outdated";
       prefetch.clear();
       if (next === 1) {
@@ -278,6 +283,8 @@
     if (!ready) return;
     const active = ++reloadToken;
     token++;
+    catalogAbort.abort();
+    catalogAbort = new AbortController();
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
@@ -399,6 +406,7 @@
     loading = true;
     appending = false;
     prefetch.clear();
+    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
     try {
       const request = {
         ...personalQuery(), revision, search, genre, platform, kind, sort,
@@ -406,8 +414,8 @@
         page: targetPage, pageSize,
       };
       const prefix = validateSnapshot
-        ? await refreshCatalogSnapshot(request, items, compatByGame, queryCatalogGames, () => current === token, offline)
-        : await reloadCatalogPrefix(request, targetPage, queryCatalogGames, () => current === token);
+        ? await refreshCatalogSnapshot(request, items, compatByGame, load, () => current === token, offline)
+        : await reloadCatalogPrefix(request, targetPage, load, () => current === token);
       if (current !== token) return;
       sourceState = get(sources);
       items = prefix.items;
@@ -435,7 +443,7 @@
           page: page + 1,
           pageSize,
         };
-        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
     } catch {
       if (current === token) prefetch.clear();
@@ -462,7 +470,7 @@
 
   function onSearch() {
     clearTimeout(debounce);
-    debounce = setTimeout(reload, 250);
+    debounce = setTimeout(() => void reload(false), 350);
   }
 
   function onSort(value: Sort) {
