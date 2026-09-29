@@ -170,6 +170,7 @@ func (h *harness) start() {
 	if err := h.svc.ServiceStartup(ctx, application.ServiceOptions{}); err != nil {
 		h.t.Fatalf("startup: %v", err)
 	}
+	h.svc.wg.Wait()
 	svc := h.svc
 	h.t.Cleanup(func() {
 		cancel()

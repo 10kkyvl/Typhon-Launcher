@@ -15,7 +15,7 @@ import (
 func TestRotationFailureKeepsTheNewCopyAndReportsTheError(t *testing.T) {
 	h := newHarness(t)
 	h.setLimit(1)
-	old := h.create()
+	old := snapOf(t, h, KindUpdate)
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "changed")
 	h.drain()
 
@@ -23,13 +23,13 @@ func TestRotationFailureKeepsTheNewCopyAndReportsTheError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snap, err := h.svc.Create(context.Background(), gameID)
+	snap, err := h.svc.SnapshotPath(context.Background(), gameID, h.saves, KindUpdate)
 	if closeErr := held.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
 
 	if err == nil || uierr.Code(err) != codeRotationFailed {
-		t.Fatalf("Create = %v, want a rotation error", err)
+		t.Fatalf("SnapshotPath = %v, want a rotation error", err)
 	}
 	if snap.ID == "" || !exists(t, snap.Path) {
 		t.Fatalf("snapshot = %+v, the copy must exist and be returned with the error", snap)
@@ -42,8 +42,9 @@ func TestRotationFailureKeepsTheNewCopyAndReportsTheError(t *testing.T) {
 		t.Fatal("the old copy disappeared although it could not be deleted")
 	}
 
-	if _, err := h.svc.Create(context.Background(), gameID); err != nil {
-		t.Fatalf("Create once the lock is gone: %v", err)
+	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "again")
+	if _, err := h.svc.SnapshotPath(context.Background(), gameID, h.saves, KindUpdate); err != nil {
+		t.Fatalf("SnapshotPath once the lock is gone: %v", err)
 	}
 	if got := len(h.list()); got != 1 {
 		t.Fatalf("%d snapshots after the retry, want the limit of 1", got)

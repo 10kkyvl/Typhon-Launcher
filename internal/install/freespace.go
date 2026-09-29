@@ -20,7 +20,7 @@ func CheckFreeSpace(path string, needed int64) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrNotEnoughSpace, err)
 	}
-	//nolint:gosec // G115: needed >= 0 checked above, the int64->uint64 conversion is exact
+	//nolint:gosec // G115, invariant 26: a negative size is refused above, so the int64->uint64 conversion is exact
 	if info.FreeBytes < uint64(needed) {
 		return fmt.Errorf("%w: нужно %d байт, свободно %d", ErrNotEnoughSpace, needed, info.FreeBytes)
 	}

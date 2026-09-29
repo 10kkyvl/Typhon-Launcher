@@ -84,7 +84,7 @@ func TestIDsDoNotCollideWithinOneSecond(t *testing.T) {
 	}
 }
 
-func TestRotationKeepsTheNewestAndNeverTheJustCreatedOnesVictim(t *testing.T) {
+func TestRotationKeepsTheNewestAutomaticCopies(t *testing.T) {
 	cases := []struct {
 		name  string
 		limit int
@@ -103,7 +103,7 @@ func TestRotationKeepsTheNewestAndNeverTheJustCreatedOnesVictim(t *testing.T) {
 			var ids []string
 			for i := 0; i < c.count; i++ {
 				writeFile(t, filepath.Join(h.saves, "slot1.sav"), strings.Repeat("x", i+1))
-				ids = append(ids, h.create().ID)
+				ids = append(ids, snapOf(t, h, KindUpdate).ID)
 			}
 			list := h.list()
 			if len(list) != c.want {
@@ -121,10 +121,10 @@ func TestRotationKeepsTheNewestAndNeverTheJustCreatedOnesVictim(t *testing.T) {
 func TestRotationSparesProtectedSnapshotAndBrokenOnes(t *testing.T) {
 	h := newHarness(t)
 	h.setLimit(1)
-	oldest := h.create()
+	oldest := snapOf(t, h, KindUpdate)
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "v2")
 	h.setLimit(5)
-	middle := h.create()
+	middle := snapOf(t, h, KindUpdate)
 	broken := filepath.Join(h.gameDir(), "20260101-000000-manual")
 	writeFile(t, filepath.Join(broken, snapshotFile), "{")
 	h.setLimit(1)
@@ -625,7 +625,7 @@ func TestConcurrentCreateDeleteListOnOneGame(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 6; i++ {
-				_, err := h.svc.Create(context.Background(), gameID)
+				_, err := h.svc.SnapshotPath(context.Background(), gameID, h.saves, KindUpdate)
 				report(err)
 			}
 		}()

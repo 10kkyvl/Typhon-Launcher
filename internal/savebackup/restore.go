@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/hashdir"
 	"typhon/internal/install"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -31,7 +32,40 @@ type journal struct {
 	Dest        string    `json:"dest"`
 	SnapshotID  string    `json:"snapshotId"`
 	HadPrevious bool      `json:"hadPrevious"`
+	Copying     bool      `json:"copying,omitempty"`
 	StartedAt   time.Time `json:"startedAt"`
+}
+
+func (s *Service) writeJournal(gameID string, j journal) error {
+	data, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	return storage.WriteAtomic(s.journalPath(gameID), data)
+}
+
+// checkIntegrity re-hashes the snapshot files against what snapshot.json
+// recorded. The snapshot is about to replace live saves, so a copy that rotted
+// on disk must be refused before anything is touched, not restored as if it
+// were good. The manifest is reused to verify the staging copy, so the
+// snapshot is read once.
+func (s *Service) checkIntegrity(ctx context.Context, snap Snapshot) (hashdir.Manifest, error) {
+	manifest, err := hashdir.Build(ctx, snap.Path, nil)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return hashdir.Manifest{}, ctxErr
+		}
+		return hashdir.Manifest{}, fmt.Errorf("%w: %w", errSnapshotBroken, err)
+	}
+	switch {
+	case len(manifest.Entries) != snap.Files:
+		return hashdir.Manifest{}, fmt.Errorf("%w: файлов %d, записано %d", errSnapshotBroken, len(manifest.Entries), snap.Files)
+	case manifest.TotalSize != snap.SizeBytes:
+		return hashdir.Manifest{}, fmt.Errorf("%w: размер %d, записано %d", errSnapshotBroken, manifest.TotalSize, snap.SizeBytes)
+	case digestOf(manifest.Entries) != snap.Digest:
+		return hashdir.Manifest{}, fmt.Errorf("%w: содержимое не совпало с записанным", errSnapshotBroken)
+	}
+	return manifest, nil
 }
 
 func (s *Service) journalPath(gameID string) string {
@@ -62,6 +96,10 @@ func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error 
 	}
 	if snap.Broken {
 		return fmt.Errorf("%w: %s", errSnapshotBroken, snap.Problem)
+	}
+	manifest, err := s.checkIntegrity(ctx, snap)
+	if err != nil {
+		return err
 	}
 	dest, exists, err := s.restoreTarget(ctx, gameID)
 	if err != nil {
@@ -99,17 +137,23 @@ func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error 
 	if err := install.CheckFreeSpace(filepath.Dir(dest), snap.SizeBytes); err != nil {
 		return uierr.Wrap(codeNoFreeSpace, err)
 	}
-	if err := install.CopyDirVerified(ctx, snap.Path, staging, nil); err != nil {
-		return errors.Join(fmt.Errorf("копирование сохранений из копии %s: %w", snapshotID, err), os.RemoveAll(staging))
-	}
 
-	j := journal{Dest: dest, SnapshotID: snapshotID, HadPrevious: exists, StartedAt: s.now().UTC()}
-	data, err := json.MarshalIndent(j, "", "  ")
-	if err != nil {
-		return errors.Join(err, os.RemoveAll(staging))
+	// The journal exists before the first byte reaches staging: a process that
+	// dies mid-copy leaves a staging folder that recovery knows to discard,
+	// instead of one that blocks every later restore as an unexplained leftover.
+	j := journal{Dest: dest, SnapshotID: snapshotID, HadPrevious: exists, Copying: true, StartedAt: s.now().UTC()}
+	if err := s.writeJournal(gameID, j); err != nil {
+		return err
 	}
-	if err := storage.WriteAtomic(s.journalPath(gameID), data); err != nil {
-		return errors.Join(err, os.RemoveAll(staging))
+	if err := install.CopyDir(ctx, snap.Path, staging, nil); err != nil {
+		return errors.Join(fmt.Errorf("копирование сохранений из копии %s: %w", snapshotID, err), s.resolve(gameID, j))
+	}
+	if err := verifyFiles(ctx, staging, manifest); err != nil {
+		return errors.Join(err, s.resolve(gameID, j))
+	}
+	j.Copying = false
+	if err := s.writeJournal(gameID, j); err != nil {
+		return errors.Join(err, s.resolve(gameID, j))
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -234,6 +278,10 @@ func (s *Service) resolve(gameID string, j journal) error {
 
 	var step error
 	switch {
+	case j.Copying && prev:
+		return fmt.Errorf("копирование в %s не завершено, но каталог предыдущих сохранений уже есть", staging)
+	case j.Copying:
+		step = os.RemoveAll(staging)
 	case prev && !dest:
 		step = os.Rename(previous, j.Dest)
 		if step == nil && stage {
@@ -278,12 +326,10 @@ func (s *Service) sweepPartials(gameID string) error {
 	return errors.Join(errs...)
 }
 
-// recoverAll runs recovery for every game that has state on disk. A game that
-// cannot be recovered is logged and left blocked: each later operation on it
-// repeats the recovery and returns its error, which is better than refusing to
-// start the whole launcher over one saves folder. Only an unreadable root is
-// fatal, because then nothing can be said about any game.
-func (s *Service) recoverAll(ctx context.Context) error {
+// recoveryTargets lists every game that has state on disk. Only an unreadable
+// root is fatal, because then nothing can be said about any game; the listing
+// is cheap and stays synchronous so that failure still stops the startup.
+func (s *Service) recoveryTargets() ([]string, error) {
 	ids := map[string]bool{}
 	for _, dir := range []string{s.root, s.legacyRoot} {
 		info, err := os.Stat(dir)
@@ -291,14 +337,14 @@ func (s *Service) recoverAll(ctx context.Context) error {
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("чтение %s: %w", dir, err)
+			return nil, fmt.Errorf("чтение %s: %w", dir, err)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("%s не является папкой", dir)
+			return nil, fmt.Errorf("%s не является папкой", dir)
 		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return fmt.Errorf("чтение %s: %w", dir, err)
+			return nil, fmt.Errorf("чтение %s: %w", dir, err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
@@ -310,19 +356,31 @@ func (s *Service) recoverAll(ctx context.Context) error {
 			}
 		}
 	}
+	out := make([]string, 0, len(ids))
 	for id := range ids {
-		if err := ctx.Err(); err != nil {
-			return err
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+// recoverGames runs in the background after startup: hashing a legacy
+// snapshot must not delay the launcher. Nothing depends on it having finished,
+// because every operation on a game runs recoverGame itself under the same
+// game lock. A game that cannot be recovered is logged here and reports the
+// same error from each later operation on it.
+func (s *Service) recoverGames(ctx context.Context, ids []string) {
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
 		}
 		unlock := s.lockGame(id)
 		err := s.recoverGame(ctx, id)
 		unlock()
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return
 		}
 		if err != nil {
 			slog.Error("save backups recovery failed", "game", id, "error", err)
 		}
 	}
-	return nil
 }

@@ -169,9 +169,9 @@ func TestRestoreIntoADeletedSavesFolder(t *testing.T) {
 func TestRestoreOfTheOldestSnapshotSurvivesItsOwnSafetyCopy(t *testing.T) {
 	h := newHarness(t)
 	h.setLimit(2)
-	oldest := h.create()
+	oldest := snapOf(t, h, KindUpdate)
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "v2")
-	h.create()
+	snapOf(t, h, KindUpdate)
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "v3")
 	if got := len(h.list()); got != 2 {
 		t.Fatalf("%d snapshots before the restore, want 2", got)

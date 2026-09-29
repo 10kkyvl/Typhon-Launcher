@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -71,8 +72,13 @@ func validName(s string) bool {
 	return true
 }
 
+var snapshotIDPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-(manual|session|update|pre-restore)(-[0-9]+)?$`)
+
+// validSnapshotID accepts exactly the shape reserveID generates, so that no
+// other file in a game directory (the restore journal, a stray file) can be
+// addressed as a snapshot.
 func validSnapshotID(s string) bool {
-	return validName(s) && !strings.HasSuffix(s, partialSuffix) && !strings.Contains(s, "..")
+	return snapshotIDPattern.MatchString(s)
 }
 
 func digestOf(entries []hashdir.Entry) string {
@@ -113,8 +119,22 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 	if err != nil {
 		return Snapshot{}, false, err
 	}
-	if dup, ok := duplicate(existing, digest, kind, opts.dedup); ok {
-		return dup, false, nil
+	// A skipped copy must not rest on a Digest that nobody re-checked when the
+	// skip leads to deleting live data (a safety copy before a restore, the
+	// legacy folder in a migration). A session copy is different: skipping it
+	// only means no new copy, and the saves it would have protected are still
+	// on disk, so the recorded Digest is enough there.
+	for _, dup := range duplicates(existing, digest, kind, opts.dedup) {
+		if kind != KindPreRestore && opts.dedup != dedupAny {
+			return dup, false, nil
+		}
+		err := verifyFiles(ctx, dup.Path, manifest)
+		if err == nil {
+			return dup, false, nil
+		}
+		if !errors.Is(err, errVerify) {
+			return Snapshot{}, false, err
+		}
 	}
 
 	gameDir := s.gameDir(gameID)
@@ -178,24 +198,27 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 	return snap, true, nil
 }
 
-func duplicate(existing []Snapshot, digest string, kind Kind, mode dedupMode) (Snapshot, bool) {
+func duplicates(existing []Snapshot, digest string, kind Kind, mode dedupMode) []Snapshot {
+	var out []Snapshot
 	for _, snap := range existing {
 		if snap.Broken {
 			continue
 		}
 		switch mode {
 		case dedupLatest:
-			return snap, snap.Digest == digest
+			if snap.Digest == digest {
+				out = append(out, snap)
+			}
+			return out
 		case dedupAny:
 			if snap.Kind == kind && snap.Digest == digest {
-				return snap, true
+				out = append(out, snap)
 			}
-		}
-		if mode != dedupAny {
-			break
+		default:
+			return nil
 		}
 	}
-	return Snapshot{}, false
+	return out
 }
 
 func verifyFiles(ctx context.Context, dir string, manifest hashdir.Manifest) error {
@@ -349,9 +372,11 @@ func readLimited(path string, limit int64) ([]byte, error) {
 	return data, nil
 }
 
-// rotate keeps the newest Limit valid snapshots plus every protected one and
-// removes the rest. Broken snapshots are neither counted nor removed: nothing
-// about them can be trusted, so the player decides.
+// rotate keeps the newest Limit automatic snapshots (session, update,
+// pre-restore) plus every protected one and removes the rest. Manual copies
+// belong to the player and are neither counted nor removed. Broken snapshots
+// are neither counted nor removed: nothing about them can be trusted, so the
+// player decides.
 func (s *Service) rotate(ctx context.Context, gameID string, keep ...string) error {
 	limit := max(s.config().SaveBackupLimit, 1)
 	list, err := s.list(ctx, gameID)
@@ -361,7 +386,7 @@ func (s *Service) rotate(ctx context.Context, gameID string, keep ...string) err
 	kept := 0
 	var errs []error
 	for _, snap := range list {
-		if snap.Broken {
+		if snap.Broken || snap.Kind == KindManual {
 			continue
 		}
 		if slices.Contains(keep, snap.ID) || kept < limit {

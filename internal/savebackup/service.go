@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -95,13 +97,19 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.ctx, s.cancel = runCtx, cancel
 	s.mu.Unlock()
 
-	if err := s.recoverAll(runCtx); err != nil {
+	ids, err := s.recoveryTargets()
+	if err != nil {
 		s.mu.Lock()
 		s.ctx, s.cancel = nil, nil
 		s.mu.Unlock()
 		cancel()
 		return err
 	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.recoverGames(runCtx, ids)
+	}()
 	return nil
 }
 
@@ -246,11 +254,22 @@ func (s *Service) Delete(gameID, snapshotID string) error {
 	unlock := s.lockGame(gameID)
 	defer unlock()
 
+	dir := filepath.Join(s.gameDir(gameID), snapshotID)
+	info, err := os.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errSnapshotNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errSnapshotNotFound
+	}
 	snap, ok := s.readSnapshot(gameID, snapshotID)
 	if !ok {
 		return errSnapshotNotFound
 	}
-	if err := removeSnapshotDir(filepath.Join(s.gameDir(gameID), snapshotID)); err != nil {
+	if err := removeSnapshotDir(dir); err != nil {
 		return fmt.Errorf("удаление копии %s: %w", snapshotID, err)
 	}
 	s.emit(Event{GameID: gameID, Kind: snap.Kind, Snapshot: &snap, Status: StatusDeleted})
