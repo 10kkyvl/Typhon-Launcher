@@ -6,6 +6,7 @@
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
+  import NetworkBanner from './NetworkBanner.svelte';
   import OfflineBanner from './OfflineBanner.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
@@ -22,6 +23,7 @@
     {#if $isOffline}
       <OfflineBanner />
     {/if}
+    <NetworkBanner />
     {#key $route}
       <main class="content" use:scrollmemory>
         <div class="page">

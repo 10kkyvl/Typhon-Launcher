@@ -166,4 +166,9 @@ export const ui: Record<UiKey, Message> = {
   'ui.changeRemoved': 'Removed',
   'ui.versionLabel': 'Version {version}',
   'ui.versionInstalledMark': 'installed',
+
+  'ui.networkBannerInterface': 'VPN is disconnected — downloads and seeding are paused',
+  'ui.networkBannerProxy': 'The proxy is unavailable — downloads and seeding are paused',
+  'ui.networkBannerSettings': 'Network settings',
+  'ui.networkRestoredToast': 'The torrent network is available again — downloads will resume',
 };

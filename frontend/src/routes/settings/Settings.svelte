@@ -25,6 +25,7 @@
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
+  import NetworkSettingsCard from './NetworkSettingsCard.svelte';
   import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
@@ -667,6 +668,8 @@
           </div>
         </div>
       </Card>
+
+      <NetworkSettingsCard />
 
       <Card title={msg('settings.downloadsUpdatesCardTitle')}>
         <div class="rows">

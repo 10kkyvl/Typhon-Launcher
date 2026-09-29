@@ -164,6 +164,11 @@ export const ui = {
   'ui.changeRemoved': 'Удалено',
   'ui.versionLabel': 'Версия {version}',
   'ui.versionInstalledMark': 'установлена',
+
+  'ui.networkBannerInterface': 'VPN отключён — загрузки и раздачи на паузе',
+  'ui.networkBannerProxy': 'Прокси недоступен — загрузки и раздачи на паузе',
+  'ui.networkBannerSettings': 'Настройки сети',
+  'ui.networkRestoredToast': 'Сеть для торрентов снова доступна — загрузки продолжатся',
 } as const;
 
 export type UiKey = keyof typeof ui;

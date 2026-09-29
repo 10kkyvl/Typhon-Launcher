@@ -15,6 +15,7 @@
   import { initHistory } from './lib/stores/history';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
+  import { initNetwork } from './lib/stores/network';
   import { locale } from './lib/i18n';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
@@ -49,6 +50,7 @@
   onDestroy(initNativeLanguage());
   initDegradedNotices();
   initDownloads();
+  initNetwork();
   initInstalls();
   refreshStorage();
   initLibrary();

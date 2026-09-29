@@ -39,6 +39,12 @@ export interface Settings {
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
   lanSharing: boolean;
+  networkMode: string;
+  networkInterface: string;
+  proxyType: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxyUsername: string;
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
@@ -87,6 +93,12 @@ const fallbackDefaults: Settings = {
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
   lanSharing: false,
+  networkMode: 'direct',
+  networkInterface: '',
+  proxyType: 'socks5',
+  proxyHost: '',
+  proxyPort: 0,
+  proxyUsername: '',
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
   anonymousDiagnostics: true,
