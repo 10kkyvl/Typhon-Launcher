@@ -65,6 +65,7 @@ type Event struct {
 
 var (
 	errNotStarted       = uierr.New("savebackup.not_started", "сервис резервных копий сохранений не запущен")
+	errDisabled         = uierr.New("savebackup.disabled", "резервные копии сохранений пока недоступны")
 	errInvalidID        = uierr.New("savebackup.invalid_id", "некорректный идентификатор")
 	errInvalidKind      = uierr.New("savebackup.invalid_kind", "неизвестный вид резервной копии")
 	errSavesNotFound    = uierr.New("savebackup.saves_not_found", "папка сохранений не найдена")

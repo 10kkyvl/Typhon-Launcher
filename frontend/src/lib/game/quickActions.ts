@@ -35,6 +35,7 @@ export interface QuickActionState {
   lanShared: boolean;
   favorite: boolean;
   status: string;
+  saveBackups: boolean;
 }
 
 function markItems(state: QuickActionState): QuickActionItem[] {
@@ -62,7 +63,9 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   items.push(...markItems(state));
   items.push({ id: 'folder', label: msg('games.openFolder') });
   items.push({ id: 'saves', label: msg('games.actionOpenSaves') });
-  items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
+  if (state.saveBackups) {
+    items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
+  }
   items.push({ id: 'verify', label: msg('games.actionVerify') });
   if (!state.running) {
     items.push({ id: 'move', label: msg('games.actionMove') });

@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { onBackupEvent } from '../services/savebackup';
+import { backupsEnabled, onBackupEvent } from '../services/savebackup';
 import { saveBackupCodeText } from '../savebackup/messages';
 import { msg } from '../i18n';
 import { libraryGames } from './library';
@@ -11,6 +11,7 @@ export interface SaveBackupTarget {
 }
 
 export const saveBackupTarget = writable<SaveBackupTarget | null>(null);
+export const saveBackupsEnabled = writable(false);
 
 export function openSaveBackups(gameId: string) {
   const game = get(libraryGames).find((g) => g.id === gameId);
@@ -23,6 +24,10 @@ export function closeSaveBackups() {
 }
 
 export function initSaveBackups() {
+  backupsEnabled().then(
+    (on) => saveBackupsEnabled.set(on),
+    () => saveBackupsEnabled.set(false),
+  );
   onBackupEvent((event) => {
     if (event.kind === 'manual') return;
     const title = get(libraryGames).find((g) => g.id === event.gameId)?.title ?? '';

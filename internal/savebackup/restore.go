@@ -73,6 +73,9 @@ func (s *Service) journalPath(gameID string) string {
 }
 
 func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error {
+	if !s.enabled {
+		return errDisabled
+	}
 	ctx, end, err := s.begin(ctx)
 	if err != nil {
 		return err

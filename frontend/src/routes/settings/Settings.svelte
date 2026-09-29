@@ -48,6 +48,7 @@
     type WineStatus,
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
@@ -706,30 +707,32 @@
               onchange={(v) => set({ updateSaveBackup: v })}
             />
           </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
+          {#if $saveBackupsEnabled}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.saveBackupAfterSession ?? true}
+                label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
+                onchange={(v) => set({ saveBackupAfterSession: v })}
+              />
             </div>
-            <Toggle
-              checked={current?.saveBackupAfterSession ?? true}
-              label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
-              onchange={(v) => set({ saveBackupAfterSession: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
+              </div>
+              <IntegerInput
+                value={current?.saveBackupLimit ?? 5}
+                min={1}
+                max={50}
+                label={msg('settings.downloadsSaveBackupLimitField')}
+                onchange={(n) => set({ saveBackupLimit: n })}
+              />
             </div>
-            <IntegerInput
-              value={current?.saveBackupLimit ?? 5}
-              min={1}
-              max={50}
-              label={msg('settings.downloadsSaveBackupLimitField')}
-              onchange={(n) => set({ saveBackupLimit: n })}
-            />
-          </div>
+          {/if}
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>

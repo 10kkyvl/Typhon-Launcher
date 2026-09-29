@@ -1,6 +1,7 @@
 export const errSaves = {
   'savebackup.fallback': 'Не удалось выполнить действие с резервной копией',
   'savebackup.not_started': 'Сервис резервных копий ещё не запущен',
+  'savebackup.disabled': 'Резервные копии сохранений пока недоступны',
   'savebackup.invalid_id': 'Некорректный идентификатор игры или копии',
   'savebackup.invalid_kind': 'Неизвестный вид резервной копии',
   'savebackup.saves_not_found': 'Папка сохранений не найдена. Укажите её вручную',

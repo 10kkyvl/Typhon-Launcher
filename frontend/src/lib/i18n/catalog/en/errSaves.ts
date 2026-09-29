@@ -4,6 +4,7 @@ import type { ErrSavesKey } from '../ru/errSaves';
 export const errSaves: Record<ErrSavesKey, Message> = {
   'savebackup.fallback': 'Could not complete the backup action',
   'savebackup.not_started': 'The backup service is not running yet',
+  'savebackup.disabled': 'Save backups are not available yet',
   'savebackup.invalid_id': 'Invalid game or backup identifier',
   'savebackup.invalid_kind': 'Unknown backup kind',
   'savebackup.saves_not_found': 'Save folder not found. Specify it manually',

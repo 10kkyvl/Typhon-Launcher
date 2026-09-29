@@ -30,6 +30,11 @@ export interface BackupEvent {
 
 const unavailable = () => new Error('unavailable in browser');
 
+export async function backupsEnabled(): Promise<boolean> {
+  if (!inWails) return false;
+  return await SaveBackupService.Enabled();
+}
+
 export async function listBackups(gameId: string): Promise<Snapshot[]> {
   if (!inWails) throw unavailable();
   return ((await SaveBackupService.List(gameId)) ?? []) as unknown as Snapshot[];

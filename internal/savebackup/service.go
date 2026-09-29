@@ -24,6 +24,11 @@ const (
 	legacyDirName = "saves"
 )
 
+// playerBackups gates everything the player can reach: the window, the Wails
+// methods and the copy after a session. The pre-update snapshot goes through
+// SnapshotPath and keeps working either way, as it did before this service.
+const playerBackups = false
+
 type games interface {
 	Find(id string) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
@@ -37,6 +42,7 @@ type Service struct {
 	games      games
 	emit       func(Event)
 	now        func() time.Time
+	enabled    bool
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -57,7 +63,12 @@ func NewService(settingsService *settings.Service, lib *library.Service) (*Servi
 	if err != nil {
 		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	return newServiceAt(dir, settingsService.GetSettings, lib)
+	s, err := newServiceAt(dir, settingsService.GetSettings, lib)
+	if err != nil {
+		return nil, err
+	}
+	s.enabled = playerBackups
+	return s, nil
 }
 
 func newServiceAt(dir string, config func() settings.Settings, g games) (*Service, error) {
@@ -78,7 +89,12 @@ func newServiceAt(dir string, config func() settings.Settings, g games) (*Servic
 		emit:       emitEvent,
 		now:        time.Now,
 		locks:      map[string]*sync.Mutex{},
+		enabled:    true,
 	}, nil
+}
+
+func (s *Service) Enabled() bool {
+	return s.enabled
 }
 
 func emitEvent(ev Event) {
@@ -173,6 +189,9 @@ func (s *Service) gameDir(id string) string {
 }
 
 func (s *Service) List(ctx context.Context, gameID string) ([]Snapshot, error) {
+	if !s.enabled {
+		return nil, errDisabled
+	}
 	ctx, end, err := s.begin(ctx)
 	if err != nil {
 		return nil, err
@@ -185,6 +204,9 @@ func (s *Service) List(ctx context.Context, gameID string) ([]Snapshot, error) {
 }
 
 func (s *Service) Create(ctx context.Context, gameID string) (Snapshot, error) {
+	if !s.enabled {
+		return Snapshot{}, errDisabled
+	}
 	ctx, end, err := s.begin(ctx)
 	if err != nil {
 		return Snapshot{}, err
@@ -243,6 +265,9 @@ func (s *Service) SnapshotPath(ctx context.Context, gameID, sourcePath string, k
 }
 
 func (s *Service) Delete(gameID, snapshotID string) error {
+	if !s.enabled {
+		return errDisabled
+	}
 	_, end, err := s.beginRooted()
 	if err != nil {
 		return err
@@ -286,7 +311,7 @@ func (s *Service) SessionStarted(library.Game) {}
 
 //wails:ignore
 func (s *Service) SessionStopped(gameID string) {
-	if !s.config().SaveBackupAfterSession {
+	if !s.enabled || !s.config().SaveBackupAfterSession {
 		return
 	}
 	s.mu.Lock()

@@ -24,7 +24,7 @@
   import { closeGameMenu, gameMenu } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
-  import { openSaveBackups } from '../stores/savebackup';
+  import { openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
   import { errorMessage } from '../utils/errors';
@@ -43,6 +43,7 @@
           lanShared: $shares.some((s) => s.gameId === game.id),
           favorite: Boolean(game.favorite),
           status: game.status ?? '',
+          saveBackups: $saveBackupsEnabled,
         })
       : [],
   );
