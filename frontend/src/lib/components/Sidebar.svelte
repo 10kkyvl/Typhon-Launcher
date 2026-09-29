@@ -16,9 +16,13 @@
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
+  import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
   import Avatar from './Avatar.svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuItem } from './DropdownMenu.svelte';
+
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -86,9 +90,21 @@
       }
       return;
     }
+    if (id === 'logout') {
+      pending = { prompt: signOutPrompt(), run: signOutNow };
+      return;
+    }
+    if (id !== 'login') return;
     try {
-      if (id === 'login') await leaveGuest();
-      else await signOut();
+      await leaveGuest();
+    } catch (err) {
+      toast(accountErrorText(err, msg('ui.signOutFailed')), 'danger');
+    }
+  }
+
+  async function signOutNow() {
+    try {
+      await signOut();
     } catch (err) {
       toast(accountErrorText(err, msg('ui.signOutFailed')), 'danger');
     }
@@ -168,6 +184,10 @@
     </DropdownMenu>
   </div>
 </aside>
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .sidebar {

@@ -22,6 +22,8 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.coverInvalid': 'Choose a JPG, PNG or WebP up to 8 MB.',
   'profile.coverDecode': 'Could not read this image. Choose another file.',
   'profile.removeCover': 'Remove cover',
+  'profile.removeCoverConfirm': 'Remove the cover? The change applies once you save.',
+  'profile.resetConfirm': 'Reset the profile appearance to the default? The change applies once you save.',
   'profile.showcases': 'Showcases',
   'profile.showcaseEmpty': 'No games in this showcase yet',
   'profile.privacy': 'Profile privacy',

@@ -19,6 +19,7 @@ export const ui = {
   'ui.avatarChange': 'Сменить аватар',
   'ui.avatarRemoving': 'Удаление…',
   'ui.avatarRemove': 'Удалить аватар',
+  'ui.avatarRemoveConfirm': 'Удалить аватар? Вернуть его можно только загрузив заново.',
 
   'ui.update': 'Обновление',
   'ui.repair': 'Восстановление',
@@ -83,6 +84,7 @@ export const ui = {
   'ui.profile': 'Профиль',
   'ui.signIn': 'Войти в аккаунт',
   'ui.signOut': 'Выйти',
+  'ui.signOutConfirm': 'Выйти из аккаунта?',
   'ui.statusChangeFailed': 'Не удалось сменить статус',
   'ui.presenceAutoAwayHint': 'Отошёл: нет активности. Вернётесь за компьютер — статус вернётся сам',
   'ui.signOutFailed': 'Не удалось выйти',

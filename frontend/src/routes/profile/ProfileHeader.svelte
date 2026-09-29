@@ -3,9 +3,11 @@
   import Avatar from '../../lib/components/Avatar.svelte';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
+  import { signOutPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import type { GameRef, ProfileStats as ProfileStatsData } from '../../lib/services/profile';
   import { joinDate } from '../../lib/social/view';
@@ -43,6 +45,7 @@
   let draft = $state({ displayName: '', username: '', bio: '' });
   let fieldErrors = $state<{ displayName?: string; username?: string; bio?: string; general?: string }>({});
   let busy = $state(false);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   const isGuest = $derived($authState === 'guest');
 
@@ -109,7 +112,7 @@
     } else if (id === 'settings') {
       onsettings();
     } else if (id === 'signout') {
-      await run(signOut, msg('social.signOutFailed'));
+      pending = { prompt: signOutPrompt(), run: () => run(signOut, msg('social.signOutFailed')) };
     }
   }
 
@@ -246,6 +249,10 @@
     {/if}
   </div>
 </section>
+
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+{/if}
 
 <style>
   .header-surface { padding: 0 0 2rem; position: relative; }

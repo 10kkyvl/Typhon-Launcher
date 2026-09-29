@@ -22,6 +22,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.avatarChange': 'Change avatar',
   'ui.avatarRemoving': 'Removing…',
   'ui.avatarRemove': 'Remove avatar',
+  'ui.avatarRemoveConfirm': 'Remove your avatar? You can only get it back by uploading it again.',
 
   'ui.update': 'Update',
   'ui.repair': 'Repair',
@@ -85,6 +86,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.profile': 'Profile',
   'ui.signIn': 'Sign in',
   'ui.signOut': 'Sign out',
+  'ui.signOutConfirm': 'Sign out of your account?',
   'ui.statusChangeFailed': "Couldn't change status",
   'ui.presenceAutoAwayHint': 'Away: no activity. The status comes back on its own once you are back at the computer',
   'ui.signOutFailed': "Couldn't sign out",
