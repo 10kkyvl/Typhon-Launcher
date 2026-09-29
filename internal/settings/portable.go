@@ -24,6 +24,8 @@ type Portable struct {
 	UpdateSaveBackup         *bool    `json:"updateSaveBackup,omitempty"`
 	KeepPreviousVersion      *string  `json:"keepPreviousVersion,omitempty"`
 	AllowTorrentReuse        *bool    `json:"allowTorrentReuse,omitempty"`
+	SaveBackupAfterSession   *bool    `json:"saveBackupAfterSession,omitempty"`
+	SaveBackupLimit          *int     `json:"saveBackupLimit,omitempty"`
 }
 
 func PortableOf(s Settings) Portable {
@@ -51,6 +53,8 @@ func PortableOf(s Settings) Portable {
 		UpdateSaveBackup:         &s.UpdateSaveBackup,
 		KeepPreviousVersion:      &s.KeepPreviousVersion,
 		AllowTorrentReuse:        &s.AllowTorrentReuse,
+		SaveBackupAfterSession:   &s.SaveBackupAfterSession,
+		SaveBackupLimit:          &s.SaveBackupLimit,
 	}
 }
 
@@ -78,7 +82,15 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.UpdateSaveBackup, p.UpdateSaveBackup)
 	applyString(&s.KeepPreviousVersion, p.KeepPreviousVersion)
 	applyBool(&s.AllowTorrentReuse, p.AllowTorrentReuse)
+	applyBool(&s.SaveBackupAfterSession, p.SaveBackupAfterSession)
+	applyInt(&s.SaveBackupLimit, p.SaveBackupLimit)
 	return s
+}
+
+func applyInt(dst *int, src *int) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 func applyString(dst *string, src *string) {

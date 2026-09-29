@@ -42,6 +42,7 @@ import (
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
 	"typhon/internal/reviews"
+	"typhon/internal/savebackup"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -132,6 +133,7 @@ func init() {
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[savebackup.Event](savebackup.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
@@ -351,7 +353,11 @@ func main() {
 		fatal("start discovery service", err)
 	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
-	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
+	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
+	if err != nil {
+		fatal("start save backup service", err)
+	}
+	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
 	}
@@ -447,6 +453,7 @@ func main() {
 		return accountService.CurrentProfileSettings().Showcase
 	})
 	libraryService.AddSessionWatcher(presenceWatcher)
+	libraryService.AddSessionWatcher(saveBackupService)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
@@ -540,6 +547,7 @@ func main() {
 		application.NewService(sourcesService),
 		application.NewService(searchService),
 		application.NewService(updateService),
+		application.NewService(saveBackupService),
 		application.NewService(metadataService),
 		application.NewService(discoveryService),
 		application.NewService(discordService),

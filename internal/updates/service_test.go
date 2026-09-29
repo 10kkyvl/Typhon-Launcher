@@ -210,7 +210,9 @@ type harness struct {
 	releases   *fakeReleases
 	downloads  *fakeDownloads
 	installer  *fakeInstaller
+	saves      *fakeSaveBackups
 	installDir string
+	configDir  string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -243,8 +245,10 @@ func newHarness(t *testing.T) *harness {
 		releases:   &fakeReleases{list: []sources.Release{release("r1", "1.0", 10<<20), release("r2", "1.1", 12<<20)}},
 		downloads:  newFakeDownloads(),
 		installDir: installDir,
+		configDir:  filepath.Join(root, "config"),
+		saves:      &fakeSaveBackups{root: filepath.Join(root, "snapshots")},
 	}
-	svc, err := newServiceAt(filepath.Join(root, "config"), nil)
+	svc, err := newServiceAt(h.configDir, nil)
 	if err != nil {
 		t.Fatalf("new updates service: %v", err)
 	}
@@ -252,6 +256,7 @@ func newHarness(t *testing.T) *harness {
 	h.service.library = h.library
 	h.service.releases = h.releases
 	h.service.downloads = h.downloads
+	h.service.saves = h.saves
 	h.installer = &fakeInstaller{
 		service: h.service,
 		files:   map[string]string{"game.exe": "new executable", "data/pak0.pak": "new data"},

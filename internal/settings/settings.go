@@ -41,6 +41,10 @@ const (
 	KeepPreviousFirstLaunch = "first_launch"
 	KeepPreviousDay         = "24h"
 
+	DefaultSaveBackupLimit = 5
+	MinSaveBackupLimit     = 1
+	MaxSaveBackupLimit     = 50
+
 	LibraryFolderName = "TyphonLibrary"
 
 	// CurrentTelemetryConsent is the version of the consent prompt this build
@@ -110,6 +114,9 @@ type Settings struct {
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
+	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
+	SaveBackupLimit        int  `json:"saveBackupLimit"`
+
 	LANSharing bool `json:"lanSharing"`
 
 	PresenceStatus   string `json:"presenceStatus"`
@@ -178,6 +185,9 @@ func Defaults() Settings {
 		UpdateSaveBackup:         true,
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
+
+		SaveBackupAfterSession: true,
+		SaveBackupLimit:        DefaultSaveBackupLimit,
 
 		LANSharing: false,
 
@@ -356,6 +366,12 @@ func sanitize(s Settings) (Settings, error) {
 	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
 	default:
 		s.KeepPreviousVersion = KeepPreviousFirstLaunch
+	}
+	if s.SaveBackupLimit < MinSaveBackupLimit {
+		s.SaveBackupLimit = MinSaveBackupLimit
+	}
+	if s.SaveBackupLimit > MaxSaveBackupLimit {
+		s.SaveBackupLimit = MaxSaveBackupLimit
 	}
 	return s, nil
 }

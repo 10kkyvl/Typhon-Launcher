@@ -31,6 +31,8 @@ var portableNames = []string{
 	"updateSaveBackup",
 	"keepPreviousVersion",
 	"allowTorrentReuse",
+	"saveBackupAfterSession",
+	"saveBackupLimit",
 }
 
 var localNames = []string{

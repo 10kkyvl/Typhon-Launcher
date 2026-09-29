@@ -17,6 +17,7 @@ import (
 	"typhon/internal/history"
 	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/savebackup"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
 	"typhon/internal/uierr"
@@ -117,6 +118,7 @@ type Service struct {
 	releases       releaseSource
 	downloads      downloadSource
 	installs       installer
+	saves          saveBackups
 	store          *store
 
 	updates       map[string]*Update
@@ -144,6 +146,7 @@ func NewService(
 	releases *sources.Service,
 	downloads *download.Manager,
 	installs *install.Service,
+	saves *savebackup.Service,
 ) (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
@@ -164,6 +167,9 @@ func NewService(
 	}
 	if installs != nil {
 		s.installs = installs
+	}
+	if saves != nil {
+		s.saves = saves
 	}
 	return s, nil
 }

@@ -6,10 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"typhon/internal/install"
 	"typhon/internal/library"
+	"typhon/internal/savebackup"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
 )
@@ -248,13 +251,50 @@ func TestPlanFailsWhenTheSavesLocationCannotBeRead(t *testing.T) {
 	}
 }
 
+type saveBackupCall struct {
+	gameID string
+	source string
+	kind   savebackup.Kind
+}
+
+type fakeSaveBackups struct {
+	root        string
+	mu          sync.Mutex
+	calls       []saveBackupCall
+	err         error
+	rotationErr error
+}
+
+func (f *fakeSaveBackups) SnapshotPath(ctx context.Context, gameID, sourcePath string, kind savebackup.Kind) (savebackup.Snapshot, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, saveBackupCall{gameID: gameID, source: sourcePath, kind: kind})
+	err, rotationErr := f.err, f.rotationErr
+	f.mu.Unlock()
+	if err != nil {
+		return savebackup.Snapshot{}, err
+	}
+	files := filepath.Join(f.root, gameID, "snap-1", "files")
+	if err := install.CopyDirVerified(ctx, sourcePath, files, nil); err != nil {
+		return savebackup.Snapshot{}, err
+	}
+	return savebackup.Snapshot{ID: "snap-1", GameID: gameID, Kind: kind, SourcePath: sourcePath, Path: files}, rotationErr
+}
+
+func (f *fakeSaveBackups) recorded() []saveBackupCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]saveBackupCall(nil), f.calls...)
+}
+
 // TestUpdateSnapshotsSavesBeforeTheFirstWrite is the switch actually doing
 // what it says: the snapshot exists after the update, outside the
-// installation the update rewrote.
+// installation the update rewrote, and it was taken by the save backup
+// service rather than by a copy of the update's own.
 func TestUpdateSnapshotsSavesBeforeTheFirstWrite(t *testing.T) {
 	h := newHarness(t)
+	savesDir := filepath.Join(h.installDir, "saves")
 	h.library.mu.Lock()
-	h.library.saves = filepath.Join(h.installDir, "saves")
+	h.library.saves = savesDir
 	h.library.mu.Unlock()
 	h.plan(t)
 
@@ -274,15 +314,97 @@ func TestUpdateSnapshotsSavesBeforeTheFirstWrite(t *testing.T) {
 	if within, err := filepath.Rel(h.installDir, u.SavesBackup); err == nil && !filepath.IsAbs(within) && within[0] != '.' {
 		t.Fatalf("snapshot %q sits inside the installation the update replaces", u.SavesBackup)
 	}
+	calls := h.saves.recorded()
+	want := saveBackupCall{gameID: "local-1", source: savesDir, kind: savebackup.KindUpdate}
+	if len(calls) != 1 || calls[0] != want {
+		t.Fatalf("snapshot calls = %+v, want exactly %+v", calls, want)
+	}
+}
+
+// TestUpdateDoesNotCopySavesItself covers the duplicate the save backup
+// service replaced: one owner of the copies means the old <config>/saves
+// directory must never come back.
+func TestUpdateDoesNotCopySavesItself(t *testing.T) {
+	h := newHarness(t)
+	h.saves.err = errors.New("backup service refused")
+	h.library.mu.Lock()
+	h.library.saves = filepath.Join(h.installDir, "saves")
+	h.library.mu.Unlock()
+	h.plan(t)
+
+	if err := h.service.StartUpdate("local-1"); err != nil {
+		t.Fatalf("start update: %v", err)
+	}
+	h.service.wg.Wait()
+
+	if _, err := os.Stat(filepath.Join(h.configDir, "saves")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stat legacy saves dir = %v, want it absent: the update copied saves on its own", err)
+	}
+	u, ok := h.service.snapshot("local-1")
+	if !ok || u.State != StateFailed {
+		t.Fatalf("state = %+v, want the update to fail when the backup service refuses", u)
+	}
 }
 
 // TestUpdateStopsWhenTheSaveSnapshotFails covers the same promise from the
 // other side: a snapshot that cannot be taken stops the update while the
 // installation is still untouched, instead of updating without it.
 func TestUpdateStopsWhenTheSaveSnapshotFails(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(h *harness)
+	}{
+		{"folder is gone", func(h *harness) {
+			h.library.mu.Lock()
+			h.library.saves = filepath.Join(t.TempDir(), "gone")
+			h.library.mu.Unlock()
+		}},
+		{"backup service fails", func(h *harness) {
+			h.library.mu.Lock()
+			h.library.saves = filepath.Join(h.installDir, "saves")
+			h.library.mu.Unlock()
+			h.saves.err = errors.New("no space")
+		}},
+		{"backup service missing", func(h *harness) {
+			h.library.mu.Lock()
+			h.library.saves = filepath.Join(h.installDir, "saves")
+			h.library.mu.Unlock()
+			h.service.saves = nil
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			c.setup(h)
+			h.plan(t)
+
+			if err := h.service.StartUpdate("local-1"); err != nil {
+				t.Fatalf("start update: %v", err)
+			}
+			h.service.wg.Wait()
+
+			u, ok := h.service.snapshot("local-1")
+			if !ok || u.State != StateFailed {
+				t.Fatalf("state = %+v, want the update to fail", u)
+			}
+			if len(h.downloads.requests) != 0 {
+				t.Fatalf("download requests = %+v, want none: the update must stop before downloading", h.downloads.requests)
+			}
+			if data, err := os.ReadFile(filepath.Join(h.installDir, "game.exe")); err != nil || string(data) != "old executable" {
+				t.Fatalf("installation touched after a failed save snapshot: %q %v", data, err)
+			}
+		})
+	}
+}
+
+// TestUpdateContinuesWhenOnlyRotationFailed keeps the promise on the side of
+// the snapshot: the copy exists and is verified, so an old copy that could
+// not be trimmed must not stop the update.
+func TestUpdateContinuesWhenOnlyRotationFailed(t *testing.T) {
 	h := newHarness(t)
+	h.saves.rotationErr = errors.New("old copy is locked")
 	h.library.mu.Lock()
-	h.library.saves = filepath.Join(t.TempDir(), "gone")
+	h.library.saves = filepath.Join(h.installDir, "saves")
 	h.library.mu.Unlock()
 	h.plan(t)
 
@@ -292,13 +414,7 @@ func TestUpdateStopsWhenTheSaveSnapshotFails(t *testing.T) {
 	h.service.wg.Wait()
 
 	u, ok := h.service.snapshot("local-1")
-	if !ok || u.State != StateFailed {
-		t.Fatalf("state = %+v, want the update to fail", u)
-	}
-	if len(h.downloads.requests) != 0 {
-		t.Fatalf("download requests = %+v, want none: the update must stop before downloading", h.downloads.requests)
-	}
-	if data, err := os.ReadFile(filepath.Join(h.installDir, "game.exe")); err != nil || string(data) != "old executable" {
-		t.Fatalf("installation touched after a failed save snapshot: %q %v", data, err)
+	if !ok || u.State == StateFailed || u.SavesBackup == "" {
+		t.Fatalf("update = %+v, want it to go on with the recorded snapshot", u)
 	}
 }

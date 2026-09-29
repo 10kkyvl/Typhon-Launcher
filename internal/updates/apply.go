@@ -683,16 +683,8 @@ func (s *Service) undoSwapAndClear(gameID, installDir, previous string) {
 }
 
 func checkBackupFreeSpace(path string, needed int64) error {
-	if needed < 0 {
-		return errNoFreeSpaceForBackup
-	}
-	info, err := platform.GetStorageInfo(path)
-	if err != nil {
+	if err := install.CheckFreeSpace(path, needed); err != nil {
 		return fmt.Errorf("%w: %w", errNoFreeSpaceForBackup, err)
-	}
-	//nolint:gosec // G115: needed >= 0 checked above, the int64->uint64 conversion is exact
-	if info.FreeBytes < uint64(needed) {
-		return errNoFreeSpaceForBackup
 	}
 	return nil
 }
