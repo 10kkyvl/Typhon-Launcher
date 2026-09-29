@@ -55,6 +55,8 @@ export const errLibrary = {
   'settings.library_create_failed': 'не удалось создать папку библиотеки',
   'settings.library_not_writable': 'нет доступа на запись в папку библиотеки',
   'settings.network_mode_invalid': 'неизвестный режим сети',
+  'settings.overlay_hotkey_invalid': 'неизвестная горячая клавиша оверлея',
+  'overlay.hotkey_unavailable': 'это сочетание клавиш уже занято другой программой',
   'settings.network_interface_required': 'не выбран сетевой адаптер',
   'settings.network_interface_invalid': 'недопустимое имя сетевого адаптера',
   'settings.proxy_type_invalid': 'неизвестный тип прокси',

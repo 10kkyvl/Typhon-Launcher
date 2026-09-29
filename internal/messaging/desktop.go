@@ -31,6 +31,7 @@ type Desktop struct {
 	closed      bool
 	lastSound   time.Time
 	unsub       []func()
+	suppress    func() bool
 }
 
 //wails:ignore
@@ -76,6 +77,9 @@ func (d *Desktop) notifyOnUI(owner, peer, title, body string) bool {
 	}
 	d.playLocked()
 	d.mu.Unlock()
+	if d.suppressed() {
+		return false
+	}
 	if d.main.IsFocused() && d.main.IsVisible() && !d.main.IsMinimised() {
 		return false
 	}
@@ -106,6 +110,20 @@ func (d *Desktop) notifyOnUI(owner, peer, title, body string) bool {
 		d.scheduleOnUI(serial, 240*time.Millisecond, d.clearOnUI)
 	})
 	return true
+}
+
+//wails:ignore
+func (d *Desktop) SetSuppress(fn func() bool) {
+	d.mu.Lock()
+	d.suppress = fn
+	d.mu.Unlock()
+}
+
+func (d *Desktop) suppressed() bool {
+	d.mu.Lock()
+	fn := d.suppress
+	d.mu.Unlock()
+	return fn != nil && fn()
 }
 
 // Both dismissal stages belong to the current notification. A replacement

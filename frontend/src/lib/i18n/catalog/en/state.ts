@@ -185,4 +185,5 @@ export const state: Record<StateKey, Message> = {
   'state.stateSaveFailed': 'Could not save state to disk: {message}',
 
   'state.themeFallbackName': 'Dark',
+  'state.uiLoadFailed': 'Could not load the interface. Restart Typhon.',
 };

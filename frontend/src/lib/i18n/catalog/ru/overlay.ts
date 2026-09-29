@@ -1,0 +1,25 @@
+export const overlay = {
+  'overlay.panelLabel': 'Оверлей Typhon',
+  'overlay.hint': '{key} или Esc — вернуться в игру',
+  'overlay.tabChat': 'Чат',
+  'overlay.tabFriends': 'Друзья',
+  'overlay.signIn': 'Войдите в аккаунт в лаунчере',
+  'overlay.accountError': 'Не удалось получить данные аккаунта. Повторите попытку.',
+  'overlay.friendsError': 'Не удалось загрузить друзей. Повторите попытку.',
+  'overlay.hideError': 'Не удалось закрыть оверлей. Нажмите Esc или горячую клавишу ещё раз.',
+  'overlay.consentNeeded': 'Завершите настройку аккаунта в лаунчере',
+  'settings.overlayCardTitle': 'Игровой оверлей',
+  'settings.overlayEnabledLabel': 'Оверлей поверх игры',
+  'settings.overlayEnabledSub': 'Чат и друзья по горячей клавише, не сворачивая игру',
+  'settings.overlayHotkeyLabel': 'Горячая клавиша',
+  'settings.overlayHotkeySub': 'Если клавишу уже занимает другая программа, оверлей не включится',
+  'settings.overlayStatusLabel': 'Состояние',
+  'settings.overlayStatusUnsupported': 'Пока только на Windows',
+  'settings.overlayStatusOff': 'Выключен',
+  'settings.overlayStatusOn': 'Работает: {hotkey}',
+  'settings.overlayStatusUnknown': 'Не удалось узнать состояние оверлея',
+  'settings.overlaySaveError': 'Не удалось применить настройку оверлея: {reason}',
+  'settings.overlaySaveErrorPlain': 'Не удалось применить настройку оверлея',
+} as const;
+
+export type OverlayKey = keyof typeof overlay;

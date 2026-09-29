@@ -44,6 +44,8 @@ var localNames = []string{
 	"proxyHost",
 	"proxyPort",
 	"proxyUsername",
+	"overlayEnabled",
+	"overlayHotkey",
 	"libraryPath",
 	"downloadsPath",
 	"gamesPath",

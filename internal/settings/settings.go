@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"unicode"
@@ -55,6 +56,11 @@ const (
 	ProxySOCKS5 = "socks5"
 	ProxyHTTP   = "http"
 
+	OverlayHotkeyAltBacktick = "Alt+`"
+	OverlayHotkeyShiftF1     = "Shift+F1"
+	OverlayHotkeyShiftF2     = "Shift+F2"
+	OverlayHotkeyCtrlShiftO  = "Ctrl+Shift+O"
+
 	maxNetworkInterfaceLen = 256
 	maxProxyHostLen        = 253
 	maxProxyLabelLen       = 63
@@ -97,7 +103,13 @@ var (
 	ErrProxyHostInvalid         = uierr.New("settings.proxy_host_invalid", "недопустимый адрес прокси")
 	ErrProxyPortInvalid         = uierr.New("settings.proxy_port_invalid", "порт прокси должен быть от 1 до 65535")
 	ErrProxyUsernameInvalid     = uierr.New("settings.proxy_username_invalid", "недопустимое имя пользователя прокси")
+
+	ErrOverlayHotkeyInvalid = uierr.New("settings.overlay_hotkey_invalid", "недопустимая клавиша оверлея")
 )
+
+func OverlayHotkeys() []string {
+	return []string{OverlayHotkeyAltBacktick, OverlayHotkeyShiftF1, OverlayHotkeyShiftF2, OverlayHotkeyCtrlShiftO}
+}
 
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
 const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
@@ -149,6 +161,9 @@ type Settings struct {
 	ProxyHost        string `json:"proxyHost"`
 	ProxyPort        int    `json:"proxyPort"`
 	ProxyUsername    string `json:"proxyUsername"`
+
+	OverlayEnabled bool   `json:"overlayEnabled"`
+	OverlayHotkey  string `json:"overlayHotkey"`
 
 	PresenceStatus   string `json:"presenceStatus"`
 	PresenceAutoAway bool   `json:"presenceAutoAway"`
@@ -224,6 +239,9 @@ func Defaults() Settings {
 
 		NetworkMode: NetworkDirect,
 		ProxyType:   ProxySOCKS5,
+
+		OverlayEnabled: true,
+		OverlayHotkey:  OverlayHotkeyAltBacktick,
 
 		PresenceStatus:   PresenceOnline,
 		PresenceAutoAway: true,
@@ -424,6 +442,13 @@ func sanitizeNetwork(s Settings) (Settings, error) {
 	return s, nil
 }
 
+func sanitizeOverlay(s Settings) error {
+	if !slices.Contains(OverlayHotkeys(), s.OverlayHotkey) {
+		return fmt.Errorf("%w: %q", ErrOverlayHotkeyInvalid, s.OverlayHotkey)
+	}
+	return nil
+}
+
 func sanitize(s Settings) (Settings, error) {
 	if s.AccentColor != "" {
 		if len(s.AccentColor) != 7 || s.AccentColor[0] != '#' || strings.IndexFunc(s.AccentColor[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) >= 0 {
@@ -439,6 +464,9 @@ func sanitize(s Settings) (Settings, error) {
 	s = derivePaths(s)
 	s, err = sanitizeNetwork(s)
 	if err != nil {
+		return Settings{}, err
+	}
+	if err := sanitizeOverlay(s); err != nil {
 		return Settings{}, err
 	}
 	if s.UIScale < 0.9 || s.UIScale > 1.25 {

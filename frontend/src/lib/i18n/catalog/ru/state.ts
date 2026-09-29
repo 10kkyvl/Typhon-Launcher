@@ -184,6 +184,7 @@ export const state = {
   'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
 
   'state.themeFallbackName': 'Тёмная',
+  'state.uiLoadFailed': 'Не удалось загрузить интерфейс. Перезапустите Typhon.',
 } as const;
 
 export type StateKey = keyof typeof state;

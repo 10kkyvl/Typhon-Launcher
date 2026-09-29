@@ -52,6 +52,8 @@ export interface Settings {
   accountSync: boolean;
   presenceStatus: string;
   presenceAutoAway: boolean;
+  overlayEnabled: boolean;
+  overlayHotkey: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -106,6 +108,8 @@ const fallbackDefaults: Settings = {
   accountSync: false,
   presenceStatus: 'online',
   presenceAutoAway: true,
+  overlayEnabled: true,
+  overlayHotkey: 'Alt+`',
 };
 
 export const maxActiveDownloadOptions = [

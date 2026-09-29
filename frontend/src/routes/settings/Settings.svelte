@@ -14,7 +14,7 @@
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
-  import { msg } from '../../lib/i18n';
+  import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
@@ -35,6 +35,7 @@
   import { logsReason } from '../../lib/services/logsMessages';
   import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
+  import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
@@ -49,7 +50,7 @@
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
-  import { settings, updateSettings } from '../../lib/stores/settings';
+  import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
   import { bytesLabel, relativeDate } from '../../lib/utils/format';
@@ -250,6 +251,59 @@
     updateSettings(patch);
   }
 
+  let overlayInfo = $state<OverlayStatus | null>(null);
+  let overlayInfoFailed = $state(false);
+  let overlayError = $state('');
+
+  const overlayHotkeyOptions = OVERLAY_HOTKEYS.map((key) => ({ id: key, label: key }));
+  const overlayHotkey = $derived.by(() => {
+    const id = current?.overlayHotkey ?? OVERLAY_HOTKEYS[0];
+    return overlayHotkeyOptions.some((o) => o.id === id) ? id : OVERLAY_HOTKEYS[0];
+  });
+  const overlayStatusFailed = $derived(overlayInfoFailed || (!!overlayInfo?.supported && !!overlayInfo.error));
+  const overlayStatusText = $derived.by(() => {
+    if (overlayInfoFailed) return msg('settings.overlayStatusUnknown');
+    if (!overlayInfo) return '';
+    if (!overlayInfo.supported) return msg('settings.overlayStatusUnsupported');
+    if (overlayInfo.error) return overlayReason(overlayInfo.error);
+    if (overlayInfo.enabled) return msg('settings.overlayStatusOn', { hotkey: overlayInfo.hotkey });
+    return msg('settings.overlayStatusOff');
+  });
+
+  async function loadOverlayStatus() {
+    try {
+      overlayInfo = await overlayStatus();
+      overlayInfoFailed = false;
+    } catch (err) {
+      console.warn('overlay status', err);
+      overlayInfoFailed = true;
+    }
+  }
+
+  function overlayReason(err: unknown): string {
+    const code = errorCode(err);
+    if (code && hasMessage(code)) return msg(code);
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  async function setOverlay(patch: Partial<Settings>) {
+    overlayError = '';
+    await updateSettingsReporting(patch, (err) => {
+      const reason = overlayReason(err);
+      overlayError = reason ? msg('settings.overlaySaveError', { reason }) : msg('settings.overlaySaveErrorPlain');
+    });
+    await loadOverlayStatus();
+  }
+
+  onMount(() => {
+    const off = onOverlayStatus((status) => {
+      overlayInfo = status;
+      overlayInfoFailed = false;
+    });
+    void loadOverlayStatus();
+    return off;
+  });
+
   function openLibrarySetup() {
     if (!inWails) {
       toast(msg('settings.generalLibraryDesktopOnlyToast'));
@@ -368,6 +422,41 @@
               label={msg('settings.generalDiscordRpcLabel')}
               onchange={(v) => set({ discordRichPresence: v })}
             />
+          </div>
+        </div>
+      </Card>
+
+      <Card title={msg('settings.overlayCardTitle')}>
+        <div class="rows">
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.overlayEnabledLabel')}</span>
+              <span class="row-sub">{msg('settings.overlayEnabledSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.overlayEnabled ?? true}
+              label={msg('settings.overlayEnabledLabel')}
+              onchange={(v) => setOverlay({ overlayEnabled: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.overlayHotkeyLabel')}</span>
+              <span class="row-sub">{msg('settings.overlayHotkeySub')}</span>
+            </div>
+            <Select
+              value={overlayHotkey}
+              width="22rem"
+              options={overlayHotkeyOptions}
+              onchange={(id) => setOverlay({ overlayHotkey: id })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
+              <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
+              {#if overlayError}<span class="row-sub row-error" role="alert">{overlayError}</span>{/if}
+            </div>
           </div>
         </div>
       </Card>
@@ -1093,6 +1182,10 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .row-error {
+    color: var(--danger);
   }
 
   .logs-upload-progress {

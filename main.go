@@ -35,6 +35,7 @@ import (
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
+	"typhon/internal/overlay"
 	"typhon/internal/platform"
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
@@ -139,6 +140,9 @@ func init() {
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
 	application.RegisterEvent[messaging.OpenEvent]("chat:open")
+	application.RegisterEvent[overlay.Signal](overlay.EventShown)
+	application.RegisterEvent[overlay.Signal](overlay.EventHidden)
+	application.RegisterEvent[overlay.Status](overlay.EventStatus)
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -528,6 +532,11 @@ func main() {
 
 	current := settingsService.GetSettings()
 
+	overlayService, err := overlay.NewService(current.OverlayEnabled, current.OverlayHotkey)
+	if err != nil {
+		fatal("start overlay service", err)
+	}
+
 	var trayController *tray.Controller
 
 	services := []application.Service{
@@ -562,6 +571,7 @@ func main() {
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
+		application.NewService(overlayService),
 	}
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)
@@ -624,7 +634,9 @@ func main() {
 
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
+	chatDesktop.SetSuppress(overlayService.Visible)
 	defer chatDesktop.Close()
+	overlayService.Attach(wails)
 	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
@@ -650,6 +662,9 @@ func main() {
 		return trayController.Apply(next.MinimizeToTray)
 	}); err != nil {
 		fatal("register tray applier", err)
+	}
+	if err := settingsService.AddApplier(overlayService.Apply); err != nil {
+		fatal("register overlay applier", err)
 	}
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
