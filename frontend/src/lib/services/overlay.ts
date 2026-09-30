@@ -36,9 +36,27 @@ export function onOverlayStatus(handler: (status: OverlayStatus) => void): () =>
   return Events.On('overlay:status', (event) => handler(toOverlayStatus(event.data)));
 }
 
-export function onOverlayEvent(name: 'overlay:shown' | 'overlay:hidden', handler: () => void): () => void {
+export interface OverlayView {
+  visible: boolean;
+  exclusive: boolean;
+}
+
+export interface OverlayShown {
+  exclusive: boolean;
+}
+
+export async function overlayView(): Promise<OverlayView> {
+  if (!inWails) return { visible: false, exclusive: false };
+  const view = (await OverlayService.View()) as Partial<OverlayView> | null;
+  return { visible: view?.visible === true, exclusive: view?.exclusive === true };
+}
+
+export function onOverlayEvent(name: 'overlay:shown' | 'overlay:hidden', handler: (shown: OverlayShown) => void): () => void {
   if (!inWails) return () => {};
-  return Events.On(name, () => handler());
+  return Events.On(name, (event) => {
+    const data = event.data as Partial<OverlayShown> | null;
+    handler({ exclusive: data?.exclusive === true });
+  });
 }
 
 export async function hideOverlay(): Promise<void> {

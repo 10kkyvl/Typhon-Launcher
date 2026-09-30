@@ -75,3 +75,13 @@ func TestIsWindowRejectsAStaleHandle(t *testing.T) {
 		t.Fatal("a handle that names no window was accepted")
 	}
 }
+
+func TestNotificationStateIsAKnownValue(t *testing.T) {
+	state, err := (windowsPlatform{}).notificationState()
+	if err != nil {
+		t.Fatalf("notificationState: %v", err)
+	}
+	if state < 1 || state > 7 {
+		t.Fatalf("state = %d, want one of QUNS_NOT_PRESENT..QUNS_APP (1-7)", state)
+	}
+}

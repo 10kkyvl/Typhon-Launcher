@@ -35,6 +35,8 @@ type fakePlatform struct {
 	foregroundErr error
 	live          map[uintptr]bool
 	iconic        map[uintptr]bool
+	state         int
+	stateErr      error
 	registerErr   map[string]error
 	regs          []*fakeRegistration
 	monitorFor    []uintptr
@@ -121,6 +123,12 @@ func (p *fakePlatform) isWindow(hwnd uintptr) bool {
 	return p.live[hwnd]
 }
 
+func (p *fakePlatform) notificationState() (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state, p.stateErr
+}
+
 func (p *fakePlatform) isIconic(hwnd uintptr) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -143,6 +151,19 @@ func (p *fakePlatform) foregroundCalls() []uintptr {
 type eventLog struct {
 	mu      sync.Mutex
 	entries []string
+	shown   []Shown
+}
+
+func (l *eventLog) addShown(s Shown) {
+	l.mu.Lock()
+	l.shown = append(l.shown, s)
+	l.mu.Unlock()
+}
+
+func (l *eventLog) shownPayloads() []Shown {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.shown)
 }
 
 func (l *eventLog) add(s string) {
@@ -229,7 +250,12 @@ func newRig(t *testing.T, enabled bool, hotkeyName string) *rig {
 		defer r.ui.Unlock()
 		f()
 	}
-	emit := func(name string, _ any) { r.log.add("emit:" + name) }
+	emit := func(name string, payload any) {
+		if shown, ok := payload.(Shown); ok {
+			r.log.addShown(shown)
+		}
+		r.log.add("emit:" + name)
+	}
 	svc, err := newService(r.plat, dispatch, emit, enabled, hotkeyName)
 	if err != nil {
 		t.Fatal(err)
@@ -425,6 +451,70 @@ func TestWindowIsCreatedOnTheFirstShowOnly(t *testing.T) {
 			}
 			if makes != c.wantMakes {
 				t.Fatalf("window factory called %d times, want %d", makes, c.wantMakes)
+			}
+		})
+	}
+}
+
+func TestShownReportsExclusiveFullscreen(t *testing.T) {
+	cases := []struct {
+		name  string
+		state int
+		err   error
+		want  bool
+	}{
+		{"exclusive d3d fullscreen", 3, nil, true},
+		{"borderless fullscreen window", 2, nil, false},
+		{"not present", 1, nil, false},
+		{"presentation mode", 4, nil, false},
+		{"windows store app", 5, nil, false},
+		{"unknown state", 42, nil, false},
+		{"query fails", 0, errors.New("no shell"), false},
+		{"query fails with an exclusive-looking state", 3, errors.New("no shell"), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t, true, settings.OverlayHotkeyAltBacktick)
+			r.plat.state, r.plat.stateErr = c.state, c.err
+			r.svc.toggleOnUI()
+
+			if got := r.log.shownPayloads(); !slices.Equal(got, []Shown{{Exclusive: c.want}}) {
+				t.Fatalf("shown payloads = %v, want one with Exclusive=%v", got, c.want)
+			}
+			if got := r.svc.View(); got != (View{Visible: true, Exclusive: c.want}) {
+				t.Fatalf("View while shown = %+v", got)
+			}
+			if !r.win.isVisible() {
+				t.Fatal("the overlay must be shown whatever the notification state query says")
+			}
+
+			r.svc.Hide()
+			if got := r.svc.View(); got != (View{}) {
+				t.Fatalf("View after hide = %+v, want zero", got)
+			}
+		})
+	}
+}
+
+func TestViewIsClearedWhenShowFails(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(*rig)
+	}{
+		{"window refuses to show", func(r *rig) { r.win.showErr = errors.New("no handle") }},
+		{"window gets no focus", func(r *rig) { r.win.noFocus = true }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t, true, settings.OverlayHotkeyAltBacktick)
+			r.plat.state = 3
+			c.setup(r)
+			r.svc.toggleOnUI()
+			if got := r.svc.View(); got != (View{}) {
+				t.Fatalf("View = %+v after a show that did not happen", got)
+			}
+			if got := r.log.shownPayloads(); len(got) != 0 {
+				t.Fatalf("shown emitted: %v", got)
 			}
 		})
 	}

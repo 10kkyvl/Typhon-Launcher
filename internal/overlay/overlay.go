@@ -36,6 +36,17 @@ type Status struct {
 
 type Signal struct{}
 
+type Shown struct {
+	Exclusive bool `json:"exclusive"`
+}
+
+type View struct {
+	Visible   bool `json:"visible"`
+	Exclusive bool `json:"exclusive"`
+}
+
+const qunsRunningD3DFullScreen = 3
+
 type rect struct {
 	x, y, w, h int32
 }
@@ -47,6 +58,7 @@ type platform interface {
 	monitorRect(hwnd uintptr) (rect, error)
 	setForeground(hwnd uintptr) error
 	isWindow(hwnd uintptr) bool
+	notificationState() (int, error)
 	isIconic(hwnd uintptr) bool
 	restore(hwnd uintptr)
 }
@@ -75,16 +87,17 @@ type Service struct {
 	regMu sync.Mutex
 	reg   *registration
 
-	mu      sync.Mutex
-	ctx     context.Context
-	wg      sync.WaitGroup
-	cfg     config
-	errText string
-	win     window
-	makeWin func() window
-	visible bool
-	prev    uintptr
-	closed  bool
+	mu        sync.Mutex
+	ctx       context.Context
+	wg        sync.WaitGroup
+	cfg       config
+	errText   string
+	win       window
+	makeWin   func() window
+	visible   bool
+	exclusive bool
+	prev      uintptr
+	closed    bool
 }
 
 //wails:ignore
@@ -124,6 +137,12 @@ func (s *Service) Visible() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.visible
+}
+
+func (s *Service) View() View {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return View{Visible: s.visible, Exclusive: s.exclusive}
 }
 
 func (s *Service) Hide() {
@@ -301,29 +320,40 @@ func (s *Service) showOnUI() {
 		slog.Warn("find monitor for overlay", "error", err)
 		return
 	}
+	state, err := s.plat.notificationState()
+	if err != nil {
+		// The state only decides which hint the overlay shows; showing it does not depend on the answer.
+		slog.Warn("query notification state", "error", err)
+		state = 0
+	}
+	exclusive := state == qunsRunningD3DFullScreen
 	s.mu.Lock()
 	s.visible = true
+	s.exclusive = exclusive
 	s.prev = prev
 	s.mu.Unlock()
 	if err := win.show(area); err != nil {
 		slog.Warn("show overlay window", "error", err)
-		s.mu.Lock()
-		s.visible = false
-		s.prev = 0
-		s.mu.Unlock()
+		s.clearShown()
 		win.hide()
 		return
 	}
 	if fg := s.plat.foreground(); fg != win.handle() {
 		slog.Warn("overlay window did not take focus, hiding it", "foreground", fg)
-		s.mu.Lock()
-		s.visible = false
-		s.prev = 0
-		s.mu.Unlock()
+		s.clearShown()
 		win.hide()
 		return
 	}
-	s.emit(EventShown, Signal{})
+	slog.Info("overlay shown", "notification_state", state, "exclusive", exclusive)
+	s.emit(EventShown, Shown{Exclusive: exclusive})
+}
+
+func (s *Service) clearShown() {
+	s.mu.Lock()
+	s.visible = false
+	s.exclusive = false
+	s.prev = 0
+	s.mu.Unlock()
 }
 
 func (s *Service) hideOnUI(restore bool) {
@@ -335,6 +365,7 @@ func (s *Service) hideOnUI(restore bool) {
 	prev := s.prev
 	win := s.win
 	s.visible = false
+	s.exclusive = false
 	s.prev = 0
 	s.mu.Unlock()
 	own := win.handle()

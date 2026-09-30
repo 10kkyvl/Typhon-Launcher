@@ -10,6 +10,7 @@ export const overlay: Record<OverlayKey, Message> = {
   'overlay.accountError': 'Could not load your account. Try again.',
   'overlay.friendsError': 'Could not load friends. Try again.',
   'overlay.hideError': 'Could not close the overlay. Press Esc or the hotkey again.',
+  'overlay.exclusiveNotice': 'The game is in exclusive fullscreen, so it was minimized. Switch it to borderless windowed in the game settings and the overlay will open on top.',
   'overlay.consentNeeded': 'Finish setting up your account in the launcher',
   'settings.overlayCardTitle': 'Game overlay',
   'settings.overlayEnabledLabel': 'Overlay over the game',

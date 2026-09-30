@@ -43,6 +43,7 @@ var (
 	procGetMonitorInfo      = user32.NewProc("GetMonitorInfoW")
 	procSetWindowPos        = user32.NewProc("SetWindowPos")
 	procIsIconic            = user32.NewProc("IsIconic")
+	procQueryNotification   = windows.NewLazySystemDLL("shell32.dll").NewProc("SHQueryUserNotificationState")
 	procShowWindow          = user32.NewProc("ShowWindow")
 )
 
@@ -193,6 +194,19 @@ func (windowsPlatform) setForeground(hwnd uintptr) error {
 
 func (windowsPlatform) isWindow(hwnd uintptr) bool {
 	return windows.IsWindow(windows.HWND(hwnd))
+}
+
+//nolint:gosec,errcheck // G103: SHQueryUserNotificationState writes the state through the address of a local that outlives the call. errcheck: it reports through its HRESULT, which is checked, not through last error.
+func (windowsPlatform) notificationState() (int, error) {
+	if err := procQueryNotification.Find(); err != nil {
+		return 0, err
+	}
+	var state uint32
+	hr, _, _ := syscall.SyscallN(procQueryNotification.Addr(), uintptr(unsafe.Pointer(&state)))
+	if int32(hr) < 0 {
+		return 0, fmt.Errorf("SHQueryUserNotificationState: HRESULT 0x%08X", uint32(hr))
+	}
+	return int(state), nil
 }
 
 // A game in exclusive fullscreen minimises itself when it loses focus, and

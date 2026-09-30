@@ -5,7 +5,7 @@
   import Tabs from '../lib/components/Tabs.svelte';
   import { msg } from '../lib/i18n';
   import type { ChatPeer } from '../lib/services/messaging';
-  import { DEFAULT_OVERLAY_HOTKEY, hideOverlay, onOverlayEvent, onOverlayStatus } from '../lib/services/overlay';
+  import { DEFAULT_OVERLAY_HOTKEY, hideOverlay, onOverlayEvent, onOverlayStatus, overlayView } from '../lib/services/overlay';
   import { initMessaging, openChat, unreadCount } from '../lib/stores/messaging';
   import { settings } from '../lib/stores/settings';
   import { needsSocialConsent } from '../lib/stores/social';
@@ -20,6 +20,7 @@
   let shown = $state(true);
   let focusTick = $state(0);
   let hideFailed = $state(false);
+  let exclusive = $state(false);
   let statusHotkey = $state('');
   let panel = $state<HTMLElement | undefined>(undefined);
 
@@ -57,8 +58,9 @@
   onMount(() => {
     initMessaging({ passive: true });
     const offs = [
-      onOverlayEvent('overlay:shown', () => {
+      onOverlayEvent('overlay:shown', (payload) => {
         shown = true;
+        exclusive = payload.exclusive;
         hideFailed = false;
         focusTick += 1;
         panel?.focus();
@@ -66,6 +68,7 @@
       }),
       onOverlayEvent('overlay:hidden', () => {
         shown = false;
+        exclusive = false;
       }),
       onOverlayStatus((status) => {
         statusHotkey = status.hotkey;
@@ -74,6 +77,11 @@
     ];
     panel?.focus();
     void refreshOverlay();
+    overlayView()
+      .then((view) => {
+        if (view.visible) exclusive = view.exclusive;
+      })
+      .catch((err) => console.warn('overlay view failed', err));
     return () => offs.forEach((off) => off());
   });
 </script>
@@ -91,6 +99,9 @@
       <IconButton label={msg('common.close')} onclick={hide}><X size="1.8rem" strokeWidth={1.8} /></IconButton>
     </header>
 
+    {#if exclusive}
+      <div class="hint-note" role="note">{msg('overlay.exclusiveNotice')}</div>
+    {/if}
     {#if hideFailed}
       <div class="banner">{msg('overlay.hideError')}</div>
     {/if}
@@ -194,6 +205,17 @@
 
   .pane.off {
     display: none;
+  }
+
+  .hint-note {
+    margin: 0 var(--space-4) var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: var(--font-xs);
+    line-height: 1.5;
   }
 
   .banner {
