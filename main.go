@@ -140,7 +140,7 @@ func init() {
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
 	application.RegisterEvent[messaging.OpenEvent]("chat:open")
-	application.RegisterEvent[overlay.Shown](overlay.EventShown)
+	application.RegisterEvent[overlay.Signal](overlay.EventShown)
 	application.RegisterEvent[overlay.Signal](overlay.EventHidden)
 	application.RegisterEvent[overlay.Status](overlay.EventStatus)
 }

@@ -85,3 +85,13 @@ func TestNotificationStateIsAKnownValue(t *testing.T) {
 		t.Fatalf("state = %d, want one of QUNS_NOT_PRESENT..QUNS_APP (1-7)", state)
 	}
 }
+
+func TestExclusiveOwnershipIsFalseWhenNobodyHoldsTheOutput(t *testing.T) {
+	owned, err := (windowsPlatform{}).exclusiveOwnership()
+	if err != nil {
+		t.Fatalf("exclusiveOwnership: %v", err)
+	}
+	if owned {
+		t.Fatal("reported exclusive ownership while no game is running")
+	}
+}

@@ -36,15 +36,6 @@ type Status struct {
 
 type Signal struct{}
 
-type Shown struct {
-	Exclusive bool `json:"exclusive"`
-}
-
-type View struct {
-	Visible   bool `json:"visible"`
-	Exclusive bool `json:"exclusive"`
-}
-
 const qunsRunningD3DFullScreen = 3
 
 type rect struct {
@@ -58,6 +49,7 @@ type platform interface {
 	monitorRect(hwnd uintptr) (rect, error)
 	setForeground(hwnd uintptr) error
 	isWindow(hwnd uintptr) bool
+	exclusiveOwnership() (bool, error)
 	notificationState() (int, error)
 	isIconic(hwnd uintptr) bool
 	restore(hwnd uintptr)
@@ -87,17 +79,16 @@ type Service struct {
 	regMu sync.Mutex
 	reg   *registration
 
-	mu        sync.Mutex
-	ctx       context.Context
-	wg        sync.WaitGroup
-	cfg       config
-	errText   string
-	win       window
-	makeWin   func() window
-	visible   bool
-	exclusive bool
-	prev      uintptr
-	closed    bool
+	mu      sync.Mutex
+	ctx     context.Context
+	wg      sync.WaitGroup
+	cfg     config
+	errText string
+	win     window
+	makeWin func() window
+	visible bool
+	prev    uintptr
+	closed  bool
 }
 
 //wails:ignore
@@ -137,12 +128,6 @@ func (s *Service) Visible() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.visible
-}
-
-func (s *Service) View() View {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return View{Visible: s.visible, Exclusive: s.exclusive}
 }
 
 func (s *Service) Hide() {
@@ -297,7 +282,28 @@ func (s *Service) toggleOnUI() {
 	}
 }
 
+// Taking the foreground from a game in exclusive fullscreen makes it minimise
+// behind a black mode switch, so the overlay stays closed then. Both probes run
+// before the window exists or focus moves, since either changes their answer.
+func (s *Service) exclusiveFullscreen() (blocked, own bool, state int) {
+	own, ownErr := s.plat.exclusiveOwnership()
+	if ownErr != nil {
+		slog.Warn("query exclusive ownership", "error", ownErr)
+	}
+	state, stateErr := s.plat.notificationState()
+	if stateErr != nil {
+		slog.Warn("query notification state", "error", stateErr)
+	}
+	// With no answer from Windows there is no way to know the mode, and an overlay that never opens is worse than the rare risk.
+	return own || state == qunsRunningD3DFullScreen, own, state
+}
+
 func (s *Service) showOnUI() {
+	blocked, ownership, state := s.exclusiveFullscreen()
+	if blocked {
+		slog.Info("overlay skipped: exclusive fullscreen", "exclusive_ownership", ownership, "notification_state", state)
+		return
+	}
 	s.mu.Lock()
 	win, create := s.win, s.makeWin
 	s.mu.Unlock()
@@ -320,40 +326,30 @@ func (s *Service) showOnUI() {
 		slog.Warn("find monitor for overlay", "error", err)
 		return
 	}
-	state, err := s.plat.notificationState()
-	if err != nil {
-		// The state only decides which hint the overlay shows; showing it does not depend on the answer.
-		slog.Warn("query notification state", "error", err)
-		state = 0
-	}
-	exclusive := state == qunsRunningD3DFullScreen
 	s.mu.Lock()
 	s.visible = true
-	s.exclusive = exclusive
 	s.prev = prev
 	s.mu.Unlock()
 	if err := win.show(area); err != nil {
 		slog.Warn("show overlay window", "error", err)
-		s.clearShown()
+		s.mu.Lock()
+		s.visible = false
+		s.prev = 0
+		s.mu.Unlock()
 		win.hide()
 		return
 	}
 	if fg := s.plat.foreground(); fg != win.handle() {
 		slog.Warn("overlay window did not take focus, hiding it", "foreground", fg)
-		s.clearShown()
+		s.mu.Lock()
+		s.visible = false
+		s.prev = 0
+		s.mu.Unlock()
 		win.hide()
 		return
 	}
-	slog.Info("overlay shown", "notification_state", state, "exclusive", exclusive)
-	s.emit(EventShown, Shown{Exclusive: exclusive})
-}
-
-func (s *Service) clearShown() {
-	s.mu.Lock()
-	s.visible = false
-	s.exclusive = false
-	s.prev = 0
-	s.mu.Unlock()
+	slog.Info("overlay shown", "exclusive_ownership", ownership, "notification_state", state)
+	s.emit(EventShown, Signal{})
 }
 
 func (s *Service) hideOnUI(restore bool) {
@@ -365,7 +361,6 @@ func (s *Service) hideOnUI(restore bool) {
 	prev := s.prev
 	win := s.win
 	s.visible = false
-	s.exclusive = false
 	s.prev = 0
 	s.mu.Unlock()
 	own := win.handle()

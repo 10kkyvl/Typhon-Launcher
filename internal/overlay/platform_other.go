@@ -30,6 +30,8 @@ func (unsupported) setForeground(uintptr) error { return errUnsupported }
 
 func (unsupported) isWindow(uintptr) bool { return false }
 
+func (unsupported) exclusiveOwnership() (bool, error) { return false, errUnsupported }
+
 func (unsupported) notificationState() (int, error) { return 0, errUnsupported }
 
 func (unsupported) isIconic(uintptr) bool { return false }

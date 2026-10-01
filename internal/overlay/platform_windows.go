@@ -43,6 +43,7 @@ var (
 	procGetMonitorInfo      = user32.NewProc("GetMonitorInfoW")
 	procSetWindowPos        = user32.NewProc("SetWindowPos")
 	procIsIconic            = user32.NewProc("IsIconic")
+	procCheckOwnership      = windows.NewLazySystemDLL("gdi32.dll").NewProc("D3DKMTCheckExclusiveOwnership")
 	procQueryNotification   = windows.NewLazySystemDLL("shell32.dll").NewProc("SHQueryUserNotificationState")
 	procShowWindow          = user32.NewProc("ShowWindow")
 )
@@ -194,6 +195,16 @@ func (windowsPlatform) setForeground(hwnd uintptr) error {
 
 func (windowsPlatform) isWindow(hwnd uintptr) bool {
 	return windows.IsWindow(windows.HWND(hwnd))
+}
+
+// D3DKMTCheckExclusiveOwnership returns a BOOLEAN that is true only while a
+// process holds the video output exclusively, the mode switch itself.
+func (windowsPlatform) exclusiveOwnership() (bool, error) {
+	if err := procCheckOwnership.Find(); err != nil {
+		return false, err
+	}
+	r1, _, _ := syscall.SyscallN(procCheckOwnership.Addr()) //nolint:errcheck // errcheck: the answer is the BOOLEAN result; the function sets no last error.
+	return r1&0xFF != 0, nil
 }
 
 //nolint:gosec,errcheck // G103: SHQueryUserNotificationState writes the state through the address of a local that outlives the call. errcheck: it reports through its HRESULT, which is checked, not through last error.

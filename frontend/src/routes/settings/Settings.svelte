@@ -432,6 +432,7 @@
             <div class="row-text">
               <span class="row-label">{msg('settings.overlayEnabledLabel')}</span>
               <span class="row-sub">{msg('settings.overlayEnabledSub')}</span>
+              <span class="row-sub">{msg('settings.overlayExclusiveNote')}</span>
             </div>
             <Toggle
               checked={current?.overlayEnabled ?? true}
