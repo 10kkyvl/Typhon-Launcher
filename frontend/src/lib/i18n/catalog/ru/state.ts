@@ -62,7 +62,6 @@ export const state = {
   'state.relocateFailedLibrary': 'Не удалось перенести «библиотеку»',
 
   'state.selfupdateNewVersionToast': 'Доступна новая версия лаунчера: {version}',
-  'state.selfupdateAppliedToast': 'Лаунчер обновлён до версии {version}',
   'state.selfupdateApplyFailedToast': 'Не удалось установить обновление {version}',
 
   'state.settingsNotLoaded': 'Настройки ещё не загружены',

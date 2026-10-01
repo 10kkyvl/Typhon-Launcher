@@ -3,6 +3,7 @@
   import { route } from '../stores/router';
   import { authState, isOffline } from '../stores/user';
   import { needsSocialConsent } from '../stores/social';
+  import { chatOpen } from '../stores/messaging';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
@@ -14,6 +15,8 @@
   import Topbar from './Topbar.svelte';
 
   let { children }: { children?: Snippet } = $props();
+
+  const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
 </script>
 
 <div class="shell">
@@ -34,7 +37,7 @@
   </div>
 </div>
 
-<div class="corner">
+<div class="corner" class:above-chat={chatShown && !$chatOpen} class:beside-chat={chatShown && $chatOpen}>
   <Toasts />
   {#if $route.name !== 'downloads'}
     <ActivityDock />
@@ -42,7 +45,7 @@
 </div>
 
 <GameQuickMenu />
-{#if $authState === 'authenticated' && !$needsSocialConsent}
+{#if chatShown}
   <ChatPanel />
 {/if}
 
@@ -57,6 +60,14 @@
     align-items: flex-end;
     gap: 0.8rem;
     pointer-events: none;
+  }
+
+  .corner.above-chat {
+    bottom: calc(2.4rem + 4.8rem + 1.2rem);
+  }
+
+  .corner.beside-chat {
+    right: calc(2.4rem + 38rem + 1.2rem);
   }
 
   .corner > :global(*) {

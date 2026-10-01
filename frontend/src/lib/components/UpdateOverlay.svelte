@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CheckCircle2, Download, RotateCcw, TriangleAlert, X } from '@lucide/svelte';
+  import { fade, fly } from 'svelte/transition';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import {
@@ -53,7 +54,7 @@
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
 {:else if outcome && !$bigPictureActive}
-  <div class="card" class:card-danger={!outcome.ok}>
+  <div class="card" class:card-danger={!outcome.ok} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
     <div class="row">
       {#if outcome.ok}
         <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
@@ -136,7 +137,7 @@
 
   .card {
     position: fixed;
-    right: 2.4rem;
+    left: calc(var(--sidebar-w) + 2.4rem);
     bottom: 2.4rem;
     z-index: 150;
     display: flex;
@@ -174,6 +175,12 @@
 
   .card-danger .meta {
     color: var(--danger);
+  }
+
+  @media (max-width: 1140px) {
+    .card {
+      left: 8.8rem;
+    }
   }
 
   @keyframes spin {
