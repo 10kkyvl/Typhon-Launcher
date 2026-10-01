@@ -125,7 +125,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	shell := s.shellBaseline(ctx, id, cfg)
+	shell := s.shellBaseline(ctx, id)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest)
+	s.dropShortcuts(ctx, id, shell, dest, cfg.InstallSkipShortcuts)
 	return s.waitForUser(id, candidates)
 }
 
@@ -230,7 +230,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest)
+	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts)
 	return s.finalize(ctx, id)
 }
 
@@ -279,11 +279,9 @@ func installOptionsFrom(cfg settings.Settings) installOptions {
 
 // Снимок ярлыков берётся до запуска установщика: без него не отличить ярлык,
 // созданный установкой, от ярлыка пользователя, поэтому ошибка обхода отменяет
-// уборку целиком, а не разрешает удалять наугад.
-func (s *Service) shellBaseline(ctx context.Context, id string, cfg settings.Settings) shellSnapshot {
-	if !cfg.InstallSkipShortcuts {
-		return shellSnapshot{}
-	}
+// уборку целиком, а не разрешает удалять наугад. Берётся всегда, а не только
+// при InstallSkipShortcuts: ярлык сайта репака убирается независимо от неё.
+func (s *Service) shellBaseline(ctx context.Context, id string) shellSnapshot {
 	roots, err := shortcutRoots()
 	if err != nil {
 		slog.Error("resolve shortcut folders", "id", id, "error", err)
@@ -300,11 +298,11 @@ func (s *Service) shellBaseline(ctx context.Context, id string, cfg settings.Set
 // Ярлыки, созданные установщиком под UAC в общих каталогах, лаунчер удалить не
 // может: он работает без прав администратора. Это не повод считать установку
 // неудачной, поэтому ошибка только логируется.
-func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string) {
-	if !before.taken || dest == "" {
+func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool) {
+	if !before.taken {
 		return
 	}
-	removed, err := cleanShellShortcuts(ctx, before, dest)
+	removed, err := cleanShellShortcuts(ctx, before, dest, game)
 	if err != nil {
 		slog.Warn("remove installer shortcuts", "id", id, "dest", dest, "error", err)
 	}
