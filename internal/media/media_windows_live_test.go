@@ -15,14 +15,14 @@ func liveService(t *testing.T) (*Service, context.Context) {
 	if os.Getenv("TYPHON_MEDIA_LIVE") != "1" {
 		t.Skip("set TYPHON_MEDIA_LIVE=1 to talk to the real system media session")
 	}
-	svc, err := NewService()
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := NewService()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if err := svc.ServiceStartup(ctx, application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
+	}
+	if err := svc.unavailable(); err != nil {
+		t.Fatalf("media controls did not start: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := svc.ServiceShutdown(); err != nil {

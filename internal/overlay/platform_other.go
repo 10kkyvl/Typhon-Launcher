@@ -40,6 +40,6 @@ func (unsupported) restore(uintptr) {}
 
 func newWindow(*application.App) (window, *application.WebviewWindow) { return nil, nil }
 
-func newBrowserWindow(*application.App, func() uintptr) (browserWindow, *application.WebviewWindow) {
+func newBrowserWindow(*application.App, func() uintptr, func()) (browserWindow, *application.WebviewWindow) {
 	return nil, nil
 }

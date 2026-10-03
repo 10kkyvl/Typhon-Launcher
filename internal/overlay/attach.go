@@ -32,7 +32,7 @@ func (s *Service) Attach(app *application.App) {
 			}
 			return win.handle()
 		}
-		b, native := newBrowserWindow(app, owner)
+		b, native := newBrowserWindow(app, owner, s.Hide)
 		native.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 			e.Cancel()
 			s.dispatch(s.closeBrowserOnUI)

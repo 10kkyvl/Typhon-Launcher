@@ -2,7 +2,14 @@
   import { Music, Pause, Play, SkipBack, SkipForward } from '@lucide/svelte';
   import IconButton from '../lib/components/IconButton.svelte';
   import { msg } from '../lib/i18n';
-  import { currentMedia, mediaNext, mediaPrevious, mediaToggle, type MediaState } from '../lib/services/media';
+  import {
+    currentMedia,
+    isMediaUnavailable,
+    mediaNext,
+    mediaPrevious,
+    mediaToggle,
+    type MediaState,
+  } from '../lib/services/media';
 
   let { active }: { active: boolean } = $props();
 
@@ -10,6 +17,7 @@
 
   let media = $state<MediaState | null>(null);
   let failed = $state(false);
+  let unavailable = $state(false);
   let commandFailed = $state(false);
 
   async function refresh(): Promise<void> {
@@ -17,6 +25,10 @@
       media = await currentMedia();
       failed = false;
     } catch (err) {
+      if (isMediaUnavailable(err)) {
+        unavailable = true;
+        return;
+      }
       console.error('current media', err);
       failed = true;
     }
@@ -34,7 +46,7 @@
   }
 
   $effect(() => {
-    if (!active) return;
+    if (!active || unavailable) return;
     void refresh();
     const timer = setInterval(() => void refresh(), POLL_MS);
     return () => clearInterval(timer);
@@ -44,11 +56,13 @@
   const line = $derived(track ? [track.artist, track.app].filter(Boolean).join(' · ') : '');
 </script>
 
-{#if failed || media?.supported}
+{#if unavailable || failed || media?.supported}
   <section class="music" aria-label={msg('overlay.musicLabel')}>
     <span class="icon"><Music size="1.6rem" strokeWidth={1.8} /></span>
     <div class="info">
-      {#if failed}
+      {#if unavailable}
+        <span class="muted">{msg('overlay.musicUnavailable')}</span>
+      {:else if failed}
         <span class="muted">{msg('overlay.musicError')}</span>
       {:else if track}
         <strong title={track.title}>{track.title || msg('overlay.musicUntitled')}</strong>

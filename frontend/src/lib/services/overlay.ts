@@ -36,7 +36,10 @@ export function onOverlayStatus(handler: (status: OverlayStatus) => void): () =>
   return Events.On('overlay:status', (event) => handler(toOverlayStatus(event.data)));
 }
 
-export function onOverlayEvent(name: 'overlay:shown' | 'overlay:hidden', handler: () => void): () => void {
+export function onOverlayEvent(
+  name: 'overlay:shown' | 'overlay:hidden' | 'overlay:browser-closed',
+  handler: () => void,
+): () => void {
   if (!inWails) return () => {};
   return Events.On(name, () => handler());
 }

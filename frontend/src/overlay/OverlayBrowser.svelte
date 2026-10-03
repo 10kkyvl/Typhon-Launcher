@@ -9,6 +9,7 @@
     browserForward,
     browserReload,
     closeBrowser,
+    onOverlayEvent,
     openBrowser,
     placeBrowser,
   } from '../lib/services/overlay';
@@ -67,7 +68,13 @@
     input?.focus();
     const observer = new ResizeObserver(() => void place());
     if (viewport) observer.observe(viewport);
-    return () => observer.disconnect();
+    const offClosed = onOverlayEvent('overlay:browser-closed', () => {
+      loaded = false;
+    });
+    return () => {
+      observer.disconnect();
+      offClosed();
+    };
   });
 </script>
 

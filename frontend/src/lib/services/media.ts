@@ -1,5 +1,12 @@
 import { Service as MediaService } from '../../../bindings/typhon/internal/media';
+import { errorCode } from '../i18n';
 import { inWails } from './backend';
+
+const UNAVAILABLE = 'media.unavailable';
+
+export function isMediaUnavailable(err: unknown): boolean {
+  return errorCode(err) === UNAVAILABLE;
+}
 
 export interface MediaTrack {
   app: string;

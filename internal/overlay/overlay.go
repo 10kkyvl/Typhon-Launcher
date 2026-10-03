@@ -19,6 +19,8 @@ const (
 	EventStatus = "overlay:status"
 	EventHide   = "overlay:hide"
 
+	EventBrowserClosed = "overlay:browser-closed"
+
 	WindowName = "overlay"
 	WindowURL  = "/?overlay=1"
 
@@ -225,7 +227,10 @@ func (s *Service) reconfigure(next config) error {
 			old.stop()
 		}
 		s.setConfig(next, "")
-		s.dispatch(func() { s.hideOnUI(true) })
+		s.dispatch(func() {
+			s.hideOnUI(true)
+			s.closeBrowserOnUI()
+		})
 		s.emitStatus()
 		return nil
 	}

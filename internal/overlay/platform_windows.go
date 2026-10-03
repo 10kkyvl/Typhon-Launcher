@@ -289,24 +289,8 @@ type wailsBrowser struct {
 	ready bool
 }
 
-func newBrowserWindow(app *application.App, owner func() uintptr) (browserWindow, *application.WebviewWindow) {
-	deny := map[application.PermissionType]application.Permission{
-		application.PermissionMicrophone:    application.PermissionDeny,
-		application.PermissionCamera:        application.PermissionDeny,
-		application.PermissionGeolocation:   application.PermissionDeny,
-		application.PermissionNotifications: application.PermissionDeny,
-		application.PermissionClipboardRead: application.PermissionDeny,
-	}
-	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name: BrowserWindowName, Title: "Typhon", URL: "about:blank", Width: 1280, Height: 720,
-		Hidden: true, Frameless: true, DisableResize: true, AlwaysOnTop: true,
-		Permissions: deny,
-		Windows: application.WindowsWindow{
-			HiddenOnTaskbar:         true,
-			GeneralAutofillEnabled:  false,
-			PasswordAutosaveEnabled: false,
-		},
-	})
+func newBrowserWindow(app *application.App, owner func() uintptr, onEscape func()) (browserWindow, *application.WebviewWindow) {
+	win := app.Window.NewWithOptions(browserOptions(onEscape))
 	return &wailsBrowser{win: win, owner: owner}, win
 }
 
@@ -327,7 +311,9 @@ func (b *wailsBrowser) place(r rect) error {
 		return errors.New("browser window has no native handle")
 	}
 	// Wails holds ExecJS back until the page reports its runtime as loaded, and
-	// a foreign page never does, so back and forward would queue forever.
+	// a foreign page never does, so back and forward and every launcher event
+	// would queue forever. The events then reach the page, where browserGuard
+	// leaves them nothing to call.
 	if !b.ready {
 		b.win.HandleMessage("wails:runtime:ready")
 		b.ready = true

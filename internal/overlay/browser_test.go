@@ -49,6 +49,13 @@ func (b *fakeBrowser) navigate(target string) {
 	b.mu.Lock()
 	b.urls = append(b.urls, target)
 	b.mu.Unlock()
+	b.log.add("browser:navigate:" + target)
+}
+
+func (b *fakeBrowser) navigated() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.urls)
 }
 
 func (b *fakeBrowser) back()    { b.log.add("browser:back") }
@@ -283,6 +290,115 @@ func TestClosedBrowserIsNotPlacedAgain(t *testing.T) {
 	}
 	if err := r.svc.BrowserReload(); !errors.Is(err, errNotShown) {
 		t.Fatalf("reload of a closed browser: %v, want %v", err, errNotShown)
+	}
+}
+
+func TestBrowserLoadsAPageOnlyWhileItIsOnScreen(t *testing.T) {
+	small := Bounds{Width: 10, Height: 10}
+	open := func(address string) func(*rig) error {
+		return func(r *rig) error {
+			_, err := r.svc.OpenBrowser(address, small)
+			return err
+		}
+	}
+	unloaded := []string{"browser:hide", "browser:navigate:about:blank", "emit:overlay:browser-closed"}
+	cases := []struct {
+		name     string
+		preload  bool
+		placeErr error
+		act      func(*rig) error
+		want     []string
+	}{
+		{"open places first and navigates after", false, nil, open("example.com"),
+			[]string{"browser:place", "browser:navigate:https://example.com"}},
+		{"open that cannot place loads nothing", false, errors.New("SetWindowPos failed"), open("example.com"), unloaded},
+		{"open that cannot place stops the page already loaded", true, errors.New("SetWindowPos failed"), open("twitch.tv"), unloaded},
+		{"move that cannot place stops the page", true, errors.New("SetWindowPos failed"), func(r *rig) error {
+			return r.svc.PlaceBrowser(small)
+		}, unloaded},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, b, _ := newBrowserRig(t)
+			r.svc.toggleOnUI()
+			if c.preload {
+				if _, err := r.svc.OpenBrowser("example.com", small); err != nil {
+					t.Fatal(err)
+				}
+			}
+			b.placeErr = c.placeErr
+			before := len(r.log.all())
+			if err := c.act(r); !errors.Is(err, c.placeErr) {
+				t.Fatalf("err = %v, want %v", err, c.placeErr)
+			}
+			if got := r.log.all()[before:]; !slices.Equal(got, c.want) {
+				t.Fatalf("browser calls = %v, want %v", got, c.want)
+			}
+			if c.placeErr != nil && b.isVisible() {
+				t.Fatal("browser is visible after a failed placement")
+			}
+		})
+	}
+}
+
+func TestClosingTheBrowserUnloadsThePage(t *testing.T) {
+	area := Bounds{Width: 800, Height: 600}
+	disable := func(t *testing.T, r *rig) {
+		t.Helper()
+		if err := r.apply(true, settings.OverlayHotkeyAltBacktick, false, settings.OverlayHotkeyAltBacktick); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		name   string
+		act    func(*testing.T, *rig)
+		unload bool
+	}{
+		{"close button", func(t *testing.T, r *rig) {
+			if err := r.svc.CloseBrowser(); err != nil {
+				t.Fatal(err)
+			}
+		}, true},
+		{"browser window closed", func(_ *testing.T, r *rig) { r.svc.dispatch(r.svc.closeBrowserOnUI) }, true},
+		{"overlay disabled in settings", disable, true},
+		{"overlay disabled after the hotkey hid it", func(t *testing.T, r *rig) {
+			r.svc.toggleOnUI()
+			disable(t, r)
+		}, true},
+		{"hotkey hides the overlay", func(_ *testing.T, r *rig) { r.svc.toggleOnUI() }, false},
+		{"focus leaves the overlay", func(_ *testing.T, r *rig) {
+			r.plat.setFg(otherHwnd)
+			r.svc.lostFocus()
+		}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, b, _ := newBrowserRig(t)
+			r.start(t)
+			r.svc.toggleOnUI()
+			if _, err := r.svc.OpenBrowser("example.com", area); err != nil {
+				t.Fatal(err)
+			}
+			c.act(t, r)
+
+			want := []string{"https://example.com"}
+			if c.unload {
+				want = append(want, "about:blank")
+			}
+			if got := b.navigated(); !slices.Equal(got, want) {
+				t.Fatalf("navigated %v, want %v", got, want)
+			}
+			if b.isVisible() {
+				t.Fatal("browser is still on screen")
+			}
+			wantClosed := 0
+			if c.unload {
+				wantClosed = 1
+			}
+			if n := r.log.count("emit:overlay:browser-closed"); n != wantClosed {
+				t.Fatalf("browser-closed emitted %d times, want %d", n, wantClosed)
+			}
+		})
 	}
 }
 

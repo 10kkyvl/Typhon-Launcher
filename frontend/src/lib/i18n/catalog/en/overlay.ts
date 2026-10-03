@@ -15,6 +15,7 @@ export const overlay: Record<OverlayKey, Message> = {
   'overlay.musicIdle': 'Nothing is playing',
   'overlay.musicUntitled': 'Untitled',
   'overlay.musicError': 'Could not find out what is playing',
+  'overlay.musicUnavailable': 'Music controls are unavailable on this system',
   'overlay.musicCommandError': 'The player did not respond',
   'overlay.musicPlay': 'Play',
   'overlay.musicPause': 'Pause',

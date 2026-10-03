@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"typhon/internal/uierr"
 )
 
 type fake struct {
+	mu          sync.Mutex
 	unsupported bool
 	track       Track
 	active      bool
@@ -19,6 +24,7 @@ type fake struct {
 	block       bool
 	started     bool
 	startErr    error
+	startGate   chan struct{}
 	stopErr     error
 	cmds        []command
 }
@@ -26,11 +32,18 @@ type fake struct {
 func (f *fake) supported() bool { return !f.unsupported }
 
 func (f *fake) start(context.Context) error {
+	if f.startGate != nil {
+		<-f.startGate
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.started = f.startErr == nil
 	return f.startErr
 }
 
 func (f *fake) stop() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.started = false
 	return f.stopErr
 }
@@ -44,7 +57,9 @@ func (f *fake) current(ctx context.Context) (Track, bool, error) {
 }
 
 func (f *fake) control(ctx context.Context, cmd command) error {
+	f.mu.Lock()
 	f.cmds = append(f.cmds, cmd)
+	f.mu.Unlock()
 	if f.block {
 		<-ctx.Done()
 		return ctx.Err()
@@ -166,15 +181,104 @@ func TestCommands(t *testing.T) {
 	}
 }
 
-func TestLifecycleErrorsReachTheCaller(t *testing.T) {
-	boom := errors.New("boom")
-	svc := newFake(&fake{startErr: boom})
-	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); !errors.Is(err, boom) {
-		t.Fatalf("ServiceStartup error = %v, want it to wrap %v", err, boom)
+func TestUnavailableMediaDoesNotStopTheLauncher(t *testing.T) {
+	boom := errors.New("RoInitialize: HRESULT 0x80004005")
+	cases := []struct {
+		name string
+		make func() (*Service, *fake)
+	}{
+		{"apartment does not start", func() (*Service, *fake) {
+			f := &fake{startErr: boom, active: true, track: Track{Title: "stale"}}
+			return newFake(f), f
+		}},
+		{"platform does not load", func() (*Service, *fake) { return newService(nil, boom), nil }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, f := c.make()
+			if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+				t.Fatalf("ServiceStartup = %v: media controls are optional and must not abort startup", err)
+			}
+			check := func(what string, err error) {
+				t.Helper()
+				if !errors.Is(err, ErrUnavailable) || !errors.Is(err, boom) {
+					t.Fatalf("%s error = %v, want ErrUnavailable wrapping %v", what, err, boom)
+				}
+				if code := uierr.Code(err); code != "media.unavailable" {
+					t.Fatalf("%s code = %q, want media.unavailable", what, code)
+				}
+			}
+			st, err := svc.Current(context.Background())
+			check("Current", err)
+			if st != (State{}) {
+				t.Fatalf("Current state = %+v, an unavailable service must not look like an idle one", st)
+			}
+			for name, run := range map[string]func(context.Context) error{
+				"toggle": svc.TogglePlayPause, "next": svc.Next, "previous": svc.Previous,
+			} {
+				check(name, run(context.Background()))
+			}
+			if f != nil && len(f.cmds) != 0 {
+				t.Fatalf("platform was called while unavailable: %v", f.cmds)
+			}
+			if err := svc.ServiceShutdown(); err != nil {
+				t.Fatalf("ServiceShutdown: %v", err)
+			}
+		})
+	}
+}
+
+func TestCallsInFlightSeeTheServiceTurnUnavailable(t *testing.T) {
+	boom := errors.New("RoInitialize: HRESULT 0x80004005")
+	gate := make(chan struct{})
+	svc := newFake(&fake{startErr: boom, startGate: gate, active: true, track: Track{Title: "song"}})
+	calls := map[string]func(context.Context) error{
+		"current": func(ctx context.Context) error {
+			_, err := svc.Current(ctx)
+			return err
+		},
+		"toggle": svc.TogglePlayPause, "next": svc.Next, "previous": svc.Previous,
 	}
 
+	const perCall = 3
+	var inFlight, done sync.WaitGroup
+	wrong := make(chan string, len(calls)*perCall)
+	for name, call := range calls {
+		for range perCall {
+			inFlight.Add(1)
+			done.Add(1)
+			go func() {
+				defer done.Done()
+				err := call(context.Background())
+				inFlight.Done()
+				for err == nil {
+					err = call(context.Background())
+				}
+				if !errors.Is(err, ErrUnavailable) || !errors.Is(err, boom) {
+					wrong <- fmt.Sprintf("%s ended with %v", name, err)
+				}
+			}()
+		}
+	}
+	started := make(chan error, 1)
+	go func() { started <- svc.ServiceStartup(context.Background(), application.ServiceOptions{}) }()
+
+	inFlight.Wait()
+	close(gate)
+	done.Wait()
+	if err := <-started; err != nil {
+		t.Fatalf("ServiceStartup = %v", err)
+	}
+	close(wrong)
+	for msg := range wrong {
+		t.Errorf("%s, want ErrUnavailable wrapping %v", msg, boom)
+	}
+}
+
+func TestLifecycleErrorsReachTheCaller(t *testing.T) {
+	boom := errors.New("boom")
 	f := &fake{stopErr: boom}
-	svc = newFake(f)
+	svc := newFake(f)
 	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}

@@ -122,8 +122,11 @@ func (s *Service) OpenBrowser(address string, area Bounds) (string, error) {
 		if err != nil {
 			return err
 		}
+		if err := s.placeBrowser(win, r); err != nil {
+			return err
+		}
 		win.navigate(target)
-		return s.placeBrowser(win, r)
+		return nil
 	})
 	if err != nil {
 		return "", err
@@ -215,10 +218,7 @@ func browserRect(overlay rect, area Bounds) (rect, error) {
 
 func (s *Service) placeBrowser(win browserWindow, r rect) error {
 	if err := win.place(r); err != nil {
-		win.hide()
-		s.mu.Lock()
-		s.browserOpen = false
-		s.mu.Unlock()
+		s.unloadBrowser(win)
 		return err
 	}
 	s.mu.Lock()
@@ -227,13 +227,23 @@ func (s *Service) placeBrowser(win browserWindow, r rect) error {
 	return nil
 }
 
+// A browser that is not open holds no page: hiding alone would leave a video
+// or a stream playing with no way to see or stop it.
+func (s *Service) unloadBrowser(win browserWindow) {
+	s.mu.Lock()
+	s.browserOpen = false
+	s.mu.Unlock()
+	win.hide()
+	win.navigate(blankPage)
+	s.emit(EventBrowserClosed, Signal{})
+}
+
 func (s *Service) closeBrowserOnUI() {
 	s.mu.Lock()
 	win := s.browser
-	s.browserOpen = false
 	s.mu.Unlock()
 	if win != nil {
-		win.hide()
+		s.unloadBrowser(win)
 	}
 }
 

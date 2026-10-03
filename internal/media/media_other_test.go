@@ -9,10 +9,7 @@ import (
 )
 
 func TestUnsupportedPlatform(t *testing.T) {
-	svc, err := NewService()
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := NewService()
 	st, err := svc.Current(context.Background())
 	if err != nil {
 		t.Fatalf("Current: %v", err)

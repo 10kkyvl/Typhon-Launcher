@@ -144,6 +144,7 @@ func init() {
 	application.RegisterEvent[overlay.Signal](overlay.EventShown)
 	application.RegisterEvent[overlay.Signal](overlay.EventHidden)
 	application.RegisterEvent[overlay.Status](overlay.EventStatus)
+	application.RegisterEvent[overlay.Signal](overlay.EventBrowserClosed)
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -538,10 +539,7 @@ func main() {
 		fatal("start overlay service", err)
 	}
 
-	mediaService, err := media.NewService()
-	if err != nil {
-		fatal("start media service", err)
-	}
+	mediaService := media.NewService()
 
 	var trayController *tray.Controller
 

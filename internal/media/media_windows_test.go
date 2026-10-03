@@ -121,10 +121,7 @@ func TestApartmentCallerContext(t *testing.T) {
 }
 
 func TestServiceBeforeStartup(t *testing.T) {
-	svc, err := NewService()
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := NewService()
 	if _, err := svc.Current(context.Background()); !errors.Is(err, ErrNotStarted) {
 		t.Fatalf("Current error = %v, want ErrNotStarted", err)
 	}
@@ -134,10 +131,7 @@ func TestServiceBeforeStartup(t *testing.T) {
 }
 
 func TestServiceStartupAndShutdown(t *testing.T) {
-	svc, err := NewService()
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := NewService()
 	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}

@@ -12,6 +12,7 @@ export const overlay = {
   'overlay.musicIdle': 'Сейчас ничего не играет',
   'overlay.musicUntitled': 'Без названия',
   'overlay.musicError': 'Не удалось узнать, что играет',
+  'overlay.musicUnavailable': 'Управление музыкой недоступно в этой системе',
   'overlay.musicCommandError': 'Плеер не выполнил команду',
   'overlay.musicPlay': 'Воспроизвести',
   'overlay.musicPause': 'Пауза',
