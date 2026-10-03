@@ -548,7 +548,8 @@ func (s *Service) interruptResumed(id string) {
 // чистит: baseline ярлыков снимался до старта установщика и не восстановим.
 // Общие каталоги воркер убрал сам, и итог лежит в его state.Shell.
 func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
-	dropInstallerLog(s.installerLogPath(id))
+	logPath := s.installerLogPath(id)
+	defer dropInstallerLog(logPath)
 	if state.Cancelled {
 		// Cancel записал маркер и оставил статус рабочим именно ради этого
 		// момента: воркер подтвердил отмену через Cancelled, а не через
@@ -563,6 +564,27 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 	}
 	if state.Shell != nil {
 		logShellReports(id, []shellReport{*state.Shell})
+	}
+	s.mu.Lock()
+	item := s.findLocked(id)
+	var engine Engine
+	if item != nil {
+		engine = item.Engine
+	}
+	s.mu.Unlock()
+	if item == nil {
+		slog.Warn("resumed installation is gone", "id", id)
+		return
+	}
+	done, logErr := installerFinished(engine, state.Code, logPath)
+	if logErr != nil {
+		slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
+	}
+	if !done {
+		slog.Error("resumed silent installer failed", "id", id, "engine", string(engine),
+			"code", state.Code, "log", installerLogTail(logPath))
+		s.fail(id, exitError(engine, state.Code))
+		return
 	}
 	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
 	if err := s.markResumedOwnership(id); err != nil {

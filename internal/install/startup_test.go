@@ -19,12 +19,16 @@ func TestServiceStartupResumesWorkerThatFinishedWhileLauncherWasDead(t *testing.
 	cases := []struct {
 		name       string
 		state      workerState
+		log        string
 		wantStatus Status
 		wantErr    string
 	}{
-		{"done clean", workerState{PID: 999999999, Done: true, Code: 0}, StatusCompleted, ""},
-		{"done with error", workerState{PID: 999999999, Done: true, Error: "boom"}, StatusFailed, "boom"},
-		{"done cancelled", workerState{PID: 999999999, Done: true, Cancelled: true, Error: "context canceled"}, StatusCancelled, ""},
+		{"done clean", workerState{PID: 999999999, Done: true, Code: 0}, "", StatusCompleted, ""},
+		{"done with error", workerState{PID: 999999999, Done: true, Error: "boom"}, "", StatusFailed, "boom"},
+		{"done cancelled", workerState{PID: 999999999, Done: true, Cancelled: true, Error: "context canceled"}, "", StatusCancelled, ""},
+		{"installer cancelled by the player", workerState{PID: 999999999, Done: true, Code: 2}, "", StatusFailed, exitError(EngineInno, 2).Error()},
+		{"installer failed", workerState{PID: 999999999, Done: true, Code: 1}, "", StatusFailed, exitError(EngineInno, 1).Error()},
+		{"installer crashed after finishing", workerState{PID: 999999999, Done: true, Code: 1}, innoSuccessMarker, StatusCompleted, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -50,6 +54,11 @@ func TestServiceStartupResumesWorkerThatFinishedWhileLauncherWasDead(t *testing.
 			}
 			if err := writeWorkerState(s.workerStatePath(id), tc.state); err != nil {
 				t.Fatalf("write worker state: %v", err)
+			}
+			if tc.log != "" {
+				if err := os.WriteFile(s.installerLogPath(id), []byte(tc.log+"\r\n"), 0o600); err != nil {
+					t.Fatalf("write installer log: %v", err)
+				}
 			}
 
 			restore := resumeWatchPollInterval
