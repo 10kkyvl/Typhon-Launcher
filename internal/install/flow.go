@@ -201,6 +201,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		slog.Warn("shortcut cleanup stays with the launcher", "id", id, "error", err)
 	}
 	specs := make([]runSpec, 0, len(chain))
+	workers := make([]*shellHandoff, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)
 		if err != nil {
@@ -210,8 +211,9 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		spec.InfPath = infPath
 		spec.CancelPath = cancelPath
 		spec.Broker = handoff
-		spec.Shell = shared
+		spec.Shell = shared.forInstaller()
 		specs = append(specs, spec)
+		workers = append(workers, spec.Shell)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
 		return err
@@ -235,7 +237,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts, shared)
+	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts, workers)
 	return s.finalize(ctx, id)
 }
 
@@ -249,23 +251,22 @@ func (s *Service) runSilentChain(ctx context.Context, id string, item Installati
 		if err != nil {
 			return err
 		}
-		exitErr := exitError(item.Engine, code)
-		if exitErr == nil {
-			continue
-		}
-		done, logErr := installerLogSucceeded(item.Engine, logPath)
+		done, logErr := installerFinished(item.Engine, code, logPath)
 		if logErr != nil {
 			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 		}
+		exitErr := exitError(item.Engine, code)
 		if !done {
 			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
 				"path", chain[i], "code", code, "log", installerLogTail(logPath))
 			return exitErr
 		}
-		// Установщики GOG падают при завершении уже после того, как файлы
-		// разложены: свой лог они при этом закрывают отметкой об успехе.
-		slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
-			"path", chain[i], "code", code)
+		if exitErr != nil {
+			// Установщики GOG падают при завершении уже после того, как файлы
+			// разложены: свой лог они при этом закрывают отметкой об успехе.
+			slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
+				"path", chain[i], "code", code)
+		}
 	}
 	return nil
 }
@@ -301,21 +302,17 @@ func (s *Service) shellBaseline(ctx context.Context, id string) shellSnapshot {
 }
 
 // Ярлыки, созданные установщиком под UAC в общих каталогах, лаунчер удалить не
-// может: он работает без прав администратора. Если установку вёл повышенный
-// воркер, он уже убрал их сам и его итог лежит в worker.Reports; тогда лаунчер
-// чистит только свои каталоги. Это не повод считать установку неудачной, поэтому
-// ошибка только логируется.
-func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool, worker *shellHandoff) {
+// может: он работает без прав администратора. Если после каждого установщика
+// цепочки их убрал повышенный воркер, лаунчер чистит только свои каталоги;
+// общие каталоги берутся из того же задания, что ушло воркеру, и заново не
+// определяются. Это не повод считать установку неудачной, поэтому ошибка
+// только логируется: канала для предупреждений у задания установки нет.
+func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool, workers []*shellHandoff) {
 	if !before.taken {
 		return
 	}
-	if reports := worker.reports(); len(reports) > 0 {
-		logShellReports(id, reports)
-		shared, err := sharedRootsFn()
-		if err != nil {
-			slog.Warn("resolve shared shortcut folders", "id", id, "error", err)
-			return
-		}
+	logShellReports(id, workerReports(workers))
+	if shared := delegatedRoots(workers); len(shared) > 0 {
 		before = before.without(shared)
 	}
 	removed, err := cleanShellShortcuts(ctx, before, dest, game)
@@ -457,6 +454,16 @@ func dropInstallerLog(path string) {
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		slog.Warn("remove installer log", "path", path, "error", err)
 	}
+}
+
+// installerFinished — единственное правило, по которому установщик считается
+// отработавшим: им решает и лаунчер (runSilentChain), и повышенный воркер,
+// прежде чем убирать ярлыки (workerShellCleanup).
+func installerFinished(engine Engine, code int, logPath string) (bool, error) {
+	if exitError(engine, code) == nil {
+		return true, nil
+	}
+	return installerLogSucceeded(engine, logPath)
 }
 
 // installerLogSucceeded отвечает на вопрос, разложил ли установщик файлы, когда

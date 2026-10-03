@@ -78,7 +78,7 @@ func runWorkerSpec(spec workerSpec) error {
 	} else if spec.Shell != nil {
 		// Done пишется одной записью вместе с итогом уборки: лаунчер мог
 		// перезапуститься, и тогда итог можно прочитать только из этого файла.
-		report := cleanSharedShortcuts(ctx, *spec.Shell, spec.Destination)
+		report := workerShellCleanup(ctx, spec, code)
 		state.Shell = &report
 	}
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
@@ -88,6 +88,22 @@ func runWorkerSpec(spec workerSpec) error {
 		return err
 	}
 	return runErr
+}
+
+// workerShellCleanup убирает ярлыки только после установки, которую лаунчер
+// тоже сочтёт успешной: код возврата и лог разбирает тот же installerFinished,
+// что и runSilentChain. Отменённый или упавший установщик оставляет за собой
+// ярлыки, а установка в лаунчере провалится.
+func workerShellCleanup(ctx context.Context, spec workerSpec, code int) shellReport {
+	done, logErr := installerFinished(spec.Engine, code, spec.LogPath)
+	if !done {
+		report := shellReport{Skipped: true}
+		if logErr != nil {
+			report.Error = logErr.Error()
+		}
+		return report
+	}
+	return cleanSharedShortcuts(ctx, *spec.Shell, spec.Destination)
 }
 
 // finishWorkerState записывает финальное состояние с причиной сбоя до того,

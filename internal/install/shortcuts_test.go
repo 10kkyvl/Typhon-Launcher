@@ -164,7 +164,11 @@ func TestSiteShortcut(t *testing.T) {
 			} else {
 				writeFile(t, path, tc.content)
 			}
-			got, err := siteShortcut(path)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			got, err := siteShortcut(path, data)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("siteShortcut error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -173,8 +177,8 @@ func TestSiteShortcut(t *testing.T) {
 			}
 		})
 	}
-	if got, err := siteShortcut(filepath.Join(dir, "нет.lnk")); err != nil || got {
-		t.Fatalf("отсутствующий ярлык = %v, %v", got, err)
+	if _, err := openShellEntry(shellSnapshotOf(t, dir), filepath.Join(dir, "нет.lnk"), false); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("отсутствующий ярлык: err = %v, want fs.ErrNotExist", err)
 	}
 }
 

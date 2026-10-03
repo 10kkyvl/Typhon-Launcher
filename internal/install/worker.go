@@ -85,8 +85,9 @@ type workerState struct {
 	Cancelled        bool     `json:"cancelled,omitempty"`
 	Components       []string `json:"components,omitempty"`
 	DiscoveryFailure string   `json:"discoveryFailure,omitempty"`
-	// Shell заполнен только когда воркер пробовал убрать ярлыки установщика;
-	// nil значит, что уборку делать не просили или установщик не дошёл до конца.
+	// Shell заполнен, когда уборку ярлыков просили и установщик отработал; nil
+	// значит, что не просили или запуск установщика вернул ошибку. Установщик,
+	// завершившийся неуспехом, даёт Skipped.
 	Shell *shellReport `json:"shell,omitempty"`
 }
 

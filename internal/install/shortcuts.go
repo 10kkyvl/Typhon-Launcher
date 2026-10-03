@@ -6,10 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"log/slog"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -34,18 +31,32 @@ type shellEntry struct {
 	path string
 }
 
+// rootIDs — каким был каждый корень в момент снимка: удаление сверяет с ним
+// записи, а не разбирает корень заново, поэтому корень, подменённый ссылкой
+// после снимка, не уводит удаление в другой каталог.
 type shellSnapshot struct {
 	roots   []string
 	entries map[string]shellEntry
+	rootIDs map[string]shellRootID
 	taken   bool
 }
 
 func takeShellSnapshot(ctx context.Context, roots []string) (shellSnapshot, error) {
-	snap := shellSnapshot{roots: roots, entries: make(map[string]shellEntry), taken: true}
+	snap := shellSnapshot{roots: roots, entries: make(map[string]shellEntry), rootIDs: make(map[string]shellRootID, len(roots)), taken: true}
 	for _, root := range roots {
 		if root == "" {
 			continue
 		}
+		// Корень опознаётся до обхода: подменённый во время обхода, он уже не
+		// совпадёт с итоговыми путями найденных записей.
+		id, err := identifyShellRoot(root)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return shellSnapshot{}, err
+		}
+		snap.rootIDs[root] = id
 		if err := scanShell(ctx, root, snap.entries); err != nil {
 			return shellSnapshot{}, err
 		}
@@ -103,7 +114,10 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 	if err != nil {
 		return nil, err
 	}
+	return removeShellShortcuts(ctx, before, after, target, game)
+}
 
+func removeShellShortcuts(ctx context.Context, before, after shellSnapshot, target string, game bool) ([]string, error) {
 	installerDirs := make(map[string]bool, len(before.roots))
 	for _, root := range before.roots {
 		if root != "" {
@@ -133,30 +147,56 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 	removed := make([]string, 0, len(files)+len(rewritten))
 	emptied := make(map[string]bool, 4)
 	var failures []error
-	drop := func(path string, fresh bool) error {
+	drop := func(path string, fresh bool) (err error) {
 		onDisk := after.entries[path].path
-		match := false
-		if fresh && game && target != "" {
-			var err error
-			if match, err = shortcutPointsTo(onDisk, target); err != nil {
-				return err
-			}
+		ext := strings.ToLower(filepath.Ext(onDisk))
+		gameRule := fresh && game && target != "" && gameShortcutExts[ext]
+		siteRule := installerDirs[filepath.Dir(path)] && siteShortcutExts[ext]
+		if !gameRule && !siteRule {
+			return nil
 		}
-		if !match && installerDirs[filepath.Dir(path)] {
-			var err error
-			if match, err = siteShortcut(onDisk); err != nil {
+		entry, err := openShellEntry(after, onDisk, false)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		defer func() { err = errors.Join(err, entry.close()) }()
+		data, err := entry.read(shortcutScanLimit)
+		if err != nil {
+			return err
+		}
+		match := gameRule && referencesPath(data, target)
+		if !match && siteRule {
+			if match, err = siteShortcut(onDisk, data); err != nil {
 				return err
 			}
 		}
 		if !match {
 			return nil
 		}
-		if err := os.Remove(onDisk); err != nil {
+		if err := removeShellEntry(entry); err != nil {
 			return err
 		}
 		removed = append(removed, path)
 		emptied[filepath.Dir(path)] = true
 		return nil
+	}
+	dropDir := func(path string) (gone bool, err error) {
+		entry, err := openShellEntry(after, after.entries[path].path, true)
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		defer func() { err = errors.Join(err, entry.close()) }()
+		err = removeShellEntry(entry)
+		if errors.Is(err, errShellDirNotEmpty) {
+			return false, nil
+		}
+		return err == nil, err
 	}
 	for _, path := range files {
 		if err := ctx.Err(); err != nil {
@@ -181,17 +221,12 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 		if !game && !emptied[path] {
 			continue
 		}
-		onDisk := after.entries[path].path
-		empty, err := dirEmpty(onDisk)
+		gone, err := dropDir(path)
 		if err != nil {
 			failures = append(failures, err)
 			continue
 		}
-		if !empty {
-			continue
-		}
-		if err := os.Remove(onDisk); err != nil {
-			failures = append(failures, err)
+		if !gone {
 			continue
 		}
 		removed = append(removed, path)
@@ -200,45 +235,27 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 	return removed, errors.Join(failures...)
 }
 
-func shortcutPointsTo(path, target string) (bool, error) {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".lnk", ".url", ".pif":
-	default:
-		return false, nil
-	}
-	data, err := readHead(path, shortcutScanLimit)
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return referencesPath(data, target), nil
-}
+var (
+	gameShortcutExts = map[string]bool{".lnk": true, ".url": true, ".pif": true}
+	siteShortcutExts = map[string]bool{".lnk": true, ".url": true}
+)
 
 // siteShortcut узнаёт ярлык сайта: .url с адресом http(s) или .lnk, цель
 // которого — .url-файл. Так делают репаки Игрухи: ярлык на общем столе ведёт в
 // Program Files (x86)\TI\TI.URL, а тот — на сайт.
-func siteShortcut(path string) (bool, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext != ".url" && ext != ".lnk" {
-		return false, nil
-	}
-	data, err := readHead(path, shortcutScanLimit)
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if ext == ".url" {
+func siteShortcut(path string, data []byte) (bool, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".url":
 		return webURL(data), nil
+	case ".lnk":
+		link, err := lnkTarget(data)
+		if err != nil {
+			return false, fmt.Errorf("%s: %w", path, err)
+		}
+		return strings.EqualFold(filepath.Ext(link), ".url"), nil
+	default:
+		return false, nil
 	}
-	link, err := lnkTarget(data)
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", path, err)
-	}
-	return strings.EqualFold(filepath.Ext(link), ".url"), nil
 }
 
 func webURL(data []byte) bool {
@@ -374,19 +391,6 @@ func lnkString(info []byte, at uint32, wide bool) (string, error) {
 		units = append(units, u)
 	}
 	return "", errBadShellLink
-}
-
-func readHead(path string, limit int64) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			slog.Warn("close shortcut", "path", path, "error", err)
-		}
-	}()
-	return io.ReadAll(io.LimitReader(f, limit))
 }
 
 // Цель ярлыка лежит в .lnk и как ANSI-строка, и как UTF-16LE, а .url хранит её

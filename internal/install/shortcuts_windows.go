@@ -38,6 +38,18 @@ func sharedShortcutRoots() ([]string, error) {
 	return knownFolderPaths(sharedShortcutFolders)
 }
 
+func systemFolders() (string, []string, error) {
+	windir, err := windows.GetSystemWindowsDirectory()
+	if err != nil {
+		return "", nil, fmt.Errorf("windows directory: %w", err)
+	}
+	programFiles, err := knownFolderPaths([]*windows.KNOWNFOLDERID{windows.FOLDERID_ProgramFiles, windows.FOLDERID_ProgramFilesX86})
+	if err != nil {
+		return "", nil, err
+	}
+	return windir, programFiles, nil
+}
+
 func knownFolderPaths(ids []*windows.KNOWNFOLDERID) ([]string, error) {
 	roots := make([]string, 0, len(ids))
 	for _, id := range ids {
