@@ -4,12 +4,19 @@ import type { ErrInstallKey } from '../ru/errInstall';
 export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.fallback': 'Could not complete the operation',
 
+  'errInstall.installArchiveCorrupt':
+    'The archive is damaged: the checksum does not match in the external extractor either, download it again',
   'errInstall.installArchiveEncrypted': 'The archive is password-protected, extract it manually',
   'errInstall.installArchiveIncomplete': 'The archive is truncated or its next volume is missing',
+  'errInstall.installArchiveResultMismatch':
+    'The unpacked files do not match the archive listing: an antivirus may have removed a file or a name had to be changed',
   'errInstall.installArchiveToolFailed': 'Neither the built-in extractor nor 7-Zip or WinRAR could unpack the archive',
   'errInstall.installArchiveToolMissing': 'The built-in extractor could not unpack this archive: install 7-Zip or WinRAR, or extract it manually',
+  'errInstall.installArchiveToolOutdated':
+    'The installed WinRAR or 7-Zip is too old or not recognised: update it (WinRAR 7.13+, 7-Zip 25.01+) or extract the archive manually',
   'errInstall.installArchiveToolWriteFailed': 'The extractor could not write files to disk',
   'errInstall.installArchiveUnsafeEntries': 'The archive contains links or paths outside its folder, extract it manually',
+  'errInstall.installArchiveVerifyFailed': 'Could not verify the unpacked files: the disk or an antivirus keeps a file locked',
   'errInstall.installBadCommand': 'The uninstall command is malformed',
   'errInstall.installBusy': 'This download is already being installed',
   'errInstall.installCopyVerifyFailed': 'Copying finished but verification failed',

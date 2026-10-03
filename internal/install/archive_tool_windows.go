@@ -3,6 +3,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"os"
@@ -19,37 +20,57 @@ func toolProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW}
 }
 
-func findArchiveTools() []archiveTool {
-	var tools []archiveTool
-	if path := firstRegularFile(unrarCandidates()); path != "" {
-		tools = append(tools, unrarTool(path))
-	}
-	if path := firstRegularFile(sevenZipCandidates()); path != "" {
-		tools = append(tools, sevenZipTool(path))
-	}
-	return tools
+type toolSources struct {
+	registry     func(path string, names ...string) []string
+	programFiles func() []string
+	lookPath     func(name string) string
 }
 
-func unrarCandidates() []string {
+var systemToolSources = toolSources{registry: registryValues, programFiles: programFilesDirs, lookPath: lookPathAbs}
+
+// WhatsNew.txt WinRAR: в 7.12 и 7.13 закрыты две уязвимости, из-за которых
+// Windows-версии RAR и UnRAR берут путь из специально собранного архива вместо
+// заданного пользователем; записать за пределы каталога можно, не оставив
+// следа внутри него. Unix-версии не затронуты.
+var unrarFloor = toolVersion{major: 7, minor: 13}
+
+func findArchiveTools(ctx context.Context) toolSet {
+	return findTools(ctx, systemToolSources)
+}
+
+func findTools(ctx context.Context, src toolSources) toolSet {
+	var set toolSet
+	if path := firstRegularFile(unrarCandidates(src)); path != "" {
+		tool, err := newUnrar(ctx, path)
+		set.add(tool, err)
+	}
+	if path := firstRegularFile(sevenZipCandidates(src)); path != "" {
+		tool, err := newSevenZip(ctx, path)
+		set.add(tool, err)
+	}
+	return set
+}
+
+func unrarCandidates(src toolSources) []string {
 	var out []string
-	for _, exe := range registryValues(`SOFTWARE\WinRAR`, "exe64", "exe32") {
+	for _, exe := range src.registry(`SOFTWARE\WinRAR`, "exe64", "exe32") {
 		out = append(out, filepath.Join(filepath.Dir(exe), "UnRAR.exe"))
 	}
-	for _, dir := range programFilesDirs() {
+	for _, dir := range src.programFiles() {
 		out = append(out, filepath.Join(dir, "WinRAR", "UnRAR.exe"))
 	}
-	return append(out, lookPathAbs("UnRAR.exe"))
+	return append(out, src.lookPath("UnRAR.exe"))
 }
 
-func sevenZipCandidates() []string {
+func sevenZipCandidates(src toolSources) []string {
 	var out []string
-	for _, dir := range registryValues(`SOFTWARE\7-Zip`, "Path64", "Path") {
+	for _, dir := range src.registry(`SOFTWARE\7-Zip`, "Path64", "Path") {
 		out = append(out, filepath.Join(dir, "7z.exe"))
 	}
-	for _, dir := range programFilesDirs() {
+	for _, dir := range src.programFiles() {
 		out = append(out, filepath.Join(dir, "7-Zip", "7z.exe"))
 	}
-	return append(out, lookPathAbs("7z.exe"))
+	return append(out, src.lookPath("7z.exe"))
 }
 
 func programFilesDirs() []string {

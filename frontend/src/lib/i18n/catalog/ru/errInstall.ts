@@ -1,12 +1,18 @@
 export const errInstall = {
   'errInstall.fallback': 'не удалось выполнить операцию',
 
+  'errInstall.installArchiveCorrupt': 'архив повреждён: контрольная сумма не сошлась и во внешнем распаковщике, скачайте его заново',
   'errInstall.installArchiveEncrypted': 'архив защищён паролем, распакуйте его вручную',
   'errInstall.installArchiveIncomplete': 'архив обрезан или не хватает следующего тома',
+  'errInstall.installArchiveResultMismatch':
+    'распакованные файлы не совпадают с оглавлением архива: возможно, файл удалил антивирус или имя пришлось изменить',
   'errInstall.installArchiveToolFailed': 'архив не распаковался ни встроенным распаковщиком, ни 7-Zip или WinRAR',
   'errInstall.installArchiveToolMissing': 'встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR либо распакуйте вручную',
+  'errInstall.installArchiveToolOutdated':
+    'установленный WinRAR или 7-Zip слишком старый или не опознан: обновите его (WinRAR 7.13+, 7-Zip 25.01+) либо распакуйте архив вручную',
   'errInstall.installArchiveToolWriteFailed': 'распаковщик не смог записать файлы на диск',
   'errInstall.installArchiveUnsafeEntries': 'в архиве есть ссылки или пути за пределы папки, распакуйте его вручную',
+  'errInstall.installArchiveVerifyFailed': 'не удалось проверить распакованные файлы: диск или антивирус не отпускает файл',
   'errInstall.installBadCommand': 'команда удаления записана неверно',
   'errInstall.installBusy': 'установка этой загрузки уже выполняется',
   'errInstall.installCopyVerifyFailed': 'копирование завершилось с ошибкой проверки',

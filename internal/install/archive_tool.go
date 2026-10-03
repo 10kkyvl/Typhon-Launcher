@@ -21,14 +21,16 @@ import (
 )
 
 const (
-	toolOutputTail = 1024
-	toolWaitDelay  = 5 * time.Second
+	toolOutputTail       = 1024
+	toolWaitDelay        = 5 * time.Second
+	toolCommandLineError = 7
 )
 
 var (
-	errToolExit    = errors.New("распаковщик завершился с ошибкой")
-	errToolWrite   = uierr.New("install.archive_tool_write_failed", "распаковщик не смог записать файлы на диск")
-	toolPercentExp = regexp.MustCompile(`(\d{1,3})%`)
+	errToolExit     = errors.New("распаковщик завершился с ошибкой")
+	errToolOutdated = errors.New("распаковщик не принял параметры безопасной распаковки, обновите 7-Zip или WinRAR")
+	errToolWrite    = uierr.New("install.archive_tool_write_failed", "распаковщик не смог записать файлы на диск")
+	toolPercentExp  = regexp.MustCompile(`(\d{1,3})%`)
 )
 
 type archiveTool struct {
@@ -38,22 +40,66 @@ type archiveTool struct {
 	// Коды выхода с известной причиной. Ошибку записи или пароль следующий
 	// распаковщик не исправит, поэтому по ним перебор останавливается.
 	exitCauses map[int]error
+	// Предупреждение распаковщика — не отказ: годен ли результат, решает
+	// сверка с оглавлением архива.
+	warnExits map[int]bool
+	// 7-Zip отвечает на любую ошибку записи кодом 2, как и на битый архив, а
+	// текст системной причины зависит от языка Windows, поэтому по тексту
+	// опознаются только его собственные фразы.
+	writeMarkers []string
+	// Обрезанный архив оба распаковщика называют одной фразой, но кодом выхода
+	// это не отличить от повреждённых данных.
+	incompleteMarkers []string
+	// UnRAR переименовывает имя, недопустимое в Windows, и при этом отвечает
+	// кодом ошибки создания файла; это ошибка имени, а не диска.
+	renameMarkers []string
 }
 
+// -snl- заставляет 7-Zip 25.01 не создавать ссылку из записи перенаправления,
+// о которой rardecode не знает, а распаковать её как обычный каталог. Без него
+// 7-Zip сам пробует создать ссылку и писать за ней. Старый 7-Zip переключатель
+// отвергает кодом 7: такой распаковщик отклоняется, а не запускается заново без
+// -snl-.
 func sevenZipTool(path string) archiveTool {
-	return archiveTool{name: "7-Zip", path: path, args: func(archive, dest string) []string {
-		return []string{"x", "-y", "-aoa", "-bso0", "-bsp1", "-sccUTF-8", "-o" + dest, "--", archive}
-	}}
+	return archiveTool{
+		name: "7-Zip",
+		path: path,
+		args: func(archive, dest string) []string {
+			return []string{"x", "-y", "-aoa", "-snl-", "-bso0", "-bsp1", "-sccUTF-8", "-o" + dest, "--", archive}
+		},
+		exitCauses: map[int]error{toolCommandLineError: errToolOutdated},
+		warnExits:  map[int]bool{1: true},
+		writeMarkers: []string{
+			"cannot open output file", "cannot delete output file", "cannot delete output folder", "cannot create folder",
+		},
+		incompleteMarkers: []string{"unexpected end of archive"},
+	}
 }
 
-func unrarTool(path string) archiveTool {
+// -ol- запрещает UnRAR создавать символические ссылки, но существует только с
+// версии 7.00: старый UnRAR может отвергнуть его или принять за -ol, то есть
+// включить обработку ссылок. Для него переключатель не передаётся, и защитой
+// остаются пропуск небезопасных ссылок самим UnRAR и verifyExtracted. На жёсткие
+// ссылки переключателя нет ни у одной версии.
+func unrarTool(path string, linkSwitch bool) archiveTool {
 	return archiveTool{
 		name: "UnRAR",
 		path: path,
 		args: func(archive, dest string) []string {
-			return []string{"x", "-y", "-o+", "-p-", "-idc", "--", archive, dest + string(filepath.Separator)}
+			args := []string{"x", "-y", "-o+", "-p-", "-idc"}
+			if linkSwitch {
+				args = append(args, "-ol-")
+			}
+			return append(args, "--", archive, dest+string(filepath.Separator))
 		},
-		exitCauses: map[int]error{5: errToolWrite, 9: errToolWrite, 11: errArchiveEncrypted},
+		// 3 и 13 — «Invalid checksum. Data is damaged» и «Bad archive» (Rar.txt,
+		// раздел Exit values): эталонный декодер подтвердил, что данные повреждены.
+		exitCauses: map[int]error{
+			3: errArchiveCorrupt, 5: errToolWrite, toolCommandLineError: errToolOutdated,
+			9: errToolWrite, 11: errArchiveEncrypted, 13: errArchiveCorrupt,
+		},
+		incompleteMarkers: []string{"unexpected end of archive"},
+		renameMarkers:     []string{"attempting to correct the invalid file or directory name"},
 	}
 }
 
@@ -62,7 +108,7 @@ func (t archiveTool) extract(ctx context.Context, archive, dest string, onPercen
 	cmd := exec.CommandContext(ctx, t.path, t.args(archive, dest)...)
 	cmd.SysProcAttr = toolProcAttr()
 	cmd.WaitDelay = toolWaitDelay
-	stderr := &tailBuffer{}
+	stderr := &tailBuffer{scan: newMarkerScan(t.renameMarkers, t.incompleteMarkers, t.writeMarkers)}
 	cmd.Stderr = stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -71,7 +117,7 @@ func (t archiveTool) extract(ctx context.Context, archive, dest string, onPercen
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("запуск %s: %w", t.name, err)
 	}
-	stdoutTail := &tailBuffer{}
+	stdoutTail := &tailBuffer{scan: newMarkerScan(t.renameMarkers, t.incompleteMarkers, t.writeMarkers)}
 	scanErr := scanToolOutput(stdout, stdoutTail, onPercent)
 	waitErr := cmd.Wait()
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -83,19 +129,40 @@ func (t archiveTool) extract(ctx context.Context, archive, dest string, onPercen
 			detail = stdoutTail.text()
 		}
 		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
-			cause, ok := t.exitCauses[exitErr.ExitCode()]
-			if !ok {
-				cause = errToolExit
-			}
-			return fmt.Errorf("%s: %w (код %d): %s", t.name, cause, exitErr.ExitCode(), detail)
+		if !errors.As(waitErr, &exitErr) {
+			return fmt.Errorf("%s: %w: %s", t.name, waitErr, detail)
 		}
-		return fmt.Errorf("%s: %w: %s", t.name, waitErr, detail)
+		code := exitErr.ExitCode()
+		if !t.warnExits[code] {
+			stderr.scan.absorb(stdoutTail.scan)
+			return t.exitError(code, detail, stderr.scan)
+		}
+		slog.Warn("external tool finished with a warning", "tool", t.name, "code", code, "output", detail)
 	}
 	if scanErr != nil {
 		return fmt.Errorf("%s: чтение вывода: %w", t.name, scanErr)
 	}
 	return nil
+}
+
+// Фраза про обрезанный архив и переименование имени точнее кода выхода: UnRAR
+// сообщает обрыв кодом «данные повреждены», а переименование — кодом ошибки
+// создания файла.
+func (t archiveTool) exitError(code int, detail string, seen *markerScan) error {
+	switch {
+	case seen.found(t.renameMarkers):
+		return fmt.Errorf("%s: %w: %w (код %d): %s", t.name, errArchiveMismatch, errArchiveUnlisted, code, detail)
+	case seen.found(t.incompleteMarkers):
+		return fmt.Errorf("%s: %w (код %d): %s", t.name, errArchiveIncomplete, code, detail)
+	}
+	cause, ok := t.exitCauses[code]
+	if !ok {
+		cause = errToolExit
+		if seen.found(t.writeMarkers) {
+			cause = errToolWrite
+		}
+	}
+	return fmt.Errorf("%s: %w (код %d): %s", t.name, cause, code, detail)
 }
 
 func scanToolOutput(r io.Reader, tail *tailBuffer, onPercent func(int)) error {
@@ -104,6 +171,7 @@ func scanToolOutput(r io.Reader, tail *tailBuffer, onPercent func(int)) error {
 	sc.Split(splitToolOutput)
 	for sc.Scan() {
 		token := sc.Bytes()
+		tail.scan.feed(string(token) + "\n")
 		matches := toolPercentExp.FindAllSubmatch(token, -1)
 		if len(matches) == 0 {
 			tail.line(token)
@@ -144,10 +212,12 @@ func isToolBreak(c byte) bool {
 }
 
 type tailBuffer struct {
-	buf []byte
+	buf  []byte
+	scan *markerScan
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.scan.feed(string(p))
 	b.buf = append(b.buf, p...)
 	if len(b.buf) > toolOutputTail {
 		b.buf = b.buf[len(b.buf)-toolOutputTail:]
@@ -168,7 +238,7 @@ func (b *tailBuffer) line(p []byte) {
 
 func (b *tailBuffer) text() string {
 	fields := strings.Fields(strings.ToValidUTF8(string(b.buf), "?"))
-	return strings.Join(fields, " ")
+	return sanitizeText(strings.Join(fields, " "), toolOutputTail)
 }
 
 // Кандидаты — догадки о месте установки: отсутствующий или нечитаемый путь

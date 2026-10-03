@@ -3,6 +3,7 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
 	"syscall"
 )
@@ -15,15 +16,21 @@ func toolProcAttr() *syscall.SysProcAttr {
 // каталоги Homebrew перечислены явно.
 var toolSearchDirs = []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"}
 
-func findArchiveTools() []archiveTool {
-	var tools []archiveTool
+// WhatsNew.txt WinRAR: уязвимости пути в 7.12 и 7.13 касаются только
+// Windows-версий, Unix-версии не затронуты, поэтому нижней границы здесь нет.
+var unrarFloor toolVersion
+
+func findArchiveTools(ctx context.Context) toolSet {
+	var set toolSet
 	if path := firstRegularFile(toolCandidates("unrar")); path != "" {
-		tools = append(tools, unrarTool(path))
+		tool, err := newUnrar(ctx, path)
+		set.add(tool, err)
 	}
 	if path := firstRegularFile(append(toolCandidates("7zz"), toolCandidates("7z")...)); path != "" {
-		tools = append(tools, sevenZipTool(path))
+		tool, err := newSevenZip(ctx, path)
+		set.add(tool, err)
 	}
-	return tools
+	return set
 }
 
 func toolCandidates(name string) []string {

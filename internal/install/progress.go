@@ -17,7 +17,7 @@ func newReporter(fn func(Progress), total int64) *reporter {
 }
 
 func (r *reporter) setFile(name string) {
-	r.current = name
+	r.current = sanitizeText(name, progressNameRunes)
 	r.tick()
 }
 

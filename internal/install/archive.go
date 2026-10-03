@@ -101,6 +101,9 @@ func EstimateExtracted(archivePath string) (int64, error) {
 // Недоступный файл и нечитаемый формат — разные причины: первая пробрасывается
 // как есть, вторая означает, что перед нами не архив заявленного типа.
 func classifyArchiveError(archivePath string, err error) error {
+	if uierr.Code(err) != "" {
+		return err
+	}
 	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
 		return fmt.Errorf("чтение %s: %w", filepath.Base(archivePath), err)
 	}
