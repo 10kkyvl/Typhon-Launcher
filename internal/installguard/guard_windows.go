@@ -82,6 +82,11 @@ func watch(ctx context.Context, root uint32, hide bool) {
 	}()
 	hidden := map[uintptr]bool{}
 	traced := map[uintptr]string{}
+	audio := audioReport{}
+	owned := func(pid uint32) bool {
+		_, ok := handles[pid]
+		return ok
+	}
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -89,6 +94,7 @@ func watch(ctx context.Context, root uint32, hide bool) {
 			return
 		}
 		followChildren(handles)
+		audio.note(muteOwnedAudio(owned))
 		for _, hwnd := range listWindows(0) {
 			if ctx.Err() != nil {
 				return
