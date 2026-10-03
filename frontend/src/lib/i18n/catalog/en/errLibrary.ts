@@ -60,6 +60,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'settings.network_mode_invalid': 'Unknown network mode',
   'settings.overlay_hotkey_invalid': 'Unknown overlay hotkey',
   'overlay.hotkey_unavailable': 'This key combination is already taken by another program',
+  'overlay.browser_url': 'This address cannot be opened: only http and https sites are allowed',
   'settings.network_interface_required': 'No network adapter selected',
   'settings.network_interface_invalid': 'Invalid network adapter name',
   'settings.proxy_type_invalid': 'Unknown proxy type',

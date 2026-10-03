@@ -49,3 +49,47 @@ export async function hideOverlay(): Promise<void> {
     await OverlayService.Hide();
   }
 }
+
+export interface BrowserArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function browserArea(element: HTMLElement): BrowserArea {
+  const box = element.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const x = Math.round(box.left * scale);
+  const y = Math.round(box.top * scale);
+  return {
+    x,
+    y,
+    width: Math.round(box.right * scale) - x,
+    height: Math.round(box.bottom * scale) - y,
+  };
+}
+
+export async function openBrowser(address: string, area: BrowserArea): Promise<string> {
+  return OverlayService.OpenBrowser(address, area);
+}
+
+export async function placeBrowser(area: BrowserArea): Promise<void> {
+  await OverlayService.PlaceBrowser(area);
+}
+
+export async function closeBrowser(): Promise<void> {
+  await OverlayService.CloseBrowser();
+}
+
+export async function browserBack(): Promise<void> {
+  await OverlayService.BrowserBack();
+}
+
+export async function browserForward(): Promise<void> {
+  await OverlayService.BrowserForward();
+}
+
+export async function browserReload(): Promise<void> {
+  await OverlayService.BrowserReload();
+}

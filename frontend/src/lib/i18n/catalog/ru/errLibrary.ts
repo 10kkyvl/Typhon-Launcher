@@ -57,6 +57,7 @@ export const errLibrary = {
   'settings.network_mode_invalid': 'неизвестный режим сети',
   'settings.overlay_hotkey_invalid': 'неизвестная горячая клавиша оверлея',
   'overlay.hotkey_unavailable': 'это сочетание клавиш уже занято другой программой',
+  'overlay.browser_url': 'такой адрес нельзя открыть: нужен сайт http или https',
   'settings.network_interface_required': 'не выбран сетевой адаптер',
   'settings.network_interface_invalid': 'недопустимое имя сетевого адаптера',
   'settings.proxy_type_invalid': 'неизвестный тип прокси',

@@ -31,6 +31,7 @@ import (
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
+	"typhon/internal/media"
 	"typhon/internal/messaging"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
@@ -537,6 +538,11 @@ func main() {
 		fatal("start overlay service", err)
 	}
 
+	mediaService, err := media.NewService()
+	if err != nil {
+		fatal("start media service", err)
+	}
+
 	var trayController *tray.Controller
 
 	services := []application.Service{
@@ -572,6 +578,7 @@ func main() {
 		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
 		application.NewService(overlayService),
+		application.NewService(mediaService),
 	}
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)
@@ -602,7 +609,7 @@ func main() {
 		Services: services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: metadataService.Middleware,
+			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware),
 		},
 		Mac: application.MacOptions{
 			// С включённым сворачиванием в трей приложение обязано пережить

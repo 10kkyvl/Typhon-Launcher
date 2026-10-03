@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
+  import { Globe, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import IconButton from '../lib/components/IconButton.svelte';
   import Tabs from '../lib/components/Tabs.svelte';
@@ -11,8 +11,10 @@
   import { needsSocialConsent } from '../lib/stores/social';
   import { currentUser } from '../lib/stores/user';
   import { listenFriends, overlayAccount, refreshOverlay } from './data';
+  import OverlayBrowser from './OverlayBrowser.svelte';
   import OverlayChat from './OverlayChat.svelte';
   import OverlayFriends from './OverlayFriends.svelte';
+  import OverlayMusic from './OverlayMusic.svelte';
 
   let { settingsFailed = false }: { settingsFailed?: boolean } = $props();
 
@@ -20,8 +22,10 @@
   let shown = $state(true);
   let focusTick = $state(0);
   let hideFailed = $state(false);
+  let browser = $state(false);
   let statusHotkey = $state('');
   let panel = $state<HTMLElement | undefined>(undefined);
+  let root = $state<HTMLElement | undefined>(undefined);
 
   const hotkey = $derived(statusHotkey || $settings?.overlayHotkey || DEFAULT_OVERLAY_HOTKEY);
   const tabs = $derived([
@@ -46,7 +50,7 @@
   }
 
   function onFocus(): void {
-    if (!panel?.contains(document.activeElement)) panel?.focus();
+    if (!root?.contains(document.activeElement)) panel?.focus();
   }
 
   function chatWith(peer: ChatPeer): void {
@@ -80,16 +84,26 @@
 
 <svelte:window onkeydown={onKeydown} onfocus={onFocus} />
 
-<div class="overlay">
+<div class="overlay" bind:this={root}>
   <button class="backdrop" type="button" tabindex="-1" aria-label={msg('common.close')} onclick={hide}></button>
+  {#if browser}
+    <OverlayBrowser {shown} onclose={() => (browser = false)} />
+  {/if}
   <aside class="panel" bind:this={panel} tabindex="-1" aria-label={msg('overlay.panelLabel')}>
     <header class="head">
       <div class="brand">
         <strong>Typhon</strong>
         <span>{msg('overlay.hint', { key: hotkey })}</span>
       </div>
-      <IconButton label={msg('common.close')} onclick={hide}><X size="1.8rem" strokeWidth={1.8} /></IconButton>
+      <div class="actions">
+        <IconButton label={msg('overlay.browserOpen')} active={browser} onclick={() => (browser = true)}>
+          <Globe size="1.8rem" strokeWidth={1.8} />
+        </IconButton>
+        <IconButton label={msg('common.close')} onclick={hide}><X size="1.8rem" strokeWidth={1.8} /></IconButton>
+      </div>
     </header>
+
+    <OverlayMusic active={shown} />
 
     {#if hideFailed}
       <div class="banner">{msg('overlay.hideError')}</div>
@@ -162,6 +176,11 @@
     justify-content: space-between;
     gap: var(--space-3);
     padding: var(--space-4) var(--space-4) var(--space-3);
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-1);
   }
 
   .brand {

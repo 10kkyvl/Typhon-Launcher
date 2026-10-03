@@ -22,6 +22,24 @@ func (s *Service) Attach(app *application.App) {
 		native.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) { s.lostFocus() })
 		return w
 	}
+	s.makeBrowser = func() (browserWindow, error) {
+		owner := func() uintptr {
+			s.mu.Lock()
+			win := s.win
+			s.mu.Unlock()
+			if win == nil {
+				return 0
+			}
+			return win.handle()
+		}
+		b, native := newBrowserWindow(app, owner)
+		native.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+			e.Cancel()
+			s.dispatch(s.closeBrowserOnUI)
+		})
+		native.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) { s.lostFocus() })
+		return b, nil
+	}
 	s.mu.Unlock()
 	app.Event.On(EventHide, func(*application.CustomEvent) { s.Hide() })
 }

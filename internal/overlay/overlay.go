@@ -74,6 +74,7 @@ type config struct {
 type Service struct {
 	plat     platform
 	dispatch func(func())
+	call     func(func() error) error
 	emit     func(name string, payload any)
 
 	regMu sync.Mutex
@@ -88,12 +89,22 @@ type Service struct {
 	makeWin func() window
 	visible bool
 	prev    uintptr
+	area    rect
 	closed  bool
+
+	browser     browserWindow
+	makeBrowser func() (browserWindow, error)
+	browserOpen bool
 }
 
 //wails:ignore
 func NewService(enabled bool, hotkeyName string) (*Service, error) {
-	return newService(newPlatform(), application.InvokeAsync, emitToApp, enabled, hotkeyName)
+	s, err := newService(newPlatform(), application.InvokeAsync, emitToApp, enabled, hotkeyName)
+	if err != nil {
+		return nil, err
+	}
+	s.call = application.InvokeSyncWithError
+	return s, nil
 }
 
 func emitToApp(name string, payload any) {
@@ -106,7 +117,12 @@ func newService(plat platform, dispatch func(func()), emit func(string, any), en
 	if _, err := parseHotkey(hotkeyName); err != nil {
 		return nil, err
 	}
-	return &Service{plat: plat, dispatch: dispatch, emit: emit, cfg: config{enabled: enabled, hotkey: hotkeyName}}, nil
+	call := func(f func() error) error {
+		var err error
+		dispatch(func() { err = f() })
+		return err
+	}
+	return &Service{plat: plat, dispatch: dispatch, call: call, emit: emit, cfg: config{enabled: enabled, hotkey: hotkeyName}}, nil
 }
 
 func (s *Service) Status() Status {
@@ -329,6 +345,7 @@ func (s *Service) showOnUI() {
 	s.mu.Lock()
 	s.visible = true
 	s.prev = prev
+	s.area = area
 	s.mu.Unlock()
 	if err := win.show(area); err != nil {
 		slog.Warn("show overlay window", "error", err)
@@ -364,6 +381,7 @@ func (s *Service) hideOnUI(restore bool) {
 	s.prev = 0
 	s.mu.Unlock()
 	own := win.handle()
+	s.hideBrowserOnUI()
 	win.hide()
 	if restore && prev != 0 && prev != own {
 		s.restoreForeground(prev)
@@ -386,12 +404,11 @@ func (s *Service) restoreForeground(prev uintptr) {
 func (s *Service) lostFocusOnUI() {
 	s.mu.Lock()
 	visible := s.visible
-	win := s.win
 	s.mu.Unlock()
 	if !visible {
 		return
 	}
-	if fg := s.plat.foreground(); fg != 0 && fg == win.handle() {
+	if fg := s.plat.foreground(); fg != 0 && s.ownWindow(fg) {
 		return
 	}
 	s.hideOnUI(false)

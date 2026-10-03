@@ -275,3 +275,96 @@ func (w *wailsWindow) show(r rect) error {
 func (w *wailsWindow) hide() {
 	w.win.Hide()
 }
+
+const gwlpHwndParent = -8
+
+var (
+	procSetWindowLongPtr = user32.NewProc("SetWindowLongPtrW")
+	procSetLastError     = windows.NewLazySystemDLL("kernel32.dll").NewProc("SetLastError")
+)
+
+type wailsBrowser struct {
+	win   *application.WebviewWindow
+	owner func() uintptr
+	ready bool
+}
+
+func newBrowserWindow(app *application.App, owner func() uintptr) (browserWindow, *application.WebviewWindow) {
+	deny := map[application.PermissionType]application.Permission{
+		application.PermissionMicrophone:    application.PermissionDeny,
+		application.PermissionCamera:        application.PermissionDeny,
+		application.PermissionGeolocation:   application.PermissionDeny,
+		application.PermissionNotifications: application.PermissionDeny,
+		application.PermissionClipboardRead: application.PermissionDeny,
+	}
+	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name: BrowserWindowName, Title: "Typhon", URL: "about:blank", Width: 1280, Height: 720,
+		Hidden: true, Frameless: true, DisableResize: true, AlwaysOnTop: true,
+		Permissions: deny,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar:         true,
+			GeneralAutofillEnabled:  false,
+			PasswordAutosaveEnabled: false,
+		},
+	})
+	return &wailsBrowser{win: win, owner: owner}, win
+}
+
+func (b *wailsBrowser) handle() uintptr {
+	return uintptr(b.win.NativeWindow())
+}
+
+// Making the overlay the owner keeps the browser above it: an owned window is
+// always drawn over its owner, while two topmost windows trade places on every
+// click.
+//
+//nolint:gosec // G115: SetWindowPos reads the low 32 bits of each argument as a signed int, so a monitor left of the primary one keeps its negative coordinate.
+func (b *wailsBrowser) place(r rect) error {
+	b.win.Run()
+	b.win.Show()
+	hwnd := b.handle()
+	if hwnd == 0 {
+		return errors.New("browser window has no native handle")
+	}
+	// Wails holds ExecJS back until the page reports its runtime as loaded, and
+	// a foreign page never does, so back and forward would queue forever.
+	if !b.ready {
+		b.win.HandleMessage("wails:runtime:ready")
+		b.ready = true
+	}
+	owner := b.owner()
+	if owner == 0 {
+		return errors.New("overlay window has no native handle")
+	}
+	idx := gwlpHwndParent
+	// The call returns the previous owner, which is legitimately zero the first
+	// time, so only a last error set by this very call means failure.
+	procSetLastError.Call(0) //nolint:errcheck // SetLastError has no result to check.
+	if r1, _, err := procSetWindowLongPtr.Call(hwnd, uintptr(idx), owner); r1 == 0 && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return lastError(err, "SetWindowLongPtrW")
+	}
+	if r1, _, err := procSetWindowPos.Call(hwnd, hwndTopmost, uintptr(r.x), uintptr(r.y), uintptr(r.w), uintptr(r.h), swpShowWindow); r1 == 0 {
+		return lastError(err, "SetWindowPos")
+	}
+	return nil
+}
+
+func (b *wailsBrowser) hide() {
+	b.win.Hide()
+}
+
+func (b *wailsBrowser) navigate(target string) {
+	b.win.SetURL(target)
+}
+
+func (b *wailsBrowser) back() {
+	b.win.ExecJS("history.back()")
+}
+
+func (b *wailsBrowser) forward() {
+	b.win.ExecJS("history.forward()")
+}
+
+func (b *wailsBrowser) reload() {
+	b.win.Reload()
+}
