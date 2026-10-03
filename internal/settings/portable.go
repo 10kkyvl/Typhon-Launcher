@@ -17,6 +17,7 @@ type Portable struct {
 	VerifyAfterInstall       *bool    `json:"verifyAfterInstall,omitempty"`
 	InstallSkipShortcuts     *bool    `json:"installSkipShortcuts,omitempty"`
 	InstallSkipExtras        *bool    `json:"installSkipExtras,omitempty"`
+	InstallVerifyRepack      *bool    `json:"installVerifyRepack,omitempty"`
 	DesktopShortcuts         *bool    `json:"desktopShortcuts,omitempty"`
 	UpdateCheckAutomatically *bool    `json:"updateCheckAutomatically,omitempty"`
 	UpdateAutoDownload       *bool    `json:"updateAutoDownload,omitempty"`
@@ -46,6 +47,7 @@ func PortableOf(s Settings) Portable {
 		VerifyAfterInstall:       &s.VerifyAfterInstall,
 		InstallSkipShortcuts:     &s.InstallSkipShortcuts,
 		InstallSkipExtras:        &s.InstallSkipExtras,
+		InstallVerifyRepack:      &s.InstallVerifyRepack,
 		DesktopShortcuts:         &s.DesktopShortcuts,
 		UpdateCheckAutomatically: &s.UpdateCheckAutomatically,
 		UpdateAutoDownload:       &s.UpdateAutoDownload,
@@ -75,6 +77,7 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.VerifyAfterInstall, p.VerifyAfterInstall)
 	applyBool(&s.InstallSkipShortcuts, p.InstallSkipShortcuts)
 	applyBool(&s.InstallSkipExtras, p.InstallSkipExtras)
+	applyBool(&s.InstallVerifyRepack, p.InstallVerifyRepack)
 	applyBool(&s.DesktopShortcuts, p.DesktopShortcuts)
 	applyBool(&s.UpdateCheckAutomatically, p.UpdateCheckAutomatically)
 	applyBool(&s.UpdateAutoDownload, p.UpdateAutoDownload)

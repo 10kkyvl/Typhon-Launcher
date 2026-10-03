@@ -158,6 +158,7 @@ type silentPlan struct {
 type installOptions struct {
 	SkipShortcuts bool
 	SkipExtras    bool
+	VerifyRepack  bool
 }
 
 // Имена задач Inno задаёт автор установщика, но набор устоявшийся: репаки берут

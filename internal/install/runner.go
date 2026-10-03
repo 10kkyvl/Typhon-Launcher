@@ -16,6 +16,9 @@ type runSpec struct {
 	Tail       string
 	Background bool
 	Hidden     bool
+	// VerifyRepack оставляет репаку его собственную проверку файлов (QuickSFV);
+	// выключенная, она закрывается сразу, как только показывается.
+	VerifyRepack bool
 
 	// Поля ниже нужны только повышенному воркеру (elevated.go, worker_run.go):
 	// без прав администратора процесс с установщиком

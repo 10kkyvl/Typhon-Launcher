@@ -51,7 +51,7 @@ func attemptDiscovery(ctx context.Context, in discoverySpec) (discoveryOutcome, 
 		return discoveryOutcome{reason: fmt.Sprintf("запуск установщика для разведки: %v", startErr)}, nil
 	}
 
-	stopGuard := installguard.Start(ctx, cmd.Process.Pid, true)
+	stopGuard := installguard.Start(ctx, cmd.Process.Pid, installguard.Options{HideProgress: true, VerifyRepack: in.Options.VerifyRepack})
 	defer stopGuard()
 
 	reason, err := awaitDiscoveryIni(ctx, cmd, group, in.InfPath, in.InstallerPath)

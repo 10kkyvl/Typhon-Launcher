@@ -24,6 +24,7 @@ var portableNames = []string{
 	"verifyAfterInstall",
 	"installSkipShortcuts",
 	"installSkipExtras",
+	"installVerifyRepack",
 	"desktopShortcuts",
 	"updateCheckAutomatically",
 	"updateAutoDownload",

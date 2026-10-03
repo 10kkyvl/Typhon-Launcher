@@ -92,7 +92,7 @@ func TestGuardControls(t *testing.T) {
 	message(soundtrack, 0xF1, 1, 0)
 	message(website, 0xF1, 1, 0)
 	if !*externalGuard {
-		stop := Start(context.Background(), os.Getpid(), true)
+		stop := Start(context.Background(), os.Getpid(), Options{HideProgress: true})
 		defer stop()
 	}
 	peek := user32.NewProc("PeekMessageW")

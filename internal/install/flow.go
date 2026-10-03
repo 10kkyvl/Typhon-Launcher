@@ -217,7 +217,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		return err
 	}
 
-	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath)
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath, opts.VerifyRepack)
 	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
 	stop()
 	if runErr != nil {
@@ -279,7 +279,7 @@ func installerChain(item Installation) []string {
 }
 
 func installOptionsFrom(cfg settings.Settings) installOptions {
-	return installOptions{SkipShortcuts: cfg.InstallSkipShortcuts, SkipExtras: cfg.InstallSkipExtras}
+	return installOptions{SkipShortcuts: cfg.InstallSkipShortcuts, SkipExtras: cfg.InstallSkipExtras, VerifyRepack: cfg.InstallVerifyRepack}
 }
 
 // Снимок ярлыков берётся до запуска установщика: без него не отличить ярлык,
@@ -386,7 +386,7 @@ func (s *Service) discardSilent(item Installation, before fsSnapshot, cause erro
 	}
 }
 
-func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string) func() {
+func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string, verifyRepack bool) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	s.wg.Add(1)
 	done := make(chan struct{})
@@ -404,7 +404,7 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 				if ctx.Err() != nil {
 					return
 				}
-				if !verifying && installerLogVerifying(logPath) {
+				if verifyRepack && !verifying && installerLogVerifying(logPath) {
 					if err := s.setInstallerVerifying(id); err == nil {
 						verifying = true
 					}
@@ -435,7 +435,7 @@ func silentSpec(item Installation, installer, logPath string, opts installOption
 	}
 	return runSpec{
 		Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true,
-		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts,
+		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts, VerifyRepack: opts.VerifyRepack,
 	}, nil
 }
 

@@ -40,7 +40,6 @@ const (
 	rebootExitCode   = 3010
 	maxSuffixAttempt = 50
 
-	installPollInterval   = 2 * time.Second
 	installerLogTailLimit = 8 << 10
 	installerLogScanLimit = 256 << 10
 
@@ -48,6 +47,8 @@ const (
 )
 
 const interruptedMessage = "установка была прервана"
+
+var installPollInterval = 2 * time.Second
 
 var (
 	errNotFound         = uierr.New("install.not_found", "установка не найдена")

@@ -3,6 +3,40 @@ package installguard
 
 import "strings"
 
+// Options selects what the guard does to a running installer tree.
+type Options struct {
+	HideProgress bool
+	// VerifyRepack lets the repack's own file check (QuickSFV) run to completion.
+	// Off, its window is closed on sight and the process is ended if it lingers.
+	VerifyRepack bool
+}
+
+type verifierAction int
+
+const (
+	verifierObserve verifierAction = iota
+	verifierClose
+	verifierWait
+	verifierTerminate
+)
+
+// verifierKillAfter is counted in guard passes (200 ms each): enough for
+// QuickSFV to honour WM_CLOSE, short enough that a stuck hash is not waited out.
+const verifierKillAfter = 25
+
+func nextVerifierAction(verify, closed bool, waited int) verifierAction {
+	switch {
+	case verify:
+		return verifierObserve
+	case !closed:
+		return verifierClose
+	case waited < verifierKillAfter:
+		return verifierWait
+	default:
+		return verifierTerminate
+	}
+}
+
 // MusicState recognises explicit playback controls, not game soundtrack components.
 func MusicState(label string) (checked bool, recognised bool) {
 	label = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(label, "&", "")))

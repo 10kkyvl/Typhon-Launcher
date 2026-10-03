@@ -54,7 +54,7 @@ func (processRunner) run(ctx context.Context, spec runSpec) (int, error) {
 		return 0, err
 	}
 
-	stopGuard := installguard.Start(ctx, cmd.Process.Pid, execSpec.Hidden)
+	stopGuard := installguard.Start(ctx, cmd.Process.Pid, installguard.Options{HideProgress: execSpec.Hidden, VerifyRepack: execSpec.VerifyRepack})
 	defer stopGuard()
 
 	// Установщик распаковывает себя во временный каталог и работает уже оттуда:

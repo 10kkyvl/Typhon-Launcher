@@ -47,7 +47,7 @@ var (
 // Start follows descendants, including Inno's extracted setup.tmp. Held process
 // handles prevent PID reuse from bringing unrelated applications into the tree.
 // The returned stop function joins the monitor before installer cleanup proceeds.
-func Start(ctx context.Context, pid int, hideProgress bool) func() {
+func Start(ctx context.Context, pid int, opts Options) func() {
 	if pid <= 0 || uint64(pid) > 0xffffffff {
 		return func() {}
 	}
@@ -56,13 +56,13 @@ func Start(ctx context.Context, pid int, hideProgress bool) func() {
 	go func() {
 		defer close(done)
 		//nolint:gosec // G115: Start rejects PIDs outside the positive uint32 range before starting the goroutine.
-		watch(ctx, uint32(pid), hideProgress)
+		watch(ctx, uint32(pid), opts)
 	}()
 	var once sync.Once
 	return func() { once.Do(func() { cancel(); <-done }) }
 }
 
-func watch(ctx context.Context, root uint32, hide bool) {
+func watch(ctx context.Context, root uint32, opts Options) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	if err := ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED); err == nil {
@@ -83,6 +83,7 @@ func watch(ctx context.Context, root uint32, hide bool) {
 	hidden := map[uintptr]bool{}
 	traced := map[uintptr]string{}
 	audio := audioReport{}
+	skip := newVerifierSkip()
 	owned := func(pid uint32) bool {
 		_, ok := handles[pid]
 		return ok
@@ -114,9 +115,10 @@ func watch(ctx context.Context, root uint32, hide bool) {
 						slog.Info("installer control", "class", class(control), "title", text(control), "style", style(control), "check", state)
 					}
 				}
-				quietWindow(ctx, hwnd, hide, hidden)
+				quietWindow(ctx, hwnd, pid, opts, hidden, skip)
 			}
 		}
+		skip.sweep(handles)
 		select {
 		case <-ctx.Done():
 			return
@@ -220,11 +222,16 @@ func visibleWithin(hwnd, top uintptr) bool {
 	return hwnd == top
 }
 
-func quietWindow(ctx context.Context, top uintptr, hide bool, hidden map[uintptr]bool) {
+func quietWindow(ctx context.Context, top uintptr, pid uint32, opts Options, hidden map[uintptr]bool, skip *verifierSkip) {
+	hide := opts.HideProgress
 	progress, interactive := false, false
 	topClass := class(top)
 	if hide && topClass == "qsfv_main" {
-		quietVerifier(top)
+		if opts.VerifyRepack {
+			quietVerifier(top)
+		} else {
+			skip.window(top, pid)
+		}
 		return
 	}
 

@@ -932,6 +932,17 @@
               onchange={(v) => set({ verifyAfterInstall: v })}
             />
           </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsVerifyRepackLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsVerifyRepackSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.installVerifyRepack ?? false}
+              label={msg('settings.downloadsVerifyRepackToggle')}
+              onchange={(v) => set({ installVerifyRepack: v })}
+            />
+          </div>
         </div>
       </Card>
 

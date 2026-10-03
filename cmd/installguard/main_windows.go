@@ -26,7 +26,7 @@ func run() int {
 	}
 	cancelFile := os.Args[2]
 	//nolint:forbidigo // standalone UI/helper operation owns its lifetime; cancellation is handled by its dialog or cancel marker.
-	stop := installguard.Start(context.Background(), os.Getpid(), hidden)
+	stop := installguard.Start(context.Background(), os.Getpid(), installguard.Options{HideProgress: hidden})
 	defer stop()
 	code, stopped, err := installguard.RunJob(os.Args[4:], cancelFile, hidden, limit)
 	if stopped {

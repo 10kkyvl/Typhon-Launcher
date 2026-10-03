@@ -156,9 +156,20 @@ func shouldDiscoverComponents(in discoverySpec) bool {
 }
 
 func runMainInstall(ctx context.Context, spec workerSpec, components []string) (int, error) {
-	plan, err := silentArgs(spec.Engine, spec.InstallerPath, spec.Destination, spec.LogPath, spec.Options)
+	rs, err := mainRunSpec(spec, components)
 	if err != nil {
 		return 0, err
+	}
+	// Neither runner needs gamesPath here: the worker only ever runs the main
+	// silent install with spec.Destination already resolved, never the
+	// devmock placement path under the library root.
+	return newRunner(func() string { return "" }).run(ctx, rs)
+}
+
+func mainRunSpec(spec workerSpec, components []string) (runSpec, error) {
+	plan, err := silentArgs(spec.Engine, spec.InstallerPath, spec.Destination, spec.LogPath, spec.Options)
+	if err != nil {
+		return runSpec{}, err
 	}
 	if len(components) > 0 {
 		plan = planWithComponents(plan, components)
@@ -167,19 +178,15 @@ func runMainInstall(ctx context.Context, spec workerSpec, components []string) (
 	if spec.Engine == EngineMsi {
 		msiexec, err := systemExecutable("msiexec.exe")
 		if err != nil {
-			return 0, err
+			return runSpec{}, err
 		}
 		path = msiexec
 	}
-	rs := runSpec{
+	return runSpec{
 		Path: path, Args: plan.Args, Dir: spec.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail,
-		Background: spec.Background, Hidden: spec.Hidden,
+		Background: spec.Background, Hidden: spec.Hidden, VerifyRepack: spec.Options.VerifyRepack,
 		InstallerPath: spec.InstallerPath, Destination: spec.Destination, LogPath: spec.LogPath,
-	}
-	// Neither runner needs gamesPath here: the worker only ever runs the main
-	// silent install with spec.Destination already resolved, never the
-	// devmock placement path under the library root.
-	return newRunner(func() string { return "" }).run(ctx, rs)
+	}, nil
 }
 
 // applyDiscoveredComponents дописывает /COMPONENTS в уже готовый план

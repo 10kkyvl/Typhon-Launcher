@@ -29,6 +29,7 @@ export interface Settings {
   verifyAfterInstall: boolean;
   installSkipShortcuts: boolean;
   installSkipExtras: boolean;
+  installVerifyRepack: boolean;
   desktopShortcuts: boolean;
   updateCheckAutomatically: boolean;
   updateAutoDownload: boolean;
@@ -85,6 +86,7 @@ const fallbackDefaults: Settings = {
   verifyAfterInstall: true,
   installSkipShortcuts: true,
   installSkipExtras: true,
+  installVerifyRepack: false,
   desktopShortcuts: true,
   updateCheckAutomatically: true,
   updateAutoDownload: false,

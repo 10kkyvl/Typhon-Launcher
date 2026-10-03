@@ -1,6 +1,56 @@
 package install
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestTrackInstallSizeVerifyingFollowsOption(t *testing.T) {
+	log := `2026-09-10 Filename: C:\Games\_Redist\QuickSFV.exe` + "\n"
+	for _, tc := range []struct {
+		name   string
+		verify bool
+		want   Status
+	}{
+		{"verification skipped keeps installing", false, StatusInstalling},
+		{"verification allowed reports verifying", true, StatusVerifying},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _ := newTestService(t)
+			old := installPollInterval
+			installPollInterval = time.Millisecond
+			t.Cleanup(func() { installPollInterval = old })
+
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "data.bin"), make([]byte, 10), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			logPath := filepath.Join(t.TempDir(), "install.log")
+			if err := os.WriteFile(logPath, []byte(log), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			s.mu.Lock()
+			s.items = append(s.items, &Installation{ID: "track", Status: StatusInstalling})
+			s.mu.Unlock()
+
+			stop := s.trackInstallSize(context.Background(), "track", dir, 100, logPath, tc.verify)
+			// updateProgress runs after the log check in the same tick, so a
+			// recorded size proves the check already had its chance.
+			waitFor(t, "install size to be recorded", func() bool {
+				item, _ := s.snapshot("track")
+				return item.BytesDone == 10
+			})
+			stop()
+			item, _ := s.snapshot("track")
+			if item.Status != tc.want {
+				t.Fatalf("status = %s, want %s", item.Status, tc.want)
+			}
+		})
+	}
+}
 
 func TestVerifierLogEvidence(t *testing.T) {
 	for _, test := range []struct {
