@@ -1,6 +1,12 @@
 export const errInstall = {
   'errInstall.fallback': 'не удалось выполнить операцию',
 
+  'errInstall.installArchiveEncrypted': 'архив защищён паролем, распакуйте его вручную',
+  'errInstall.installArchiveIncomplete': 'архив обрезан или не хватает следующего тома',
+  'errInstall.installArchiveToolFailed': 'архив не распаковался ни встроенным распаковщиком, ни 7-Zip или WinRAR',
+  'errInstall.installArchiveToolMissing': 'встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR либо распакуйте вручную',
+  'errInstall.installArchiveToolWriteFailed': 'распаковщик не смог записать файлы на диск',
+  'errInstall.installArchiveUnsafeEntries': 'в архиве есть ссылки или пути за пределы папки, распакуйте его вручную',
   'errInstall.installBadCommand': 'команда удаления записана неверно',
   'errInstall.installBusy': 'установка этой загрузки уже выполняется',
   'errInstall.installCopyVerifyFailed': 'копирование завершилось с ошибкой проверки',

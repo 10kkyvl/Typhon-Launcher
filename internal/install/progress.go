@@ -26,6 +26,22 @@ func (r *reporter) add(n int64) {
 	r.tick()
 }
 
+func (r *reporter) restart() {
+	r.done = 0
+	r.current = ""
+	r.flush()
+}
+
+func (r *reporter) setPercent(pct int) {
+	pct = min(max(pct, 0), 100)
+	done := r.total * int64(pct) / 100
+	if done <= r.done {
+		return
+	}
+	r.done = done
+	r.tick()
+}
+
 func (r *reporter) tick() {
 	if r.fn == nil {
 		return

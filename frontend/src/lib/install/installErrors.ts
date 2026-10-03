@@ -2,6 +2,12 @@ import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
 
 export const REASONS: Record<string, MessageKey> = {
+  'install.archive_encrypted': 'errInstall.installArchiveEncrypted',
+  'install.archive_incomplete': 'errInstall.installArchiveIncomplete',
+  'install.archive_tool_failed': 'errInstall.installArchiveToolFailed',
+  'install.archive_tool_missing': 'errInstall.installArchiveToolMissing',
+  'install.archive_tool_write_failed': 'errInstall.installArchiveToolWriteFailed',
+  'install.archive_unsafe_entries': 'errInstall.installArchiveUnsafeEntries',
   'install.bad_command': 'errInstall.installBadCommand',
   'install.busy': 'errInstall.installBusy',
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',

@@ -4,6 +4,12 @@ import type { ErrInstallKey } from '../ru/errInstall';
 export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.fallback': 'Could not complete the operation',
 
+  'errInstall.installArchiveEncrypted': 'The archive is password-protected, extract it manually',
+  'errInstall.installArchiveIncomplete': 'The archive is truncated or its next volume is missing',
+  'errInstall.installArchiveToolFailed': 'Neither the built-in extractor nor 7-Zip or WinRAR could unpack the archive',
+  'errInstall.installArchiveToolMissing': 'The built-in extractor could not unpack this archive: install 7-Zip or WinRAR, or extract it manually',
+  'errInstall.installArchiveToolWriteFailed': 'The extractor could not write files to disk',
+  'errInstall.installArchiveUnsafeEntries': 'The archive contains links or paths outside its folder, extract it manually',
   'errInstall.installBadCommand': 'The uninstall command is malformed',
   'errInstall.installBusy': 'This download is already being installed',
   'errInstall.installCopyVerifyFailed': 'Copying finished but verification failed',
