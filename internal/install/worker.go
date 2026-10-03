@@ -44,6 +44,7 @@ type workerSpec struct {
 	Options       installOptions `json:"options"`
 	Background    bool           `json:"background"`
 	Hidden        bool           `json:"hidden"`
+	Shell         *shellJob      `json:"shell,omitempty"`
 }
 
 // discoverySpec — минимальный набор полей, нужных именно для разведки
@@ -84,6 +85,9 @@ type workerState struct {
 	Cancelled        bool     `json:"cancelled,omitempty"`
 	Components       []string `json:"components,omitempty"`
 	DiscoveryFailure string   `json:"discoveryFailure,omitempty"`
+	// Shell заполнен только когда воркер пробовал убрать ярлыки установщика;
+	// nil значит, что уборку делать не просили или установщик не дошёл до конца.
+	Shell *shellReport `json:"shell,omitempty"`
 }
 
 func workerStatePath(dir, id string) string {

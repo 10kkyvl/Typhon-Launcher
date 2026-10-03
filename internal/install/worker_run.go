@@ -9,7 +9,12 @@ import (
 	"time"
 )
 
-var workerCancelPollInterval = 250 * time.Millisecond
+var (
+	workerCancelPollInterval = 250 * time.Millisecond
+
+	// Подменяется в тестах: настоящий установщик в юнит-тесте не запустить.
+	workerInstall = runMainInstall
+)
 
 // RunWorker — точка входа отдельного процесса с правами администратора: сам
 // лаунчер поднимает его один раз через startElevated и дальше общается с ним
@@ -64,12 +69,17 @@ func runWorkerSpec(spec workerSpec) error {
 		return err
 	}
 
-	code, runErr := runMainInstall(ctx, spec, components)
+	code, runErr := workerInstall(ctx, spec, components)
 	state.Code = code
 	state.Done = true
 	if runErr != nil {
 		state.Error = runErr.Error()
 		state.Cancelled = errors.Is(runErr, context.Canceled)
+	} else if spec.Shell != nil {
+		// Done пишется одной записью вместе с итогом уборки: лаунчер мог
+		// перезапуститься, и тогда итог можно прочитать только из этого файла.
+		report := cleanSharedShortcuts(ctx, *spec.Shell, spec.Destination)
+		state.Shell = &report
 	}
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
 		if runErr != nil {

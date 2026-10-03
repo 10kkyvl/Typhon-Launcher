@@ -31,6 +31,7 @@ type shellEntry struct {
 	dir  bool
 	size int64
 	mod  time.Time
+	path string
 }
 
 type shellSnapshot struct {
@@ -76,7 +77,9 @@ func scanShell(ctx context.Context, root string, out map[string]shellEntry) erro
 		if err != nil {
 			return err
 		}
-		out[strings.ToLower(path)] = shellEntry{dir: d.IsDir(), size: info.Size(), mod: info.ModTime()}
+		// Ключ в нижнем регистре нужен для сравнения на Windows, а файловые
+		// операции идут по настоящему пути: на регистрозависимой ФС ключ не открывается.
+		out[strings.ToLower(path)] = shellEntry{dir: d.IsDir(), size: info.Size(), mod: info.ModTime(), path: path}
 		return nil
 	})
 	if errors.Is(err, fs.ErrNotExist) {
@@ -131,23 +134,24 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 	emptied := make(map[string]bool, 4)
 	var failures []error
 	drop := func(path string, fresh bool) error {
+		onDisk := after.entries[path].path
 		match := false
 		if fresh && game && target != "" {
 			var err error
-			if match, err = shortcutPointsTo(path, target); err != nil {
+			if match, err = shortcutPointsTo(onDisk, target); err != nil {
 				return err
 			}
 		}
 		if !match && installerDirs[filepath.Dir(path)] {
 			var err error
-			if match, err = siteShortcut(path); err != nil {
+			if match, err = siteShortcut(onDisk); err != nil {
 				return err
 			}
 		}
 		if !match {
 			return nil
 		}
-		if err := os.Remove(path); err != nil {
+		if err := os.Remove(onDisk); err != nil {
 			return err
 		}
 		removed = append(removed, path)
@@ -177,7 +181,8 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 		if !game && !emptied[path] {
 			continue
 		}
-		empty, err := dirEmpty(path)
+		onDisk := after.entries[path].path
+		empty, err := dirEmpty(onDisk)
 		if err != nil {
 			failures = append(failures, err)
 			continue
@@ -185,7 +190,7 @@ func cleanShellShortcuts(ctx context.Context, before shellSnapshot, target strin
 		if !empty {
 			continue
 		}
-		if err := os.Remove(path); err != nil {
+		if err := os.Remove(onDisk); err != nil {
 			failures = append(failures, err)
 			continue
 		}

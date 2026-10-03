@@ -75,6 +75,10 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		Background:    spec.Background,
 		Hidden:        true,
 	}
+	if spec.Shell != nil {
+		job := spec.Shell.Job
+		ws.Shell = &job
+	}
 	exited, cleanup, terminate, err := handOffToWorker(ctx, spec, ws, specFile)
 	if err != nil {
 		return 0, err
@@ -94,7 +98,12 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			if res.err != nil {
 				return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, res.err)
 			}
-			return readFinalWorkerState(spec.StatePath, run)
+			state, err := loadFinalWorkerState(spec.StatePath, run)
+			if err != nil {
+				return 0, err
+			}
+			spec.Shell.record(state)
+			return finishElevatedState(state)
 		case <-ctx.Done():
 			if !cancelRequested {
 				cancelRequested = true
@@ -166,6 +175,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			}
 			stateReadFailures = 0
 			if found && state.Done && state.Run == run {
+				spec.Shell.record(state)
 				return finishElevatedState(state)
 			}
 		}
@@ -236,14 +246,22 @@ func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile 
 }
 
 func readFinalWorkerState(statePath, run string) (int, error) {
-	state, found, err := readWorkerState(statePath)
+	state, err := loadFinalWorkerState(statePath, run)
 	if err != nil {
-		return 0, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, err)
-	}
-	if !found || !state.Done || state.Run != run {
-		return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, errWorkerNotFinished)
+		return 0, err
 	}
 	return finishElevatedState(state)
+}
+
+func loadFinalWorkerState(statePath, run string) (workerState, error) {
+	state, found, err := readWorkerState(statePath)
+	if err != nil {
+		return workerState{}, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, err)
+	}
+	if !found || !state.Done || state.Run != run {
+		return workerState{}, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, errWorkerNotFinished)
+	}
+	return state, nil
 }
 
 // finishElevatedState оборачивает отмену через %w вокруг context.Canceled:

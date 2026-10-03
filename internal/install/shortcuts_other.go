@@ -3,3 +3,5 @@
 package install
 
 func shortcutRoots() ([]string, error) { return nil, nil }
+
+func sharedShortcutRoots() ([]string, error) { return nil, nil }

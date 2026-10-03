@@ -543,9 +543,9 @@ func (s *Service) interruptResumed(id string) {
 // finishResumed завершает установку по итогу воркера, обнаруженного живым на
 // старте: сохранённый OwnedDestination подтверждает происхождение каталога.
 // Без него оставляем Owned=false. Запись деинсталлятора без исходного снимка
-// неизвестна, поэтому UninstallUnknown=true. Уборка ярлыков здесь не
-// выполняется: baseline ярлыков снимался до старта установщика и тоже не
-// восстановим.
+// неизвестна, поэтому UninstallUnknown=true. Своих каталогов лаунчер здесь не
+// чистит: baseline ярлыков снимался до старта установщика и не восстановим.
+// Общие каталоги воркер убрал сам, и итог лежит в его state.Shell.
 func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
 	dropInstallerLog(s.installerLogPath(id))
 	if state.Cancelled {
@@ -559,6 +559,9 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		slog.Warn("resumed installer worker failed", "id", id, "error", state.Error)
 		s.fail(id, errors.New(state.Error))
 		return
+	}
+	if state.Shell != nil {
+		logShellReports(id, []shellReport{*state.Shell})
 	}
 	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
 	if err := s.markResumedOwnership(id); err != nil {

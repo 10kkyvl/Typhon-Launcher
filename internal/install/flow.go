@@ -182,7 +182,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest, cfg.InstallSkipShortcuts)
+	s.dropShortcuts(ctx, id, shell, dest, cfg.InstallSkipShortcuts, nil)
 	return s.waitForUser(id, candidates)
 }
 
@@ -196,6 +196,10 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	// DropBroker освобождается один раз для всей установки в runInstaller —
 	// дальше по цепочке установщиков этот же брокер ещё нужен.
 	handoff := s.brokerFor(item.DownloadID)
+	shared, err := newShellHandoff(shell, opts.SkipShortcuts)
+	if err != nil {
+		slog.Warn("shortcut cleanup stays with the launcher", "id", id, "error", err)
+	}
 	specs := make([]runSpec, 0, len(chain))
 	for _, installer := range chain {
 		spec, err := silentSpec(item, installer, logPath, opts)
@@ -206,6 +210,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 		spec.InfPath = infPath
 		spec.CancelPath = cancelPath
 		spec.Broker = handoff
+		spec.Shell = shared
 		specs = append(specs, spec)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
@@ -230,7 +235,7 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts)
+	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts, shared)
 	return s.finalize(ctx, id)
 }
 
@@ -282,7 +287,7 @@ func installOptionsFrom(cfg settings.Settings) installOptions {
 // уборку целиком, а не разрешает удалять наугад. Берётся всегда, а не только
 // при InstallSkipShortcuts: ярлык сайта репака убирается независимо от неё.
 func (s *Service) shellBaseline(ctx context.Context, id string) shellSnapshot {
-	roots, err := shortcutRoots()
+	roots, err := shortcutRootsFn()
 	if err != nil {
 		slog.Error("resolve shortcut folders", "id", id, "error", err)
 		return shellSnapshot{}
@@ -296,11 +301,22 @@ func (s *Service) shellBaseline(ctx context.Context, id string) shellSnapshot {
 }
 
 // Ярлыки, созданные установщиком под UAC в общих каталогах, лаунчер удалить не
-// может: он работает без прав администратора. Это не повод считать установку
-// неудачной, поэтому ошибка только логируется.
-func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool) {
+// может: он работает без прав администратора. Если установку вёл повышенный
+// воркер, он уже убрал их сам и его итог лежит в worker.Reports; тогда лаунчер
+// чистит только свои каталоги. Это не повод считать установку неудачной, поэтому
+// ошибка только логируется.
+func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool, worker *shellHandoff) {
 	if !before.taken {
 		return
+	}
+	if reports := worker.reports(); len(reports) > 0 {
+		logShellReports(id, reports)
+		shared, err := sharedRootsFn()
+		if err != nil {
+			slog.Warn("resolve shared shortcut folders", "id", id, "error", err)
+			return
+		}
+		before = before.without(shared)
 	}
 	removed, err := cleanShellShortcuts(ctx, before, dest, game)
 	if err != nil {
