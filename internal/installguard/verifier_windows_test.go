@@ -3,67 +3,100 @@
 package installguard
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
-	"unsafe"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
 
-const verifierHelperEnv = "TYPHON_VERIFIER_HELPER"
+const (
+	verifierHelperEnv = "TYPHON_VERIFIER_HELPER"
+	verifierClass     = "QSFV_MAIN"
+	stubbornClass     = "TYPHON_STUBBORN_VERIFIER"
+	wmClose           = 0x10
+	wmQuit            = 0x12
+)
+
+var onStubbornClose func()
+
+var stubbornProc = windows.NewCallback(func(h, m, w, l uintptr) uintptr {
+	if m == wmClose {
+		onStubbornClose()
+		return 0
+	}
+	return win32(defWindow, h, m, w, l)
+})
 
 func TestVerifierHelperProcess(t *testing.T) {
-	if os.Getenv(verifierHelperEnv) != "1" {
-		return
+	switch os.Getenv(verifierHelperEnv) {
+	case "1":
+		if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+			t.Fatal(err)
+		}
+	case "window":
+		runStubbornVerifier(t)
 	}
-	if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
-		t.Fatal(err)
+}
+
+func say(line string) {
+	fmt.Fprintln(os.Stderr, line)
+}
+
+func runStubbornVerifier(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	registerWindowClass(t, verifierClass, stubbornProc)
+	onStubbornClose = func() { say("wm_close") }
+	createWindow(t, verifierClass, "Verifying")
+	thread := windows.GetCurrentThreadId()
+	go func() {
+		if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+			say("helper stdin: " + err.Error())
+		}
+		if win32(postThreadMessage, uintptr(thread), wmQuit, 0, 0) == 0 {
+			say("helper could not post WM_QUIT")
+		}
+	}()
+	say("ready")
+	for {
+		var msg fixtureMessage
+		if got := msgCall(getMessage, &msg) & 0xFFFFFFFF; got == 0 || got == 0xFFFFFFFF {
+			return
+		}
+		msgCall(translateMessage, &msg)
+		msgCall(dispatchMessage, &msg)
 	}
 }
 
 func verifierWindow(t *testing.T, title string) uintptr {
 	t.Helper()
-	name := windows.StringToUTF16Ptr("QSFV_MAIN")
-	//nolint:gosec // G103: Win32/COM ABI uses pointers to live typed buffers; the call is synchronous.
-	top, _, err := user32.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(title))), 0x10CF0000, 0, 0, 400, 200, 0, 0, 0, 0)
-	if top == 0 {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		//nolint:errcheck,gosec // the window may already be destroyed by the code under test. G104: native result is not authoritative, cleanup is best effort.
-		user32.NewProc("DestroyWindow").Call(top)
-	})
-	return top
+	return createWindow(t, verifierClass, title)
 }
 
 func registerVerifierClass(t *testing.T) {
 	t.Helper()
-	wc := fixtureClass{Proc: fixtureProc, Name: windows.StringToUTF16Ptr("QSFV_MAIN")}
-	wc.Size = uint32(unsafe.Sizeof(wc))
-	//nolint:gosec // G103: Win32/COM ABI uses pointers to live typed buffers; the call is synchronous.
-	atom, _, err := user32.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&wc)))
-	if atom == 0 {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		//nolint:errcheck,gosec // Win32/COM result is carried by the return value or output buffer; last-error is not authoritative here. G103: synchronous Win32/COM ABI call with live typed buffers.
-		user32.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(wc.Name)), 0)
-	})
+	registerWindowClass(t, verifierClass, fixtureProc)
 }
 
-func windowAlive(top uintptr) bool {
-	//nolint:errcheck // Win32/COM result is carried by the return value or output buffer; last-error is not authoritative here.
-	alive, _, _ := user32.NewProc("IsWindow").Call(top)
-	return alive != 0
+func lockThread(t *testing.T) {
+	t.Helper()
+	runtime.LockOSThread()
+	t.Cleanup(runtime.UnlockOSThread)
 }
 
 func TestQuietWindowVerifierPolicy(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	registerVerifierClass(t)
 	pid := windows.GetCurrentProcessId()
 	for _, tc := range []struct {
@@ -76,6 +109,7 @@ func TestQuietWindowVerifierPolicy(t *testing.T) {
 		{"no progress hiding leaves verifier alone", Options{}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			lockThread(t)
 			top := verifierWindow(t, "Verifying")
 			quietWindow(context.Background(), top, pid, tc.opts, map[uintptr]bool{}, newVerifierSkip())
 			if got := windowAlive(top); got != tc.wantAlive {
@@ -86,9 +120,8 @@ func TestQuietWindowVerifierPolicy(t *testing.T) {
 }
 
 func TestVerifierSkipClosesOncePerProcess(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	registerVerifierClass(t)
+	lockThread(t)
 	skip := newVerifierSkip()
 	pid := windows.GetCurrentProcessId()
 	first := verifierWindow(t, "Verifying")
@@ -108,9 +141,7 @@ func TestVerifierSkipClosesOncePerProcess(t *testing.T) {
 
 func verifierChild(t *testing.T) (uint32, windows.Handle) {
 	t.Helper()
-	//nolint:gosec // G204: the test binary re-executes itself as a stand-in process; no external input.
-	cmd := exec.Command(os.Args[0], "-test.run=^TestVerifierHelperProcess$")
-	cmd.Env = append(os.Environ(), verifierHelperEnv+"=1")
+	cmd := reexec("1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +175,7 @@ func TestVerifierSweepTerminatesStuckProcess(t *testing.T) {
 	pid, h := verifierChild(t)
 	handles := map[uint32]windows.Handle{pid: h}
 	skip := newVerifierSkip()
-	skip.closed[pid] = 0
+	skip.closed[pid] = &verifierProc{}
 
 	for range verifierKillAfter - 1 {
 		skip.sweep(handles)
@@ -172,12 +203,190 @@ func TestVerifierSweepTerminatesStuckProcess(t *testing.T) {
 func TestVerifierSweepIgnoresForeignProcess(t *testing.T) {
 	pid, h := verifierChild(t)
 	skip := newVerifierSkip()
-	skip.closed[pid] = verifierKillAfter * 2
+	skip.closed[pid] = &verifierProc{passes: verifierKillAfter * 2}
 	skip.sweep(map[uint32]windows.Handle{})
 	if exited, err := processExited(h); err != nil || exited {
 		t.Fatalf("process outside the installer tree was terminated: exited=%v err=%v", exited, err)
 	}
 	if _, ok := skip.closed[pid]; ok {
 		t.Fatal("process outside the installer tree is still tracked")
+	}
+}
+
+func TestVerifierSweepGivesUpWhenEndingFails(t *testing.T) {
+	registerWindowClass(t, stubbornClass, stubbornProc)
+	pid := windows.GetCurrentProcessId()
+	for _, tc := range []struct {
+		name           string
+		exited         func(windows.Handle) (bool, error)
+		terminateErr   error
+		wantTerminates int
+		wantStep       string
+	}{
+		{"terminate refused", func(windows.Handle) (bool, error) { return false, nil }, errors.New("access denied"), 1, "step=terminate"},
+		{"liveness check refused", func(windows.Handle) (bool, error) { return false, errors.New("invalid handle") }, nil, 0, "step=wait"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lockThread(t)
+			closes := 0
+			onStubbornClose = func() { closes++ }
+			t.Cleanup(func() { onStubbornClose = nil })
+			var logged bytes.Buffer
+			terminates := 0
+			skip := newVerifierSkip()
+			skip.log = slog.New(slog.NewTextHandler(&logged, nil))
+			skip.exited = tc.exited
+			skip.terminate = func(uint32) error {
+				terminates++
+				return tc.terminateErr
+			}
+			var shown []uintptr
+			skip.show = func(top, command uintptr) {
+				shown = append(shown, command)
+				showSync(top, command)
+			}
+			handles := map[uint32]windows.Handle{pid: 0}
+			top := createWindow(t, stubbornClass, "Verifying")
+
+			// Like the guard, repeat a request until the window state is seen to change.
+			for range 100 {
+				skip.window(top, pid)
+				if style(top)&wsVisible == 0 {
+					break
+				}
+			}
+			if style(top)&wsVisible != 0 {
+				t.Fatal("verifier window was not hidden")
+			}
+			for range verifierKillAfter + 5 {
+				skip.sweep(handles)
+				skip.window(top, pid)
+			}
+			for range 100 {
+				if style(top)&wsVisible != 0 {
+					break
+				}
+				skip.window(top, pid)
+			}
+
+			if style(top)&wsVisible == 0 {
+				t.Fatal("verifier window stayed hidden after the guard gave up")
+			}
+			if len(shown) < 2 || shown[0] != swHide || shown[len(shown)-1] != swShowNoActivate || !slices.IsSorted(shown) {
+				t.Fatalf("window show commands = %v, want hides followed by shows and no hide after the guard gave up", shown)
+			}
+			if closes != 1 {
+				t.Fatalf("WM_CLOSE sent %d times, want 1", closes)
+			}
+			if terminates != tc.wantTerminates {
+				t.Fatalf("terminate called %d times, want %d", terminates, tc.wantTerminates)
+			}
+			if n := strings.Count(logged.String(), "msg=\"repack verifier left running\""); n != 1 {
+				t.Fatalf("failure logged %d times, want 1:\n%s", n, logged.String())
+			}
+			if !strings.Contains(logged.String(), tc.wantStep) {
+				t.Fatalf("log does not name the failed step %q:\n%s", tc.wantStep, logged.String())
+			}
+			if n := strings.Count(logged.String(), "msg=\"repack verification skipped\""); n != 1 {
+				t.Fatalf("skip logged %d times, want 1:\n%s", n, logged.String())
+			}
+			if tracked, ok := skip.closed[pid]; !ok || !tracked.gaveUp {
+				t.Fatal("gave-up verifier is not remembered")
+			}
+		})
+	}
+}
+
+func TestVerifierSweepForgetsGaveUpProcessAfterExit(t *testing.T) {
+	pid := uint32(4242)
+	exited := false
+	skip := newVerifierSkip()
+	skip.log = slog.New(slog.DiscardHandler)
+	skip.terminate = func(uint32) error { return errors.New("access denied") }
+	skip.exited = func(windows.Handle) (bool, error) { return exited, nil }
+	skip.closed[pid] = &verifierProc{passes: verifierKillAfter}
+	handles := map[uint32]windows.Handle{pid: 0}
+
+	skip.sweep(handles)
+	if tracked, ok := skip.closed[pid]; !ok || !tracked.gaveUp {
+		t.Fatal("verifier was not given up on")
+	}
+	exited = true
+	skip.sweep(handles)
+	if _, ok := skip.closed[pid]; ok {
+		t.Fatal("exited verifier is still tracked")
+	}
+}
+
+func TestTerminateVerifierReportsFailure(t *testing.T) {
+	if err := terminateVerifier(0xFFFFFFFC); err == nil {
+		t.Fatal("terminating a process that does not exist reported success")
+	}
+}
+
+func TestGuardEndsVerifierThatIgnoresClose(t *testing.T) {
+	previous := guardInterval
+	guardInterval = 20 * time.Millisecond
+	t.Cleanup(func() { guardInterval = previous })
+
+	cmd := reexec("window")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	lines := make(chan string, 16)
+	go func() {
+		defer close(lines)
+		scan := bufio.NewScanner(stderr)
+		for scan.Scan() {
+			lines <- scan.Text()
+		}
+	}()
+	t.Cleanup(func() {
+		if err := stdin.Close(); err != nil {
+			t.Logf("close helper stdin: %v", err)
+		}
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			t.Logf("stop helper: %v", err)
+		}
+	})
+	deadline := time.After(30 * time.Second)
+	select {
+	case line := <-lines:
+		if line != "ready" {
+			t.Fatalf("helper said %q before the window existed", line)
+		}
+	case <-deadline:
+		t.Fatal("helper window did not appear")
+	}
+
+	stop := Start(context.Background(), cmd.Process.Pid, Options{HideProgress: true})
+	defer stop()
+	var seen []string
+	for open := true; open; {
+		select {
+		case line, ok := <-lines:
+			if !ok {
+				open = false
+				break
+			}
+			seen = append(seen, line)
+		case <-deadline:
+			t.Fatalf("verifier was not terminated; helper output: %q", seen)
+		}
+	}
+	if len(seen) != 1 || seen[0] != "wm_close" {
+		t.Fatalf("helper output = %q, want exactly one WM_CLOSE before the kill", seen)
+	}
+	var exit *exec.ExitError
+	if err := cmd.Wait(); !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		t.Fatalf("helper did not end by TerminateProcess: %v", err)
 	}
 }

@@ -34,8 +34,8 @@ func TestSilentSpecCarriesVerifyRepack(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if spec.VerifyRepack != verify || spec.Options.VerifyRepack != verify {
-			t.Fatalf("verify=%v: spec.VerifyRepack=%v spec.Options.VerifyRepack=%v", verify, spec.VerifyRepack, spec.Options.VerifyRepack)
+		if spec.Options.VerifyRepack != verify {
+			t.Fatalf("verify=%v: spec.Options.VerifyRepack=%v", verify, spec.Options.VerifyRepack)
 		}
 	}
 }
@@ -45,17 +45,17 @@ func TestMainRunSpecCarriesVerifyRepack(t *testing.T) {
 	for _, verify := range []bool{false, true} {
 		ws := workerSpec{
 			Engine: EngineInno, InstallerPath: filepath.Join(root, "setup.exe"), Destination: filepath.Join(root, "Game"),
-			Options: installOptions{VerifyRepack: verify}, Hidden: true,
+			Options: installOptions{SkipShortcuts: true, SkipExtras: true, VerifyRepack: verify}, Hidden: true,
 		}
 		rs, err := mainRunSpec(ws, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if rs.VerifyRepack != verify {
-			t.Fatalf("verify=%v: runSpec.VerifyRepack=%v", verify, rs.VerifyRepack)
+		if want := (installOptions{VerifyRepack: verify}); rs.Options != want {
+			t.Fatalf("verify=%v: runSpec.Options = %+v, want only %+v: the worker main run must not repeat component discovery", verify, rs.Options, want)
 		}
-		if rs.Options != (installOptions{}) {
-			t.Fatalf("worker main run must not repeat component discovery, Options = %+v", rs.Options)
+		if shouldDiscoverComponents(discoverySpec{Engine: EngineInno, Options: rs.Options}) {
+			t.Fatalf("verify=%v: worker main run would discover components again", verify)
 		}
 	}
 }
@@ -66,7 +66,7 @@ func TestRunElevatedHandsVerifyRepackToWorker(t *testing.T) {
 		statePath := filepath.Join(dir, "state.json")
 		spec := runSpec{
 			Path: `C:\fake\installer.exe`, ID: "vr", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"),
-			Options: installOptions{VerifyRepack: verify}, VerifyRepack: verify,
+			Options: installOptions{VerifyRepack: verify},
 		}
 		var sent bool
 		withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {

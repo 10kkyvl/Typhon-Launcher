@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"typhon/internal/installguard"
+	"typhon/internal/settings"
 	"typhon/internal/wine"
 )
 
@@ -390,5 +392,104 @@ func TestWineFitGirlAudioIsScopedToInstaller(t *testing.T) {
 		if got := wineInstallerDLLOverrides(tc.engine, tc.path); got != "" {
 			t.Errorf("audio changed outside profile: %q", got)
 		}
+	}
+}
+
+func bridgeFixture(t *testing.T) (games, dest, installer string) {
+	t.Helper()
+	games = t.TempDir()
+	dest = filepath.Join(games, "Demo")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	installer = filepath.Join(dest, "setup.exe")
+	if err := os.WriteFile(installer, []byte("MZ"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return games, dest, installer
+}
+
+func TestRunPreparedPicksBridgeFromSpec(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		hidden bool
+		verify bool
+		want   installguard.Bridge
+	}{
+		{"hidden install skips verification", true, false, installguard.Bridge{Options: installguard.Options{HideProgress: true}}},
+		{"hidden install keeps verification on request", true, true, installguard.Bridge{Options: installguard.Options{HideProgress: true, VerifyRepack: true}}},
+		{"visible install keeps verification on request", false, true, installguard.Bridge{Options: installguard.Options{VerifyRepack: true}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			games, dest, installer := bridgeFixture(t)
+			var got installguard.Bridge
+			r := wineRunner{launch: func(_ context.Context, _ wine.Bottle, _ wine.Cmd, bridge installguard.Bridge) (int, error) {
+				got = bridge
+				return 0, nil
+			}}
+			spec := runSpec{Path: installer, Destination: dest, Dir: dest, Hidden: tc.hidden, Options: installOptions{VerifyRepack: tc.verify}}
+			if _, err := r.runPrepared(context.Background(), spec, testBottle(games, dest)); err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("bridge = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDiscoveryRunNeverAsksForVerification(t *testing.T) {
+	games, dest, installer := bridgeFixture(t)
+	var got installguard.Bridge
+	r := wineRunner{launch: func(_ context.Context, _ wine.Bottle, _ wine.Cmd, bridge installguard.Bridge) (int, error) {
+		got = bridge
+		return 0, nil
+	}}
+	cmd := wine.Cmd{Path: installer, HideProgress: true, InstallerGuard: true}
+	if _, err := r.doRun(context.Background(), testBottle(games, dest), cmd); err != nil {
+		t.Fatal(err)
+	}
+	if want := (installguard.Bridge{Options: installguard.Options{HideProgress: true}}); got != want {
+		t.Fatalf("bridge = %+v, want %+v", got, want)
+	}
+}
+
+func TestVerifyRepackSettingReachesTheBridgeOnMac(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		verify bool
+		fg     bool
+		want   string
+	}{
+		{"verification skipped", false, false, "quiet"},
+		{"verification wanted", true, false, "verify-quiet"},
+		{"repack verification skipped", false, true, "repack-quiet"},
+		{"repack verification wanted", true, true, "repack-verify-quiet"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			games, dest, installer := bridgeFixture(t)
+			if tc.fg {
+				if err := os.WriteFile(filepath.Join(dest, "fg-01.bin"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			opts := installOptionsFrom(settings.Settings{InstallVerifyRepack: tc.verify})
+			item := Installation{Engine: EngineInno, Destination: dest, WorkingDir: dest, InstallerPath: installer}
+			spec, err := silentSpec(item, installer, filepath.Join(dest, "install.log"), opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got installguard.Bridge
+			r := wineRunner{launch: func(_ context.Context, _ wine.Bottle, _ wine.Cmd, bridge installguard.Bridge) (int, error) {
+				got = bridge
+				return 0, nil
+			}}
+			if _, err := r.runPrepared(context.Background(), spec, testBottle(games, dest)); err != nil {
+				t.Fatal(err)
+			}
+			if mode := got.Mode(); mode != tc.want {
+				t.Fatalf("bridge mode = %q, want %q", mode, tc.want)
+			}
+		})
 	}
 }

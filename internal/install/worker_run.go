@@ -200,7 +200,7 @@ func mainRunSpec(spec workerSpec, components []string) (runSpec, error) {
 	}
 	return runSpec{
 		Path: path, Args: plan.Args, Dir: spec.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail,
-		Background: spec.Background, Hidden: spec.Hidden, VerifyRepack: spec.Options.VerifyRepack,
+		Background: spec.Background, Hidden: spec.Hidden, Options: installOptions{VerifyRepack: spec.Options.VerifyRepack},
 		InstallerPath: spec.InstallerPath, Destination: spec.Destination, LogPath: spec.LogPath,
 	}, nil
 }

@@ -5,15 +5,19 @@ package main
 
 import (
 	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"typhon/internal/installguard/asset"
 )
 
 func main() {
+	sum, err := asset.SourceHash("../../..")
+	if err != nil {
+		log.Fatal(err)
+	}
 	dir, err := os.MkdirTemp("", "typhon-guard-build-")
 	if err != nil {
 		log.Fatal(err)
@@ -39,15 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	hash := sha256.New()
-	for _, path := range []string{"../../../cmd/installguard/main_windows.go", "../guard_windows.go", "../job_windows.go", "../policy.go", "../options_windows.go", "../checklist_wine_windows.go", "../../../go.mod", "../../../go.sum", "generate.go"} {
-		source, readErr := os.ReadFile(path)
-		if readErr != nil {
-			log.Fatal(readErr)
-		}
-		hash.Write(source)
-	}
-	z.Comment = "source-sha256:" + hex.EncodeToString(hash.Sum(nil))
+	z.Comment = "source-sha256:" + sum
 	if _, err = z.Write(data); err != nil {
 		log.Fatal(err)
 	}

@@ -432,7 +432,7 @@ func silentSpec(item Installation, installer, logPath string, opts installOption
 	}
 	return runSpec{
 		Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true,
-		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts, VerifyRepack: opts.VerifyRepack,
+		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts,
 	}, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"typhon/internal/installguard"
 	"typhon/internal/installguard/asset"
 	"typhon/internal/uierr"
 	"typhon/internal/wine"
@@ -27,6 +28,9 @@ type wineRunner struct {
 	// runCmd подменяется в тестах: настоящий cxstart на машине сборки может
 	// отсутствовать, а проверять надо собранную команду.
 	runCmd func(ctx context.Context, b wine.Bottle, c wine.Cmd) (int, error)
+	// launch подменяется в тестах: режим моста выбирается до запуска и в
+	// собранной команде не виден, а именно он несёт настройку проверки файлов.
+	launch func(ctx context.Context, b wine.Bottle, c wine.Cmd, bridge installguard.Bridge) (int, error)
 }
 
 func newRunner(gamesPath func() string) runner {
@@ -125,11 +129,22 @@ func (r wineRunner) runPrepared(ctx context.Context, spec runSpec, bottle wine.B
 		}
 		cmd.WorkDir = dir
 	}
-	code, err := r.doRun(ctx, bottle, cmd)
+	code, err := r.start(ctx, bottle, cmd, bridgeFor(spec.Options, cmd.HideProgress, cmd.Limit32BitAddressSpace))
 	return code, classifyRunErr(err)
 }
 
 func (r wineRunner) doRun(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd) (int, error) {
+	return r.start(ctx, bottle, cmd, bridgeFor(installOptions{}, cmd.HideProgress, cmd.Limit32BitAddressSpace))
+}
+
+func (r wineRunner) start(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd, bridge installguard.Bridge) (int, error) {
+	if r.launch != nil {
+		return r.launch(ctx, bottle, cmd, bridge)
+	}
+	return r.runGuarded(ctx, bottle, cmd, bridge)
+}
+
+func (r wineRunner) runGuarded(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd, bridge installguard.Bridge) (int, error) {
 	if r.runCmd != nil {
 		return r.runCmd(ctx, bottle, cmd)
 	}
@@ -163,13 +178,6 @@ func (r wineRunner) doRun(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd)
 			cmd.WorkDir = original[:end]
 		}
 	}
-	mode := "music"
-	if cmd.HideProgress {
-		mode = "quiet"
-	}
-	if cmd.Limit32BitAddressSpace {
-		mode = "repack-" + mode
-	}
 	cancelPath := filepath.Join(filepath.Dir(path), "cancel")
 	cancelWin, err := bottle.ToWindows(cancelPath)
 	if err != nil {
@@ -177,7 +185,7 @@ func (r wineRunner) doRun(ctx context.Context, bottle wine.Bottle, cmd wine.Cmd)
 	}
 	cmd.WaitChildren = false // the bridge waits for writers; Wine services may outlive it
 	cmd.CancelFile = cancelPath
-	cmd.Args = append([]string{mode, cancelWin, "--", original}, cmd.Args...)
+	cmd.Args = bridgeArgs(bridge, cancelWin, original, cmd.Args)
 	cmd.Path = helperPath
 	cmd.StopPaths = []string{original}
 	code, err := manager.Run(ctx, bottle, cmd)

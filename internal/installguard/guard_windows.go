@@ -44,6 +44,8 @@ var (
 	})
 )
 
+var guardInterval = 200 * time.Millisecond
+
 // Start follows descendants, including Inno's extracted setup.tmp. Held process
 // handles prevent PID reuse from bringing unrelated applications into the tree.
 // The returned stop function joins the monitor before installer cleanup proceeds.
@@ -88,7 +90,7 @@ func watch(ctx context.Context, root uint32, opts Options) {
 		_, ok := handles[pid]
 		return ok
 	}
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(guardInterval)
 	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {

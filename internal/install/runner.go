@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"crypto/ed25519"
+
+	"typhon/internal/installguard"
 )
 
 type runSpec struct {
@@ -16,9 +18,6 @@ type runSpec struct {
 	Tail       string
 	Background bool
 	Hidden     bool
-	// VerifyRepack оставляет репаку его собственную проверку файлов (QuickSFV);
-	// выключенная, она закрывается сразу, как только показывается.
-	VerifyRepack bool
 
 	// Поля ниже нужны только повышенному воркеру (elevated.go, worker_run.go):
 	// без прав администратора процесс с установщиком
@@ -53,4 +52,15 @@ type brokerHandoff struct {
 
 type runner interface {
 	run(ctx context.Context, spec runSpec) (int, error)
+}
+
+func bridgeFor(opts installOptions, hide, limit32 bool) installguard.Bridge {
+	return installguard.Bridge{
+		Options:                installguard.Options{HideProgress: hide, VerifyRepack: opts.VerifyRepack},
+		Limit32BitAddressSpace: limit32,
+	}
+}
+
+func bridgeArgs(bridge installguard.Bridge, cancelFile, installer string, args []string) []string {
+	return append([]string{bridge.Mode(), cancelFile, "--", installer}, args...)
 }

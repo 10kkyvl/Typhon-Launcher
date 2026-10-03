@@ -92,6 +92,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify the embedded Win32 bridge is current
+        run: go test ./internal/installguard/asset/
+
       # Только arm64. Универсальный бандл macOS 26 встречает окном «Support
       # Ending for Intel-Based Apps»: система ругается на x86_64-слайс даже
       # тогда, когда приложение стартует нативно. Tahoe — последняя macOS для

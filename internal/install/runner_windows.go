@@ -19,6 +19,10 @@ const backgroundSchedulingClass = 3
 
 type processRunner struct{}
 
+// startGuard подменяется в тестах: охранника нельзя проверить иначе, чем по
+// тому, с какими параметрами его запустили.
+var startGuard = installguard.Start
+
 func newRunner(func() string) runner { return processRunner{} }
 
 // run сначала пытается разведать компоненты Inno (если движок и опции того
@@ -54,7 +58,7 @@ func (processRunner) run(ctx context.Context, spec runSpec) (int, error) {
 		return 0, err
 	}
 
-	stopGuard := installguard.Start(ctx, cmd.Process.Pid, installguard.Options{HideProgress: execSpec.Hidden, VerifyRepack: execSpec.VerifyRepack})
+	stopGuard := startGuard(ctx, cmd.Process.Pid, installguard.Options{HideProgress: execSpec.Hidden, VerifyRepack: execSpec.Options.VerifyRepack})
 	defer stopGuard()
 
 	// Установщик распаковывает себя во временный каталог и работает уже оттуда:

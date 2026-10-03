@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 )
 
-//go:generate go run generate.go
 //go:embed helper.exe.gz
 var helper []byte
 
