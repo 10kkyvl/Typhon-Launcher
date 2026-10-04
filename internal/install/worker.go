@@ -1,6 +1,8 @@
 package install
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,9 +110,9 @@ func workerCancelPath(dir, id string) string {
 }
 
 func readWorkerSpec(path string) (workerSpec, error) {
-	data, err := os.ReadFile(path)
+	data, err := readWorkerSpecBytes(path)
 	if err != nil {
-		return workerSpec{}, fmt.Errorf("read worker spec %s: %w", path, err)
+		return workerSpec{}, err
 	}
 	var spec workerSpec
 	if err := json.Unmarshal(data, &spec); err != nil {
@@ -120,14 +122,26 @@ func readWorkerSpec(path string) (workerSpec, error) {
 }
 
 func writeWorkerSpec(path string, spec workerSpec) error {
+	_, err := writeWorkerSpecDigest(path, spec)
+	return err
+}
+
+// writeWorkerSpecDigest возвращает SHA-256 тех самых байт, что ушли в файл, а
+// не файла, перечитанного с диска: между записью и чтением его уже мог
+// подменить другой процесс.
+func writeWorkerSpecDigest(path string, spec workerSpec) (string, error) {
 	if path == "" {
-		return errors.New("worker spec path unavailable")
+		return "", errors.New("worker spec path unavailable")
 	}
 	data, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal worker spec: %w", err)
+		return "", fmt.Errorf("marshal worker spec: %w", err)
 	}
-	return writeWorkerFile(path, data)
+	if err := writeWorkerFile(path, data); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // readWorkerState различает только отсутствие файла: воркер ещё не успел его

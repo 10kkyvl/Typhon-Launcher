@@ -20,8 +20,8 @@ var (
 // лаунчер поднимает его один раз через startElevated и дальше общается с ним
 // только через файлы spec/state/cancel, потому что процесс с высоким уровнем
 // целостности лаунчеру не принадлежит и других каналов связи для него нет.
-func RunWorker(specPath string) error {
-	spec, specErr := readWorkerSpec(specPath)
+func RunWorker(specPath, specSHA256 string) error {
+	spec, specErr := readVerifiedWorkerSpec(specPath, specSHA256)
 	if specErr != nil {
 		if spec.StatePath != "" {
 			if err := writeWorkerState(spec.StatePath, workerState{Run: spec.Run, Done: true, Error: specErr.Error()}); err != nil {

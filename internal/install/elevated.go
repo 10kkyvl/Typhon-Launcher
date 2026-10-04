@@ -98,6 +98,9 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			if res.err != nil {
 				return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, res.err)
 			}
+			if res.code == WorkerSpecRejectedExit {
+				return 0, ErrWorkerSpecRejected
+			}
 			state, err := loadFinalWorkerState(spec.StatePath, run)
 			if err != nil {
 				return 0, err
@@ -218,14 +221,15 @@ func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile 
 		return exited, func() { close(stop) }, terminate, nil
 	}
 
-	if err := writeWorkerSpec(specFile, ws); err != nil {
+	digest, err := writeWorkerSpecDigest(specFile, ws)
+	if err != nil {
 		return nil, nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("путь к лаунчеру: %w", err)
 	}
-	proc, err := startElevatedWorker(runSpec{Path: exe, Args: []string{installWorkerFlag, specFile}, Hidden: true})
+	proc, err := startElevatedWorker(runSpec{Path: exe, Args: workerLaunchArgs(specFile, digest), Hidden: true})
 	if err != nil {
 		return nil, nil, nil, workerStartError(spec.Path, err)
 	}

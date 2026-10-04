@@ -74,7 +74,7 @@ func startInlineWorker(t *testing.T) func(runSpec) (workerHandle, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			done <- RunWorker(launch.Args[1])
+			done <- RunWorker(ParseWorkerArgs(launch.Args[1:]))
 		}()
 		return &inlineWorker{done: done}, nil
 	}

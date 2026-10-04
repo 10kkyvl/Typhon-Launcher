@@ -205,8 +205,12 @@ func main() {
 			slog.Error("install worker failed", "error", errNoWorkerSpec)
 			os.Exit(1)
 		}
-		if err := install.RunWorker(os.Args[2]); err != nil {
+		specPath, specSHA256 := install.ParseWorkerArgs(os.Args[2:])
+		if err := install.RunWorker(specPath, specSHA256); err != nil {
 			slog.Error("install worker failed", "error", err)
+			if errors.Is(err, install.ErrWorkerSpecRejected) {
+				os.Exit(install.WorkerSpecRejectedExit)
+			}
 			os.Exit(1)
 		}
 		return
