@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    ArrowRight,
     Bell,
     ChevronLeft,
     ChevronRight,
@@ -69,6 +70,14 @@
     navigate('sources', { sourceId: hit.sourceId, releaseId: hit.id });
   }
 
+  function openCatalog() {
+    const query = results.query.trim();
+    if (query === '') return;
+    overlay.close();
+    searchInput?.blur();
+    navigate('catalog', { q: query });
+  }
+
   function openActive() {
     const active = overlay.activeHit();
     if (!active) return;
@@ -91,9 +100,9 @@
         overlay.move(-1);
         return;
       case 'Enter':
-        if (results.active < 0) return;
         event.preventDefault();
-        openActive();
+        if (results.active < 0) openCatalog();
+        else openActive();
     }
   }
 
@@ -188,7 +197,10 @@
             </button>
           {/each}
           {#if results.moreGames > 0}
-            <div class="results-more">{msg('search.more', { count: results.moreGames })}</div>
+            <button class="results-more results-link" onclick={openCatalog}>
+              {msg('search.moreInCatalog', { count: results.moreGames })}
+              <ArrowRight size="1.4rem" strokeWidth={1.8} />
+            </button>
           {/if}
         {/if}
 
@@ -479,6 +491,21 @@
 
   .results-error {
     color: var(--danger);
+  }
+
+  .results-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease);
+  }
+
+  .results-link:hover {
+    background: var(--hover-strong);
   }
 
   .right {

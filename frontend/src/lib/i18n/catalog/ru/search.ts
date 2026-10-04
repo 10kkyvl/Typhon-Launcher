@@ -5,6 +5,7 @@ export const search = {
   'search.placeholder': 'Поиск игр и релизов',
   'search.games': 'Игры',
   'search.more': 'и ещё {count}',
+  'search.moreInCatalog': 'Ещё {count} в каталоге',
   'search.releasesNoMatch': 'Релизы без совпадения',
   'search.nothingFound': 'Ничего не найдено',
 } as const;

@@ -41,7 +41,7 @@
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo } from '../../lib/stores/metadata';
-  import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
+  import { currentRouteKey, navigate, recallRoute, route, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
@@ -99,7 +99,7 @@
   let sourceState = restored?.sourceState;
   let snapshot = $state(restored?.snapshot ?? '');
 
-  let search = $state(restored?.search ?? '');
+  let search = $state(restored?.search ?? get(route).params.q ?? '');
   let genre = $state(restored?.genre ?? '');
   let sort = $state<Sort>(restored?.sort ?? 'auto');
   let compatOnly = $state(restored?.compatOnly ?? false);

@@ -8,6 +8,7 @@ export const search: Record<SearchKey, Message> = {
   'search.placeholder': 'Search games and releases',
   'search.games': 'Games',
   'search.more': 'and {count} more',
+  'search.moreInCatalog': '{count} more in the catalog',
   'search.releasesNoMatch': 'Releases without a match',
   'search.nothingFound': 'Nothing found',
 };
