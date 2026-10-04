@@ -75,6 +75,7 @@ func TestElevatedWorkerEndToEndInProcess(t *testing.T) {
 
 	dir := t.TempDir()
 	installerPath := filepath.Join(dir, "download", "FooGame-setup.exe")
+	mkText(t, installerPath, "installer fixture")
 	dest := filepath.Join(dir, "Games", "FooGame")
 	spec := runSpec{
 		Path: installerPath, InstallerPath: installerPath, ID: "e2e1",
@@ -120,6 +121,7 @@ func TestElevatedWorkerEndToEndInProcessCancel(t *testing.T) {
 
 	dir := t.TempDir()
 	installerPath := filepath.Join(dir, "download", "FooGame-setup.exe")
+	mkText(t, installerPath, "installer fixture")
 	dest := filepath.Join(dir, "Games", "FooGame")
 	spec := runSpec{
 		Path: installerPath, InstallerPath: installerPath, ID: "e2e2",

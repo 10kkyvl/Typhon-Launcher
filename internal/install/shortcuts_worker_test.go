@@ -418,7 +418,7 @@ func TestRunWorkerSpecCleansSharedShortcuts(t *testing.T) {
 			workerInstall = install(t, shared, tc.installErr)
 			t.Cleanup(func() { workerInstall = previous })
 
-			runErr := runWorkerSpec(spec)
+			runErr := runWorkerSpec(withInstaller(t, spec))
 			if (runErr != nil) != (tc.installErr != nil) {
 				t.Fatalf("runWorkerSpec error = %v, want %v", runErr, tc.installErr)
 			}
@@ -521,7 +521,7 @@ func TestWorkerCleansSharedShortcutsOnlyAfterSuccess(t *testing.T) {
 			}
 			t.Cleanup(func() { workerInstall = previous })
 
-			if err := runWorkerSpec(spec); err != nil {
+			if err := runWorkerSpec(withInstaller(t, spec)); err != nil {
 				t.Fatalf("runWorkerSpec error = %v", err)
 			}
 			state, found, err := readWorkerState(spec.StatePath)
@@ -598,7 +598,7 @@ func TestRunWorkerSpecRejectsForgedJob(t *testing.T) {
 			}
 			t.Cleanup(func() { workerInstall = install })
 
-			if err := runWorkerSpec(workerSpec{ID: "w1", Run: "r1", StatePath: state, Destination: dest, Shell: &job}); err != nil {
+			if err := runWorkerSpec(withInstaller(t, workerSpec{ID: "w1", Run: "r1", StatePath: state, Destination: dest, Shell: &job})); err != nil {
 				t.Fatalf("runWorkerSpec error = %v", err)
 			}
 			got, found, err := readWorkerState(state)
@@ -772,7 +772,7 @@ func TestRunElevatedCarriesShellJobAndReport(t *testing.T) {
 			dir := t.TempDir()
 			statePath := filepath.Join(dir, "state.json")
 			handoff := &shellHandoff{Job: job}
-			spec := runSpec{Path: `C:\fake\installer.exe`, ID: "sh1", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"), Shell: handoff}
+			spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "sh1", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"), Shell: handoff}
 
 			var sent *shellJob
 			withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {
@@ -803,7 +803,7 @@ func TestRunElevatedCarriesShellJobAndReport(t *testing.T) {
 func TestRunElevatedWithoutShellJobSendsNone(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "sh2", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "sh2", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 	var sent *shellJob
 	withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {
 		ws, err := readWorkerSpec(launch.Args[1])

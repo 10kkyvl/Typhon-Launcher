@@ -221,6 +221,11 @@ func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile 
 		return exited, func() { close(stop) }, terminate, nil
 	}
 
+	installer, err := installerDigest(ctx, ws.InstallerPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)
+	}
+	ws.InstallerSHA256 = installer
 	digest, err := writeWorkerSpecDigest(specFile, ws)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)

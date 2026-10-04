@@ -65,7 +65,7 @@ func TestRunElevatedHandsVerifyRepackToWorker(t *testing.T) {
 		dir := t.TempDir()
 		statePath := filepath.Join(dir, "state.json")
 		spec := runSpec{
-			Path: `C:\fake\installer.exe`, ID: "vr", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"),
+			Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "vr", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"),
 			Options: installOptions{VerifyRepack: verify},
 		}
 		var sent bool

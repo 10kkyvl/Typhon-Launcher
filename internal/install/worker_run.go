@@ -44,10 +44,10 @@ func runWorkerSpec(spec workerSpec) error {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func() {
+	go func(path string) {
 		defer wg.Done()
-		watchWorkerCancel(ctx, spec.CancelPath, cancel)
-	}()
+		watchWorkerCancel(ctx, path, cancel)
+	}(spec.CancelPath)
 	defer func() {
 		cancel()
 		wg.Wait()
@@ -57,6 +57,13 @@ func runWorkerSpec(spec workerSpec) error {
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
 		return err
 	}
+
+	f, pinned, err := pinInstaller(ctx, spec)
+	if err != nil {
+		return finishWorkerState(spec.StatePath, state, err)
+	}
+	defer closePinnedInstaller(f)
+	spec = pinned
 
 	components, reason, err := discoverComponents(ctx, spec.discovery())
 	if err != nil {

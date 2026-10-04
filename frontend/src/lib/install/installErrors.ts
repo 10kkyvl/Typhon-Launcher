@@ -30,6 +30,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.game_running': 'errInstall.installGameRunning',
   'install.incomplete_source': 'errInstall.installIncompleteSource',
   'install.installer_busy': 'errInstall.installInstallerBusy',
+  'install.installer_changed': 'errInstall.installInstallerChanged',
   'install.installer_cancelled': 'errInstall.installInstallerCancelled',
   'install.installer_failed': 'errInstall.installInstallerFailed',
   'install.installer_no_output': 'errInstall.installInstallerNoOutput',

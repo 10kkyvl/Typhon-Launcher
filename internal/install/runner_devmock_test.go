@@ -241,7 +241,7 @@ func TestMockRunnerRunElevateEnabledUsesWorkerProtocol(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	spec := runSpec{
-		Path: filepath.Join(dir, "setup.exe"), InstallerPath: filepath.Join(dir, "setup.exe"),
+		Path: filepath.Join(dir, "setup.exe"), InstallerPath: installerFixture(t, dir),
 		StatePath: statePath, CancelPath: filepath.Join(dir, "cancel"), ID: "e1",
 	}
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
@@ -279,7 +279,7 @@ func TestMockRunnerRunElevateEnabledCancelWritesMarker(t *testing.T) {
 	dir := t.TempDir()
 	cancelPath := filepath.Join(dir, "cancel")
 	spec := runSpec{
-		Path: filepath.Join(dir, "setup.exe"), InstallerPath: filepath.Join(dir, "setup.exe"),
+		Path: filepath.Join(dir, "setup.exe"), InstallerPath: installerFixture(t, dir),
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: cancelPath, ID: "e2",
 	}
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {

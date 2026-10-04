@@ -146,8 +146,12 @@ func TestRunWorkerRunsSpecWithMatchingDigest(t *testing.T) {
 	dir := t.TempDir()
 	specPath := filepath.Join(dir, "spec.json")
 	statePath := filepath.Join(dir, "state.json")
-	installer := filepath.Join(dir, "setup.exe")
-	digest, err := writeWorkerSpecDigest(specPath, workerSpec{ID: "ok", Run: "run-1", InstallerPath: installer, StatePath: statePath})
+	installer := installerFixture(t, dir)
+	resolved, err := filepath.EvalSymlinks(installer)
+	if err != nil {
+		t.Fatalf("resolve installer: %v", err)
+	}
+	digest, err := writeWorkerSpecDigest(specPath, workerSpec{ID: "ok", Run: "run-1", InstallerPath: installer, InstallerSHA256: fileDigest(t, installer), StatePath: statePath})
 	if err != nil {
 		t.Fatalf("writeWorkerSpecDigest: %v", err)
 	}
@@ -172,8 +176,8 @@ func TestRunWorkerRunsSpecWithMatchingDigest(t *testing.T) {
 			if err := RunWorker(specPath, tc.digest); err != nil {
 				t.Fatalf("RunWorker: %v", err)
 			}
-			if calls != 1 || got.InstallerPath != installer {
-				t.Fatalf("workerInstall calls = %d, spec = %+v, want one run of %s", calls, got, installer)
+			if calls != 1 || got.InstallerPath != resolved {
+				t.Fatalf("workerInstall calls = %d, spec = %+v, want one run of %s", calls, got, resolved)
 			}
 			state, found, err := readWorkerState(statePath)
 			if err != nil || !found || !state.Done || state.Error != "" || state.Run != "run-1" {
@@ -208,7 +212,7 @@ func TestParseWorkerArgs(t *testing.T) {
 func TestRunElevatedPassesDigestOfTheWrittenSpec(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "dg1", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "dg1", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {
 		if len(launch.Args) != 4 || launch.Args[0] != installWorkerFlag {
@@ -232,7 +236,7 @@ func TestRunElevatedPassesDigestOfTheWrittenSpec(t *testing.T) {
 
 func TestRunElevatedReportsRejectedWorker(t *testing.T) {
 	dir := t.TempDir()
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "rj1", StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "rj1", StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		if runtime.GOOS == "windows" {

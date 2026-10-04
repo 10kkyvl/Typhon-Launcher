@@ -36,6 +36,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installGameRunning': 'The game is running, close it before removing it',
   'errInstall.installIncompleteSource': 'The download is not finished — only incomplete files remain on disk',
   'errInstall.installInstallerBusy': 'Another installation is already running on this system',
+  'errInstall.installInstallerChanged':
+    'The installer changed after administrator rights were requested, so it was not started. Start the installation again',
   'errInstall.installInstallerCancelled': 'The installation was cancelled',
   'errInstall.installInstallerFailed': 'The installer exited with an error',
   'errInstall.installInstallerNoOutput': 'The installer did not create any files in the install folder',

@@ -59,6 +59,20 @@ func mkText(t *testing.T, path, content string) {
 	}
 }
 
+func installerFixture(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "setup.exe")
+	mkText(t, path, "installer fixture")
+	return path
+}
+
+func withInstaller(t *testing.T, spec workerSpec) workerSpec {
+	t.Helper()
+	spec.InstallerPath = installerFixture(t, t.TempDir())
+	spec.InstallerSHA256 = fileDigest(t, spec.InstallerPath)
+	return spec
+}
+
 func exists(path string) bool {
 	//nolint:gosec // G703: path is built by the test from t.TempDir(), not user input; gosec's taint pass flags it only on some runs
 	_, err := os.Stat(path)

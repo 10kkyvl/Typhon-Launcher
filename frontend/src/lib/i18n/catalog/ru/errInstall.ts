@@ -33,6 +33,8 @@ export const errInstall = {
   'errInstall.installGameRunning': 'игра запущена, закройте её перед удалением',
   'errInstall.installIncompleteSource': 'загрузка не завершена — на диске остались только незавершённые файлы',
   'errInstall.installInstallerBusy': 'в системе уже выполняется другая установка',
+  'errInstall.installInstallerChanged':
+    'установщик изменился после запроса прав администратора, запуск отменён. Повторите установку',
   'errInstall.installInstallerCancelled': 'установка была отменена',
   'errInstall.installInstallerFailed': 'установщик завершился с ошибкой',
   'errInstall.installInstallerNoOutput': 'установщик не создал файлов в папке установки',
