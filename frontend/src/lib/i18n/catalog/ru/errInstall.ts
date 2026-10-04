@@ -1,7 +1,7 @@
 export const errInstall = {
   'errInstall.fallback': 'не удалось выполнить операцию',
 
-  'errInstall.installArchiveCorrupt': 'архив повреждён: контрольная сумма не сошлась и во внешнем распаковщике, скачайте его заново',
+  'errInstall.installArchiveCorrupt': 'архив повреждён, скачайте его заново',
   'errInstall.installArchiveEncrypted': 'архив защищён паролем, распакуйте его вручную',
   'errInstall.installArchiveIncomplete': 'архив обрезан или не хватает следующего тома',
   'errInstall.installArchiveResultMismatch':

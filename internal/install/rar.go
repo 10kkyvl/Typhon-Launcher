@@ -23,7 +23,7 @@ var (
 	errArchiveIncomplete   = uierr.New("install.archive_incomplete", "архив обрезан или не хватает следующего тома")
 	errArchiveMismatch     = uierr.New("install.archive_result_mismatch", "распакованные файлы не совпадают с оглавлением архива")
 	errArchiveVerify       = uierr.New("install.archive_verify_failed", "не удалось проверить распакованные файлы")
-	errArchiveCorrupt      = uierr.New("install.archive_corrupt", "архив повреждён: контрольная сумма не сошлась и во внешнем распаковщике, скачайте его заново")
+	errArchiveCorrupt      = uierr.New("install.archive_corrupt", "архив повреждён, скачайте его заново")
 	errArchiveToolOutdated = uierr.New("install.archive_tool_outdated", "установленный WinRAR или 7-Zip слишком старый или не опознан: обновите его либо распакуйте архив вручную")
 	errArchiveHasLinks     = errors.New("ссылка или нестандартная запись")
 )
@@ -84,8 +84,11 @@ func asDecodeError(archivePath string, err error, atEOF bool) error {
 
 // В заголовках io.ErrUnexpectedEOF — всегда обрыв файла: они читаются прямо с
 // диска, без декодера.
-func rarListError(archivePath string, err error) error {
+func rarListError(archivePath string, err error, eof *volumeEOF) error {
 	if cause := rarCause(archivePath, err); cause != nil {
+		return cause
+	}
+	if cause := rarHeaderCause(err, eof); cause != nil {
 		return cause
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
@@ -94,12 +97,84 @@ func rarListError(archivePath string, err error) error {
 	return err
 }
 
+func rarReadError(archivePath string, err error, eof *volumeEOF) error {
+	if cause := rarHeaderCause(err, eof); cause != nil {
+		return cause
+	}
+	return asDecodeError(archivePath, err, eof.reached())
+}
+
+var rarHeaderErrors = []error{
+	rardecode.ErrBadBlockHeader, rardecode.ErrBadHeaderCRC,
+	rardecode.ErrCorruptBlockHeader, rardecode.ErrCorruptFileHeader,
+}
+
+// Заголовок нельзя разобрать, и оглавления нет: внешний распаковщик пишет мимо
+// проверок rardecode, а проверять записанное ему нечем (checkToolEntries,
+// verifyExtracted), поэтому его не зовут. Если чтение остановилось в хвосте
+// файла из одних нулей, данные не докачаны (файл предвыделен под полный
+// размер); иначе заголовок испорчен.
+func rarHeaderCause(err error, eof *volumeEOF) error {
+	if !slices.ContainsFunc(rarHeaderErrors, func(h error) bool { return errors.Is(err, h) }) {
+		return nil
+	}
+	blank, tailErr := eof.stoppedInZeroTail()
+	switch {
+	case tailErr != nil:
+		return fmt.Errorf("%w: %w; хвост тома не проверен: %w", errArchiveCorrupt, err, tailErr)
+	case blank:
+		return fmt.Errorf("%w: %w", errArchiveIncomplete, err)
+	}
+	return fmt.Errorf("%w: %w", errArchiveCorrupt, err)
+}
+
 // volumeEOF помнит, дошло ли чтение текущего файла тома до его конца: так
 // обрезанный файл отличается от ошибки декодера, у которой тот же
 // io.ErrUnexpectedEOF. Читает один поток, поэтому без синхронизации.
-type volumeEOF struct{ hit bool }
+type volumeEOF struct {
+	hit   bool
+	name  string
+	pos   int64
+	reach int64
+}
 
 func (v *volumeEOF) reached() bool { return v != nil && v.hit }
+
+const (
+	minBlankTail = 8
+	maxZeroScan  = 1 << 20
+)
+
+// stoppedInZeroTail: от места, где остановилось чтение, до конца файла тома
+// одни нули, причём не короче минимального блока. Конец корректного RAR всегда
+// ненулевой, а предвыделенный и недокачанный файл кончается нулями. Смотрим не
+// дальше последнего мегабайта: у недокачанной раздачи дыра бывает в десятки
+// гигабайт, а вызывающий (оценка размера) отмены не принимает.
+func (v *volumeEOF) stoppedInZeroTail() (bool, error) {
+	if v == nil || v.name == "" {
+		return false, nil
+	}
+	f, err := os.Open(v.name)
+	if err != nil {
+		return false, err
+	}
+	defer closeReadOnly(v.name, f)
+	info, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	size := info.Size()
+	from := min(v.reach-1, size-minBlankTail)
+	if from < 0 {
+		return false, nil
+	}
+	from = max(from, size-maxZeroScan)
+	tail := make([]byte, size-from)
+	if _, err := f.ReadAt(tail, from); err != nil {
+		return false, err
+	}
+	return !slices.ContainsFunc(tail, func(b byte) bool { return b != 0 }), nil
+}
 
 type eofFS struct{ eof *volumeEOF }
 
@@ -108,7 +183,7 @@ func (f eofFS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.eof.hit = false
+	*f.eof = volumeEOF{name: name}
 	return &eofFile{File: file, eof: f.eof}, nil
 }
 
@@ -119,10 +194,20 @@ type eofFile struct {
 
 func (f *eofFile) Read(p []byte) (int, error) {
 	n, err := f.File.Read(p)
+	f.eof.pos += int64(n)
+	f.eof.reach = max(f.eof.reach, f.eof.pos)
 	if errors.Is(err, io.EOF) {
 		f.eof.hit = true
 	}
 	return n, err
+}
+
+func (f *eofFile) Seek(offset int64, whence int) (int64, error) {
+	pos, err := f.File.Seek(offset, whence)
+	if err == nil {
+		f.eof.pos = pos
+	}
+	return pos, err
 }
 
 type rarSource struct {
@@ -133,7 +218,7 @@ type rarSource struct {
 
 func (s rarSource) Read(p []byte) (int, error) {
 	n, err := s.r.Read(p)
-	return n, asDecodeError(s.archive, err, s.eof.reached())
+	return n, rarReadError(s.archive, err, s.eof)
 }
 
 func extractRar(ctx context.Context, archivePath, dest string, rep *reporter) error {
@@ -149,7 +234,7 @@ func decodeRar(ctx context.Context, archivePath, dest string, rep *reporter) err
 	eof := &volumeEOF{}
 	rc, err := rardecode.OpenReader(archivePath, rardecode.FileSystem(eofFS{eof: eof}))
 	if err != nil {
-		return classifyArchiveError(archivePath, rarListError(archivePath, err))
+		return classifyArchiveError(archivePath, rarListError(archivePath, err, eof))
 	}
 	defer closeReadOnly(archivePath, rc)
 
@@ -164,7 +249,7 @@ func decodeRar(ctx context.Context, archivePath, dest string, rep *reporter) err
 			return nil
 		}
 		if err != nil {
-			return asDecodeError(archivePath, err, eof.reached())
+			return rarReadError(archivePath, err, eof)
 		}
 		if !header.IsDir && !header.Mode().IsRegular() {
 			skipIrregular(archivePath, header.Name)
@@ -254,9 +339,10 @@ func runArchiveTool(ctx context.Context, tool archiveTool, archivePath, dest str
 // перенаправления RAR5, и ссылки, которых нет в оглавлении, ловит проверка
 // результата в verifyExtracted.
 func checkToolEntries(archivePath, dest string) ([]*rardecode.File, error) {
-	files, err := rardecode.List(archivePath)
+	eof := &volumeEOF{}
+	files, err := rardecode.List(archivePath, rardecode.FileSystem(eofFS{eof: eof}))
 	if err != nil {
-		return nil, classifyArchiveError(archivePath, rarListError(archivePath, err))
+		return nil, classifyArchiveError(archivePath, rarListError(archivePath, err, eof))
 	}
 	for _, f := range files {
 		if isLinkEntry(&f.FileHeader) {
@@ -283,9 +369,10 @@ func isLinkEntry(h *rardecode.FileHeader) bool {
 }
 
 func estimateRar(archivePath string) (int64, error) {
-	files, err := rardecode.List(archivePath)
+	eof := &volumeEOF{}
+	files, err := rardecode.List(archivePath, rardecode.FileSystem(eofFS{eof: eof}))
 	if err != nil {
-		return 0, rarListError(archivePath, err)
+		return 0, rarListError(archivePath, err, eof)
 	}
 	var total int64
 	for _, f := range files {

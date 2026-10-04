@@ -4,8 +4,7 @@ import type { ErrInstallKey } from '../ru/errInstall';
 export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.fallback': 'Could not complete the operation',
 
-  'errInstall.installArchiveCorrupt':
-    'The archive is damaged: the checksum does not match in the external extractor either, download it again',
+  'errInstall.installArchiveCorrupt': 'The archive is damaged, download it again',
   'errInstall.installArchiveEncrypted': 'The archive is password-protected, extract it manually',
   'errInstall.installArchiveIncomplete': 'The archive is truncated or its next volume is missing',
   'errInstall.installArchiveResultMismatch':
