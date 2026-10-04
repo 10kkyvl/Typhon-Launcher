@@ -248,11 +248,11 @@ func TestWindowsPathRedacted(t *testing.T) {
 	srv, reqs := newCapturingServer(t, http.StatusNoContent)
 	svc := newTestService(t, srv, nil)
 
-	svc.Capture("install", "extract", errors.New(`open C:\Users\10kk\AppData\Local\Typhon\state.json: access denied`), false)
+	svc.Capture("install", "extract", errors.New(`open C:\Users\alice\AppData\Local\Typhon\state.json: access denied`), false)
 	svc.flush(context.Background())
 
 	report := decodeSingleReport(t, waitFor(t, reqs, "/diagnostics/errors"))
-	for _, leak := range []string{"10kk", "AppData", `C:\`} {
+	for _, leak := range []string{"alice", "AppData", `C:\`} {
 		if strings.Contains(report.Message, leak) {
 			t.Fatalf("message leaked %q: %q", leak, report.Message)
 		}
@@ -546,14 +546,14 @@ func TestReportClientErrorSanitizesFrontendInput(t *testing.T) {
 	srv, reqs := newCapturingServer(t, http.StatusNoContent)
 	svc := newTestService(t, srv, nil)
 
-	err := svc.ReportClientError("ui", "render", `TypeError at C:\Users\10kk\AppData\Local\Typhon`, "at Foo (app.js:1:1)", true)
+	err := svc.ReportClientError("ui", "render", `TypeError at C:\Users\alice\AppData\Local\Typhon`, "at Foo (app.js:1:1)", true)
 	if err != nil {
 		t.Fatalf("ReportClientError: %v", err)
 	}
 	svc.flush(context.Background())
 
 	report := decodeSingleReport(t, waitFor(t, reqs, "/diagnostics/errors"))
-	if strings.Contains(report.Message, "10kk") {
+	if strings.Contains(report.Message, "alice") {
 		t.Fatalf("frontend message leaked: %q", report.Message)
 	}
 	if !report.Fatal {

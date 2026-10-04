@@ -14,8 +14,8 @@ func TestTextRedactsSensitiveValues(t *testing.T) {
 	}{
 		{
 			name:    "windows home path",
-			in:      `open C:\Users\10kk\AppData\Local\Typhon\state.json: access denied`,
-			leaks:   []string{"10kk", "AppData", `C:\`},
+			in:      `open C:\Users\alice\AppData\Local\Typhon\state.json: access denied`,
+			leaks:   []string{"alice", "AppData", `C:\`},
 			wantSub: Path,
 		},
 		{
@@ -107,7 +107,7 @@ func TestTextRedactsSensitiveValues(t *testing.T) {
 }
 
 func TestTextKeepsDiagnosticShape(t *testing.T) {
-	got := Text(`write C:\Users\10kk\Typhon\state.json: disk full`)
+	got := Text(`write C:\Users\alice\Typhon\state.json: disk full`)
 	for _, keep := range []string{"write", "disk full"} {
 		if !strings.Contains(got, keep) {
 			t.Fatalf("Text dropped %q from the message: %q", keep, got)
@@ -122,11 +122,11 @@ func TestTextEmpty(t *testing.T) {
 }
 
 func TestSanitizeRefusesSurvivingSecrets(t *testing.T) {
-	safe, err := Sanitize(`open C:\Users\10kk\state.json: denied`)
+	safe, err := Sanitize(`open C:\Users\alice\state.json: denied`)
 	if err != nil {
 		t.Fatalf("Sanitize returned an error for a scrubbable value: %v", err)
 	}
-	if strings.Contains(safe, "10kk") {
+	if strings.Contains(safe, "alice") {
 		t.Fatalf("Sanitize returned a leaking value: %q", safe)
 	}
 }
@@ -185,9 +185,9 @@ func TestTruncateKeepsValidUTF8(t *testing.T) {
 func TestStackScrubsGoFrames(t *testing.T) {
 	in := "goroutine 1 [running]:\n" +
 		"typhon/internal/install.(*Service).Run(0xc000123456)\n" +
-		"\tC:/Users/10kk/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n"
+		"\tC:/Users/alice/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n"
 	got := Stack(in)
-	if strings.Contains(got, "10kk") {
+	if strings.Contains(got, "alice") {
 		t.Fatalf("Stack leaked the build path: %q", got)
 	}
 	if !strings.Contains(got, "install.(*Service).Run") {
