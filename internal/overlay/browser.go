@@ -40,6 +40,7 @@ type browserWindow interface {
 	handle() uintptr
 	place(r rect) error
 	hide()
+	isVisible() bool
 	navigate(url string)
 	back()
 	forward()
@@ -230,12 +231,14 @@ func (s *Service) placeBrowser(win browserWindow, r rect) error {
 // A browser that is not open holds no page: hiding alone would leave a video
 // or a stream playing with no way to see or stop it.
 func (s *Service) unloadBrowser(win browserWindow) {
+	gone := hideVerified(win, "browser window")
 	s.mu.Lock()
-	s.browserOpen = false
+	s.browserOpen = !gone
 	s.mu.Unlock()
-	win.hide()
 	win.navigate(blankPage)
-	s.emit(EventBrowserClosed, Signal{})
+	if gone {
+		s.emit(EventBrowserClosed, Signal{})
+	}
 }
 
 func (s *Service) closeBrowserOnUI() {
@@ -249,13 +252,11 @@ func (s *Service) closeBrowserOnUI() {
 
 // The page stays loaded while the overlay is closed, so a video or a stream
 // keeps playing; the browser shows again only when the panel asks for it.
-func (s *Service) hideBrowserOnUI() {
+func (s *Service) hideBrowserOnUI() bool {
 	s.mu.Lock()
 	win := s.browser
 	s.mu.Unlock()
-	if win != nil {
-		win.hide()
-	}
+	return win == nil || hideVerified(win, "browser window")
 }
 
 func (s *Service) ownWindow(hwnd uintptr) bool {

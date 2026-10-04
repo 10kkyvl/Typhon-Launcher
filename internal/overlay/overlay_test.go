@@ -191,6 +191,8 @@ type fakeWindow struct {
 	noFocus bool
 	visible bool
 	shown   []rect
+	ignored int
+	hides   int
 }
 
 func (w *fakeWindow) handle() uintptr { return overlayHwnd }
@@ -212,9 +214,26 @@ func (w *fakeWindow) show(r rect) error {
 
 func (w *fakeWindow) hide() {
 	w.mu.Lock()
-	w.visible = false
+	w.hides++
+	if w.ignored > 0 {
+		w.ignored--
+	} else {
+		w.visible = false
+	}
 	w.mu.Unlock()
 	w.log.add("window:hide")
+}
+
+func (w *fakeWindow) hideCalls() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.hides
+}
+
+func (w *fakeWindow) reappear() {
+	w.mu.Lock()
+	w.visible = true
+	w.mu.Unlock()
 }
 
 func (w *fakeWindow) isVisible() bool {

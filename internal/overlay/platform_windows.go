@@ -29,6 +29,13 @@ const (
 
 	swpShowWindow = 0x0040
 	swRestore     = 9
+
+	swpNoSize       = 0x0001
+	swpNoMove       = 0x0002
+	swpNoZOrder     = 0x0004
+	swpNoActivate   = 0x0010
+	swpHideWindow   = 0x0080
+	swpHideNoChange = swpHideWindow | swpNoActivate | swpNoMove | swpNoSize | swpNoZOrder
 )
 
 var (
@@ -46,6 +53,7 @@ var (
 	procCheckOwnership      = windows.NewLazySystemDLL("gdi32.dll").NewProc("D3DKMTCheckExclusiveOwnership")
 	procQueryNotification   = windows.NewLazySystemDLL("shell32.dll").NewProc("SHQueryUserNotificationState")
 	procShowWindow          = user32.NewProc("ShowWindow")
+	procIsWindowVisible     = user32.NewProc("IsWindowVisible")
 )
 
 // HWND_TOPMOST is (HWND)-1.
@@ -274,6 +282,30 @@ func (w *wailsWindow) show(r rect) error {
 
 func (w *wailsWindow) hide() {
 	w.win.Hide()
+	forceHide(w.handle())
+}
+
+func (w *wailsWindow) isVisible() bool {
+	return hwndVisible(w.handle())
+}
+
+//nolint:errcheck // IsWindowVisible answers only through its result and sets no last error, so there is no error to check.
+func hwndVisible(hwnd uintptr) bool {
+	r1, _, _ := syscall.SyscallN(procIsWindowVisible.Addr(), hwnd)
+	return r1 != 0
+}
+
+// ShowWindow(SW_HIDE) on the active window hands activation to another one, and
+// for an owned window that is its owner. SWP_HIDEWINDOW with SWP_NOACTIVATE
+// hides without that hand-over, so it is the second try for a window that
+// ShowWindow left on screen.
+func forceHide(hwnd uintptr) {
+	if hwnd == 0 || !hwndVisible(hwnd) {
+		return
+	}
+	if r1, _, err := procSetWindowPos.Call(hwnd, 0, 0, 0, 0, 0, swpHideNoChange); r1 == 0 {
+		slog.Warn("hide window without activation", "hwnd", hwnd, "error", lastError(err, "SetWindowPos"))
+	}
 }
 
 const gwlpHwndParent = -8
@@ -337,6 +369,11 @@ func (b *wailsBrowser) place(r rect) error {
 
 func (b *wailsBrowser) hide() {
 	b.win.Hide()
+	forceHide(b.handle())
+}
+
+func (b *wailsBrowser) isVisible() bool {
+	return hwndVisible(b.handle())
 }
 
 func (b *wailsBrowser) navigate(target string) {

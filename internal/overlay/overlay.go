@@ -61,6 +61,7 @@ type window interface {
 	handle() uintptr
 	show(r rect) error
 	hide()
+	isVisible() bool
 }
 
 type registration struct {
@@ -294,6 +295,14 @@ func (s *Service) toggleOnUI() {
 	visible := s.visible
 	usable := s.cfg.enabled && !s.closed && (s.win != nil || s.makeWin != nil)
 	s.mu.Unlock()
+	if !visible && s.onScreen() {
+		slog.Warn("overlay is on screen while the service has it closed, hiding it")
+		s.mu.Lock()
+		s.visible = true
+		s.prev = 0
+		s.mu.Unlock()
+		visible = true
+	}
 	if visible {
 		s.hideOnUI(true)
 		return
@@ -354,20 +363,12 @@ func (s *Service) showOnUI() {
 	s.mu.Unlock()
 	if err := win.show(area); err != nil {
 		slog.Warn("show overlay window", "error", err)
-		s.mu.Lock()
-		s.visible = false
-		s.prev = 0
-		s.mu.Unlock()
-		win.hide()
+		s.abortShow(win)
 		return
 	}
 	if fg := s.plat.foreground(); fg != win.handle() {
 		slog.Warn("overlay window did not take focus, hiding it", "foreground", fg)
-		s.mu.Lock()
-		s.visible = false
-		s.prev = 0
-		s.mu.Unlock()
-		win.hide()
+		s.abortShow(win)
 		return
 	}
 	slog.Info("overlay shown", "exclusive_ownership", ownership, "notification_state", state)
@@ -382,16 +383,38 @@ func (s *Service) hideOnUI(restore bool) {
 	}
 	prev := s.prev
 	win := s.win
+	s.mu.Unlock()
+	own := win.handle()
+	browserGone := s.hideBrowserOnUI()
+	overlayGone := hideVerified(win, "overlay window")
+	if !browserGone || !overlayGone {
+		return
+	}
+	s.mu.Lock()
 	s.visible = false
 	s.prev = 0
 	s.mu.Unlock()
-	own := win.handle()
-	s.hideBrowserOnUI()
-	win.hide()
 	if restore && prev != 0 && prev != own {
 		s.restoreForeground(prev)
 	}
 	s.emit(EventHidden, Signal{})
+}
+
+func (s *Service) abortShow(win window) {
+	if !hideVerified(win, "overlay window") {
+		return
+	}
+	s.mu.Lock()
+	s.visible = false
+	s.prev = 0
+	s.mu.Unlock()
+}
+
+func (s *Service) onScreen() bool {
+	s.mu.Lock()
+	win, browser := s.win, s.browser
+	s.mu.Unlock()
+	return win != nil && win.isVisible() || browser != nil && browser.isVisible()
 }
 
 func (s *Service) restoreForeground(prev uintptr) {

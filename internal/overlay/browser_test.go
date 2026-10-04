@@ -22,6 +22,8 @@ type fakeBrowser struct {
 	visible  bool
 	placed   []rect
 	urls     []string
+	ignored  int
+	hides    int
 }
 
 func (b *fakeBrowser) handle() uintptr { return browserHwnd }
@@ -40,9 +42,20 @@ func (b *fakeBrowser) place(r rect) error {
 
 func (b *fakeBrowser) hide() {
 	b.mu.Lock()
-	b.visible = false
+	b.hides++
+	if b.ignored > 0 {
+		b.ignored--
+	} else {
+		b.visible = false
+	}
 	b.mu.Unlock()
 	b.log.add("browser:hide")
+}
+
+func (b *fakeBrowser) hideCalls() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.hides
 }
 
 func (b *fakeBrowser) navigate(target string) {
