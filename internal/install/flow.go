@@ -188,9 +188,6 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 
 func (s *Service) runSilent(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry, shell shellSnapshot) error {
 	logPath := s.installerLogPath(id)
-	statePath := s.workerStatePath(id)
-	infPath := s.workerInfPath(id)
-	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
 	// DropBroker освобождается один раз для всей установки в runInstaller —
@@ -200,27 +197,20 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	if err != nil {
 		slog.Warn("shortcut cleanup stays with the launcher", "id", id, "error", err)
 	}
-	specs := make([]runSpec, 0, len(chain))
-	workers := make([]*shellHandoff, 0, len(chain))
-	for _, installer := range chain {
-		spec, err := silentSpec(item, installer, logPath, opts)
-		if err != nil {
-			return err
-		}
-		spec.StatePath = statePath
-		spec.InfPath = infPath
-		spec.CancelPath = cancelPath
-		spec.Broker = handoff
-		spec.Shell = shared.forInstaller()
-		specs = append(specs, spec)
-		workers = append(workers, spec.Shell)
+	steps, err := s.chainSteps(item, chain, 0, logPath, opts, handoff, shared)
+	if err != nil {
+		return err
+	}
+	workers := make([]*shellHandoff, 0, len(steps))
+	for _, step := range steps {
+		workers = append(workers, step.spec.Shell)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
 		return err
 	}
 
 	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath, opts.VerifyRepack)
-	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
+	runErr := s.runSilentChain(ctx, id, item, steps, logPath)
 	stop()
 	if runErr != nil {
 		s.discardSilent(item, before, runErr)
@@ -241,13 +231,81 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 	return s.finalize(ctx, id)
 }
 
+type chainStep struct {
+	number int
+	path   string
+	spec   runSpec
+}
+
+// chainSteps строит задания для установщиков chain начиная с индекса from:
+// общий кусок для первого запуска (runSilent) и для продолжения цепочки после
+// перезапуска лаунчера (finishResumed), чтобы пути состояния, брокер и ярлыки
+// задавались в одном месте.
+func (s *Service) chainSteps(item Installation, chain []string, from int, logPath string, opts installOptions, handoff *brokerHandoff, shared *shellHandoff) ([]chainStep, error) {
+	statePath := s.workerStatePath(item.ID)
+	infPath := s.workerInfPath(item.ID)
+	cancelPath := s.workerCancelPath(item.ID)
+	steps := make([]chainStep, 0, len(chain)-from)
+	for i := from; i < len(chain); i++ {
+		spec, err := silentSpec(item, chain[i], logPath, opts)
+		if err != nil {
+			return nil, err
+		}
+		spec.StatePath = statePath
+		spec.InfPath = infPath
+		spec.CancelPath = cancelPath
+		spec.Broker = handoff
+		spec.Shell = shared.forInstaller()
+		steps = append(steps, chainStep{number: i + 1, path: chain[i], spec: spec})
+	}
+	return steps, nil
+}
+
+// beginChainStep записывает номер установщика цепочки до его запуска: если
+// лаунчер умрёт посреди шага, после перезапуска только по этому номеру видно,
+// остались ли за ним ещё установщики. Файл состояния воркера один на всю
+// цепочку, поэтому результат предыдущего шага убирается раньше номера: иначе
+// смерть между двумя записями оставила бы чужой Done рядом с новым номером.
+func (s *Service) beginChainStep(id string, number int) error {
+	if path := s.workerStatePath(id); path != "" {
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("remove worker state %s: %w", path, err)
+		}
+	}
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil {
+		s.mu.Unlock()
+		return errNotFound
+	}
+	if !active(item.Status) {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	prev := item.ChainStep
+	item.ChainStep = number
+	if err := s.persistLocked(); err != nil {
+		item.ChainStep = prev
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
+	s.mu.Unlock()
+	return nil
+}
+
 // runSilentChain прогоняет установщики набора по очереди: дополнение GOG ставится
 // только поверх уже установленной игры, поэтому порядок из плана обязателен, а
 // первая же неудача останавливает цепочку.
-func (s *Service) runSilentChain(ctx context.Context, id string, item Installation, chain []string, specs []runSpec, logPath string) error {
-	for i, spec := range specs {
+func (s *Service) runSilentChain(ctx context.Context, id string, item Installation, steps []chainStep, logPath string) error {
+	track := len(installerChain(item)) > 1
+	for _, step := range steps {
+		if track {
+			if err := s.beginChainStep(id, step.number); err != nil {
+				return err
+			}
+		}
 		dropInstallerLog(logPath)
-		code, err := s.runner.run(ctx, spec)
+		code, err := s.runner.run(ctx, step.spec)
 		if err != nil {
 			return err
 		}
@@ -258,15 +316,67 @@ func (s *Service) runSilentChain(ctx context.Context, id string, item Installati
 		exitErr := exitError(item.Engine, code)
 		if !done {
 			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
-				"path", chain[i], "code", code, "log", installerLogTail(logPath))
+				"path", step.path, "code", code, "log", installerLogTail(logPath))
 			return exitErr
 		}
 		if exitErr != nil {
 			// Установщики GOG падают при завершении уже после того, как файлы
 			// разложены: свой лог они при этом закрывают отметкой об успехе.
 			slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
-				"path", chain[i], "code", code)
+				"path", step.path, "code", code)
 		}
+	}
+	return nil
+}
+
+var errResumedCancelled = errors.New("отмена запрошена до продолжения цепочки установщиков")
+
+// resumeChain вызывается, когда воркер подтвердил успех текущего установщика
+// уже после перезапуска лаунчера. Цепочка из одного установщика на этом
+// закончена. В длинной номер текущего шага читается из записи: нет номера
+// (старая запись) или он вне цепочки значит, что нельзя сказать, чем кончилась
+// установка, и объявлять её готовой нельзя. Остаток цепочки идёт тем же
+// runSilentChain, что и обычный запуск, но без снимков до установки: брокера
+// и общих ярлыков у такого продолжения нет.
+func (s *Service) resumeChain(ctx context.Context, id string, item Installation, logPath string) error {
+	chain := installerChain(item)
+	if len(chain) <= 1 {
+		return nil
+	}
+	if item.ChainStep < 1 || item.ChainStep > len(chain) {
+		return fmt.Errorf("%w: в цепочке %d установщиков, записан шаг %d", errChainStepUnknown, len(chain), item.ChainStep)
+	}
+	if item.ChainStep == len(chain) {
+		return nil
+	}
+	next := item.ChainStep
+	for i := next; i < len(chain); i++ {
+		info, err := os.Stat(chain[i])
+		if err != nil {
+			return fmt.Errorf("установщик %d из %d, %s: %w: %w", i+1, len(chain), chain[i], errChainInstallerMissing, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("установщик %d из %d, %s: %w: не обычный файл", i+1, len(chain), chain[i], errChainInstallerMissing)
+		}
+	}
+	if workerCancelRequested(s.workerCancelPath(id)) {
+		return errResumedCancelled
+	}
+	opts := installOptionsFrom(s.config())
+	steps, err := s.chainSteps(item, chain, next, logPath, opts, s.brokerFor(item.DownloadID), nil)
+	if err != nil {
+		return fmt.Errorf("установщик %d из %d: %w", next+1, len(chain), err)
+	}
+	slog.Warn("continuing installer chain after launcher restart", "id", id, "done", item.ChainStep, "total", len(chain))
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath, opts.VerifyRepack)
+	err = s.runSilentChain(ctx, id, item, steps, logPath)
+	stop()
+	if err != nil {
+		failedAt := next + 1
+		if cur, ok := s.snapshot(id); ok && cur.ChainStep > failedAt {
+			failedAt = cur.ChainStep
+		}
+		return fmt.Errorf("установщик %d из %d: %w", failedAt, len(chain), err)
 	}
 	return nil
 }
@@ -978,3 +1088,17 @@ func pickInstallDir(dirs []string, candidates []Candidate) string {
 }
 
 var removeInstalledSource = os.RemoveAll
+
+// adoptJob заводит запись job для продолжения цепочки после перезапуска:
+// без неё Cancel не видел бы идущий установщик и объявил бы отмену над
+// процессом, который продолжает писать.
+func (s *Service) adoptJob(ctx context.Context, id string) (context.Context, func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.jobs[id] != nil {
+		return ctx, func() {}
+	}
+	jobCtx, cancel := context.WithCancel(ctx)
+	s.jobs[id] = &job{cancel: cancel}
+	return jobCtx, func() { s.endJob(id) }
+}

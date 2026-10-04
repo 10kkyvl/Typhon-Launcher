@@ -75,6 +75,11 @@ var (
 
 	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
 
+	// Без кода uierr: коды — контракт с таблицей фронтенда, а текст ошибки
+	// продолжения цепочки пользователь и так видит целиком.
+	errChainStepUnknown      = errors.New("после перезапуска не удалось определить, какой установщик цепочки отработал")
+	errChainInstallerMissing = errors.New("файл установщика цепочки не найден")
+
 	// errInstallerNotConfirmedStopped значит, что процесс всё ещё может писать
 	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
 	errInstallerNotConfirmedStopped = uierr.New("install.installer_not_confirmed_stopped", "установщик не подтвердил остановку")
@@ -565,17 +570,12 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 	if state.Shell != nil {
 		logShellReports(id, []shellReport{*state.Shell})
 	}
-	s.mu.Lock()
-	item := s.findLocked(id)
-	var engine Engine
-	if item != nil {
-		engine = item.Engine
-	}
-	s.mu.Unlock()
-	if item == nil {
+	snap, found := s.snapshot(id)
+	if !found {
 		slog.Warn("resumed installation is gone", "id", id)
 		return
 	}
+	engine := snap.Engine
 	done, logErr := installerFinished(engine, state.Code, logPath)
 	if logErr != nil {
 		slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
@@ -586,6 +586,25 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		s.fail(id, exitError(engine, state.Code))
 		return
 	}
+	chainCtx, endJob := s.adoptJob(ctx, id)
+	chainErr := s.resumeChain(chainCtx, id, snap, logPath)
+	switch {
+	case chainErr == nil:
+	case errors.Is(chainErr, errResumedCancelled):
+		endJob()
+		s.cancelResumed(ctx, id)
+		return
+	case errors.Is(chainErr, errUnavailable):
+		endJob()
+		slog.Info("resumed installation left the active states while its chain was continuing", "id", id, "error", chainErr)
+		return
+	default:
+		slog.Error("resumed installer chain cannot be continued", "id", id, "error", chainErr)
+		s.fail(id, chainErr)
+		endJob()
+		return
+	}
+	endJob()
 	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
 	if err := s.markResumedOwnership(id); err != nil {
 		s.fail(id, err)

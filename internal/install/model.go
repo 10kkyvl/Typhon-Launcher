@@ -81,6 +81,7 @@ type Installation struct {
 	Destination      string            `json:"destination"`
 	InstallerPath    string            `json:"installerPath"`
 	ExtraInstallers  []string          `json:"extraInstallers,omitempty"`
+	ChainStep        int               `json:"chainStep,omitempty"`
 	ManualInstaller  bool              `json:"manualInstaller,omitempty"`
 	WorkingDir       string            `json:"workingDir"`
 	Engine           Engine            `json:"engine"`
