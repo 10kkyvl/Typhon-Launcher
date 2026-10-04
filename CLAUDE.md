@@ -189,7 +189,7 @@ golangci-lint run --new-from-rev=origin/dev ./...   # новый/изменён�
 golangci-lint run ./...                             # весь модуль: число не растёт
 ```
 
-`go test -race` требует cgo. На этой машине gcc: `C:\Users\10kk\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin` — добавить в `PATH` на время прогона. `zig cc` не подходит (не линкуется tsan).
+`go test -race` требует cgo и gcc (на Windows — MinGW-w64, например WinLibs из winget): его каталог добавить в `PATH` на время прогона, путь на конкретной машине в репозиторий не пишется. `zig cc` не подходит (не линкуется tsan).
 
 `go build ./...` падает на `build/ios` (wails-скаффолд без `main`) — поэтому скоуп `. ./internal/...`; это не повод убирать команду из чеклиста.
 
@@ -220,7 +220,7 @@ wails3 task build
 
 Затем прибить старый `typhon` и поднять `bin/typhon.exe` заново. Проверка живости — процесс
 отвечает и в `%APPDATA%\Typhon\typhon.log` свежий хвост без паник. Если правка задевает
-бэкенд (`E:\typhon-backend`) — перезапустить и его: `go run ./cmd/api`, дождаться `GET /ready`
+бэкенд (соседний репозиторий `typhon-backend`) — перезапустить и его: `go run ./cmd/api`, дождаться `GET /ready`
 = 200 на `http://127.0.0.1:8080` и убедиться, что порт держит новый pid.
 
 Изменение, не доехавшее до запущенной сборки, для пользователя выглядит как «не работает»:
