@@ -91,6 +91,9 @@ func rarListError(archivePath string, err error, eof *volumeEOF) error {
 	if cause := rarHeaderCause(err, eof); cause != nil {
 		return cause
 	}
+	if cause := rarSigCause(err, eof); cause != nil {
+		return cause
+	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
 		return fmt.Errorf("%w: %w", errArchiveIncomplete, err)
 	}
@@ -101,7 +104,28 @@ func rarReadError(archivePath string, err error, eof *volumeEOF) error {
 	if cause := rarHeaderCause(err, eof); cause != nil {
 		return cause
 	}
+	if cause := rarSigCause(err, eof); cause != nil {
+		return cause
+	}
 	return asDecodeError(archivePath, err, eof.reached())
+}
+
+// Сигнатуры нет, а начало тома пустое или из одних нулей: первый кусок тома
+// не докачан. Чем-то заполненное начало без сигнатуры — действительно не RAR.
+// Проверяется не больше минимального куска торрента (16 КиБ): недокачанный
+// первый кусок обнуляет как минимум его, даже если остальной файл на месте.
+func rarSigCause(err error, eof *volumeEOF) error {
+	if !errors.Is(err, rardecode.ErrNoSig) {
+		return nil
+	}
+	blank, headErr := eof.blankHead()
+	switch {
+	case headErr != nil:
+		return fmt.Errorf("%w; начало тома не проверено: %w", err, headErr)
+	case blank:
+		return fmt.Errorf("%w: %w", errArchiveIncomplete, err)
+	}
+	return nil
 }
 
 var rarHeaderErrors = []error{
@@ -141,8 +165,9 @@ type volumeEOF struct {
 func (v *volumeEOF) reached() bool { return v != nil && v.hit }
 
 const (
-	minBlankTail = 8
-	maxZeroScan  = 1 << 20
+	minBlankTail    = 8
+	maxZeroScan     = 1 << 20
+	minTorrentPiece = 16 << 10
 )
 
 // stoppedInZeroTail: от места, где остановилось чтение, до конца файла тома
@@ -174,6 +199,22 @@ func (v *volumeEOF) stoppedInZeroTail() (bool, error) {
 		return false, err
 	}
 	return !slices.ContainsFunc(tail, func(b byte) bool { return b != 0 }), nil
+}
+
+func (v *volumeEOF) blankHead() (bool, error) {
+	if v == nil || v.name == "" {
+		return false, nil
+	}
+	f, err := os.Open(v.name)
+	if err != nil {
+		return false, err
+	}
+	defer closeReadOnly(v.name, f)
+	head, err := io.ReadAll(io.LimitReader(f, minTorrentPiece))
+	if err != nil {
+		return false, err
+	}
+	return !slices.ContainsFunc(head, func(b byte) bool { return b != 0 }), nil
 }
 
 type eofFS struct{ eof *volumeEOF }

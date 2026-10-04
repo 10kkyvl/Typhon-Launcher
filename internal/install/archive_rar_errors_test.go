@@ -79,7 +79,7 @@ func TestExtractArchiveRarFailureCauses(t *testing.T) {
 			wantIs:  []error{fs.ErrPermission},
 			wantNot: []error{errUnsupportedArchive, errArchiveIncomplete},
 		},
-		{name: "not a rar at all", prepare: func(t *testing.T, path string) { writeRar(t, path, make([]byte, 128)) }, wantIs: []error{errUnsupportedArchive}, wantNot: []error{errArchiveIncomplete, errArchiveEncrypted}},
+		{name: "not a rar at all", prepare: func(t *testing.T, path string) { writeRar(t, path, bytes.Repeat([]byte("not a rar "), 13)) }, wantIs: []error{errUnsupportedArchive}, wantNot: []error{errArchiveIncomplete, errArchiveEncrypted}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

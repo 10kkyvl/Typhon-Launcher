@@ -119,6 +119,24 @@ func TestRarDamagedHeadersAreClassifiedNotUnsupported(t *testing.T) {
 			wantIs:  []error{errArchiveCorrupt},
 			wantNot: []error{errUnsupportedArchive, errArchiveIncomplete},
 		},
+		{
+			name:    "nothing downloaded: preallocated file of zeros",
+			raw:     make([]byte, len(big5)),
+			wantIs:  []error{errArchiveIncomplete, rardecode.ErrNoSig},
+			wantNot: []error{errUnsupportedArchive, errArchiveCorrupt},
+		},
+		{
+			name:    "nothing downloaded: empty file",
+			raw:     []byte{},
+			wantIs:  []error{errArchiveIncomplete},
+			wantNot: []error{errUnsupportedArchive, errArchiveCorrupt},
+		},
+		{
+			name:    "first torrent piece missing, the rest downloaded",
+			raw:     zeroed(big5, 0, 32<<10),
+			wantIs:  []error{errArchiveIncomplete, rardecode.ErrNoSig},
+			wantNot: []error{errUnsupportedArchive, errArchiveCorrupt},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -164,6 +182,21 @@ func TestRarDamagedHeadersAreClassifiedNotUnsupported(t *testing.T) {
 			}
 			check(t, "decodeRar", decErr)
 		})
+	}
+}
+
+func TestRarWithoutSignatureAndWithDataStaysUnsupported(t *testing.T) {
+	neverConsultTools(t)
+	archive := filepath.Join(t.TempDir(), "game.rar")
+	writeRar(t, archive, bytes.Repeat([]byte("not a rar "), 4000))
+
+	for what, err := range map[string]error{
+		"EstimateExtracted": func() error { _, err := EstimateExtracted(archive); return err }(),
+		"ExtractArchive":    ExtractArchive(context.Background(), archive, filepath.Join(t.TempDir(), "out"), nil),
+	} {
+		if !errors.Is(err, errUnsupportedArchive) || errors.Is(err, errArchiveIncomplete) {
+			t.Fatalf("%s: err = %v, a file with data and no RAR signature is an unsupported format", what, err)
+		}
 	}
 }
 
