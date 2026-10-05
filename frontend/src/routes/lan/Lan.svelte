@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MonitorSmartphone, Share2, Wifi, X } from '@lucide/svelte';
+  import { Download, MonitorSmartphone, Share2, Wifi, X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -67,10 +67,21 @@
     {:else}
       <div class="rows">
         {#each $offers as offer (offer.peerId + offer.infoHash)}
-          <div class="row">
-            <span class="row-title">{offerLabel(offer)}</span>
+          <div class="row" title={offerLabel(offer)}>
+            <div class="row-text">
+              <span class="row-title">{offer.title}</span>
+              <span class="row-sub">
+                <MonitorSmartphone size="1.3rem" strokeWidth={1.8} />
+                {msg('transfers.lanFromHost', { host: offer.host })}
+              </span>
+            </div>
+            {#if offer.version}<span class="row-date">{offer.version}</span>{/if}
+            <span class="row-size">{bytesSize(offer.sizeBytes)}</span>
             <div class="row-actions">
-              <Button variant="primary" size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>{msg('transfers.lanDownload')}</Button>
+              <Button size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>
+                <Download size="1.4rem" strokeWidth={1.8} />
+                {msg('transfers.lanDownload')}
+              </Button>
             </div>
           </div>
         {/each}
@@ -133,12 +144,17 @@
 
 <style>
   .stats {
-    display: flex;
+    display: inline-flex;
     align-items: flex-start;
     margin-bottom: var(--space-8);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
   }
 
   .stat {
+    min-width: 14rem;
     padding: 0 var(--space-6);
     border-left: 1px solid var(--border);
   }
@@ -161,8 +177,8 @@
     display: flex;
     align-items: baseline;
     gap: 0.8rem;
-    font-size: var(--font-xl);
-    margin-bottom: var(--space-4);
+    font-size: var(--font-lg);
+    margin-bottom: var(--space-3);
   }
 
   .count {
@@ -180,18 +196,24 @@
   .rows {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0.8rem;
   }
 
   .row {
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    min-height: 5.2rem;
-    padding: var(--space-4) var(--space-5);
+    min-height: 6.4rem;
+    padding: var(--space-2) var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    transition: border-color var(--dur) var(--ease);
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
+  }
+
+  .row:hover {
+    border-color: var(--border-strong);
   }
 
   .row-title {
@@ -212,9 +234,17 @@
     gap: 0.4rem;
   }
 
+  .row-text .row-title {
+    flex: none;
+  }
+
   .row-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     font-size: var(--font-xs);
     color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 
   .row-size,

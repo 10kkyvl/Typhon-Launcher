@@ -37,8 +37,9 @@
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    padding: var(--space-10) 0;
+    padding: var(--space-8) 0;
     max-width: 44rem;
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .icon {
@@ -48,9 +49,10 @@
     width: 4.4rem;
     height: 4.4rem;
     margin-bottom: var(--space-4);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-2);
-    color: var(--text-3);
+    color: var(--text-2);
   }
 
   h3 {
