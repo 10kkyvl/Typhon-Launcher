@@ -1,12 +1,24 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Play, Square } from '@lucide/svelte';
+  import { Play, Square, type LucideIcon } from '@lucide/svelte';
   import { openGameMenu } from '../stores/gameMenu';
   import { navigate } from '../stores/router';
   import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
   import type { CompatInfo } from '../services/sources';
   import { compatBadge } from '../game/compat';
+
+  export interface GameCardAction {
+    id: string;
+    label: string;
+    icon: LucideIcon;
+    active?: boolean;
+    filled?: boolean;
+    pinned?: boolean;
+    quiet?: boolean;
+    disabled?: boolean;
+    onclick: (event: MouseEvent) => void;
+  }
 
   let {
     id,
@@ -18,6 +30,7 @@
     compat,
     variant = 'poster',
     footer,
+    actions,
     onplay,
   }: {
     id: string;
@@ -29,8 +42,11 @@
     compat?: CompatInfo;
     variant?: 'poster' | 'capsule';
     footer?: Snippet;
+    actions?: GameCardAction[];
     onplay?: () => void;
   } = $props();
+
+  let popped = $state('');
 
   const ratio = $derived(variant === 'capsule' ? '16 / 9' : '3 / 4');
 
@@ -65,6 +81,28 @@
           <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
         {/if}
       </button>
+    {/if}
+    {#if actions && actions.length > 0}
+      <div class="quick">
+        {#each actions as action (action.id)}
+          <button
+            class="quick-btn"
+            class:active={action.active}
+            class:pinned={action.pinned}
+            class:quiet={action.pinned && action.quiet}
+            class:pop={action.active && popped === action.id}
+            aria-label={action.label}
+            title={action.label}
+            disabled={action.disabled}
+            onclick={(event) => {
+              popped = action.active ? '' : action.id;
+              action.onclick(event);
+            }}
+          >
+            <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
+          </button>
+        {/each}
+      </div>
     {/if}
   </div>
   <button class="info" onclick={() => navigate('game', { id })}>
@@ -194,6 +232,76 @@
 
   .play:active {
     transform: scale(0.92);
+  }
+
+  .quick {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .quick-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-sm);
+    background: rgba(5, 8, 12, 0.72);
+    color: #fff;
+    opacity: 0;
+    transform: scale(0.8);
+    transform-origin: top right;
+    pointer-events: none;
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur-panel) var(--ease-spring),
+      background var(--dur) var(--ease);
+  }
+
+  .cover-wrap:hover .quick-btn,
+  .cover-wrap:focus-within .quick-btn,
+  .quick-btn.pinned {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+
+  .quick-btn:hover:not(:disabled) {
+    background: rgba(5, 8, 12, 0.92);
+  }
+
+  .quick-btn.active {
+    background: var(--accent);
+    color: var(--accent-on, #fff);
+  }
+
+  .quick-btn.active:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .cover-wrap:not(:hover):not(:focus-within) .quick-btn.quiet {
+    background: rgba(5, 8, 12, 0.45);
+    color: #fff;
+    transform: scale(0.8);
+  }
+
+  .cover-wrap .quick-btn:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  .quick-btn:disabled {
+    cursor: default;
+  }
+
+  .quick-btn:disabled :global(svg) {
+    opacity: 0.45;
+  }
+
+  .quick-btn.pop :global(svg) {
+    animation: pop-in var(--dur-slow) var(--ease-spring);
   }
 
   .info {

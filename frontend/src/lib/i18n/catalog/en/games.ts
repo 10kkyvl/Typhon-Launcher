@@ -299,5 +299,6 @@ export const games: Record<GamesKey, Message> = {
   'games.catalogLoadingMore': 'Loading…',
   'games.catalogShowMore': 'Show more',
   'games.catalogShownOf': 'Loaded {shown} of {total}',
+  'games.catalogTotalCount': { one: '{count} game', other: '{count} games' },
   'games.recommendationRefreshFailed': 'Could not refresh your picks. Showing the previous selection for now.',
 };
