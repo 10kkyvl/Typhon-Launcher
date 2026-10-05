@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    ArrowUp,
     ChevronDown,
     EllipsisVertical,
     FolderOpen,
@@ -7,9 +8,11 @@
     HardDrive,
     LayoutGrid,
     List,
+    Play,
     Plus,
     RefreshCw,
     Search,
+    Sparkles,
     Square,
   } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
@@ -22,7 +25,6 @@
   import Modal from '../../lib/components/Modal.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -115,6 +117,11 @@
     return game.sizeBytes > 0 ? bytesSize(game.sizeBytes) : '';
   }
 
+  function updateLabel(update?: { available: boolean; kind: string }) {
+    if (!update?.available) return '';
+    return update.kind === 'update' ? msg('games.updateKindUpdate') : msg('games.updateKindNewRelease');
+  }
+
   const gamesBytes = $derived($installedGames.reduce((sum, game) => sum + game.sizeBytes, 0));
   const hasUnknownSize = $derived($installedGames.some((game) => game.sizeUnknown));
   const usedPct = $derived($storageInfo ? ($storageInfo.usedBytes / $storageInfo.totalBytes) * 100 : 0);
@@ -122,6 +129,15 @@
     if (!$storageInfo || hasUnknownSize) return null;
     const value = $storageInfo.usedBytes - gamesBytes;
     return value >= 0 ? value : null;
+  });
+  const segments = $derived.by(() => {
+    if (!$storageInfo || $storageInfo.totalBytes <= 0) return [];
+    if (otherBytes === null) return [{ id: 'used', pct: Math.min(100, usedPct) }];
+    const total = $storageInfo.totalBytes;
+    return [
+      { id: 'games', pct: (gamesBytes / total) * 100 },
+      { id: 'other', pct: (otherBytes / total) * 100 },
+    ].filter((segment) => segment.pct > 0);
   });
 
   function coverFor(game: LibraryGame) {
@@ -313,15 +329,15 @@
     <SegmentedControl
       bind:value={$installedView}
       options={[
-        { id: 'list', label: msg('games.viewList') },
         { id: 'grid', label: msg('games.viewGrid') },
+        { id: 'list', label: msg('games.viewList') },
       ]}
     >
       {#snippet item(option)}
-        {#if option.id === 'list'}
-          <List size="1.6rem" strokeWidth={1.8} />
-        {:else}
+        {#if option.id === 'grid'}
           <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+        {:else}
+          <List size="1.6rem" strokeWidth={1.8} />
         {/if}
       {/snippet}
     </SegmentedControl>
@@ -358,39 +374,47 @@
   <div class="storage-block">
     <Card>
       <div class="storage">
-        <div class="storage-primary">
-          <div class="storage-head">
-            <span class="disk-icon">
-              <HardDrive size="1.8rem" strokeWidth={1.8} />
+        <div class="storage-head">
+          <span class="disk-icon">
+            <HardDrive size="1.8rem" strokeWidth={1.8} />
+          </span>
+          <div class="disk-text">
+            <span class="disk-name">{msg('games.installedStorageTitle')}</span>
+            <span class="disk-meta">
+              {msg('games.installedStorageUsage', {
+                used: bytesSize($storageInfo.usedBytes),
+                total: bytesSize($storageInfo.totalBytes),
+              })}
             </span>
-            <div class="disk-text">
-              <span class="disk-name">{msg('games.installedStorageTitle')}</span>
-              <span class="disk-meta">
-                {msg('games.installedStorageUsage', {
-                  used: bytesSize($storageInfo.usedBytes),
-                  total: bytesSize($storageInfo.totalBytes),
-                })}
-              </span>
-            </div>
           </div>
-          <div class="storage-bar">
-            <div class="storage-bar-track">
-              <ProgressBar value={usedPct} height={6} />
-            </div>
-            <span class="storage-pct">{Math.round(usedPct)}%</span>
+          <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
+        </div>
+        <div class="storage-bar">
+          <div class="segments" aria-hidden="true">
+            {#each segments as segment (segment.id)}
+              <span class="segment {segment.id}" style:width="{segment.pct}%"></span>
+            {/each}
+            <span class="segment free"></span>
           </div>
+          <span class="storage-pct">{Math.round(usedPct)}%</span>
         </div>
         <ul class="storage-legend">
-          <li>
-            <span class="dot games"></span>
-            <span class="legend-label">{msg('games.installedLegendGames')}</span>
-            <span class="legend-value">{bytesSize(gamesBytes)}</span>
-          </li>
           {#if otherBytes !== null}
+            <li>
+              <span class="dot games"></span>
+              <span class="legend-label">{msg('games.installedLegendGames')}</span>
+              <span class="legend-value">{bytesSize(gamesBytes)}</span>
+            </li>
             <li>
               <span class="dot other"></span>
               <span class="legend-label">{msg('games.installedLegendOther')}</span>
               <span class="legend-value">{bytesSize(otherBytes)}</span>
+            </li>
+          {:else}
+            <li>
+              <span class="dot used"></span>
+              <span class="legend-label">{msg('games.installedLegendUsed')}</span>
+              <span class="legend-value">{bytesSize($storageInfo.usedBytes)}</span>
             </li>
           {/if}
           <li>
@@ -399,7 +423,6 @@
             <span class="legend-value">{bytesSize($storageInfo.freeBytes)}</span>
           </li>
         </ul>
-        <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
       </div>
     </Card>
   </div>
@@ -435,6 +458,7 @@
     {#each filteredGames as game (game.id)}
       {@const running = $runningGames.has(game.id)}
       {@const update = $updatesByGame.get(game.id)?.availability}
+      {@const updateText = updateLabel(update)}
       <div class="row" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
         <button class="game" onclick={() => navigate('game', { id: game.id })}>
           <div class="thumb">
@@ -443,7 +467,21 @@
           <div class="titles">
             <span class="title">{game.title}</span>
             <span class="path">{game.installDir}</span>
-            {#if sizeLabel(game)}<span class="size">{sizeLabel(game)}</span>{/if}
+            {#if sizeLabel(game) || updateText}
+              <span class="size">
+                {sizeLabel(game)}
+                {#if updateText}
+                  <span class="row-update" class:release={update?.kind !== 'update'}>
+                    {#if update?.kind === 'update'}
+                      <ArrowUp size="1.2rem" strokeWidth={2.2} />
+                    {:else}
+                      <Sparkles size="1.2rem" strokeWidth={2} />
+                    {/if}
+                    {updateText}
+                  </span>
+                {/if}
+              </span>
+            {/if}
           </div>
         </button>
         <div class="status">
@@ -490,21 +528,41 @@
 {:else}
   <div class="grid">
     {#each filteredGames as game (game.id)}
+      {@const running = $runningGames.has(game.id)}
       {@const update = $updatesByGame.get(game.id)?.availability}
+      {@const updateText = updateLabel(update)}
       <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
-        <button class="card-cover" onclick={() => navigate('game', { id: game.id })} aria-label={game.title}>
-          <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
-        </button>
-        <div class="card-info">
-          <span class="card-title">{game.title}</span>
-          <span class="card-meta">
-            {sizeLabel(game)}
-            {#if update?.available}
-              <span class="card-update">
-                {update.kind === 'update' ? msg('games.updateKindUpdate') : msg('games.updateKindNewRelease')}
+        <div class="card-media">
+          <button
+            class="card-cover"
+            onclick={() => navigate('game', { id: game.id })}
+            aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
+          >
+            <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+            {#if updateText}
+              <span class="card-badge" class:release={update?.kind !== 'update'}>
+                {#if update?.kind === 'update'}
+                  <ArrowUp size="1.3rem" strokeWidth={2.4} />
+                {:else}
+                  <Sparkles size="1.3rem" strokeWidth={2} />
+                {/if}
+                <span class="card-badge-text">{updateText}</span>
               </span>
             {/if}
-          </span>
+          </button>
+          {#if running}
+            <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
+              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+            </button>
+          {:else if game.executable}
+            <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
+              <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+            </button>
+          {/if}
+        </div>
+        <div class="card-info">
+          <span class="card-title">{game.title}</span>
+          <span class="card-meta">{sizeLabel(game)}</span>
         </div>
       </div>
     {/each}
@@ -578,23 +636,22 @@
   }
 
   .storage {
-    display: flex;
-    align-items: center;
-    gap: var(--space-6);
-  }
-
-  .storage-primary {
+    --seg-games: var(--accent);
+    --seg-other: var(--text-3);
+    --seg-free: color-mix(in srgb, var(--text-3) 28%, transparent);
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    flex: 1;
-    min-width: 0;
+    gap: var(--space-4);
   }
 
   .storage-head {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+  }
+
+  .storage-head .disk-text {
+    flex: 1;
   }
 
   .disk {
@@ -640,9 +697,52 @@
     gap: var(--space-3);
   }
 
-  .storage-bar-track {
+  .segments {
+    display: flex;
+    gap: 0.2rem;
     flex: 1;
     min-width: 0;
+    height: 0.8rem;
+    border-radius: 99rem;
+    overflow: hidden;
+  }
+
+  .segment {
+    min-width: 0.4rem;
+    transform-origin: left center;
+    animation: segment-grow var(--dur-slow) var(--ease) backwards;
+  }
+
+  .segment.games {
+    background: var(--seg-games);
+  }
+
+  .segment.other {
+    background: var(--seg-other);
+    animation-delay: calc(var(--dur-fast) / 2);
+  }
+
+  .segment.used {
+    background: var(--seg-other);
+  }
+
+  .segment.free {
+    flex: 1;
+    min-width: 0;
+    background: var(--seg-free);
+    animation-name: segment-fade;
+  }
+
+  @keyframes segment-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes segment-fade {
+    from {
+      opacity: 0;
+    }
   }
 
   .storage-pct {
@@ -654,9 +754,11 @@
 
   .storage-legend {
     display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .storage-legend li {
@@ -667,32 +769,31 @@
   }
 
   .dot {
-    width: 0.8rem;
-    height: 0.8rem;
+    width: 1rem;
+    height: 1rem;
     border-radius: 50%;
     flex-shrink: 0;
   }
 
   .dot.games {
-    background: var(--accent);
+    background: var(--seg-games);
   }
 
-  .dot.other {
-    background: var(--text-2);
+  .dot.other,
+  .dot.used {
+    background: var(--seg-other);
   }
 
   .dot.free {
-    background: var(--text-3);
+    background: var(--seg-free);
   }
 
   .legend-label {
-    min-width: 7rem;
     color: var(--text-2);
   }
 
   .legend-value {
-    margin-left: auto;
-    padding-left: var(--space-5);
+    padding-left: var(--space-2);
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
@@ -793,16 +894,123 @@
     min-width: 0;
   }
 
+  .card-media {
+    position: relative;
+    border-radius: var(--radius-md);
+    transition: transform var(--dur-panel) var(--ease);
+  }
+
+  .card-media::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 0.4rem;
+  }
+
+  .card-media:hover,
+  .card-media:focus-within {
+    transform: translateY(-0.4rem);
+  }
+
   .card-cover {
+    position: relative;
     display: block;
     width: 100%;
     border-radius: var(--radius-md);
     overflow: hidden;
-    transition: transform var(--dur) var(--ease);
+    transition: box-shadow var(--dur-panel) var(--ease);
   }
 
-  .card-cover:hover {
-    transform: scale(1.01);
+  .card-cover :global(img) {
+    transition: transform var(--dur-slow) var(--ease);
+  }
+
+  .card-media:hover .card-cover {
+    box-shadow: var(--shadow-lift);
+  }
+
+  .card-media:hover .card-cover :global(img) {
+    transform: scale(1.04);
+  }
+
+  .card-badge {
+    position: absolute;
+    top: 0.6rem;
+    left: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: calc(100% - 1.2rem);
+    height: 2.2rem;
+    padding: 0 0.7rem 0 0.5rem;
+    border-radius: var(--radius-sm);
+    background: rgba(5, 8, 12, 0.78);
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 500;
+    line-height: 1.2;
+    transform-origin: left top;
+    animation: badge-pop var(--dur-slow) var(--ease-spring) backwards;
+  }
+
+  .card-badge :global(svg) {
+    flex-shrink: 0;
+    color: color-mix(in srgb, var(--warning) 75%, white);
+  }
+
+  .card-badge.release :global(svg) {
+    color: white;
+  }
+
+  .card-badge-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @keyframes badge-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  .card-play {
+    position: absolute;
+    left: 1rem;
+    bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--accent-on, #fff);
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.9);
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur-panel) var(--ease-spring),
+      background var(--dur) var(--ease);
+  }
+
+  .card-play:hover {
+    background: var(--accent-hover);
+  }
+
+  .card-media:hover .card-play,
+  .card-play:focus-visible,
+  .card-play.running {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .card-play:active {
+    transform: scale(0.92);
   }
 
   .card-info {
@@ -830,9 +1038,17 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .card-update {
+  .row-update {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     margin-left: 0.8rem;
     color: var(--warning);
+    vertical-align: bottom;
+  }
+
+  .row-update.release {
+    color: var(--text-2);
   }
 
   .count {

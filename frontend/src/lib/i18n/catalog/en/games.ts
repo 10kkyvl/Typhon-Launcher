@@ -255,6 +255,7 @@ export const games: Record<GamesKey, Message> = {
   'games.installedLegendGames': 'Games',
   'games.installedLegendOther': 'Other',
   'games.installedLegendFree': 'Free',
+  'games.installedLegendUsed': 'Used',
   'games.installedManageStorage': 'Manage storage',
   'games.installedNoGamesTitle': 'No games added yet',
   'games.installedNoGamesDescription':
