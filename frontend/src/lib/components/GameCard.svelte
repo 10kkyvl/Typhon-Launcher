@@ -110,6 +110,21 @@
   .cover-wrap {
     position: relative;
     border-radius: var(--radius-md);
+    transition: transform var(--dur-panel) var(--ease);
+  }
+
+  .cover-wrap::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 0.4rem;
+  }
+
+  .cover-wrap:hover,
+  .cover-wrap:focus-within {
+    transform: translateY(-0.4rem);
   }
 
   .cover {
@@ -118,11 +133,19 @@
     border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--surface-3);
-    transition: transform var(--dur) var(--ease);
+    transition: box-shadow var(--dur-panel) var(--ease);
+  }
+
+  .cover :global(img) {
+    transition: transform var(--dur-slow) var(--ease);
   }
 
   .cover-wrap:hover .cover {
-    transform: scale(1.01);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .cover-wrap:hover .cover :global(img) {
+    transform: scale(1.04);
   }
 
   .fade {
@@ -151,10 +174,10 @@
     background: var(--accent);
     color: var(--accent-on, #fff);
     opacity: 0;
-    transform: translateY(0.3rem);
+    transform: translateY(0.4rem) scale(0.9);
     transition:
       opacity var(--dur) var(--ease),
-      transform var(--dur) var(--ease),
+      transform var(--dur-panel) var(--ease-spring),
       background var(--dur) var(--ease);
   }
 
@@ -166,7 +189,11 @@
   .play:focus-visible,
   .play.running {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+  }
+
+  .play:active {
+    transform: scale(0.92);
   }
 
   .info {

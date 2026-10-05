@@ -23,6 +23,9 @@
   import type { MenuItem } from './DropdownMenu.svelte';
 
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let sidebar = $state<HTMLElement>();
+  let marker = $state<{ left: number; top: number; height: number } | null>(null);
+  let glide = $state(false);
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -49,6 +52,28 @@
     $route.name === name ||
     (name === 'library' && $route.name === 'game') ||
     (name === 'friends' && $route.name === 'user');
+
+  function placeMarker() {
+    const active = sidebar?.querySelector<HTMLElement>('.nav-item.active');
+    marker = active ? { left: active.offsetLeft, top: active.offsetTop, height: active.offsetHeight } : null;
+  }
+
+  $effect(() => {
+    void $route.name;
+    void $settings?.lanSharing;
+    glide = true;
+    placeMarker();
+  });
+
+  $effect(() => {
+    if (!sidebar) return;
+    const observer = new ResizeObserver(() => {
+      glide = false;
+      placeMarker();
+    });
+    observer.observe(sidebar);
+    return () => observer.disconnect();
+  });
 
   const isGuest = $derived($authState === 'guest');
 
@@ -118,7 +143,6 @@
     aria-current={isActive(item.name) ? 'page' : undefined}
     onclick={() => navigate(item.name)}
   >
-    <span class="indicator"></span>
     <item.icon size="2rem" strokeWidth={1.8} />
     <span class="nav-label">{item.label}</span>
     {#if item.name === 'friends' && $incomingCount > 0}
@@ -127,7 +151,16 @@
   </button>
 {/snippet}
 
-<aside class="sidebar">
+<aside class="sidebar" bind:this={sidebar}>
+  {#if marker}
+    <span
+      class="marker"
+      class:glide
+      style:left="{marker.left}px"
+      style:height="calc({marker.height}px - 2.2rem)"
+      style:transform="translateY(calc({marker.top}px + 1.1rem))"
+    ></span>
+  {/if}
   <div class="logo">
     <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><filter id="typhon-accent-logo" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values={logoMatrix} /></filter></defs></svg>
     <img style:filter={$appearanceSettings?.tintLogo ? 'url(#typhon-accent-logo)' : undefined} class="logo-mark" src="/typhon.png" alt="" draggable="false" />
@@ -191,12 +224,14 @@
 
 <style>
   .sidebar {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: var(--sidebar-w);
     flex-shrink: 0;
     height: 100%;
     background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
     padding: 1.8rem 1.2rem 1.4rem;
   }
 
@@ -222,13 +257,18 @@
   nav {
     display: flex;
     flex-direction: column;
-    gap: var(--space-5);
+    gap: var(--space-3);
   }
 
   .group {
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .group + .group {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
   }
 
   .nav-item {
@@ -271,24 +311,30 @@
     color: var(--text);
   }
 
-  .indicator {
+  .marker {
     position: absolute;
-    left: 0;
-    top: 1.1rem;
-    bottom: 1.1rem;
+    top: 0;
+    z-index: 1;
     width: 0.3rem;
     border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
     background: var(--accent);
-    opacity: 0;
-    transform: scaleY(0.5);
-    transition:
-      opacity var(--dur) var(--ease),
-      transform var(--dur) var(--ease);
+    pointer-events: none;
+    animation: marker-in var(--dur) var(--ease);
   }
 
-  .nav-item.active .indicator {
-    opacity: 1;
-    transform: scaleY(1);
+  .marker.glide {
+    transition:
+      transform var(--dur-slow) var(--ease),
+      height var(--dur-slow) var(--ease);
+  }
+
+  @keyframes marker-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .nav-label {
@@ -317,6 +363,8 @@
 
   .bottom :global(.dropdown) {
     width: 100%;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
   }
 
   .profile {

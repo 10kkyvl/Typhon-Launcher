@@ -38,11 +38,8 @@
       background var(--dur) var(--ease),
       border-color var(--dur) var(--ease),
       color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease),
       transform var(--dur-fast) var(--ease);
-  }
-
-  .btn:active:not(:disabled) {
-    transform: scale(0.98);
   }
 
   .btn:disabled {
@@ -76,6 +73,8 @@
 
   .primary:hover:not(:disabled) {
     background: var(--accent-hover);
+    box-shadow: var(--shadow-accent);
+    transform: translateY(-1px);
   }
 
   .secondary {
@@ -86,6 +85,7 @@
 
   .secondary:hover:not(:disabled) {
     background: var(--surface-4);
+    border-color: color-mix(in srgb, var(--text) 22%, transparent);
   }
 
   .ghost {
@@ -107,5 +107,10 @@
   .danger:hover:not(:disabled) {
     background: var(--danger-subtle);
     border-color: rgba(217, 105, 105, 0.5);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: none;
   }
 </style>
