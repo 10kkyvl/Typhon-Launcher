@@ -385,6 +385,8 @@
 </div>
 
 <div class="settings-page">
+{#key tab}
+<div class="tab-body">
 {#if tab === 'general'}
   <div class="settings-grid">
     <div class="settings-column">
@@ -665,7 +667,7 @@
               {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
             </Button>
           </div>
-          <div class="row">
+          <div class="row danger-zone">
             <div class="row-text">
               <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
               <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
@@ -1136,6 +1138,8 @@
     </div>
   </div>
 {/if}
+</div>
+{/key}
 
 </div>
 
@@ -1159,7 +1163,16 @@
 
 <style>
   .tabs-wrap {
-    margin-bottom: var(--space-8);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-bottom: var(--space-6);
+    padding-top: var(--space-2);
+    background: var(--bg);
+  }
+
+  .tab-body {
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .rows {
@@ -1177,6 +1190,14 @@
 
   .row + .row {
     border-top: 1px solid var(--border);
+  }
+
+  .row.danger-zone {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--danger-subtle);
   }
 
   .row-text {
