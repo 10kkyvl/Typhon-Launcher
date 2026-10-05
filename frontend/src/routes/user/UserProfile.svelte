@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { LogIn, UserRound } from '@lucide/svelte';
+  import { Lock, LogIn, UserRound } from '@lucide/svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { PublicProfile } from '../../lib/services/social';
@@ -30,6 +27,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
+  import ProfilePlaying from '../profile/ProfilePlaying.svelte';
   import UserActivity from './UserActivity.svelte';
   import UserCommon from './UserCommon.svelte';
   import UserCovers from './UserCovers.svelte';
@@ -227,12 +225,19 @@
     <ProfileCover appearance={data.appearance} />
     <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
     {#if closed}
-      <p class="muted note">{msg('social.userProfileClosed')}</p>
+      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
     {:else if restricted}
-      <p class="muted note">{msg('social.userRestToFriends')}</p>
+      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
     {:else}
       <div class="columns">
         <div class="main">
+          {#if presenceGame}
+            <ProfilePlaying
+              title={presenceGame.title}
+              art={wideArt(presenceGame)}
+              onopen={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}
+            />
+          {/if}
           {#each data.showcase ?? [] as block (block.kind)}
             <UserCovers title={showcaseLabel(block.kind)} games={block.games} hearts={block.kind === 'favorites'} />
           {/each}
@@ -242,33 +247,11 @@
           {#if common}
             <UserCommon {common} {name} />
           {/if}
-          <div class="pair">
-            <div class="pair-left">
-              {#if activity.length > 0}
-                <UserActivity items={activity} />
-              {/if}
-            </div>
-          </div>
-        </div>
-        <div class="side">
-          {#if presenceGame}
-            <Card title={msg('social.nowPlayingTitle')}>
-              <button class="playing" type="button" onclick={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}>
-                <span class="cover">
-                  <Artwork src={wideArt(presenceGame)} alt={presenceGame.title} ratio="16 / 9" radius="var(--radius-md)" />
-                </span>
-                <span class="title">{presenceGame.title}</span>
-                <StatusBadge kind="success" label={msg('social.playing')} plain />
-              </button>
-            </Card>
-          {/if}
-          {#if data.bio}
-            <Card title={msg('social.aboutTitle')}>
-              <p class="bio">{data.bio}</p>
-            </Card>
-          {/if}
           {#if mutual.length > 0}
             <UserMutual friends={mutual} count={data.mutualCount} />
+          {/if}
+          {#if activity.length > 0}
+            <UserActivity items={activity} />
           {/if}
         </div>
       </div>
@@ -287,8 +270,21 @@
     color: var(--text-3);
   }
 
-  .note {
-    margin-bottom: var(--space-10);
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .notice :global(svg) {
+    flex-shrink: 0;
+    color: var(--text-3);
   }
 
   .profile {
@@ -307,83 +303,10 @@
     gap: var(--space-6);
   }
 
-  .main,
-  .side {
+  .main {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
     min-width: 0;
-  }
-
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-6);
-    align-items: start;
-  }
-
-  .pair-left {
-    display: contents;
-  }
-
-  .pair > :global(*) {
-    min-width: 0;
-  }
-
-  .bio {
-    font-size: var(--font-sm);
-    line-height: 1.55;
-    color: var(--text-2);
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  }
-
-  .playing {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
-    width: 100%;
-    padding: 0;
-    background: none;
-    border: 0;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .playing .cover {
-    display: block;
-    width: 100%;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    transition: transform var(--dur) var(--ease);
-  }
-
-  .playing:hover .cover {
-    transform: scale(1.01);
-  }
-
-  .playing .title {
-    font-size: var(--font-md);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    line-height: 1.3;
-  }
-
-  @media (min-width: 1600px) {
-    .columns {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 40rem;
-      gap: 0 var(--space-6);
-      align-items: start;
-    }
-  }
-
-  @media (max-width: 1200px) {
-    .pair {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

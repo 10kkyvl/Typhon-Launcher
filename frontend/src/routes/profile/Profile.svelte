@@ -7,6 +7,7 @@
   import { initProfile, profileSnapshot } from '../../lib/stores/profile';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
+  import { navigate } from '../../lib/stores/router';
   import { authState, currentUser } from '../../lib/stores/user';
   import { coverOf } from '../../lib/profile/view';
   import { playtime, relativeDate } from '../../lib/utils/format';
@@ -33,7 +34,7 @@
   const shown = $derived(preview ?? settings);
   const appearance = $derived(appearanceOf(shown.appearance));
   const blocks = $derived(shown.showcase.map((kind) => (allShowcases ?? $profileSnapshot).showcase.find((b) => b.kind === kind) ?? { kind, games: [] }));
-  const bio = $derived(!isGuest ? ($currentUser?.bio ?? '') : '');
+  const playingNow = $derived($profileSnapshot.running[0] ?? null);
 
   function lastPlayedOf(id: string): string | null {
     return $libraryGames.find((game) => game.id === id)?.lastPlayed ?? null;
@@ -88,6 +89,15 @@
   {#if !isGuest}
     <div class="columns">
       <div class="main">
+        {#if playingNow}
+          <ProfilePlaying
+            title={playingNow.title}
+            art={coverOf(playingNow, $gameArt)}
+            hidden={!shown.showPlaying}
+            disabled={playingNow.archived}
+            onopen={() => navigate('game', { id: playingNow.id })}
+          />
+        {/if}
         <ProfileShowcase {blocks} showEmpty={appearanceOpen} onmanage={() => (appearanceOpen = true)} />
         {#if $profileSnapshot.playing.length > 0}
           <Card title={msg('social.recentlyPlayedTitle')}>
@@ -113,14 +123,6 @@
             <ProfileActivity days={$profileSnapshot.activity} hidden={!shown.showActivity} />
           </div>
         </div>
-      </div>
-      <div class="side">
-        <ProfilePlaying running={$profileSnapshot.running} hidden={!shown.showPlaying} />
-        {#if bio}
-          <Card title={msg('social.aboutTitle')}>
-            <p class="bio">{bio}</p>
-          </Card>
-        {/if}
       </div>
     </div>
   {/if}
@@ -151,8 +153,7 @@
     gap: var(--space-6);
   }
 
-  .main,
-  .side {
+  .main {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
@@ -174,19 +175,12 @@
     min-width: 0;
   }
 
-  .bio {
-    font-size: var(--font-sm);
-    line-height: 1.55;
-    color: var(--text-2);
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  }
-
   .recent-row {
     display: flex;
     gap: var(--space-4);
     overflow-x: auto;
-    padding-bottom: var(--space-2);
+    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
+    padding: var(--space-2) var(--space-2) var(--space-3);
   }
 
   .recent-item {
@@ -209,15 +203,6 @@
     border-radius: 50%;
     background: var(--success);
     flex-shrink: 0;
-  }
-
-  @media (min-width: 1250px) {
-    .columns {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 28rem;
-      gap: 0 var(--space-6);
-      align-items: start;
-    }
   }
 
   .customizing .columns { display: flex; align-items: stretch; }

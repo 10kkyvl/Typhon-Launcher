@@ -34,6 +34,7 @@ export const social = {
   'social.reactionParty': 'Праздник',
   'social.reactionEyes': 'Глаза',
   'social.reactionJoy': 'Смех',
+  'social.reactionAdd': 'Добавить реакцию',
 
   // lib/social/feed.ts — event kind labels
   'social.feedCompleted': 'Пройдена',

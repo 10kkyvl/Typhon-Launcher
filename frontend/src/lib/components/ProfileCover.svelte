@@ -15,7 +15,7 @@
   <div class="fade"></div>
 </div>
 <style>
-  .cover { position: relative; height: 16rem; margin: 0 -2rem -4.8rem; border-radius: var(--radius-lg) var(--radius-lg) 0 0; overflow: hidden; }
+  .cover { position: relative; height: 11rem; margin: 0 -2rem -4.8rem; border-radius: var(--radius-lg) var(--radius-lg) 0 0; overflow: hidden; }
   .cover.has-image { height: auto; aspect-ratio: 4 / 1; }
   img, .dim, .fade { position: absolute; inset: 0; width: 100%; height: 100%; }
   img { object-fit: cover; }

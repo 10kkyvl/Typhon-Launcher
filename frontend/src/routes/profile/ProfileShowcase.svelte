@@ -77,14 +77,14 @@
     border-radius: var(--radius-md);
     box-shadow: inset 0 0 0 1px var(--border);
     transition:
-      transform var(--dur) var(--ease),
-      box-shadow var(--dur) var(--ease);
+      transform var(--dur-panel) var(--ease),
+      box-shadow var(--dur-panel) var(--ease);
   }
 
   .tile:hover .cover,
   .tile:focus-visible .cover {
-    transform: scale(1.01);
-    box-shadow: inset 0 0 0 1px var(--border-strong);
+    transform: translateY(-0.3rem);
+    box-shadow: var(--shadow-lift);
   }
 
   .caption {

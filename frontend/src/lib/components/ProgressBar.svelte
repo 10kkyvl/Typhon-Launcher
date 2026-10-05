@@ -23,7 +23,7 @@
 <style>
   .track {
     width: 100%;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--hover-strong);
     border-radius: 99rem;
     overflow: hidden;
   }

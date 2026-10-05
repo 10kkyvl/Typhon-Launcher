@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { PresenceDot } from '../social/presence';
 
   let {
@@ -21,6 +22,16 @@
   });
 
   const initial = $derived(name.trim().slice(0, 1).toUpperCase() || '?');
+
+  let lastStatus = untrack(() => status);
+  let changed = $state(false);
+
+  $effect(() => {
+    if (status === lastStatus) return;
+    const known = lastStatus !== undefined && status !== undefined;
+    lastStatus = status;
+    if (known) changed = true;
+  });
 </script>
 
 <span class="avatar {size}">
@@ -30,7 +41,7 @@
     <img {src} alt="" draggable="false" onerror={() => (failed = true)} />
   {/if}
   {#if status}
-    <span class="dot {status}"></span>
+    <span class="dot {status}" class:changed onanimationend={() => (changed = false)}></span>
   {/if}
 </span>
 
@@ -109,6 +120,10 @@
     width: 2rem;
     height: 2rem;
     border-width: 3px;
+  }
+
+  .dot.changed {
+    animation: pop-in var(--dur-slow) var(--ease-spring);
   }
 
   .dot.online {

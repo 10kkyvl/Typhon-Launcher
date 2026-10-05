@@ -151,11 +151,11 @@
           {/if}
           <div class="meta">
             {#if playing}
-              <span class="meta-item">
+              <span class="meta-item now">
                 <Gamepad2 size="1.5rem" strokeWidth={1.8} />
                 {msg('social.playingIn', { name: playing.title })}
-                {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
               </span>
+              {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
             {/if}
             {#if memberSince}
               <span class="meta-item">
@@ -296,8 +296,8 @@
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -321,6 +321,20 @@
   .meta-item :global(svg) {
     color: var(--text-3);
     flex-shrink: 0;
+  }
+
+  .meta-item.now {
+    min-width: 0;
+    height: 2.8rem;
+    padding: 0 1.1rem;
+    border-radius: var(--radius-xl);
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+
+  .meta-item.now :global(svg) {
+    color: inherit;
   }
 
   .right {

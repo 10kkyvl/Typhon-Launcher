@@ -56,6 +56,16 @@
   .cover {
     position: relative;
     display: block;
+    border-radius: var(--radius-md);
+    transition:
+      transform var(--dur-panel) var(--ease),
+      box-shadow var(--dur-panel) var(--ease);
+  }
+
+  .tile:hover .cover,
+  .tile:focus-visible .cover {
+    transform: translateY(-0.3rem);
+    box-shadow: var(--shadow-lift);
   }
 
   .heart {
