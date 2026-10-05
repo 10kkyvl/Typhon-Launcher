@@ -107,11 +107,13 @@ export const ui = {
     'Typhon Launcher закроется прямо сейчас, установит обновление {version} и запустится заново. Незавершённые загрузки и установки продолжатся после перезапуска.',
 
   'ui.updateAvailable': 'Доступно обновление',
+  'ui.updateAvailableHint': 'Вышла новая версия установленной игры.',
   'ui.newReleaseAvailable': 'Доступен новый релиз',
   'ui.versionUnknown': 'версия неизвестна',
   'ui.newRelease': 'новый релиз',
   'ui.readyToInstall': 'Готово к установке',
   'ui.versionsNotComparable': 'Версии не сравнимы',
+  'ui.versionsNotComparableHint': 'Версии не сравнимы: неизвестно, новее ли этот релиз установленного.',
   'ui.distributionUpdated': 'Раздача обновлена',
   'ui.newDistributionRevisionReason': 'Источник опубликовал новую ревизию вашей раздачи.',
   'ui.calculatingDownloadSize': 'Расчёт объёма загрузки…',
