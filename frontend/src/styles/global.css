@@ -142,7 +142,7 @@ h4 {
 }
 
 ::selection {
-  background: rgba(102, 115, 242, 0.35);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .media-reveal {

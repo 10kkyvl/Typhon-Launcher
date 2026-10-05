@@ -73,7 +73,7 @@
 
   .primary:hover:not(:disabled) {
     background: var(--accent-hover);
-    box-shadow: var(--shadow-accent);
+    box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
     transform: translateY(-1px);
   }
 

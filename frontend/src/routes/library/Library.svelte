@@ -445,8 +445,6 @@
 
 <style>
   .hero {
-    --hero-fg: #fff;
-    --hero-fg-2: rgba(255, 255, 255, 0.76);
     position: relative;
     display: flex;
     align-items: flex-end;
@@ -454,14 +452,12 @@
     margin-bottom: var(--space-8);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    background: rgb(8, 12, 18);
+    background: var(--surface-2);
     overflow: hidden;
     isolation: isolate;
   }
 
   .hero.plain {
-    --hero-fg: var(--text);
-    --hero-fg-2: var(--text-2);
     background:
       linear-gradient(115deg, var(--accent-subtle), transparent 62%),
       var(--surface-2);
@@ -492,8 +488,14 @@
 
   .hero-scrim {
     background:
-      linear-gradient(90deg, rgba(5, 8, 12, 0.94) 0%, rgba(5, 8, 12, 0.78) 34%, rgba(5, 8, 12, 0.28) 68%, rgba(5, 8, 12, 0.1) 100%),
-      linear-gradient(0deg, rgba(5, 8, 12, 0.6) 0%, transparent 62%);
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--surface-2) 96%, transparent) 0%,
+        color-mix(in srgb, var(--surface-2) 86%, transparent) 40%,
+        color-mix(in srgb, var(--surface-2) 30%, transparent) 72%,
+        color-mix(in srgb, var(--surface-2) 6%, transparent) 100%
+      ),
+      linear-gradient(0deg, color-mix(in srgb, var(--surface-2) 55%, transparent) 0%, transparent 62%);
   }
 
   .hero-body {
@@ -505,7 +507,7 @@
     min-width: 0;
     max-width: min(64rem, 100%);
     padding: var(--space-6) var(--space-8);
-    color: var(--hero-fg);
+    color: var(--text);
   }
 
   .hero-body > * {
@@ -524,7 +526,7 @@
   .hero-eyebrow {
     font-size: var(--font-sm);
     font-weight: 500;
-    color: var(--hero-fg-2);
+    color: var(--text-2);
   }
 
   .hero-title {
@@ -541,7 +543,7 @@
     flex-wrap: wrap;
     gap: 0.2rem var(--space-5);
     font-size: var(--font-sm);
-    color: var(--hero-fg-2);
+    color: var(--text-2);
     font-variant-numeric: tabular-nums;
   }
 
@@ -562,17 +564,12 @@
     width: 3.2rem;
     height: 3.2rem;
     border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.55);
-    color: #fff;
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    color: var(--text);
     opacity: 0.75;
     transition:
       opacity var(--dur) var(--ease),
       transform var(--dur-fast) var(--ease);
-  }
-
-  .hero.plain .hero-close {
-    background: var(--hover-strong);
-    color: var(--text);
   }
 
   .hero-close:hover,
