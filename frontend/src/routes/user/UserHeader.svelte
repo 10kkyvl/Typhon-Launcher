@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { PublicProfile } from '../../lib/services/social';
   import { presenceDot } from '../../lib/social/presence';
   import { memberSince, relationLabel } from '../../lib/social/view';
@@ -52,7 +53,7 @@
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="meta">
           {#if playingLine}
-            <span class="meta-item">
+            <span class="meta-item now">
               <Gamepad2 size="1.5rem" strokeWidth={1.8} />
               {playingLine}
             </span>
@@ -69,7 +70,7 @@
       <div class="right">
         <div class="head-actions">
           {#if profile.relation === 'friend'}
-            <Button disabled>{relationLabel('friend')}</Button>
+            <StatusBadge kind="success" label={relationLabel('friend')} />
             {#if onmessage}<Button variant="primary" onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
@@ -84,13 +85,13 @@
                 {relationLabel('none')}
               </Button>
             {:else if profile.relation === 'outgoing'}
-              <Button disabled>{relationLabel('outgoing')}</Button>
+              <StatusBadge kind="neutral" label={relationLabel('outgoing')} />
               <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>{msg('social.cancelRequestButton')}</Button>
             {:else}
               <Button variant="primary" disabled={busy} onclick={() => onaction('accept')}>
                 {relationLabel('incoming')}
               </Button>
-              <Button variant="ghost" disabled={busy} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
+              <Button disabled={busy} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
             {/if}
             <DropdownMenu items={blockMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
@@ -153,8 +154,8 @@
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -178,6 +179,25 @@
   .meta-item :global(svg) {
     color: var(--text-3);
     flex-shrink: 0;
+  }
+
+  .meta-item.now {
+    min-width: 0;
+    height: 2.8rem;
+    padding: 0 1.1rem;
+    border-radius: var(--radius-xl);
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+
+  .meta-item.now :global(svg) {
+    color: inherit;
+  }
+
+  .identity,
+  .right {
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .right {

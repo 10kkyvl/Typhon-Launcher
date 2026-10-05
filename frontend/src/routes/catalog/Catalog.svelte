@@ -794,10 +794,12 @@
             <span class="list-meta right">{@render installedStatus()}</span>
           {/if}
         </button>
-        <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
-          active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
-          {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
-        </IconButton></div>
+        <span class="list-action" class:pinned={isDismissed(game)}>
+          <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+            active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
+            {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+          </IconButton>
+        </span></div>
       {/each}
     </div>
   {/if}
@@ -818,6 +820,8 @@
   .profile-hint { margin-bottom: var(--space-5); }
   .list-entry { display: flex; align-items: center; }
   .list-entry .list-row { flex: 1; min-width: 0; }
+  .list-action { display: inline-flex; opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease); }
+  .list-entry:hover .list-action, .list-entry:focus-within .list-action, .list-action.pinned { opacity: 1; pointer-events: auto; }
 
   .more-error { color: var(--danger); }
   .catalog-skeleton { margin-top: var(--space-4); }
