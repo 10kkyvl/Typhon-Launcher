@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, ChevronDown, Download, EllipsisVertical, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
+  import { ArrowDownUp, ChevronDown, Ellipsis, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
@@ -18,7 +18,7 @@
   import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameCard from '../../lib/components/GameCard.svelte';
+  import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -533,6 +533,80 @@
 
   function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
+  function cardActions(game: CatalogGame, libId: string | undefined, favorite: boolean): GameCardAction[] {
+    const dismissed = isDismissed(game);
+    const dismissAction: GameCardAction = {
+      id: 'dismiss',
+      label: dismissed ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested'),
+      icon: dismissed ? Undo2 : ThumbsDown,
+      active: dismissed,
+      pinned: dismissed,
+      disabled: preferenceBusy,
+      onclick: () => void dismiss(game, !dismissed),
+    };
+    if (!libId) return [dismissAction];
+    const moreAction: GameCardAction = {
+      id: 'more',
+      label: msg('games.moreLabel'),
+      icon: Ellipsis,
+      onclick: (event) => openGameMenu(event, libId),
+    };
+    const favoriteAction: GameCardAction = {
+      id: 'favorite',
+      label: favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd'),
+      icon: Heart,
+      active: favorite,
+      filled: favorite,
+      pinned: favorite,
+      quiet: true,
+      onclick: (event) => {
+        event.stopPropagation();
+        toggleFavorite(libId, favorite);
+      },
+    };
+    return [moreAction, dismissAction, favoriteAction];
+  }
+
+  let stuck = $state(false);
+
+  function watchStuck(dock: HTMLElement) {
+    const chipsRow = dock.nextElementSibling;
+    if (!chipsRow || typeof IntersectionObserver === 'undefined' || typeof ResizeObserver === 'undefined') return;
+    let root = dock.parentElement;
+    while (root && !/auto|scroll/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+    let observer: IntersectionObserver | undefined;
+    const resize = new ResizeObserver(() => {
+      observer?.disconnect();
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          stuck = !entry.isIntersecting && entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0);
+        },
+        { root, rootMargin: `-${dock.offsetHeight}px 0px 0px 0px` },
+      );
+      observer.observe(chipsRow);
+    });
+    resize.observe(dock);
+    return {
+      destroy() {
+        resize.disconnect();
+        observer?.disconnect();
+      },
+    };
+  }
+
+  let lastView = get(catalogView);
+  let viewSwitched = $state(false);
+
+  $effect(() => {
+    if ($catalogView === lastView) return;
+    lastView = $catalogView;
+    viewSwitched = true;
+  });
+
+  function endViewSwitch(event: AnimationEvent) {
+    if (event.target === event.currentTarget) viewSwitched = false;
+  }
+
   async function toggleRun(libraryId: string) {
     try {
       if ($runningGames.has(libraryId)) await stopGame(libraryId);
@@ -561,68 +635,77 @@
   }
 </script>
 
+{#snippet installedStatus()}
+  <span class="status"><span class="dot"></span>{msg('games.gameInstalledWord')}</span>
+{/snippet}
+
 <Card surface="panel">
-  <PageHeader title={msg('games.allGamesTitle')} />
+  <PageHeader
+    title={msg('games.allGamesTitle')}
+    count={total > 0 ? msg('games.catalogTotalCount', { count: total }) : undefined}
+  />
 
-  <div class="search-row">
-    <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
-  </div>
-
-  <fieldset class="filter-row" disabled={preferenceBusy || !ready}>
-    <div class="chips">
-      {#each chips as label (label)}
-        <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
-          {label === allGenres ? label : genreLabel(label)}
-        </Chip>
-      {/each}
-      <Chip variant="outline" selected={hideLibrary} onclick={() => { hideLibrary = !hideLibrary; void preferencesChanged(); }}>{msg('games.catalogHideLibrary')}</Chip>
-      <Chip variant="outline" selected={hideNotInterested} onclick={() => { hideNotInterested = !hideNotInterested; void preferencesChanged(); }}>{msg('games.catalogHideDismissed')}</Chip>
-      {#if compatRelevant}
-        <Chip
-          variant="outline"
-          selected={compatOnly}
-          title={msg('games.compatFilterHint')}
-          onclick={onCompatOnly}
+  <div class="toolbar-dock" use:watchStuck>
+    <div class="toolbar-row" class:stuck>
+      <div class="search-wrap">
+        <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
+      </div>
+      <fieldset class="controls" disabled={preferenceBusy || !ready}>
+        <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
+          options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
+        <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
+          options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
+        <DropdownMenu
+          items={[
+            ...(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({ id, label: sortLabels[id] })),
+          ]}
+          onselect={(id) => onSort(id as Sort)}
         >
-          {msg('games.compatFilterLabel')}
-        </Chip>
-      {/if}
+          {#snippet trigger({ open, toggle })}
+            <Chip selected={open} onclick={toggle}>
+              <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+              {sortLabels[(effectiveSort || 'popular') as Sort]}
+              <ChevronDown size="1.4rem" strokeWidth={1.8} />
+            </Chip>
+          {/snippet}
+        </DropdownMenu>
+        <SegmentedControl
+          bind:value={$catalogView}
+          options={[
+            { id: 'grid', label: msg('games.viewGrid') },
+            { id: 'list', label: msg('games.viewList') },
+          ]}
+        >
+          {#snippet item(option)}
+            {#if option.id === 'grid'}
+              <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+            {:else}
+              <List size="1.6rem" strokeWidth={1.8} />
+            {/if}
+          {/snippet}
+        </SegmentedControl>
+      </fieldset>
     </div>
-    <div class="controls">
-      <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
-        options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
-      <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
-        options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
-      <DropdownMenu
-        items={[
-          ...(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({ id, label: sortLabels[id] })),
-        ]}
-        onselect={(id) => onSort(id as Sort)}
+  </div>
+  <fieldset class="chips" disabled={preferenceBusy || !ready}>
+    {#each chips as label (label)}
+      <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
+        {label === allGenres ? label : genreLabel(label)}
+      </Chip>
+    {/each}
+    <span class="chips-sep" aria-hidden="true"></span>
+    <Chip variant="outline" selected={hideLibrary} onclick={() => { hideLibrary = !hideLibrary; void preferencesChanged(); }}>{msg('games.catalogHideLibrary')}</Chip>
+    <Chip variant="outline" selected={hideNotInterested} onclick={() => { hideNotInterested = !hideNotInterested; void preferencesChanged(); }}>{msg('games.catalogHideDismissed')}</Chip>
+    {#if compatRelevant}
+      <Chip
+        variant="outline"
+        selected={compatOnly}
+        title={msg('games.compatFilterHint')}
+        onclick={onCompatOnly}
       >
-        {#snippet trigger({ open, toggle })}
-          <button class="sort" class:open onclick={toggle}>
-            <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-            {sortLabels[(effectiveSort || 'popular') as Sort]}
-            <ChevronDown size="1.4rem" strokeWidth={1.8} />
-          </button>
-        {/snippet}
-      </DropdownMenu>
-      <SegmentedControl
-        bind:value={$catalogView}
-        options={[
-          { id: 'grid', label: msg('games.viewGrid') },
-          { id: 'list', label: msg('games.viewList') },
-        ]}
-      >
-        {#snippet item(option)}
-          {#if option.id === 'grid'}
-            <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-          {:else}
-            <List size="1.6rem" strokeWidth={1.8} />
-          {/if}
-        {/snippet}
-      </SegmentedControl>
-    </div>
+        {msg('games.compatFilterLabel')}
+      </Chip>
+    {/if}
   </fieldset>
 
   {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
@@ -671,11 +754,11 @@
       />
     {/if}
   {:else if $catalogView === 'grid'}
-    <div class="grid">
+    <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch}>
       {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         {@const libId = libraryByGame.get(game.id)}
-        {@const isFav = libId ? favoriteByLibraryId.get(libId) : false}
+        {@const isFav = libId ? Boolean(favoriteByLibraryId.get(libId)) : false}
         {@const isInstalled = installedByGame.has(game.id)}
         <div class="cell">
           <GameCard
@@ -686,50 +769,15 @@
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={catalogMeta(shown)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
+            actions={cardActions(game, libId, isFav)}
+            footer={isInstalled ? installedStatus : undefined}
             onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
-          >
-            {#snippet footer()}
-              <span class="status" class:on={isInstalled}>
-                {#if isInstalled}
-                  <span class="dot"></span>{msg('games.gameInstalledWord')}
-                {:else}
-                  <Download size="1.3rem" strokeWidth={1.8} />{msg('games.gameNotInstalledWord')}
-                {/if}
-              </span>
-              <div class="actions">
-                <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
-                  active={isDismissed(game)} size="sm" disabled={preferenceBusy}
-                  onclick={() => void dismiss(game, !isDismissed(game))}>
-                  {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
-                </IconButton>
-              {#if libId}
-                  <IconButton
-                    label={isFav ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
-                    size="sm"
-                    active={isFav}
-                    onclick={(event) => {
-                      event.stopPropagation();
-                      toggleFavorite(libId, Boolean(isFav));
-                    }}
-                  >
-                    <Heart size="1.5rem" strokeWidth={1.8} fill={isFav ? 'currentColor' : 'none'} />
-                  </IconButton>
-                  <IconButton
-                    label={msg('games.moreLabel')}
-                    size="sm"
-                    onclick={(event) => openGameMenu(event, libId)}
-                  >
-                    <EllipsisVertical size="1.5rem" strokeWidth={1.8} />
-                  </IconButton>
-              {/if}
-              </div>
-            {/snippet}
-          </GameCard>
+          />
         </div>
       {/each}
     </div>
   {:else}
-    <div class="list">
+    <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch}>
       {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         <div class="list-entry">
@@ -742,9 +790,9 @@
           </div>
           <span class="list-title">{shown.title}</span>
           <span class="list-meta">{listMeta(shown)}</span>
-          <span class="list-meta right">
-            {installedByGame.has(game.id) ? msg('games.gameInstalledWord') : msg('games.gameNotInstalledWord')}
-          </span>
+          {#if installedByGame.has(game.id)}
+            <span class="list-meta right">{@render installedStatus()}</span>
+          {/if}
         </button>
         <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
           active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
@@ -783,58 +831,83 @@
   .loading-list .loading-cover { width: 5rem; flex-shrink: 0; }
   .loading-list .loading-copy { width: min(32rem, 60%); margin-top: 0; }
 
-  .search-row {
-    max-width: 46rem;
-    margin-bottom: var(--space-4);
+  .toolbar-dock {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-top: calc(-1 * var(--space-2));
+    padding-top: var(--space-2);
+    background: var(--surface);
   }
 
-  .filter-row {
-    border: 0;
-    padding: 0;
-    min-width: 0;
+  .toolbar-row {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-6);
+    gap: var(--space-3);
     flex-wrap: wrap;
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 
+  .toolbar-row.stuck {
+    border-radius: var(--radius-lg);
+  }
+
+  .toolbar-row::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lift);
+    opacity: 0;
+    transition: opacity var(--dur-panel) var(--ease);
+    pointer-events: none;
+  }
+
+  .toolbar-row.stuck::after {
+    opacity: 1;
+  }
+
+  .search-wrap {
+    flex: 1;
+    min-width: 16rem;
+    max-width: 46rem;
+  }
+
+  .controls,
   .chips {
+    min-width: 0;
+    margin: 0;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
     flex-wrap: wrap;
   }
 
   .controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex-shrink: 1;
-    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: 0;
+    border: 0;
   }
 
-  .sort {
-    display: inline-flex;
-    align-items: center;
+  .chips {
     gap: 0.6rem;
-    height: var(--control-sm);
-    padding: 0 1.1rem;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-3);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+    margin-bottom: var(--space-6);
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 
-  .sort:hover,
-  .sort.open {
-    background: var(--hover);
-    color: var(--text);
+  .chips-sep {
+    width: 1px;
+    height: 2rem;
+    margin: 0 0.4rem;
+    background: var(--border-strong);
   }
 
   .cell {
@@ -847,20 +920,26 @@
     gap: var(--space-6) var(--space-5);
   }
 
+  .grid:not(.catalog-skeleton),
+  .list {
+    animation: media-in var(--dur-panel) var(--ease);
+  }
+
+  .grid.switched:not(.catalog-skeleton),
+  .list.switched {
+    animation: rise-in var(--dur-panel) var(--ease);
+  }
+
   .status {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
     font-size: var(--font-xs);
-    color: var(--text-3);
+    color: var(--text-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .status.on {
-    color: var(--text-2);
   }
 
   .dot {
@@ -869,13 +948,6 @@
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--success);
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    flex-shrink: 0;
   }
 
   .list {

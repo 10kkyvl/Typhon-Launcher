@@ -296,6 +296,7 @@ export const games = {
   'games.catalogLoadingMore': 'Загрузка…',
   'games.catalogShowMore': 'Показать ещё',
   'games.catalogShownOf': 'Загружено {shown} из {total}',
+  'games.catalogTotalCount': { one: '{count} игра', few: '{count} игры', many: '{count} игр', other: '{count} игры' },
   'games.recommendationRefreshFailed': 'Не удалось обновить подборку. Пока показываем предыдущую.',
 } as const;
 
