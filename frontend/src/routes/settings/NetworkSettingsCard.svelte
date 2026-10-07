@@ -150,7 +150,7 @@
     try {
       if (mode === 'proxy' && password !== '') {
         try {
-          await setProxyPassword(password);
+          await setProxyPassword(username.trim(), password);
         } catch (err) {
           failure = networkErrorText(err);
           return;
@@ -180,7 +180,7 @@
     passwordBusy = true;
     failure = '';
     try {
-      await setProxyPassword('');
+      await setProxyPassword(saved.username, '');
       hasPassword = false;
       password = '';
       toast(msg('settings.networkProxyPasswordDeletedToast'), 'success');

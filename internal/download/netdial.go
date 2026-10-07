@@ -28,6 +28,58 @@ const (
 
 var errDirectBlocked = errors.New("direct connection is not allowed while the proxy is on")
 
+var errBadTarget = errors.New("not an address the proxy may be asked to reach")
+
+// maxTargetLen is the longest host name, a colon and the longest port.
+const maxTargetLen = 253 + len(":65535")
+
+// validProxyTarget says whether target may be written into a proxy request.
+// Peer addresses come from magnet links, trackers and other peers, and the
+// library does not check them; written into a CONNECT line as they are, a
+// line break in one would let its sender add headers or a second request.
+func validProxyTarget(target string) error {
+	if len(target) > maxTargetLen {
+		return fmt.Errorf("%w: %d bytes", errBadTarget, len(target))
+	}
+	host, port, err := net.SplitHostPort(target)
+	if err != nil {
+		// The text of err carries the address as it is, line breaks included.
+		return fmt.Errorf("%w: %q: not host:port", errBadTarget, target)
+	}
+	if n, err := strconv.ParseUint(port, 10, 16); err != nil || n == 0 {
+		return fmt.Errorf("%w: %q: port", errBadTarget, target)
+	}
+	if !validProxyHost(host) {
+		return fmt.Errorf("%w: %q: host", errBadTarget, target)
+	}
+	return nil
+}
+
+// validProxyHost accepts an address without a zone or a plain ASCII DNS name;
+// a name outside ASCII has to come as punycode.
+func validProxyHost(host string) bool {
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.Zone() == ""
+	}
+	name := strings.TrimSuffix(host, ".")
+	if name == "" || len(name) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(name, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			letter := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+			if !letter && (c < '0' || c > '9') && c != '-' && c != '_' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // netDialer adapts a dial function to the peer dialer the torrent client
@@ -235,6 +287,9 @@ func socks5Dial(p netPlan) (dialFunc, error) {
 		if err := tcpNetwork(network); err != nil {
 			return nil, err
 		}
+		if err := validProxyTarget(addr); err != nil {
+			return nil, err
+		}
 		c, err := cd.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			// The library reports a cancelled handshake as the read error the
@@ -337,6 +392,9 @@ func timed(ctx context.Context, conn net.Conn, fn func() error) error {
 // connectStatus sends a CONNECT for target and returns the status of the
 // answer. The caller decides what a status means.
 func connectStatus(conn net.Conn, br *bufio.Reader, target, auth string) (int, string, error) {
+	if err := validProxyTarget(target); err != nil {
+		return 0, "", err
+	}
 	var req strings.Builder
 	req.WriteString("CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n")
 	if auth != "" {
@@ -362,6 +420,9 @@ func httpConnectDial(p netPlan) dialFunc {
 	d := &net.Dialer{Timeout: dialTimeout}
 	return func(ctx context.Context, network, target string) (net.Conn, error) {
 		if err := tcpNetwork(network); err != nil {
+			return nil, err
+		}
+		if err := validProxyTarget(target); err != nil {
 			return nil, err
 		}
 		conn, err := d.DialContext(ctx, "tcp", p.proxyAddr())

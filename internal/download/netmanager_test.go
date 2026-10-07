@@ -106,6 +106,9 @@ type fakeNetwork struct {
 	dnsErr   error
 	hostErr  error
 	checks   []hostCheckCall
+
+	probeEntered chan struct{}
+	probeHold    chan struct{}
 }
 
 type hostCheckCall struct {
@@ -150,11 +153,35 @@ func (f *fakeNetwork) interfaces() ([]ifaceInfo, error) {
 	return append([]ifaceInfo(nil), f.ifaces...), nil
 }
 
-func (f *fakeNetwork) probe(_ context.Context, addr string) error {
+func (f *fakeNetwork) probe(ctx context.Context, addr string) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.probed = append(f.probed, addr)
-	return f.probeErr
+	err := f.probeErr
+	entered, hold := f.probeEntered, f.probeHold
+	f.mu.Unlock()
+	if hold != nil {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-hold:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return err
+}
+
+// holdProbe makes the next probes wait until the returned release is called;
+// entered receives one value per probe that starts waiting.
+func (f *fakeNetwork) holdProbe() (entered <-chan struct{}, release func()) {
+	enter, hold := make(chan struct{}, 4), make(chan struct{})
+	f.mu.Lock()
+	f.probeEntered, f.probeHold = enter, hold
+	f.mu.Unlock()
+	var once sync.Once
+	return enter, func() { once.Do(func() { close(hold) }) }
 }
 
 func (f *fakeNetwork) set(ifaces ...ifaceInfo) {
@@ -181,19 +208,33 @@ type memStore struct {
 	saved   int
 	deleted int
 	loads   int
+	// loadHold, when set, makes Load signal loadEntered once it has read the
+	// credential and then wait for loadHold to be closed, so a test can change
+	// the store while a reader is in the middle of a read.
+	loadEntered chan struct{}
+	loadHold    chan struct{}
 }
 
 func (s *memStore) Load() (account.Credential, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.loads++
-	if s.loadErr != nil {
-		return account.Credential{}, s.loadErr
+	cred, err := s.cred, error(nil)
+	switch {
+	case s.loadErr != nil:
+		cred, err = account.Credential{}, s.loadErr
+	case !s.present:
+		cred, err = account.Credential{}, account.ErrNoCredential
 	}
-	if !s.present {
-		return account.Credential{}, account.ErrNoCredential
+	entered, hold := s.loadEntered, s.loadHold
+	s.mu.Unlock()
+	if hold != nil {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		<-hold
 	}
-	return s.cred, nil
+	return cred, err
 }
 
 func (s *memStore) Save(c account.Credential) error {
@@ -975,7 +1016,7 @@ func TestProxyPasswordRoundTrip(t *testing.T) {
 	if has, err := r.m.HasProxyPassword(); err != nil || has {
 		t.Fatalf("HasProxyPassword = %v, %v before anything is saved", has, err)
 	}
-	if err := r.m.SetProxyPassword("hunter2"); err != nil {
+	if err := r.m.SetProxyPassword("user", "hunter2"); err != nil {
 		t.Fatalf("SetProxyPassword: %v", err)
 	}
 	if has, err := r.m.HasProxyPassword(); err != nil || !has {
@@ -992,7 +1033,7 @@ func TestProxyPasswordRoundTrip(t *testing.T) {
 		t.Fatal("the client was not rebuilt with the new password")
 	}
 
-	if err := r.m.SetProxyPassword(""); err != nil {
+	if err := r.m.SetProxyPassword("user", ""); err != nil {
 		t.Fatalf("clearing the password: %v", err)
 	}
 	if r.store.deleted != 1 {
@@ -1003,7 +1044,7 @@ func TestProxyPasswordRoundTrip(t *testing.T) {
 		t.Fatal("the client kept a cleared password")
 	}
 
-	if err := r.m.SetProxyPassword(strings.Repeat("x", 256)); !errors.Is(err, errProxyPasswordSize) {
+	if err := r.m.SetProxyPassword("user", strings.Repeat("x", 256)); !errors.Is(err, errProxyPasswordSize) {
 		t.Fatalf("an oversized password: %v", err)
 	}
 	r.store.loadErr = errors.New("locked")
@@ -1011,7 +1052,7 @@ func TestProxyPasswordRoundTrip(t *testing.T) {
 		t.Fatalf("HasProxyPassword on a failing store: %v", err)
 	}
 	r.m.proxyStore = nil
-	if err := r.m.SetProxyPassword("x"); !errors.Is(err, errProxyCredentials) {
+	if err := r.m.SetProxyPassword("user", "x"); !errors.Is(err, errProxyCredentials) {
 		t.Fatalf("SetProxyPassword without a store: %v", err)
 	}
 }
@@ -1020,7 +1061,7 @@ func TestPasswordChangeOutsideProxyModeKeepsTheClient(t *testing.T) {
 	r := newNetRig(t, nil)
 	r.reconcile(t)
 	first := r.client()
-	if err := r.m.SetProxyPassword("hunter2"); err != nil {
+	if err := r.m.SetProxyPassword("", "hunter2"); err != nil {
 		t.Fatal(err)
 	}
 	r.reconcile(t)
@@ -1046,7 +1087,7 @@ func TestTestProxyUsesTheSavedSettings(t *testing.T) {
 	if err := r.m.TestProxy(t.Context()); !errors.Is(err, errProxyAuthFailed) {
 		t.Fatalf("no saved password: %v, want errProxyAuthFailed", err)
 	}
-	if err := r.m.SetProxyPassword("p"); err != nil {
+	if err := r.m.SetProxyPassword("u", "p"); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.m.TestProxy(t.Context()); err != nil {
@@ -1730,7 +1771,7 @@ func TestProxyPasswordIsReadOnceAndBelongsToItsUser(t *testing.T) {
 	r.m.mu.Lock()
 	r.m.netKey = netKeyOf(r.svc.GetSettings())
 	r.m.mu.Unlock()
-	if err := r.m.SetProxyPassword("s3cret"); err != nil {
+	if err := r.m.SetProxyPassword("user", "s3cret"); err != nil {
 		t.Fatal(err)
 	}
 	loads := func() int { r.store.mu.Lock(); defer r.store.mu.Unlock(); return r.store.loads }
@@ -1770,11 +1811,162 @@ func TestProxyPasswordIsReadOnceAndBelongsToItsUser(t *testing.T) {
 	}
 
 	// Entering the password again for the new name fixes it.
-	if err := r.m.SetProxyPassword("other"); err != nil {
+	if err := r.m.SetProxyPassword("someone", "other"); err != nil {
 		t.Fatal(err)
 	}
 	r.reconcile(t)
 	if st := r.state(); st.State != NetworkOK || r.builds.lastPlan().ppass != "other" || r.builds.lastPlan().puser != "someone" {
 		t.Fatalf("state = %+v, plan = %+v", st, r.builds.lastPlan())
+	}
+}
+
+func (r *netRig) followSettings(t *testing.T) {
+	t.Helper()
+	unsubscribe := r.svc.Subscribe(r.m.applySettings)
+	t.Cleanup(unsubscribe)
+	r.m.mu.Lock()
+	r.m.netKey = netKeyOf(r.svc.GetSettings())
+	r.m.mu.Unlock()
+}
+
+func (r *netRig) saveProxyUser(t *testing.T, user string) {
+	t.Helper()
+	next := r.svc.GetSettings()
+	next.ProxyUsername = user
+	if err := r.svc.SaveSettings(next); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+}
+
+// TestProxyPasswordWithANewUserNameFollowsTheOrderOfTheWindow is what one press
+// of Apply does on a clean install: the password goes in first, together with
+// the name typed next to it, and the settings with that name come second.
+func TestProxyPasswordWithANewUserNameFollowsTheOrderOfTheWindow(t *testing.T) {
+	r := newNetRig(t, nil)
+	r.followSettings(t)
+	r.reconcile(t)
+
+	if err := r.m.SetProxyPassword("bob", "hunter2"); err != nil {
+		t.Fatalf("SetProxyPassword: %v", err)
+	}
+	next := r.svc.GetSettings()
+	viaProxy(&next)
+	next.ProxyUsername = "bob"
+	if err := r.svc.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	r.reconcile(t)
+
+	st := r.state()
+	if st.State != NetworkOK || st.Mode != settings.NetworkProxy {
+		t.Fatalf("state = %+v, want the proxy client up on the first Apply", st)
+	}
+	if p := r.builds.lastPlan(); p.puser != "bob" || p.ppass != "hunter2" {
+		t.Fatalf("plan = %+v", p)
+	}
+	if has, err := r.m.HasProxyPassword(); err != nil || !has {
+		t.Fatalf("HasProxyPassword = %v, %v after Apply", has, err)
+	}
+}
+
+// TestProxyPasswordForAnotherUserNameLeavesTheRunningClientAlone covers the
+// monitor tick that lands between the two calls of Apply: the proxy that
+// works for the old name must not be taken down for a password that belongs
+// to a name the settings do not carry yet.
+func TestProxyPasswordForAnotherUserNameLeavesTheRunningClientAlone(t *testing.T) {
+	r := newNetRig(t, func(s *settings.Settings) { viaProxy(s); s.ProxyUsername = "alice" })
+	r.followSettings(t)
+	r.store.present, r.store.cred = true, account.Credential{Token: "old", Username: "alice"}
+	r.reconcile(t)
+	first := r.client()
+	if first == nil {
+		t.Fatalf("no client to start from: %+v", r.state())
+	}
+	built := r.builds.built()
+
+	if err := r.m.SetProxyPassword("bob", "new"); err != nil {
+		t.Fatal(err)
+	}
+	r.reconcile(t)
+	if st := r.state(); st.State != NetworkOK || r.client() != first || clientClosed(first) || r.builds.built() != built {
+		t.Fatalf("state = %+v: a password for a name the settings do not carry yet took the working client down", st)
+	}
+
+	r.saveProxyUser(t, "bob")
+	r.reconcile(t)
+	st := r.state()
+	if st.State != NetworkOK {
+		t.Fatalf("state = %+v after the settings caught up", st)
+	}
+	if p := r.builds.lastPlan(); p.puser != "bob" || p.ppass != "new" {
+		t.Fatalf("plan = %+v", p)
+	}
+}
+
+// TestProxyPasswordAfterTheNewUserNameRecoversInOneCheck is the other order:
+// the settings with the new name land first, the old password does not belong
+// to it, and the password that follows has to bring the client back at once.
+func TestProxyPasswordAfterTheNewUserNameRecoversInOneCheck(t *testing.T) {
+	r := newNetRig(t, func(s *settings.Settings) { viaProxy(s); s.ProxyUsername = "alice" })
+	r.followSettings(t)
+	r.store.present, r.store.cred = true, account.Credential{Token: "old", Username: "alice"}
+	r.reconcile(t)
+
+	r.saveProxyUser(t, "bob")
+	r.reconcile(t)
+	if st := r.state(); st.State != NetworkDown || st.Code != "download.proxy_credentials_mismatch" {
+		t.Fatalf("state = %+v, want the mismatch while there is no password for bob", st)
+	}
+
+	if err := r.m.SetProxyPassword("bob", "new"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.m.netKick) != 1 {
+		t.Fatal("the password that ends a mismatch must wake the monitor")
+	}
+	r.reconcile(t)
+	if st := r.state(); st.State != NetworkOK {
+		t.Fatalf("state = %+v, want the client back after one check", st)
+	}
+	if p := r.builds.lastPlan(); p.puser != "bob" || p.ppass != "new" {
+		t.Fatalf("plan = %+v", p)
+	}
+}
+
+// TestPasswordReadBeforeASaveDoesNotOutliveIt: the monitor reads the store
+// while the window saves a new password. What the monitor read is the old one,
+// and it must not stay in the cache once the save has cleared it.
+func TestPasswordReadBeforeASaveDoesNotOutliveIt(t *testing.T) {
+	r := newNetRig(t, func(s *settings.Settings) { viaProxy(s); s.ProxyUsername = "user" })
+	r.store.present, r.store.cred = true, account.Credential{Token: "old", Username: "user"}
+	entered := make(chan struct{}, 1)
+	hold := make(chan struct{})
+	r.store.mu.Lock()
+	r.store.loadEntered, r.store.loadHold = entered, hold
+	r.store.mu.Unlock()
+
+	read := make(chan string, 1)
+	go func() {
+		pass, err := r.m.proxyPassword("user")
+		if err != nil {
+			pass = "error: " + err.Error()
+		}
+		read <- pass
+	}()
+	<-entered
+	r.store.mu.Lock()
+	r.store.loadHold = nil
+	r.store.mu.Unlock()
+
+	if err := r.m.SetProxyPassword("user", "new"); err != nil {
+		t.Fatal(err)
+	}
+	close(hold)
+	if got := <-read; got != "old" {
+		t.Fatalf("the interrupted read returned %q", got)
+	}
+	pass, err := r.m.proxyPassword("user")
+	if err != nil || pass != "new" {
+		t.Fatalf("password after the save = %q, %v, want the saved one and not the stale read", pass, err)
 	}
 }

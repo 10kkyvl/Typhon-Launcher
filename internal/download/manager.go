@@ -153,6 +153,7 @@ type Manager struct {
 	netMu        sync.Mutex
 	passMu       sync.Mutex
 	passCache    *proxySecret
+	passGen      uint64
 	verified     map[string]bool
 	netState     NetworkState
 	switching    bool
@@ -1914,7 +1915,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 
 	lt, err := m.reattach(jobCtx, cl, j)
 	if err != nil {
-		if jobCtx.Err() != nil {
+		if jobCtx.Err() != nil || m.replaced(j.gen) {
 			return
 		}
 		slog.Error("restore download", "download_id", j.id, "error", err)
@@ -1927,6 +1928,14 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	}
 	m.watchWriteErrors(j.id, lt)
 	m.settleRestored(jobCtx, j, lt, lt.t.Info())
+}
+
+// replaced says that the client a job was made for is gone, so whatever the job
+// failed on is not about its download.
+func (m *Manager) replaced(gen uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return gen != m.gen
 }
 
 func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTorrent, info *metainfo.Info) {
@@ -2057,7 +2066,7 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 		return nil, errNotFound
 	}
 
-	mi := lt.t.Metainfo()
+	mi := lt.metainfo()
 	if err := m.store.saveMetainfo(j.infoHash, &mi); err != nil {
 		slog.Warn("save metainfo", "download_id", j.id, "error", err)
 	}

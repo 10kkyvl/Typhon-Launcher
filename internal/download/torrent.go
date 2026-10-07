@@ -10,6 +10,7 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
@@ -86,8 +87,14 @@ type client struct {
 	httpTrackersOnly bool
 	// filterTrackers rewrites the tracker list of every torrent before the
 	// engine sees it: a proxy drops what it cannot carry, an adapter has the
-	// host names of UDP trackers resolved through it.
-	filterTrackers func([][]string) [][]string
+	// host names of UDP trackers resolved through it. What it left out for now
+	// goes to retryTrackers once the torrent exists.
+	filterTrackers func([][]string) ([][]string, []lostTracker)
+	retryTrackers  func(*torrent.Torrent, []lostTracker)
+	later          *retrier
+	// stopped is set when the client is cut off from the network ahead of its
+	// close: it takes no new torrents and carries no data.
+	stopped atomic.Bool
 }
 
 func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
@@ -101,6 +108,7 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 	if err != nil && isListenError(err) {
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
 		closeDefaultStorage(tc)
+		attach.later.stop()
 		tc, attach, err = networkedConfig(ctx, cfg, metaDir, 0, wrapped, plan)
 		if err != nil {
 			closeDefaultStorage(tc)
@@ -110,6 +118,7 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 	}
 	if err != nil {
 		closeDefaultStorage(tc)
+		attach.later.stop()
 		return nil, err
 	}
 	attach.attach(cl)
@@ -122,6 +131,8 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 		completion:       wrapped,
 		httpTrackersOnly: plan.mode == settings.NetworkProxy,
 		filterTrackers:   attach.trackers,
+		retryTrackers:    attach.retry,
+		later:            attach.later,
 	}, nil
 }
 
@@ -168,9 +179,36 @@ func (c *client) applyLimits(down, up int64) {
 }
 
 func (c *client) close() {
+	c.later.stop()
 	for _, err := range c.cl.Close() {
 		slog.Error("close torrent client", "error", err)
 	}
+	c.later.wait()
+}
+
+func (c *client) halted() bool { return c.stopped.Load() }
+
+// halt cuts the client off from the network ahead of its close. Closing the
+// client is the last step of a teardown, after jobs that may take long to
+// notice they were cancelled, and a client closed before they end would hang
+// them (a verify that starts on a closed torrent returns with the client lock
+// held). So the client stays open and stops carrying data instead: no torrent
+// moves a byte either way, every peer connection is dropped and none is
+// accepted or dialled again.
+func (c *client) halt() {
+	// Set first: a torrent added while the sweep runs is halted by add.
+	c.stopped.Store(true)
+	for _, t := range c.cl.Torrents() {
+		haltTorrent(t)
+	}
+}
+
+func haltTorrent(t *torrent.Torrent) {
+	t.DisallowDataDownload()
+	t.DisallowDataUpload()
+	// Dropping the connections is what closes the sockets; with the gates alone
+	// they stay open and the swarm keeps seeing the address.
+	t.SetMaxEstablishedConns(0)
 }
 
 func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string, opts storageOpts) (*liveTorrent, error) {
@@ -209,15 +247,19 @@ func newStorage(destination string, opts storageOpts, completion storage.PieceCo
 }
 
 func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storageOpts) (*liveTorrent, error) {
+	if c.halted() {
+		return nil, errNetworkDown
+	}
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
 	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
 	var announce [][]string
+	var lost []lostTracker
 	if c.filterTrackers != nil {
 		announce = cloneTiers(spec.Trackers)
-		spec.Trackers = c.filterTrackers(spec.Trackers)
+		spec.Trackers, lost = c.filterTrackers(spec.Trackers)
 	}
 
 	t, isNew, err := c.cl.AddTorrentSpec(spec)
@@ -242,6 +284,12 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
+	if c.halted() {
+		haltTorrent(t)
+	}
+	if len(lost) > 0 && c.retryTrackers != nil {
+		c.retryTrackers(t, lost)
+	}
 	return &liveTorrent{t: t, storage: st, flat: opts.flat, announce: announce, gen: c.gen}, nil
 }
 
