@@ -129,6 +129,7 @@ type Manager struct {
 	reserved map[string]bool
 	fetching map[string]fetchEntry
 	fetchSeq int64
+	promoter *partPromoter
 
 	client          *client
 	max             int
@@ -219,6 +220,7 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		jobs:     map[string]*jobState{},
 		reserved: map[string]bool{},
 		fetching: map[string]fetchEntry{},
+		promoter: newPartPromoter(),
 
 		netKick:     make(chan struct{}, 1),
 		netInterval: netPollInterval,
@@ -1577,7 +1579,11 @@ func (m *Manager) verifyCompletion(ctx context.Context, id string, eng engineTor
 	}
 	defer m.endJob(id)
 
-	err := verifyFilesOnDisk(jobCtx, files, eng.filePaths(dest))
+	paths := eng.filePaths(dest)
+	err := m.promoter.promoteComplete(jobCtx, files, paths, eng.filesHashed())
+	if err == nil {
+		err = verifyFilesOnDisk(jobCtx, files, paths)
+	}
 	if err != nil {
 		if jobCtx.Err() != nil {
 			return
