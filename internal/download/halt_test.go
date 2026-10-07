@@ -2,10 +2,17 @@ package download
 
 import (
 	"errors"
+	"io"
+	"net"
+	"net/netip"
 	"testing"
 	"time"
 
 	"typhon/internal/settings"
+
+	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/storage"
 )
 
 // A client that is going away must stop carrying data before anything slow
@@ -296,5 +303,246 @@ func TestRestoreRefusedByAClientThatIsGoingAwayDoesNotFailTheDownload(t *testing
 
 	if failed || r.m.statusOf(t, "dl") == StatusFailed {
 		t.Fatalf("a restore refused by a halted client failed the download: %+v", mustGet(t, r.m, "dl"))
+	}
+}
+
+type guardedPlan struct {
+	name string
+	plan func(t *testing.T) netPlan
+	dht  bool
+}
+
+func guardedClient(t *testing.T, plan netPlan) (*client, *torrent.ClientConfig) {
+	t.Helper()
+	var cfg *torrent.ClientConfig
+	orig := openTorrentClient
+	t.Cleanup(func() { openTorrentClient = orig })
+	openTorrentClient = func(tc *torrent.ClientConfig) (*torrent.Client, error) {
+		cfg = tc
+		tc.ListenPort = 0
+		tc.NoDHT = true
+		tc.DisableTrackers = true
+		tc.DisablePEX = true
+		tc.NoDefaultPortForwarding = true
+		return orig(tc)
+	}
+	c, err := newClient(t.Context(), settings.Defaults(), t.TempDir(), storage.NewMapPieceCompletion(), plan)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	t.Cleanup(c.close)
+	return c, cfg
+}
+
+func guardedPlans() []guardedPlan {
+	return []guardedPlan{
+		{"direct", func(*testing.T) netPlan { return netPlan{mode: settings.NetworkDirect} }, false},
+		{"interface", func(*testing.T) netPlan {
+			return netPlan{mode: settings.NetworkInterface, iface: "test", index: 7, ip4: netip.MustParseAddr("127.0.0.1")}
+		}, true},
+		{"proxy", func(t *testing.T) netPlan { return socksPlan(t, startSOCKS(t, &socksServer{}), "", "") }, false},
+	}
+}
+
+// After the cut nothing the old client owns may announce: a tracker or the
+// DHT would still show the address of a route that is being given up.
+func TestHaltedClientRefusesEveryAnnounceChannel(t *testing.T) {
+	for _, c := range guardedPlans() {
+		t.Run(c.name, func(t *testing.T) {
+			cl, cfg := guardedClient(t, c.plan(t))
+			cl.halt()
+
+			if cfg.TrackerDialContext == nil || cfg.TrackerListenPacket == nil || cfg.MetainfoSourcesMerger == nil || cfg.ConfigureAnacrolixDhtServer == nil {
+				t.Fatal("a hook that carries announces is missing, so nothing can refuse it")
+			}
+			if _, err := cfg.TrackerDialContext(t.Context(), "tcp", "127.0.0.1:1"); !errors.Is(err, errNetworkDown) {
+				t.Errorf("tracker dial after halt = %v, want errNetworkDown", err)
+			}
+			if cfg.HTTPDialContext != nil {
+				if _, err := cfg.HTTPDialContext(t.Context(), "tcp", "127.0.0.1:1"); !errors.Is(err, errNetworkDown) {
+					t.Errorf("http dial after halt = %v, want errNetworkDown", err)
+				}
+			}
+			pc, err := cfg.TrackerListenPacket("udp4", ":0")
+			if err != nil {
+				t.Fatalf("udp tracker socket after halt: %v: the library panics when this hook fails", err)
+			}
+			t.Cleanup(func() { closeQuietly(pc) })
+			if _, err := pc.WriteTo([]byte("announce"), &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9}); err == nil {
+				t.Error("a udp tracker socket sent a packet after halt")
+			}
+			if err := cfg.MetainfoSourcesMerger(nil, nil); !errors.Is(err, errNetworkDown) {
+				t.Errorf("metainfo source merge after halt = %v, want errNetworkDown", err)
+			}
+
+			dhtConn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { closeQuietly(dhtConn) })
+			dc := dht.ServerConfig{Conn: dhtConn}
+			cfg.ConfigureAnacrolixDhtServer(&dc)
+			if _, err := dc.Conn.WriteTo([]byte("query"), &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9}); err == nil {
+				t.Error("the DHT sent a packet after halt")
+			}
+			if c.dht {
+				if _, err := cfg.DhtStartingNodes("udp")(); !errors.Is(err, errNetworkDown) {
+					t.Errorf("DHT bootstrap after halt = %v, want errNetworkDown", err)
+				}
+			}
+		})
+	}
+}
+
+// The sockets that were open before the cut are the ones that matter: a
+// tracker connection is kept alive and reused without another dial.
+func TestHaltCutsTrackerSocketsThatWereOpenBeforeIt(t *testing.T) {
+	cl, cfg := guardedClient(t, netPlan{mode: settings.NetworkDirect})
+	if cfg.TrackerDialContext == nil || cfg.TrackerListenPacket == nil || cfg.ConfigureAnacrolixDhtServer == nil {
+		t.Fatal("a hook that carries announces is missing, so nothing can cut its sockets")
+	}
+
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeQuietly(ln) })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				logged(io.Copy(io.Discard, conn))
+				closeQuietly(conn)
+			}()
+		}
+	}()
+	target, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeQuietly(target) })
+
+	conn, err := cfg.TrackerDialContext(t.Context(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("tracker dial before halt: %v", err)
+	}
+	t.Cleanup(func() { closeQuietly(conn) })
+	pc, err := cfg.TrackerListenPacket("udp4", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeQuietly(pc) })
+	dhtConn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeQuietly(dhtConn) })
+	dc := dht.ServerConfig{Conn: dhtConn}
+	cfg.ConfigureAnacrolixDhtServer(&dc)
+
+	if _, err := conn.Write([]byte("GET")); err != nil {
+		t.Fatalf("tracker write before halt: %v", err)
+	}
+	if _, err := pc.WriteTo([]byte("announce"), target.LocalAddr()); err != nil {
+		t.Fatalf("udp tracker write before halt: %v", err)
+	}
+	if _, err := dc.Conn.WriteTo([]byte("query"), target.LocalAddr()); err != nil {
+		t.Fatalf("DHT write before halt: %v", err)
+	}
+
+	cl.halt()
+
+	if _, err := conn.Write([]byte("GET")); !errors.Is(err, errNetworkDown) {
+		t.Errorf("tracker write after halt = %v, want errNetworkDown", err)
+	}
+	if _, err := pc.WriteTo([]byte("announce"), target.LocalAddr()); !errors.Is(err, errNetworkDown) {
+		t.Errorf("udp tracker write after halt = %v, want errNetworkDown", err)
+	}
+	if _, err := dc.Conn.WriteTo([]byte("query"), target.LocalAddr()); !errors.Is(err, errNetworkDown) {
+		t.Errorf("DHT write after halt = %v, want errNetworkDown", err)
+	}
+}
+
+func TestHaltStopsTheRetryOfLostTrackers(t *testing.T) {
+	cl := offlineClient(t)
+	cl.later = newRetrier(t.Context())
+	cl.halt()
+	if cl.later.ctx.Err() == nil {
+		t.Fatal("a halted client goes on resolving the names of its trackers")
+	}
+}
+
+func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
+	r := newNetRig(t, viaProxy)
+	log := recordEmits(t)
+	r.reconcile(t)
+	if st := r.state(); st.State != NetworkOK || st.Address != "127.0.0.1:1080" {
+		t.Fatalf("no route to start from: %+v", st)
+	}
+
+	entered, release := r.net.holdProbe()
+	t.Cleanup(release)
+	next := r.svc.GetSettings()
+	next.ProxyPort = 1081
+	if err := r.svc.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		r.reconcile(t)
+		close(done)
+	}()
+	<-entered
+
+	st := r.state()
+	if st.State == NetworkOK || st.Address != "" {
+		t.Fatalf("state while the new route is probed = %+v, the old route is still shown as working", st)
+	}
+	if st.Code != "download.network_checking" || st.Mode != settings.NetworkProxy {
+		t.Fatalf("state while the new route is probed = %+v, want the check state", st)
+	}
+	r.m.mu.Lock()
+	active := r.m.netActive
+	r.m.mu.Unlock()
+	if active != nil {
+		t.Fatalf("netActive = %+v while no client runs", active)
+	}
+	events := log.networks()
+	if last := events[len(events)-1]; last.State != NetworkDown {
+		t.Fatalf("the window was last told %+v, want the check state", last)
+	}
+	release()
+	<-done
+	if st := r.state(); st.State != NetworkOK || st.Address != "127.0.0.1:1081" {
+		t.Fatalf("state after the probe = %+v", st)
+	}
+}
+
+// The teardown has finished by the time a late restore of the old client gets
+// to announce that it looks for metadata: nobody is left to move the download
+// out of that status.
+func TestRestoreOfAGoneClientLeavesTheStatusAlone(t *testing.T) {
+	const hash = "a748597437835a2fd0d2e06f8edd86fee316a84d"
+	r := newNetRig(t, nil)
+	r.reconcile(t)
+	cl := r.client()
+	d := r.m.addTestItem("dl", StatusQueued)
+	r.m.mu.Lock()
+	d.Source = "magnet:?xt=urn:btih:" + hash + "&dn=x"
+	d.InfoHash = hash
+	gen := r.m.gen
+	r.m.gen++
+	r.m.mu.Unlock()
+	cl.halt()
+
+	_, err := r.m.reattach(t.Context(), cl, restoreJob{id: "dl", infoHash: hash, source: d.Source, dest: t.TempDir(), gen: gen})
+	if err == nil {
+		t.Fatal("a restore for a client that is gone succeeded")
+	}
+	if st := r.m.statusOf(t, "dl"); st != StatusQueued {
+		t.Fatalf("status = %q, want the download left queued for the next client", st)
 	}
 }

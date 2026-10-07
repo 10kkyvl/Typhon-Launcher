@@ -300,6 +300,7 @@ export const settings = {
   'settings.networkAppliedToast': 'Сетевые настройки применены',
   'settings.networkStatusLabel': 'Текущее состояние',
   'settings.networkStatusOk': 'Работает',
+  'settings.networkStatusChecking': 'Проверка…',
   'settings.networkStatusDown': 'Не работает',
   'settings.networkFallbackError': 'Не удалось выполнить действие с сетевыми настройками',
 } as const;

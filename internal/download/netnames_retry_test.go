@@ -2,7 +2,10 @@ package download
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -211,6 +214,120 @@ func TestFailedLookupIsLoggedOncePerName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRetryGivesUpOnANameThatDoesNotExist(t *testing.T) {
+	dns := startDNS(t, "127.0.0.3", "203.0.113.9", "other.example")
+	cl, gate := retryClient(t, dns)
+	addRetryMagnet(t, cl)
+	done := make(chan struct{})
+	go func() {
+		cl.later.wait()
+		close(done)
+	}()
+	ended := func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}
+
+	for i := 1; ; i++ {
+		if i > 20 {
+			t.Fatal("still retrying every few minutes after 20 tries for a name that does not exist")
+		}
+		waitUntil(t, "the next try to wait for its turn or the retry to end", func() bool { return ended() || len(gate.waited()) >= i })
+		if ended() {
+			return
+		}
+		gate.fire(t)
+	}
+}
+
+func TestRecoverKeepsTryingWhileTheNameServerIsDown(t *testing.T) {
+	down := &net.Resolver{PreferGo: true, Dial: func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("name server unreachable")
+	}}
+	names := nameResolver{r: down, allow4: true, seen: newHostLog()}
+	lost := []lostTracker{{u: mustURL(t, "udp://tracker.example:6969/announce")}}
+	for range 20 {
+		lost = names.recover(t.Context(), nil, lost)
+	}
+	if len(lost) != 1 {
+		t.Fatalf("lost = %v: a name server that is not up yet says nothing about the name", lost)
+	}
+}
+
+func TestRecoverDropsANameTheServerSaysDoesNotExist(t *testing.T) {
+	dns := startDNS(t, "127.0.0.3", "203.0.113.9", "other.example")
+	_, names := boundResolver(t, dns, "127.0.0.3")
+	names.seen = newHostLog()
+	lost := []lostTracker{{u: mustURL(t, "udp://gone.example:6969/announce")}}
+	for i := 0; i < 20 && len(lost) > 0; i++ {
+		lost = names.recover(t.Context(), nil, lost)
+	}
+	if len(lost) != 0 {
+		t.Fatalf("lost = %v after 20 answers that the name does not exist", lost)
+	}
+}
+
+func TestSecondRetryOfTheSameTorrentJoinsTheFirst(t *testing.T) {
+	dns := startDNS(t, "127.0.0.3", "203.0.113.9", "other.example")
+	cl, gate := retryClient(t, dns)
+	lt := addRetryMagnet(t, cl)
+	gate.waitFor(t, 1)
+
+	_, same := cl.filterTrackers([][]string{{"udp://tracker.example:6969/announce"}})
+	cl.retryTrackers(lt.t, same)
+	_, other := cl.filterTrackers([][]string{{"udp://second.example:80"}})
+	cl.retryTrackers(lt.t, other)
+
+	dns.allow("tracker.example")
+	dns.allow("second.example")
+	gate.fire(t)
+	waitUntil(t, "both trackers to come back on one try", func() bool {
+		got := announced(lt)
+		return slices.Contains(got, "udp://203.0.113.9:6969/announce") && slices.Contains(got, "udp://203.0.113.9:80")
+	})
+	done := make(chan struct{})
+	go func() {
+		cl.later.wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a second goroutine for the same torrent is still waiting for its turn")
+	}
+}
+
+func TestRecoveredTrackerGoesBackToItsOwnTier(t *testing.T) {
+	dns := startDNS(t, "127.0.0.3", "203.0.113.9", "other.example")
+	cl, gate := retryClient(t, dns)
+	mi, dir := makeSeedData(t, 256<<10)
+	mi.AnnounceList = [][]string{{"udp://tracker.example:6969/announce"}, {"http://h.example/a"}}
+	lt, err := cl.addMetainfo(mi, dir, storageOpts{inPlace: true})
+	if err != nil {
+		t.Fatalf("addMetainfo: %v", err)
+	}
+	t.Cleanup(lt.drop)
+	gate.waitFor(t, 1)
+	dns.allow("tracker.example")
+	gate.fire(t)
+
+	want := [][]string{{"udp://203.0.113.9:6969/announce"}, {"http://h.example/a"}}
+	var got [][]string
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("announce list = %q", got)
+		}
+	})
+	waitUntil(t, "the tracker to come back to the first tier", func() bool {
+		got = lt.t.Metainfo().AnnounceList
+		return slices.EqualFunc(got, want, slices.Equal[[]string])
+	})
 }
 
 func TestInterfaceConfigRetriesUnresolvedTrackers(t *testing.T) {

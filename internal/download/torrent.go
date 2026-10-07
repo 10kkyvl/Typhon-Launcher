@@ -83,21 +83,12 @@ type client struct {
 	metaDir    string
 	completion storage.PieceCompletion
 
-	// gen is the manager's number for this client, set once it is installed.
-	gen uint64
-	// httpTrackersOnly is set for a client behind a proxy, which can carry
-	// nothing but HTTP trackers.
+	gen              uint64
 	httpTrackersOnly bool
-	// filterTrackers rewrites the tracker list of every torrent before the
-	// engine sees it: a proxy drops what it cannot carry, an adapter has the
-	// host names of UDP trackers resolved through it. What it left out for now
-	// goes to retryTrackers once the torrent exists.
-	filterTrackers func([][]string) ([][]string, []lostTracker)
-	retryTrackers  func(*torrent.Torrent, []lostTracker)
-	later          *retrier
-	// stopped is set when the client is cut off from the network ahead of its
-	// close: it takes no new torrents and carries no data.
-	stopped atomic.Bool
+	filterTrackers   func([][]string) ([][]string, []lostTracker)
+	retryTrackers    func(*torrent.Torrent, []lostTracker)
+	later            *retrier
+	stopped          atomic.Bool
 }
 
 func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
@@ -109,21 +100,23 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 			closeDefaultStorage(tc)
 			return nil, err
 		}
+		c := &client{
+			down:             tc.DownloadRateLimiter,
+			up:               tc.UploadRateLimiter,
+			metaDir:          metaDir,
+			completion:       wrapped,
+			httpTrackersOnly: plan.mode == settings.NetworkProxy,
+			filterTrackers:   attach.trackers,
+			retryTrackers:    attach.retry,
+			later:            attach.later,
+		}
+		guardNetwork(tc, c.halted)
 		cl, err := openTorrentClient(tc)
 		if err == nil {
 			attach.attach(cl)
+			c.cl = cl
 			slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
-			return &client{
-				cl:               cl,
-				down:             tc.DownloadRateLimiter,
-				up:               tc.UploadRateLimiter,
-				metaDir:          metaDir,
-				completion:       wrapped,
-				httpTrackersOnly: plan.mode == settings.NetworkProxy,
-				filterTrackers:   attach.trackers,
-				retryTrackers:    attach.retry,
-				later:            attach.later,
-			}, nil
+			return c, nil
 		}
 		closeDefaultStorage(tc)
 		attach.later.stop()
@@ -201,6 +194,7 @@ func (c *client) halted() bool { return c.stopped.Load() }
 func (c *client) halt() {
 	// Set first: a torrent added while the sweep runs is halted by add.
 	c.stopped.Store(true)
+	c.later.stop()
 	for _, t := range c.cl.Torrents() {
 		haltTorrent(t)
 	}

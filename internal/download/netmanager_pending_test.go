@@ -45,6 +45,56 @@ func (r *netRig) restart(t *testing.T) *netRig {
 	return next
 }
 
+func TestClearingThePasswordOfAnotherLoginKeepsTheSavedOne(t *testing.T) {
+	cases := []struct {
+		name  string
+		typed bool
+	}{
+		{"nothing typed before", false},
+		{"typed and cleared again", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newNetRig(t, func(s *settings.Settings) { viaProxy(s); s.ProxyUsername = "alice" })
+			r.workingProxyFor(t, "alice", "pw1")
+			if c.typed {
+				if err := r.m.SetProxyPassword("bob", "hunter2"); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if err := r.m.SetProxyPassword("bob", ""); err != nil {
+				t.Fatalf("SetProxyPassword: %v", err)
+			}
+
+			r.store.mu.Lock()
+			deleted := r.store.deleted
+			r.store.mu.Unlock()
+			cred, present, _ := r.store.snapshot()
+			if deleted != 0 || !present || cred.Username != "alice" || cred.Token != "pw1" {
+				t.Fatalf("store = %+v present=%v deleted=%d: clearing the field of another login took the password of the saved one", cred, present, deleted)
+			}
+			r.m.saveMu.Lock()
+			typed := r.m.typedPass
+			r.m.saveMu.Unlock()
+			if typed != nil {
+				t.Fatalf("the cleared password of bob is still waiting: %+v", typed)
+			}
+		})
+	}
+}
+
+func TestClearingThePasswordOfTheSavedLoginStillRemovesIt(t *testing.T) {
+	r := newNetRig(t, func(s *settings.Settings) { viaProxy(s); s.ProxyUsername = "alice" })
+	r.workingProxyFor(t, "alice", "pw1")
+	if err := r.m.SetProxyPassword("alice", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, present, _ := r.store.snapshot(); present {
+		t.Fatal("the password of the saved login was not removed")
+	}
+}
+
 func TestRejectedSettingsLeaveTheStoredPasswordOfTheWorkingLoginAlone(t *testing.T) {
 	rejected := []struct {
 		name  string

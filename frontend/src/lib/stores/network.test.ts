@@ -69,6 +69,27 @@ describe('network store', () => {
     expect(toast).toHaveBeenLastCalledWith('Сеть для торрентов снова доступна — загрузки продолжатся', 'success');
   });
 
+  it('stays quiet while a working route is replaced', async () => {
+    const { store, toast } = await load();
+    handlers['download:network']({ data: makeState({ state: 'down', code: 'download.network_checking', address: '' }) });
+    expect(get(store.networkDown)).toBe(false);
+    handlers['download:network']({ data: makeState({ address: '10.8.0.3' }) });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('remembers a down route across the check that follows it', async () => {
+    const { toast } = await load();
+    handlers['download:network']({ data: makeState({ state: 'down', code: 'download.net_interface_down' }) });
+    handlers['download:network']({ data: makeState({ state: 'down', code: 'download.network_checking' }) });
+    expect(toast).toHaveBeenCalledTimes(1);
+    handlers['download:network']({ data: makeState({ state: 'down', code: 'download.net_interface_missing' }) });
+    expect(toast).toHaveBeenCalledTimes(1);
+    handlers['download:network']({ data: makeState({ state: 'down', code: 'download.network_checking' }) });
+    handlers['download:network']({ data: makeState() });
+    expect(toast).toHaveBeenCalledTimes(2);
+    expect(toast).toHaveBeenLastCalledWith('Сеть для торрентов снова доступна — загрузки продолжатся', 'success');
+  });
+
   it('does not raise the banner in direct mode', async () => {
     initial = makeState({ mode: 'direct', address: '' });
     const { store, toast } = await load();

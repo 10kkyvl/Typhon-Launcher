@@ -160,6 +160,7 @@ type Manager struct {
 	passGen      uint64
 	verified     map[string]bool
 	netState     NetworkState
+	startErr     error
 	switching    bool
 	netActive    *netPlan
 	netKey       netKey
@@ -261,7 +262,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	// Until the route is checked nothing may start, and a window that asks
 	// meanwhile should be told the network is not ready, not that no client
 	// exists.
-	m.netState = NetworkState{Mode: cfg.NetworkMode, State: NetworkDown, Code: uierr.Code(errNetworkDown), Reason: "проверка сети"}
+	m.netState = checkingState(cfg.NetworkMode)
 	if err := m.loadLocked(); err != nil {
 		cancel := m.cancel
 		m.cancel = nil
@@ -617,8 +618,6 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	return torrentInfoOf(infoHash, info), nil
 }
 
-// fetchCancelled tells a fetch that the client it ran on was replaced from one
-// the caller cancelled.
 func (m *Manager) fetchCancelled(cl *client) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1941,8 +1940,6 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	m.settleRestored(jobCtx, j, lt, lt.t.Info())
 }
 
-// replaced says that the client a job was made for is gone, so whatever the job
-// failed on is not about its download.
 func (m *Manager) replaced(gen uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1953,8 +1950,6 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 	m.mu.Lock()
 	d := m.findLocked(j.id)
 	if d == nil || j.gen != m.gen {
-		// Either the download is gone or the client this engine belongs to was
-		// replaced while the job ran; in both cases nobody owns the engine.
 		m.mu.Unlock()
 		eng.drop()
 		return
@@ -2050,7 +2045,9 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 		return nil, errors.New("metainfo unavailable")
 	}
 
-	m.setStatus(j.id, StatusMetadata)
+	if !m.setStatus(j.id, StatusMetadata, j.gen) {
+		return nil, errClientGone
+	}
 	lt, err := cl.addMagnet(j.source, j.dest, opts)
 	if err != nil {
 		return nil, err
@@ -2084,15 +2081,21 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 	return lt, nil
 }
 
-func (m *Manager) setStatus(id string, status Status) {
+// setStatus is false when the client the caller works for is gone: the
+// teardown has parked the download by then, and a status set now would stay.
+func (m *Manager) setStatus(id string, status Status, gen uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if gen != m.gen {
+		return false
+	}
 	d := m.findLocked(id)
 	if d == nil {
-		return
+		return true
 	}
 	d.Status = status
 	emit(eventUpdated, snapshot(d))
+	return true
 }
 
 func (m *Manager) setSeeding(id string, seeding bool) {
