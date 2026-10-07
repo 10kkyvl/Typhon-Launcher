@@ -37,6 +37,8 @@ export const errInstall = {
     'установщик изменился после запроса прав администратора, запуск отменён. Повторите установку',
   'errInstall.installInstallerCancelled': 'установка была отменена',
   'errInstall.installInstallerFailed': 'установщик завершился с ошибкой',
+  'errInstall.installInstallerNeedsInteractive': 'установщик не поддерживает тихую установку: установите игру вручную',
+  'errInstall.installInterrupted': 'установка была прервана',
   'errInstall.installInstallerNoOutput': 'установщик не создал файлов в папке установки',
   'errInstall.installInstallerNotConfirmedStopped': 'установщик не подтвердил остановку',
   'errInstall.installInstallerStillRunning':

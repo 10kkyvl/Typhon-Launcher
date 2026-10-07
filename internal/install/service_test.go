@@ -836,7 +836,7 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("items = %+v", items)
 	}
-	if items[0].Status != StatusInterrupted || items[0].Error != interruptedMessage {
+	if items[0].Status != StatusInterrupted || items[0].Error != errInterrupted.Error() {
 		t.Fatalf("first = %+v", items[0])
 	}
 	if items[1].Status != StatusWaitingForUser {
@@ -909,7 +909,7 @@ func TestExeInstallerFailsOnExitCode(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	failed := s.waitStatus(t, item.ID, StatusFailed)
-	if failed.Error != errInstallerFail.Error() {
+	if !strings.HasPrefix(failed.Error, errInstallerFail.Error()+": код 1") {
 		t.Fatalf("error = %q", failed.Error)
 	}
 }

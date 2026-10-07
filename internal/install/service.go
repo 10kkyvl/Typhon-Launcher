@@ -43,10 +43,9 @@ const (
 	installerLogTailLimit = 8 << 10
 	installerLogScanLimit = 256 << 10
 
-	innoSuccessMarker = "Installation process succeeded."
+	innoSuccessMarker       = "Installation process succeeded."
+	innoWizardRefusedMarker = "Failed to proceed to next wizard page"
 )
-
-const interruptedMessage = "установка была прервана"
 
 var installPollInterval = 2 * time.Second
 
@@ -61,6 +60,7 @@ var (
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
 	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
 	errInstallerFail    = uierr.New("install.installer_failed", "установщик завершился с ошибкой")
+	errInterrupted      = uierr.New("install.interrupted", "установка была прервана")
 	errNoExecutable     = uierr.New("install.no_executable", "исполняемый файл не найден")
 	errOutsideInstall   = uierr.New("install.outside_install", "файл находится вне папки установки")
 	errEmptyInstall     = uierr.New("install.empty_install", "папка установки пуста")
@@ -74,6 +74,8 @@ var (
 	errNotStarted = errors.New("install service is not started")
 
 	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
+
+	errInstallerNeedsInteractive = uierr.New("install.installer_needs_interactive", "установщик не поддерживает тихую установку")
 
 	// Без кода uierr: коды — контракт с таблицей фронтенда, а текст ошибки
 	// продолжения цепочки пользователь и так видит целиком.
@@ -303,6 +305,11 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	for _, rec := range stored {
 		item := rec
 		wasTransient := transient(item.Status)
+		if wasTransient && external(item.Type) {
+			// Записи прошлых версий держат здесь размер раздачи: установленный
+			// размер внешнего установщика заранее неизвестен.
+			item.BytesTotal = 0
+		}
 		if wasTransient {
 			alive, done := s.transientWorkerStatus(item.ID)
 			switch {
@@ -320,7 +327,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 				slog.Info("installation committed before crash, finalizing", "id", item.ID, "name", item.Name)
 			default:
 				item.Status = StatusInterrupted
-				item.Error = interruptedMessage
+				item.Error = errInterrupted.Error()
 				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
 			}
 		}
@@ -531,7 +538,7 @@ func (s *Service) interruptResumed(id string) {
 		return
 	}
 	item.Status = StatusInterrupted
-	item.Error = interruptedMessage
+	item.Error = errInterrupted.Error()
 	if err := s.persistLocked(); err != nil {
 		snap, wrapped := s.markPersistFailureLocked(item, err)
 		s.mu.Unlock()
@@ -583,7 +590,7 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 	if !done {
 		slog.Error("resumed silent installer failed", "id", id, "engine", string(engine),
 			"code", state.Code, "log", installerLogTail(logPath))
-		s.fail(id, exitError(engine, state.Code))
+		s.fail(id, installerFailure(engine, state.Code, logPath))
 		return
 	}
 	chainCtx, endJob := s.adoptJob(ctx, id)
@@ -922,7 +929,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		Engine:          plan.Engine,
 		Silent:          plan.Silent,
 		ArchivePath:     plan.ArchivePath,
-		BytesTotal:      plan.EstimatedSize,
+		BytesTotal:      progressTotal(plan.Type, plan),
 		Origin:          d.Origin,
 		Unattended:      opts.Unattended,
 		SkipRegister:    opts.SkipRegister,
@@ -1097,6 +1104,17 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 }
 
 func (s *Service) Retry(id string) error {
+	return s.retry(id, false)
+}
+
+// RetryInteractive повторяет упавшую установку внешним установщиком без ключей
+// тишины: пользователь проходит мастер сам. Выбор запоминается в записи, и
+// обычный Retry или перезапуск лаунчера его не сбрасывают.
+func (s *Service) RetryInteractive(id string) error {
+	return s.retry(id, true)
+}
+
+func (s *Service) retry(id string, forceInteractive bool) error {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
@@ -1107,6 +1125,11 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	if forceInteractive && (!external(item.Type) || item.Status == StatusCancelled) {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	interactive := item.Interactive || forceInteractive
 	base, err := s.baseLocked()
 	if err != nil {
 		s.mu.Unlock()
@@ -1176,7 +1199,8 @@ func (s *Service) Retry(id string) error {
 	if external(kind) && installer == "" {
 		return errNoExecutable
 	}
-	if external(kind) && supportsSilent(engine) && destination == "" {
+	silent := supportsSilent(engine) && !interactive
+	if external(kind) && silent && destination == "" {
 		destination = s.proposeDestination(s.config().GamesPath, title)
 		if destination == "" {
 			return errNoDestination
@@ -1202,7 +1226,7 @@ func (s *Service) Retry(id string) error {
 	if controlled(item.Type) {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
-		item.BytesTotal = plan.EstimatedSize
+		item.BytesTotal = progressTotal(item.Type, plan)
 		item.Mode = installMode(item.Mode, d.Seeding)
 	}
 	if external(item.Type) {
@@ -1210,10 +1234,16 @@ func (s *Service) Retry(id string) error {
 		item.ExtraInstallers = extras
 		item.WorkingDir = filepath.Dir(installer)
 		item.Engine = engine
-		item.Silent = supportsSilent(engine)
-		item.BytesTotal = plan.EstimatedSize
-		if item.Silent {
+		item.Silent = silent
+		item.Interactive = interactive
+		item.BytesTotal = progressTotal(item.Type, plan)
+		switch {
+		case item.Silent:
 			item.Destination = destination
+		case interactive:
+			// Мастер сам выбирает папку: каталог тихой попытки не годится.
+			item.Destination = ""
+			item.Unattended = false
 		}
 	}
 	if err := s.persistLocked(); err != nil {
@@ -1718,6 +1748,17 @@ func volumeTarget(destination, fallback string) string {
 		return destination
 	}
 	return fallback
+}
+
+// progressTotal — знаменатель прогресса установки. EstimatedSize внешнего
+// установщика — размер раздачи (сжатого репака), а не установленной игры: им
+// нельзя мерить записанное, поэтому для exe/msi знаменатель неизвестен (0), а
+// EstimatedSize остаётся только для проверки места.
+func progressTotal(kind Type, p Plan) int64 {
+	if external(kind) {
+		return 0
+	}
+	return p.EstimatedSize
 }
 
 func requiredBytes(p Plan) int64 {

@@ -158,9 +158,9 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		if err != nil {
 			return err
 		}
-		if code != 0 && code != rebootExitCode {
+		if exitErr := exitError(item.Engine, code); exitErr != nil {
 			slog.Error("installer exit code", "id", id, "path", installer, "code", code)
-			return errInstallerFail
+			return exitErr
 		}
 	}
 
@@ -313,13 +313,12 @@ func (s *Service) runSilentChain(ctx context.Context, id string, item Installati
 		if logErr != nil {
 			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 		}
-		exitErr := exitError(item.Engine, code)
 		if !done {
 			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
 				"path", step.path, "code", code, "log", installerLogTail(logPath))
-			return exitErr
+			return installerFailure(item.Engine, code, logPath)
 		}
-		if exitErr != nil {
+		if exitErr := exitError(item.Engine, code); exitErr != nil {
 			// Установщики GOG падают при завершении уже после того, как файлы
 			// разложены: свой лог они при этом закрывают отметкой об успехе.
 			slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
@@ -518,6 +517,10 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 				}
 				size, err := DirSize(ctx, dir)
 				if err != nil {
+					// Каталог меняется под обходом (установщик создаёт и удаляет
+					// файлы): пропущенный замер — это тик без обновления, а не
+					// сбой установки, следующий тик замерит заново.
+					slog.Debug("measure install size", "id", id, "dir", dir, "error", err)
 					continue
 				}
 				s.updateProgress(id, Progress{BytesDone: size, BytesTotal: total})
@@ -580,6 +583,30 @@ func installerFinished(engine Engine, code int, logPath string) (bool, error) {
 // код возврата говорит об обратном: Inno закрывает свой лог отметкой об успехе
 // до кода возврата, и падение на выходе не отменяет уже сделанную установку.
 func installerLogSucceeded(engine Engine, path string) (bool, error) {
+	return innoLogContains(engine, path, innoSuccessMarker)
+}
+
+// installerFailure превращает неуспех тихой установки в ошибку: код возврата
+// Inno не отличает «установщик не умеет тишину» от обычного сбоя, это видно
+// только по логу, где мастер отказался переходить на следующую страницу.
+// Нечитаемый лог не отменяет сам неуспех, поэтому возвращается ошибка по коду.
+func installerFailure(engine Engine, code int, logPath string) error {
+	exitErr := exitError(engine, code)
+	if exitErr == nil {
+		return nil
+	}
+	refused, err := innoLogContains(engine, logPath, innoWizardRefusedMarker)
+	if err != nil {
+		slog.Warn("read installer log", "path", logPath, "error", err)
+		return exitErr
+	}
+	if refused {
+		return exitCodeError(errInstallerNeedsInteractive, engine, code)
+	}
+	return exitErr
+}
+
+func innoLogContains(engine Engine, path, marker string) (bool, error) {
 	if engine != EngineInno || path == "" {
 		return false, nil
 	}
@@ -590,7 +617,7 @@ func installerLogSucceeded(engine Engine, path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(decodeLogText(data), innoSuccessMarker), nil
+	return strings.Contains(decodeLogText(data), marker), nil
 }
 
 func installerLogTail(path string) string {
