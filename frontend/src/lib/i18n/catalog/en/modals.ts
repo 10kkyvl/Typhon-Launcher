@@ -319,6 +319,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installPickInstallerButton': 'Choose installer…',
   'modals.installPickExecutableButton': 'Choose executable…',
   'modals.installWaitingExternal': 'Waiting for the installer to finish...',
+  'modals.installWritten': 'Written: {size}',
   'modals.installExecutablesAriaLabel': 'Executable files',
   'modals.installPickManually': 'Choose manually…',
   'modals.installGameLabel': 'Game',

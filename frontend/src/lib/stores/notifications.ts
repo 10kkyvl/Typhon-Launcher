@@ -12,7 +12,8 @@ import { mergeNotifications } from '../notifications/merge';
 import { navigate, type RouteName } from './router';
 import { selfUpdateStatus } from './selfupdate';
 import type { SelfUpdateStatus } from '../services/selfupdate';
-import { progressPercent } from '../utils/format';
+import { bytesSize, progressPercent } from '../utils/format';
+import { installTotalUnknown } from '../install/progress';
 import { sources } from './sources';
 import { updates } from './updates';
 
@@ -162,7 +163,9 @@ const allNotifications = derived(
       items.push({
         id: `install:${install.id}`,
         title: install.name,
-        text: msg('state.notifInstallProgress', { percent: pct(install.progress) }),
+        text: msg('state.notifInstallProgress', {
+          percent: installTotalUnknown(install) ? bytesSize(install.bytesDone) : pct(install.progress),
+        }),
         route: 'downloads',
         terminal: false,
       });
