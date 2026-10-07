@@ -242,6 +242,11 @@ func main() {
 		return
 	}
 
+	qaArgs, err := qaStart()
+	if err != nil {
+		fatal("start qa build", err)
+	}
+
 	// При автозапуске и запуске из фонового процесса передавать нечего:
 	// ErrNoForegroundRight там — ожидаемый исход, а не сбой.
 	if err := platform.AllowForegroundHandoff(); err != nil {
@@ -589,7 +594,7 @@ func main() {
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
 		Windows: application.WindowsOptions{
-			AdditionalBrowserArgs: browserArgs(current.HardwareAcceleration),
+			AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: singleInstanceID,
@@ -883,5 +888,5 @@ func windowTitle() string {
 	if devmock.Enabled {
 		return "Typhon [devmock]"
 	}
-	return "Typhon"
+	return "Typhon" + qaTitleSuffix
 }
