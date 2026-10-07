@@ -4,6 +4,7 @@
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
+  import { latestRunner, serialQueue } from '../../lib/catalog/serial';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
@@ -364,7 +365,9 @@
     hideNotInterested = preferences.hideNotInterested;
   }
 
-  async function preferencesChanged() {
+  const preferenceWrites = serialQueue();
+
+  const applyPreferences = latestRunner(() => preferenceWrites(async () => {
     preferenceBusy = true;
     try {
       const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
@@ -377,22 +380,27 @@
       restoreChoices();
       toast(msg('games.recommendationError'), 'danger');
     } finally { preferenceBusy = false; }
+  }));
+
+  function preferencesChanged() {
+    return applyPreferences();
   }
 
   function isDismissed(game: CatalogGame) {
     return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
   }
 
-  async function dismiss(game: CatalogGame, on = true) {
-    if (preferenceBusy) return;
-    preferenceBusy = true;
-    try {
-      await setNotInterested(game.id, on);
-      preferences = await getRecommendationPreferences();
-      lastDismissed = on ? { id: game.id, title: game.title } : null;
-      await reload();
-    } catch { toast(msg('games.recommendationError'), 'danger'); }
-    finally { preferenceBusy = false; }
+  function dismiss(game: CatalogGame, on = true) {
+    return preferenceWrites(async () => {
+      preferenceBusy = true;
+      try {
+        await setNotInterested(game.id, on);
+        preferences = await getRecommendationPreferences();
+        lastDismissed = on ? { id: game.id, title: game.title } : null;
+        await reload();
+      } catch { toast(msg('games.recommendationError'), 'danger'); }
+      finally { preferenceBusy = false; }
+    });
   }
 
   async function undoDismissal() {
@@ -571,7 +579,7 @@
     <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
   </div>
 
-  <fieldset class="filter-row" disabled={preferenceBusy || !ready}>
+  <fieldset class="filter-row" disabled={!ready}>
     <div class="chips">
       {#each chips as label (label)}
         <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
