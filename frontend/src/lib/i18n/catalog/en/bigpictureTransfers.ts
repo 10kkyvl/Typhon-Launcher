@@ -28,6 +28,7 @@ export const bigpictureTransfers: Record<BigpictureTransfersKey, Message> = {
   'bp.transfers.continueInstall': 'Continue installation',
   'bp.transfers.installProgress': 'Open installation',
   'bp.transfers.retryInstall': 'Retry installation',
+  'bp.transfers.installManually': 'Install manually',
   'bp.transfers.openLibrary': 'Open game in library',
   'bp.transfers.installed': 'Game installed',
   'bp.transfers.installing': 'Installing game',

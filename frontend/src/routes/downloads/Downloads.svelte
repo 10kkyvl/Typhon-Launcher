@@ -38,7 +38,7 @@
     stats,
   } from '../../lib/stores/downloads';
   import { installErrorText } from '../../lib/install/installErrors';
-  import { installTotalUnknown } from '../../lib/install/progress';
+  import { installIndeterminate } from '../../lib/install/progress';
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -282,7 +282,7 @@
             {:else if installActive(install.status)}
               <div class="install-progress">
                 <span class="install-status">{installStatusLabels(install.status)}</span>
-                <ProgressBar value={install.progress * 100} indeterminate={installTotalUnknown(install)} height={4} />
+                <ProgressBar value={install.progress * 100} indeterminate={installIndeterminate(install)} height={4} />
               </div>
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>

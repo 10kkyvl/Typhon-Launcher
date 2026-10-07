@@ -31,6 +31,7 @@
     isControlled,
     isExternal,
     retryInstall,
+    retryInstallInteractive,
     startInstall,
     type InstallMode,
     type Installation,
@@ -39,7 +40,7 @@
   import { addGame, selectExecutable } from '../../services/library';
   import { openFolder, openGameFolder, selectFolder } from '../../services/settings';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
-  import { installErrorText } from '../../install/installErrors';
+  import { installErrorText, needsInteractiveInstall } from '../../install/installErrors';
   import { installIndeterminate, installTotalUnknown } from '../../install/progress';
   import { active, completed, downloads, downloadsById, queue, statusLabels } from '../../stores/downloads';
   import { installStatusLabels, installTypeLabels, installations, installationsByDownload, upsertInstallation } from '../../stores/install';
@@ -589,6 +590,13 @@
     const item = selectedInstallation;
     const key = actionKey('install', item.id, 'retry');
     await perform(key, () => retryInstall(item.id));
+  }
+
+  async function retryInstallationManually() {
+    if (!selectedInstallation) return;
+    const item = selectedInstallation;
+    const key = actionKey('install', item.id, 'retry');
+    await perform(key, () => retryInstallInteractive(item.id));
   }
 
   function askConfirmation(value: Confirmation) {
@@ -1165,7 +1173,7 @@
           <div class="bp-actions dialog-actions">
             <button class="bp-button" data-bp-focus="install:error-close" onclick={closeDialog}>{$t('bp.transfers.close')}</button>
             <button class="bp-button" data-bp-focus="install:dismiss" disabled={actionPending(dismissKey)} onclick={() => askConfirmation({ kind: 'dismiss-install', installId: selectedInstallation.id })}>{$t('bp.transfers.dismissInstall')}</button>
-            <button class="bp-button bp-primary" data-bp-focus="install:retry" data-bp-default disabled={actionPending(retryKey)} onclick={retryInstallation}><RefreshCw size={20} />{$t('bp.transfers.retryInstall')}</button>
+            <button class="bp-button bp-primary" data-bp-focus="install:retry" data-bp-default disabled={actionPending(retryKey)} onclick={needsInteractiveInstall(selectedInstallation.error) ? retryInstallationManually : retryInstallation}><RefreshCw size={20} />{needsInteractiveInstall(selectedInstallation.error) ? $t('bp.transfers.installManually') : $t('bp.transfers.retryInstall')}</button>
           </div>
         {/if}
       {:else if dialog === 'confirm' && confirmation}

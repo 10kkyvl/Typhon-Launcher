@@ -25,6 +25,7 @@ export const bigpictureTransfers = {
   'bp.transfers.continueInstall': 'Продолжить установку',
   'bp.transfers.installProgress': 'Открыть установку',
   'bp.transfers.retryInstall': 'Повторить установку',
+  'bp.transfers.installManually': 'Установить вручную',
   'bp.transfers.openLibrary': 'Открыть игру в библиотеке',
   'bp.transfers.installed': 'Игра установлена',
   'bp.transfers.installing': 'Установка игры',
