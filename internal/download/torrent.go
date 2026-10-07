@@ -23,10 +23,13 @@ import (
 )
 
 const (
-	listenPort      = 42815
-	minLimiterBurst = 256 * 1024
-	maxTorrentConns = 60
+	listenPort         = 42815
+	randomPortAttempts = 8
+	minLimiterBurst    = 256 * 1024
+	maxTorrentConns    = 60
 )
+
+var openTorrentClient = torrent.NewClient
 
 var errBadPaths = uierr.New("download.bad_paths", "недопустимые пути файлов в торренте")
 
@@ -99,41 +102,41 @@ type client struct {
 
 func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
 	wrapped := nonClosingCompletion{completion}
-	tc, attach, err := networkedConfig(ctx, cfg, metaDir, listenPort, wrapped, plan)
-	if err != nil {
-		closeDefaultStorage(tc)
-		return nil, err
-	}
-	cl, err := torrent.NewClient(tc)
-	if err != nil && isListenError(err) {
-		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
-		closeDefaultStorage(tc)
-		attach.later.stop()
-		tc, attach, err = networkedConfig(ctx, cfg, metaDir, 0, wrapped, plan)
+	port := listenPort
+	for attempt := 0; ; attempt++ {
+		tc, attach, err := networkedConfig(ctx, cfg, metaDir, port, wrapped, plan)
 		if err != nil {
 			closeDefaultStorage(tc)
 			return nil, err
 		}
-		cl, err = torrent.NewClient(tc)
-	}
-	if err != nil {
+		cl, err := openTorrentClient(tc)
+		if err == nil {
+			attach.attach(cl)
+			slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
+			return &client{
+				cl:               cl,
+				down:             tc.DownloadRateLimiter,
+				up:               tc.UploadRateLimiter,
+				metaDir:          metaDir,
+				completion:       wrapped,
+				httpTrackersOnly: plan.mode == settings.NetworkProxy,
+				filterTrackers:   attach.trackers,
+				retryTrackers:    attach.retry,
+				later:            attach.later,
+			}, nil
+		}
 		closeDefaultStorage(tc)
 		attach.later.stop()
-		return nil, err
+		if !isListenError(err) || attempt == randomPortAttempts {
+			return nil, err
+		}
+		// The client takes one port number for TCP and UDP over both IPv4 and
+		// IPv6. A random port is only free for the first of them, so the same
+		// number can still be held in UDP by another process (Windows services
+		// keep ephemeral UDP ports), and the next random port usually is not.
+		slog.Warn("torrent port unavailable, retrying on a random port", "port", port, "error", err)
+		port = 0
 	}
-	attach.attach(cl)
-	slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
-	return &client{
-		cl:               cl,
-		down:             tc.DownloadRateLimiter,
-		up:               tc.UploadRateLimiter,
-		metaDir:          metaDir,
-		completion:       wrapped,
-		httpTrackersOnly: plan.mode == settings.NetworkProxy,
-		filterTrackers:   attach.trackers,
-		retryTrackers:    attach.retry,
-		later:            attach.later,
-	}, nil
 }
 
 func networkedConfig(ctx context.Context, cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion, plan netPlan) (*torrent.ClientConfig, netAttach, error) {
