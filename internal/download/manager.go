@@ -150,7 +150,11 @@ type Manager struct {
 	// never while holding it. Everything below except the hooks is guarded by
 	// mu. gen counts the clients the manager has had, so that work started on
 	// one client can tell that it is over.
-	netMu        sync.Mutex
+	netMu sync.Mutex
+	// saveMu orders the writes of the proxy store and guards typedPass. It is
+	// taken before passMu and never under mu: the store is a keychain call.
+	saveMu       sync.Mutex
+	typedPass    *pendingPass
 	passMu       sync.Mutex
 	passCache    *proxySecret
 	passGen      uint64
@@ -1718,6 +1722,13 @@ func differs(a, b *Download) bool {
 }
 
 func (m *Manager) applySettings(next settings.Settings) {
+	if err := m.settlePending(next.ProxyUsername); err != nil {
+		// No caller to return this to. The password stays queued and every check
+		// of the proxy retries it, so the monitor is woken to put the failure
+		// into the network state, where the window shows it.
+		slog.Error("store the proxy password", "error", err)
+		m.kickNetwork()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if key := netKeyOf(next); key != m.netKey {

@@ -148,15 +148,14 @@
     }
     applying = true;
     try {
-      if (mode === 'proxy' && password !== '') {
+      const sentPassword = mode === 'proxy' && password !== '';
+      if (sentPassword) {
         try {
           await setProxyPassword(username.trim(), password);
         } catch (err) {
           failure = networkErrorText(err);
           return;
         }
-        hasPassword = true;
-        password = '';
       }
       const patch: Partial<Settings> = { networkMode: mode };
       if (mode === 'interface') patch.networkInterface = iface.trim();
@@ -169,7 +168,12 @@
       const ok = await updateSettingsReporting(patch, (err) => {
         failure = networkErrorText(err);
       });
-      if (ok) toast(msg('settings.networkAppliedToast'), 'success');
+      if (!ok) return;
+      if (sentPassword) {
+        hasPassword = true;
+        password = '';
+      }
+      toast(msg('settings.networkAppliedToast'), 'success');
     } finally {
       applying = false;
     }

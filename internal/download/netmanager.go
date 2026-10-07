@@ -199,19 +199,43 @@ func (m *Manager) clearPasswordCache() {
 	m.passMu.Unlock()
 }
 
-// SetProxyPassword stores the password for the user name it is given, which is
-// the name the window is about to save with the settings and not necessarily
-// the one saved now; an empty password removes the stored one. Only a password
-// for the name that is saved now concerns the client that is running: one for
-// another name waits in the store until the settings with that name arrive,
-// and the monitor is not woken for it, so a window that saves the password
-// before the settings never takes a working proxy down in between.
+// pendingPass is a password typed for a login the settings do not carry yet.
+// The store has room for one credential, which belongs to the saved login, so
+// the new one waits here until settings with its login are accepted. base is
+// the login that was saved when it was typed: while the settings stay on it the
+// entry is still on its way, once they move to a third name it is abandoned.
+type pendingPass struct {
+	user string
+	pass string
+	base string
+}
+
+// SetProxyPassword takes the password for the login it is given, which is the
+// one the window is about to save with the settings and not necessarily the one
+// saved now; an empty password removes the stored one. A password for the saved
+// login goes to the store at once. One for another login only waits in memory:
+// the store keeps the password of the login that works until the settings with
+// the new login are accepted, so a save that is refused cannot cost the old
+// password, and the monitor is not woken for it.
 func (m *Manager) SetProxyPassword(username, password string) error {
 	if len(password) > maxProxyPassLen {
 		return errProxyPasswordSize
 	}
+	username, err := settings.NormalizeProxyUsername(username)
+	if err != nil {
+		return err
+	}
 	if m.proxyStore == nil {
 		return fmt.Errorf("%w: no credential store", errProxyCredentials)
+	}
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	saved := m.config().ProxyUsername
+	if password != "" && username != saved {
+		m.typedPass = &pendingPass{user: username, pass: password, base: saved}
+		// The settings may have taken the login over while this call was reading
+		// them; then nobody else will come for the entry.
+		return m.settleLocked(m.config().ProxyUsername)
 	}
 	if password == "" {
 		if err := m.proxyStore.Delete(); err != nil {
@@ -220,12 +244,44 @@ func (m *Manager) SetProxyPassword(username, password string) error {
 	} else if err := m.proxyStore.Save(account.Credential{Token: password, Username: username}); err != nil {
 		return fmt.Errorf("%w: %w", errProxyCredentials, err)
 	}
-	// Asked after the save: settings that took the name over while it ran have
-	// kicked the monitor against the old credential, and need the kick again.
-	if password == "" || username == m.config().ProxyUsername {
-		m.clearPasswordCache()
-		m.kickNetwork()
+	m.typedPass = nil
+	m.clearPasswordCache()
+	m.kickNetwork()
+	return nil
+}
+
+func (m *Manager) settlePending(login string) error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	return m.settleLocked(login)
+}
+
+// settleLocked is what the settings with this login do to the waiting
+// password: it goes to the store when the login is its own, stays while the
+// settings are still on the login it was typed against, and is dropped when
+// they have moved to another one, so it can never be stored under a login it
+// was not typed for. A failed write keeps it: the settings are already
+// accepted, and every check of the proxy tries again until the store takes it.
+func (m *Manager) settleLocked(login string) error {
+	p := m.typedPass
+	if p == nil {
+		return nil
 	}
+	if login != p.user {
+		if login != p.base {
+			m.typedPass = nil
+		}
+		return nil
+	}
+	if m.proxyStore == nil {
+		return fmt.Errorf("%w: no credential store", errProxyCredentials)
+	}
+	if err := m.proxyStore.Save(account.Credential{Token: p.pass, Username: p.user}); err != nil {
+		return fmt.Errorf("%w: %w", errProxyCredentials, err)
+	}
+	m.typedPass = nil
+	m.clearPasswordCache()
+	m.kickNetwork()
 	return nil
 }
 
@@ -279,6 +335,11 @@ func (m *Manager) proxyPassword(user string) (string, error) {
 		m.passMu.Unlock()
 		return pass, nil
 	}
+	m.passMu.Unlock()
+	if err := m.settlePending(user); err != nil {
+		return "", err
+	}
+	m.passMu.Lock()
 	gen := m.passGen
 	m.passMu.Unlock()
 	if m.proxyStore == nil {

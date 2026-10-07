@@ -401,7 +401,6 @@ func hasControl(text string) bool {
 func sanitizeNetwork(s Settings) (Settings, error) {
 	s.NetworkInterface = strings.TrimSpace(s.NetworkInterface)
 	s.ProxyHost = strings.TrimSpace(s.ProxyHost)
-	s.ProxyUsername = strings.TrimSpace(s.ProxyUsername)
 
 	switch s.NetworkMode {
 	case NetworkDirect, NetworkInterface, NetworkProxy:
@@ -437,11 +436,24 @@ func sanitizeNetwork(s Settings) (Settings, error) {
 		return Settings{}, ErrProxyPortInvalid
 	}
 
-	if len(s.ProxyUsername) > maxProxyUsernameLen || hasControl(s.ProxyUsername) ||
-		strings.ContainsRune(s.ProxyUsername, ':') || !utf8.ValidString(s.ProxyUsername) {
-		return Settings{}, ErrProxyUsernameInvalid
+	user, err := NormalizeProxyUsername(s.ProxyUsername)
+	if err != nil {
+		return Settings{}, err
 	}
+	s.ProxyUsername = user
 	return s, nil
+}
+
+// NormalizeProxyUsername is the one rule for a proxy login, shared by the
+// settings save and by whoever takes a password for a login that is not saved
+// yet: what it refuses here, the save would refuse too.
+func NormalizeProxyUsername(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if len(name) > maxProxyUsernameLen || hasControl(name) ||
+		strings.ContainsRune(name, ':') || !utf8.ValidString(name) {
+		return "", ErrProxyUsernameInvalid
+	}
+	return name, nil
 }
 
 func sanitizeOverlay(s Settings) error {
