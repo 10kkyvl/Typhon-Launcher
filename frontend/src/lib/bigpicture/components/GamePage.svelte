@@ -3,6 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Download, Heart, Play, RotateCw, Square, X } from '@lucide/svelte';
   import Artwork from '../../components/Artwork.svelte';
+  import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero } from '../../game/view';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
@@ -24,6 +25,7 @@
   import type { RequestText } from '../contracts';
   import { bytesSize, progressPercent, relativeDate } from '../../utils/format';
   import { installErrorText } from '../../install/installErrors';
+  import { installTotalUnknown } from '../../install/progress';
   import { sourceErrorText } from '../../sources/sourceErrors';
   import { errorCode, hasMessage } from '../../i18n';
 
@@ -591,8 +593,12 @@
         <section class="state-card install-card" aria-label={installStatusText()}>
           <div class="state-heading"><div><span class="section-kicker">{bp('bp.game.installation')}</span><h2>{currentInstall.name}</h2></div><span class="state-label">{installStatusText()}</span></div>
           {#if installActive(currentInstall.status)}
-            <div class="progress-track" role="progressbar" aria-valuenow={progressPercent(currentInstall.progress)} aria-valuemin="0" aria-valuemax="100"><span style:width={`${progressPercent(currentInstall.progress)}%`}></span></div>
-            <div class="progress-foot"><span>{currentInstall.currentFile || installStatusLabels(currentInstall.status)}</span><span>{progressPercent(currentInstall.progress)}%</span></div>
+            {#if installTotalUnknown(currentInstall)}
+              <div class="progress-unknown"><ProgressBar value={0} indeterminate height={10} /></div>
+            {:else}
+              <div class="progress-track" role="progressbar" aria-valuenow={progressPercent(currentInstall.progress)} aria-valuemin="0" aria-valuemax="100"><span style:width={`${progressPercent(currentInstall.progress)}%`}></span></div>
+            {/if}
+            <div class="progress-foot"><span>{currentInstall.currentFile || installStatusLabels(currentInstall.status)}</span><span>{installTotalUnknown(currentInstall) ? $t('bp.transfers.installWritten', { size: bytesSize(currentInstall.bytesDone) }) : `${progressPercent(currentInstall.progress)}%`}</span></div>
           {:else if currentInstall.status === 'failed' || currentInstall.status === 'interrupted'}
             <p class="install-error">{installErrorText(currentInstall.error, bp('bp.game.installFailed'))}</p>
           {/if}
@@ -772,6 +778,7 @@
   .state-heading, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
   .state-heading h2, .section-title h2, .description-card h2, .screenshots-card h2 { margin: .5rem 0 0; font-size: 2.2rem; line-height: 1.2; }
   .state-label { color: var(--text-2); font-size: 1.45rem; text-align: right; }
+  .progress-unknown { margin-top: 2rem; }
   .progress-track { height: 1rem; margin-top: 2rem; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
   .progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 200ms ease; }
   .progress-foot { display: flex; justify-content: space-between; gap: 2rem; margin-top: .8rem; color: var(--text-3); font-size: 1.3rem; font-variant-numeric: tabular-nums; }

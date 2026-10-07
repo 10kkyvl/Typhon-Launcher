@@ -16,6 +16,7 @@
     type PlanInfo,
   } from '../services/install';
   import { installErrorText } from '../install/installErrors';
+  import { installIndeterminate, installTotalUnknown } from '../install/progress';
   import { openGameFolder, selectFolder } from '../services/settings';
   import { downloadsById } from '../stores/downloads';
   import {
@@ -371,8 +372,12 @@
       {#if externalWait}
         <p class="note">{msg('modals.installWaitingExternal')}</p>
       {:else}
-        <ProgressBar value={installation.progress * 100} indeterminate={installation.status === 'verifying'} />
-        {#if installation.status !== 'verifying'}
+        <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} />
+        {#if installTotalUnknown(installation)}
+        <div class="progress-foot">
+          <span class="size">{msg('modals.installWritten', { size: bytesSize(installation.bytesDone) })}</span>
+        </div>
+        {:else if installation.status !== 'verifying'}
         <div class="progress-foot">
           <span class="size">{bytesSize(installation.bytesDone)} / {bytesSize(installation.bytesTotal)}</span>
           <span class="pct">{progressPercent(installation.progress)}%</span>

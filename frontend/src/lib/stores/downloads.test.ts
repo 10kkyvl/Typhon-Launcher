@@ -180,3 +180,32 @@ describe('download:progress merging', () => {
     expect(updated.files[0].path).toBe('only.bin');
   });
 });
+
+describe('failed downloads', () => {
+  it('lists only failed downloads, so they stay on screen after leaving active, queue and completed', async () => {
+    seeded = [
+      makeDownload({ id: 'a', status: 'downloading' }),
+      makeDownload({ id: 'b', status: 'failed', error: 'disk_full' }),
+      makeDownload({ id: 'c', status: 'queued' }),
+      makeDownload({ id: 'd', status: 'completed' }),
+      makeDownload({ id: 'e', status: 'failed' }),
+    ];
+    const { store } = await load();
+
+    expect(get(store.failed).map((d) => d.id)).toEqual(['b', 'e']);
+    expect(get(store.active).map((d) => d.id)).toEqual(['a']);
+    expect(get(store.queue).map((d) => d.id)).toEqual(['c']);
+    expect(get(store.completed).map((d) => d.id)).toEqual(['d']);
+  });
+
+  it('moves a download into the failed list when a tick reports the failure', async () => {
+    seeded = [makeDownload()];
+    const { store } = await load();
+    expect(get(store.failed)).toHaveLength(0);
+
+    handlers['download:updated']({ data: makeDownload({ status: 'failed', error: 'boom' }) });
+
+    expect(get(store.failed).map((d) => d.id)).toEqual(['d1']);
+    expect(get(store.active)).toHaveLength(0);
+  });
+});

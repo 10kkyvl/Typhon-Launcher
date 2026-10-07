@@ -25,6 +25,7 @@
   import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
+  import { canPlay } from '../../lib/library/launch';
   import {
     compatOnlyWorking,
     isCancelledRequest,
@@ -189,6 +190,8 @@
     }
     return map;
   });
+
+  const playableIds = $derived(new Set($installedGames.filter(canPlay).map((game) => game.id)));
 
   const libraryByGame = $derived.by(() => {
     const map = new Map<string, string>();
@@ -686,7 +689,7 @@
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={catalogMeta(shown)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
-            onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
+            onplay={playableIds.has(installedByGame.get(game.id) ?? '') ? () => toggleRun(installedByGame.get(game.id) ?? '') : undefined}
           >
             {#snippet footer()}
               <span class="status" class:on={isInstalled}>

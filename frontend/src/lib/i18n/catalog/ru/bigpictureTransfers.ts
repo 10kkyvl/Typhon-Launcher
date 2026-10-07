@@ -73,6 +73,7 @@ export const bigpictureTransfers = {
   'bp.transfers.confirmExecutable': 'Подтвердить выбор',
   'bp.transfers.installProgressTitle': 'Установка',
   'bp.transfers.installBytes': 'Обработано {done} из {total}',
+  'bp.transfers.installWritten': 'Записано {size}',
   'bp.transfers.currentFile': 'Сейчас: {file}',
   'bp.transfers.waitingExternal': 'Дождитесь завершения внешнего установщика.',
   'bp.transfers.installComplete': 'Установка завершена',

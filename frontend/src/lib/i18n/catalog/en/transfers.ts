@@ -25,6 +25,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.downloadsQueueActionsLabel': 'Queue actions',
   'transfers.downloadsCancelLabel': 'Cancel',
   'transfers.downloadsCompletedHeading': 'Completed',
+  'transfers.downloadsFailedHeading': 'Failed',
   'transfers.downloadsDoneSize': 'Done · {size}',
   'transfers.downloadsDoneWhen': 'Done {when}',
   'transfers.downloadsInstallAction': 'Install',

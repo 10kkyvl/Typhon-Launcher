@@ -316,6 +316,7 @@ export const modals = {
   'modals.installPickInstallerButton': 'Выбрать установщик…',
   'modals.installPickExecutableButton': 'Выбрать исполняемый файл…',
   'modals.installWaitingExternal': 'Ожидание завершения установщика...',
+  'modals.installWritten': 'Записано {size}',
   'modals.installExecutablesAriaLabel': 'Исполняемые файлы',
   'modals.installPickManually': 'Выбрать вручную…',
   'modals.installGameLabel': 'Игра',

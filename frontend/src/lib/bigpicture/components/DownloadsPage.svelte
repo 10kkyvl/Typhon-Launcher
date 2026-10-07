@@ -40,6 +40,7 @@
   import { openFolder, openGameFolder, selectFolder } from '../../services/settings';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { installErrorText } from '../../install/installErrors';
+  import { installIndeterminate, installTotalUnknown } from '../../install/progress';
   import { active, completed, downloads, downloadsById, queue, statusLabels } from '../../stores/downloads';
   import { installStatusLabels, installTypeLabels, installations, installationsByDownload, upsertInstallation } from '../../stores/install';
   import { libraryGames } from '../../stores/library';
@@ -830,8 +831,8 @@
               </div>
               {#if installation && stage === 'install-progress'}
                 <div class="install-inline">
-                  <div class="card-heading"><span>{installStatusLabels(installation.status)}</span><span>{progressPercent(installation.progress)}%</span></div>
-                  <ProgressBar value={installation.progress * 100} indeterminate={installation.status === 'verifying'} height={7} />
+                  <div class="card-heading"><span>{installStatusLabels(installation.status)}</span><span>{installTotalUnknown(installation) ? $t('bp.transfers.installWritten', { size: bytesSize(installation.bytesDone) }) : `${progressPercent(installation.progress)}%`}</span></div>
+                  <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} height={7} />
                 </div>
               {:else if stage === 'library'}
                 <p class="muted">{$t('bp.transfers.installComplete')}</p>
@@ -922,8 +923,8 @@
               </div>
               {#if stage === 'install-progress'}
                 <div class="install-inline">
-                  <div class="card-heading"><span>{installStatusLabels(installation.status)}</span><span>{progressPercent(installation.progress)}%</span></div>
-                  <ProgressBar value={installation.progress * 100} indeterminate={installation.status === 'verifying'} height={7} />
+                  <div class="card-heading"><span>{installStatusLabels(installation.status)}</span><span>{installTotalUnknown(installation) ? $t('bp.transfers.installWritten', { size: bytesSize(installation.bytesDone) }) : `${progressPercent(installation.progress)}%`}</span></div>
+                  <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} height={7} />
                 </div>
               {:else if stage === 'install-error'}
                 <p class="bp-error" role="alert">{installation.error ? installErrorText(installation.error) : $t('bp.transfers.installFailed')}</p>
@@ -1094,9 +1095,9 @@
             <p class="dialog-note">{$t('bp.transfers.waitingExternal')}</p>
           {:else}
             <div class="install-progress">
-              <div class="card-heading"><strong>{installStatusLabels(selectedInstallation.status)}</strong><span>{progressPercent(selectedInstallation.progress)}%</span></div>
-              <ProgressBar value={selectedInstallation.progress * 100} indeterminate={selectedInstallation.status === 'verifying'} height={8} />
-              {#if selectedInstallation.status !== 'verifying'}<p class="muted">{$t('bp.transfers.installBytes', { done: bytesSize(selectedInstallation.bytesDone), total: bytesSize(selectedInstallation.bytesTotal) })}</p>{/if}
+              <div class="card-heading"><strong>{installStatusLabels(selectedInstallation.status)}</strong>{#if !installTotalUnknown(selectedInstallation)}<span>{progressPercent(selectedInstallation.progress)}%</span>{/if}</div>
+              <ProgressBar value={selectedInstallation.progress * 100} indeterminate={installIndeterminate(selectedInstallation)} height={8} />
+              {#if installTotalUnknown(selectedInstallation)}<p class="muted">{$t('bp.transfers.installWritten', { size: bytesSize(selectedInstallation.bytesDone) })}</p>{:else if selectedInstallation.status !== 'verifying'}<p class="muted">{$t('bp.transfers.installBytes', { done: bytesSize(selectedInstallation.bytesDone), total: bytesSize(selectedInstallation.bytesTotal) })}</p>{/if}
               {#if selectedInstallation.currentFile}<p class="path-value">{$t('bp.transfers.currentFile', { file: truncateMiddle(selectedInstallation.currentFile, 70) })}</p>{/if}
             </div>
           {/if}

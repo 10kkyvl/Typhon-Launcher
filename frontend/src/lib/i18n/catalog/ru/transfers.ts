@@ -22,6 +22,7 @@ export const transfers = {
   'transfers.downloadsQueueActionsLabel': 'Действия с очередью',
   'transfers.downloadsCancelLabel': 'Отменить',
   'transfers.downloadsCompletedHeading': 'Завершённые',
+  'transfers.downloadsFailedHeading': 'С ошибкой',
   'transfers.downloadsDoneSize': 'Завершено · {size}',
   'transfers.downloadsDoneWhen': 'Завершено {when}',
   'transfers.downloadsInstallAction': 'Установить',

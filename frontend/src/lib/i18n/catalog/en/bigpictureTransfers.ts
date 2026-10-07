@@ -76,6 +76,7 @@ export const bigpictureTransfers: Record<BigpictureTransfersKey, Message> = {
   'bp.transfers.confirmExecutable': 'Confirm selection',
   'bp.transfers.installProgressTitle': 'Installation progress',
   'bp.transfers.installBytes': 'Processed {done} of {total}',
+  'bp.transfers.installWritten': 'Written: {size}',
   'bp.transfers.currentFile': 'Current: {file}',
   'bp.transfers.waitingExternal': 'Wait for the external installer to finish.',
   'bp.transfers.installComplete': 'Installation complete',

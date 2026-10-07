@@ -110,6 +110,9 @@ export const ui: Record<UiKey, Message> = {
 
   'ui.updateAvailable': 'Update available',
   'ui.newReleaseAvailable': 'New release available',
+  'ui.latestVersionInstalled': 'Latest version installed',
+  'ui.updateInProgress': 'Update in progress',
+  'ui.updateFailedTitle': 'Update failed',
   'ui.versionUnknown': 'version unknown',
   'ui.newRelease': 'new release',
   'ui.readyToInstall': 'Ready to install',
