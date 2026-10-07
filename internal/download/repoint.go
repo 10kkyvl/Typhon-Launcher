@@ -24,6 +24,7 @@ var (
 	errRepointNotDir       = errors.New("папка загрузок повреждена: путь не является каталогом")
 	errRepointNonRegular   = errors.New("неподдерживаемый тип файла в папке загрузок")
 	errRepointOldRootStuck = errors.New("загрузки перенесены, но старую папку не удалось удалить")
+	errRepointTargetNotDir = errors.New("новый путь занят файлом, а не папкой")
 )
 
 // Repoint moves the whole downloads tree from oldRoot to newRoot and makes
@@ -146,7 +147,7 @@ func moveTreeIfPresent(ctx context.Context, oldRoot, newRoot string) error {
 	// неудавшимся удалением старой папки. Данные уже на новом месте: копировать
 	// их второй раз нельзя, и переименовать поверх занятого пути тоже нельзя —
 	// без этой ветки перенос корня библиотеки застревал бы навсегда.
-	populated, err := dirHasEntries(newRoot)
+	populated, err := targetHasEntries(newRoot)
 	if err != nil {
 		return err
 	}
@@ -159,7 +160,12 @@ func moveTreeIfPresent(ctx context.Context, oldRoot, newRoot string) error {
 		if err != nil {
 			return err
 		}
-		if len(result.Issues) != 0 || len(result.Extra) != 0 {
+		// Удаление старой папки могло остановиться на полпути: тогда в ней
+		// осталась только часть дерева, а в новой лежит всё, так что лишние
+		// файлы в новой папке (result.Extra) — ожидаемое состояние, а не
+		// расхождение. Старую папку можно снести, когда каждый её файл есть в
+		// новой с тем же содержимым; любое отличие остаётся ошибкой.
+		if len(result.Issues) != 0 {
 			return errRepointVerifyFailed
 		}
 		if rmErr := os.RemoveAll(oldRoot); rmErr != nil {
@@ -201,18 +207,29 @@ func moveTreeIfPresent(ctx context.Context, oldRoot, newRoot string) error {
 		return err
 	}
 	if err := os.RemoveAll(oldRoot); err != nil {
-		return fmt.Errorf("remove old downloads %s: %w", oldRoot, err)
+		return fmt.Errorf("%w: %s: %w", errRepointOldRootStuck, oldRoot, err)
 	}
 	return nil
 }
 
-// dirHasEntries reports whether path is a directory that already holds
-// something. A missing path is not an error here: it simply holds nothing.
-func dirHasEntries(path string) (bool, error) {
-	entries, err := os.ReadDir(path)
+// targetHasEntries reports whether path is a directory that already holds
+// something. A missing path holds nothing. Anything else that is not a
+// directory is somebody's file and must not be cleared out of the way, so it
+// is an error; the kind is asked for before the directory is read because
+// reading a file as a directory fails differently per OS (Windows reports it
+// as a missing path, which would read as "empty" and let the caller delete it).
+func targetHasEntries(path string) (bool, error) {
+	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
+	if err != nil {
+		return false, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("%s: %w", path, errRepointTargetNotDir)
+	}
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", path, err)
 	}

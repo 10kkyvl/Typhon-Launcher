@@ -80,6 +80,16 @@ type Download struct {
 	Error         string      `json:"error"`
 	Stalled       bool        `json:"stalled"`
 	StalledSince  *time.Time  `json:"stalledSince,omitempty"`
+
+	// heldSelection is the selection a stored record named while the torrent's
+	// file list is not known (no cached torrent yet). It is written back as it
+	// is and applied once the list arrives; nil means the record named none.
+	heldSelection []int
+
+	// root is the folder below Destination that the torrent writes its files
+	// into: the name the torrent itself carries. Name is only the title the
+	// download is shown under, and AddTask takes it from a feed.
+	root string
 }
 
 type TorrentInfo struct {
@@ -169,6 +179,16 @@ func selectedIndices(d *Download) []int {
 		}
 	}
 	return indices
+}
+
+// selectionRecord is what a save writes as the selection. With the file list
+// unknown the list cannot be derived, and writing it empty would turn a chosen
+// subset into "nothing" on the next load, so the held one is written back.
+func selectionRecord(d *Download) []int {
+	if len(d.Files) == 0 {
+		return d.heldSelection
+	}
+	return selectedIndices(d)
 }
 
 func selectedTotal(files []FileState) int64 {

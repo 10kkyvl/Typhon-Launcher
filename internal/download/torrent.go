@@ -438,6 +438,48 @@ func (l *liveTorrent) verifyEach(ctx context.Context, done func(index int, lengt
 	return nil
 }
 
+// settlePieces waits until no piece is queued for a hash, being hashed or being
+// marked in the storage. A piece check returns as soon as the hash is known,
+// but the engine tells the storage and publishes the verdict a moment later, so
+// the completion read right after the last check can still show pieces that
+// passed as not complete. The wait ends with ctx or when the torrent is gone.
+func (l *liveTorrent) settlePieces(ctx context.Context) error {
+	// Subscribed before the first look, so a change between the look and the
+	// wait is delivered and not missed.
+	sub := l.t.SubscribePieceStateChanges()
+	defer sub.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-l.t.Closed():
+			return errNetworkDown
+		default:
+		}
+		if !l.piecesBusy() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+		case <-l.t.Closed():
+		case _, open := <-sub.Values:
+			if !open {
+				return errNetworkDown
+			}
+		}
+	}
+}
+
+func (l *liveTorrent) piecesBusy() bool {
+	for _, run := range l.t.PieceStateRuns() {
+		if run.Marking || run.Checking {
+			return true
+		}
+	}
+	return false
+}
+
 func (l *liveTorrent) completePieces() (complete, total int) {
 	total = l.t.NumPieces()
 	for i := 0; i < total; i++ {

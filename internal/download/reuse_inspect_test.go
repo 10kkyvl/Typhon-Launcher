@@ -37,6 +37,9 @@ func TestInspectReuseReportsWhatCanBeReused(t *testing.T) {
 			if r.MissingFiles != 0 || r.Name != "Game" || r.Layout != LayoutDirectFiles || len(r.Files) != 5 {
 				t.Fatalf("report = %+v", r)
 			}
+			if r.BadPieces != 0 || r.OkPieces != r.TotalPieces || r.MatchedBytes != total || r.MissingBytes != 0 {
+				t.Fatalf("intact data reported as damaged: ok/bad/total pieces = %d/%d/%d, matched %d, missing %d", r.OkPieces, r.BadPieces, r.TotalPieces, r.MatchedBytes, r.MissingBytes)
+			}
 			for _, f := range r.Files {
 				if f.Missing {
 					t.Fatalf("file = %+v", f)
@@ -46,6 +49,9 @@ func TestInspectReuseReportsWhatCanBeReused(t *testing.T) {
 		{"intact data directly in the chosen folder", func(p string) string { return filepath.Join(p, "Game") }, nil, nil, func(t *testing.T, r ReuseReport) {
 			if !r.Applicable || !r.Flat || r.PresentFiles != 5 || r.Files[0].Path != "d1.dat" || r.Files[4].Path != "game.exe" {
 				t.Fatalf("report = %+v", r)
+			}
+			if r.BadPieces != 0 || r.OkPieces != r.TotalPieces || r.MatchedBytes != total || r.MissingBytes != 0 {
+				t.Fatalf("intact data reported as damaged: ok/bad/total pieces = %d/%d/%d, matched %d, missing %d", r.OkPieces, r.BadPieces, r.TotalPieces, r.MatchedBytes, r.MissingBytes)
 			}
 		}},
 		{"one damaged piece", func(p string) string { return p }, func(t *testing.T, p string) {
