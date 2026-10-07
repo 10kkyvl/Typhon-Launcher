@@ -225,43 +225,17 @@ func (s *Service) clearDegradedLocked() {
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	startupCtx, cancel := context.WithCancel(ctx)
+	stored, err := s.store.loadAll()
+	if err != nil {
+		s.store.block(err)
+		s.ctx, s.cancel = nil, nil
+		s.mu.Unlock()
+		cancel()
+		return err
+	}
+	s.store.block(nil)
 	s.ctx, s.cancel = startupCtx, cancel
-	storedUpdates, err := s.store.loadUpdates()
-	if err != nil {
-		s.cancel = nil
-		s.mu.Unlock()
-		cancel()
-		return err
-	}
-	storedVerifications, err := s.store.loadVerifications()
-	if err != nil {
-		s.cancel = nil
-		s.mu.Unlock()
-		cancel()
-		return err
-	}
-	storedRollbacks, err := s.store.loadRollbacks()
-	if err != nil {
-		s.cancel = nil
-		s.mu.Unlock()
-		cancel()
-		return err
-	}
-	storedHistory, err := s.store.loadHistory()
-	if err != nil {
-		s.cancel = nil
-		s.mu.Unlock()
-		cancel()
-		return err
-	}
-	storedJournals, err := s.store.loadJournals()
-	if err != nil {
-		s.cancel = nil
-		s.mu.Unlock()
-		cancel()
-		return err
-	}
-	for _, u := range storedUpdates {
+	for _, u := range stored.updates {
 		item := u
 		if item.State == StateUpdating || item.State == StateDownloading {
 			item.State = StateFailed
@@ -280,21 +254,21 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 		s.updates[item.GameID] = &item
 	}
-	for _, v := range storedVerifications {
+	for _, v := range stored.verifications {
 		state := v
 		state.Running = false
 		state.Repairing = false
 		s.verifications[state.GameID] = &state
 	}
-	for _, r := range storedRollbacks {
+	for _, r := range stored.rollbacks {
 		entry := r
 		s.rollbacks[entry.GameID] = &entry
 	}
-	for _, j := range storedJournals {
+	for _, j := range stored.journals {
 		entry := j
 		s.journals[entry.GameID] = &entry
 	}
-	s.history = storedHistory
+	s.history = stored.history
 	interrupted := make([]string, 0, len(s.updates))
 	for _, u := range s.updates {
 		if u.State == StateFailed {
@@ -344,7 +318,12 @@ func (s *Service) ServiceShutdown() error {
 	s.wg.Wait()
 
 	s.mu.Lock()
-	err := s.persistLocked()
+	var err error
+	// A refused start loaded nothing: saving its empty picture would replace
+	// the file that failed to load.
+	if s.store.writable() == nil {
+		err = s.persistLocked()
+	}
 	s.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("persist updates on shutdown: %w", err)
@@ -544,13 +523,14 @@ func (s *Service) updateFieldsBestEffort(gameID string, apply func(*Update)) {
 // forgetRollbackBestEffort removes gameID's kept-previous-version record and
 // persists it, rolling back and marking the service degraded on failure. See
 // updateFieldsBestEffort for why this stays a logged best effort rather than
-// a propagated error.
-func (s *Service) forgetRollbackBestEffort(gameID string) {
+// a propagated error. It reports whether the record is gone, so a caller that
+// deletes the copy the record points at can tell when it must not.
+func (s *Service) forgetRollbackBestEffort(gameID string) bool {
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
 	if !ok {
 		s.mu.Unlock()
-		return
+		return true
 	}
 	delete(s.rollbacks, gameID)
 	if err := s.persistRollbacksLocked(); err != nil {
@@ -558,10 +538,11 @@ func (s *Service) forgetRollbackBestEffort(gameID string) {
 		s.markDegradedLocked(err)
 		s.mu.Unlock()
 		slog.Error("persist rollbacks", "game", gameID, "error", err)
-		return
+		return false
 	}
 	s.clearDegradedLocked()
 	s.mu.Unlock()
+	return true
 }
 
 // planProgress reports progress of a long planning step without persisting it:
@@ -781,6 +762,14 @@ func (s *Service) prune(known map[string]bool) {
 	s.mu.Unlock()
 }
 
+func (s *Service) resolveAvailability(game library.Game) UpdateAvailability {
+	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
+	game = s.bindLegacyDistribution(game, list)
+	availability := ResolveUpdate(installedOf(game), list, PatchesFrom(list))
+	availability.GameID = game.ID
+	return availability
+}
+
 // check resolves update availability for game and persists it. A persist
 // failure rolls the in-memory entry back to what it was before this call
 // (removing it entirely if check itself created it), marks the service
@@ -789,11 +778,7 @@ func (s *Service) check(game library.Game) error {
 	if s.releases == nil {
 		return nil
 	}
-	list := s.releases.ReleasesFor(game.CanonicalGameID, game.Title)
-	game = s.bindLegacyDistribution(game, list)
-	installed := installedOf(game)
-	availability := ResolveUpdate(installed, list, PatchesFrom(list))
-	availability.GameID = game.ID
+	availability := s.resolveAvailability(game)
 
 	s.mu.Lock()
 	current, existed := s.updates[game.ID]
@@ -953,7 +938,7 @@ func (s *Service) HandleSessionEnded(gameID string, seconds int64) {
 	}
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
-	if !ok || !entry.AwaitLaunch || s.rollbackActive[gameID] || s.journals[gameID] != nil {
+	if !ok || !entry.AwaitLaunch || s.rollbackActive[gameID] || s.journals[gameID] != nil || s.jobs[gameID] != nil {
 		s.mu.Unlock()
 		return
 	}
@@ -1018,7 +1003,8 @@ func (s *Service) sweepPrevious() {
 	removedRollbacks := map[string]*Rollback{}
 	changedUpdates := map[string]Update{}
 	for id, entry := range s.rollbacks {
-		if s.rollbackActive[id] || s.journals[id] != nil {
+		// A job's backup copy lands in this very .previous before it is journaled.
+		if s.rollbackActive[id] || s.journals[id] != nil || s.jobs[id] != nil {
 			continue
 		}
 		if entry.KeepUntil == nil || now.Before(*entry.KeepUntil) {
