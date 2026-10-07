@@ -115,6 +115,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadNetInterfaceUnsupported': 'Binding to a network adapter is supported on Windows only',
   'errInstall.downloadNetInterfaceWeakHost': 'The adapter allows sending through other interfaces (weak host send): traffic could bypass the VPN',
   'errInstall.downloadProxyCredentialsMismatch': 'The saved proxy password belongs to a different login: enter the password again',
+  'errInstall.downloadNetworkChecking': 'Checking the network',
   'errInstall.downloadNetworkDown': 'The network is unavailable: the VPN or proxy is not responding, downloads are stopped',
   'errInstall.downloadNoMetadataProxy': 'Metadata was not received: through a proxy only HTTP trackers work, DHT and UDP tracker lookup is disabled',
   'errInstall.downloadProxyAuthFailed': 'The proxy rejected the login or password',

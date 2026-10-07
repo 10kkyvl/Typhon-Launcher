@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { networkCodeText, networkDownTitle, networkErrorText, networkIsDown, networkReasonText, networkWarningText } from './networkText';
+import { networkChecking, networkCodeText, networkDownTitle, networkErrorText, networkIsDown, networkReasonText, networkWarningText } from './networkText';
 import type { NetworkState } from '../services/network';
 
 function state(patch: Partial<NetworkState>): NetworkState {
@@ -50,6 +50,15 @@ describe('network state text', () => {
     expect(networkIsDown(state({ mode: 'direct' }))).toBe(false);
     expect(networkIsDown(state({ mode: 'proxy', state: 'ok' }))).toBe(false);
     expect(networkIsDown(state({ mode: 'proxy' }))).toBe(true);
+  });
+
+  it('does not call a route that is being checked down', () => {
+    const checking = state({ mode: 'proxy', code: 'download.network_checking' });
+    expect(networkChecking(checking)).toBe(true);
+    expect(networkIsDown(checking)).toBe(false);
+    expect(networkChecking(state({ mode: 'proxy', code: 'download.network_down' }))).toBe(false);
+    expect(networkChecking(state({ mode: 'proxy', state: 'ok', code: 'download.network_checking' }))).toBe(false);
+    expect(networkChecking(null)).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ const (
 
 var (
 	errNetworkDown       = uierr.New("download.network_down", "сеть недоступна: VPN или прокси не отвечает, загрузки остановлены")
+	errNetworkChecking   = uierr.New("download.network_checking", "проверка сети")
 	errNetIfaceMissing   = uierr.New("download.net_interface_missing", "сетевой адаптер не найден")
 	errNetIfaceDown      = uierr.New("download.net_interface_down", "сетевой адаптер отключён")
 	errNetIfaceNoAddr    = uierr.New("download.net_interface_no_address", "у сетевого адаптера нет подходящего IP-адреса")

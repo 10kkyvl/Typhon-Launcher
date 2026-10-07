@@ -106,6 +106,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.net_interface_unsupported': 'errInstall.downloadNetInterfaceUnsupported',
   'download.net_interface_weak_host': 'errInstall.downloadNetInterfaceWeakHost',
   'download.network_down': 'errInstall.downloadNetworkDown',
+  'download.network_checking': 'errInstall.downloadNetworkChecking',
   'download.no_metadata_proxy': 'errInstall.downloadNoMetadataProxy',
   'download.proxy_auth_failed': 'errInstall.downloadProxyAuthFailed',
   'download.proxy_credentials_failed': 'errInstall.downloadProxyCredentialsFailed',

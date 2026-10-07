@@ -78,7 +78,7 @@ func (m *Manager) offlineLocked() bool {
 var errClientGone = errors.New("the client this restore was made for is gone")
 
 func checkingState(mode string) NetworkState {
-	return NetworkState{Mode: mode, State: NetworkDown, Code: uierr.Code(errNetworkDown), Reason: "проверка сети"}
+	return NetworkState{Mode: mode, State: NetworkDown, Code: uierr.Code(errNetworkChecking), Reason: "проверка сети"}
 }
 
 // buildFailure is the cause a failed client start goes down with: the code of

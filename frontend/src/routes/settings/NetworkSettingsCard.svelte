@@ -7,7 +7,13 @@
   import Select from '../../lib/components/Select.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
-  import { networkCodeText, networkErrorText, networkReasonText, networkWarningText } from '../../lib/network/networkText';
+  import {
+    networkChecking,
+    networkCodeText,
+    networkErrorText,
+    networkReasonText,
+    networkWarningText,
+  } from '../../lib/network/networkText';
   import {
     hasProxyPassword,
     listNetworkInterfaces,
@@ -210,8 +216,9 @@
   }
 
   const status = $derived($networkState);
-  const statusDown = $derived(status?.state === 'down');
-  const statusDetail = $derived(status ? (statusDown ? networkReasonText(status) : status.address) : '');
+  const statusChecking = $derived(networkChecking(status));
+  const statusDown = $derived(status?.state === 'down' && !statusChecking);
+  const statusDetail = $derived(status && !statusChecking ? (statusDown ? networkReasonText(status) : status.address) : '');
   const statusWarning = $derived(networkWarningText(status));
 </script>
 
@@ -368,8 +375,12 @@
           {/if}
         </div>
         <StatusBadge
-          kind={statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
-          label={statusDown ? msg('settings.networkStatusDown') : msg('settings.networkStatusOk')}
+          kind={statusChecking ? 'accent' : statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
+          label={statusChecking
+            ? msg('settings.networkStatusChecking')
+            : statusDown
+              ? msg('settings.networkStatusDown')
+              : msg('settings.networkStatusOk')}
         />
       </div>
     {/if}

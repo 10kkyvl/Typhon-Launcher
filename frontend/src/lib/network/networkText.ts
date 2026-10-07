@@ -30,8 +30,12 @@ export function networkWarningText(state: NetworkState | null): string {
   return state && state.state === 'ok' && state.warning ? networkCodeText(state.warning) : '';
 }
 
+export function networkChecking(state: NetworkState | null): boolean {
+  return state !== null && state.state === 'down' && state.code === 'download.network_checking';
+}
+
 export function networkIsDown(state: NetworkState | null): boolean {
-  return state !== null && state.mode !== 'direct' && state.state === 'down';
+  return state !== null && state.mode !== 'direct' && state.state === 'down' && !networkChecking(state);
 }
 
 export function networkDownTitle(state: NetworkState): string {

@@ -303,6 +303,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.networkAppliedToast': 'Network settings applied',
   'settings.networkStatusLabel': 'Current state',
   'settings.networkStatusOk': 'Working',
+  'settings.networkStatusChecking': 'Checking…',
   'settings.networkStatusDown': 'Not working',
   'settings.networkFallbackError': 'Could not complete the network settings action',
 };

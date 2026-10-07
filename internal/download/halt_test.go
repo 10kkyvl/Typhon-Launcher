@@ -501,7 +501,7 @@ func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 	if st.State == NetworkOK || st.Address != "" {
 		t.Fatalf("state while the new route is probed = %+v, the old route is still shown as working", st)
 	}
-	if st.Code != "download.network_down" || st.Mode != settings.NetworkProxy {
+	if st.Code != "download.network_checking" || st.Mode != settings.NetworkProxy {
 		t.Fatalf("state while the new route is probed = %+v, want the check state", st)
 	}
 	r.m.mu.Lock()
