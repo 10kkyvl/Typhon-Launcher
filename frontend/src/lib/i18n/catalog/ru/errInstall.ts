@@ -86,6 +86,7 @@ export const errInstall = {
   'errInstall.downloadEmptyDestination': 'укажите папку назначения',
   'errInstall.downloadEmptySource': 'укажите magnet-ссылку или torrent-файл',
   'errInstall.downloadFileIncomplete': 'загрузка не завершена: на диске остался только незавершённый файл (.part)',
+  'errInstall.downloadPartPromotionFailed': 'не удалось завершить загруженный файл: его держит другая программа (например, антивирус). Повторите загрузку, когда она его отпустит',
   'errInstall.downloadFileMissing': 'файл отсутствует на диске',
   'errInstall.downloadFileOversized': 'файл на диске больше ожидаемого размера',
   'errInstall.downloadFileStatFailed': 'не удалось проверить файл на диске',

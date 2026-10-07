@@ -81,6 +81,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.empty_destination': 'errInstall.downloadEmptyDestination',
   'download.empty_source': 'errInstall.downloadEmptySource',
   'download.file_incomplete': 'errInstall.downloadFileIncomplete',
+  'download.part_promotion_failed': 'errInstall.downloadPartPromotionFailed',
   'download.file_missing': 'errInstall.downloadFileMissing',
   'download.file_oversized': 'errInstall.downloadFileOversized',
   'download.file_stat_failed': 'errInstall.downloadFileStatFailed',

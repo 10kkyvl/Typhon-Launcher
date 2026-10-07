@@ -89,6 +89,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadEmptyDestination': 'Choose a destination folder',
   'errInstall.downloadEmptySource': 'Enter a magnet link or a torrent file',
   'errInstall.downloadFileIncomplete': 'The download is not finished: only an incomplete (.part) file remains on disk',
+  'errInstall.downloadPartPromotionFailed': 'Could not finish the downloaded file: another program is holding it (an antivirus, for example). Retry the download once it lets go',
   'errInstall.downloadFileMissing': 'The file is missing from disk',
   'errInstall.downloadFileOversized': 'The file on disk is larger than expected',
   'errInstall.downloadFileStatFailed': 'Could not check the file on disk',
