@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +23,12 @@ const (
 	bootstrapTTL    = 5 * time.Minute
 	retryBase       = 5 * time.Second
 	retryCap        = 5 * time.Minute
+
+	// maxNameMisses is how many answers in a row that the name does not exist
+	// a lost tracker survives. With the backoff above that is about eight
+	// minutes, long enough for a name server that answers wrongly while a
+	// tunnel comes up; a server that cannot be reached counts for nothing.
+	maxNameMisses = 5
 )
 
 var (
@@ -116,10 +123,16 @@ func (h *hostLog) first(host string) bool {
 }
 
 // lostTracker is a UDP tracker that stays out of its torrent until its name
-// resolves. tier is the index it would have in the list the torrent got.
+// resolves. tier is the index it would have in the list the torrent got, which
+// keeps a slot for a tier that has nothing else in it for now.
 type lostTracker struct {
-	u    *url.URL
-	tier int
+	u      *url.URL
+	tier   int
+	misses int
+}
+
+type retryJob struct {
+	lost []lostTracker
 }
 
 // retrier owns the goroutines that try the lost trackers again. They end with
@@ -134,11 +147,62 @@ type retrier struct {
 
 	mu     sync.Mutex
 	closed bool
+	jobs   map[*torrent.Torrent]*retryJob
 }
 
 func newRetrier(ctx context.Context) *retrier {
 	ctx, cancel := context.WithCancel(ctx)
-	return &retrier{ctx: ctx, cancel: cancel}
+	return &retrier{ctx: ctx, cancel: cancel, jobs: map[*torrent.Torrent]*retryJob{}}
+}
+
+// join hands lost to the job of t, and says whether that job is new and needs a
+// goroutine. A torrent has one job however often its trackers are lost.
+func (r *retrier) join(t *torrent.Torrent, lost []lostTracker) (*retryJob, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil, false
+	}
+	job, ok := r.jobs[t]
+	if !ok {
+		job = &retryJob{}
+		r.jobs[t] = job
+	}
+	for _, l := range lost {
+		if !slices.ContainsFunc(job.lost, func(o lostTracker) bool { return o.u.String() == l.u.String() }) {
+			job.lost = append(job.lost, l)
+		}
+	}
+	return job, !ok
+}
+
+func (r *retrier) take(job *retryJob) []lostTracker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	batch := job.lost
+	job.lost = nil
+	return batch
+}
+
+// settle puts back what is still lost and ends the job, in the same step, when
+// nothing is: a tracker that joins right after finds no job and starts a new one.
+func (r *retrier) settle(t *torrent.Torrent, job *retryJob, still []lostTracker) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	job.lost = append(still, job.lost...)
+	if len(job.lost) > 0 {
+		return false
+	}
+	delete(r.jobs, t)
+	return true
+}
+
+func (r *retrier) forget(t *torrent.Torrent, job *retryJob) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.jobs[t] == job {
+		delete(r.jobs, t)
+	}
 }
 
 // start runs fn as one of the retrier's goroutines. Once the retrier is
@@ -223,34 +287,62 @@ func (n nameResolver) logger() *slog.Logger {
 // lookup resolves host, and says so once when it cannot. A failure that comes
 // from ctx ending is the shutdown talking and is not reported.
 func (n nameResolver) lookup(ctx context.Context, host string) []netip.Addr {
-	out, err := n.query(ctx, host)
+	out, err := n.lookupErr(ctx, host)
 	if err != nil {
-		if ctx.Err() == nil && n.seen.first(host) {
-			n.logger().Warn("resolve host through the adapter", "host", host, "error", err)
-		}
 		return nil
 	}
 	return out
 }
 
-// resolveHosts resolves the hosts side by side; the ones that did not resolve
-// are left out of the answer.
-func (n nameResolver) resolveHosts(ctx context.Context, hosts map[string]bool) map[string]netip.Addr {
+func (n nameResolver) lookupErr(ctx context.Context, host string) ([]netip.Addr, error) {
+	out, err := n.query(ctx, host)
+	if err != nil {
+		if ctx.Err() == nil && n.seen.first(host) {
+			n.logger().Warn("resolve host through the adapter", "host", host, "error", err)
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// missingName is true when the server answered that the name has no address
+// to use, as opposed to not answering: only the first says anything about the
+// name.
+func missingName(err error) bool {
+	if errors.Is(err, errNoUsableAddr) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) && dnsErr.IsNotFound
+}
+
+// lookupHosts resolves the hosts side by side. A host that did not resolve is
+// left out of the first answer and has its error in the second.
+func (n nameResolver) lookupHosts(ctx context.Context, hosts map[string]bool) (map[string]netip.Addr, map[string]error) {
 	resolved := map[string]netip.Addr{}
+	failed := map[string]error{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for host := range hosts {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if a, ok := first(n.lookup(ctx, host)); ok {
-				mu.Lock()
+			addrs, err := n.lookupErr(ctx, host)
+			mu.Lock()
+			defer mu.Unlock()
+			if a, ok := first(addrs); ok {
 				resolved[host] = a
-				mu.Unlock()
+			} else if err != nil {
+				failed[host] = err
 			}
 		}()
 	}
 	wg.Wait()
+	return resolved, failed
+}
+
+func (n nameResolver) resolveHosts(ctx context.Context, hosts map[string]bool) map[string]netip.Addr {
+	resolved, _ := n.lookupHosts(ctx, hosts)
 	return resolved
 }
 
@@ -300,6 +392,7 @@ func (n nameResolver) resolveUDPTrackers(ctx context.Context, tiers [][]string) 
 	var lost []lostTracker
 	for i, tier := range tiers {
 		var kept []string
+		lostHere := false
 		for j, raw := range tier {
 			u := parsed[i][j]
 			switch {
@@ -315,12 +408,20 @@ func (n nameResolver) resolveUDPTrackers(ctx context.Context, tiers [][]string) 
 					kept = append(kept, withHost(u, a))
 				} else {
 					lost = append(lost, lostTracker{u: u, tier: len(out)})
+					lostHere = true
 				}
 			}
 		}
 		if len(kept) > 0 {
 			out = append(out, kept)
+		} else if lostHere {
+			// An empty tier holds the place: the tracker that comes back goes
+			// where it was, not into the tier that followed it.
+			out = append(out, []string{})
 		}
+	}
+	for len(out) > 0 && len(out[len(out)-1]) == 0 {
+		out = out[:len(out)-1]
 	}
 	return out, lost
 }
@@ -334,8 +435,13 @@ func (n nameResolver) retryLost(t *torrent.Torrent, lost []lostTracker) {
 	if l == nil || len(lost) == 0 {
 		return
 	}
+	job, fresh := l.join(t, lost)
+	if !fresh {
+		return
+	}
 	l.start(func() {
-		for attempt := 0; len(lost) > 0; attempt++ {
+		defer l.forget(t, job)
+		for attempt := 0; ; attempt++ {
 			select {
 			case <-l.ctx.Done():
 				return
@@ -343,25 +449,37 @@ func (n nameResolver) retryLost(t *torrent.Torrent, lost []lostTracker) {
 				return
 			case <-l.due(attempt):
 			}
-			lost = n.recover(l.ctx, t, lost)
+			if l.settle(t, job, n.recover(l.ctx, t, l.take(job))) {
+				return
+			}
 		}
 	})
 }
 
 // recover resolves the names of lost again, gives t the trackers whose name
-// resolved now, and returns the rest.
+// resolved now, and returns the rest. A tracker whose name the server keeps
+// saying does not exist is dropped.
 func (n nameResolver) recover(ctx context.Context, t *torrent.Torrent, lost []lostTracker) []lostTracker {
 	hosts := map[string]bool{}
 	for _, l := range lost {
 		hosts[l.u.Hostname()] = true
 	}
-	resolved := n.resolveHosts(ctx, hosts)
+	resolved, failed := n.lookupHosts(ctx, hosts)
 
 	var back [][]string
 	var still []lostTracker
 	for _, l := range lost {
 		a, ok := resolved[l.u.Hostname()]
 		if !ok {
+			if missingName(failed[l.u.Hostname()]) {
+				l.misses++
+			} else {
+				l.misses = 0
+			}
+			if l.misses >= maxNameMisses {
+				n.logger().Warn("tracker name does not exist, not trying again", "host", l.u.Hostname())
+				continue
+			}
 			still = append(still, l)
 			continue
 		}

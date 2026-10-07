@@ -95,6 +95,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadInvalidMagnet': 'The magnet link is invalid',
   'errInstall.downloadMetadataRequired': 'Fetch the torrent metadata first',
   'errInstall.downloadNoClient': 'The torrent client is unavailable',
+  'errInstall.downloadClientStartFailed': 'The torrent client did not start',
   'errInstall.downloadNoFilesSelected': 'No files were selected',
   'errInstall.downloadNoFreeSpace': 'Could not determine free disk space',
   'errInstall.downloadNoMetadata': 'Could not fetch the torrent metadata',

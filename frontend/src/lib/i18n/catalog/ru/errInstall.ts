@@ -92,6 +92,7 @@ export const errInstall = {
   'errInstall.downloadInvalidMagnet': 'некорректная magnet-ссылка',
   'errInstall.downloadMetadataRequired': 'сначала получите метаданные торрента',
   'errInstall.downloadNoClient': 'торрент-клиент недоступен',
+  'errInstall.downloadClientStartFailed': 'торрент-клиент не запустился',
   'errInstall.downloadNoFilesSelected': 'не выбрано ни одного файла',
   'errInstall.downloadNoFreeSpace': 'не удалось определить свободное место на диске',
   'errInstall.downloadNoMetadata': 'не удалось получить метаданные торрента',

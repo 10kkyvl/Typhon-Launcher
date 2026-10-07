@@ -30,6 +30,7 @@ var (
 	errProxyMismatch     = uierr.New("download.proxy_credentials_mismatch", "сохранённый пароль относится к другому имени пользователя прокси: введите пароль заново")
 	errProxyNotSet       = uierr.New("download.proxy_not_configured", "прокси не настроен")
 	errProxyPasswordSize = uierr.New("download.proxy_password_invalid", "пароль прокси не должен быть длиннее 255 байт")
+	errClientStart       = uierr.New("download.client_start_failed", "торрент-клиент не запустился")
 	errNoMetadataProxy   = uierr.New("download.no_metadata_proxy", "метаданные не получены: через прокси работают только HTTP-трекеры, поиск по DHT и UDP-трекерам отключён")
 )
 

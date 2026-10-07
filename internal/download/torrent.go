@@ -109,21 +109,23 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 			closeDefaultStorage(tc)
 			return nil, err
 		}
+		c := &client{
+			down:             tc.DownloadRateLimiter,
+			up:               tc.UploadRateLimiter,
+			metaDir:          metaDir,
+			completion:       wrapped,
+			httpTrackersOnly: plan.mode == settings.NetworkProxy,
+			filterTrackers:   attach.trackers,
+			retryTrackers:    attach.retry,
+			later:            attach.later,
+		}
+		guardNetwork(tc, c.halted)
 		cl, err := openTorrentClient(tc)
 		if err == nil {
 			attach.attach(cl)
+			c.cl = cl
 			slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
-			return &client{
-				cl:               cl,
-				down:             tc.DownloadRateLimiter,
-				up:               tc.UploadRateLimiter,
-				metaDir:          metaDir,
-				completion:       wrapped,
-				httpTrackersOnly: plan.mode == settings.NetworkProxy,
-				filterTrackers:   attach.trackers,
-				retryTrackers:    attach.retry,
-				later:            attach.later,
-			}, nil
+			return c, nil
 		}
 		closeDefaultStorage(tc)
 		attach.later.stop()
@@ -201,6 +203,7 @@ func (c *client) halted() bool { return c.stopped.Load() }
 func (c *client) halt() {
 	// Set first: a torrent added while the sweep runs is halted by add.
 	c.stopped.Store(true)
+	c.later.stop()
 	for _, t := range c.cl.Torrents() {
 		haltTorrent(t)
 	}

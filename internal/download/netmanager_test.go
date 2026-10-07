@@ -890,6 +890,74 @@ func TestClientStartFailureIsDownWithItsOwnCode(t *testing.T) {
 	}
 }
 
+func TestClientStartFailureKeepsTheCodeOfItsCause(t *testing.T) {
+	cases := []struct {
+		name     string
+		mutate   func(*settings.Settings)
+		cause    error
+		wantCode string
+	}{
+		{"direct, cause with a code", nil, errNetIfaceNoAddr, "download.net_interface_no_address"},
+		{"proxy, cause with a code", viaProxy, errProxyAuthFailed, "download.proxy_auth_failed"},
+		{"direct, cause without a code", nil, errors.New("bind failed"), "download.no_client"},
+		{"proxy, cause without a code", viaProxy, errors.New("bind failed"), "download.no_client"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newNetRig(t, c.mutate)
+			r.builds.fail(c.cause)
+			r.reconcile(t)
+			st := r.state()
+			if st.State != NetworkDown || st.Code != c.wantCode {
+				t.Fatalf("state = %+v, want code %s", st, c.wantCode)
+			}
+			if strings.Contains(st.Reason, "typhon:") {
+				t.Fatalf("reason %q carries the code prefix", st.Reason)
+			}
+		})
+	}
+}
+
+func TestNoClientErrorSaysWhyTheDirectClientDidNotStart(t *testing.T) {
+	cases := []struct {
+		name     string
+		mutate   func(*settings.Settings)
+		wantCode string
+	}{
+		{"direct", nil, "download.client_start_failed"},
+		{"proxy", viaProxy, "download.network_down"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newNetRig(t, c.mutate)
+			r.builds.fail(errors.New("bind failed"))
+			r.reconcile(t)
+
+			_, err := r.m.FetchMetadata("magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d")
+			if got := uierr.Code(err); got != c.wantCode {
+				t.Fatalf("FetchMetadata with no client = %v (code %q), want code %q", err, got, c.wantCode)
+			}
+			if c.wantCode == "download.client_start_failed" && !strings.Contains(err.Error(), "bind failed") {
+				t.Fatalf("error %q does not carry the cause", err)
+			}
+		})
+	}
+}
+
+func TestInterfaceWithoutAnIndexIsRefused(t *testing.T) {
+	r := newNetRig(t, viaInterface)
+	r.net.set(ifaceInfo{Name: "vpn0", Index: 0, Up: true, Addrs: []netip.Addr{netip.MustParseAddr("10.8.0.2")}})
+	r.reconcile(t)
+
+	st := r.state()
+	if st.State != NetworkDown || st.Code != "download.net_interface_missing" {
+		t.Fatalf("state = %+v: an adapter without an index cannot be pinned and must not be bound", st)
+	}
+	if n := r.builds.built(); n != 0 {
+		t.Fatalf("a client was built %d times for an adapter that cannot be pinned", n)
+	}
+}
+
 func TestProxyChecks(t *testing.T) {
 	t.Run("unreachable", func(t *testing.T) {
 		r := newNetRig(t, viaProxy)

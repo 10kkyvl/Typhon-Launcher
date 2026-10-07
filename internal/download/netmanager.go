@@ -10,6 +10,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/anacrolix/torrent/storage"
 )
@@ -81,7 +82,26 @@ func (m *Manager) offlineLocked() bool {
 	return m.netState.State == NetworkDown || m.switching
 }
 
+var errClientGone = errors.New("the client this restore was made for is gone")
+
+func checkingState(mode string) NetworkState {
+	return NetworkState{Mode: mode, State: NetworkDown, Code: uierr.Code(errNetworkDown), Reason: "проверка сети"}
+}
+
+// buildFailure is the cause a failed client start goes down with: the code of
+// the reason when it has one, so the window shows what is wrong and not that
+// there is no client.
+func buildFailure(err error) error {
+	if uierr.Code(err) != "" {
+		return err
+	}
+	return fmt.Errorf("%w: %w", errNoClient, err)
+}
+
 func (m *Manager) noClientLocked() error {
+	if m.netState.State == NetworkDown && m.netState.Mode == settings.NetworkDirect && m.netState.Code == uierr.Code(errNoClient) && m.startErr != nil {
+		return fmt.Errorf("%w: %w", errClientStart, m.startErr)
+	}
 	if m.offlineLocked() {
 		return errNetworkDown
 	}
@@ -236,6 +256,12 @@ func (m *Manager) SetProxyPassword(username, password string) error {
 		// The settings may have taken the login over while this call was reading
 		// them; then nobody else will come for the entry.
 		return m.settleLocked(m.config().ProxyUsername)
+	}
+	if password == "" && username != saved {
+		if m.typedPass != nil && m.typedPass.user == username {
+			m.typedPass = nil
+		}
+		return nil
 	}
 	if password == "" {
 		if err := m.proxyStore.Delete(); err != nil {
@@ -420,6 +446,9 @@ func (m *Manager) resolveInterface(cfg settings.Settings, active *netPlan) (netP
 	if !ok {
 		return netPlan{}, fmt.Errorf("%w: %s", errNetIfaceMissing, cfg.NetworkInterface)
 	}
+	if ifc.Index == 0 {
+		return netPlan{}, fmt.Errorf("%w: %s: no interface index to pin the sockets to", errNetIfaceMissing, ifc.Name)
+	}
 	if !ifc.Up {
 		return netPlan{}, fmt.Errorf("%w: %s", errNetIfaceDown, ifc.Name)
 	}
@@ -523,6 +552,7 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 		m.setSwitching(true)
 		defer m.setSwitching(false)
 		m.teardownClient()
+		m.enterChecking(cfg.NetworkMode)
 		hasClient, active = false, nil
 	}
 
@@ -543,6 +573,13 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 	}
 	m.teardownClient()
 	m.bringUp(ctx, cfg, plan)
+}
+
+func (m *Manager) enterChecking(mode string) {
+	m.mu.Lock()
+	m.netActive = nil
+	m.setNetStateLocked(checkingState(mode))
+	m.mu.Unlock()
 }
 
 func (m *Manager) enterDown(mode string, cause error) {
@@ -587,7 +624,10 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	cl, err := build(clientCtx, cfg, m.metaDir, completion, plan)
 	if err != nil {
 		cancelClient()
-		m.enterDown(cfg.NetworkMode, fmt.Errorf("%w: %w", errNoClient, err))
+		m.mu.Lock()
+		m.startErr = err
+		m.mu.Unlock()
+		m.enterDown(cfg.NetworkMode, buildFailure(err))
 		return
 	}
 
@@ -605,6 +645,7 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	// Cleared in the step that installs the client: a request that comes in
 	// afterwards finds a client, and one that came in before was told to wait.
 	m.switching = false
+	m.startErr = nil
 	active := plan
 	m.netActive = &active
 	if m.setNetStateLocked(NetworkState{Mode: plan.mode, State: NetworkOK, Address: plan.address(), Warning: plan.warning()}) {

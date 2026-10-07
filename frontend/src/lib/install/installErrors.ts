@@ -87,6 +87,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.invalid_magnet': 'errInstall.downloadInvalidMagnet',
   'download.metadata_required': 'errInstall.downloadMetadataRequired',
   'download.no_client': 'errInstall.downloadNoClient',
+  'download.client_start_failed': 'errInstall.downloadClientStartFailed',
   'download.no_files_selected': 'errInstall.downloadNoFilesSelected',
   'download.no_free_space': 'errInstall.downloadNoFreeSpace',
   'download.no_metadata': 'errInstall.downloadNoMetadata',
