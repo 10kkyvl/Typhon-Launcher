@@ -82,7 +82,7 @@ func startDiscoveryRun(rs runSpec) (*exec.Cmd, windows.Handle, error) {
 		return nil, 0, err
 	}
 
-	group, groupErr := groupProcess(cmd.Process.Pid, true)
+	group, groupErr := groupProcess(cmd.Process.Pid, true, true)
 	if groupErr != nil {
 		if killErr := cmd.Process.Kill(); killErr != nil {
 			slog.Warn("kill discovery installer", "path", rs.Path, "error", killErr)

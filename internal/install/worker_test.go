@@ -223,7 +223,7 @@ func TestLimitJobSucceedsRegardlessOfKillOnCloseSupport(t *testing.T) {
 			t.Errorf("CloseHandle: %v", err)
 		}
 	}()
-	if err := limitJob(job); err != nil {
+	if err := limitJob(job, true); err != nil {
 		t.Fatalf("limitJob: %v", err)
 	}
 }

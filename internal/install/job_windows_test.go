@@ -40,7 +40,7 @@ func newTestJob(t *testing.T) windows.Handle {
 
 func TestLimitJobSetsKillOnClose(t *testing.T) {
 	job := newTestJob(t)
-	if err := limitJob(job); err != nil {
+	if err := limitJob(job, true); err != nil {
 		t.Fatalf("limitJob: %v", err)
 	}
 	info := queryJobLimits(t, job)
@@ -59,9 +59,24 @@ func TestLimitJobSetsKillOnClose(t *testing.T) {
 	}
 }
 
+func TestLimitJobForAnUninstallerKeepsItAlive(t *testing.T) {
+	job := newTestJob(t)
+	if err := limitJob(job, false); err != nil {
+		t.Fatalf("limitJob: %v", err)
+	}
+	info := queryJobLimits(t, job)
+	flags := info.BasicLimitInformation.LimitFlags
+	if flags&windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE != 0 {
+		t.Errorf("job limit flags %#x kill an uninstaller with its owner", flags)
+	}
+	if flags&windows.JOB_OBJECT_LIMIT_PRIORITY_CLASS == 0 {
+		t.Errorf("job limit flags %#x lost the priority limit", flags)
+	}
+}
+
 func TestReleaseJobDropsOnlyKillOnClose(t *testing.T) {
 	job := newTestJob(t)
-	if err := limitJob(job); err != nil {
+	if err := limitJob(job, true); err != nil {
 		t.Fatalf("limitJob: %v", err)
 	}
 	releaseJob(job, "installer.exe")
@@ -94,7 +109,7 @@ func TestClosingGroupKillsBackgroundInstaller(t *testing.T) {
 		<-done
 	})
 
-	group, err := groupProcess(cmd.Process.Pid, true)
+	group, err := groupProcess(cmd.Process.Pid, true, true)
 	if err != nil {
 		t.Fatalf("groupProcess: %v", err)
 	}
