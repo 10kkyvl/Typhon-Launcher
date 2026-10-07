@@ -205,6 +205,8 @@ type memStore struct {
 	cred    account.Credential
 	present bool
 	loadErr error
+	saveErr error
+	users   []string
 	saved   int
 	deleted int
 	loads   int
@@ -240,7 +242,11 @@ func (s *memStore) Load() (account.Credential, error) {
 func (s *memStore) Save(c account.Credential) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	s.cred, s.present = c, true
+	s.users = append(s.users, c.Username)
 	s.saved++
 	return nil
 }
