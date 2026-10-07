@@ -5,7 +5,7 @@
 //   node cdp.mjs targets [--json]
 //   node cdp.mjs eval '<js>' | eval -          (expression from stdin with "-")
 //   node cdp.mjs text [--limit N]
-//   node cdp.mjs click '<visible text>' [--nth N]
+//   node cdp.mjs click '<visible text>' [--nth N] [--aria]   (--aria: exact aria-label, for switches and icon buttons)
 //   node cdp.mjs fill '<css selector>' '<value>'
 //   node cdp.mjs wait '<text>' [timeoutMs] [--gone]
 //   node cdp.mjs shot <file.png>
@@ -42,7 +42,7 @@ class Fail extends Error {
 const BENIGN_LOG_URLS = ['/wails/custom.js'];
 
 const VALUE_FLAGS = new Set(['limit', 'nth', 'target', 'connect-ms']);
-const BOOL_FLAGS = new Set(['json', 'gone', 'fail-on-error']);
+const BOOL_FLAGS = new Set(['json', 'gone', 'fail-on-error', 'aria']);
 
 function parseArgs(argv) {
   const pos = [];
@@ -254,7 +254,7 @@ function formatValue(r) {
 }
 
 // Runs inside the page. Returns where to click, or why there is nothing to click.
-function locate(query, nth) {
+function locate(query, nth, aria) {
   const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
   const q = norm(query);
   const ql = q.toLowerCase();
@@ -288,12 +288,14 @@ function locate(query, nth) {
   for (const el of document.querySelectorAll('body, body *')) {
     if (skip.has(el.tagName)) continue;
     const label = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`.toLowerCase();
-    if (!(el.textContent ?? '').toLowerCase().includes(ql) && !label.includes(ql)) continue;
+    if (aria) {
+      if (norm(el.getAttribute('aria-label')).toLowerCase() !== ql) continue;
+    } else if (!(el.textContent ?? '').toLowerCase().includes(ql) && !label.includes(ql)) continue;
     if (!visible(el)) continue;
     all.push({ el, text: norm(el.innerText ?? el.textContent), aria: norm(el.getAttribute('aria-label')), title: norm(el.getAttribute('title')) });
   }
 
-  const tiers = [
+  const tiers = aria ? [['aria', () => true]] : [
     ['exact', (c) => c.text === q],
     ['exact-ignore-case', (c) => c.text.toLowerCase() === ql],
     ['includes', (c) => c.text.toLowerCase().includes(ql)],
@@ -397,9 +399,9 @@ const commands = {
   },
 
   async click({ pos, flags, session }) {
-    if (pos.length !== 1 || !pos[0].trim()) throw new Fail(EXIT_USAGE, 'usage: click <visible text> [--nth N]');
+    if (pos.length !== 1 || !pos[0].trim()) throw new Fail(EXIT_USAGE, 'usage: click <visible text> [--nth N] [--aria]');
     const nth = intFlag(flags, 'nth', 0, 0);
-    const found = (await evaluate(session, `(${locate})(${JSON.stringify(pos[0])}, ${nth})`)).value;
+    const found = (await evaluate(session, `(${locate})(${JSON.stringify(pos[0])}, ${nth}, ${Boolean(flags.aria)})`)).value;
     if (!found?.ok) {
       const extra = found?.candidates ? `\ncandidates: ${JSON.stringify(found.candidates)}` : found?.visibleClickables ? `\nvisible clickables: ${JSON.stringify(found.visibleClickables)}` : '';
       throw new Fail(EXIT_FAIL, `click "${pos[0]}": ${found?.reason ?? 'locate failed'}${extra}`);
