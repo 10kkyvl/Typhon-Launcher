@@ -53,6 +53,12 @@ var onCheckJoined = func() {}
 // its status is committed and before the schedule decides on the next one.
 var onQuietCheckDone = func() {}
 
+// restartGrace is added to the worker's parentExitTimeout before the launcher
+// concludes that it was never replaced. The worker counts that timeout from
+// its own start, which comes after ours: without the margin the launcher could
+// report a miss while the worker is still willing to wait.
+var restartGrace = 15 * time.Second
+
 type Service struct {
 	mu     sync.Mutex
 	dir    string
@@ -65,9 +71,13 @@ type Service struct {
 	busy           bool
 	check          *checkCall
 	downloadCancel context.CancelFunc
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
+	restart        *time.Timer
+	// onRestartMissed is a test seam on the instance rather than a package
+	// variable: the timer that calls it outlives the test that armed it.
+	onRestartMissed func()
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
 
 	currentVersion  string
 	pendingArtifact *Artifact
@@ -195,33 +205,19 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 	}
 
+	if v.ReadyPath != "" && v.Artifact != nil {
+		v, err = s.vetReady(startupCtx, v)
+		if err != nil {
+			return err
+		}
+	}
+
 	s.mu.Lock()
 	s.status = statusFromStored(v, s.currentVersion)
 	if s.status.State == StateReady {
 		s.readyPath = v.ReadyPath
 		s.readyArtifact = v.Artifact
 	}
-	s.mu.Unlock()
-
-	if v.ReadyPath != "" && v.Artifact != nil {
-		if verr := VerifyFile(startupCtx, v.ReadyPath, *v.Artifact); verr != nil {
-			if rerr := os.Remove(v.ReadyPath); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-				return fmt.Errorf("selfupdate: remove invalid ready artifact: %w", rerr)
-			}
-			v.Artifact = nil
-			v.ReadyPath = ""
-			if serr := s.store.Save(v); serr != nil {
-				return fmt.Errorf("selfupdate: persist cleared ready state: %w", serr)
-			}
-			s.mu.Lock()
-			s.status = statusFromStored(v, s.currentVersion)
-			s.readyPath = ""
-			s.readyArtifact = nil
-			s.mu.Unlock()
-		}
-	}
-
-	s.mu.Lock()
 	keepVersion := ""
 	if s.status.State == StateReady || s.status.State == StateAvailable {
 		keepVersion = s.status.AvailableVersion
@@ -229,7 +225,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Unlock()
 
 	if err := s.cleanupCache(startupCtx, keepVersion); err != nil {
-		return fmt.Errorf("selfupdate: clean cache: %w", err)
+		if ctxErr := startupCtx.Err(); ctxErr != nil {
+			return fmt.Errorf("selfupdate: clean cache: %w", ctxErr)
+		}
+		// The cache is disposable and the state it must not lose is already
+		// loaded: a scanner holding a file without FILE_SHARE_DELETE is no
+		// reason to refuse to start, and the next start sweeps again.
+		slog.Warn("selfupdate: clean cache", "error", err)
 	}
 
 	s.wg.Add(1)
@@ -241,6 +243,8 @@ func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	cancel := s.cancel
 	download := s.downloadCancel
+	restart := s.restart
+	s.restart = nil
 	s.mu.Unlock()
 	if download != nil {
 		download()
@@ -248,8 +252,39 @@ func (s *Service) ServiceShutdown() error {
 	if cancel != nil {
 		cancel()
 	}
+	if restart != nil && restart.Stop() {
+		s.wg.Done()
+	}
 	s.wg.Wait()
 	return nil
+}
+
+// vetReady decides whether the installer state.json calls ready can still be
+// trusted. A path that is not <cache>/<version>/<name> is dropped from the
+// record and the file behind it is left alone; a file that fails verification
+// is deleted, but the record goes either way so that nothing later offers or
+// installs an artifact that failed to be removed.
+func (s *Service) vetReady(ctx context.Context, v stored) (stored, error) {
+	_, _, pathErr := artifactRel(s.dir, v.ReadyPath)
+	var verifyErr error
+	if pathErr == nil {
+		verifyErr = VerifyFile(ctx, v.ReadyPath, *v.Artifact)
+	}
+	if pathErr == nil && verifyErr == nil {
+		return v, nil
+	}
+
+	if pathErr != nil {
+		slog.Warn("selfupdate: ready artifact is not inside the cache, dropping the record and leaving the file", "path", v.ReadyPath, "error", pathErr)
+	} else if rerr := removeCached(s.dir, v.ReadyPath); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		slog.Warn("selfupdate: remove invalid ready artifact", "path", v.ReadyPath, "verify", verifyErr, "error", rerr)
+	}
+	v.Artifact = nil
+	v.ReadyPath = ""
+	if serr := s.store.Save(v); serr != nil {
+		return v, fmt.Errorf("selfupdate: persist cleared ready state: %w", serr)
+	}
+	return v, nil
 }
 
 // takeOutcome picks up what the update worker left behind. The install runs
@@ -275,7 +310,10 @@ func (s *Service) takeOutcome() error {
 	s.mu.Unlock()
 
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("selfupdate: remove update outcome: %w", err)
+		// Already read and kept in memory: a scanner holding the record open is
+		// no reason to refuse to start. At worst it is reported once more, and
+		// outcomeMaxAge ends that.
+		slog.Warn("selfupdate: remove update outcome", "path", path, "error", err)
 	}
 	return nil
 }
@@ -347,7 +385,15 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 		}
 	}()
 
-	return fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
+	// One entry another process holds open must not stop the sweep of the
+	// rest: failures are collected and reported together.
+	var failed []error
+	remove := func(relPath string, rm func(string) error) {
+		if err := rm(relPath); err != nil {
+			failed = append(failed, fmt.Errorf("remove %s: %w", relPath, err))
+		}
+	}
+	walkErr := fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -369,20 +415,19 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			if keepVersion != "" && d.Name() == keepVersion {
 				return nil
 			}
-			if err := root.RemoveAll(relPath); err != nil {
-				return err
-			}
+			remove(relPath, root.RemoveAll)
 			return fs.SkipDir
 		case depth == 1:
 			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName {
 				return nil
 			}
-			return root.Remove(relPath)
+			remove(relPath, root.Remove)
 		case depth == 2 && !d.IsDir() && strings.HasPrefix(d.Name(), "."):
-			return root.Remove(relPath)
+			remove(relPath, root.Remove)
 		}
 		return nil
 	})
+	return errors.Join(append(failed, walkErr)...)
 }
 
 // nextCheckDelay is the pause before the next quiet check after failures
@@ -849,10 +894,44 @@ func (s *Service) ApplyUpdate(language string) error {
 		return rollback(err)
 	}
 
+	s.watchRestart()
 	if a := application.Get(); a != nil {
 		a.Quit()
 	}
 	return nil
+}
+
+// watchRestart is the launcher's end of the worker's parentExitTimeout. After
+// a successful ApplyUpdate the process is meant to be gone; if it is still
+// here once the worker has given up on it (and will not relaunch), the status
+// would stay applying with the service busy for good.
+func (s *Service) watchRestart() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.wg.Add(1)
+	s.restart = time.AfterFunc(parentExitTimeout+restartGrace, func() {
+		defer s.wg.Done()
+		s.restartMissed()
+	})
+}
+
+func (s *Service) restartMissed() {
+	s.mu.Lock()
+	s.restart = nil
+	if s.status.State != StateApplying {
+		s.mu.Unlock()
+		return
+	}
+	s.busy = false
+	status := errorStatus(s.status, "apply", errParentStillRunning)
+	status.State = StateReady
+	s.status = status
+	hook := s.onRestartMissed
+	s.mu.Unlock()
+	emit(eventStatus, status)
+	if hook != nil {
+		hook()
+	}
 }
 
 func (s *Service) DismissUpdate() error {
@@ -895,10 +974,15 @@ func (s *Service) DismissUpdate() error {
 	s.mu.Unlock()
 	emit(eventStatus, status)
 
-	if err := os.Remove(readyPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	err := removeCached(s.dir, readyPath)
+	switch {
+	case err == nil, errors.Is(err, fs.ErrNotExist):
+		return nil
+	case errors.Is(err, errNotCached):
+		slog.Warn("selfupdate: dismissed ready path is not inside the cache, leaving the file", "path", readyPath)
+		return nil
 	}
-	return nil
+	return err
 }
 
 // storeReleaseNotes runs after the status is committed on purpose: a

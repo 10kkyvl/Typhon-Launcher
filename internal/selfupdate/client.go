@@ -60,9 +60,19 @@ func NewClient(baseURL string) (*Client, error) {
 		// передачу обрывает stallTimeout в Download.
 		downloadClient: &http.Client{
 			Transport:     transport,
-			CheckRedirect: account.CheckRedirect,
+			CheckRedirect: checkArtifactRedirect,
 		},
 	}, nil
+}
+
+// checkArtifactRedirect gives a refused redirect its own error: it is a policy
+// answer, the same on every attempt, and Download must not take it for a
+// network failure worth retrying.
+func checkArtifactRedirect(req *http.Request, via []*http.Request) error {
+	if err := account.CheckRedirect(req, via); err != nil {
+		return fmt.Errorf("%w: redirect refused: %w", ErrInvalidArtifactURL, err)
+	}
+	return nil
 }
 
 func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
