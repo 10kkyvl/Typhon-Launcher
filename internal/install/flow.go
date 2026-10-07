@@ -105,10 +105,9 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
 	// Брокер поднимается заранее (HandleDownloadStarted), пока лаунчер ещё не
-	// знает, какой веткой пойдёт эта установка: только runSilent реально
-	// отдаёт ему задание (brokerFor), а интерактивная ветка вообще к нему не
-	// обращается. Освобождать его нужно на любом выходе из этой функции, а
-	// не только из silent-ветки — иначе интерактивный репак, для которого
+	// знает, какой веткой пойдёт эта установка: задание ему отдаёт и тихая, и
+	// интерактивная ветка (brokerFor). Освобождать его нужно на любом выходе
+	// из этой функции, а не только из одной ветки — иначе репак, для которого
 	// брокер подняли заранее, держит процесс с правами администратора до
 	// закрытия лаунчера.
 	defer s.DropBroker(item.DownloadID)
@@ -129,7 +128,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if item.Silent && item.Destination != "" {
+	if runsSilently(item) {
 		if err := s.rememberInstallerDestination(id, item.Destination); err != nil {
 			return err
 		}
@@ -142,15 +141,23 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		return err
 	}
 
+	engine := item.Engine
+	if item.Type == TypeMsiInstaller {
+		engine = EngineMsi
+	}
+	handoff := s.brokerFor(item.DownloadID)
 	for _, installer := range installerChain(item) {
-		spec := runSpec{Path: installer, Dir: item.WorkingDir}
-		if item.Type == TypeMsiInstaller {
-			msiexec, err := systemExecutable("msiexec.exe")
-			if err != nil {
-				return err
-			}
-			spec = runSpec{Path: msiexec, Args: []string{"/i", installer}, Dir: item.WorkingDir}
+		spec, err := interactiveRunSpec(engine, installer, item.WorkingDir)
+		if err != nil {
+			return err
 		}
+		spec.ID = item.ID
+		spec.Engine = engine
+		spec.InstallerPath = installer
+		// Shell не передаётся: каталог игры мастер выбирает пользователь, и до
+		// конца установки он неизвестен, а воркеру цель уборки ярлыков нужна в
+		// задании. Ярлыки после интерактивной установки убирает лаунчер.
+		spec = s.bindWorker(spec, handoff, nil)
 
 		s.setExternal(id, true)
 		code, err := s.runner.run(ctx, spec)
@@ -242,23 +249,37 @@ type chainStep struct {
 // перезапуска лаунчера (finishResumed), чтобы пути состояния, брокер и ярлыки
 // задавались в одном месте.
 func (s *Service) chainSteps(item Installation, chain []string, from int, logPath string, opts installOptions, handoff *brokerHandoff, shared *shellHandoff) ([]chainStep, error) {
-	statePath := s.workerStatePath(item.ID)
-	infPath := s.workerInfPath(item.ID)
-	cancelPath := s.workerCancelPath(item.ID)
 	steps := make([]chainStep, 0, len(chain)-from)
 	for i := from; i < len(chain); i++ {
 		spec, err := silentSpec(item, chain[i], logPath, opts)
 		if err != nil {
 			return nil, err
 		}
-		spec.StatePath = statePath
-		spec.InfPath = infPath
-		spec.CancelPath = cancelPath
-		spec.Broker = handoff
-		spec.Shell = shared.forInstaller()
+		spec = s.bindWorker(spec, handoff, shared.forInstaller())
 		steps = append(steps, chainStep{number: i + 1, path: chain[i], spec: spec})
 	}
 	return steps, nil
+}
+
+// bindWorker привязывает задание к повышенному воркеру: файлы состояния,
+// отмены и разведки, брокер и уборка ярлыков. Единственное место, где они
+// задаются, — и для тихой цепочки, и для ручной установки (runInstaller),
+// иначе запуск, которому понадобился UAC, не находит, через что говорить с
+// воркером (errWorkerStatePath).
+func (s *Service) bindWorker(spec runSpec, handoff *brokerHandoff, shell *shellHandoff) runSpec {
+	spec.StatePath = s.workerStatePath(spec.ID)
+	spec.InfPath = s.workerInfPath(spec.ID)
+	spec.CancelPath = s.workerCancelPath(spec.ID)
+	spec.Broker = handoff
+	spec.Shell = shell
+	return spec
+}
+
+// runsSilently — единственное правило, по которому установка идёт тихой
+// веткой: им решают и runInstaller, и ServiceStartup, чтобы воркер ручной
+// установки после перезапуска не приняли за тихий.
+func runsSilently(item Installation) bool {
+	return item.Silent && item.Destination != ""
 }
 
 // beginChainStep записывает номер установщика цепочки до его запуска: если
@@ -547,6 +568,20 @@ func silentSpec(item Installation, installer, logPath string, opts installOption
 		Path: path, Args: plan.Args, Dir: item.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail, Background: true, Hidden: true,
 		ID: item.ID, Engine: item.Engine, InstallerPath: installer, Destination: item.Destination, LogPath: logPath, Options: opts,
 	}, nil
+}
+
+// interactiveRunSpec — запуск установщика без ключей тишины: общий для
+// лаунчера (runInstaller) и повышенного воркера (mainRunSpec), чтобы то, что
+// видит пользователь, не зависело от того, понадобились ли права администратора.
+func interactiveRunSpec(engine Engine, installer, dir string) (runSpec, error) {
+	if engine != EngineMsi {
+		return runSpec{Path: installer, Dir: dir, Interactive: true}, nil
+	}
+	msiexec, err := systemExecutable("msiexec.exe")
+	if err != nil {
+		return runSpec{}, err
+	}
+	return runSpec{Path: msiexec, Args: []string{"/i", installer}, Dir: dir, Interactive: true}, nil
 }
 
 func dirEmpty(dir string) (bool, error) {

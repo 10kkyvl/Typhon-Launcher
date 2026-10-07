@@ -175,7 +175,7 @@ type discoveryOutcome struct {
 }
 
 func shouldDiscoverComponents(in discoverySpec) bool {
-	return in.Engine == EngineInno && (in.Options.SkipExtras || in.Options.SkipShortcuts)
+	return !in.Interactive && in.Engine == EngineInno && (in.Options.SkipExtras || in.Options.SkipShortcuts)
 }
 
 func runMainInstall(ctx context.Context, spec workerSpec, components []string) (int, error) {
@@ -190,6 +190,15 @@ func runMainInstall(ctx context.Context, spec workerSpec, components []string) (
 }
 
 func mainRunSpec(spec workerSpec, components []string) (runSpec, error) {
+	if spec.Interactive {
+		rs, err := interactiveRunSpec(spec.Engine, spec.InstallerPath, spec.WorkingDir)
+		if err != nil {
+			return runSpec{}, err
+		}
+		rs.InstallerPath = spec.InstallerPath
+		rs.Destination = spec.Destination
+		return rs, nil
+	}
 	plan, err := silentArgs(spec.Engine, spec.InstallerPath, spec.Destination, spec.LogPath, spec.Options)
 	if err != nil {
 		return runSpec{}, err

@@ -73,6 +73,7 @@ export const errInstall = {
   'errInstall.installUnsafeRemoval': 'этот каталог нельзя удалять целиком',
   'errInstall.installUnsupportedArchive': 'формат архива не поддерживается, распакуйте вручную',
   'errInstall.installWorkerNotFinished': 'повышенный воркер установки не подтвердил завершение',
+  'errInstall.installWorkerStateMissing': 'установку с правами администратора не удалось подготовить: нет файла состояния',
   'errInstall.installWorkerSpecRejected': 'установка остановлена: задание для процесса с правами администратора было изменено после записи, запустите установку заново',
 
   'errInstall.downloadAddTorrentFailed': 'не удалось добавить торрент',
