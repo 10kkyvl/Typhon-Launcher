@@ -40,6 +40,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
     'The installer changed after administrator rights were requested, so it was not started. Start the installation again',
   'errInstall.installInstallerCancelled': 'The installation was cancelled',
   'errInstall.installInstallerFailed': 'The installer exited with an error',
+  'errInstall.installInstallerNeedsInteractive': 'The installer does not support silent installation: install the game manually',
+  'errInstall.installInterrupted': 'The installation was interrupted',
   'errInstall.installInstallerNoOutput': 'The installer did not create any files in the install folder',
   'errInstall.installInstallerNotConfirmedStopped': 'The installer did not confirm that it stopped',
   'errInstall.installInstallerStillRunning':

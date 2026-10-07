@@ -536,13 +536,13 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 // TestRunElevatedKeepsNotConfirmedStoppedEvenAfterConfirmedWorkerKill
 // закрывает разбор с ревью: terminate() доказывает только смерть ВОРКЕРА, а
-// не дерева процессов, которое он запустил. Воркер держит установщик живым
-// через job-объект с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
-// limitJob), но SetInformationJobObject может отказать (там же — «отказ
-// воспроизведён на этой машине, похоже на вмешательство защитного ПО»), и
-// limitJob в этом случае молча откатывается на лимиты без этого флага.
-// Значит убитый воркер не гарантирует убитый установщик, и класс ошибки
-// обязан остаться errInstallerNotConfirmedStopped: discardSilent (flow.go)
+// не дерева процессов, которое он запустил. Воркер держит установщик в
+// job-объекте с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
+// limitJob), и смерть воркера гасит дерево, но асинхронно и без подтверждения
+// для вызывающего; groupProcess к тому же может не завестись, и тогда
+// установщик живёт вне job-объекта. Значит убитый воркер не гарантирует
+// убитый установщик, и класс ошибки обязан остаться
+// errInstallerNotConfirmedStopped: discardSilent (flow.go)
 // делает RemoveAll только когда его нет, а RemoveAll по каталогу, в который
 // ещё может писать не убитый установщик, — гонка на единственной копии
 // данных (инвариант 9, тот же класс бага, что уже был закрыт КРИТ для

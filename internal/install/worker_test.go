@@ -208,12 +208,11 @@ func TestProcessRunnerContinuesAfterDiscoveryFailure(t *testing.T) {
 	}
 }
 
-// TestLimitJobSucceedsRegardlessOfKillOnCloseSupport закрывает п.4: на этой
-// машине SetInformationJobObject отклоняет JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-// с ERROR_INVALID_PARAMETER (похоже на вмешательство защитного ПО) — limitJob
-// обязан деградировать до приоритета/класса планирования, а не проваливать
-// запуск установщика целиком. До фикса (см. ТЕСТЫ в отчёте) ровно эта же
-// ошибка ловилась в groupProcess через TestAwaitDiscoveryIni*.
+// TestLimitJobSucceedsRegardlessOfKillOnCloseSupport: limitJob обязан
+// выставить лимиты на свежем job-объекте и не проваливать запуск установщика.
+// Раньше KILL_ON_JOB_CLOSE уходил в базовой структуре лимитов, и Windows
+// отвечала на него ERROR_INVALID_PARAMETER; kill-on-close проверяет
+// TestLimitJobSetsKillOnClose.
 func TestLimitJobSucceedsRegardlessOfKillOnCloseSupport(t *testing.T) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {

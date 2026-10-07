@@ -33,6 +33,8 @@ export const REASONS: Record<string, MessageKey> = {
   'install.installer_changed': 'errInstall.installInstallerChanged',
   'install.installer_cancelled': 'errInstall.installInstallerCancelled',
   'install.installer_failed': 'errInstall.installInstallerFailed',
+  'install.installer_needs_interactive': 'errInstall.installInstallerNeedsInteractive',
+  'install.interrupted': 'errInstall.installInterrupted',
   'install.installer_no_output': 'errInstall.installInstallerNoOutput',
   'install.installer_not_confirmed_stopped': 'errInstall.installInstallerNotConfirmedStopped',
   'install.installer_still_running': 'errInstall.installInstallerStillRunning',

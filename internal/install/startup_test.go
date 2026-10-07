@@ -160,7 +160,7 @@ func TestServiceStartupInterruptsControlledInstallWithEmptyDestination(t *testin
 	})
 
 	got, ok := s.snapshot(id)
-	if !ok || got.Status != StatusInterrupted || got.Error != interruptedMessage {
+	if !ok || got.Status != StatusInterrupted || got.Error != errInterrupted.Error() {
 		t.Fatalf("status = %+v, want interrupted", got)
 	}
 }
