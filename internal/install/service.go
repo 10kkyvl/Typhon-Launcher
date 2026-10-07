@@ -311,7 +311,15 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 			item.BytesTotal = 0
 		}
 		if wasTransient {
-			alive, done := s.transientWorkerStatus(item.ID)
+			var alive, done bool
+			// Ручная установка под UAC тоже идёт через воркер, но продолжить её
+			// нельзя: снимки каталогов и ярлыков «до» остались в памяти умершего
+			// лаунчера, без них не найти, куда мастер положил игру. Запись
+			// помечается прерванной, а живой воркер всё равно не даст повторить
+			// установку поверх себя (Retry проверяет его через transientWorkerStatus).
+			if runsSilently(item) || !external(item.Type) {
+				alive, done = s.transientWorkerStatus(item.ID)
+			}
 			switch {
 			case alive || done:
 				resume = append(resume, item.ID)

@@ -15,7 +15,7 @@ import (
 const installWorkerFlag = "--install-worker"
 
 var (
-	errWorkerStatePath   = errors.New("путь состояния установки не задан")
+	errWorkerStatePath   = uierr.New("install.worker_state_missing", "у задания установки нет файла состояния, через который можно говорить с повышенным воркером")
 	errWorkerNotFinished = uierr.New("install.worker_not_finished", "повышенный воркер установки не подтвердил завершение")
 
 	// Подменяются в тестах, чтобы не поднимать настоящий UAC-запрос и не ждать
@@ -73,7 +73,8 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		CancelPath:    spec.CancelPath,
 		Options:       spec.Options,
 		Background:    spec.Background,
-		Hidden:        true,
+		Hidden:        !spec.Interactive,
+		Interactive:   spec.Interactive,
 	}
 	if spec.Shell != nil {
 		job := spec.Shell.Job

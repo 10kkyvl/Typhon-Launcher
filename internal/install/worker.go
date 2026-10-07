@@ -46,7 +46,11 @@ type workerSpec struct {
 	Options       installOptions `json:"options"`
 	Background    bool           `json:"background"`
 	Hidden        bool           `json:"hidden"`
-	Shell         *shellJob      `json:"shell,omitempty"`
+	// Interactive просит воркер запустить сам установщик без ключей тишины,
+	// с видимым окном и без разведки компонентов: пользователь проходит мастер
+	// сам, воркер нужен только ради прав администратора.
+	Interactive bool      `json:"interactive"`
+	Shell       *shellJob `json:"shell,omitempty"`
 }
 
 // discoverySpec — минимальный набор полей, нужных именно для разведки
@@ -61,12 +65,15 @@ type discoverySpec struct {
 	WorkingDir    string
 	InfPath       string
 	Options       installOptions
+	// Interactive отключает разведку: она существует только ради тихого
+	// прогона, а мастер установщика пользователь проходит сам.
+	Interactive bool
 }
 
 func (s workerSpec) discovery() discoverySpec {
 	return discoverySpec{
 		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options,
+		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options, Interactive: s.Interactive,
 	}
 }
 

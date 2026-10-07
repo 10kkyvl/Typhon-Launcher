@@ -76,6 +76,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installUnsafeRemoval': 'This folder cannot be removed entirely',
   'errInstall.installUnsupportedArchive': 'This archive format is not supported, extract it manually',
   'errInstall.installWorkerNotFinished': 'The elevated install worker did not confirm it finished',
+  'errInstall.installWorkerStateMissing': 'Could not prepare the install with administrator rights: its state file is missing',
   'errInstall.installWorkerSpecRejected': 'Installation stopped: the job handed to the administrator process was changed after it was written, start the installation again',
 
   'errInstall.downloadAddTorrentFailed': 'Could not add the torrent',
