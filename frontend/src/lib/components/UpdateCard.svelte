@@ -32,7 +32,15 @@
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
   const isUpdate = $derived(availability.kind === 'update');
   const isNewRevision = $derived(availability.reason === 'new_distribution_revision');
-  const headline = $derived(isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable'));
+  const noRelease = $derived(availability.kind === 'none');
+  const headline = $derived.by(() => {
+    if (noRelease) {
+      if (busy) return msg('ui.updateInProgress');
+      if (update.state === 'update_failed') return msg('ui.updateFailedTitle');
+      return msg('ui.latestVersionInstalled');
+    }
+    return isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable');
+  });
 
   const sizeLabel = $derived.by(() => {
     if (plan) return bytesSize(plan.downloadBytes);
@@ -68,9 +76,13 @@
     <div class="titles">
       <h3 class="card-title">{headline}</h3>
       <p class="versions">
-        <span class="from">{availability.installedVersion || msg('ui.versionUnknown')}</span>
-        <span class="arrow">→</span>
-        <span class="to">{availability.targetVersion || msg('ui.newRelease')}</span>
+        {#if noRelease}
+          <span class="to">{availability.installedVersion || msg('ui.versionUnknown')}</span>
+        {:else}
+          <span class="from">{availability.installedVersion || msg('ui.versionUnknown')}</span>
+          <span class="arrow">→</span>
+          <span class="to">{availability.targetVersion || msg('ui.newRelease')}</span>
+        {/if}
       </p>
     </div>
     <div class="badges">
@@ -78,7 +90,7 @@
         <StatusBadge kind="success" label={msg('ui.readyToInstall')} />
       {:else if busy}
         <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
-      {:else if !isUpdate}
+      {:else if !isUpdate && !noRelease}
         <StatusBadge kind="accent" label={msg(isNewRevision ? 'ui.distributionUpdated' : 'ui.versionsNotComparable')} dot={false} />
       {/if}
     </div>
@@ -91,7 +103,7 @@
       <ProgressBar value={update.progress * 100} />
       <span class="muted">{progressPercent(update.progress)}%</span>
     </div>
-  {:else}
+  {:else if !noRelease || plan}
     <dl class="summary">
       <div>
         <dt>{msg('ui.downloadLabel')}</dt>
@@ -116,7 +128,7 @@
     </dl>
   {/if}
 
-  {#if availability.reason && !isUpdate}
+  {#if availability.reason && !isUpdate && !noRelease}
     <p class="muted reason">{msg(updateReasonKey(availability.reason))}</p>
   {/if}
   {#if update.error}
@@ -138,7 +150,7 @@
         {msg('ui.details')}
         <ChevronDown size="1.5rem" strokeWidth={1.8} />
       </Button>
-    {:else}
+    {:else if !noRelease}
       <Button variant="primary" disabled={update.planning} onclick={() => preparePlan(update.gameId)}>
         {msg('ui.calculateUpdate')}
       </Button>
