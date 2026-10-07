@@ -622,6 +622,9 @@ func (m *Manager) fetchCancelled(cl *client) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.client != cl {
+		if m.offlineLocked() {
+			return m.offlineErrLocked()
+		}
 		return errNetworkDown
 	}
 	return errNoMetadata
@@ -745,8 +748,9 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
 	m.mu.Lock()
 	if m.offlineLocked() {
+		err := m.offlineErrLocked()
 		m.mu.Unlock()
-		return Download{}, errNetworkDown
+		return Download{}, err
 	}
 	p := m.pending[infoHash]
 	if p != nil {

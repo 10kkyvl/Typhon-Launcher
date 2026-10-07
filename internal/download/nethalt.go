@@ -56,7 +56,12 @@ func gateDial(dial dialFunc, halted func() bool) dialFunc {
 // the same reason, since trackers reuse them without dialling again.
 func guardNetwork(tc *torrent.ClientConfig, halted func() bool) {
 	tc.TrackerDialContext = gateDial(tc.TrackerDialContext, halted)
-	tc.HTTPDialContext = gateDial(tc.HTTPDialContext, halted)
+	// A dial hook turns HTTP/2 off in the library's transport. Web seeds and
+	// metainfo sources stop with the data and the merger hook, so the direct
+	// mode keeps its default transport.
+	if tc.HTTPDialContext != nil {
+		tc.HTTPDialContext = gateDial(tc.HTTPDialContext, halted)
+	}
 
 	listen := tc.TrackerListenPacket
 	if listen == nil {

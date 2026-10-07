@@ -36,7 +36,9 @@ var (
 	errNoUsableAddr = errors.New("the name has no address of a family the adapter has")
 )
 
-// dnsDial resolves through the servers of the bound adapter, from the bound address, or not at all: the system resolver would send the lookup outside the tunnel.
+// dnsDial resolves through the servers of the bound adapter, from the bound
+// address, or not at all: the system resolver would send the lookup outside
+// the tunnel.
 func (b *bindDialer) dnsDial(servers []netip.Addr) func(ctx context.Context, network, address string) (net.Conn, error) {
 	return func(ctx context.Context, network, _ string) (net.Conn, error) {
 		proto := "udp"
@@ -408,7 +410,9 @@ func (n nameResolver) resolveUDPTrackers(ctx context.Context, tiers [][]string) 
 	return out, lost
 }
 
-// retryLost exists because a name server that is not up yet, as right after a tunnel, would cost the torrent its UDP trackers for as long as the client lives.
+// retryLost exists because a name server that is not up yet, as right after a
+// tunnel, would cost the torrent its UDP trackers for as long as the client
+// lives.
 func (n nameResolver) retryLost(t *torrent.Torrent, lost []lostTracker) {
 	l := n.later
 	if l == nil || len(lost) == 0 {

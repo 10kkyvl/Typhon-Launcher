@@ -937,6 +937,9 @@ func TestNoClientErrorSaysWhyTheDirectClientDidNotStart(t *testing.T) {
 			if got := uierr.Code(err); got != c.wantCode {
 				t.Fatalf("FetchMetadata with no client = %v (code %q), want code %q", err, got, c.wantCode)
 			}
+			if _, startErr := r.m.StartDownloadFrom("a748597437835a2fd0d2e06f8edd86fee316a84d", t.TempDir(), nil, Origin{}); uierr.Code(startErr) != c.wantCode {
+				t.Fatalf("StartDownloadFrom with no client = %v, want code %q", startErr, c.wantCode)
+			}
 			if c.wantCode == "download.client_start_failed" && !strings.Contains(err.Error(), "bind failed") {
 				t.Fatalf("error %q does not carry the cause", err)
 			}

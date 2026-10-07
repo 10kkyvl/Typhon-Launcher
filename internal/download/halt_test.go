@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/torrent"
@@ -509,6 +510,12 @@ func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 	r.m.mu.Unlock()
 	if active != nil {
 		t.Fatalf("netActive = %+v while no client runs", active)
+	}
+	if _, err := r.m.FetchMetadata("magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d"); uierr.Code(err) != "download.network_checking" {
+		t.Fatalf("FetchMetadata while the new route is probed = %v, want the check code", err)
+	}
+	if _, err := r.m.StartDownloadFrom("a748597437835a2fd0d2e06f8edd86fee316a84d", t.TempDir(), nil, Origin{}); uierr.Code(err) != "download.network_checking" {
+		t.Fatalf("StartDownloadFrom while the new route is probed = %v, want the check code", err)
 	}
 	events := log.networks()
 	if last := events[len(events)-1]; last.State != NetworkDown {

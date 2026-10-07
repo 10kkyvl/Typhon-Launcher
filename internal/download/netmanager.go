@@ -92,13 +92,20 @@ func buildFailure(err error) error {
 }
 
 func (m *Manager) noClientLocked() error {
+	if m.offlineLocked() {
+		return m.offlineErrLocked()
+	}
+	return errNoClient
+}
+
+func (m *Manager) offlineErrLocked() error {
 	if m.netState.State == NetworkDown && m.netState.Mode == settings.NetworkDirect && m.netState.Code == uierr.Code(errNoClient) && m.startErr != nil {
 		return fmt.Errorf("%w: %w", errClientStart, m.startErr)
 	}
-	if m.offlineLocked() {
-		return errNetworkDown
+	if m.netState.Code == uierr.Code(errNetworkChecking) {
+		return errNetworkChecking
 	}
-	return errNoClient
+	return errNetworkDown
 }
 
 func (m *Manager) setSwitching(on bool) {
@@ -223,9 +230,9 @@ type pendingPass struct {
 // one the window is about to save with the settings and not necessarily the one
 // saved now. A password for the saved login goes to the store at once, and an
 // empty one removes it. One for another login only waits in memory, and an
-// empty one only forgets it: the store keeps the password of the login that works until the settings with
-// the new login are accepted, so a save that is refused cannot cost the old
-// password, and the monitor is not woken for it.
+// empty one only forgets it: the store keeps the password of the login that
+// works until the settings with the new login are accepted, so a save that is
+// refused cannot cost the old password, and the monitor is not woken for it.
 func (m *Manager) SetProxyPassword(username, password string) error {
 	if len(password) > maxProxyPassLen {
 		return errProxyPasswordSize

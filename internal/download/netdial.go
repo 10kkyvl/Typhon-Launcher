@@ -220,7 +220,8 @@ func (c *blockedPacketConn) SetDeadline(time.Time) error      { return nil }
 func (c *blockedPacketConn) SetReadDeadline(time.Time) error  { return nil }
 func (c *blockedPacketConn) SetWriteDeadline(time.Time) error { return nil }
 
-// proxyOnlyDial fails closed: the HTTP transports only ever dial the proxy, so any other address is a path it does not cover.
+// proxyOnlyDial fails closed: the HTTP transports only ever dial the proxy, so
+// any other address is a path it does not cover.
 func proxyOnlyDial(proxyHost string, proxyPort int) dialFunc {
 	wantHost, wantPort := proxyHost, strconv.Itoa(proxyPort)
 	d := &net.Dialer{Timeout: dialTimeout}
