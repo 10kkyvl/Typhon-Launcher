@@ -189,13 +189,24 @@ type proxySecret struct {
 	pass string
 }
 
+// clearPasswordCache drops the cached password and invalidates every read of
+// the store that started before it, so that a read which raced with a save
+// cannot put the old password back.
 func (m *Manager) clearPasswordCache() {
 	m.passMu.Lock()
 	m.passCache = nil
+	m.passGen++
 	m.passMu.Unlock()
 }
 
-func (m *Manager) SetProxyPassword(password string) error {
+// SetProxyPassword stores the password for the user name it is given, which is
+// the name the window is about to save with the settings and not necessarily
+// the one saved now; an empty password removes the stored one. Only a password
+// for the name that is saved now concerns the client that is running: one for
+// another name waits in the store until the settings with that name arrive,
+// and the monitor is not woken for it, so a window that saves the password
+// before the settings never takes a working proxy down in between.
+func (m *Manager) SetProxyPassword(username, password string) error {
 	if len(password) > maxProxyPassLen {
 		return errProxyPasswordSize
 	}
@@ -206,11 +217,15 @@ func (m *Manager) SetProxyPassword(password string) error {
 		if err := m.proxyStore.Delete(); err != nil {
 			return fmt.Errorf("%w: %w", errProxyCredentials, err)
 		}
-	} else if err := m.proxyStore.Save(account.Credential{Token: password, Username: m.config().ProxyUsername}); err != nil {
+	} else if err := m.proxyStore.Save(account.Credential{Token: password, Username: username}); err != nil {
 		return fmt.Errorf("%w: %w", errProxyCredentials, err)
 	}
-	m.clearPasswordCache()
-	m.kickNetwork()
+	// Asked after the save: settings that took the name over while it ran have
+	// kicked the monitor against the old credential, and need the kick again.
+	if password == "" || username == m.config().ProxyUsername {
+		m.clearPasswordCache()
+		m.kickNetwork()
+	}
 	return nil
 }
 
@@ -264,13 +279,14 @@ func (m *Manager) proxyPassword(user string) (string, error) {
 		m.passMu.Unlock()
 		return pass, nil
 	}
+	gen := m.passGen
 	m.passMu.Unlock()
 	if m.proxyStore == nil {
 		return "", fmt.Errorf("%w: no credential store", errProxyCredentials)
 	}
 	cred, err := m.proxyStore.Load()
 	if errors.Is(err, account.ErrNoCredential) {
-		return m.cachePassword(user, ""), nil
+		return m.cachePassword(user, "", gen), nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", errProxyCredentials, err)
@@ -278,12 +294,17 @@ func (m *Manager) proxyPassword(user string) (string, error) {
 	if cred.Username != user {
 		return "", errProxyMismatch
 	}
-	return m.cachePassword(user, cred.Token), nil
+	return m.cachePassword(user, cred.Token, gen), nil
 }
 
-func (m *Manager) cachePassword(user, pass string) string {
+// cachePassword remembers what a read of the store returned, unless the cache
+// was cleared since gen was taken: then the answer is the one the caller
+// asked for, but it is already out of date for the next one.
+func (m *Manager) cachePassword(user, pass string, gen uint64) string {
 	m.passMu.Lock()
-	m.passCache = &proxySecret{user: user, pass: pass}
+	if m.passGen == gen {
+		m.passCache = &proxySecret{user: user, pass: pass}
+	}
 	m.passMu.Unlock()
 	return pass
 }
@@ -433,6 +454,17 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 	hasClient := m.client != nil
 	m.mu.Unlock()
 
+	// The client is on a route the settings no longer ask for: it comes down
+	// before the new route is checked, not after, since the check of a proxy
+	// can take as long as the proxy takes to time out.
+	retired := hasClient && active != nil && !active.servesSettings(cfg)
+	if retired {
+		m.setSwitching(true)
+		defer m.setSwitching(false)
+		m.teardownClient()
+		hasClient, active = false, nil
+	}
+
 	plan, err := m.resolveNetwork(ctx, cfg, active)
 	if ctx.Err() != nil {
 		return
@@ -440,8 +472,10 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 	if err == nil && hasClient && active != nil && *active == plan {
 		return
 	}
-	m.setSwitching(true)
-	defer m.setSwitching(false)
+	if !retired {
+		m.setSwitching(true)
+		defer m.setSwitching(false)
+	}
 	if err != nil {
 		m.enterDown(cfg.NetworkMode, err)
 		return
@@ -527,6 +561,11 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 // and parks the downloads that were active as queued. It is the same for a
 // lost route and for a change of settings: in both the client the data was
 // served by is gone, and the downloads wait for the next one.
+//
+// The order is the point. The client is cut off from the network before
+// anything that can take long: the write of the parked downloads, which may
+// sit on a disk or a scanner, and the wait for jobs, which can be in the middle
+// of a recheck. Until the very last step the client stays open for them.
 func (m *Manager) teardownClient() {
 	m.mu.Lock()
 	cl := m.client
@@ -535,6 +574,8 @@ func (m *Manager) teardownClient() {
 		return
 	}
 	m.client = nil
+	// From here every job of the old client is stale: what it fails on from now
+	// on is not a failure of its download.
 	m.gen++
 	cancelClient := m.clientCancel
 	m.clientCtx, m.clientCancel = nil, nil
@@ -572,7 +613,22 @@ func (m *Manager) teardownClient() {
 	for _, j := range m.jobs {
 		jobs = append(jobs, j)
 	}
+	m.mu.Unlock()
 
+	// Told to stop, not waited for, and before the cut: a job that finds the
+	// client refusing work then already knows why.
+	if cancelClient != nil {
+		cancelClient()
+	}
+	for _, cancel := range fetches {
+		cancel()
+	}
+	for _, j := range jobs {
+		j.cancel()
+	}
+	cl.halt()
+
+	m.mu.Lock()
 	persist := false
 	for _, d := range m.items {
 		delete(m.rates, d.ID)
@@ -598,14 +654,7 @@ func (m *Manager) teardownClient() {
 	}
 	m.mu.Unlock()
 
-	if cancelClient != nil {
-		cancelClient()
-	}
-	for _, cancel := range fetches {
-		cancel()
-	}
 	for _, j := range jobs {
-		j.cancel()
 		<-j.done
 	}
 	for _, p := range pendings {

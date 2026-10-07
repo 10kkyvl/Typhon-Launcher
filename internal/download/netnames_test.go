@@ -64,18 +64,20 @@ func (f *fakeDNS) serve() {
 		f.mu.Lock()
 		f.sources = append(f.sources, from.String())
 		f.asked = append(f.asked, strings.TrimSuffix(q.Name.String(), "."))
+		restricted := len(f.names) > 0
+		known := f.names[q.Name.String()]
 		f.mu.Unlock()
 
 		resp := dnsmessage.Message{
 			Header:    dnsmessage.Header{ID: req.ID, Response: true, Authoritative: true, RecursionAvailable: true},
 			Questions: req.Questions,
 		}
-		if q.Type == dnsmessage.TypeA && (len(f.names) == 0 || f.names[q.Name.String()]) {
+		if q.Type == dnsmessage.TypeA && (!restricted || known) {
 			resp.Answers = []dnsmessage.Resource{{
 				Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60},
 				Body:   &dnsmessage.AResource{A: f.answer.As4()},
 			}}
-		} else if len(f.names) > 0 && !f.names[q.Name.String()] {
+		} else if restricted && !known {
 			resp.RCode = dnsmessage.RCodeNameError
 		}
 		out, err := resp.Pack()
@@ -84,6 +86,13 @@ func (f *fakeDNS) serve() {
 		}
 		logged(f.pc.WriteTo(out, from))
 	}
+}
+
+// allow makes the server answer for one more name from now on.
+func (f *fakeDNS) allow(name string) {
+	f.mu.Lock()
+	f.names[name+"."] = true
+	f.mu.Unlock()
 }
 
 func (f *fakeDNS) queriedFrom() []string {
@@ -197,7 +206,10 @@ func TestUDPTrackerHostsAreResolvedThroughTheAdapter(t *testing.T) {
 		{"udp://gone.example:2"},
 		{"::bad"},
 	}
-	got := names.resolveUDPTrackers(t.Context(), in)
+	got, lost := names.resolveUDPTrackers(t.Context(), in)
+	if len(lost) != 2 {
+		t.Fatalf("lost = %v, want the two names that did not resolve", lost)
+	}
 	want := [][]string{
 		{"udp://203.0.113.9:6969/announce", "udp://198.51.100.4:80", "http://h.example/a"},
 		{"udp://203.0.113.9:1"},
@@ -222,7 +234,7 @@ func TestUDPTrackerHostsAreResolvedThroughTheAdapter(t *testing.T) {
 	b := &bindDialer{ip4: netip.MustParseAddr("127.0.0.2"), ctx: t.Context()}
 	b.resolver = b.newResolver(nil)
 	blind := nameResolver{r: b.resolver, allow4: true}
-	got = blind.resolveUDPTrackers(t.Context(), in)
+	got, _ = blind.resolveUDPTrackers(t.Context(), in)
 	if len(got) != 1 || strings.Join(got[0], " ") != "udp://198.51.100.4:80 http://h.example/a" {
 		t.Fatalf("with no name server only the address and the http tracker stay: %v", got)
 	}
@@ -237,7 +249,9 @@ func TestInterfaceClientRewritesUDPTrackersAndKeepsTheOriginals(t *testing.T) {
 	const uri = "magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&dn=x" +
 		"&tr=udp%3A%2F%2Ftracker.example%3A6969%2Fannounce&tr=udp%3A%2F%2Fgone.example%3A80"
 	cl := offlineClient(t)
-	cl.filterTrackers = func(tiers [][]string) [][]string { return names.resolveUDPTrackers(t.Context(), tiers) }
+	cl.filterTrackers = func(tiers [][]string) ([][]string, []lostTracker) {
+		return names.resolveUDPTrackers(t.Context(), tiers)
+	}
 	lt, err := cl.addMagnet(uri, cl.metaDir, storageOpts{})
 	if err != nil {
 		t.Fatalf("addMagnet: %v", err)

@@ -56,6 +56,22 @@ func (p netPlan) dnsServers() []netip.Addr {
 	return out
 }
 
+// servesSettings is true while the route this plan binds the client to is the
+// one the settings ask for. The password is not part of the route: a client
+// that has to be rebuilt for another password is still on the right route.
+func (p netPlan) servesSettings(cfg settings.Settings) bool {
+	if p.mode != cfg.NetworkMode {
+		return false
+	}
+	switch p.mode {
+	case settings.NetworkInterface:
+		return strings.EqualFold(p.iface, cfg.NetworkInterface)
+	case settings.NetworkProxy:
+		return p.ptype == cfg.ProxyType && p.phost == cfg.ProxyHost && p.pport == cfg.ProxyPort && p.puser == cfg.ProxyUsername
+	}
+	return true
+}
+
 func (p netPlan) warning() string {
 	if p.mode == settings.NetworkInterface && p.dns == "" {
 		return uierr.Code(errNetIfaceNoDNS)
@@ -97,8 +113,13 @@ func (p netPlan) proxyURL() *url.URL {
 type netAttach struct {
 	dialers     []torrent.Dialer
 	udpListener bool
-	// trackers rewrites the tracker list of every torrent the client adds.
-	trackers func([][]string) [][]string
+	// trackers rewrites the tracker list of every torrent the client adds and
+	// hands back the trackers it had to leave out for now; retry takes them up
+	// again once the torrent exists.
+	trackers func([][]string) ([][]string, []lostTracker)
+	retry    func(*torrent.Torrent, []lostTracker)
+	// later is what retry runs on; the client stops it when it closes.
+	later *retrier
 }
 
 func (a netAttach) attach(cl *torrent.Client) {
@@ -136,8 +157,9 @@ func applyInterface(ctx context.Context, tc *torrent.ClientConfig, p netPlan) (n
 	}
 	b := &bindDialer{ip4: p.ip4, ip6: p.ip6, control: unicastControl(p.index), ctx: ctx}
 	b.resolver = b.newResolver(p.dnsServers())
-	names := nameResolver{r: b.resolver, allow4: p.ip4.IsValid(), allow6: p.ip6.IsValid()}
-	resolveTrackers := func(tiers [][]string) [][]string { return names.resolveUDPTrackers(ctx, tiers) }
+	later := newRetrier(ctx)
+	names := nameResolver{r: b.resolver, allow4: p.ip4.IsValid(), allow6: p.ip6.IsValid(), seen: newHostLog(), later: later}
+	resolveTrackers := func(tiers [][]string) ([][]string, []lostTracker) { return names.resolveUDPTrackers(ctx, tiers) }
 
 	tc.ListenHost = func(network string) string {
 		if strings.HasSuffix(network, "6") {
@@ -159,11 +181,14 @@ func applyInterface(ctx context.Context, tc *torrent.ClientConfig, p netPlan) (n
 	tc.DhtStartingNodes = names.dhtStartingNodes(ctx)
 	tc.MetainfoSourcesMerger = func(t *torrent.Torrent, mi *metainfo.MetaInfo) error {
 		spec := torrent.TorrentSpecFromMetaInfo(mi)
-		spec.Trackers = resolveTrackers(spec.Trackers)
-		return t.MergeSpec(spec)
+		var lost []lostTracker
+		spec.Trackers, lost = resolveTrackers(spec.Trackers)
+		err := t.MergeSpec(spec)
+		names.retryLost(t, lost)
+		return err
 	}
 
-	a := netAttach{udpListener: true, trackers: resolveTrackers}
+	a := netAttach{udpListener: true, trackers: resolveTrackers, retry: names.retryLost, later: later}
 	for _, d := range b.peerDialers() {
 		a.dialers = append(a.dialers, d)
 	}
@@ -211,7 +236,8 @@ func applyProxy(tc *torrent.ClientConfig, p netPlan) (netAttach, error) {
 		spec.Trackers = httpTrackerTiers(spec.Trackers)
 		return t.MergeSpec(spec)
 	}
-	return netAttach{dialers: []torrent.Dialer{netDialer{network: "tcp", dial: dial}}, trackers: httpTrackerTiers}, nil
+	keepHTTP := func(tiers [][]string) ([][]string, []lostTracker) { return httpTrackerTiers(tiers), nil }
+	return netAttach{dialers: []torrent.Dialer{netDialer{network: "tcp", dial: dial}}, trackers: keepHTTP}, nil
 }
 
 // httpTrackerTiers keeps the trackers a proxy can carry. UDP trackers need
