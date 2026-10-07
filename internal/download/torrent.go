@@ -83,21 +83,12 @@ type client struct {
 	metaDir    string
 	completion storage.PieceCompletion
 
-	// gen is the manager's number for this client, set once it is installed.
-	gen uint64
-	// httpTrackersOnly is set for a client behind a proxy, which can carry
-	// nothing but HTTP trackers.
+	gen              uint64
 	httpTrackersOnly bool
-	// filterTrackers rewrites the tracker list of every torrent before the
-	// engine sees it: a proxy drops what it cannot carry, an adapter has the
-	// host names of UDP trackers resolved through it. What it left out for now
-	// goes to retryTrackers once the torrent exists.
-	filterTrackers func([][]string) ([][]string, []lostTracker)
-	retryTrackers  func(*torrent.Torrent, []lostTracker)
-	later          *retrier
-	// stopped is set when the client is cut off from the network ahead of its
-	// close: it takes no new torrents and carries no data.
-	stopped atomic.Bool
+	filterTrackers   func([][]string) ([][]string, []lostTracker)
+	retryTrackers    func(*torrent.Torrent, []lostTracker)
+	later            *retrier
+	stopped          atomic.Bool
 }
 
 func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {

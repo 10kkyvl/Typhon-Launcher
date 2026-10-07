@@ -30,7 +30,6 @@ var errDirectBlocked = errors.New("direct connection is not allowed while the pr
 
 var errBadTarget = errors.New("not an address the proxy may be asked to reach")
 
-// maxTargetLen is the longest host name, a colon and the longest port.
 const maxTargetLen = 253 + len(":65535")
 
 // validProxyTarget says whether target may be written into a proxy request.
@@ -55,8 +54,6 @@ func validProxyTarget(target string) error {
 	return nil
 }
 
-// validProxyHost accepts an address without a zone or a plain ASCII DNS name;
-// a name outside ASCII has to come as punycode.
 func validProxyHost(host string) bool {
 	if ip, err := netip.ParseAddr(host); err == nil {
 		return ip.Zone() == ""
@@ -82,8 +79,6 @@ func validProxyHost(host string) bool {
 
 type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// netDialer adapts a dial function to the peer dialer the torrent client
-// takes; the network is fixed per dialer, as the client expects.
 type netDialer struct {
 	network string
 	dial    dialFunc
@@ -107,11 +102,8 @@ type bindDialer struct {
 	ip4, ip6 netip.Addr
 	control  func(network, address string, c syscall.RawConn) error
 	ctx      context.Context
-	// resolver resolves host names through the adapter; nil means the system
-	// one, which the interface mode never leaves in place.
 	resolver *net.Resolver
-	// dnsPort is 53 unless a test says otherwise.
-	dnsPort string
+	dnsPort  string
 }
 
 func (b *bindDialer) families(network string) ([]dialFamily, error) {
@@ -200,7 +192,6 @@ func (b *bindDialer) listenPacket(network, _ string) (net.PacketConn, error) {
 	return pc, nil
 }
 
-// blockedPacketConn is a UDP socket that never touches the network.
 type blockedPacketConn struct {
 	closed chan struct{}
 	once   sync.Once
@@ -229,10 +220,7 @@ func (c *blockedPacketConn) SetDeadline(time.Time) error      { return nil }
 func (c *blockedPacketConn) SetReadDeadline(time.Time) error  { return nil }
 func (c *blockedPacketConn) SetWriteDeadline(time.Time) error { return nil }
 
-// proxyOnlyDial lets the HTTP transports of the client reach the proxy and
-// nothing else. With a proxy configured they never dial anything but the
-// proxy, so any other address means a path the proxy does not cover, and that
-// path must fail closed.
+// proxyOnlyDial fails closed: the HTTP transports only ever dial the proxy, so any other address is a path it does not cover.
 func proxyOnlyDial(proxyHost string, proxyPort int) dialFunc {
 	wantHost, wantPort := proxyHost, strconv.Itoa(proxyPort)
 	d := &net.Dialer{Timeout: dialTimeout}
@@ -333,9 +321,6 @@ func contextError(err error) error {
 	return nil
 }
 
-// protocolError marks a failure in the middle of a proxy handshake, such as a
-// connection the proxy cut, as the proxy's fault; what already carries a
-// reason of its own, and a cancelled context, is left as it is.
 func protocolError(err error) error {
 	switch {
 	case err == nil:
@@ -362,8 +347,6 @@ type bufferedConn struct {
 
 func (c bufferedConn) Read(p []byte) (int, error) { return c.r.Read(p) }
 
-// timed runs a handshake on conn under ctx and a deadline, so a proxy that
-// stops answering cannot hold a dial forever.
 func timed(ctx context.Context, conn net.Conn, fn func() error) error {
 	deadline := time.Now().Add(handshakeTimeout)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
@@ -389,8 +372,6 @@ func timed(ctx context.Context, conn net.Conn, fn func() error) error {
 	return conn.SetDeadline(time.Time{})
 }
 
-// connectStatus sends a CONNECT for target and returns the status of the
-// answer. The caller decides what a status means.
 func connectStatus(conn net.Conn, br *bufio.Reader, target, auth string) (int, string, error) {
 	if err := validProxyTarget(target); err != nil {
 		return 0, "", err
@@ -464,9 +445,6 @@ func connectResult(status int, text string) error {
 	}
 }
 
-// socks5Handshake negotiates the method and the credentials and stops there:
-// it proves the proxy speaks SOCKS5 and accepts the login without asking it
-// to connect anywhere.
 func socks5Handshake(rw io.ReadWriter, user, pass string) error {
 	greeting := []byte{5, 1, 0}
 	if user != "" {
@@ -512,7 +490,6 @@ func socks5Handshake(rw io.ReadWriter, user, pass string) error {
 	}
 }
 
-// testProxy checks that the proxy is reachable and accepts the login.
 func testProxy(ctx context.Context, p netPlan) error {
 	d := net.Dialer{Timeout: handshakeTimeout}
 	conn, err := d.DialContext(ctx, "tcp", p.proxyAddr())

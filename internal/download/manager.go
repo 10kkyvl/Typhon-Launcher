@@ -618,8 +618,6 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	return torrentInfoOf(infoHash, info), nil
 }
 
-// fetchCancelled tells a fetch that the client it ran on was replaced from one
-// the caller cancelled.
 func (m *Manager) fetchCancelled(cl *client) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1942,8 +1940,6 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	m.settleRestored(jobCtx, j, lt, lt.t.Info())
 }
 
-// replaced says that the client a job was made for is gone, so whatever the job
-// failed on is not about its download.
 func (m *Manager) replaced(gen uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1954,8 +1950,6 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 	m.mu.Lock()
 	d := m.findLocked(j.id)
 	if d == nil || j.gen != m.gen {
-		// Either the download is gone or the client this engine belongs to was
-		// replaced while the job ran; in both cases nobody owns the engine.
 		m.mu.Unlock()
 		eng.drop()
 		return

@@ -36,9 +36,7 @@ var (
 	errNoUsableAddr = errors.New("the name has no address of a family the adapter has")
 )
 
-// dnsDial is what the resolver dials instead of the servers the system would
-// pick: the name servers of the bound adapter, from the bound address. A name
-// is then either resolved through the adapter or not at all.
+// dnsDial resolves through the servers of the bound adapter, from the bound address, or not at all: the system resolver would send the lookup outside the tunnel.
 func (b *bindDialer) dnsDial(servers []netip.Addr) func(ctx context.Context, network, address string) (net.Conn, error) {
 	return func(ctx context.Context, network, _ string) (net.Conn, error) {
 		proto := "udp"
@@ -86,19 +84,13 @@ func (b *bindDialer) newResolver(servers []netip.Addr) *net.Resolver {
 	return &net.Resolver{PreferGo: true, Dial: b.dnsDial(servers)}
 }
 
-// nameResolver serves the places where the library would resolve a name on its
-// own with the system resolver: UDP tracker hosts and the DHT bootstrap nodes.
 type nameResolver struct {
 	r      *net.Resolver
 	allow4 bool
 	allow6 bool
-	// log and seen make a failing name show up once; nil means the default
-	// logger and a record for every failure.
-	log  *slog.Logger
-	seen *hostLog
-	// later brings back the trackers whose name did not resolve; nil means
-	// they are not tried again.
-	later *retrier
+	log    *slog.Logger
+	seen   *hostLog
+	later  *retrier
 }
 
 type hostLog struct {
@@ -108,7 +100,6 @@ type hostLog struct {
 
 func newHostLog() *hostLog { return &hostLog{done: map[string]bool{}} }
 
-// first says whether this is the first time host is asked about.
 func (h *hostLog) first(host string) bool {
 	if h == nil {
 		return true
@@ -135,15 +126,11 @@ type retryJob struct {
 	lost []lostTracker
 }
 
-// retrier owns the goroutines that try the lost trackers again. They end with
-// the context, with their torrent, or when the client that owns the retrier
-// is closed.
 type retrier struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-	// after says when the next try is due; nil means the backoff below.
-	after func(attempt int) <-chan time.Time
+	after  func(attempt int) <-chan time.Time
 
 	mu     sync.Mutex
 	closed bool
@@ -243,9 +230,6 @@ func (r *retrier) due(attempt int) <-chan time.Time {
 	return time.After(retryDelay(attempt))
 }
 
-// retryDelay grows threefold with every try, from retryBase up to retryCap: a
-// name server that is not up yet is asked soon, one that stays down is not
-// hammered.
 func retryDelay(attempt int) time.Duration {
 	d := retryBase
 	for i := 0; i < attempt && d < retryCap; i++ {
@@ -316,8 +300,6 @@ func missingName(err error) bool {
 	return errors.As(err, &dnsErr) && dnsErr.IsNotFound
 }
 
-// lookupHosts resolves the hosts side by side. A host that did not resolve is
-// left out of the first answer and has its error in the second.
 func (n nameResolver) lookupHosts(ctx context.Context, hosts map[string]bool) (map[string]netip.Addr, map[string]error) {
 	resolved := map[string]netip.Addr{}
 	failed := map[string]error{}
@@ -426,10 +408,7 @@ func (n nameResolver) resolveUDPTrackers(ctx context.Context, tiers [][]string) 
 	return out, lost
 }
 
-// retryLost tries the lost trackers of t again, with growing pauses, until
-// every one has come back, t is dropped, or the client is closed. A name server
-// that is not up yet, as right after a tunnel is, would otherwise cost the
-// torrent its UDP trackers for as long as the client lives.
+// retryLost exists because a name server that is not up yet, as right after a tunnel, would cost the torrent its UDP trackers for as long as the client lives.
 func (n nameResolver) retryLost(t *torrent.Torrent, lost []lostTracker) {
 	l := n.later
 	if l == nil || len(lost) == 0 {
@@ -456,9 +435,6 @@ func (n nameResolver) retryLost(t *torrent.Torrent, lost []lostTracker) {
 	})
 }
 
-// recover resolves the names of lost again, gives t the trackers whose name
-// resolved now, and returns the rest. A tracker whose name the server keeps
-// saying does not exist is dropped.
 func (n nameResolver) recover(ctx context.Context, t *torrent.Torrent, lost []lostTracker) []lostTracker {
 	hosts := map[string]bool{}
 	for _, l := range lost {
