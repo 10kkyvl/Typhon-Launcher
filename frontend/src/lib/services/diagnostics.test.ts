@@ -84,6 +84,28 @@ describe('installDiagnostics inside Wails', () => {
     expect(fatal).toBe(false);
   });
 
+  it('drops the late rejection of a call the user cancelled, but keeps a real failure behind a cancel', async () => {
+    vi.doMock('./backend', () => ({ inWails: true }));
+    bindings.ReportClientError.mockResolvedValue(undefined);
+    const { CancelledRejectionError } = await import('@wailsio/runtime');
+    const { installDiagnostics } = await import('./diagnostics');
+    installDiagnostics();
+
+    const cancelled = Promise.resolve();
+    const cases = [
+      { cause: new Error('сервер метаданных недоступен: Post "https://api.example/catalog/games": context canceled'), reported: false },
+      { cause: new Error('сервер метаданных недоступен: разбор ответа: context canceled'), reported: false },
+      { cause: new Error('сервер метаданных недоступен: 503 unavailable'), reported: true },
+    ];
+    for (const { cause, reported } of cases) {
+      bindings.ReportClientError.mockClear();
+      const preventDefault = vi.fn();
+      win.dispatchEvent({ ...rejectionEvent(new CancelledRejectionError(cancelled as never, cause)), preventDefault });
+      expect(bindings.ReportClientError).toHaveBeenCalledTimes(reported ? 1 : 0);
+      expect(preventDefault).toHaveBeenCalledTimes(reported ? 0 : 1);
+    }
+  });
+
   it('scrubs Windows paths, Unix paths, macOS paths, magnet URIs, infohashes and bearer tokens', async () => {
     vi.doMock('./backend', () => ({ inWails: true }));
     bindings.ReportClientError.mockResolvedValueOnce(undefined);
