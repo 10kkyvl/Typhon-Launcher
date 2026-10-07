@@ -843,7 +843,11 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return PlanInfo{}, err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return PlanInfo{}, err
 	}
@@ -885,7 +889,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if err != nil {
 		return Installation{}, err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return Installation{}, err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return Installation{}, err
 	}
@@ -1177,7 +1185,11 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return err
 	}
@@ -1718,12 +1730,28 @@ func (s *Service) installRoots() []string {
 	return out
 }
 
-func sourceDir(d download.Download) string {
-	nested := filepath.Join(d.Destination, d.Name)
-	if info, err := os.Stat(nested); err == nil && info.IsDir() {
-		return nested
+// sourceDir — то, что скачала эта загрузка, а не каталог загрузок целиком:
+// однофайловая раздача лежит файлом рядом с чужими загрузками, и разбор их
+// общего каталога выбрал бы чужой установщик или не нашёл бы архив вовсе.
+// Destination целиком берётся, только когда под именем загрузки на диске
+// ничего нет: так лежат раздачи без своего каталога (flat, inPlace).
+func sourceDir(d download.Download) (string, error) {
+	if d.Destination == "" {
+		return "", fmt.Errorf("%w: у загрузки %s нет каталога назначения", errNoSource, d.ID)
 	}
-	return d.Destination
+	if d.Flat || d.InPlace || d.Name == "" {
+		return d.Destination, nil
+	}
+	nested := filepath.Join(d.Destination, d.Name)
+	_, err := os.Stat(nested)
+	switch {
+	case err == nil:
+		return nested, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return d.Destination, nil
+	default:
+		return "", fmt.Errorf("%w: %w", errNoSource, err)
+	}
 }
 
 func partialPath(item *Installation) string {
