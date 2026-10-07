@@ -38,6 +38,9 @@ func (s *Service) run(ctx context.Context, id string) {
 	if err != nil {
 		s.fail(id, err)
 	}
+	if external(item.Type) {
+		s.releaseWorkerFiles(id, err)
+	}
 }
 
 func (s *Service) runPortable(ctx context.Context, id string, item Installation) error {
@@ -1035,6 +1038,39 @@ func (s *Service) workerCancelPath(id string) string {
 		return ""
 	}
 	return workerCancelPath(s.store.dir, id)
+}
+
+func (s *Service) workerSpecFilePath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return workerSpecFilePath(s.store.dir, id)
+}
+
+// workerFiles — всё, что лаунчер и воркер оставляют на диске ради одного
+// прогона. Пустые пути отбрасываются в removeWorkerFiles.
+func (s *Service) workerFiles(id string) []string {
+	return []string{s.workerSpecFilePath(id), s.workerStatePath(id), s.workerCancelPath(id), s.workerInfPath(id)}
+}
+
+// releaseWorkerFiles убирает файлы воркера, когда итог прогона уже в записи.
+// Остаются они в двух случаях: воркер не подтвердил остановку и мог не
+// закончить писать (по ним Retry и Cancel узнают, что он жив), либо запись ещё в
+// работе и после перезапуска её продолжат по этим файлам. Статус читается под
+// тем же замком, что и удаление: Retry не успеет занять запись между ними.
+func (s *Service) releaseWorkerFiles(id string, cause error) {
+	if errors.Is(cause, errInstallerNotConfirmedStopped) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil || transient(item.Status) {
+		return
+	}
+	if err := removeWorkerFiles(s.workerFiles(id)...); err != nil {
+		slog.Warn("remove worker files of a settled install", "id", id, "error", err)
+	}
 }
 
 func (s *Service) forceDestination(id, destination string) error {

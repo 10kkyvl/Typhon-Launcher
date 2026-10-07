@@ -197,6 +197,22 @@ func writeWorkerCancel(path string) error {
 	return writeWorkerFile(path, []byte{})
 }
 
+// removeWorkerFiles убирает файлы прогона воркера. Отсутствие файла не ошибка,
+// любая другая причина возвращается: оставшееся состояние прошлого прогона
+// иначе принималось бы за итог следующего.
+func removeWorkerFiles(paths ...string) error {
+	var errs []error
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove worker file %s: %w", path, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func clearWorkerCancel(path string) error {
 	if path == "" {
 		return nil
