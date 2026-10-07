@@ -125,3 +125,7 @@ export function installErrorText(err: unknown, fallback: string = msg('errInstal
   const key = REASONS[errorCode(err)];
   return key ? msg(key) : fallback;
 }
+
+export function needsInteractiveInstall(err: unknown): boolean {
+  return errorCode(err) === 'install.installer_needs_interactive';
+}

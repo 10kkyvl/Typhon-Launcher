@@ -335,4 +335,5 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installCancelInstall': 'Cancel install',
   'modals.installConfirm': 'Confirm',
   'modals.installDismiss': 'Dismiss',
+  'modals.installManually': 'Install manually',
 };

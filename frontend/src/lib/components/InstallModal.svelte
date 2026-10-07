@@ -12,10 +12,11 @@
     isControlled,
     isExternal,
     retryInstall,
+    retryInstallInteractive,
     startInstall,
     type PlanInfo,
   } from '../services/install';
-  import { installErrorText } from '../install/installErrors';
+  import { installErrorText, needsInteractiveInstall } from '../install/installErrors';
   import { installIndeterminate, installTotalUnknown } from '../install/progress';
   import { openGameFolder, selectFolder } from '../services/settings';
   import { downloadsById } from '../stores/downloads';
@@ -259,6 +260,12 @@
     return run(() => retryInstall(item.id));
   }
 
+  function retryManually() {
+    const item = installation;
+    if (!item) return;
+    return run(() => retryInstallInteractive(item.id));
+  }
+
   function dismissCurrent() {
     const item = installation;
     if (!item) return;
@@ -465,7 +472,11 @@
       <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
     {:else if phase === 'problem'}
       <Button onclick={dismissCurrent} disabled={busy}>{msg('modals.installDismiss')}</Button>
-      <Button variant="primary" onclick={retryCurrent} disabled={busy}>{msg('common.retry')}</Button>
+      {#if installation && needsInteractiveInstall(installation.error)}
+        <Button variant="primary" onclick={retryManually} disabled={busy}>{msg('modals.installManually')}</Button>
+      {:else}
+        <Button variant="primary" onclick={retryCurrent} disabled={busy}>{msg('common.retry')}</Button>
+      {/if}
     {/if}
   {/snippet}
 </Modal>

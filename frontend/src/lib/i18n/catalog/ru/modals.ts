@@ -332,6 +332,7 @@ export const modals = {
   'modals.installCancelInstall': 'Отменить установку',
   'modals.installConfirm': 'Подтвердить',
   'modals.installDismiss': 'Убрать',
+  'modals.installManually': 'Установить вручную',
 } as const;
 
 export type ModalsKey = keyof typeof modals;
