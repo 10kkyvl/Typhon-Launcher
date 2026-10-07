@@ -664,32 +664,42 @@ func (s *Service) SaveSettings(next Settings) error {
 	copy(appliers, s.appliers)
 	s.mu.Unlock()
 
-	// The consent version only ever moves forward. Every other field here
-	// comes straight from a caller that may have assembled the struct without
-	// knowing this field exists, and a zero from such a caller would erase the
-	// record that the user was asked — after which the prompt reappears and
-	// the defaults apply again to somebody who already answered.
-	if next.TelemetryConsentVersion < prev.TelemetryConsentVersion {
-		next.TelemetryConsentVersion = prev.TelemetryConsentVersion
-	}
+	next = keepNewerConsent(next, prev)
 
-	for _, apply := range appliers {
+	for i, apply := range appliers {
 		if err := apply(prev, next); err != nil {
-			return fmt.Errorf("apply settings: %w", err)
+			return undoAppliers(fmt.Errorf("apply settings: %w", err), appliers[:i], prev, next)
 		}
 	}
 
-	next, subs, err := s.persist(next)
+	saved, subs, err := s.persist(next)
 	if err != nil {
-		return err
+		return undoAppliers(err, appliers, prev, next)
 	}
 	if app := application.Get(); app != nil {
-		app.Event.Emit("settings:updated", next)
+		app.Event.Emit("settings:updated", saved)
 	}
 	for _, notify := range subs {
-		notify(next)
+		notify(saved)
 	}
 	return nil
+}
+
+// An applier compares the pair it is handed and acts on what differs, so
+// handing it the pair reversed puts back what the forward call changed. Only
+// the appliers that returned nil are undone, newest first: one that failed
+// owns whatever it left behind.
+func undoAppliers(cause error, applied []func(prev, next Settings) error, prev, next Settings) error {
+	var failed []error
+	for i := len(applied) - 1; i >= 0; i-- {
+		if err := applied[i](next, prev); err != nil {
+			failed = append(failed, fmt.Errorf("undo settings: %w", err))
+		}
+	}
+	if len(failed) == 0 {
+		return cause
+	}
+	return errors.Join(append([]error{cause}, failed...)...)
 }
 
 // SaveConsent records the answer to the consent prompt together with the
@@ -713,6 +723,23 @@ func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
 	return s.GetSettings(), nil
 }
 
+// The consent version only ever moves forward. Every other field of a save
+// comes straight from a caller that may have assembled the struct without
+// knowing this field exists, and a zero from such a caller would erase the
+// record that the user was asked — after which the prompt reappears and the
+// defaults apply again to somebody who already answered. The two switches
+// are the answer that version belongs to, so they move with it: a version
+// raised over switches the caller never answered with would hand the newer
+// consent to whatever preselection that caller happened to hold.
+func keepNewerConsent(next, stored Settings) Settings {
+	if next.TelemetryConsentVersion < stored.TelemetryConsentVersion {
+		next.TelemetryConsentVersion = stored.TelemetryConsentVersion
+		next.AnonymousUsageStats = stored.AnonymousUsageStats
+		next.AnonymousDiagnostics = stored.AnonymousDiagnostics
+	}
+	return next
+}
+
 func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -720,6 +747,10 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	if s.path == "" {
 		return next, nil, errors.New("settings path unavailable")
 	}
+	// SaveSettings read the stored settings before it ran the appliers, and a
+	// consent answered while they ran is only visible here, under the lock
+	// that also publishes the write.
+	next = keepNewerConsent(next, s.current)
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return next, nil, fmt.Errorf("create config dir: %w", err)
 	}
