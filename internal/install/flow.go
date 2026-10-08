@@ -296,7 +296,7 @@ func runsSilently(item Installation) bool {
 // смерть между двумя записями оставила бы чужой Done рядом с новым номером.
 func (s *Service) beginChainStep(id string, number int) error {
 	if path := s.workerStatePath(id); path != "" {
-		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := os.Remove(path); err != nil && !alreadyGone(err) {
 			return fmt.Errorf("remove worker state %s: %w", path, err)
 		}
 	}

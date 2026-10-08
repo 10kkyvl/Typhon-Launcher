@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"typhon/internal/storage"
 )
@@ -200,13 +201,19 @@ func writeWorkerCancel(path string) error {
 // removeWorkerFiles убирает файлы прогона воркера. Отсутствие файла не ошибка,
 // любая другая причина возвращается: оставшееся состояние прошлого прогона
 // иначе принималось бы за итог следующего.
+// A parent that is not a directory answers ENOTDIR on POSIX and "path not
+// found" on Windows; either way the file cannot be there.
+func alreadyGone(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
 func removeWorkerFiles(paths ...string) error {
 	var errs []error
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
-		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := os.Remove(path); err != nil && !alreadyGone(err) {
 			errs = append(errs, fmt.Errorf("remove worker file %s: %w", path, err))
 		}
 	}
