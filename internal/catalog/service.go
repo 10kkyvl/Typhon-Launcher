@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -419,38 +420,52 @@ func (s *Service) EnsureGame(title string, year int) (Game, error) {
 	return game, nil
 }
 
+// MatchUndo is what LearnMatch changed, kept so that a caller whose own
+// follow-up write fails can take the rule back without touching a rule that
+// was already there. The zero value undoes nothing.
+type MatchUndo struct {
+	pattern  string
+	learned  MatchOverride
+	previous *MatchOverride
+	aliasOf  string
+}
+
 //wails:ignore
-func (s *Service) LearnMatch(normalized, gameID string) error {
+func (s *Service) LearnMatch(normalized, gameID string) (MatchUndo, error) {
 	normalized = strings.TrimSpace(normalized)
 	if normalized == "" || gameID == "" {
-		return errNothingToLearn
+		return MatchUndo{}, errNothingToLearn
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	pos, ok := s.idx.byID[gameID]
 	if !ok {
-		return errNotFound
+		return MatchUndo{}, errNotFound
 	}
 	game := s.idx.games[pos]
 
 	previousOverrides := append([]MatchOverride(nil), s.overrides...)
+	undo := MatchUndo{pattern: normalized}
 
+	learned := MatchOverride{Pattern: normalized, GameID: gameID, CreatedAt: time.Now()}
 	replaced := false
 	for i := range s.overrides {
 		if s.overrides[i].Pattern == normalized {
-			s.overrides[i].GameID = gameID
-			s.overrides[i].CreatedAt = time.Now()
+			prev := s.overrides[i]
+			undo.previous = &prev
+			s.overrides[i] = learned
 			replaced = true
 			break
 		}
 	}
 	if !replaced {
-		s.overrides = append(s.overrides, MatchOverride{Pattern: normalized, GameID: gameID, CreatedAt: time.Now()})
+		s.overrides = append(s.overrides, learned)
 	}
+	undo.learned = learned
 	if err := s.persistOverridesLocked(); err != nil {
 		s.overrides = previousOverrides
-		return fmt.Errorf("save overrides: %w", err)
+		return MatchUndo{}, fmt.Errorf("save overrides: %w", err)
 	}
 
 	if learnable(normalized, game) {
@@ -465,13 +480,72 @@ func (s *Service) LearnMatch(normalized, gameID string) error {
 				s.overrides = previousOverrides
 				revertErr := s.persistOverridesLocked()
 				s.rebuildLocked()
-				return errors.Join(fmt.Errorf("save catalog: %w", err), revertErr)
+				return MatchUndo{}, errors.Join(fmt.Errorf("save catalog: %w", err), revertErr)
 			}
+			undo.aliasOf = gameID
 			break
 		}
 	}
 	s.rebuildLocked()
 	slog.Info("match override saved", "pattern", normalized, "game", gameID)
+	return undo, nil
+}
+
+// UndoMatch puts back what the LearnMatch that returned undo changed: the
+// rule it replaced, or no rule if there was none, and the alias it added. A
+// rule written for the same pattern since then is not undone, because it is
+// somebody else's answer. ForgetMatch cannot do this job: it would also erase
+// the rule that was there before.
+//
+//wails:ignore
+func (s *Service) UndoMatch(undo MatchUndo) error {
+	if undo.pattern == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if undo.aliasOf != "" {
+		for i := range s.games {
+			if s.games[i].ID != undo.aliasOf {
+				continue
+			}
+			at := slices.Index(s.games[i].Aliases, undo.pattern)
+			if at < 0 {
+				break
+			}
+			before := s.games[i].Aliases
+			s.games[i].Aliases = slices.Delete(slices.Clone(before), at, at+1)
+			if err := s.persistGamesLocked(); err != nil {
+				s.games[i].Aliases = before
+				return fmt.Errorf("save catalog: %w", err)
+			}
+			break
+		}
+	}
+
+	for i := range s.overrides {
+		current := s.overrides[i]
+		if current.Pattern != undo.pattern {
+			continue
+		}
+		if current.GameID != undo.learned.GameID || !current.CreatedAt.Equal(undo.learned.CreatedAt) {
+			break
+		}
+		previousOverrides := append([]MatchOverride(nil), s.overrides...)
+		if undo.previous != nil {
+			s.overrides[i] = *undo.previous
+		} else {
+			s.overrides = slices.Delete(slices.Clone(s.overrides), i, i+1)
+		}
+		if err := s.persistOverridesLocked(); err != nil {
+			s.overrides = previousOverrides
+			s.rebuildLocked()
+			return fmt.Errorf("save overrides: %w", err)
+		}
+		break
+	}
+	s.rebuildLocked()
 	return nil
 }
 

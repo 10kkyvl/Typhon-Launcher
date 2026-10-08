@@ -194,7 +194,7 @@ func TestPartialRemoteCacheDoesNotConfirmTitleIdentity(t *testing.T) {
 	if got := svc.Resolve(Query{Title: "Same Name"}); got.Status != StatusReview || got.GameID != "" {
 		t.Fatalf("partial cache auto matched: %+v", got)
 	}
-	if err = svc.LearnMatch("same name", "one"); err != nil {
+	if _, err = svc.LearnMatch("same name", "one"); err != nil {
 		t.Fatal(err)
 	}
 	if got := svc.Resolve(Query{Title: "Same Name"}); got.Status != StatusMatched {

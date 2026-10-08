@@ -564,6 +564,7 @@ type Service struct {
 	subs     map[int]func(Settings)
 	nextSub  int
 	appliers []func(prev, next Settings) error
+	version  uint64
 }
 
 func NewService() (*Service, error) {
@@ -660,21 +661,76 @@ func (s *Service) SaveSettings(next Settings) error {
 
 	s.mu.Lock()
 	prev := s.current
+	s.mu.Unlock()
+
+	next = keepNewerConsent(next, prev)
+	_, _, err = s.publish(prev, next, nil)
+	return err
+}
+
+// Update changes some settings without owning the rest. The callback gets a
+// copy of what is stored and edits only its own fields, so a field somebody
+// else saved while this change was being applied is not overwritten by a
+// stale copy. If the stored settings moved on before the write, the appliers
+// are undone and the callback runs again on the newer settings, so it must
+// not have effects of its own. Appliers and subscribers must not call Update
+// or SaveSettings from inside the call.
+//
+//wails:ignore
+func (s *Service) Update(mutate func(*Settings) error) (Settings, error) {
+	if mutate == nil {
+		return Settings{}, errors.New("settings: nil update")
+	}
+	for {
+		s.mu.Lock()
+		prev, version := s.current, s.version
+		s.mu.Unlock()
+
+		next := prev
+		if err := mutate(&next); err != nil {
+			return Settings{}, err
+		}
+		next, err := sanitize(next)
+		if err != nil {
+			return Settings{}, err
+		}
+		next = keepNewerConsent(next, prev)
+
+		saved, stale, err := s.publish(prev, next, &version)
+		if stale {
+			continue
+		}
+		if err != nil {
+			return Settings{}, err
+		}
+		return saved, nil
+	}
+}
+
+// publish runs the appliers, writes, and announces the result. With base set
+// the write happens only while the stored settings are still at that version;
+// otherwise stale is true and no applier is left applied.
+func (s *Service) publish(prev, next Settings, base *uint64) (saved Settings, stale bool, err error) {
+	s.mu.Lock()
 	appliers := make([]func(prev, next Settings) error, len(s.appliers))
 	copy(appliers, s.appliers)
 	s.mu.Unlock()
 
-	next = keepNewerConsent(next, prev)
-
 	for i, apply := range appliers {
 		if err := apply(prev, next); err != nil {
-			return undoAppliers(fmt.Errorf("apply settings: %w", err), appliers[:i], prev, next)
+			return Settings{}, false, undoAppliers(fmt.Errorf("apply settings: %w", err), appliers[:i], prev, next)
 		}
 	}
 
-	saved, subs, err := s.persist(next)
+	saved, subs, stale, err := s.persist(next, base)
+	if stale {
+		if failed := undoAll(appliers, prev, next); len(failed) > 0 {
+			return Settings{}, false, errors.Join(failed...)
+		}
+		return Settings{}, true, nil
+	}
 	if err != nil {
-		return undoAppliers(err, appliers, prev, next)
+		return Settings{}, false, undoAppliers(err, appliers, prev, next)
 	}
 	if app := application.Get(); app != nil {
 		app.Event.Emit("settings:updated", saved)
@@ -682,7 +738,7 @@ func (s *Service) SaveSettings(next Settings) error {
 	for _, notify := range subs {
 		notify(saved)
 	}
-	return nil
+	return saved, false, nil
 }
 
 // An applier compares the pair it is handed and acts on what differs, so
@@ -690,16 +746,21 @@ func (s *Service) SaveSettings(next Settings) error {
 // the appliers that returned nil are undone, newest first: one that failed
 // owns whatever it left behind.
 func undoAppliers(cause error, applied []func(prev, next Settings) error, prev, next Settings) error {
+	failed := undoAll(applied, prev, next)
+	if len(failed) == 0 {
+		return cause
+	}
+	return errors.Join(append([]error{cause}, failed...)...)
+}
+
+func undoAll(applied []func(prev, next Settings) error, prev, next Settings) []error {
 	var failed []error
 	for i := len(applied) - 1; i >= 0; i-- {
 		if err := applied[i](next, prev); err != nil {
 			failed = append(failed, fmt.Errorf("undo settings: %w", err))
 		}
 	}
-	if len(failed) == 0 {
-		return cause
-	}
-	return errors.Join(append([]error{cause}, failed...)...)
+	return failed
 }
 
 // SaveConsent records the answer to the consent prompt together with the
@@ -710,17 +771,19 @@ func undoAppliers(cause error, applied []func(prev, next Settings) error, prev, 
 // Callers get the stored settings back so the prompt closes on what was
 // written rather than on what it sent.
 func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
-	next := s.GetSettings()
-	next.AnonymousUsageStats = usageStats
-	next.AnonymousDiagnostics = diagnostics
-	next.TelemetryConsentVersion = CurrentTelemetryConsent
-	if err := s.SaveSettings(next); err != nil {
+	saved, err := s.Update(func(next *Settings) error {
+		next.AnonymousUsageStats = usageStats
+		next.AnonymousDiagnostics = diagnostics
+		next.TelemetryConsentVersion = CurrentTelemetryConsent
+		return nil
+	})
+	if err != nil {
 		// The consent screen closes only on a successful answer, so its error
 		// text is the one thing the user is left with. Give it a code the
 		// frontend can translate instead of a raw Go string.
 		return Settings{}, uierr.Wrap(ErrCodeConsentSaveFailed, fmt.Errorf("save telemetry consent: %w", err))
 	}
-	return s.GetSettings(), nil
+	return saved, nil
 }
 
 // The consent version only ever moves forward. Every other field of a save
@@ -740,34 +803,38 @@ func keepNewerConsent(next, stored Settings) Settings {
 	return next
 }
 
-func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
+func (s *Service) persist(next Settings, base *uint64) (Settings, []func(Settings), bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if base != nil && s.version != *base {
+		return next, nil, true, nil
+	}
 	if s.path == "" {
-		return next, nil, errors.New("settings path unavailable")
+		return next, nil, false, errors.New("settings path unavailable")
 	}
 	// SaveSettings read the stored settings before it ran the appliers, and a
 	// consent answered while they ran is only visible here, under the lock
 	// that also publishes the write.
 	next = keepNewerConsent(next, s.current)
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return next, nil, fmt.Errorf("create config dir: %w", err)
+		return next, nil, false, fmt.Errorf("create config dir: %w", err)
 	}
 	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
-		return next, nil, err
+		return next, nil, false, err
 	}
 	if err := storage.WriteAtomic(s.path, data); err != nil {
-		return next, nil, fmt.Errorf("write settings: %w", err)
+		return next, nil, false, fmt.Errorf("write settings: %w", err)
 	}
 	s.current = next
+	s.version++
 
 	subs := make([]func(Settings), 0, len(s.subs))
 	for _, fn := range s.subs {
 		subs = append(subs, fn)
 	}
-	return next, subs, nil
+	return next, subs, false, nil
 }
 
 func libraryRootFor(parent string) (string, error) {
@@ -798,12 +865,10 @@ func (s *Service) SetupLibrary(parent string) (Settings, error) {
 	if err := createLibrary(root); err != nil {
 		return Settings{}, err
 	}
-	next := s.GetSettings()
-	next.LibraryPath = root
-	if err := s.SaveSettings(next); err != nil {
-		return Settings{}, err
-	}
-	return s.GetSettings(), nil
+	return s.Update(func(next *Settings) error {
+		next.LibraryPath = root
+		return nil
+	})
 }
 
 func createLibrary(root string) error {

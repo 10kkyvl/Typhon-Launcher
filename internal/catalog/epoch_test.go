@@ -19,7 +19,7 @@ func TestEpochMovesWhenMatchingCouldChange(t *testing.T) {
 			seed(t, s, Game{Title: "Epoch Second"})
 		}},
 		{"an override is learnt", func(t *testing.T) {
-			if err := s.LearnMatch("epoch alias", game.ID); err != nil {
+			if _, err := s.LearnMatch("epoch alias", game.ID); err != nil {
 				t.Fatalf("LearnMatch() error = %v", err)
 			}
 		}},
