@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/sources"
 )
 
 func (h *harness) awaitJob(t *testing.T, gameID string) {
@@ -39,7 +40,7 @@ func (h *harness) seedManifest(t *testing.T) {
 }
 
 func (h *harness) withTorrent(report download.ReuseReport) {
-	h.releases.list[0].InfoHash = "hash-r1"
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[0].InfoHash = "hash-r1"; return list })
 	h.downloads.reuseErr = nil
 	h.downloads.reuse = report
 }
@@ -151,8 +152,8 @@ func TestVerifyGameReportsTorrentDamage(t *testing.T) {
 
 func TestVerifyGameDoesNotUseUpdatedStableRecordForOlderInstall(t *testing.T) {
 	h := newHarness(t)
-	h.releases.list[0].InfoHash = "new-version-hash"
-	h.releases.list[0].Version = "2.0"
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[0].InfoHash = "new-version-hash"; return list })
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[0].Version = "2.0"; return list })
 	h.seedManifest(t)
 
 	if err := h.service.VerifyGame("local-1"); err != nil {
@@ -220,7 +221,7 @@ func TestGetVerifyStateDropsResultOfAnotherVersion(t *testing.T) {
 // integrity result.
 func TestPreparePlanLeavesVerifyStateUntouched(t *testing.T) {
 	h := newHarness(t)
-	h.releases.list[1].InfoHash = "hash-r2"
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[1].InfoHash = "hash-r2"; return list })
 	h.downloads.reuseErr = nil
 	h.downloads.reuse = download.ReuseReport{
 		InfoHash:     "hash-r2",
