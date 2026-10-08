@@ -103,7 +103,7 @@ func (s *Service) InspectRemoval(gameID string) (RemovalInfo, error) {
 		DirMissing:       missing,
 		QuietUninstall:   plan.method == RemovalInstaller && plan.spec.Background,
 		Running:          s.library.IsRunning(gameID),
-		Busy:             s.gameBusy(gameID, plan.game.InstallDir),
+		Busy:             s.gameBusy(plan.game),
 		DownloadID:       plan.game.SourceDownloadID,
 	}
 	d, present, err := s.downloadOf(plan.game.SourceDownloadID)
@@ -134,7 +134,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	if s.library.IsRunning(gameID) {
 		return errGameRunning
 	}
-	if s.gameBusy(gameID, game.InstallDir) {
+	if s.gameBusy(game) {
 		return errGameBusy
 	}
 	d, present, err := s.downloadOf(game.SourceDownloadID)
@@ -285,13 +285,18 @@ func usableUninstallSpec(u library.Uninstall) (runSpec, bool, error) {
 	}
 }
 
-func (s *Service) gameBusy(gameID, installDir string) bool {
+func (s *Service) gameBusy(game library.Game) bool {
 	s.mu.Lock()
 	for _, item := range s.items {
 		if !active(item.Status) {
 			continue
 		}
-		if item.GameID == gameID || sharesPath(item.Destination, installDir) {
+		// Установку, ждущую выбора по загрузке самой игры, RemoveGame отменит
+		// сам: отказывать в удалении из-за неё — тот самый вечный тупик.
+		if item.Status == StatusWaitingForUser && game.SourceDownloadID != "" && item.DownloadID == game.SourceDownloadID {
+			continue
+		}
+		if item.GameID == game.ID || sharesPath(item.Destination, game.InstallDir) {
 			s.mu.Unlock()
 			return true
 		}
@@ -301,7 +306,7 @@ func (s *Service) gameBusy(gameID, installDir string) bool {
 	if busy == nil {
 		return false
 	}
-	return busy(gameID)
+	return busy(game.ID)
 }
 
 func (s *Service) downloadOf(id string) (download.Download, bool, error) {
