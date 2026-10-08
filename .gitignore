@@ -25,6 +25,7 @@ Thumbs.db
 
 .claude/*
 !.claude/settings.json
+!.claude/heavy.sh
 *.local.md
 
 typhon.exe
