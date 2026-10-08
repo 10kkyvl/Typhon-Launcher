@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"typhon/internal/winpath"
 
 	"typhon/internal/uierr"
 )
@@ -18,10 +19,6 @@ var (
 var errNotCached = errors.New("selfupdate: path is not an artifact inside the selfupdate cache")
 
 const pathInvalidChars = `/\:*?"<>|`
-
-var windowsDeviceNames = map[string]bool{
-	"CON": true, "PRN": true, "AUX": true, "NUL": true, "CONIN$": true, "CONOUT$": true,
-}
 
 func CacheDir(configDir string) (string, error) {
 	if configDir == "" {
@@ -75,26 +72,7 @@ func validatePathSegment(s string) error {
 // these names whatever the extension, and silently strips a trailing dot or
 // space, so two names the manifest keeps apart would land on one file.
 func isWindowsUnsafeName(name string) bool {
-	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
-		return true
-	}
-	stem := name
-	if i := strings.IndexByte(stem, '.'); i >= 0 {
-		stem = stem[:i]
-	}
-	stem = strings.ToUpper(strings.TrimRight(stem, " "))
-	if windowsDeviceNames[stem] {
-		return true
-	}
-	runes := []rune(stem)
-	if len(runes) != 4 {
-		return false
-	}
-	if prefix := string(runes[:3]); prefix != "COM" && prefix != "LPT" {
-		return false
-	}
-	last := runes[3]
-	return last >= '0' && last <= '9' || last == '¹' || last == '²' || last == '³'
+	return winpath.Reserved(name)
 }
 
 // artifactRel accepts only the shape the downloader produces, <version>/<name>

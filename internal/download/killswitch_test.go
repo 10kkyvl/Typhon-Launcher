@@ -222,6 +222,16 @@ func TestNewClientFallsBackWhenTheFixedPortIsReallyTaken(t *testing.T) {
 			}
 		})
 	}
+	// The client binds TCP and UDP on the same number; a TCP holder alone does
+	// not stop it on every Windows build, a UDP holder does. A failed UDP bind
+	// means another process holds the port already, which serves the same end.
+	if udp, err := net.ListenPacket("udp", fmt.Sprintf(":%d", listenPort)); err == nil {
+		t.Cleanup(func() {
+			if err := udp.Close(); err != nil {
+				t.Errorf("close the occupied UDP port: %v", err)
+			}
+		})
+	}
 
 	var attempts []int
 	orig := openTorrentClient

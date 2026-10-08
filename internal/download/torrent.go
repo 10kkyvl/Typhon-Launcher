@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"typhon/internal/winpath"
 
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
@@ -533,6 +534,9 @@ func isSafeTorrentPath(path string) bool {
 			return false
 		}
 		if !filepath.IsLocal(component) {
+			return false
+		}
+		if winpath.Reserved(component) {
 			return false
 		}
 	}
