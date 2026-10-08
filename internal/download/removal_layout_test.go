@@ -156,8 +156,8 @@ func TestRemovalByLayout(t *testing.T) {
 			func(m *Manager) error { return m.Cancel("a") }, nil, nil, false},
 		{"a stored name with an embedded parent step", StatusDownloading, "Game/../../victim", false, false, nil,
 			func(m *Manager) error { return m.Cancel("a") }, nil, nil, false},
-		{"delete the data under a stored name that climbs out", StatusCompleted, "../victim", false, false, nil,
-			func(m *Manager) error { return m.DeleteData("a") }, nil, nil, false},
+		{"delete the data under a stored name that climbs out is refused", StatusCompleted, "../victim", false, false, nil,
+			func(m *Manager) error { return m.DeleteData("a") }, errRootUnknown, nil, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -167,7 +167,8 @@ func TestRemovalByLayout(t *testing.T) {
 			eng := attachFake(m, "a")
 			setItem(m, "a", func(d *Download) {
 				d.Destination = dest
-				d.Name = c.itemName
+				d.Name = "A title that names no folder"
+				d.root = c.itemName
 				d.Flat = c.flat
 				d.InPlace = c.inPlace
 				d.Files = c.files
@@ -201,7 +202,7 @@ func TestCancelDeletesNothingWhileTheDownloadsJobStillRuns(t *testing.T) {
 	m := newTestManager(t, 1)
 	m.addTestItem("a", StatusVerifying)
 	eng := attachFake(m, "a")
-	setItem(m, "a", func(d *Download) { d.Destination, d.Name = dest, "Game" })
+	setItem(m, "a", func(d *Download) { d.Destination, d.root = dest, "Game" })
 	job := &jobState{cancel: func() {}, done: make(chan struct{})}
 	m.mu.Lock()
 	m.jobs["a"] = job
@@ -254,7 +255,7 @@ func TestRemovalThatCannotBePersistedDeletesNoFiles(t *testing.T) {
 			m := newTestManager(t, 1)
 			m.addTestItem("a", c.status)
 			eng := attachFake(m, "a")
-			setItem(m, "a", func(d *Download) { d.Destination, d.Name = dest, "Game" })
+			setItem(m, "a", func(d *Download) { d.Destination, d.root = dest, "Game" })
 			gone := make(chan string, 1)
 			m.SetOnGone(func(id string) { gone <- id })
 			breakStore(t, m)

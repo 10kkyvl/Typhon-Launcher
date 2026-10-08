@@ -166,6 +166,7 @@ func (m *Manager) addTestItem(id string, status Status) *Download {
 		Name:       id,
 		Type:       TypeTorrent,
 		InfoHash:   id,
+		root:       id,
 		Status:     status,
 		Total:      100,
 		ETASeconds: -1,

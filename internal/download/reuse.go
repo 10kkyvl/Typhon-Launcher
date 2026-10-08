@@ -239,9 +239,9 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 		return nil, errNoMetadata
 	}
 	if !strings.HasPrefix(source, "magnet:") {
-		mi, err := metainfo.LoadFromFile(source)
+		mi, err := loadMetainfoFile(source)
 		if err != nil {
-			return nil, errors.New("не удалось прочитать torrent-файл")
+			return nil, fmt.Errorf("не удалось прочитать torrent-файл: %w", err)
 		}
 		return mi, nil
 	}
@@ -445,6 +445,10 @@ func (m *Manager) InspectReuse(ctx context.Context, req ReuseRequest, onProgress
 		}
 		onProgress(VerifyProgress{ProcessedBytes: processed, TotalBytes: total, CurrentFile: current})
 	}); err != nil {
+		return ReuseReport{}, err
+	}
+
+	if err := lt.settlePieces(ctx); err != nil {
 		return ReuseReport{}, err
 	}
 

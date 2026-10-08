@@ -103,6 +103,7 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		Files:       files,
 		Flat:        req.Flat,
 		InPlace:     req.InPlace,
+		root:        info.BestName(),
 		Origin:      req.Origin,
 		AddedAt:     time.Now(),
 	}
@@ -120,10 +121,12 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		lt.drop()
 		return Download{}, errNetworkDown
 	}
-	m.items = append(m.items, d)
-	if err := m.store.saveMetainfo(infoHash, mi); err != nil {
-		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
+	if err := m.keepMetainfo(infoHash, mi, req.Source, d.ID); err != nil {
+		m.mu.Unlock()
+		lt.drop()
+		return Download{}, fmt.Errorf("добавить загрузку: %w", err)
 	}
+	m.items = append(m.items, d)
 	if !req.Verify {
 		m.engines[d.ID] = lt
 		m.markVerifiedLocked(d.ID)

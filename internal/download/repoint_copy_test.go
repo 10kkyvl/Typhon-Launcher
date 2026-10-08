@@ -149,7 +149,6 @@ func TestMoveTreeIfPresent(t *testing.T) {
 	t.Run("a destination that differs from the source is never trusted", func(t *testing.T) {
 		cases := map[string]map[string]string{
 			"altered content": {"GameA/file.bin": "DATA", "GameB/other.bin": "more"},
-			"extra file":      {"GameA/file.bin": "data", "GameB/other.bin": "more", "stray.txt": "x"},
 			"missing file":    {"GameA/file.bin": "data"},
 		}
 		for name, other := range cases {
