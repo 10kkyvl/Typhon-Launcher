@@ -98,11 +98,17 @@
     navigate(item.key.startsWith('move:') ? 'settings' : 'downloads');
   }
 
+  let cancelling = $state<string[]>([]);
+
   async function cancelWaiting(item: ActivityItem) {
+    if (cancelling.includes(item.key)) return;
+    cancelling = [...cancelling, item.key];
     try {
       await cancelInstall(item.key.slice('install:'.length));
     } catch (err) {
       toast(installErrorText(err), 'danger');
+    } finally {
+      cancelling = cancelling.filter((key) => key !== item.key);
     }
   }
 
@@ -208,6 +214,7 @@
                   <IconButton
                     label={msg('modals.installCancelInstall')}
                     size="sm"
+                    disabled={cancelling.includes(item.key)}
                     onclick={(e) => {
                       e.stopPropagation();
                       cancelWaiting(item);

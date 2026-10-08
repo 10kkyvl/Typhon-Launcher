@@ -79,7 +79,10 @@ func TestRemoveGameCancelsTheWaitingInstallOfItsDownload(t *testing.T) {
 			dir := gameDir(t, "Game")
 			r.download("d1", "Game", t.TempDir())
 			r.reg.put(library.Game{ID: "g1", Title: "Game", InstallDir: dir, SourceDownloadID: "d1", Source: library.SourceDiscovered})
-			r.add(waitingFor("mine", "d1"))
+			mine := waitingFor("mine", "d1")
+			mine.GameID = "g1"
+			mine.Destination = dir
+			r.add(mine)
 			r.add(waitingFor("foreign", "d2"))
 			r.add(waitingFor("orphan", ""))
 
