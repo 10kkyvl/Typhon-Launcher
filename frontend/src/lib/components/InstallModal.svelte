@@ -467,6 +467,7 @@
       <Button variant="danger" disabled={busy || externalWait} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
     {:else if phase === 'choose'}
       <Button onclick={() => (open = false)}>{msg('common.close')}</Button>
+      <Button variant="danger" disabled={busy} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
       <Button variant="primary" disabled={busy || !chosen} onclick={confirmChoice}>{msg('modals.installConfirm')}</Button>
     {:else if phase === 'done'}
       <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
