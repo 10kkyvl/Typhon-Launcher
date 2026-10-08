@@ -285,15 +285,26 @@ func (b *buildLog) build(_ context.Context, cfg settings.Settings, metaDir strin
 		return nil, b.failing
 	}
 	wrapped := nonClosingCompletion{completion}
-	tc := clientConfig(cfg, metaDir, 0, wrapped)
-	tc.NoDHT = true
-	tc.DisableTrackers = true
-	tc.DisablePEX = true
-	tc.NoDefaultPortForwarding = true
-	cl, err := torrent.NewClient(tc)
-	if err != nil {
+	var tc *torrent.ClientConfig
+	var cl *torrent.Client
+	for attempt := 0; ; attempt++ {
+		tc = clientConfig(cfg, metaDir, 0, wrapped)
+		tc.NoDHT = true
+		tc.DisableTrackers = true
+		tc.DisablePEX = true
+		tc.NoDefaultPortForwarding = true
+		var err error
+		cl, err = torrent.NewClient(tc)
+		if err == nil {
+			break
+		}
 		closeDefaultStorage(tc)
-		return nil, err
+		// A random port is free for TCP and can still be held in UDP by
+		// another process on Windows; newClient retries that, and so must
+		// this stand-in, or the client of a test silently never comes up.
+		if !isListenError(err) || attempt == randomPortAttempts {
+			return nil, err
+		}
 	}
 	c := &client{
 		cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir, completion: wrapped,
@@ -1767,10 +1778,18 @@ func TestUnsettledDownloadsAreRecheckedAfterTheNetworkFlaps(t *testing.T) {
 	mark := log.mark()
 	r.net.set(vpnIface("10.8.0.9"))
 	r.reconcile(t)
-	waitUntil(t, "both to be restored", func() bool { return hasEngine(r.m, "not reached") && hasEngine(r.m, "was checking") })
-	waitUntil(t, "the rechecks to finish", func() bool {
-		return r.m.statusOf(t, "not reached") != StatusVerifying && r.m.statusOf(t, "was checking") != StatusVerifying
-	})
+	// The pass restores one download after the other and each recheck syncs
+	// the pieces it marks, so how long it takes depends on the disk and the
+	// load; its end is the event to wait for, not a deadline.
+	r.m.wg.Wait()
+	for _, id := range []string{"not reached", "was checking"} {
+		if !hasEngine(r.m, id) {
+			t.Fatalf("%s was not restored on the new client", id)
+		}
+		if st := r.m.statusOf(t, id); st == StatusVerifying {
+			t.Fatalf("%s is still %s after the restore pass ended", id, st)
+		}
+	}
 	for _, id := range []string{"not reached", "was checking"} {
 		seen := false
 		for _, st := range log.statusesSince(id, mark) {
