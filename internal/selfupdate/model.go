@@ -167,6 +167,9 @@ func validateArtifactName(name string) error {
 			return ErrInvalidArtifactName
 		}
 	}
+	if isWindowsUnsafeName(name) {
+		return ErrInvalidArtifactName
+	}
 	return nil
 }
 

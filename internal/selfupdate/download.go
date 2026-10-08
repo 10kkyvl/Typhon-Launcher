@@ -232,6 +232,9 @@ func (c *Client) download(ctx context.Context, art Artifact, destDir string, onP
 
 	resp, err := c.downloadClient.Do(req)
 	if err != nil {
+		if errors.Is(err, ErrInvalidArtifactURL) {
+			return "", resumed, err
+		}
 		return "", resumed, fmt.Errorf("%w: %w", errArtifactRead, err)
 	}
 	defer func() {
