@@ -676,14 +676,14 @@ var (
 )
 
 // checkLeftovers: после установки в каталоге состояния не остаётся ничего, кроме
-// списков. Лог упавшей установки и спеку с состоянием повышенного воркера не
-// убирает ни сервис, ни воркер (известный дефект, он описан отдельно), поэтому
-// здесь они допускаются, но ничего другого быть не должно.
-func checkLeftovers(t *testing.T, r *rig, elevated, failed bool, want []string) {
+// списков. Лог упавшей установки живёт до Dismiss, файлы воркера допускаются
+// только у установки, где воркер не подтвердил остановку: по ним лаунчер узнаёт,
+// что он мог остаться жив.
+func checkLeftovers(t *testing.T, r *rig, keepsWorker, failed bool, want []string) {
 	t.Helper()
 	got := make([]string, 0, 2)
 	for _, name := range r.stateFiles() {
-		if elevated && workerLeftover.MatchString(name) {
+		if keepsWorker && workerLeftover.MatchString(name) {
 			continue
 		}
 		if failed && logLeftover.MatchString(name) {
@@ -773,9 +773,15 @@ func TestFlowMatrix(t *testing.T) {
 			} else {
 				checkRegistered(t, r, p, got, p.games)
 			}
-			_, elevated := p.runner.(elevatingRunner)
-			checkLeftovers(t, r, elevated, got.Status == StatusFailed, p.files)
+			keepsWorker := p.errCode == "install.installer_not_confirmed_stopped"
+			checkLeftovers(t, r, keepsWorker, got.Status == StatusFailed, p.files)
 			r.assertDurable(item.ID)
+			if got.Status == StatusFailed {
+				if err := r.s.Dismiss(item.ID); err != nil {
+					t.Fatalf("Dismiss: %v", err)
+				}
+				checkLeftovers(t, r, false, false, nil)
+			}
 		})
 	}
 }

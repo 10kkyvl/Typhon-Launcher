@@ -501,6 +501,7 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 	}
 
 	var proc *testProcHandle
+	started := make(chan struct{})
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		h := longRunningProcess(t, 30)
 		ok := false
@@ -508,13 +509,23 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 		if !ok {
 			t.Fatalf("longRunningProcess returned %T, want *testProcHandle", h)
 		}
+		close(started)
 		return h, nil
 	})
 
+	// Отмена приходит только после запуска воркера: на нагруженной машине
+	// runElevated доходит до запуска дольше любой фиксированной паузы, и отмена
+	// раньше него оставила бы proc пустым.
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan struct{})
+	defer close(finished)
 	go func() {
-		<-time.After(30 * time.Millisecond)
-		cancel()
+		select {
+		case <-started:
+			cancel()
+		case <-finished:
+		}
 	}()
 	// Воркер никогда не отвечает на маркер отмены: единственный способ узнать,
 	// что процесс остановлен, — дедлайн workerCancelWait и принудительное
@@ -522,6 +533,9 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 	if _, err := runElevated(ctx, spec); err == nil {
 		t.Fatal("runElevated returned nil error though the worker never confirmed stopping")
+	}
+	if proc == nil {
+		t.Fatal("the worker was never started")
 	}
 
 	pid := proc.cmd.Process.Pid
