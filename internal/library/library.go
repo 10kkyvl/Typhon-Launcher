@@ -486,8 +486,16 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	previousExcluded := s.excluded
 	if err := s.allowLocked(installDir); err != nil {
 		return Game{}, err
+	}
+	saveFailed := func(err error) error {
+		err = fmt.Errorf("save library: %w", err)
+		if rollback := s.restoreExcludedLocked(previousExcluded); rollback != nil {
+			return errors.Join(err, rollback)
+		}
+		return err
 	}
 	if i := s.matchRegisteredLocked(g); i >= 0 {
 		previous := s.games[i]
@@ -519,7 +527,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		s.games[i].UninstallUnknown = g.UninstallUnknown
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
-			return Game{}, fmt.Errorf("save library: %w", err)
+			return Game{}, saveFailed(err)
 		}
 		markInstalled(s.games[i])
 		slog.Info("game updated", "id", s.games[i].ID, "title", s.games[i].Title)
@@ -557,7 +565,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
 		s.games = s.games[:len(s.games)-1]
-		return Game{}, fmt.Errorf("save library: %w", err)
+		return Game{}, saveFailed(err)
 	}
 	markInstalled(game)
 	slog.Info("game installed", "id", game.ID, "title", game.Title)
@@ -784,6 +792,7 @@ func (s *Service) removeGameLocked(id string) error {
 		if game.ID != id {
 			continue
 		}
+		previousExcluded := s.excluded
 		if game.InstallDir != "" {
 			_, err := os.Stat(game.InstallDir)
 			switch {
@@ -812,7 +821,7 @@ func (s *Service) removeGameLocked(id string) error {
 		if err := s.persist(); err != nil {
 			s.games = previous
 			s.archived = previousArchive
-			if rollback := s.allowLocked(game.InstallDir); rollback != nil {
+			if rollback := s.restoreExcludedLocked(previousExcluded); rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
