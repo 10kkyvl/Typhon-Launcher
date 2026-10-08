@@ -135,6 +135,10 @@ type Service struct {
 	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
 	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
 	releaseRuntime func(installDir string) error
+	// readEntries читает записи удаления. Поле, а не прямой вызов: на
+	// Windows это реестр машины, и тесту нужно подставить, какие записи
+	// «появились» во время установки.
+	readEntries func() (map[string]uninstallEntry, error)
 
 	items      []*Installation
 	loadErr    error
@@ -190,6 +194,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
 	s.releaseRuntime = releaseRuntime
+	s.readEntries = readUninstallEntries
 	return s, nil
 }
 

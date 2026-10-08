@@ -13,6 +13,7 @@ type uninstallEntry struct {
 	Command         string
 	QuietCommand    string
 	InstallLocation string
+	Icon            string
 	ProductCode     string
 	SystemComponent bool
 }
@@ -57,11 +58,7 @@ func pickUninstall(before, after map[string]uninstallEntry, destination, name st
 	if key := titleKey(name); key != "" {
 		matched := make([]uninstallEntry, 0, 2)
 		for _, entry := range entries {
-			display := titleKey(entry.DisplayName)
-			if display == "" {
-				continue
-			}
-			if strings.Contains(display, key) || strings.Contains(key, display) {
+			if titleMatches(entry.DisplayName, key) {
 				matched = append(matched, entry)
 			}
 		}
@@ -82,6 +79,11 @@ func uninstallOf(e uninstallEntry) library.Uninstall {
 		QuietCommand: e.QuietCommand,
 		ProductCode:  e.ProductCode,
 	}
+}
+
+func titleMatches(displayName, key string) bool {
+	display := titleKey(displayName)
+	return display != "" && (strings.Contains(display, key) || strings.Contains(key, display))
 }
 
 func titleKey(name string) string {
