@@ -42,4 +42,4 @@ case " ${GOFLAGS:-} " in
   *) export GOFLAGS="${GOFLAGS:-} -p=$half" ;;
 esac
 
-"$@"
+env "$@"

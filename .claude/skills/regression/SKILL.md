@@ -10,7 +10,7 @@ description: Use when checking that nothing that used to work broke — before a
 | Слой | Что ловит | Где |
 | --- | --- | --- |
 | Тесты кода | логику сервисов, коды ошибок, переводы, контракты | `go test ./internal/...`, `npx vitest run` |
-| Совместимость API | новый бэкенд против старых лаунчеров 0.5–0.8 | `internal/httpapi` в typhon-backend |
+| Совместимость API | новый бэкенд против старых лаунчеров (`TestLegacy*`) | `internal/httpapi` в typhon-backend |
 | Живые сценарии | то, что видно только в окне: UAC, мастер установщика, оверлей, трей, рендер | агент `typhon-qa` по `scenarios/*.md` |
 
 Порядок всегда такой: сначала код, потом живые сценарии. Живой прогон поверх красных тестов
@@ -18,12 +18,14 @@ description: Use when checking that nothing that used to work broke — before a
 
 ## 1. Тесты кода
 
-Из корня лаунчера, полный чеклист из CLAUDE.md, плюс фронтенд:
+Из корня лаунчера, полный чеклист из CLAUDE.md, плюс фронтенд. Полные прогоны идут один раз,
+после слияния веток, и только через очередь тяжёлых команд — по вызову на команду:
 
 ```bash
-go test ./internal/... ./tools/...
-CGO_ENABLED=1 go test -race ./internal/...
-(cd frontend && npx vitest run && npm run check)
+bash .claude/heavy.sh go test ./internal/... ./tools/...
+bash .claude/heavy.sh sh -c 'CGO_ENABLED=1 go test -race ./internal/...'
+bash .claude/heavy.sh sh -c 'cd frontend && npx vitest run'
+bash .claude/heavy.sh sh -c 'cd frontend && npm run check'
 ```
 
 Отдельно стоит знать охранные тесты. Если они падают, это не повод их «поправить»:
@@ -35,17 +37,26 @@ CGO_ENABLED=1 go test -race ./internal/...
 
 ## 2. Совместимость API (после любого деплоя бэкенда)
 
-В `E:\typhon-backend`: `go test ./internal/httpapi/ -run Compat`. Таблица эндпоинтов
-собрана по тегам лаунчера v0.5.0…v0.8.0. Новый релиз лаунчера, который начал звать новый
-эндпоинт или читать новое поле, добавляет строку в эту таблицу в том же PR. Тесты с базой
-идут через `TEST_DATABASE_URL` (как гонять без локального Docker — в CLAUDE.md бэкенда).
+В репозитории бэкенда (`<backend repo>` — путь к соседнему `typhon-backend`; на этой
+машине его передаёт основная сессия в задании): `go test ./internal/httpapi/ -run 'Legacy'`.
+Очередь `heavy.sh` лаунчера считает замок по `.git` лаунчера и бэкенд не покрывает — не
+запускать этот прогон одновременно с другими тяжёлыми командами. Паттерн `Compat` здесь
+не годится: он ловит только `TestCompat*` — отчёты совместимости игр (`compat_test.go`), а
+не старых лаунчеров. Набор для старых клиентов — `TestLegacy*` в
+`legacy_launcher_compat_test.go` (маршруты, принятие запросов, шлюз версий, читаемые ответы
+об устаревшей версии и лимитах) и инвентарь вызовов в `legacy_launcher_inventory_test.go`.
+Инвентарь собран по тегам лаунчера v0.5.0…v0.8.0 и по `dev` (форма запросов `dev` равна
+v0.8.0; см. шапку файла), поэтому тег, вышедший позже, надо сверять с ним вручную. Новый
+релиз лаунчера, который начал звать новый эндпоинт или читать новое поле, добавляет строку в
+инвентарь в том же PR. Тесты с базой идут через `TEST_DATABASE_URL` (как гонять без локального
+Docker — в CLAUDE.md бэкенда).
 
 ## 3. Живые сценарии
 
 ### qa-сборка
 
 ```bash
-wails3 task build:qa        # bin/typhon.exe с тегом qa: CDP на 127.0.0.1:9333, заголовок «Typhon [qa]»
+bash .claude/heavy.sh wails3 task build:qa   # bin/typhon.exe с тегом qa: CDP на 127.0.0.1:9333, заголовок «Typhon [qa]»
 ```
 
 Тег `qa` есть только под Windows и физически не собирается вместе с `production`
@@ -59,7 +70,7 @@ wails3 task build:qa        # bin/typhon.exe с тегом qa: CDP на 127.0.0.
 
 ```powershell
 Get-Process typhon -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Process E:\TyphonLauncher\bin\typhon.exe -WorkingDirectory E:\TyphonLauncher\bin
+Start-Process <repo>\bin\typhon.exe -WorkingDirectory <repo>\bin    # <repo> — корень лаунчера (или его worktree)
 ```
 
 Лаунчер single-instance: живой старый процесс съест новый запуск. Заголовок окна без
@@ -103,14 +114,14 @@ Start-Process E:\TyphonLauncher\bin\typhon.exe -WorkingDirectory E:\TyphonLaunch
 в логе — `WARN qa build: CDP on 127.0.0.1` и `WARN UPnP … AddPortMapping: 500` (роутер).
 
 Навигация — по подписям сайдбара: «Библиотека», «Все игры», «Установлено», «Загрузки»,
-«Источники», «Друзья», «Активность», «История», «Настройки». Нативные диалоги (выбор файла)
+«Источники», «Друзья», «Активность», «История», «Локальная сеть», «Настройки». Нативные диалоги (выбор файла)
 CDP не видит — для них `scripts/uia.ps1` (`windows`, `controls`, `set-filename`, `invoke`). Окна UAC не автоматизируются вообще: это
 шаги `ЧЕЛОВЕК`.
 
 ### Где смотреть результат
 
 - Лог: `%APPDATA%\Typhon\typhon.log` (`level=ERROR`, `panic`, сообщения сценария). Время в
-  нём локальное (`+03:00`), строк десятки тысяч. Отметка начала прогона — номер последней
+  нём локальное, со смещением часового пояса машины, строк десятки тысяч. Отметка начала прогона — номер последней
   строки с `qa build: CDP on`, дальше читать только после неё.
 - Состояние: `%APPDATA%\Typhon\*.json` — `installations.json`, `downloads.json`,
   `library.json`, `settings.json`, `playlog.json`, `history.json` (`{"version":1,"data":[…]}`,
@@ -124,7 +135,7 @@ CDP не видит — для них `scripts/uia.ps1` (`windows`, `controls`, 
 Задание агенту: список id сценариев, каталог для скриншотов, разрешено ли трогать
 тестовые объекты. Отчёт агента принимается только со скриншотами и дословным логом.
 
-После прогона вернуть обычную сборку: `wails3 task build` и перезапуск. qa-сборку у
+После прогона вернуть обычную сборку: `bash .claude/heavy.sh wails3 task build` и перезапуск. qa-сборку у
 пользователя не оставлять — открытый CDP-порт даёт любому локальному процессу управлять
 окном.
 

@@ -18,7 +18,7 @@ description: Use when a change must be proven in the running launcher, not just 
 ### 0. Инструменты
 
 ```bash
-export PATH="$HOME/go/bin:$PATH"                       # wails3 и golangci-lint лежат там
+export PATH="$(go env GOPATH)/bin:$PATH"               # wails3 и golangci-lint лежат там
 sh .claude/skills/verify-live/scripts/build.sh "$UI"   # UI=папка в скретчпаде; даёт winid, click, scroll
 ```
 
@@ -47,16 +47,20 @@ ps -eo pid,command | grep '[b]in/typhon' && pkill -9 -f 'bin/typhon'   # не у
 
 ### 2. Собрать и запустить
 
+Сборка идёт через очередь тяжёлых команд, остальное — обычные команды:
+
 ```bash
-wails3 task build:devmock && ls -la bin/typhon         # время файла — после правки
+bash .claude/heavy.sh wails3 task build:devmock
+ls -la bin/typhon                                      # время файла — после правки
 find frontend/dist -newer frontend/src/App.svelte -name '*.js' | head -2   # бандл собран после правки (подставь свой файл)
 TYPHON_API_URL=http://127.0.0.1:8080 ./bin/typhon &    # локальный бэкенд
 ./bin/typhon &                                         # без переменной — прод
-sleep 3; tail -5 "$HOME/Library/Application Support/typhon/typhon.log"
+sleep 3; tail -5 "$HOME/Library/Application Support/Typhon/typhon.log"
 ```
 
-Какой бэкенд нужен, решает задача: локальный (`typhon-backend-feed`, засеянный каталог,
-логин `egor`) для фич с сервером, прод — когда надо видеть настоящие данные. В логе при
+Какой бэкенд нужен, решает задача: локальный (соседний репозиторий `typhon-backend` с
+засеянным каталогом и тестовой учётной записью, адрес в `TYPHON_API_URL`) для фич с
+сервером, прод — когда надо видеть настоящие данные. В логе при
 старте строка `devmock build: Windows-only subsystems are mocked`; `invalid_credentials`
 в первые секунды — нормальный хендшейк. Фоновый `wails3 task dev:devmock` держит свой
 `TYPHON_API_URL` из момента запуска — пересборка через него вернёт старый бэкенд.
@@ -64,26 +68,32 @@ sleep 3; tail -5 "$HOME/Library/Application Support/typhon/typhon.log"
 ### 3. Найти окно и подготовить его
 
 ```bash
-"$UI/winid"                                            # id=… pid=… x=0 y=30 w=2560 h=1318
-osascript -e 'tell application "System Events" to tell (first process whose name contains "typhon") to tell window 1 to set size to {2560, 1318}'
+"$UI/winid"                                            # id=… pid=… x=… y=… w=… h=…
+osascript -e 'tell application "System Events" to tell (first process whose name contains "typhon") to tell window 1 to set size to {W, H}'   # если окно мало для нужного экрана
 osascript -e 'tell application "System Events" to set frontmost of (first process whose name contains "typhon") to true'
 ```
 
-Окно без Retina-масштаба: точки = пиксели, окно начинается на y=30, поэтому
-**экранный y = y на скриншоте + 30**. `set frontmost` — перед каждой серией кликов, иначе
+`click` и `screencapture -R` работают в экранных координатах, а кадр окна (`-l`) начинается
+в его углу: **экранные x, y = x, y на кадре + x, y окна из `winid`** (под строкой меню окно
+начинается не с нуля по y). Масштаб кадра к экранным точкам проверить один раз: на Retina
+кадр может быть вдвое крупнее. `set frontmost` — перед каждой серией кликов, иначе
 события уходят в другое окно. Если `winid` без `all` окно не видит — оно на другом Space
 (терминал во весь экран): скриншот снять можно, кликнуть нельзя.
 
 ### 4. Кликнуть и снять
 
-Сайдбар при 2560x1318, x=104: библиотека 139, каталог 185, установленные 231, загрузки 296,
-друзья 342, лента 388, профиль 434, настройки 481, «О программе» 1246. После правок
-сайдбара координаты перепроверить по скриншоту.
+Координаты кнопок не хранятся: они зависят от размера окна и меняются с каждой правкой
+сайдбара. Порядок такой: снять кадр окна, найти нужный пункт глазами, пересчитать в экранные
+координаты по формуле выше, кликнуть и снять кадр ещё раз. Пункты сайдбара сверху вниз
+(`frontend/src/lib/components/Sidebar.svelte`): «Библиотека», «Все игры», «Установлено»,
+«Загрузки», «Источники», «Друзья», «Активность», «История», «Локальная сеть», «Настройки».
+Профиль и статус — в меню пользователя в самом сайдбаре, а не отдельным пунктом; «О программе»
+— вкладка внутри «Настроек».
 
 ```bash
-"$UI/click" 104 481; sleep 1.8
-screencapture -o -x -l"$ID" "$OUT/settings.png"       # только окно
-screencapture -o -x -R 883,253,204,83 "$OUT/card.png"   # кусок экрана, координаты экранные
+"$UI/click" X Y; sleep 1.8                             # X, Y — экранные, пересчитанные с кадра
+screencapture -o -x -l"$ID" "$OUT/settings.png"        # только окно
+screencapture -o -x -R X,Y,W,H "$OUT/card.png"         # кусок экрана, координаты экранные
 ```
 
 Скриншот прочитать инструментом Read и сверить с диффом глазами: нужный текст, нужное
@@ -93,33 +103,37 @@ screencapture -o -x -R 883,253,204,83 "$OUT/card.png"   # кусок экран�
 
 pid процесса, время файла `bin/typhon`, путь к скриншоту, что на нём подтверждает правку.
 Если правки не видно — по порядку: время бинаря старше правки; `ps` показывает второй
-экземпляр; скриншот снят с другого id (у лаунчера несколько окон, нужное — с `h=1318`);
+экземпляр; скриншот снят с другого id (у лаунчера несколько окон, нужное — главное, самое
+высокое, а не полоска в 30 точек);
 frontend не пересобрался (`frontend/dist`).
 
 ### Перед тестами
 
 Запущенный лаунчер держит UDP-порт LAN-обнаружения: `go test ./internal/lan/` падает с
 `bind: address already in use`. Это не регрессия — `pkill -f bin/typhon` и повторить.
-Зависший тест с `panic: test timed out after 10m` — см. память про `Skip`/`Fatal` под
-мьютексом: в дампе горутина стоит в `Mutex.Lock`, держателя нет.
+Зависший тест с `panic: test timed out after 10m` — смотреть дамп горутин: кто стоит в
+`Mutex.Lock` и есть ли у этого мьютекса держатель в другой горутине.
 
 ### Где смотреть, когда не работает
 
-`~/Library/Application Support/typhon/`: `typhon.log` (с ротацией `.1`…), состояние —
-`downloads.json`, `installation.json`, `catalog.json`, `account.json`, `compat*.json`,
-фейковые процессы devmock — `devmock-processes.json`. Самообновление целиком:
+`~/Library/Application Support/Typhon/` (имя с заглавной T, `internal/settings/settings.go`):
+`typhon.log` (с ротацией `.1`…), состояние — `downloads.json`, `installations.json` (записи
+установок), `installation.json` (идентификатор этого клиента, не установки), `catalog.json`,
+`account.json`, `compat*.json`, фейковые процессы devmock — `devmock-processes.json`. Самообновление целиком:
 `wails3 task devrelease VERSION=x.y.z` и две переменные, которые он печатает
 (раздел про devmock в CLAUDE.md).
 
 ## Windows
 
+Сборка идёт через очередь тяжёлых команд (`bash .claude/heavy.sh wails3 task build` из
+Bash), перезапуск — обычными командами:
+
 ```powershell
-wails3 task build
 taskkill /IM typhon.exe /F; Start-Process .\bin\typhon.exe
 Get-Content $env:APPDATA\Typhon\typhon.log -Tail 20      # свежий хвост, без паник
 ```
 
-Бэкенд, если правка его задевает: перезапустить `go run ./cmd/api` в `typhon-backend`,
+Бэкенд, если правка его задевает: перезапустить `go run ./cmd/api` в соседнем репозитории `typhon-backend`,
 дождаться `GET /ready` = 200 на `127.0.0.1:8080`, убедиться, что порт держит новый pid.
 Скриншот окна — через инструменты Claude in Chrome недоступен (окно нативное); на Windows
 проверка — лог плюс ручной взгляд пользователя, в отчёте pid и хвост лога.

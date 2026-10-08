@@ -43,7 +43,9 @@ git diff --stat v<прошлая>..dev -- frontend/src/lib/i18n   # новые �
 
 ## 3. Написать: форма записи
 
-Парсер `cmd/signrelease` строгий, любая другая строка валит сборку:
+Парсер `cmd/signrelease` строгий, но не до последней буквы: заголовок версии терпит три
+разделителя (` — `, ` – `, ` - `), заголовки секций — русские и английские названия. Любая
+строка вне этих форм валит сборку. Пишем по одной форме, как ниже:
 
 ```markdown
 ## 0.4.2 — 2026-09-07
@@ -57,8 +59,13 @@ git diff --stat v<прошлая>..dev -- frontend/src/lib/i18n   # новые �
 - Пункт
 ```
 
-Только эти заголовки (ещё `### Удалено`), тире в заголовке версии длинное (`—`), дата — день
-тега. Пустые секции не пишутся. Запись стоит первой в файле.
+Секции — эти и `### Удалено` (парсер знает также `Added`/`Changed`/`Fixed`/`Removed`, на них
+держится английский файл), тире в заголовке версии по соглашению длинное (`—`, как во всех
+записях; парсер принимает ещё `–` и `-`, но менять разделитель между записями незачем), дата —
+день тега в формате `ГГГГ-ММ-ДД`. Неизвестный заголовок секции, пункт до первой секции и
+строка-продолжение без пункта — ошибки (`changelog.go`); текст между заголовком версии и
+первой секцией уходит в саммари. Пустые секции не пишутся. Запись стоит
+первой в файле.
 
 ## 4. Написать: как звучит пункт
 
@@ -106,7 +113,8 @@ closes», не «Downloads were not stopping anymore». Секции `Added`/`Ch
 
 ## 6. Поднять версию
 
-Шесть мест, их сверяет `TestVersionSourcesMatch` в `internal/app/version_test.go`:
+Шесть файлов, девять значений; их сверяет `TestVersionSourcesMatch` в
+`internal/app/version_test.go`:
 
 - `VERSION`
 - `internal/app/app.go` — `var Version`
@@ -117,10 +125,12 @@ closes», не «Downloads were not stopping anymore». Секции `Added`/`Ch
 
 ## 7. Проверить перед тегом
 
+Тесты идут через очередь тяжёлых команд, по вызову на команду:
+
 ```bash
-go test ./internal/app/ -run TestVersionSourcesMatch   # версия в четырёх местах
-go test ./cmd/signrelease/                              # CHANGELOG.md парсится и верхняя запись = VERSION
-awk '/^## /{print; exit}' CHANGELOG.md CHANGELOG.en.md    # обе записи про одну версию
+bash .claude/heavy.sh go test ./internal/app/ -run TestVersionSourcesMatch   # версия во всех шести файлах
+bash .claude/heavy.sh go test ./cmd/signrelease/                              # CHANGELOG.md парсится и верхняя запись = VERSION
+for f in CHANGELOG.md CHANGELOG.en.md; do awk '/^## /{print; exit}' "$f"; done   # обе записи про одну версию
 ```
 
 Верхняя запись обоих changelog обязана совпадать с `VERSION` — иначе падает подпись манифеста
