@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { ChevronUp, Download, FileCheck, Pause, Play, Wrench } from '@lucide/svelte';
+  import { ChevronUp, Download, FileCheck, Pause, Play, Wrench, X } from '@lucide/svelte';
+  import { installErrorText } from '../install/installErrors';
   import { stageLabel, movePercent } from '../relocate/moveText';
+  import { cancelInstall } from '../services/install';
   import type { MoveJob } from '../services/relocate';
   import { activity, type ActivityItem } from '../stores/activity';
   import { pause, resume } from '../stores/downloads';
   import { activeMove } from '../stores/relocate';
   import { navigate } from '../stores/router';
+  import { toast } from '../stores/toasts';
   import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
   import { msg } from '../i18n';
@@ -93,6 +96,14 @@
     // настройках библиотеки, и отправлять туда клик — единственный переход,
     // который не заканчивается пустой страницей.
     navigate(item.key.startsWith('move:') ? 'settings' : 'downloads');
+  }
+
+  async function cancelWaiting(item: ActivityItem) {
+    try {
+      await cancelInstall(item.key.slice('install:'.length));
+    } catch (err) {
+      toast(installErrorText(err), 'danger');
+    }
   }
 
   function onFocusOut(event: FocusEvent) {
@@ -192,6 +203,17 @@
                     }}
                   >
                     <Play size="1.6rem" strokeWidth={1.8} />
+                  </IconButton>
+                {:else if item.kind === 'install' && item.attention}
+                  <IconButton
+                    label={msg('modals.installCancelInstall')}
+                    size="sm"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      cancelWaiting(item);
+                    }}
+                  >
+                    <X size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/if}
               </span>

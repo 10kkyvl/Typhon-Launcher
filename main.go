@@ -417,7 +417,11 @@ func main() {
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
-	downloadManager.SetOnGone(installService.DropBroker)
+	downloadManager.SetOnGone(func(downloadID string) {
+		if err := installService.HandleDownloadGone(downloadID); err != nil {
+			slog.Error("release installs of a gone download", "download_id", downloadID, "error", err)
+		}
+	})
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)

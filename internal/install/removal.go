@@ -188,6 +188,9 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	// сразу, до всякой мутации библиотеки, и пользователь может просто
 	// повторить попытку.
 	forgetErr := s.forgetInstallations(gameID)
+	if source := game.SourceDownloadID; source != "" {
+		forgetErr = errors.Join(forgetErr, s.cancelWaiting(func(item *Installation) bool { return item.DownloadID == source }))
+	}
 	if forgetErr != nil && !deleteFiles {
 		return forgetErr
 	}
