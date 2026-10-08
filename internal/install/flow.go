@@ -123,7 +123,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	beforeEntries, err := readUninstallEntries()
+	beforeEntries, err := s.readEntries()
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	dirs := diffSnapshot(before, after)
+	dirs := shallowest(append(diffSnapshot(before, after), s.entryDirs(id, item, roots, beforeEntries)...))
 	candidates, err := gather(ctx, dirs, item.Name)
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 			return err
 		}
 	}
-	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+	if err := s.setRemoval(id, dest, before.withUnseen(dest), beforeEntries, item.Name); err != nil {
 		return err
 	}
 	s.dropShortcuts(ctx, id, shell, dest, cfg.InstallSkipShortcuts, nil)
@@ -229,12 +229,16 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 
 	dropInstallerLog(logPath)
 
-	dest, err := s.silentDestination(ctx, id, item, roots, before)
+	dest, err := s.silentDestination(ctx, id, item, roots, before, beforeEntries)
 	if err != nil {
 		s.discardSilent(item, before, err)
 		return err
 	}
-	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+	seen := before
+	if dest != item.Destination {
+		seen = before.withUnseen(dest)
+	}
+	if err := s.setRemoval(id, dest, seen, beforeEntries, item.Name); err != nil {
 		return err
 	}
 	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts, workers)
@@ -460,7 +464,7 @@ func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnap
 // silentDestination доверяет заданному каталогу только после того, как убедился,
 // что установщик действительно в него писал: часть установщиков игнорирует
 // ключ каталога и ставит игру по своему пути, и тогда его надо найти по снимку.
-func (s *Service) silentDestination(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot) (string, error) {
+func (s *Service) silentDestination(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry) (string, error) {
 	empty, err := dirEmpty(item.Destination)
 	if err != nil {
 		return "", err
@@ -472,7 +476,7 @@ func (s *Service) silentDestination(ctx context.Context, id string, item Install
 	if err != nil {
 		return "", err
 	}
-	dirs := diffSnapshot(before, after)
+	dirs := shallowest(append(diffSnapshot(before, after), s.entryDirs(id, item, roots, beforeEntries)...))
 	candidates, err := gather(ctx, dirs, item.Name)
 	if err != nil {
 		return "", err
@@ -729,7 +733,7 @@ func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEn
 		owned = !existed
 	}
 	uninstall, unknown := library.Uninstall{}, false
-	afterEntries, err := readUninstallEntries()
+	afterEntries, err := s.readEntries()
 	if err != nil {
 		slog.Error("read uninstall entries", "id", id, "error", err)
 		unknown = true

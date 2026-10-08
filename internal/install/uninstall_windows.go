@@ -89,6 +89,9 @@ func readUninstallEntry(parent registry.Key, name string) (uninstallEntry, bool,
 	if entry.InstallLocation, err = readString(key, "InstallLocation"); err != nil {
 		return uninstallEntry{}, false, err
 	}
+	if entry.Icon, err = readString(key, "DisplayIcon"); err != nil {
+		return uninstallEntry{}, false, err
+	}
 	system, err := readUint(key, "SystemComponent")
 	if err != nil {
 		return uninstallEntry{}, false, err
