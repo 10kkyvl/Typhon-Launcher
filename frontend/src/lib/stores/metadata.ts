@@ -107,8 +107,13 @@ async function pump() {
       await wait(retryDelay);
     }
   } catch (err) {
+    const now = Date.now();
+    for (const id of pending) taken.set(id, now);
     pending.clear();
-    toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
+    if (!artFailureShown) {
+      artFailureShown = true;
+      toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
+    }
   } finally {
     pumping = false;
   }
