@@ -19,11 +19,20 @@ const { ensureArt, getGameArt, isMetadataAvailable, toast } = vi.hoisted(() => (
 vi.mock('../services/metadata', () => ({ ensureArt, getGameArt, isMetadataAvailable }));
 vi.mock('./toasts', () => ({ toast }));
 
+let resets = 0;
+
+async function forgetShownFailure() {
+  resets += 1;
+  await loadArt([`reset-${resets}`]);
+  getGameArt.mockClear();
+}
+
 describe('metadata art pump error reporting', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     getGameArt.mockResolvedValue({});
     locale.set('en');
+    await forgetShownFailure();
   });
 
   afterEach(() => {
@@ -47,14 +56,30 @@ describe('metadata art pump error reporting', () => {
     await vi.waitFor(() => expect(toast).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith('Failed to load cover art', 'danger');
   });
+
+  it('reports a lasting failure once while a screen keeps asking for the same art', async () => {
+    getGameArt.mockRejectedValue(new Error('socket hang up'));
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    requestArt(['pump-spam-a']);
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    for (let tick = 0; tick < 5; tick += 1) {
+      requestArt(['pump-spam-a']);
+      await settle();
+    }
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(getGameArt).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('metadata availability and art loading errors', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     getGameArt.mockResolvedValue({});
     isMetadataAvailable.mockResolvedValue(true);
     locale.set('en');
+    await forgetShownFailure();
   });
 
   afterEach(() => {
