@@ -614,9 +614,11 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 	}
 	if !done {
+		failure := installerFailure(engine, state.Code, logPath)
+		tail := installerLogTail(logPath)
 		slog.Error("resumed silent installer failed", "id", id, "engine", string(engine),
-			"code", state.Code, "log", installerLogTail(logPath))
-		s.fail(id, installerFailure(engine, state.Code, logPath))
+			"code", state.Code, "log", tail, "error", withLogTail(failure, tail))
+		s.fail(id, failure)
 		return
 	}
 	chainCtx, endJob := s.adoptJob(ctx, id)
