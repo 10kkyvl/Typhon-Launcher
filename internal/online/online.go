@@ -186,9 +186,10 @@ func (s *Service) SetStatus(status string) error {
 	if !settings.ValidPresenceStatus(status) {
 		return fmt.Errorf("%w: %s", ErrInvalidStatus, status)
 	}
-	next := s.settings.GetSettings()
-	next.PresenceStatus = status
-	if err := s.settings.SaveSettings(next); err != nil {
+	if _, err := s.settings.Update(func(next *settings.Settings) error {
+		next.PresenceStatus = status
+		return nil
+	}); err != nil {
 		return fmt.Errorf("save presence status: %w", err)
 	}
 

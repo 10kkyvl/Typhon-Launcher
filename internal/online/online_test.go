@@ -952,3 +952,46 @@ func TestAwayAfterFrom(t *testing.T) {
 		})
 	}
 }
+
+func TestSetStatusKeepsASettingSavedWhileItWasInFlight(t *testing.T) {
+	h := newSyncedHarness(t, staticToken("tok"), http.StatusNoContent, nil, false)
+
+	reached := make(chan struct{})
+	release := make(chan struct{})
+	var once, free sync.Once
+	t.Cleanup(func() { free.Do(func() { close(release) }) })
+	if err := h.settings.AddApplier(func(prev, next settings.Settings) error {
+		if next.PresenceStatus == settings.PresenceBusy && prev.PresenceStatus != settings.PresenceBusy {
+			once.Do(func() {
+				close(reached)
+				<-release
+			})
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- h.svc.SetStatus(settings.PresenceBusy) }()
+	<-reached
+
+	other := h.settings.GetSettings()
+	other.Theme = "light"
+	other.MaxActiveDownloads = 7
+	if err := h.settings.SaveSettings(other); err != nil {
+		t.Fatalf("concurrent save: %v", err)
+	}
+	free.Do(func() { close(release) })
+	if err := <-done; err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	got := h.settings.GetSettings()
+	if got.PresenceStatus != settings.PresenceBusy {
+		t.Errorf("stored status = %q, want busy", got.PresenceStatus)
+	}
+	if got.Theme != "light" || got.MaxActiveDownloads != 7 {
+		t.Errorf("theme %q, downloads %d: SetStatus wrote a stale copy over a newer save", got.Theme, got.MaxActiveDownloads)
+	}
+}

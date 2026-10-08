@@ -521,15 +521,26 @@ func (s *Service) RemoveSource(id string) error {
 			s.mu.Unlock()
 			return err
 		}
+		var removeErr error
+		if err := s.store.removeReleases(id); err != nil {
+			// Put the source back on disk while its releases file is still
+			// there; if that fails too, sources.json is what the next start
+			// reads, so memory follows it and the file stays as a leftover.
+			restoreErr := s.store.saveSources(flatten(s.sources))
+			if restoreErr == nil {
+				s.mu.Unlock()
+				return err
+			}
+			removeErr = errors.Join(err, fmt.Errorf("restore sources after a failed removal: %w", restoreErr))
+		}
 		s.sources = remaining
 		delete(s.releases, id)
 		delete(s.failures, id)
 		delete(s.retryAt, id)
-		s.store.removeReleases(id)
 		s.mu.Unlock()
 		slog.Info("source removed", "source_id", id, "name", name)
 		emit(eventUpdated, Source{ID: id})
-		return nil
+		return removeErr
 	}
 	s.mu.Unlock()
 	return errSourceNotFound

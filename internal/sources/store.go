@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -95,12 +94,13 @@ func (s *store) saveReleases(sourceID string, list []*Release) error {
 	return storage.Save(path, releasesVersion, flat)
 }
 
-func (s *store) removeReleases(sourceID string) {
+func (s *store) removeReleases(sourceID string) error {
 	path := s.releasesPath(sourceID)
 	if path == "" {
-		return
+		return errors.New("releases path unavailable")
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Warn("remove releases file", "source_id", sourceID, "error", err)
+		return fmt.Errorf("remove releases %s: %w", sourceID, err)
 	}
+	return nil
 }
