@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"typhon/internal/storage"
 )
@@ -22,12 +23,72 @@ const (
 	maxHistory = 200
 )
 
+var errStoreUnloaded = errors.New("saved updates state was not loaded, saving is refused")
+
 type store struct {
 	dir string
+
+	mu      sync.Mutex
+	blocked error
 }
 
 func newStore(dir string) *store {
 	return &store{dir: dir}
+}
+
+// block makes every save fail until it is called with nil. A service whose
+// state could not be read holds an empty picture of it, and the first save of
+// that picture would replace the file it failed to read (invariant 3).
+func (s *store) block(cause error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cause == nil {
+		s.blocked = nil
+		return
+	}
+	s.blocked = fmt.Errorf("%w: %w", errStoreUnloaded, cause)
+}
+
+func (s *store) writable() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.blocked
+}
+
+func (s *store) save(name string, version int, data any) error {
+	if err := s.writable(); err != nil {
+		return err
+	}
+	return storage.Save(s.path(name), version, data)
+}
+
+type loadedState struct {
+	updates       []Update
+	verifications []VerifyState
+	rollbacks     []Rollback
+	history       []UpdateHistory
+	journals      []SwapJournal
+}
+
+func (s *store) loadAll() (loadedState, error) {
+	var state loadedState
+	var err error
+	if state.updates, err = s.loadUpdates(); err != nil {
+		return loadedState{}, err
+	}
+	if state.verifications, err = s.loadVerifications(); err != nil {
+		return loadedState{}, err
+	}
+	if state.rollbacks, err = s.loadRollbacks(); err != nil {
+		return loadedState{}, err
+	}
+	if state.history, err = s.loadHistory(); err != nil {
+		return loadedState{}, err
+	}
+	if state.journals, err = s.loadJournals(); err != nil {
+		return loadedState{}, err
+	}
+	return state, nil
 }
 
 func (s *store) path(name string) string {
@@ -64,7 +125,7 @@ func (s *store) loadUpdates() ([]Update, error) {
 }
 
 func (s *store) saveUpdates(list []Update) error {
-	return storage.Save(s.path("updates.json"), updatesVersion, list)
+	return s.save("updates.json", updatesVersion, list)
 }
 
 func (s *store) loadHistory() ([]UpdateHistory, error) {
@@ -75,7 +136,7 @@ func (s *store) saveHistory(list []UpdateHistory) error {
 	if len(list) > maxHistory {
 		list = list[len(list)-maxHistory:]
 	}
-	return storage.Save(s.path("update_history.json"), historyVersion, list)
+	return s.save("update_history.json", historyVersion, list)
 }
 
 func (s *store) loadRollbacks() ([]Rollback, error) {
@@ -83,7 +144,7 @@ func (s *store) loadRollbacks() ([]Rollback, error) {
 }
 
 func (s *store) saveRollbacks(list []Rollback) error {
-	return storage.Save(s.path("rollbacks.json"), rollbackVersion, list)
+	return s.save("rollbacks.json", rollbackVersion, list)
 }
 
 func (s *store) loadJournals() ([]SwapJournal, error) {
@@ -91,7 +152,7 @@ func (s *store) loadJournals() ([]SwapJournal, error) {
 }
 
 func (s *store) saveJournals(list []SwapJournal) error {
-	return storage.Save(s.path("journal.json"), journalVersion, list)
+	return s.save("journal.json", journalVersion, list)
 }
 
 func (s *store) loadVerifications() ([]VerifyState, error) {
@@ -99,7 +160,7 @@ func (s *store) loadVerifications() ([]VerifyState, error) {
 }
 
 func (s *store) saveVerifications(list []VerifyState) error {
-	return storage.Save(s.path("verify.json"), verifyVersion, list)
+	return s.save("verify.json", verifyVersion, list)
 }
 
 func (s *store) loadManifest(gameID string) (FileManifest, bool, error) {

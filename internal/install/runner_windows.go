@@ -19,6 +19,10 @@ const backgroundSchedulingClass = 3
 
 type processRunner struct{}
 
+// startGuard подменяется в тестах: охранника нельзя проверить иначе, чем по
+// тому, с какими параметрами его запустили.
+var startGuard = installguard.Start
+
 func newRunner(func() string) runner { return processRunner{} }
 
 // run сначала пытается разведать компоненты Inno (если движок и опции того
@@ -54,12 +58,12 @@ func (processRunner) run(ctx context.Context, spec runSpec) (int, error) {
 		return 0, err
 	}
 
-	stopGuard := installguard.Start(ctx, cmd.Process.Pid, execSpec.Hidden)
+	stopGuard := startGuard(ctx, cmd.Process.Pid, installguard.Options{HideProgress: execSpec.Hidden, VerifyRepack: execSpec.Options.VerifyRepack})
 	defer stopGuard()
 
 	// Установщик распаковывает себя во временный каталог и работает уже оттуда:
 	// без job-объекта отмена убила бы только загрузчик, а установка продолжилась бы.
-	group, groupErr := groupProcess(cmd.Process.Pid, execSpec.Background)
+	group, groupErr := groupProcess(cmd.Process.Pid, execSpec.Background, !execSpec.Outlive)
 	if groupErr != nil {
 		slog.Warn("installer job object", "path", execSpec.Path, "error", groupErr)
 	}
@@ -70,6 +74,9 @@ func (processRunner) run(ctx context.Context, spec runSpec) (int, error) {
 
 	select {
 	case err := <-done:
+		if execSpec.Background && !execSpec.Outlive {
+			releaseJob(group, execSpec.Path)
+		}
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			return exit.ExitCode(), nil
@@ -108,13 +115,13 @@ func startupAttr(spec runSpec) *syscall.SysProcAttr {
 	return attr
 }
 
-func groupProcess(pid int, background bool) (windows.Handle, error) {
+func groupProcess(pid int, background, killOnClose bool) (windows.Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return 0, fmt.Errorf("create job object: %w", err)
 	}
 	if background {
-		if err := limitJob(job); err != nil {
+		if err := limitJob(job, killOnClose); err != nil {
 			closeGroup(job, "")
 			return 0, err
 		}
@@ -137,43 +144,51 @@ func groupProcess(pid int, background bool) (windows.Handle, error) {
 	return job, nil
 }
 
-// limitJob ставит KILL_ON_JOB_CLOSE: смерть воркера (или любого другого
-// владельца job-объекта) закрывает его хэндл, и без этого флага установщик
-// остаётся сиротой, а не гаснет вместе с процессом, который им управлял.
-// Хэндл job-объекта во всех вызывающих закрывается уже после подтверждённого
-// выхода процесса (cmd.Wait() отработал), поэтому обычное завершение флаг не
-// затрагивает.
-// limitJob сначала пробует набор лимитов вместе с KILL_ON_JOB_CLOSE: смерть
-// владельца job-объекта (в первую очередь — воркера) тогда гасит и
-// установщик, вместо того чтобы оставлять его сиротой. На части систем
-// SetInformationJobObject отклоняет именно этот флаг с ERROR_INVALID_PARAMETER
-// (воспроизведено на этой машине — похоже на вмешательство защитного ПО,
-// PRIORITY_CLASS/SCHEDULING_CLASS сами по себе проходят). Понижение
-// приоритета важнее автопогребения сироты, поэтому при отказе комбинированного
-// набора лимитов повторяем без KILL_ON_JOB_CLOSE, а не проваливаем запуск
-// установщика целиком.
-func limitJob(job windows.Handle) error {
-	info := windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
-		LimitFlags: windows.JOB_OBJECT_LIMIT_PRIORITY_CLASS | windows.JOB_OBJECT_LIMIT_SCHEDULING_CLASS |
-			windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-		PriorityClass:   windows.BELOW_NORMAL_PRIORITY_CLASS,
-		SchedulingClass: backgroundSchedulingClass,
+// limitJob понижает приоритет дерева установщика и ставит KILL_ON_JOB_CLOSE:
+// смерть владельца job-объекта (лаунчера или воркера) закрывает его хэндл и
+// гасит установщик, вместо того чтобы оставлять его сиротой, пишущим в каталог
+// игры (инвариант 22). Флаг принимает только расширенная структура лимитов:
+// с JobObjectBasicLimitInformation Windows отвечает ERROR_INVALID_PARAMETER.
+// Если флаг всё же отвергнут, job-объект остаётся без него: через него идёт
+// TerminateJobObject при отмене, а без job-объекта отмена убила бы только
+// загрузчик, перезапустивший установщик из %TEMP%.
+func limitJob(job windows.Handle, killOnClose bool) error {
+	if !killOnClose {
+		return setJobLimits(job, priorityLimitFlags)
 	}
-	if err := setJobBasicLimits(job, info); err != nil {
-		slog.Warn("job object kill-on-close unavailable, falling back", "error", err)
-		info.LimitFlags = windows.JOB_OBJECT_LIMIT_PRIORITY_CLASS | windows.JOB_OBJECT_LIMIT_SCHEDULING_CLASS
-		if err := setJobBasicLimits(job, info); err != nil {
-			return fmt.Errorf("limit job object: %w", err)
-		}
+	err := setJobLimits(job, priorityLimitFlags|windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+	if err == nil {
+		return nil
 	}
-	return nil
+	slog.Warn("job object kill-on-close refused, keeping the job without it", "error", err)
+	return setJobLimits(job, priorityLimitFlags)
 }
 
-func setJobBasicLimits(job windows.Handle, info windows.JOBOBJECT_BASIC_LIMIT_INFORMATION) error {
+const priorityLimitFlags = windows.JOB_OBJECT_LIMIT_PRIORITY_CLASS | windows.JOB_OBJECT_LIMIT_SCHEDULING_CLASS
+
+// releaseJob снимает KILL_ON_JOB_CLOSE перед закрытием хэндла после штатного
+// выхода главного процесса: вспомогательный процесс, ещё дописывающий файлы,
+// не должен гаснуть из-за уборки лаунчера, как не гас до появления флага.
+func releaseJob(job windows.Handle, path string) {
+	if job == 0 {
+		return
+	}
+	if err := setJobLimits(job, priorityLimitFlags); err != nil {
+		slog.Warn("release installer job object", "path", path, "error", err)
+	}
+}
+
+func setJobLimits(job windows.Handle, flags uint32) error {
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
+	info.BasicLimitInformation.LimitFlags = flags
+	info.BasicLimitInformation.PriorityClass = windows.BELOW_NORMAL_PRIORITY_CLASS
+	info.BasicLimitInformation.SchedulingClass = backgroundSchedulingClass
 	//nolint:gosec // G103: SetInformationJobObject принимает структуру только по указателю; инвариант 22 требует управлять деревом процессов установщика
 	ptr := uintptr(unsafe.Pointer(&info))
-	_, err := windows.SetInformationJobObject(job, windows.JobObjectBasicLimitInformation, ptr, uint32(unsafe.Sizeof(info)))
-	return err
+	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, ptr, uint32(unsafe.Sizeof(info))); err != nil {
+		return fmt.Errorf("limit job object: %w", err)
+	}
+	return nil
 }
 
 func terminateGroup(job windows.Handle, cmd *exec.Cmd, path string) {

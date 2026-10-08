@@ -6,12 +6,22 @@ export type LatestRequestResult<T> =
 /** Tags async reads so a slower response cannot replace newer page state. */
 export class LatestRequestGate {
   private revision = 0;
+  private pendingAbort: AbortController | undefined;
 
   begin(): number {
     return ++this.revision;
   }
 
+  beginRequest(): { ticket: number; signal: AbortSignal } {
+    this.pendingAbort?.abort();
+    const controller = new AbortController();
+    this.pendingAbort = controller;
+    return { ticket: this.begin(), signal: controller.signal };
+  }
+
   invalidate(): void {
+    this.pendingAbort?.abort();
+    this.pendingAbort = undefined;
     this.revision += 1;
   }
 

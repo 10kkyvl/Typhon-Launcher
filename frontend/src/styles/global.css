@@ -30,6 +30,11 @@ body {
   user-select: none;
 }
 
+html.overlay-window,
+html.overlay-window body {
+  background: transparent;
+}
+
 #app {
   height: 100%;
 }

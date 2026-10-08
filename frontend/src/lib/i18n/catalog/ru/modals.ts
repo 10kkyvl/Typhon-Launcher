@@ -316,6 +316,7 @@ export const modals = {
   'modals.installPickInstallerButton': 'Выбрать установщик…',
   'modals.installPickExecutableButton': 'Выбрать исполняемый файл…',
   'modals.installWaitingExternal': 'Ожидание завершения установщика...',
+  'modals.installWritten': 'Записано {size}',
   'modals.installExecutablesAriaLabel': 'Исполняемые файлы',
   'modals.installPickManually': 'Выбрать вручную…',
   'modals.installGameLabel': 'Игра',
@@ -331,6 +332,7 @@ export const modals = {
   'modals.installCancelInstall': 'Отменить установку',
   'modals.installConfirm': 'Подтвердить',
   'modals.installDismiss': 'Убрать',
+  'modals.installManually': 'Установить вручную',
 } as const;
 
 export type ModalsKey = keyof typeof modals;

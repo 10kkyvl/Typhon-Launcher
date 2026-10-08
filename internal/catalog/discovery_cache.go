@@ -2,6 +2,13 @@ package catalog
 
 import "time"
 
+// maxDiscoveryGamesCache bounds the shared temporary cache used by both
+// discovery previews and durable catalog pages for games the user has only
+// glanced at (never opened). A discovery shelf refreshes a handful of items
+// at a time, but browsing the catalog can flip through dozens of 60-item
+// pages in one sitting; the cap must cover that without growing unbounded.
+const maxDiscoveryGamesCache = 3000
+
 type discoveryGame struct {
 	game Game
 	used time.Time
@@ -37,13 +44,23 @@ func (s *Service) previewRemotePage(page GamePage) GamePage {
 func (s *Service) rememberDiscoveryGames(items []RecommendationItem) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
+	for _, item := range items {
+		s.rememberBrowsedGameLocked(item.Game, now)
+	}
+}
+
+// rememberBrowsedGameLocked stashes a game the user has only seen in a
+// listing — a discovery shelf or a durable catalog page — without writing it
+// to s.games/catalog.json. It becomes durable only through
+// promoteDiscoveryGameLocked, triggered by the first interaction that needs
+// a stable ID (GetGame). Caller holds s.mu.
+func (s *Service) rememberBrowsedGameLocked(game Game, used time.Time) {
 	if s.discoveryGames == nil {
 		s.discoveryGames = map[string]discoveryGame{}
 	}
-	for _, item := range items {
-		s.discoveryGames[item.Game.ID] = discoveryGame{game: item.Game, used: time.Now()}
-	}
-	for len(s.discoveryGames) > 256 {
+	s.discoveryGames[game.ID] = discoveryGame{game: game, used: used}
+	for len(s.discoveryGames) > maxDiscoveryGamesCache {
 		oldest := ""
 		for id, g := range s.discoveryGames {
 			if oldest == "" || g.used.Before(s.discoveryGames[oldest].used) {

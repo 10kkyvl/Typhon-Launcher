@@ -62,7 +62,6 @@ export const state = {
   'state.relocateFailedLibrary': 'Не удалось перенести «библиотеку»',
 
   'state.selfupdateNewVersionToast': 'Доступна новая версия лаунчера: {version}',
-  'state.selfupdateAppliedToast': 'Лаунчер обновлён до версии {version}',
   'state.selfupdateApplyFailedToast': 'Не удалось установить обновление {version}',
 
   'state.settingsNotLoaded': 'Настройки ещё не загружены',
@@ -184,6 +183,7 @@ export const state = {
   'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
 
   'state.themeFallbackName': 'Тёмная',
+  'state.uiLoadFailed': 'Не удалось загрузить интерфейс. Перезапустите Typhon.',
 } as const;
 
 export type StateKey = keyof typeof state;

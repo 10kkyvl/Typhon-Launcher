@@ -108,3 +108,37 @@ func TestEnvCredentialStoreOverride(t *testing.T) {
 		t.Errorf("token = %q, want stored", cred.Token)
 	}
 }
+
+func TestNamedCredentialStoreIgnoresAccountTokenOverride(t *testing.T) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		t.Fatalf("random target suffix: %v", err)
+	}
+	t.Setenv("TYPHON_API_TOKEN", "env-token")
+
+	store, err := NewNamedCredentialStore("Typhon Launcher Test Named " + hex.EncodeToString(buf))
+	if err != nil {
+		t.Fatalf("NewNamedCredentialStore() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Delete(); err != nil {
+			t.Errorf("cleanup credential: %v", err)
+		}
+	})
+
+	if _, err := store.Load(); !errors.Is(err, ErrNoCredential) {
+		t.Fatalf("Load() on an empty named store error = %v, want ErrNoCredential", err)
+	}
+	//nolint:gosec // G101: фикстура теста OS credential storage (инвариант 10), а не встроенный секрет.
+	want := Credential{Token: "proxy-secret", Username: "proxyuser"}
+	if err := store.Save(want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("Load() = %+v, want %+v", got, want)
+	}
+}

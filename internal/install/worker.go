@@ -1,12 +1,15 @@
 package install
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"typhon/internal/storage"
 )
@@ -44,6 +47,11 @@ type workerSpec struct {
 	Options       installOptions `json:"options"`
 	Background    bool           `json:"background"`
 	Hidden        bool           `json:"hidden"`
+	// Interactive просит воркер запустить сам установщик без ключей тишины,
+	// с видимым окном и без разведки компонентов: пользователь проходит мастер
+	// сам, воркер нужен только ради прав администратора.
+	Interactive bool      `json:"interactive"`
+	Shell       *shellJob `json:"shell,omitempty"`
 }
 
 // discoverySpec — минимальный набор полей, нужных именно для разведки
@@ -58,12 +66,15 @@ type discoverySpec struct {
 	WorkingDir    string
 	InfPath       string
 	Options       installOptions
+	// Interactive отключает разведку: она существует только ради тихого
+	// прогона, а мастер установщика пользователь проходит сам.
+	Interactive bool
 }
 
 func (s workerSpec) discovery() discoverySpec {
 	return discoverySpec{
 		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options,
+		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options, Interactive: s.Interactive,
 	}
 }
 
@@ -84,6 +95,10 @@ type workerState struct {
 	Cancelled        bool     `json:"cancelled,omitempty"`
 	Components       []string `json:"components,omitempty"`
 	DiscoveryFailure string   `json:"discoveryFailure,omitempty"`
+	// Shell заполнен, когда уборку ярлыков просили и установщик отработал; nil
+	// значит, что не просили или запуск установщика вернул ошибку. Установщик,
+	// завершившийся неуспехом, даёт Skipped.
+	Shell *shellReport `json:"shell,omitempty"`
 }
 
 func workerStatePath(dir, id string) string {
@@ -103,9 +118,9 @@ func workerCancelPath(dir, id string) string {
 }
 
 func readWorkerSpec(path string) (workerSpec, error) {
-	data, err := os.ReadFile(path)
+	data, err := readWorkerSpecBytes(path)
 	if err != nil {
-		return workerSpec{}, fmt.Errorf("read worker spec %s: %w", path, err)
+		return workerSpec{}, err
 	}
 	var spec workerSpec
 	if err := json.Unmarshal(data, &spec); err != nil {
@@ -115,14 +130,26 @@ func readWorkerSpec(path string) (workerSpec, error) {
 }
 
 func writeWorkerSpec(path string, spec workerSpec) error {
+	_, err := writeWorkerSpecDigest(path, spec)
+	return err
+}
+
+// writeWorkerSpecDigest возвращает SHA-256 тех самых байт, что ушли в файл, а
+// не файла, перечитанного с диска: между записью и чтением его уже мог
+// подменить другой процесс.
+func writeWorkerSpecDigest(path string, spec workerSpec) (string, error) {
 	if path == "" {
-		return errors.New("worker spec path unavailable")
+		return "", errors.New("worker spec path unavailable")
 	}
 	data, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal worker spec: %w", err)
+		return "", fmt.Errorf("marshal worker spec: %w", err)
 	}
-	return writeWorkerFile(path, data)
+	if err := writeWorkerFile(path, data); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // readWorkerState различает только отсутствие файла: воркер ещё не успел его
@@ -169,6 +196,28 @@ func writeWorkerCancel(path string) error {
 		return errors.New("worker cancel path unavailable")
 	}
 	return writeWorkerFile(path, []byte{})
+}
+
+// removeWorkerFiles убирает файлы прогона воркера. Отсутствие файла не ошибка,
+// любая другая причина возвращается: оставшееся состояние прошлого прогона
+// иначе принималось бы за итог следующего.
+// A parent that is not a directory answers ENOTDIR on POSIX and "path not
+// found" on Windows; either way the file cannot be there.
+func alreadyGone(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func removeWorkerFiles(paths ...string) error {
+	var errs []error
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !alreadyGone(err) {
+			errs = append(errs, fmt.Errorf("remove worker file %s: %w", path, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func clearWorkerCancel(path string) error {

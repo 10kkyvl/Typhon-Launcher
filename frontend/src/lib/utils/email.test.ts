@@ -5,7 +5,7 @@ describe('maskEmail', () => {
   it.each([
     ['player@example.com', 'p*****@example.com'],
     ['a@example.com', 'a*@example.com'],
-    ['nefka2007@gmail.com', 'n********@gmail.com'],
+    ['alice1990@gmail.com', 'a********@gmail.com'],
     ['very.long.address.of.a.person@mail.ru', 'v**********@mail.ru'],
     ['user@sub.domain.co.uk', 'u***@sub.domain.co.uk'],
     ['weird@name@example.com', 'w*********@example.com'],

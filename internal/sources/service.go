@@ -514,14 +514,17 @@ func (s *Service) RemoveSource(id string) error {
 			continue
 		}
 		name := src.Name
-		s.sources = append(s.sources[:i], s.sources[i+1:]...)
-		delete(s.releases, id)
-		delete(s.failures, id)
-		delete(s.retryAt, id)
-		if err := s.store.saveSources(flatten(s.sources)); err != nil {
+		remaining := make([]*Source, 0, len(s.sources)-1)
+		remaining = append(remaining, s.sources[:i]...)
+		remaining = append(remaining, s.sources[i+1:]...)
+		if err := s.store.saveSources(flatten(remaining)); err != nil {
 			s.mu.Unlock()
 			return err
 		}
+		s.sources = remaining
+		delete(s.releases, id)
+		delete(s.failures, id)
+		delete(s.retryAt, id)
 		s.store.removeReleases(id)
 		s.mu.Unlock()
 		slog.Info("source removed", "source_id", id, "name", name)
@@ -539,9 +542,11 @@ func (s *Service) SetSourceEnabled(id string, enabled bool) error {
 		s.mu.Unlock()
 		return errSourceNotFound
 	}
+	before := *src
 	src.Enabled = enabled
 	src.Status = statusOf(src)
 	if err := s.store.saveSources(flatten(s.sources)); err != nil {
+		*src = before
 		s.mu.Unlock()
 		return err
 	}
@@ -641,7 +646,15 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	defer func() {
 		s.mu.Lock()
 		delete(s.refreshing, id)
+		current := s.findLocked(id)
+		if current == nil || current.Status != StatusUpdating {
+			s.mu.Unlock()
+			return
+		}
+		current.Status = statusOf(current)
+		settled := *current
 		s.mu.Unlock()
+		emit(eventUpdated, settled)
 	}()
 
 	slog.Info("source refresh started", "source_id", id, "name", name, "source_type", string(kind), "scheduled", scheduled, "timeout_ms", refreshTimeout.Milliseconds())

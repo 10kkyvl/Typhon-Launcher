@@ -54,9 +54,32 @@ func mkText(t *testing.T, path, content string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir for %s: %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("open %s: %v", filepath.Dir(path), err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			t.Errorf("close %s: %v", filepath.Dir(path), err)
+		}
+	}()
+	if err := root.WriteFile(filepath.Base(path), []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func installerFixture(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "setup.exe")
+	mkText(t, path, "installer fixture")
+	return path
+}
+
+func withInstaller(t *testing.T, spec workerSpec) workerSpec {
+	t.Helper()
+	spec.InstallerPath = installerFixture(t, t.TempDir())
+	spec.InstallerSHA256 = fileDigest(t, spec.InstallerPath)
+	return spec
 }
 
 func exists(path string) bool {

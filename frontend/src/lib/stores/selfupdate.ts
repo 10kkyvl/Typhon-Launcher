@@ -56,7 +56,12 @@ export const selfUpdateBusy = derived(
   ([$status, $downloading]) => $downloading || $status.state === 'downloading' || $status.state === 'applying',
 );
 
+export const OUTCOME_SUCCESS_MS = 2000;
+
+let outcomeTimer: ReturnType<typeof setTimeout> | undefined;
+
 export function dismissOutcome() {
+  clearTimeout(outcomeTimer);
   selfUpdateOutcome.set(null);
 }
 
@@ -115,16 +120,11 @@ export async function initSelfUpdate() {
     const outcome = await getOutcome();
     if (outcome) {
       selfUpdateOutcome.set(outcome);
-      // The "what's new" window is the notification for a successful update:
-      // a toast on top of it says the same thing twice.
-      const announced = outcome.ok && get(releaseNotes).unseen.length > 0;
-      if (!announced) {
-        toast(
-          outcome.ok
-            ? msg('state.selfupdateAppliedToast', { version: outcome.version })
-            : msg('state.selfupdateApplyFailedToast', { version: outcome.version }),
-          outcome.ok ? 'success' : 'danger',
-        );
+      if (outcome.ok) {
+        clearTimeout(outcomeTimer);
+        outcomeTimer = setTimeout(dismissOutcome, OUTCOME_SUCCESS_MS);
+      } else {
+        toast(msg('state.selfupdateApplyFailedToast', { version: outcome.version }), 'danger');
       }
     }
   } catch (err) {

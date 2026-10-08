@@ -99,6 +99,7 @@
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
+  import { installIndeterminate } from '../../lib/install/progress';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -402,7 +403,7 @@
 
   const busy = $derived(
     busyState([
-      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: ownInstall.status === 'verifying' } : null,
+      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: installIndeterminate(ownInstall) } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
         ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,

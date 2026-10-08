@@ -507,6 +507,20 @@ func TestUninstallSpecPrefersProductCode(t *testing.T) {
 	}
 }
 
+func TestUninstallerOutlivesTheLauncher(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "unins000.exe")
+	if err := os.WriteFile(path, []byte("MZ"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec, ok, err := usableUninstallSpec(library.Uninstall{Command: `"` + path + `"`})
+	if err != nil || !ok {
+		t.Fatalf("usableUninstallSpec = %v, %v", ok, err)
+	}
+	if !spec.Outlive {
+		t.Fatal("an uninstaller killed with the launcher leaves a half-removed game behind")
+	}
+}
+
 func TestPickUninstall(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "Game")
 	before := map[string]uninstallEntry{

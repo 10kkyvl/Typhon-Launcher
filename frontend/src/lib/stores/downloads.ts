@@ -54,6 +54,8 @@ export const active = derived(downloads, ($downloads) =>
 
 export const queue = derived(downloads, ($downloads) => $downloads.filter((d) => d.status === 'queued'));
 
+export const failed = derived(downloads, ($downloads) => $downloads.filter((d) => d.status === 'failed'));
+
 export const completed = derived(downloads, ($downloads) =>
   $downloads
     .filter((d) => d.status === 'completed')

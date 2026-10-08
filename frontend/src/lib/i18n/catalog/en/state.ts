@@ -65,7 +65,6 @@ export const state: Record<StateKey, Message> = {
   'state.relocateFailedLibrary': 'Failed to move the library',
 
   'state.selfupdateNewVersionToast': 'New launcher version available: {version}',
-  'state.selfupdateAppliedToast': 'Launcher updated to version {version}',
   'state.selfupdateApplyFailedToast': 'Failed to install update {version}',
 
   'state.settingsNotLoaded': 'Settings have not loaded yet',
@@ -185,4 +184,5 @@ export const state: Record<StateKey, Message> = {
   'state.stateSaveFailed': 'Could not save state to disk: {message}',
 
   'state.themeFallbackName': 'Dark',
+  'state.uiLoadFailed': 'Could not load the interface. Restart Typhon.',
 };

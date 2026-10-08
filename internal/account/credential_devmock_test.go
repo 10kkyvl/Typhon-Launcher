@@ -107,3 +107,35 @@ func TestFileCredentialStoreSaveUnwritableParent(t *testing.T) {
 		t.Fatal("Save() err = nil, want error for unwritable parent")
 	}
 }
+
+func TestNamedCredentialStoresDoNotShareAFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TYPHON_TEST_DATA_DIR", dir)
+	first, err := NewNamedCredentialStore("Typhon Launcher Proxy")
+	if err != nil {
+		t.Fatalf("NewNamedCredentialStore(first) err = %v", err)
+	}
+	second, err := NewNamedCredentialStore("Another Store")
+	if err != nil {
+		t.Fatalf("NewNamedCredentialStore(second) err = %v", err)
+	}
+	if err := first.Save(Credential{Token: "one"}); err != nil {
+		t.Fatalf("Save() err = %v", err)
+	}
+	if _, err := second.Load(); !errors.Is(err, ErrNoCredential) {
+		t.Fatalf("second store Load() err = %v, want ErrNoCredential", err)
+	}
+}
+
+func TestCredentialSlug(t *testing.T) {
+	cases := map[string]string{
+		"Typhon Launcher Proxy": "typhon-launcher-proxy",
+		`a/b\c`:                 "a-b-c",
+		"Ключ":                  "----",
+	}
+	for in, want := range cases {
+		if got := credentialSlug(in); got != want {
+			t.Errorf("credentialSlug(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

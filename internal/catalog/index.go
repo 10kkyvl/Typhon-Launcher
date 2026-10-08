@@ -47,6 +47,16 @@ func buildIndex(games []Game) *index {
 // Пустой тип считается игрой: у записей, которых бэкенд ещё не переливал, его
 // просто нет.
 func (idx *index) add(g Game) int {
+	pos := len(idx.entries)
+	idx.entries = append(idx.entries, entry{})
+	idx.registerAt(pos, g)
+	return pos
+}
+
+// registerAt (re)computes the entry at pos and adds its postings to the
+// reverse indexes. The caller owns entries[pos]: add appends a placeholder
+// first, update clears the previous postings first via removePostings.
+func (idx *index) registerAt(pos int, g Game) {
 	normalized := titles.Normalize(g.Title)
 	e := entry{
 		normalized: normalized,
@@ -61,8 +71,7 @@ func (idx *index) add(g Game) int {
 		e.aliases = append(e.aliases, normalizedAlias)
 	}
 
-	pos := len(idx.entries)
-	idx.entries = append(idx.entries, e)
+	idx.entries[pos] = e
 	idx.byID[g.ID] = pos
 	if normalized != "" {
 		idx.byTitle[normalized] = append(idx.byTitle[normalized], pos)
@@ -76,7 +85,51 @@ func (idx *index) add(g Game) int {
 	for _, key := range externalKeys(g.ExternalIDs) {
 		idx.byExternal[key] = pos
 	}
-	return pos
+}
+
+// update refreshes the entry at pos after idx.games[pos] was overwritten in
+// place with a new value. It only touches the postings that belonged to old,
+// instead of rebuilding the whole index — the caller (a durable catalog page
+// merge, or a link-reconciliation pass) may touch a handful of positions out
+// of tens of thousands and cannot afford buildIndex's full O(n) pass.
+func (idx *index) update(pos int, old Game) {
+	idx.removePostings(pos, old, idx.entries[pos])
+	idx.registerAt(pos, idx.games[pos])
+}
+
+func (idx *index) removePostings(pos int, g Game, e entry) {
+	if e.normalized != "" {
+		idx.byTitle[e.normalized] = removeIntFromSlice(idx.byTitle[e.normalized], pos)
+		if len(idx.byTitle[e.normalized]) == 0 {
+			delete(idx.byTitle, e.normalized)
+		}
+	}
+	for _, alias := range e.aliases {
+		idx.byAlias[alias] = removeIntFromSlice(idx.byAlias[alias], pos)
+		if len(idx.byAlias[alias]) == 0 {
+			delete(idx.byAlias, alias)
+		}
+	}
+	for _, token := range e.tokens {
+		idx.byToken[token] = removeIntFromSlice(idx.byToken[token], pos)
+		if len(idx.byToken[token]) == 0 {
+			delete(idx.byToken, token)
+		}
+	}
+	for _, key := range externalKeys(g.ExternalIDs) {
+		if idx.byExternal[key] == pos {
+			delete(idx.byExternal, key)
+		}
+	}
+}
+
+func removeIntFromSlice(list []int, value int) []int {
+	for i, v := range list {
+		if v == value {
+			return append(list[:i:i], list[i+1:]...)
+		}
+	}
+	return list
 }
 
 func externalKeys(ids ExternalIDs) []string {

@@ -60,7 +60,7 @@ func TestRunElevatedIgnoresTheStateOfThePreviousRun(t *testing.T) {
 	if err := writeWorkerState(statePath, workerState{Run: "stale", Done: true, Code: 7}); err != nil {
 		t.Fatalf("seed stale state: %v", err)
 	}
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(launch runSpec) (workerHandle, error) {
 		if len(launch.Args) < 2 {
@@ -241,7 +241,7 @@ func echoRun(t *testing.T, dir, id string, state workerState) workerState {
 func TestRunElevatedReturnsErrorWhenStateStaysUnfinished(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t1",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t1",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
@@ -269,7 +269,7 @@ func TestRunElevatedReturnsErrorWhenStateStaysUnfinished(t *testing.T) {
 func TestRunElevatedPicksUpStateThroughPolling(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t2", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t2", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	// Keeps the stand-in process alive well past the poll interval, so a
 	// success here proves the state-file poll fired, not the process-exit path.
@@ -300,7 +300,7 @@ func TestRunElevatedPicksUpStateThroughPolling(t *testing.T) {
 func TestRunElevatedPropagatesWorkerError(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t3", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t3", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		return longRunningProcess(t, 10), nil
@@ -326,7 +326,7 @@ func TestRunElevatedCancellationWritesMarkerAndWaitsForWorker(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	cancelPath := filepath.Join(dir, "cancel")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t4", StatePath: statePath, CancelPath: cancelPath}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t4", StatePath: statePath, CancelPath: cancelPath}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		return longRunningProcess(t, 30), nil
@@ -373,7 +373,7 @@ func TestRunElevatedCancellationWritesMarkerAndWaitsForWorker(t *testing.T) {
 func TestRunElevatedCancellationTimesOutWhenWorkerNeverResponds(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t5",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t5",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 
@@ -413,7 +413,7 @@ func TestRunElevatedSurvivesTransientStateReadFailure(t *testing.T) {
 	if err := os.Mkdir(statePath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t9", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t9", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		return longRunningProcess(t, 10), nil
@@ -451,7 +451,7 @@ func TestRunElevatedReportsPersistentStateReadFailure(t *testing.T) {
 	if err := os.Mkdir(statePath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t10", StatePath: statePath, CancelPath: filepath.Join(dir, "cancel")}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		return longRunningProcess(t, 10), nil
@@ -496,11 +496,12 @@ func isProcessAlive(pid int) bool {
 func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t11",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t11",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 
 	var proc *testProcHandle
+	started := make(chan struct{})
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		h := longRunningProcess(t, 30)
 		ok := false
@@ -508,13 +509,23 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 		if !ok {
 			t.Fatalf("longRunningProcess returned %T, want *testProcHandle", h)
 		}
+		close(started)
 		return h, nil
 	})
 
+	// Отмена приходит только после запуска воркера: на нагруженной машине
+	// runElevated доходит до запуска дольше любой фиксированной паузы, и отмена
+	// раньше него оставила бы proc пустым.
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan struct{})
+	defer close(finished)
 	go func() {
-		<-time.After(30 * time.Millisecond)
-		cancel()
+		select {
+		case <-started:
+			cancel()
+		case <-finished:
+		}
 	}()
 	// Воркер никогда не отвечает на маркер отмены: единственный способ узнать,
 	// что процесс остановлен, — дедлайн workerCancelWait и принудительное
@@ -522,6 +533,9 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 	if _, err := runElevated(ctx, spec); err == nil {
 		t.Fatal("runElevated returned nil error though the worker never confirmed stopping")
+	}
+	if proc == nil {
+		t.Fatal("the worker was never started")
 	}
 
 	pid := proc.cmd.Process.Pid
@@ -536,13 +550,13 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 // TestRunElevatedKeepsNotConfirmedStoppedEvenAfterConfirmedWorkerKill
 // закрывает разбор с ревью: terminate() доказывает только смерть ВОРКЕРА, а
-// не дерева процессов, которое он запустил. Воркер держит установщик живым
-// через job-объект с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
-// limitJob), но SetInformationJobObject может отказать (там же — «отказ
-// воспроизведён на этой машине, похоже на вмешательство защитного ПО»), и
-// limitJob в этом случае молча откатывается на лимиты без этого флага.
-// Значит убитый воркер не гарантирует убитый установщик, и класс ошибки
-// обязан остаться errInstallerNotConfirmedStopped: discardSilent (flow.go)
+// не дерева процессов, которое он запустил. Воркер держит установщик в
+// job-объекте с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
+// limitJob), и смерть воркера гасит дерево, но асинхронно и без подтверждения
+// для вызывающего; groupProcess к тому же может не завестись, и тогда
+// установщик живёт вне job-объекта. Значит убитый воркер не гарантирует
+// убитый установщик, и класс ошибки обязан остаться
+// errInstallerNotConfirmedStopped: discardSilent (flow.go)
 // делает RemoveAll только когда его нет, а RemoveAll по каталогу, в который
 // ещё может писать не убитый установщик, — гонка на единственной копии
 // данных (инвариант 9, тот же класс бага, что уже был закрыт КРИТ для
@@ -550,7 +564,7 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 func TestRunElevatedKeepsNotConfirmedStoppedEvenAfterConfirmedWorkerKill(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t12",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t12",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 
@@ -595,7 +609,7 @@ func (*unkillableHandle) terminate() error     { return errors.New("kill failed"
 func TestRunElevatedKeepsNotConfirmedStoppedWhenKillFails(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t13",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t13",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 
@@ -643,7 +657,7 @@ func (*closeDisciplineHandle) terminate() error     { return nil }
 func TestRunElevatedNeverClosesTheHandleFromItsOwnGoroutine(t *testing.T) {
 	dir := t.TempDir()
 	spec := runSpec{
-		Path: `C:\fake\installer.exe`, ID: "t14",
+		Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t14",
 		StatePath: filepath.Join(dir, "state.json"), CancelPath: filepath.Join(dir, "cancel"),
 	}
 
@@ -686,7 +700,7 @@ func TestRunElevatedRetriesCancelDeliveryOnTransientFailure(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	cancelPath := filepath.Join(dir, "cancel")
-	spec := runSpec{Path: `C:\fake\installer.exe`, ID: "t15", StatePath: statePath, CancelPath: cancelPath}
+	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t15", StatePath: statePath, CancelPath: cancelPath}
 
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		return longRunningProcess(t, 30), nil

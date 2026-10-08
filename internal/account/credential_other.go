@@ -2,8 +2,10 @@
 
 package account
 
-import "errors"
-
 func newSystemCredentialStore() (CredentialStore, error) {
-	return nil, errors.New("no OS credential store is available on this platform")
+	return nil, ErrNoCredentialStore
+}
+
+func newNamedCredentialStore(string) (CredentialStore, error) {
+	return nil, ErrNoCredentialStore
 }

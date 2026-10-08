@@ -272,6 +272,7 @@ func usableUninstallSpec(u library.Uninstall) (runSpec, bool, error) {
 	spec, err := uninstallSpec(u)
 	switch {
 	case err == nil:
+		spec.Outlive = true
 		return spec, true, nil
 	case errors.Is(err, errNoUninstaller), errors.Is(err, errBadCommand),
 		errors.Is(err, errNoExecutable), errors.Is(err, fs.ErrNotExist):

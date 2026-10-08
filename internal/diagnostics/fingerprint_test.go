@@ -4,9 +4,9 @@ import "testing"
 
 func TestFingerprintSameLogicalErrorSameFingerprint(t *testing.T) {
 	stackA := "typhon/internal/install.(*Service).Run(0xc000123456)\n" +
-		"\tC:/Users/10kk/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n" +
+		"\tC:/Users/alice/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n" +
 		"typhon/internal/install.(*Service).apply(0xc000654321)\n" +
-		"\tC:/Users/10kk/TyphonLauncher/internal/install/flow.go:210 +0x88\n"
+		"\tC:/Users/alice/TyphonLauncher/internal/install/flow.go:210 +0x88\n"
 	stackB := "typhon/internal/install.(*Service).Run(0xdeadbeef)\n" +
 		"\t/home/egor/typhon/internal/install/flow.go:305 +0x1a4\n" +
 		"typhon/internal/install.(*Service).apply(0xfeedface)\n" +
@@ -21,7 +21,7 @@ func TestFingerprintSameLogicalErrorSameFingerprint(t *testing.T) {
 
 func TestFingerprintDifferentComponentDifferentFingerprint(t *testing.T) {
 	stack := "typhon/internal/install.(*Service).Run(0xc000123456)\n" +
-		"\tC:/Users/10kk/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n"
+		"\tC:/Users/alice/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n"
 
 	fpInstall := Fingerprint("timeout", "install", stack)
 	fpDownload := Fingerprint("timeout", "download", stack)
@@ -78,9 +78,9 @@ func TestFingerprintJSStackFramesResolve(t *testing.T) {
 func TestFingerprintGoStackFramesResolve(t *testing.T) {
 	stack := "goroutine 1 [running]:\n" +
 		"typhon/internal/install.(*Service).Run(0xc000123456)\n" +
-		"\tC:/Users/10kk/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n" +
+		"\tC:/Users/alice/TyphonLauncher/internal/install/flow.go:305 +0x1a4\n" +
 		"main.main()\n" +
-		"\tC:/Users/10kk/TyphonLauncher/main.go:91 +0x25\n"
+		"\tC:/Users/alice/TyphonLauncher/main.go:91 +0x25\n"
 	got := normalizeFrames(stack, 3)
 	want := []string{"typhon/internal/install.(*Service).Run", "main.main"}
 	if len(got) != len(want) {

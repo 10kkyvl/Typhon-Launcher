@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"crypto/ed25519"
+
+	"typhon/internal/installguard"
 )
 
 type runSpec struct {
@@ -16,6 +18,15 @@ type runSpec struct {
 	Tail       string
 	Background bool
 	Hidden     bool
+	// Outlive оставляет процесс жить после смерти лаунчера. Деинсталлятор,
+	// убитый посередине, оставляет полуудалённую игру при прежней записи в
+	// библиотеке; установщик, наоборот, гасится вместе с владельцем.
+	Outlive bool
+	// Interactive — установщик запускается как есть, без ключей тишины: его
+	// мастер проходит пользователь. Разведка компонентов для такого запуска
+	// не делается, а если ему нужны права администратора, он идёт тем же
+	// воркером, что и тихий (elevated.go).
+	Interactive bool
 
 	// Поля ниже нужны только повышенному воркеру (elevated.go, worker_run.go):
 	// без прав администратора процесс с установщиком
@@ -36,6 +47,10 @@ type runSpec struct {
 	// кладёт задание и читает состояние из файлов, потому что процессом с
 	// правами администратора он не владеет ни в том, ни в другом случае.
 	Broker *brokerHandoff
+
+	// Shell передаёт воркеру уборку ярлыков в общих каталогах и забирает итог.
+	// Без повышения он не используется: тогда уборка целиком остаётся за лаунчером.
+	Shell *shellHandoff
 }
 
 type brokerHandoff struct {
@@ -46,4 +61,15 @@ type brokerHandoff struct {
 
 type runner interface {
 	run(ctx context.Context, spec runSpec) (int, error)
+}
+
+func bridgeFor(opts installOptions, hide, limit32 bool) installguard.Bridge {
+	return installguard.Bridge{
+		Options:                installguard.Options{HideProgress: hide, VerifyRepack: opts.VerifyRepack},
+		Limit32BitAddressSpace: limit32,
+	}
+}
+
+func bridgeArgs(bridge installguard.Bridge, cancelFile, installer string, args []string) []string {
+	return append([]string{bridge.Mode(), cancelFile, "--", installer}, args...)
 }

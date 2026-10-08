@@ -7,11 +7,19 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"typhon/internal/uierr"
+)
+
+var (
+	errInstallerChanged     = uierr.New("install.installer_changed", "установщик изменился после запроса прав администратора, запуск отменён. Повторите установку")
+	errInstallerHashMissing = errors.New("в задании нет контрольной суммы установщика")
 )
 
 // The private key exists only in the launcher. The elevated process receives
@@ -20,17 +28,9 @@ func writeSignedBrokerSpec(ctx context.Context, dir string, spec workerSpec, key
 	if len(key) != ed25519.PrivateKeySize {
 		return errBrokerOutsidePin
 	}
-	f, err := os.Open(spec.InstallerPath)
+	digest, err := installerDigest(ctx, spec.InstallerPath)
 	if err != nil {
 		return err
-	}
-	digest, readErr := hashBrokerInstaller(ctx, f)
-	closeErr := f.Close()
-	if readErr != nil {
-		return readErr
-	}
-	if closeErr != nil {
-		return closeErr
 	}
 	spec.InstallerSHA256 = digest
 	spec.BrokerSignature = ""
@@ -43,6 +43,25 @@ func writeSignedBrokerSpec(ctx context.Context, dir string, spec workerSpec, key
 		return err
 	}
 	return writeWorkerSpec(brokerSpecPath(dir), spec)
+}
+
+func installerDigest(ctx context.Context, path string) (string, error) {
+	if path == "" {
+		return "", errEmptyInstallerPath
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	digest, readErr := hashBrokerInstaller(ctx, f)
+	closeErr := f.Close()
+	if readErr != nil {
+		return "", readErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	return digest, nil
 }
 
 // Bound each read so cancellation does not wait for hashing the entire installer.
@@ -81,28 +100,43 @@ func verifyBrokerSignature(spec workerSpec, keys []string) error {
 }
 
 func runSignedBrokerSpec(spec workerSpec) error {
-	// Resolve before opening and launch that same path. On Windows the held
-	// handle denies writes/deletion until the installer has finished.
+	err := runWorkerSpec(spec)
+	if errors.Is(err, errInstallerChanged) {
+		return fmt.Errorf("%w: %w", errBrokerOutsidePin, err)
+	}
+	return err
+}
+
+// The installer sits in a folder the unelevated user can write to. Resolve
+// before opening and launch that same path: on Windows the held handle denies
+// writes and deletion until the installer has finished.
+func pinInstaller(ctx context.Context, spec workerSpec) (*os.File, workerSpec, error) {
+	if spec.InstallerSHA256 == "" {
+		return nil, workerSpec{}, errInstallerHashMissing
+	}
 	path, err := filepath.EvalSymlinks(spec.InstallerPath)
 	if err != nil {
-		return err
+		return nil, workerSpec{}, err
 	}
 	f, err := openBrokerInstaller(path)
 	if err != nil {
-		return err
+		return nil, workerSpec{}, err
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			slog.Warn("close broker installer", "error", err)
-		}
-	}()
-	sum := sha256.New()
-	if _, err := io.Copy(sum, f); err != nil {
-		return err
+	digest, err := hashBrokerInstaller(ctx, f)
+	if err != nil {
+		closePinnedInstaller(f)
+		return nil, workerSpec{}, err
 	}
-	if hex.EncodeToString(sum.Sum(nil)) != spec.InstallerSHA256 {
-		return fmt.Errorf("%w: installer content changed", errBrokerOutsidePin)
+	if digest != spec.InstallerSHA256 {
+		closePinnedInstaller(f)
+		return nil, workerSpec{}, errInstallerChanged
 	}
 	spec.InstallerPath = path
-	return runWorkerSpec(spec)
+	return f, spec, nil
+}
+
+func closePinnedInstaller(f *os.File) {
+	if err := f.Close(); err != nil {
+		slog.Warn("close pinned installer", "error", err)
+	}
 }

@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
     ChevronDown,
+    CircleAlert,
     CircleCheck,
     Download,
     FolderOpen,
     Menu,
     Plus,
+    RotateCcw,
     Settings,
     X,
   } from '@lucide/svelte';
@@ -23,7 +25,20 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { Download as DownloadRecord } from '../../lib/services/downloads';
   import { maxActiveDownloadOptions, openFolder } from '../../lib/services/settings';
-  import { active, completed, forceStart, moveDown, moveUp, queue, remove, stats } from '../../lib/stores/downloads';
+  import {
+    active,
+    completed,
+    failed,
+    forceStart,
+    moveDown,
+    moveUp,
+    queue,
+    remove,
+    resume,
+    stats,
+  } from '../../lib/stores/downloads';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { installIndeterminate } from '../../lib/install/progress';
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -81,7 +96,7 @@
   }
 
   $effect(() => {
-    const ids = [...$queue, ...$completed]
+    const ids = [...$queue, ...$failed, ...$completed]
       .map((d) => d.origin.gameId)
       .filter((id): id is string => Boolean(id));
     if (ids.length > 0) requestArt(ids);
@@ -150,6 +165,37 @@
     </div>
   {/if}
 </section>
+
+{#if $failed.length > 0}
+  <section class="section">
+    <h2>{msg('transfers.downloadsFailedHeading')} <span class="count">{$failed.length}</span></h2>
+    <div class="rows">
+      {#each $failed as item (item.id)}
+        <div class="row failed">
+          <div class="thumb">
+            <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
+          </div>
+          <div class="info">
+            <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+            <span class="error-text">
+              <CircleAlert size="1.4rem" strokeWidth={1.8} />
+              <span>{installErrorText(item.error)}</span>
+            </span>
+          </div>
+          <div class="row-actions">
+            <Button size="sm" onclick={() => resume(item.id)}>
+              <RotateCcw size="1.4rem" strokeWidth={1.8} />
+              {msg('common.retry')}
+            </Button>
+            <IconButton label={msg('transfers.downloadsRemoveFromListLabel')} size="sm" onclick={() => remove(item.id)}>
+              <X size="1.6rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+        </div>
+      {/each}
+    </div>
+  </section>
+{/if}
 
 <section class="section">
   <h2>{msg('transfers.downloadsQueueHeading')} <span class="count">{$queue.length}</span></h2>
@@ -236,7 +282,7 @@
             {:else if installActive(install.status)}
               <div class="install-progress">
                 <span class="install-status">{installStatusLabels(install.status)}</span>
-                <ProgressBar value={install.progress * 100} height={4} />
+                <ProgressBar value={install.progress * 100} indeterminate={installIndeterminate(install)} height={4} />
               </div>
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
@@ -313,6 +359,30 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+  }
+
+  .row.failed {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  }
+
+  .error-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: 100%;
+    font-size: var(--font-xs);
+    color: var(--danger);
+  }
+
+  .error-text span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .error-text :global(svg) {
+    flex-shrink: 0;
   }
 
   .thumb {

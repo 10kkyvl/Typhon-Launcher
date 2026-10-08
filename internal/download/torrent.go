@@ -10,6 +10,8 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"typhon/internal/winpath"
 
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
@@ -22,10 +24,13 @@ import (
 )
 
 const (
-	listenPort      = 42815
-	minLimiterBurst = 256 * 1024
-	maxTorrentConns = 60
+	listenPort         = 42815
+	randomPortAttempts = 8
+	minLimiterBurst    = 256 * 1024
+	maxTorrentConns    = 60
 )
+
+var openTorrentClient = torrent.NewClient
 
 var errBadPaths = uierr.New("download.bad_paths", "недопустимые пути файлов в торренте")
 
@@ -78,24 +83,60 @@ type client struct {
 	up         *rate.Limiter
 	metaDir    string
 	completion storage.PieceCompletion
+
+	gen              uint64
+	httpTrackersOnly bool
+	filterTrackers   func([][]string) ([][]string, []lostTracker)
+	retryTrackers    func(*torrent.Torrent, []lostTracker)
+	later            *retrier
+	stopped          atomic.Bool
 }
 
-func newClient(cfg settings.Settings, metaDir string, completion storage.PieceCompletion) (*client, error) {
+func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
 	wrapped := nonClosingCompletion{completion}
-	tc := clientConfig(cfg, metaDir, listenPort, wrapped)
-	cl, err := torrent.NewClient(tc)
-	if err != nil && isListenError(err) {
-		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
+	port := listenPort
+	for attempt := 0; ; attempt++ {
+		tc, attach, err := networkedConfig(ctx, cfg, metaDir, port, wrapped, plan)
+		if err != nil {
+			closeDefaultStorage(tc)
+			return nil, err
+		}
+		c := &client{
+			down:             tc.DownloadRateLimiter,
+			up:               tc.UploadRateLimiter,
+			metaDir:          metaDir,
+			completion:       wrapped,
+			httpTrackersOnly: plan.mode == settings.NetworkProxy,
+			filterTrackers:   attach.trackers,
+			retryTrackers:    attach.retry,
+			later:            attach.later,
+		}
+		guardNetwork(tc, c.halted)
+		cl, err := openTorrentClient(tc)
+		if err == nil {
+			attach.attach(cl)
+			c.cl = cl
+			slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
+			return c, nil
+		}
 		closeDefaultStorage(tc)
-		tc = clientConfig(cfg, metaDir, 0, wrapped)
-		cl, err = torrent.NewClient(tc)
+		attach.later.stop()
+		if !isListenError(err) || attempt == randomPortAttempts {
+			return nil, err
+		}
+		// The client takes one port number for TCP and UDP over both IPv4 and
+		// IPv6. A random port is only free for the first of them, so the same
+		// number can still be held in UDP by another process (Windows services
+		// keep ephemeral UDP ports), and the next random port usually is not.
+		slog.Warn("torrent port unavailable, retrying on a random port", "port", port, "error", err)
+		port = 0
 	}
-	if err != nil {
-		closeDefaultStorage(tc)
-		return nil, err
-	}
-	slog.Info("torrent client started", "port", cl.LocalPort())
-	return &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: metaDir, completion: wrapped}, nil
+}
+
+func networkedConfig(ctx context.Context, cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion, plan netPlan) (*torrent.ClientConfig, netAttach, error) {
+	tc := clientConfig(cfg, dataDir, port, completion)
+	attach, err := applyNetwork(ctx, tc, plan)
+	return tc, attach, err
 }
 
 func clientConfig(cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion) *torrent.ClientConfig {
@@ -135,9 +176,37 @@ func (c *client) applyLimits(down, up int64) {
 }
 
 func (c *client) close() {
+	c.later.stop()
 	for _, err := range c.cl.Close() {
 		slog.Error("close torrent client", "error", err)
 	}
+	c.later.wait()
+}
+
+func (c *client) halted() bool { return c.stopped.Load() }
+
+// halt cuts the client off from the network ahead of its close. Closing the
+// client is the last step of a teardown, after jobs that may take long to
+// notice they were cancelled, and a client closed before they end would hang
+// them (a verify that starts on a closed torrent returns with the client lock
+// held). So the client stays open and stops carrying data instead: no torrent
+// moves a byte either way, every peer connection is dropped and none is
+// accepted or dialled again.
+func (c *client) halt() {
+	// Set first: a torrent added while the sweep runs is halted by add.
+	c.stopped.Store(true)
+	c.later.stop()
+	for _, t := range c.cl.Torrents() {
+		haltTorrent(t)
+	}
+}
+
+func haltTorrent(t *torrent.Torrent) {
+	t.DisallowDataDownload()
+	t.DisallowDataUpload()
+	// Dropping the connections is what closes the sockets; with the gates alone
+	// they stay open and the swarm keeps seeing the address.
+	t.SetMaxEstablishedConns(0)
 }
 
 func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string, opts storageOpts) (*liveTorrent, error) {
@@ -176,11 +245,20 @@ func newStorage(destination string, opts storageOpts, completion storage.PieceCo
 }
 
 func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storageOpts) (*liveTorrent, error) {
+	if c.halted() {
+		return nil, errNetworkDown
+	}
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
 	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
+	var announce [][]string
+	var lost []lostTracker
+	if c.filterTrackers != nil {
+		announce = cloneTiers(spec.Trackers)
+		spec.Trackers, lost = c.filterTrackers(spec.Trackers)
+	}
 
 	t, isNew, err := c.cl.AddTorrentSpec(spec)
 	if err != nil {
@@ -204,7 +282,13 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
-	return &liveTorrent{t: t, storage: st, flat: opts.flat}, nil
+	if c.halted() {
+		haltTorrent(t)
+	}
+	if len(lost) > 0 && c.retryTrackers != nil {
+		c.retryTrackers(t, lost)
+	}
+	return &liveTorrent{t: t, storage: st, flat: opts.flat, announce: announce, gen: c.gen}, nil
 }
 
 func magnetSpec(uri string) (*torrent.TorrentSpec, error) {
@@ -249,6 +333,20 @@ type liveTorrent struct {
 	t       *torrent.Torrent
 	storage io.Closer
 	flat    bool
+
+	// announce is the tracker list as it came in, kept when the client had to
+	// drop trackers it cannot reach, so that the stored torrent still has them
+	// the day the proxy is switched off.
+	announce [][]string
+	gen      uint64
+}
+
+func (l *liveTorrent) metainfo() metainfo.MetaInfo {
+	mi := l.t.Metainfo()
+	if l.announce != nil {
+		mi.AnnounceList = cloneTiers(l.announce)
+	}
+	return mi
 }
 
 func (l *liveTorrent) setPriorities(selected []bool) {
@@ -341,6 +439,48 @@ func (l *liveTorrent) verifyEach(ctx context.Context, done func(index int, lengt
 	return nil
 }
 
+// settlePieces waits until no piece is queued for a hash, being hashed or being
+// marked in the storage. A piece check returns as soon as the hash is known,
+// but the engine tells the storage and publishes the verdict a moment later, so
+// the completion read right after the last check can still show pieces that
+// passed as not complete. The wait ends with ctx or when the torrent is gone.
+func (l *liveTorrent) settlePieces(ctx context.Context) error {
+	// Subscribed before the first look, so a change between the look and the
+	// wait is delivered and not missed.
+	sub := l.t.SubscribePieceStateChanges()
+	defer sub.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-l.t.Closed():
+			return errNetworkDown
+		default:
+		}
+		if !l.piecesBusy() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+		case <-l.t.Closed():
+		case _, open := <-sub.Values:
+			if !open {
+				return errNetworkDown
+			}
+		}
+	}
+}
+
+func (l *liveTorrent) piecesBusy() bool {
+	for _, run := range l.t.PieceStateRuns() {
+		if run.Marking || run.Checking {
+			return true
+		}
+	}
+	return false
+}
+
 func (l *liveTorrent) completePieces() (complete, total int) {
 	total = l.t.NumPieces()
 	for i := 0; i < total; i++ {
@@ -394,6 +534,9 @@ func isSafeTorrentPath(path string) bool {
 			return false
 		}
 		if !filepath.IsLocal(component) {
+			return false
+		}
+		if winpath.Reserved(component) {
 			return false
 		}
 	}

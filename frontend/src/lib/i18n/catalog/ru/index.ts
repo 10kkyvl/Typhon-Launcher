@@ -26,6 +26,9 @@ import { errUpdates } from './errUpdates';
 import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
+import { errSaves } from './errSaves';
+import { saves } from './saves';
+import { overlay } from './overlay';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -55,8 +58,11 @@ export const ru = {
   ...errSources,
   ...errLibrary,
   ...errLogs,
+  ...errSaves,
+  ...saves,
+  ...overlay,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs };
+export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, saves, overlay };

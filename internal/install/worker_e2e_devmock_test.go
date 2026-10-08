@@ -54,15 +54,11 @@ func startInProcessWorker(t *testing.T) func(runSpec) (workerHandle, error) {
 	var wg sync.WaitGroup
 	t.Cleanup(wg.Wait)
 	return func(launchSpec runSpec) (workerHandle, error) {
-		specFile, err := workerSpecArg(launchSpec.Args)
-		if err != nil {
-			return nil, err
-		}
 		done := make(chan error, 1)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			done <- RunWorker(specFile)
+			done <- RunWorker(ParseWorkerArgs(launchSpec.Args[1:]))
 		}()
 		return &inProcessWorkerHandle{done: done}, nil
 	}
@@ -79,6 +75,7 @@ func TestElevatedWorkerEndToEndInProcess(t *testing.T) {
 
 	dir := t.TempDir()
 	installerPath := filepath.Join(dir, "download", "FooGame-setup.exe")
+	mkText(t, installerPath, "installer fixture")
 	dest := filepath.Join(dir, "Games", "FooGame")
 	spec := runSpec{
 		Path: installerPath, InstallerPath: installerPath, ID: "e2e1",
@@ -124,6 +121,7 @@ func TestElevatedWorkerEndToEndInProcessCancel(t *testing.T) {
 
 	dir := t.TempDir()
 	installerPath := filepath.Join(dir, "download", "FooGame-setup.exe")
+	mkText(t, installerPath, "installer fixture")
 	dest := filepath.Join(dir, "Games", "FooGame")
 	spec := runSpec{
 		Path: installerPath, InstallerPath: installerPath, ID: "e2e2",

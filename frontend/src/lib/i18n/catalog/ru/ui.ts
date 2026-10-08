@@ -19,6 +19,7 @@ export const ui = {
   'ui.avatarChange': 'Сменить аватар',
   'ui.avatarRemoving': 'Удаление…',
   'ui.avatarRemove': 'Удалить аватар',
+  'ui.avatarRemoveConfirm': 'Удалить аватар? Вернуть его можно только загрузив заново.',
 
   'ui.update': 'Обновление',
   'ui.repair': 'Восстановление',
@@ -83,6 +84,7 @@ export const ui = {
   'ui.profile': 'Профиль',
   'ui.signIn': 'Войти в аккаунт',
   'ui.signOut': 'Выйти',
+  'ui.signOutConfirm': 'Выйти из аккаунта?',
   'ui.statusChangeFailed': 'Не удалось сменить статус',
   'ui.presenceAutoAwayHint': 'Отошёл: нет активности. Вернётесь за компьютер — статус вернётся сам',
   'ui.signOutFailed': 'Не удалось выйти',
@@ -106,6 +108,9 @@ export const ui = {
 
   'ui.updateAvailable': 'Доступно обновление',
   'ui.newReleaseAvailable': 'Доступен новый релиз',
+  'ui.latestVersionInstalled': 'Установлена последняя версия',
+  'ui.updateInProgress': 'Идёт обновление',
+  'ui.updateFailedTitle': 'Обновление не удалось',
   'ui.versionUnknown': 'версия неизвестна',
   'ui.newRelease': 'новый релиз',
   'ui.readyToInstall': 'Готово к установке',
@@ -164,6 +169,11 @@ export const ui = {
   'ui.changeRemoved': 'Удалено',
   'ui.versionLabel': 'Версия {version}',
   'ui.versionInstalledMark': 'установлена',
+
+  'ui.networkBannerInterface': 'VPN отключён — загрузки и раздачи на паузе',
+  'ui.networkBannerProxy': 'Прокси недоступен — загрузки и раздачи на паузе',
+  'ui.networkBannerSettings': 'Настройки сети',
+  'ui.networkRestoredToast': 'Сеть для торрентов снова доступна — загрузки продолжатся',
 } as const;
 
 export type UiKey = keyof typeof ui;

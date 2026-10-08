@@ -102,3 +102,55 @@ export function sendLogsPrompt(): ConfirmPrompt {
     busy: msg('settings.aboutLogsSendingEllipsis'),
   };
 }
+
+export function restoreSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('saves.restoreTitle'),
+    text: msg('saves.restoreText'),
+    confirm: msg('saves.restore'),
+    busy: msg('saves.restoring'),
+  };
+}
+
+export function removeAvatarPrompt(): ConfirmPrompt {
+  return {
+    title: msg('ui.avatarRemove'),
+    text: msg('ui.avatarRemoveConfirm'),
+    confirm: msg('ui.avatarRemove'),
+    busy: msg('ui.avatarRemoving'),
+  };
+}
+
+export function removeCoverPrompt(): ConfirmPrompt {
+  return {
+    title: msg('profile.removeCover'),
+    text: msg('profile.removeCoverConfirm'),
+    confirm: msg('profile.removeCover'),
+  };
+}
+
+export function resetProfileAppearancePrompt(): ConfirmPrompt {
+  return {
+    title: msg('profile.reset'),
+    text: msg('profile.resetConfirm'),
+    confirm: msg('settings.appearanceResetButton'),
+  };
+}
+
+export function signOutPrompt(): ConfirmPrompt {
+  return {
+    title: msg('ui.signOut'),
+    text: msg('ui.signOutConfirm'),
+    confirm: msg('ui.signOut'),
+    busy: msg('social.signingOut'),
+  };
+}
+
+export function deleteSaveBackupPrompt(date: string): ConfirmPrompt {
+  return {
+    title: msg('saves.deleteTitle'),
+    text: msg('saves.deleteText', { date }),
+    confirm: msg('saves.delete'),
+    busy: msg('saves.deleting'),
+  };
+}

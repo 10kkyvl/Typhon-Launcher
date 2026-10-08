@@ -1,6 +1,8 @@
 <script lang="ts">
   import AvatarCropModal from './AvatarCropModal.svelte';
   import Button from './Button.svelte';
+  import ConfirmModal from './ConfirmModal.svelte';
+  import { removeAvatarPrompt } from '../confirm/prompts';
   import { accountErrorText } from '../services/accountMessages';
   import {
     chooseAvatar,
@@ -20,6 +22,7 @@
   let cropOpen = $state(false);
   let cropSrc = $state('');
   let failure = $state('');
+  let confirmingRemove = $state(false);
 
   const busy = $derived($pickingAvatar || $uploadingAvatar || $removingAvatar);
 
@@ -63,7 +66,7 @@
     <Button {size} disabled={busy || disabled} onclick={pick}>
       {$pickingAvatar ? msg('ui.avatarPicking') : msg('ui.avatarChange')}
     </Button>
-    <Button {size} variant="danger" disabled={busy || disabled || !$currentUser?.avatarUrl} onclick={remove}>
+    <Button {size} variant="danger" disabled={busy || disabled || !$currentUser?.avatarUrl} onclick={() => (confirmingRemove = true)}>
       {$removingAvatar ? msg('ui.avatarRemoving') : msg('ui.avatarRemove')}
     </Button>
   </div>
@@ -77,6 +80,10 @@
   error={cropOpen ? failure : ''}
   onsave={save}
 />
+
+{#if confirmingRemove}
+  <ConfirmModal prompt={removeAvatarPrompt()} onconfirm={remove} onclose={() => (confirmingRemove = false)} />
+{/if}
 
 <style>
   .avatar-editor {

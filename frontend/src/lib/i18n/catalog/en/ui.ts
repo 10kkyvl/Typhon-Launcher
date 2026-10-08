@@ -22,6 +22,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.avatarChange': 'Change avatar',
   'ui.avatarRemoving': 'Removing…',
   'ui.avatarRemove': 'Remove avatar',
+  'ui.avatarRemoveConfirm': 'Remove your avatar? You can only get it back by uploading it again.',
 
   'ui.update': 'Update',
   'ui.repair': 'Repair',
@@ -85,6 +86,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.profile': 'Profile',
   'ui.signIn': 'Sign in',
   'ui.signOut': 'Sign out',
+  'ui.signOutConfirm': 'Sign out of your account?',
   'ui.statusChangeFailed': "Couldn't change status",
   'ui.presenceAutoAwayHint': 'Away: no activity. The status comes back on its own once you are back at the computer',
   'ui.signOutFailed': "Couldn't sign out",
@@ -108,6 +110,9 @@ export const ui: Record<UiKey, Message> = {
 
   'ui.updateAvailable': 'Update available',
   'ui.newReleaseAvailable': 'New release available',
+  'ui.latestVersionInstalled': 'Latest version installed',
+  'ui.updateInProgress': 'Update in progress',
+  'ui.updateFailedTitle': 'Update failed',
   'ui.versionUnknown': 'version unknown',
   'ui.newRelease': 'new release',
   'ui.readyToInstall': 'Ready to install',
@@ -166,4 +171,9 @@ export const ui: Record<UiKey, Message> = {
   'ui.changeRemoved': 'Removed',
   'ui.versionLabel': 'Version {version}',
   'ui.versionInstalledMark': 'installed',
+
+  'ui.networkBannerInterface': 'VPN is disconnected — downloads and seeding are paused',
+  'ui.networkBannerProxy': 'The proxy is unavailable — downloads and seeding are paused',
+  'ui.networkBannerSettings': 'Network settings',
+  'ui.networkRestoredToast': 'The torrent network is available again — downloads will resume',
 };

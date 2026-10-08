@@ -4,27 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"log/slog"
 
-	"typhon/internal/install"
+	"typhon/internal/savebackup"
 )
 
-const (
-	savesBackupDirName = "saves"
-	savesStagingSuffix = ".partial"
-)
+var errNoSaveBackups = errors.New("сервис резервных копий сохранений недоступен")
 
-var errNoSavesDir = errors.New("каталог снимков сохранений недоступен")
-
-// savesBackupDir keeps the snapshot outside the installation: every update
-// strategy either replaces that directory or writes over its files, so a copy
-// kept inside it is gone exactly when it is needed.
-func (s *Service) savesBackupDir(gameID string) (string, error) {
-	if s.store == nil || s.store.dir == "" || gameID == "" {
-		return "", errNoSavesDir
-	}
-	return filepath.Join(s.store.dir, savesBackupDirName, gameID), nil
+// saveBackups is the only thing that copies saves: the update asks for a
+// snapshot and records where it went, it never copies the folder itself.
+type saveBackups interface {
+	SnapshotPath(ctx context.Context, gameID, sourcePath string, kind savebackup.Kind) (savebackup.Snapshot, error)
 }
 
 // locateSaves resolves the folder a snapshot would be taken from. It runs once
@@ -50,49 +40,26 @@ func (s *Service) locateSaves(ctx context.Context, gameID string) (string, error
 // backupSaves copies the saves resolved at plan time before the update makes
 // its first write, and fails the update when it cannot: an update that
 // proceeds after a failed backup is the same broken promise as a switch that
-// does nothing.
+// does nothing. The snapshot lives outside the installation because every
+// update strategy either replaces that directory or writes over its files.
 func (s *Service) backupSaves(ctx context.Context, plan UpdatePlan) (string, error) {
 	if plan.SavesPath == "" || !s.config().UpdateSaveBackup {
 		return "", nil
 	}
-	target, err := s.savesBackupDir(plan.GameID)
-	if err != nil {
-		return "", err
+	if s.saves == nil {
+		return "", errNoSaveBackups
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return "", err
-	}
-	total, err := install.DirSize(ctx, plan.SavesPath)
-	if err != nil {
-		return "", err
-	}
-	if err := checkBackupFreeSpace(filepath.Dir(target), total); err != nil {
-		return "", err
-	}
-
-	staging := target + savesStagingSuffix
-	removeTree(staging)
-	if err := install.CopyDirVerified(ctx, plan.SavesPath, staging, nil); err != nil {
-		removeTree(staging)
+	snap, err := s.saves.SnapshotPath(ctx, plan.GameID, plan.SavesPath, savebackup.KindUpdate)
+	if err != nil && snap.ID == "" {
 		return "", fmt.Errorf("снимок сохранений %s: %w", plan.SavesPath, err)
 	}
-
-	// The previous snapshot is moved aside rather than deleted, so a crash
-	// between the two renames leaves the older copy on disk instead of no
-	// copy at all. Nothing here touches the installation, so this needs no
-	// journal: the next update overwrites both paths from scratch.
-	replaced := target + replacedSuffix
-	removeTree(replaced)
-	if _, err := os.Stat(target); err == nil {
-		if err := os.Rename(target, replaced); err != nil {
-			removeTree(staging)
-			return "", err
-		}
+	if err != nil {
+		// The snapshot exists and is verified; what failed is trimming older
+		// ones, which the saves:backups event already reports to the player.
+		slog.Warn("saves snapshot rotation failed", "game", plan.GameID, "error", err)
 	}
-	if err := os.Rename(staging, target); err != nil {
-		removeTree(staging)
-		return "", err
+	if snap.Path == "" {
+		return "", fmt.Errorf("снимок сохранений %s: сервис не вернул путь копии", plan.SavesPath)
 	}
-	removeTree(replaced)
-	return target, nil
+	return snap.Path, nil
 }

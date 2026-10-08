@@ -8,6 +8,7 @@ import {
   type InstallType,
 } from '../services/install';
 import { msg } from '../i18n';
+import { installErrorText } from '../install/installErrors';
 import { toast } from './toasts';
 
 export const installations = writable<Installation[]>([]);
@@ -86,7 +87,7 @@ export async function initInstalls() {
   Events.On('install:failed', (event) => {
     const item = event.data as Installation;
     upsertInstallation(item);
-    toast(msg('state.installFailedToast', { name: item.name, error: item.error }), 'danger');
+    toast(msg('state.installFailedToast', { name: item.name, error: installErrorText(item.error, item.error) }), 'danger');
   });
   Events.On('install:cancelled', (event) => {
     upsertInstallation(event.data as Installation);

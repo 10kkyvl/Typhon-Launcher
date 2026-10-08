@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"typhon/internal/settings"
 	"typhon/internal/storage"
@@ -20,6 +21,27 @@ func newSystemCredentialStore() (CredentialStore, error) {
 		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 	return newFileCredentialStore(filepath.Join(dir, "devmock-credential.json")), nil
+}
+
+func newNamedCredentialStore(name string) (CredentialStore, error) {
+	dir, err := settings.ConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config dir: %w", err)
+	}
+	return newFileCredentialStore(filepath.Join(dir, "devmock-credential-"+credentialSlug(name)+".json")), nil
+}
+
+func credentialSlug(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 'a' - 'A'
+		default:
+			return '-'
+		}
+	}, name)
 }
 
 type fileCredentialStore struct {

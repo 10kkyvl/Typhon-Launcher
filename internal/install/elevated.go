@@ -15,7 +15,7 @@ import (
 const installWorkerFlag = "--install-worker"
 
 var (
-	errWorkerStatePath   = errors.New("путь состояния установки не задан")
+	errWorkerStatePath   = uierr.New("install.worker_state_missing", "у задания установки нет файла состояния, через который можно говорить с повышенным воркером")
 	errWorkerNotFinished = uierr.New("install.worker_not_finished", "повышенный воркер установки не подтвердил завершение")
 
 	// Подменяются в тестах, чтобы не поднимать настоящий UAC-запрос и не ждать
@@ -73,7 +73,12 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		CancelPath:    spec.CancelPath,
 		Options:       spec.Options,
 		Background:    spec.Background,
-		Hidden:        true,
+		Hidden:        !spec.Interactive,
+		Interactive:   spec.Interactive,
+	}
+	if spec.Shell != nil {
+		job := spec.Shell.Job
+		ws.Shell = &job
 	}
 	exited, cleanup, terminate, err := handOffToWorker(ctx, spec, ws, specFile)
 	if err != nil {
@@ -94,7 +99,15 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			if res.err != nil {
 				return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, res.err)
 			}
-			return readFinalWorkerState(spec.StatePath, run)
+			if res.code == WorkerSpecRejectedExit {
+				return 0, ErrWorkerSpecRejected
+			}
+			state, err := loadFinalWorkerState(spec.StatePath, run)
+			if err != nil {
+				return 0, err
+			}
+			spec.Shell.record(state)
+			return finishElevatedState(state)
 		case <-ctx.Done():
 			if !cancelRequested {
 				cancelRequested = true
@@ -116,19 +129,18 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			//
 			// Но класс ошибки НЕ меняется даже при успешном terminate():
 			// убитый воркер не значит убитый установщик. Воркер держит
-			// установщик живым через job-объект с
-			// JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
-			// limitJob), а SetInformationJobObject может отказать
-			// (там же — «отказ воспроизведён на этой машине, похоже на
-			// вмешательство защитного ПО») и limitJob в этом случае молча
-			// откатывается на лимиты без этого флага. Значит подтверждённая
-			// смерть воркера не доказывает смерть дерева процессов, которое
-			// он запустил, и discardSilent (flow.go) обязан остаться в
-			// консервативной ветке: RemoveAll по каталогу, в который ещё
-			// может писать не убитый установщик, — гонка на единственной
-			// копии данных (инвариант 9). Цена — каталог отменённой
-			// установки остаётся на диске после принудительного убийства;
-			// это осознанно и совпадает с поведением до этого фикса.
+			// установщик в job-объекте с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+			// (runner_windows.go, limitJob), и смерть воркера гасит дерево,
+			// но асинхронно: terminate() этого не ждёт и ничем не
+			// подтверждает. К тому же groupProcess может не завестись (это
+			// лишь предупреждение в журнале), и тогда установщик живёт вне
+			// job-объекта. Значит смерть воркера не доказывает смерть дерева
+			// процессов, которое он запустил, и discardSilent (flow.go)
+			// обязан остаться в консервативной ветке: RemoveAll по каталогу,
+			// в который ещё может писать не убитый установщик, — гонка на
+			// единственной копии данных (инвариант 9). Цена — каталог
+			// отменённой установки остаётся на диске после принудительного
+			// убийства; это осознанно.
 			if killErr := terminate(); killErr != nil {
 				slog.Warn("kill installer worker after cancel timeout", "path", spec.Path, "error", killErr)
 			}
@@ -166,6 +178,7 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			}
 			stateReadFailures = 0
 			if found && state.Done && state.Run == run {
+				spec.Shell.record(state)
 				return finishElevatedState(state)
 			}
 		}
@@ -208,14 +221,20 @@ func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile 
 		return exited, func() { close(stop) }, terminate, nil
 	}
 
-	if err := writeWorkerSpec(specFile, ws); err != nil {
+	installer, err := installerDigest(ctx, ws.InstallerPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)
+	}
+	ws.InstallerSHA256 = installer
+	digest, err := writeWorkerSpecDigest(specFile, ws)
+	if err != nil {
 		return nil, nil, nil, fmt.Errorf("подготовка воркера установки: %w", err)
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("путь к лаунчеру: %w", err)
 	}
-	proc, err := startElevatedWorker(runSpec{Path: exe, Args: []string{installWorkerFlag, specFile}, Hidden: true})
+	proc, err := startElevatedWorker(runSpec{Path: exe, Args: workerLaunchArgs(specFile, digest), Hidden: true})
 	if err != nil {
 		return nil, nil, nil, workerStartError(spec.Path, err)
 	}
@@ -236,14 +255,22 @@ func handOffToWorker(ctx context.Context, spec runSpec, ws workerSpec, specFile 
 }
 
 func readFinalWorkerState(statePath, run string) (int, error) {
-	state, found, err := readWorkerState(statePath)
+	state, err := loadFinalWorkerState(statePath, run)
 	if err != nil {
-		return 0, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, err)
-	}
-	if !found || !state.Done || state.Run != run {
-		return 0, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, errWorkerNotFinished)
+		return 0, err
 	}
 	return finishElevatedState(state)
+}
+
+func loadFinalWorkerState(statePath, run string) (workerState, error) {
+	state, found, err := readWorkerState(statePath)
+	if err != nil {
+		return workerState{}, fmt.Errorf("%w: состояние установки: %w", errInstallerNotConfirmedStopped, err)
+	}
+	if !found || !state.Done || state.Run != run {
+		return workerState{}, fmt.Errorf("%w: %w", errInstallerNotConfirmedStopped, errWorkerNotFinished)
+	}
+	return state, nil
 }
 
 // finishElevatedState оборачивает отмену через %w вокруг context.Canceled:

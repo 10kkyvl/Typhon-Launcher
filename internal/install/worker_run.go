@@ -9,14 +9,19 @@ import (
 	"time"
 )
 
-var workerCancelPollInterval = 250 * time.Millisecond
+var (
+	workerCancelPollInterval = 250 * time.Millisecond
+
+	// Подменяется в тестах: настоящий установщик в юнит-тесте не запустить.
+	workerInstall = runMainInstall
+)
 
 // RunWorker — точка входа отдельного процесса с правами администратора: сам
 // лаунчер поднимает его один раз через startElevated и дальше общается с ним
 // только через файлы spec/state/cancel, потому что процесс с высоким уровнем
 // целостности лаунчеру не принадлежит и других каналов связи для него нет.
-func RunWorker(specPath string) error {
-	spec, specErr := readWorkerSpec(specPath)
+func RunWorker(specPath, specSHA256 string) error {
+	spec, specErr := readVerifiedWorkerSpec(specPath, specSHA256)
 	if specErr != nil {
 		if spec.StatePath != "" {
 			if err := writeWorkerState(spec.StatePath, workerState{Run: spec.Run, Done: true, Error: specErr.Error()}); err != nil {
@@ -39,10 +44,10 @@ func runWorkerSpec(spec workerSpec) error {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func() {
+	go func(path string) {
 		defer wg.Done()
-		watchWorkerCancel(ctx, spec.CancelPath, cancel)
-	}()
+		watchWorkerCancel(ctx, path, cancel)
+	}(spec.CancelPath)
 	defer func() {
 		cancel()
 		wg.Wait()
@@ -52,6 +57,13 @@ func runWorkerSpec(spec workerSpec) error {
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
 		return err
 	}
+
+	f, pinned, err := pinInstaller(ctx, spec)
+	if err != nil {
+		return finishWorkerState(spec.StatePath, state, err)
+	}
+	defer closePinnedInstaller(f)
+	spec = pinned
 
 	components, reason, err := discoverComponents(ctx, spec.discovery())
 	if err != nil {
@@ -64,12 +76,17 @@ func runWorkerSpec(spec workerSpec) error {
 		return err
 	}
 
-	code, runErr := runMainInstall(ctx, spec, components)
+	code, runErr := workerInstall(ctx, spec, components)
 	state.Code = code
 	state.Done = true
 	if runErr != nil {
 		state.Error = runErr.Error()
 		state.Cancelled = errors.Is(runErr, context.Canceled)
+	} else if spec.Shell != nil {
+		// Done пишется одной записью вместе с итогом уборки: лаунчер мог
+		// перезапуститься, и тогда итог можно прочитать только из этого файла.
+		report := workerShellCleanup(ctx, spec, code)
+		state.Shell = &report
 	}
 	if err := writeWorkerState(spec.StatePath, state); err != nil {
 		if runErr != nil {
@@ -78,6 +95,22 @@ func runWorkerSpec(spec workerSpec) error {
 		return err
 	}
 	return runErr
+}
+
+// workerShellCleanup убирает ярлыки только после установки, которую лаунчер
+// тоже сочтёт успешной: код возврата и лог разбирает тот же installerFinished,
+// что и runSilentChain. Отменённый или упавший установщик оставляет за собой
+// ярлыки, а установка в лаунчере провалится.
+func workerShellCleanup(ctx context.Context, spec workerSpec, code int) shellReport {
+	done, logErr := installerFinished(spec.Engine, code, spec.LogPath)
+	if !done {
+		report := shellReport{Skipped: true}
+		if logErr != nil {
+			report.Error = logErr.Error()
+		}
+		return report
+	}
+	return cleanSharedShortcuts(ctx, *spec.Shell, spec.Destination)
 }
 
 // finishWorkerState записывает финальное состояние с причиной сбоя до того,
@@ -142,13 +175,33 @@ type discoveryOutcome struct {
 }
 
 func shouldDiscoverComponents(in discoverySpec) bool {
-	return in.Engine == EngineInno && (in.Options.SkipExtras || in.Options.SkipShortcuts)
+	return !in.Interactive && in.Engine == EngineInno && (in.Options.SkipExtras || in.Options.SkipShortcuts)
 }
 
 func runMainInstall(ctx context.Context, spec workerSpec, components []string) (int, error) {
-	plan, err := silentArgs(spec.Engine, spec.InstallerPath, spec.Destination, spec.LogPath, spec.Options)
+	rs, err := mainRunSpec(spec, components)
 	if err != nil {
 		return 0, err
+	}
+	// Neither runner needs gamesPath here: the worker only ever runs the main
+	// silent install with spec.Destination already resolved, never the
+	// devmock placement path under the library root.
+	return newRunner(func() string { return "" }).run(ctx, rs)
+}
+
+func mainRunSpec(spec workerSpec, components []string) (runSpec, error) {
+	if spec.Interactive {
+		rs, err := interactiveRunSpec(spec.Engine, spec.InstallerPath, spec.WorkingDir)
+		if err != nil {
+			return runSpec{}, err
+		}
+		rs.InstallerPath = spec.InstallerPath
+		rs.Destination = spec.Destination
+		return rs, nil
+	}
+	plan, err := silentArgs(spec.Engine, spec.InstallerPath, spec.Destination, spec.LogPath, spec.Options)
+	if err != nil {
+		return runSpec{}, err
 	}
 	if len(components) > 0 {
 		plan = planWithComponents(plan, components)
@@ -157,19 +210,15 @@ func runMainInstall(ctx context.Context, spec workerSpec, components []string) (
 	if spec.Engine == EngineMsi {
 		msiexec, err := systemExecutable("msiexec.exe")
 		if err != nil {
-			return 0, err
+			return runSpec{}, err
 		}
 		path = msiexec
 	}
-	rs := runSpec{
+	return runSpec{
 		Path: path, Args: plan.Args, Dir: spec.WorkingDir, CmdLine: plan.CmdLine, Tail: plan.Tail,
-		Background: spec.Background, Hidden: spec.Hidden,
+		Background: spec.Background, Hidden: spec.Hidden, Options: installOptions{VerifyRepack: spec.Options.VerifyRepack},
 		InstallerPath: spec.InstallerPath, Destination: spec.Destination, LogPath: spec.LogPath,
-	}
-	// Neither runner needs gamesPath here: the worker only ever runs the main
-	// silent install with spec.Destination already resolved, never the
-	// devmock placement path under the library root.
-	return newRunner(func() string { return "" }).run(ctx, rs)
+	}, nil
 }
 
 // applyDiscoveredComponents дописывает /COMPONENTS в уже готовый план

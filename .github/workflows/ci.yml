@@ -128,6 +128,12 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           variant: race-${{ matrix.mode }}
+      # The torrent network tests bind sockets to 127.0.0.2 and 127.0.0.3 to
+      # stand in for a VPN adapter; macOS only configures 127.0.0.1 on lo0.
+      - name: Add loopback aliases
+        run: |
+          sudo ifconfig lo0 alias 127.0.0.2 up
+          sudo ifconfig lo0 alias 127.0.0.3 up
       - name: Run race tests
         env:
           CGO_ENABLED: "1"

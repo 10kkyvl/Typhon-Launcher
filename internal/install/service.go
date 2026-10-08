@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,14 +41,16 @@ const (
 	rebootExitCode   = 3010
 	maxSuffixAttempt = 50
 
-	installPollInterval   = 2 * time.Second
 	installerLogTailLimit = 8 << 10
 	installerLogScanLimit = 256 << 10
 
-	innoSuccessMarker = "Installation process succeeded."
+	innoSuccessMarker       = "Installation process succeeded."
+	innoWizardRefusedMarker = "Failed to proceed to next wizard page"
 )
 
-const interruptedMessage = "установка была прервана"
+var installPollInterval = 2 * time.Second
+
+var removePartialDir = os.RemoveAll
 
 var (
 	errNotFound         = uierr.New("install.not_found", "установка не найдена")
@@ -60,6 +63,7 @@ var (
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
 	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
 	errInstallerFail    = uierr.New("install.installer_failed", "установщик завершился с ошибкой")
+	errInterrupted      = uierr.New("install.interrupted", "установка была прервана")
 	errNoExecutable     = uierr.New("install.no_executable", "исполняемый файл не найден")
 	errOutsideInstall   = uierr.New("install.outside_install", "файл находится вне папки установки")
 	errEmptyInstall     = uierr.New("install.empty_install", "папка установки пуста")
@@ -72,7 +76,19 @@ var (
 	// errUnavailable: это не «недоступно для этой установки».
 	errNotStarted = errors.New("install service is not started")
 
+	// errStoreNotLoaded значит, что installations.json не удалось прочитать:
+	// пустой список в памяти не отражает файл, и любая запись затёрла бы его
+	// (инвариант 3).
+	errStoreNotLoaded = errors.New("installations were not loaded, refusing to overwrite them")
+
 	errInstallerNoOutput = uierr.New("install.installer_no_output", "установщик не создал файлов в папке установки")
+
+	errInstallerNeedsInteractive = uierr.New("install.installer_needs_interactive", "установщик не поддерживает тихую установку")
+
+	// Без кода uierr: коды — контракт с таблицей фронтенда, а текст ошибки
+	// продолжения цепочки пользователь и так видит целиком.
+	errChainStepUnknown      = errors.New("после перезапуска не удалось определить, какой установщик цепочки отработал")
+	errChainInstallerMissing = errors.New("файл установщика цепочки не найден")
 
 	// errInstallerNotConfirmedStopped значит, что процесс всё ещё может писать
 	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
@@ -119,8 +135,13 @@ type Service struct {
 	// releaseRuntime сносит окружение запуска вместе с файлами игры. Тоже
 	// поле: настоящая реализация на macOS удаляет бутыль CrossOver.
 	releaseRuntime func(installDir string) error
+	// readEntries читает записи удаления. Поле, а не прямой вызов: на
+	// Windows это реестр машины, и тесту нужно подставить, какие записи
+	// «появились» во время установки.
+	readEntries func() (map[string]uninstallEntry, error)
 
 	items      []*Installation
+	loadErr    error
 	jobs       map[string]*job
 	brokers    map[string]*broker
 	onFinished func(Installation)
@@ -173,6 +194,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
 	s.releaseRuntime = releaseRuntime
+	s.readEntries = readUninstallEntries
 	return s, nil
 }
 
@@ -286,19 +308,34 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	staleItems := make([]Installation, 0, 4)
 	stored, err := s.store.load()
 	if err != nil {
+		s.loadErr = err
 		cancel := s.cancel
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
 		return err
 	}
+	s.loadErr = nil
 	resume := make([]string, 0, 2)
 	toFinalize := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
 		wasTransient := transient(item.Status)
+		if wasTransient && external(item.Type) {
+			// Записи прошлых версий держат здесь размер раздачи: установленный
+			// размер внешнего установщика заранее неизвестен.
+			item.BytesTotal = 0
+		}
 		if wasTransient {
-			alive, done := s.transientWorkerStatus(item.ID)
+			var alive, done bool
+			// Ручная установка под UAC тоже идёт через воркер, но продолжить её
+			// нельзя: снимки каталогов и ярлыков «до» остались в памяти умершего
+			// лаунчера, без них не найти, куда мастер положил игру. Запись
+			// помечается прерванной, а живой воркер всё равно не даст повторить
+			// установку поверх себя (Retry проверяет его через transientWorkerStatus).
+			if runsSilently(item) || !external(item.Type) {
+				alive, done = s.transientWorkerStatus(item.ID)
+			}
 			switch {
 			case alive || done:
 				resume = append(resume, item.ID)
@@ -314,7 +351,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 				slog.Info("installation committed before crash, finalizing", "id", item.ID, "name", item.Name)
 			default:
 				item.Status = StatusInterrupted
-				item.Error = interruptedMessage
+				item.Error = errInterrupted.Error()
 				slog.Info("installation interrupted", "id", item.ID, "name", item.Name)
 			}
 		}
@@ -525,7 +562,7 @@ func (s *Service) interruptResumed(id string) {
 		return
 	}
 	item.Status = StatusInterrupted
-	item.Error = interruptedMessage
+	item.Error = errInterrupted.Error()
 	if err := s.persistLocked(); err != nil {
 		snap, wrapped := s.markPersistFailureLocked(item, err)
 		s.mu.Unlock()
@@ -543,11 +580,14 @@ func (s *Service) interruptResumed(id string) {
 // finishResumed завершает установку по итогу воркера, обнаруженного живым на
 // старте: сохранённый OwnedDestination подтверждает происхождение каталога.
 // Без него оставляем Owned=false. Запись деинсталлятора без исходного снимка
-// неизвестна, поэтому UninstallUnknown=true. Уборка ярлыков здесь не
-// выполняется: baseline ярлыков снимался до старта установщика и тоже не
-// восстановим.
+// неизвестна, поэтому UninstallUnknown=true. Своих каталогов лаунчер здесь не
+// чистит: baseline ярлыков снимался до старта установщика и не восстановим.
+// Общие каталоги воркер убрал сам, и итог лежит в его state.Shell.
 func (s *Service) finishResumed(ctx context.Context, id string, state workerState) {
-	dropInstallerLog(s.installerLogPath(id))
+	logPath := s.installerLogPath(id)
+	defer dropInstallerLog(logPath)
+	var unconfirmed error
+	defer func() { s.releaseWorkerFiles(id, unconfirmed) }()
 	if state.Cancelled {
 		// Cancel записал маркер и оставил статус рабочим именно ради этого
 		// момента: воркер подтвердил отмену через Cancelled, а не через
@@ -560,6 +600,45 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		s.fail(id, errors.New(state.Error))
 		return
 	}
+	if state.Shell != nil {
+		logShellReports(id, []shellReport{*state.Shell})
+	}
+	snap, found := s.snapshot(id)
+	if !found {
+		slog.Warn("resumed installation is gone", "id", id)
+		return
+	}
+	engine := snap.Engine
+	done, logErr := installerFinished(engine, state.Code, logPath)
+	if logErr != nil {
+		slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
+	}
+	if !done {
+		slog.Error("resumed silent installer failed", "id", id, "engine", string(engine),
+			"code", state.Code, "log", installerLogTail(logPath))
+		s.fail(id, installerFailure(engine, state.Code, logPath))
+		return
+	}
+	chainCtx, endJob := s.adoptJob(ctx, id)
+	chainErr := s.resumeChain(chainCtx, id, snap, logPath)
+	switch {
+	case chainErr == nil:
+	case errors.Is(chainErr, errResumedCancelled):
+		endJob()
+		s.cancelResumed(ctx, id)
+		return
+	case errors.Is(chainErr, errUnavailable):
+		endJob()
+		slog.Info("resumed installation left the active states while its chain was continuing", "id", id, "error", chainErr)
+		return
+	default:
+		slog.Error("resumed installer chain cannot be continued", "id", id, "error", chainErr)
+		s.fail(id, chainErr)
+		endJob()
+		unconfirmed = chainErr
+		return
+	}
+	endJob()
 	slog.Warn("installation resumed after launcher restart, uninstall origin unknown", "id", id)
 	if err := s.markResumedOwnership(id); err != nil {
 		s.fail(id, err)
@@ -585,7 +664,7 @@ func (s *Service) cancelResumed(ctx context.Context, id string) {
 		s.notifyFinished(snap)
 		return
 	}
-	go s.sweepPartialItem(ctx, snap)
+	s.spawnSweep(ctx, snap)
 	s.notifyFinished(snap)
 }
 
@@ -626,15 +705,40 @@ func (s *Service) ServiceShutdown() error {
 	s.wg.Wait()
 
 	s.mu.Lock()
-	err := s.persistLocked()
-	s.mu.Unlock()
-	return err
+	defer s.mu.Unlock()
+	if s.loadErr != nil {
+		// ServiceStartup уже вернул эту ошибку; сохранять нечего, а файл на диске
+		// остаётся единственной копией данных пользователя.
+		return nil
+	}
+	return s.persistLocked()
 }
 
 func (s *Service) sweepPartial(ctx context.Context, items []Installation) {
 	for _, item := range items {
 		s.sweepPartialItem(ctx, item)
 	}
+}
+
+// spawnSweep чистит .partial в фоне, но горутина принадлежит сервису: она учтена
+// в s.wg, поэтому ServiceShutdown дожидается её, и не стартует, если сервис уже
+// закрывается или ctx отменён (инвариант 19).
+func (s *Service) spawnSweep(ctx context.Context, item Installation) {
+	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		slog.Info("skip partial sweep, service is closing", "id", item.ID)
+		return
+	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		if ctx.Err() != nil {
+			return
+		}
+		s.sweepPartialItem(ctx, item)
+	}()
 }
 
 // sweepPartialItem решает, можно ли стереть .partial записи, или он —
@@ -659,7 +763,7 @@ func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 		s.recoverMovePartial(ctx, item, partial)
 		return
 	}
-	if err := os.RemoveAll(partial); err != nil {
+	if err := removePartialDir(partial); err != nil {
 		slog.Warn("remove partial install", "path", partial, "error", err)
 		return
 	}
@@ -749,6 +853,9 @@ func (s *Service) markPersistFailureLocked(item *Installation, err error) (Insta
 }
 
 func (s *Service) persistNowLocked() error {
+	if s.loadErr != nil {
+		return fmt.Errorf("%w: %w", errStoreNotLoaded, s.loadErr)
+	}
 	items := make([]Installation, 0, len(s.items))
 	for _, item := range s.items {
 		items = append(items, snapshotOf(item))
@@ -791,7 +898,11 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return PlanInfo{}, err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return PlanInfo{}, err
 	}
@@ -833,7 +944,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if err != nil {
 		return Installation{}, err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return Installation{}, err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return Installation{}, err
 	}
@@ -877,7 +992,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		Engine:          plan.Engine,
 		Silent:          plan.Silent,
 		ArchivePath:     plan.ArchivePath,
-		BytesTotal:      plan.EstimatedSize,
+		BytesTotal:      progressTotal(plan.Type, plan),
 		Origin:          d.Origin,
 		Unattended:      opts.Unattended,
 		SkipRegister:    opts.SkipRegister,
@@ -991,7 +1106,7 @@ func (s *Service) Cancel(id string) error {
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after cancel, service not started", "id", snap.ID, "error", err)
 	} else {
-		go s.sweepPartialItem(base, snap)
+		s.spawnSweep(base, snap)
 	}
 	s.notifyFinished(snap)
 	return nil
@@ -1017,33 +1132,46 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 		return err
 	}
 
+	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
+	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
+	// вместе с ним, а не висело после закрытия лаунчера. Контекст берётся до
+	// захвата записи: после него отказаться от завершения уже нельзя.
+	confirmCtx, ctxErr := s.baseContext()
+	if ctxErr != nil {
+		return ctxErr
+	}
+
+	// Запись захватывается под тем же замком, что и повторная проверка статуса
+	// (инвариант 17): StatusVerifying второй вызов уже не пропустит, поэтому
+	// complete выполняет ровно один.
 	s.mu.Lock()
 	item = s.findLocked(id)
 	if item == nil {
 		s.mu.Unlock()
 		return errNotFound
 	}
-	prevExecutable, prevDestination := item.Executable, item.Destination
+	if item.Status != StatusWaitingForUser {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	prevStatus, prevExecutable, prevDestination := item.Status, item.Executable, item.Destination
+	item.Status = StatusVerifying
 	item.Executable = executable
 	if item.Destination == "" {
 		item.Destination = filepath.Dir(executable)
 	}
 	if err := s.persistLocked(); err != nil {
+		item.Status = prevStatus
 		item.Executable = prevExecutable
 		item.Destination = prevDestination
 		s.mu.Unlock()
 		return wrapPersistError(err)
 	}
+	snap := snapshotOf(item)
 	s.mu.Unlock()
 	slog.Info("install executable confirmed", "id", id, "executable", executable)
+	emit(eventUpdated, snap)
 
-	// ConfirmExecutable приходит из интерфейса и своего контекста не имеет:
-	// берём контекст жизни сервиса, чтобы завершение установки обрывалось
-	// вместе с ним, а не висело после закрытия лаунчера.
-	confirmCtx, ctxErr := s.baseContext()
-	if ctxErr != nil {
-		return ctxErr
-	}
 	if err := s.complete(confirmCtx, id); err != nil {
 		s.fail(id, err)
 		return err
@@ -1052,6 +1180,17 @@ func (s *Service) ConfirmExecutable(id, executable string) error {
 }
 
 func (s *Service) Retry(id string) error {
+	return s.retry(id, false)
+}
+
+// RetryInteractive повторяет упавшую установку внешним установщиком без ключей
+// тишины: пользователь проходит мастер сам. Выбор запоминается в записи, и
+// обычный Retry или перезапуск лаунчера его не сбрасывают.
+func (s *Service) RetryInteractive(id string) error {
+	return s.retry(id, true)
+}
+
+func (s *Service) retry(id string, forceInteractive bool) error {
 	s.mu.Lock()
 	item := s.findLocked(id)
 	if item == nil {
@@ -1062,6 +1201,11 @@ func (s *Service) Retry(id string) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	if forceInteractive && (!external(item.Type) || item.Status == StatusCancelled) {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	interactive := item.Interactive || forceInteractive
 	base, err := s.baseLocked()
 	if err != nil {
 		s.mu.Unlock()
@@ -1109,7 +1253,11 @@ func (s *Service) Retry(id string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(base, sourceDir(d))
+	source, err := sourceDir(d)
+	if err != nil {
+		return err
+	}
+	plan, err := Inspect(base, source)
 	if err != nil {
 		return err
 	}
@@ -1131,18 +1279,37 @@ func (s *Service) Retry(id string) error {
 	if external(kind) && installer == "" {
 		return errNoExecutable
 	}
-	if external(kind) && supportsSilent(engine) && destination == "" {
+	silent := supportsSilent(engine) && !interactive
+	if external(kind) && silent && destination == "" {
 		destination = s.proposeDestination(s.config().GamesPath, title)
 		if destination == "" {
 			return errNoDestination
 		}
 	}
 
+	// Первая проверка шла до разбора загрузки, и за это время запись мог занять
+	// другой вызов: статус перечитывается и меняется под одним захватом
+	// (инвариант 17), иначе каждый из параллельных повторов запустит установщик.
 	s.mu.Lock()
 	item = s.findLocked(id)
 	if item == nil {
 		s.mu.Unlock()
 		return errNotFound
+	}
+	if !retryable(item.Status) || s.jobs[id] != nil || s.closing {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	if alive, _ := s.transientWorkerStatus(id); alive {
+		s.mu.Unlock()
+		return errInstallerStillRunning
+	}
+	// Итог прошлого прогона убирается до записи Pending: смерть лаунчера между
+	// ними оставила бы запись в работе рядом с чужим Done, который
+	// ServiceStartup принял бы за итог нового воркера.
+	if err := removeWorkerFiles(s.workerFiles(id)...); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("не удалось убрать файлы предыдущего запуска установщика: %w", err)
 	}
 	prev := *item
 	item.Status = StatusPending
@@ -1157,7 +1324,7 @@ func (s *Service) Retry(id string) error {
 	if controlled(item.Type) {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
-		item.BytesTotal = plan.EstimatedSize
+		item.BytesTotal = progressTotal(item.Type, plan)
 		item.Mode = installMode(item.Mode, d.Seeding)
 	}
 	if external(item.Type) {
@@ -1165,10 +1332,16 @@ func (s *Service) Retry(id string) error {
 		item.ExtraInstallers = extras
 		item.WorkingDir = filepath.Dir(installer)
 		item.Engine = engine
-		item.Silent = supportsSilent(engine)
-		item.BytesTotal = plan.EstimatedSize
-		if item.Silent {
+		item.Silent = silent
+		item.Interactive = interactive
+		item.BytesTotal = progressTotal(item.Type, plan)
+		switch {
+		case item.Silent:
 			item.Destination = destination
+		case interactive:
+			// Мастер сам выбирает папку: каталог тихой попытки не годится.
+			item.Destination = ""
+			item.Unattended = false
 		}
 	}
 	if err := s.persistLocked(); err != nil {
@@ -1182,6 +1355,16 @@ func (s *Service) Retry(id string) error {
 	s.sweepPartialItem(base, snap)
 
 	s.mu.Lock()
+	claimed := s.findLocked(id)
+	if claimed == nil {
+		s.mu.Unlock()
+		return errNotFound
+	}
+	if claimed.Status != StatusPending || s.closing {
+		// Пока шла уборка, запись отменили или сервис закрылся: запускать нечего.
+		s.mu.Unlock()
+		return errUnavailable
+	}
 	if err := s.spawnLocked(id); err != nil {
 		s.mu.Unlock()
 		slog.Error("spawn install job right after retrying it", "id", id, "error", err)
@@ -1206,17 +1389,19 @@ func (s *Service) Dismiss(id string) error {
 		return errUnavailable
 	}
 	snap := snapshotOf(item)
-	idx := -1
-	for i, existing := range s.items {
-		if existing.ID == id {
-			idx = i
-			break
-		}
+	// Файлы убираются до записи из списка: отказ оставляет запись на месте, и
+	// пользователь повторяет Dismiss, а не получает ошибку над уже исчезнувшей
+	// записью. Воркер, который ещё жив, свои файлы не теряет.
+	if alive, _ := s.transientWorkerStatus(id); alive {
+		slog.Warn("keep the files of a dismissed install, its worker is still running", "id", id)
+	} else if err := removeWorkerFiles(append(s.workerFiles(id), s.installerLogPath(id))...); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("не удалось убрать файлы установки: %w", err)
 	}
-	removed := s.items[idx]
-	s.items = append(s.items[:idx], s.items[idx+1:]...)
+	idx := slices.Index(s.items, item)
+	s.items = slices.Delete(s.items, idx, idx+1)
 	if err := s.persistLocked(); err != nil {
-		s.items = append(s.items, removed)
+		s.items = slices.Insert(s.items, idx, item)
 		s.mu.Unlock()
 		return wrapPersistError(err)
 	}
@@ -1227,7 +1412,7 @@ func (s *Service) Dismiss(id string) error {
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after dismiss, service not started", "id", id, "error", err)
 	} else {
-		go s.sweepPartialItem(base, snap)
+		s.spawnSweep(base, snap)
 	}
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
@@ -1643,12 +1828,28 @@ func (s *Service) installRoots() []string {
 	return out
 }
 
-func sourceDir(d download.Download) string {
-	nested := filepath.Join(d.Destination, d.Name)
-	if info, err := os.Stat(nested); err == nil && info.IsDir() {
-		return nested
+// sourceDir — то, что скачала эта загрузка, а не каталог загрузок целиком:
+// однофайловая раздача лежит файлом рядом с чужими загрузками, и разбор их
+// общего каталога выбрал бы чужой установщик или не нашёл бы архив вовсе.
+// Destination целиком берётся, только когда под именем загрузки на диске
+// ничего нет: так лежат раздачи без своего каталога (flat, inPlace).
+func sourceDir(d download.Download) (string, error) {
+	if d.Destination == "" {
+		return "", fmt.Errorf("%w: у загрузки %s нет каталога назначения", errNoSource, d.ID)
 	}
-	return d.Destination
+	if d.Flat || d.InPlace || d.Name == "" {
+		return d.Destination, nil
+	}
+	nested := filepath.Join(d.Destination, d.Name)
+	_, err := os.Stat(nested)
+	switch {
+	case err == nil:
+		return nested, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return d.Destination, nil
+	default:
+		return "", fmt.Errorf("%w: %w", errNoSource, err)
+	}
 }
 
 func partialPath(item *Installation) string {
@@ -1673,6 +1874,17 @@ func volumeTarget(destination, fallback string) string {
 		return destination
 	}
 	return fallback
+}
+
+// progressTotal — знаменатель прогресса установки. EstimatedSize внешнего
+// установщика — размер раздачи (сжатого репака), а не установленной игры: им
+// нельзя мерить записанное, поэтому для exe/msi знаменатель неизвестен (0), а
+// EstimatedSize остаётся только для проверки места.
+func progressTotal(kind Type, p Plan) int64 {
+	if external(kind) {
+		return 0
+	}
+	return p.EstimatedSize
 }
 
 func requiredBytes(p Plan) int64 {

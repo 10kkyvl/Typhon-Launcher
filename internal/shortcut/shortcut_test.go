@@ -180,8 +180,9 @@ func TestRemoveSymlinkDoesNotFollowTarget(t *testing.T) {
 	}
 
 	link := filepath.Join(dir, "Game"+shortcutExt)
-	if err := os.Symlink(victim, link); err != nil {
-		t.Fatal(err)
+	linkDir(t, victim, link)
+	if _, err := os.Stat(filepath.Join(link, "keep-me")); err != nil {
+		t.Fatalf("link does not resolve to its target: %v", err)
 	}
 
 	if err := Remove(link); err != nil {

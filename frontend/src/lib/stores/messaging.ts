@@ -54,6 +54,7 @@ const DRAFT_PREFIX = 'typhon.chat.draft';
 const TYPING_EXPIRY_MS = 6000;
 const TYPING_THROTTLE_MS = 3000;
 let started = false;
+let passive = false;
 let generation = 0;
 let authKey = '';
 let toastId = 0;
@@ -300,6 +301,10 @@ async function reloadConversations(expected = generation): Promise<void> {
     console.warn('messaging conversations failed', err);
     if (expected === generation) chatConversationsError.set(msg('social.chatConversationsError'));
   }
+}
+
+export async function refreshConversations(): Promise<void> {
+  await reloadConversations();
 }
 
 export async function loadMessages(peerId: string, before = '', append = false, markReadAfter = false): Promise<void> {
@@ -589,6 +594,7 @@ async function incomingMessage(peerId: string, message: Message, expectedGenerat
     lastMessage: message,
     unread: knownBeforeReload ? conversation.unread + 1 : conversation.unread,
   }));
+  if (passive) return;
   if (get(presenceStatus) === 'busy') return;
   const notifyKey = message.id || message.clientId;
   if (notifyIds.has(notifyKey)) return;
@@ -666,10 +672,15 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   closeChat();
   if (!nextKey) {
     chatConnected.set(false);
-    await stop().catch(() => undefined);
+    if (!passive) await stop().catch(() => undefined);
     return;
   }
   const expectedGeneration = generation;
+  if (passive) {
+    chatConnected.set(true);
+    await reloadConversations(expectedGeneration);
+    return;
+  }
   try {
     await start();
     if (serial !== sessionSerial || expectedGeneration !== generation || authKey !== nextKey) return;
@@ -702,23 +713,29 @@ export async function retryMessaging(): Promise<void> {
   }
 }
 
-export function initMessaging(): void {
+function listenChatEvents(): void {
+  if (!inWails) return;
+  Events.On('chat:event', (event) => {
+    void handleEvent(event.data as ChatEvent);
+  });
+  Events.On('chat:open', (event) => {
+    const data = event.data as { ownerId?: string; peerId?: string } | null;
+    if (!data || data.ownerId !== get(currentUser)?.id || !data.peerId) return;
+    openChatById(data.peerId);
+  });
+}
+
+export function initMessaging(options: { passive?: boolean } = {}): void {
   if (started) return;
   started = true;
-  if (!expiryTimer) expiryTimer = setInterval(pruneExpired, 1000);
-  if (!conversationRefreshTimer) conversationRefreshTimer = setInterval(() => {
-    if (authKey) void reloadConversations(generation);
-  }, 60000);
-  if (inWails) {
-    Events.On('chat:event', (event) => {
-      void handleEvent(event.data as ChatEvent);
-    });
-    Events.On('chat:open', (event) => {
-      const data = event.data as { ownerId?: string; peerId?: string } | null;
-      if (!data || data.ownerId !== get(currentUser)?.id || !data.peerId) return;
-      openChatById(data.peerId);
-    });
+  passive = options.passive === true;
+  if (!passive) {
+    if (!expiryTimer) expiryTimer = setInterval(pruneExpired, 1000);
+    if (!conversationRefreshTimer) conversationRefreshTimer = setInterval(() => {
+      if (authKey) void reloadConversations(generation);
+    }, 60000);
   }
+  listenChatEvents();
   let authStateValue = '';
   let consent = false;
   const kick = () => {

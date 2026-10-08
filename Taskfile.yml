@@ -27,6 +27,20 @@ tasks:
           DEV: "{{.DEV}}"
           EXTRA_TAGS: "{{.EXTRA_TAGS}}"
 
+  # qa: the release build flags with the qa tag in place of production, so an
+  # agent can drive the real window over CDP (.claude/skills/regression). The
+  # tag cannot be combined with the production tag: qa_forbid.go fails to
+  # compile in that case. The output is the usual bin/typhon.exe path: a new
+  # path would raise a new firewall prompt for the torrent listener.
+  build:qa:
+    summary: Builds bin/typhon.exe with the qa tag (DevTools port on loopback, window titled [qa]); never a release artifact
+    platforms: [windows]
+    cmds:
+      - task: windows:build
+        vars:
+          QA: "true"
+          EXTRA_TAGS: "{{.EXTRA_TAGS}}"
+
   package:
     summary: Packages a production build of the application
     cmds:

@@ -10,6 +10,7 @@ const state = (over: Partial<QuickActionState> = {}): QuickActionState => ({
   lanShared: false,
   favorite: false,
   status: '',
+  saveBackups: true,
   ...over,
 });
 
@@ -24,12 +25,18 @@ describe('quickActions', () => {
       'status',
       'folder',
       'saves',
+      'saves-backups',
       'verify',
       'move',
       'shortcut-create',
       'uninstall',
       'remove',
     ]);
+  });
+
+  it('hides the saves window while backups are switched off', () => {
+    expect(ids({ saveBackups: false })).not.toContain('saves-backups');
+    expect(ids({ saveBackups: false })).toContain('saves');
   });
 
   it('shows the status item for an installed game', () => {

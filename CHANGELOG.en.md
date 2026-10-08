@@ -6,6 +6,44 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 0.9.0 — 2026-10-08
+Chat, friends and music right over your game, save backups, and torrents through a VPN or a proxy. Installs and downloads no longer get stuck or lose data.
+
+### Added
+- In-game overlay: press Alt+` over a game to open chat, friends, music controls and a browser without leaving the game. Turn it on and set it up in Settings → General → Game overlay; Windows only for now
+- The overlay does not open while a game runs in exclusive fullscreen; switch such a game to borderless windowed mode. If another program already uses Alt+`, pick Shift+F1, Shift+F2 or Ctrl+Shift+O instead
+- Save backups: right-click a game → Saves… opens a window where you can back up now, restore any earlier copy and delete the ones you no longer need. Before restoring, the launcher makes a safety copy of your current saves
+- Saves are backed up automatically after every play session and before a game update. Each game keeps its last 5 automatic copies (change the number in Settings → Downloads → Updates); manual copies are never deleted on their own. Backups stay on your computer
+- Torrents can go through a VPN adapter or a SOCKS5 or HTTP proxy: Settings → Downloads → Torrent network. If the VPN disconnects or the proxy goes away, downloads and seeding pause with a banner at the top of the window and resume on their own when the network is back, so no traffic leaks around it
+- The proxy password is kept in the system credential store, not in the settings file. DHT and UDP do not work through a proxy, so torrents without trackers will not find peers in that mode. Binding to a VPN adapter works on Windows only
+- When an installer refuses to install silently, the install window offers Install manually, which opens the installer's usual wizard
+- When the built-in extractor cannot unpack a RAR archive, the launcher tries an installed 7-Zip or WinRAR, and if there is none or it is too old, tells you which version to install
+- Top bar search: Enter or the "N more in the catalog" line opens the catalog with your query
+
+### Changed
+- Checksum verification in FitGirl installers is now opt-in: Settings → Downloads → Install → Verify repack files during install. It is off by default, so an install finishes right away instead of waiting hours for the check
+- Installer sound is muted during an install; other programs and system sounds are left alone (Windows)
+- The launcher asks for confirmation before removing your avatar or cover, resetting your profile appearance and signing out
+
+### Fixed
+- An installer that needed administrator rights failed at once with "Could not complete the operation" when it was not installing silently
+- When an installer put the game next to the library folder instead of inside it, the launcher could not find the game afterwards; the folder now comes from the entry the installer registers in Windows
+- A fully downloaded game sometimes ended up in Error with a message about an unfinished .part file, usually when seeding or an antivirus held the file at that moment
+- Double-clicking Retry started the installer several times
+- The launcher did not start when an antivirus held a file in the launcher's own update folder
+- When the file listing downloads, installs or game updates got damaged, the launcher wrote an empty list over it on exit and everything disappeared
+- Cancelling a game update download could delete a folder named like the release in the source and leave the downloaded data behind
+- An interrupted patch update showed "Update available" although some patches were already installed; you can now see which patch it stopped on
+- Switching catalog genres quickly could leave a genre other than the last one you clicked selected
+- Downloads that ended in an error disappeared from the Downloads screen; they now show under Failed with the reason, Retry and Remove from list
+- Games without an executable had a Play button that only led to an error
+- The update card said "New release available" when there was no newer version and only a rollback was left
+- Shortcuts to the repacker's website that installers drop on the desktop stayed after the install
+- A repack's install bar got stuck at 99% with a size larger than expected; when the final size is unknown, it shows how much has been written
+- If the launcher closed in the middle of several installers in a row (a game and its add-ons), after a restart the game counted as installed and the add-ons were never installed
+- After the launcher crashed, the installer kept running in the background
+- A damaged or incomplete RAR archive is reported as damaged or incomplete, not as "format not supported"
+
 ## 0.8.0 — 2026-09-28
 Steam-style game reviews and a fullscreen Big Picture mode for playing with a controller. Games started from shortcuts or requiring administrator rights now launch as expected.
 

@@ -6,6 +6,7 @@
   import { bigPictureActive } from './lib/bigpicture/mode';
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
+  import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
@@ -14,6 +15,7 @@
   import { initHistory } from './lib/stores/history';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
+  import { initNetwork } from './lib/stores/network';
   import { locale } from './lib/i18n';
   import { route } from './lib/stores/router';
   import { initLibrary } from './lib/stores/library';
@@ -21,6 +23,7 @@
   import { initMessaging } from './lib/stores/messaging';
   import { initMoves } from './lib/stores/relocate';
   import { initPresence } from './lib/stores/presence';
+  import { initSaveBackups } from './lib/stores/savebackup';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
@@ -47,6 +50,7 @@
   onDestroy(initNativeLanguage());
   initDegradedNotices();
   initDownloads();
+  initNetwork();
   initInstalls();
   refreshStorage();
   initLibrary();
@@ -62,6 +66,7 @@
   initLan();
   initSocial();
   initPresence();
+  initSaveBackups();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -116,6 +121,7 @@
       </AppShell>
       <ReleaseNotesModal />
       <MoveGameModal />
+      <SaveBackupsModal />
     <UpdateOverlay />
   {:else}
     <AuthScreen />

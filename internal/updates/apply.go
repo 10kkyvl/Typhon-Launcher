@@ -112,6 +112,7 @@ func (s *Service) StartUpdate(gameID string) error {
 		defer s.wg.Done()
 		defer s.endJob(gameID)
 		err := s.runUpdate(ctx, plan)
+		moved := err != nil && s.installMovedFrom(plan)
 		switch {
 		case err == nil:
 			s.finishHistory(entry.ID, HistoryCompleted, "")
@@ -156,30 +157,43 @@ func (s *Service) StartUpdate(gameID string) error {
 					ErrorCode:       usagestats.Classify(ctx.Err()),
 				},
 			})
-			s.finishHistory(entry.ID, HistoryFailed, interruptedUpdateText)
-			s.mutate(gameID, func(u *Update) {
-				u.State = StateAvailable
-				u.Step = ""
-				u.Progress = 0
-				u.Error = interruptedUpdateText
-			})
+			message := interruptedUpdateText
+			if moved {
+				message = interruptedAt(err)
+			}
+			s.finishHistory(entry.ID, HistoryFailed, message)
+			if moved {
+				s.stopAtCommitted(gameID, message)
+			} else {
+				s.mutate(gameID, func(u *Update) {
+					u.State = StateAvailable
+					u.Step = ""
+					u.Progress = 0
+					u.Error = interruptedUpdateText
+				})
+			}
 			s.recordUpdateHistory(history.Record{
 				Kind:        history.KindUpdateFailed,
 				GameID:      canonicalID,
 				Title:       s.gameTitle(gameID),
 				FromVersion: plan.InstalledVersion,
 				ToVersion:   plan.TargetVersion,
-				Detail:      interruptedUpdateText,
+				Detail:      message,
 				RefID:       gameID,
 			})
 		default:
 			s.finishHistory(entry.ID, HistoryFailed, err.Error())
-			failed, _ := s.mutate(gameID, func(u *Update) {
-				u.State = StateFailed
-				u.Step = ""
-				u.Progress = 0
-				u.Error = err.Error()
-			})
+			var failed Update
+			if moved {
+				failed, _ = s.stopAtCommitted(gameID, err.Error())
+			} else {
+				failed, _ = s.mutate(gameID, func(u *Update) {
+					u.State = StateFailed
+					u.Step = ""
+					u.Progress = 0
+					u.Error = err.Error()
+				})
+			}
 			emit(eventFailed, failed)
 			s.recordUsage(usagestats.Event{
 				Type:      usagestats.TypeUpdateFailed,
@@ -217,6 +231,59 @@ func (s *Service) CancelUpdate(gameID string) error {
 	}
 	s.cancelJob(gameID)
 	return nil
+}
+
+// installMovedFrom reports that the installation no longer is the one plan was
+// built for: a patch chain commits each patch before the next, so a run that
+// stops partway leaves the game at an intermediate version.
+func (s *Service) installMovedFrom(plan UpdatePlan) bool {
+	game, ok := s.installedGame(plan.GameID)
+	return ok && (game.Version != plan.InstalledVersion || game.ReleaseID != plan.InstalledReleaseID)
+}
+
+// stopAtCommitted records a run that stopped after the installation moved. The
+// offer and the plan describe the version the run started from and
+// validatePlan refuses both, so the offer is resolved again from what is on
+// disk now and the plan is dropped: the player's next PreparePlan builds one
+// from the committed version without waiting for a periodic check (invariant 14).
+func (s *Service) stopAtCommitted(gameID, message string) (Update, bool) {
+	availability := UpdateAvailability{Kind: KindNone, GameID: gameID}
+	if game, ok := s.installedGame(gameID); ok {
+		availability.InstalledVersion = game.Version
+		if s.releases != nil {
+			availability = s.resolveAvailability(game)
+		}
+	}
+	return s.mutate(gameID, func(u *Update) {
+		u.State = StateFailed
+		u.Step = ""
+		u.Progress = 0
+		u.Message = ""
+		u.DownloadID = ""
+		u.InstallID = ""
+		u.Plan = nil
+		u.Error = message
+		u.Availability = availability
+	})
+}
+
+type patchStepError struct {
+	from, to string
+	err      error
+}
+
+func (e *patchStepError) Error() string {
+	return "патч " + e.from + " → " + e.to + ": " + e.err.Error()
+}
+
+func (e *patchStepError) Unwrap() error { return e.err }
+
+func interruptedAt(err error) string {
+	var step *patchStepError
+	if errors.As(err, &step) {
+		return "патч " + step.from + " → " + step.to + ": " + interruptedUpdateText
+	}
+	return interruptedUpdateText
 }
 
 func (s *Service) runUpdate(ctx context.Context, plan UpdatePlan) error {
@@ -613,7 +680,7 @@ func (s *Service) backupInPlace(ctx context.Context, gameID, installDir, version
 	return s.backupInPlaceSuffix(ctx, gameID, installDir, version, "")
 }
 func (s *Service) backupInPlaceSuffix(ctx context.Context, gameID, installDir, version, suffix string) (string, error) {
-	previous, err := copyInstallAsideSuffix(ctx, installDir, suffix)
+	previous, err := s.copyInstallAside(ctx, gameID, installDir, suffix)
 	if err != nil {
 		return "", err
 	}
@@ -635,10 +702,7 @@ func (s *Service) backupInPlaceSuffix(ctx context.Context, gameID, installDir, v
 // before its first destructive write. A crash during the copy itself leaves
 // installDir untouched, so the copy is safe to redo from scratch on the next
 // attempt (invariant 15).
-func copyInstallAside(ctx context.Context, installDir string) (string, error) {
-	return copyInstallAsideSuffix(ctx, installDir, "")
-}
-func copyInstallAsideSuffix(ctx context.Context, installDir, suffix string) (string, error) {
+func (s *Service) copyInstallAside(ctx context.Context, gameID, installDir, suffix string) (string, error) {
 	previous, err := previousDir(installDir)
 	if err != nil {
 		return "", err
@@ -651,12 +715,34 @@ func copyInstallAsideSuffix(ctx context.Context, installDir, suffix string) (str
 	if err := checkBackupFreeSpace(installDir, total); err != nil {
 		return "", err
 	}
+	if err := s.releaseBackupSlot(gameID, previous); err != nil {
+		return "", err
+	}
 	removeTree(previous)
 	if err := install.CopyDirVerified(ctx, installDir, previous, nil); err != nil {
 		removeTree(previous)
 		return "", err
 	}
 	return previous, nil
+}
+
+// releaseBackupSlot drops the rollback record that names path before the copy
+// that overwrites path starts. A record outliving the directory it names
+// offers Rollback whatever a crash or a cancel left there, which is a partial
+// copy (invariant 9). When the removal cannot be saved the old copy is left
+// alone and the update stops.
+func (s *Service) releaseBackupSlot(gameID, path string) error {
+	s.mu.Lock()
+	entry, ok := s.rollbacks[gameID]
+	named := ok && platform.SamePath(entry.Path, path)
+	s.mu.Unlock()
+	if !named {
+		return nil
+	}
+	if !s.forgetPrevious(gameID) {
+		return fmt.Errorf("%w: запись о прежней версии не удалось сохранить, резервная копия не тронута", errUpdateFailed)
+	}
+	return nil
 }
 
 // undoSwapAndClear rolls a swap or in-place write back to previous and only
@@ -683,16 +769,8 @@ func (s *Service) undoSwapAndClear(gameID, installDir, previous string) {
 }
 
 func checkBackupFreeSpace(path string, needed int64) error {
-	if needed < 0 {
-		return errNoFreeSpaceForBackup
-	}
-	info, err := platform.GetStorageInfo(path)
-	if err != nil {
+	if err := install.CheckFreeSpace(path, needed); err != nil {
 		return fmt.Errorf("%w: %w", errNoFreeSpaceForBackup, err)
-	}
-	//nolint:gosec // G115: needed >= 0 checked above, the int64->uint64 conversion is exact
-	if info.FreeBytes < uint64(needed) {
-		return errNoFreeSpaceForBackup
 	}
 	return nil
 }
@@ -720,7 +798,7 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 	defer removeTree(staging)
 
 	s.setStep(plan.GameID, StepBackup, "Резервная копия установки")
-	previous, err := copyInstallAside(ctx, game.InstallDir)
+	previous, err := s.copyInstallAside(ctx, plan.GameID, game.InstallDir, "")
 	if err != nil {
 		return err
 	}
@@ -730,8 +808,7 @@ func (s *Service) applyPatchChain(ctx context.Context, plan UpdatePlan) error {
 
 	touched, err := s.runPatchChain(ctx, plan, game, staging)
 	if err != nil {
-		if !touched {
-			s.forgetPrevious(plan.GameID)
+		if !touched && s.forgetPrevious(plan.GameID) {
 			removeTree(previous)
 		}
 		return err
@@ -755,7 +832,7 @@ func (s *Service) runPatchChain(ctx context.Context, plan UpdatePlan, game libra
 	// prefix (invariant 24).
 	defer func() {
 		if err != nil && stopped.ID != "" {
-			err = fmt.Errorf("патч %s → %s: %w", stopped.FromVersion, stopped.ToVersion, err)
+			err = &patchStepError{from: stopped.FromVersion, to: stopped.ToVersion, err: err}
 		}
 	}()
 
@@ -962,8 +1039,9 @@ func (s *Service) settlePrevious(gameID, path string) {
 	if s.config().KeepPreviousVersion != settings.KeepPreviousOff {
 		return
 	}
-	s.forgetPrevious(gameID)
-	removeTree(path)
+	if s.forgetPrevious(gameID) {
+		removeTree(path)
+	}
 }
 
 func (s *Service) Rollback(gameID string) error {
@@ -1045,9 +1123,16 @@ func (s *Service) Rollback(gameID string) error {
 	return nil
 }
 
-func (s *Service) forgetPrevious(gameID string) {
-	s.forgetRollbackBestEffort(gameID)
+// forgetPrevious drops the rollback record together with the flag that offers
+// it and reports whether the record is gone. When the removal could not be
+// saved the record stays, so the flag stays and the copy it points at must be
+// left alone; the service is degraded until a later save succeeds.
+func (s *Service) forgetPrevious(gameID string) bool {
+	if !s.forgetRollbackBestEffort(gameID) {
+		return false
+	}
 	s.updateFieldsBestEffort(gameID, func(u *Update) { u.CanRollback = false })
+	return true
 }
 
 // swapDirectories journals before any rename and retains an older rollback

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"typhon/internal/platform"
@@ -84,6 +85,19 @@ func (s *Service) excludeLocked(dir string) error {
 	s.excluded = append(append([]string(nil), s.excluded...), key)
 	if err := s.persistExcludedLocked(); err != nil {
 		s.excluded = previous
+		return err
+	}
+	return nil
+}
+
+func (s *Service) restoreExcludedLocked(previous []string) error {
+	if slices.Equal(s.excluded, previous) {
+		return nil
+	}
+	written := s.excluded
+	s.excluded = previous
+	if err := s.persistExcludedLocked(); err != nil {
+		s.excluded = written
 		return err
 	}
 	return nil

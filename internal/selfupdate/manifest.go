@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"typhon/internal/version"
 )
@@ -64,10 +65,21 @@ func (m Manifest) Validate() error {
 }
 
 func (m Manifest) ArtifactFor(goos, goarch string) (Artifact, error) {
+	for _, kind := range appliedKinds(goos) {
+		for _, a := range m.Artifacts {
+			if a.OS == goos && a.Arch == goarch && a.Kind == kind {
+				return a, nil
+			}
+		}
+	}
+	var offered []string
 	for _, a := range m.Artifacts {
 		if a.OS == goos && a.Arch == goarch {
-			return a, nil
+			offered = append(offered, string(a.Kind))
 		}
+	}
+	if len(offered) > 0 {
+		return Artifact{}, fmt.Errorf("%w: %s/%s offers only %s", ErrNoArtifact, goos, goarch, strings.Join(offered, ", "))
 	}
 	return Artifact{}, ErrNoArtifact
 }

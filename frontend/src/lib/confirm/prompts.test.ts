@@ -6,10 +6,14 @@ import {
   deleteThemePrompt,
   discardDownloadPrompt,
   forgetSyncPrompt,
+  removeAvatarPrompt,
+  removeCoverPrompt,
   removeDownloadPrompt,
   removeSourcePrompt,
   resetAppearancePrompt,
+  resetProfileAppearancePrompt,
   sendLogsPrompt,
+  signOutPrompt,
   unfriendPrompt,
 } from './prompts';
 
@@ -84,6 +88,29 @@ describe('settings prompts', () => {
     const prompt = clearHistoryPrompt();
     expect(prompt.title).toBe('Очистить историю');
     expect(prompt.busy).toBe('Очищаем...');
+  });
+});
+
+describe('profile prompts', () => {
+  it('warns the avatar comes back only by a new upload', () => {
+    const prompt = removeAvatarPrompt();
+    expect(prompt.text).toContain('загрузив заново');
+    expect(prompt.confirm).toBe('Удалить аватар');
+    expect(prompt.busy).toBe('Удаление…');
+  });
+
+  it('says cover removal and reset apply on save', () => {
+    expect(removeCoverPrompt().text).toContain('после сохранения');
+    expect(removeCoverPrompt().confirm).toBe('Убрать обложку');
+    expect(resetProfileAppearancePrompt().text).toContain('после сохранения');
+    expect(resetProfileAppearancePrompt().confirm).toBe('Сбросить');
+  });
+
+  it('asks before signing out', () => {
+    const prompt = signOutPrompt();
+    expect(prompt.text).toBe('Выйти из аккаунта?');
+    expect(prompt.confirm).toBe('Выйти');
+    expect(prompt.busy).toBe('Выход…');
   });
 });
 

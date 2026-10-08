@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -17,11 +18,16 @@ func TestIncompleteIndexAcceptsExplicitNewLink(t *testing.T) {
 		Providers: []IndexStatus{{Provider: "igdb", Complete: false}, {Provider: "steam", Complete: false}},
 	}}
 	svc.SetRemoteCatalog(remote)
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	// "igdb-card" matches nothing saved, so the browse above only previewed
+	// it; open the card so the second browse below updates a durable record.
+	if _, err = svc.GetGame("igdb-card"); err != nil {
 		t.Fatal(err)
 	}
 	remote.page.Items = []Game{{ID: "igdb-card", Title: "0xFF", ExternalIDs: ExternalIDs{IGDB: "242303", Steam: "2218760"}, ProviderLinks: map[string][]string{"igdb": {"242303"}, "steam": {"2218760"}}}}
-	page, err := svc.BrowseGames(GameQuery{})
+	page, err := svc.BrowseGames(context.Background(), GameQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +61,24 @@ func TestIncompleteIndexCorrectionRemovesStaleClaim(t *testing.T) {
 		}
 	}
 	svc.SetRemoteCatalog(&remoteFixture{page: GamePage{Items: []Game{{ID: "right", Title: "Same", ExternalIDs: ExternalIDs{IGDB: "2", Steam: "11"}, ProviderLinks: map[string][]string{"igdb": {"2"}, "steam": {"11"}}}}, Providers: []IndexStatus{{Provider: "igdb", Complete: false}, {Provider: "steam", Complete: false}}}})
-	page, err := svc.BrowseGames(GameQuery{})
-	if err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
 		t.Fatal(err)
 	}
-	if svc.SameGame("wrong", "steam") || !svc.SameGame("right", "steam") {
+	if svc.SameGame("wrong", "steam") {
+		t.Fatal("old page retained a disproven provider link")
+	}
+	// "right" matches nothing saved, so the browse above only previewed it and
+	// could not yet resolve it against "steam"; open the card, then browse
+	// again so the now-durable record picks up its confirmed alias.
+	if _, err = svc.GetGame("right"); err != nil {
+		t.Fatal(err)
+	}
+	if !svc.SameGame("right", "steam") {
 		t.Fatal("explicit correction did not replace conflicting claim")
+	}
+	page, err := svc.BrowseGames(context.Background(), GameQuery{})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if len(page.Items[0].AliasIDs) != 1 || page.Items[0].AliasIDs[0] != "steam" {
 		t.Fatalf("personal aliases=%v", page.Items[0].AliasIDs)
@@ -80,11 +98,19 @@ func TestOfflinePageFoldsLearnedProviderPairAndPreservesHomonym(t *testing.T) {
 	}, Total: 3, Page: 1, PageSize: 60}}
 	svc.SetRemoteCatalog(remote)
 	query := GameQuery{Page: 1, PageSize: 60}
-	if _, err = svc.BrowseGames(query); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
+	// None of the three rows match anything saved, so the browse above only
+	// previewed them; open all three so the durable-linking below (and the
+	// offline fold after restart) has something to work with.
+	for _, id := range []string{"steam", "igdb", "homonym"} {
+		if _, err = svc.GetGame(id); err != nil {
+			t.Fatal(err)
+		}
+	}
 	remote.page.Items = []Game{{ID: "igdb", Title: "Same", Developer: "Author", ExternalIDs: ExternalIDs{IGDB: "2", Steam: "11"}, ProviderLinks: map[string][]string{"igdb": {"2"}, "steam": {"11"}}}}
-	if _, err = svc.BrowseGames(GameQuery{Search: "Same"}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{Search: "Same"}); err != nil {
 		t.Fatal(err)
 	}
 	// Reopen without a remote: use the original three-row page and durable links.
@@ -92,7 +118,7 @@ func TestOfflinePageFoldsLearnedProviderPairAndPreservesHomonym(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := svc.BrowseGames(query)
+	page, err := svc.BrowseGames(context.Background(), query)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,14 +143,19 @@ func TestBrowseDeveloperOverridesOldEmptyDetails(t *testing.T) {
 	}
 	remote := &remoteFixture{page: GamePage{Items: []Game{{ID: "game", Title: "Game", ExternalIDs: ExternalIDs{IGDB: "2"}}}}}
 	svc.SetRemoteCatalog(remote)
-	if _, err = svc.BrowseGames(GameQuery{}); err != nil {
+	if _, err = svc.BrowseGames(context.Background(), GameQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	// "game" matches nothing saved, so the browse above only previewed it;
+	// ApplyMetadata only ever operates on durable records.
+	if _, err = svc.GetGame("game"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = svc.ApplyMetadata("game", MetadataPatch{IGDBID: "2", UpdatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	remote.page.Items[0].Developer = "Author"
-	page, err := svc.BrowseGames(GameQuery{})
+	page, err := svc.BrowseGames(context.Background(), GameQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}

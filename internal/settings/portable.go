@@ -17,6 +17,7 @@ type Portable struct {
 	VerifyAfterInstall       *bool    `json:"verifyAfterInstall,omitempty"`
 	InstallSkipShortcuts     *bool    `json:"installSkipShortcuts,omitempty"`
 	InstallSkipExtras        *bool    `json:"installSkipExtras,omitempty"`
+	InstallVerifyRepack      *bool    `json:"installVerifyRepack,omitempty"`
 	DesktopShortcuts         *bool    `json:"desktopShortcuts,omitempty"`
 	UpdateCheckAutomatically *bool    `json:"updateCheckAutomatically,omitempty"`
 	UpdateAutoDownload       *bool    `json:"updateAutoDownload,omitempty"`
@@ -24,6 +25,8 @@ type Portable struct {
 	UpdateSaveBackup         *bool    `json:"updateSaveBackup,omitempty"`
 	KeepPreviousVersion      *string  `json:"keepPreviousVersion,omitempty"`
 	AllowTorrentReuse        *bool    `json:"allowTorrentReuse,omitempty"`
+	SaveBackupAfterSession   *bool    `json:"saveBackupAfterSession,omitempty"`
+	SaveBackupLimit          *int     `json:"saveBackupLimit,omitempty"`
 }
 
 func PortableOf(s Settings) Portable {
@@ -44,6 +47,7 @@ func PortableOf(s Settings) Portable {
 		VerifyAfterInstall:       &s.VerifyAfterInstall,
 		InstallSkipShortcuts:     &s.InstallSkipShortcuts,
 		InstallSkipExtras:        &s.InstallSkipExtras,
+		InstallVerifyRepack:      &s.InstallVerifyRepack,
 		DesktopShortcuts:         &s.DesktopShortcuts,
 		UpdateCheckAutomatically: &s.UpdateCheckAutomatically,
 		UpdateAutoDownload:       &s.UpdateAutoDownload,
@@ -51,6 +55,8 @@ func PortableOf(s Settings) Portable {
 		UpdateSaveBackup:         &s.UpdateSaveBackup,
 		KeepPreviousVersion:      &s.KeepPreviousVersion,
 		AllowTorrentReuse:        &s.AllowTorrentReuse,
+		SaveBackupAfterSession:   &s.SaveBackupAfterSession,
+		SaveBackupLimit:          &s.SaveBackupLimit,
 	}
 }
 
@@ -71,6 +77,7 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.VerifyAfterInstall, p.VerifyAfterInstall)
 	applyBool(&s.InstallSkipShortcuts, p.InstallSkipShortcuts)
 	applyBool(&s.InstallSkipExtras, p.InstallSkipExtras)
+	applyBool(&s.InstallVerifyRepack, p.InstallVerifyRepack)
 	applyBool(&s.DesktopShortcuts, p.DesktopShortcuts)
 	applyBool(&s.UpdateCheckAutomatically, p.UpdateCheckAutomatically)
 	applyBool(&s.UpdateAutoDownload, p.UpdateAutoDownload)
@@ -78,7 +85,15 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.UpdateSaveBackup, p.UpdateSaveBackup)
 	applyString(&s.KeepPreviousVersion, p.KeepPreviousVersion)
 	applyBool(&s.AllowTorrentReuse, p.AllowTorrentReuse)
+	applyBool(&s.SaveBackupAfterSession, p.SaveBackupAfterSession)
+	applyInt(&s.SaveBackupLimit, p.SaveBackupLimit)
 	return s
+}
+
+func applyInt(dst *int, src *int) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 func applyString(dst *string, src *string) {

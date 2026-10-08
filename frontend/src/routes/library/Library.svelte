@@ -36,6 +36,7 @@
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
+  import { canPlay } from '../../lib/library/launch';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
@@ -50,6 +51,7 @@
     cover: string;
     hero: string;
     installed: boolean;
+    playable: boolean;
     playtimeSeconds: number;
     sizeBytes: number;
     lastPlayed: string | null;
@@ -139,6 +141,7 @@
       cover: art?.cover || game.cover,
       hero: art?.hero ?? '',
       installed: !game.uninstalled,
+      playable: canPlay(game),
       playtimeSeconds: game.playtimeSeconds,
       sizeBytes: game.sizeBytes,
       lastPlayed: game.lastPlayed,
@@ -158,6 +161,7 @@
       cover: $gameArt[gameId]?.cover ?? '',
       hero: $gameArt[gameId]?.hero ?? '',
       installed: false,
+      playable: false,
       playtimeSeconds: 0,
       sizeBytes: item.total,
       lastPlayed: null,
@@ -209,7 +213,7 @@
     $installedGames.map(installedEntry).toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed)),
   );
 
-  const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null));
+  const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null && entry.playable));
 
   const recentGames = $derived(
     playedGames.filter((entry) => entry.lastPlayed !== null && entry.id !== hero?.id),
@@ -287,7 +291,7 @@
               variant="capsule"
               installed={entry.installed}
               running={$runningGames.has(entry.id)}
-              onplay={() => toggleRun(entry.id)}
+              onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
             >
               {#snippet footer()}
                 <span class="recent-meta">
@@ -374,7 +378,7 @@
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
             meta={entryMeta(entry)}
-            onplay={() => toggleRun(entry.id)}
+            onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
           />
         {/each}
       </div>

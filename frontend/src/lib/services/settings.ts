@@ -29,14 +29,23 @@ export interface Settings {
   verifyAfterInstall: boolean;
   installSkipShortcuts: boolean;
   installSkipExtras: boolean;
+  installVerifyRepack: boolean;
   desktopShortcuts: boolean;
   updateCheckAutomatically: boolean;
   updateAutoDownload: boolean;
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
+  saveBackupAfterSession: boolean;
+  saveBackupLimit: number;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
   lanSharing: boolean;
+  networkMode: string;
+  networkInterface: string;
+  proxyType: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxyUsername: string;
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
@@ -44,6 +53,8 @@ export interface Settings {
   accountSync: boolean;
   presenceStatus: string;
   presenceAutoAway: boolean;
+  overlayEnabled: boolean;
+  overlayHotkey: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -75,14 +86,23 @@ const fallbackDefaults: Settings = {
   verifyAfterInstall: true,
   installSkipShortcuts: true,
   installSkipExtras: true,
+  installVerifyRepack: false,
   desktopShortcuts: true,
   updateCheckAutomatically: true,
   updateAutoDownload: false,
   updateAutoInstall: false,
   updateSaveBackup: true,
+  saveBackupAfterSession: true,
+  saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
   lanSharing: false,
+  networkMode: 'direct',
+  networkInterface: '',
+  proxyType: 'socks5',
+  proxyHost: '',
+  proxyPort: 0,
+  proxyUsername: '',
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
   anonymousDiagnostics: true,
@@ -90,6 +110,8 @@ const fallbackDefaults: Settings = {
   accountSync: false,
   presenceStatus: 'online',
   presenceAutoAway: true,
+  overlayEnabled: true,
+  overlayHotkey: 'Alt+`',
 };
 
 export const maxActiveDownloadOptions = [

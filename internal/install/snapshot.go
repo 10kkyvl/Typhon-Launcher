@@ -84,6 +84,21 @@ func scanDir(out map[string]dirState, dir string, depth int) error {
 	return nil
 }
 
+// withUnseen помечает каталог вне корней снимка как существовавший: о нём до
+// установки ничего не известно, и признать его созданным установкой — значит
+// разрешить удалить целиком чужую папку.
+func (f fsSnapshot) withUnseen(dir string) fsSnapshot {
+	if dir == "" || insideAny(f.roots, dir) {
+		return f
+	}
+	dirs := make(map[string]dirState, len(f.dirs)+1)
+	for path, state := range f.dirs {
+		dirs[path] = state
+	}
+	dirs[dir] = dirState{}
+	return fsSnapshot{roots: f.roots, dirs: dirs}
+}
+
 func diffSnapshot(before, after fsSnapshot) []string {
 	skip := make(map[string]bool, len(after.roots))
 	for _, root := range after.roots {

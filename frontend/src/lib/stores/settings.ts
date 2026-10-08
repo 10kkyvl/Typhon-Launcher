@@ -34,7 +34,7 @@ let queued = 0;
 let confirmed: Settings | null = null;
 const fieldRevision = new Map<string, number>();
 
-function enqueueSettingsUpdate(patch: Partial<Settings>): Promise<boolean> {
+function enqueueSettingsUpdate(patch: Partial<Settings>, onError?: (err: unknown) => void): Promise<boolean> {
   const before = get(settings);
   if (!before) {
     toast(msg('state.settingsNotLoaded'), 'danger');
@@ -58,7 +58,8 @@ function enqueueSettingsUpdate(patch: Partial<Settings>): Promise<boolean> {
       return true;
     } catch (err) {
       console.error('save settings', err);
-      toast(msg('state.settingsSaveFailed'), 'danger');
+      if (onError) onError(err);
+      else toast(msg('state.settingsSaveFailed'), 'danger');
       // Undo this call's own keys against the latest state instead of
       // restoring the whole snapshot: another call may have saved a
       // different field successfully while this one was in flight, and
@@ -87,6 +88,10 @@ function enqueueSettingsUpdate(patch: Partial<Settings>): Promise<boolean> {
 /** Persist a settings patch and report whether the write succeeded. */
 export function updateSettingsResult(patch: Partial<Settings>): Promise<boolean> {
   return enqueueSettingsUpdate(patch);
+}
+
+export function updateSettingsReporting(patch: Partial<Settings>, onError: (err: unknown) => void): Promise<boolean> {
+  return enqueueSettingsUpdate(patch, onError);
 }
 
 /** Existing callers rely on the toast-based, fire-and-forget result. */

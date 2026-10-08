@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
@@ -6,6 +7,7 @@
   import { list as listReviews, type Review, type ReviewFilter, type ReviewSort } from '../../lib/services/reviews';
   import { reviewsChanged } from '../../lib/game/reviewsRefresh';
   import { msg } from '../../lib/i18n';
+  import { measureScrollFloor } from '../../lib/utils/scrollFloor';
   import ReviewCard from './ReviewCard.svelte';
   import ReviewComposer from './ReviewComposer.svelte';
   import { authState } from '../../lib/stores/user';
@@ -22,6 +24,9 @@
   let loaded = $state(false);
   let unsupported = $state(false);
   let moreFailed = $state(false);
+  let results = $state<HTMLElement>();
+  let floor = $state(0);
+  let heldFor = '';
 
   const guest = $derived($authState !== 'authenticated');
 
@@ -94,8 +99,13 @@
       failed = false;
       unsupported = false;
       moreFailed = false;
+      floor = 0;
+      heldFor = '';
       return;
     }
+    const node = untrack(() => results);
+    floor = heldFor === id && node ? measureScrollFloor(node) : 0;
+    heldFor = id;
     void loadFirst(id, currentSort, currentFilter);
   });
 </script>
@@ -114,6 +124,7 @@
       <ReviewComposer {canonicalGameId} />
     </div>
 
+    <div class="results" bind:this={results} style:min-height={floor > 0 ? `${floor}px` : undefined}>
     {#if loading && items.length === 0}
       <div class="state">
         <span class="spinner"></span>
@@ -143,6 +154,7 @@
         </div>
       {/if}
     {/if}
+    </div>
   </section>
 {/if}
 
@@ -180,6 +192,12 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
     background: var(--surface-2);
+  }
+
+  .results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   .list {

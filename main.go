@@ -31,10 +31,12 @@ import (
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
+	"typhon/internal/media"
 	"typhon/internal/messaging"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
 	"typhon/internal/online"
+	"typhon/internal/overlay"
 	"typhon/internal/platform"
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
@@ -42,6 +44,7 @@ import (
 	"typhon/internal/redact"
 	"typhon/internal/relocate"
 	"typhon/internal/reviews"
+	"typhon/internal/savebackup"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -85,6 +88,7 @@ func init() {
 	application.RegisterEvent[download.Download]("download:completed")
 	application.RegisterEvent[download.Download]("download:failed")
 	application.RegisterEvent[download.RemovedEvent]("download:removed")
+	application.RegisterEvent[download.NetworkState]("download:network")
 	application.RegisterEvent[install.Installation]("install:started")
 	application.RegisterEvent[install.Installation]("install:updated")
 	application.RegisterEvent[install.Installation]("install:completed")
@@ -132,10 +136,15 @@ func init() {
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[savebackup.Event](savebackup.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
 	application.RegisterEvent[messaging.OpenEvent]("chat:open")
+	application.RegisterEvent[overlay.Signal](overlay.EventShown)
+	application.RegisterEvent[overlay.Signal](overlay.EventHidden)
+	application.RegisterEvent[overlay.Status](overlay.EventStatus)
+	application.RegisterEvent[overlay.Signal](overlay.EventBrowserClosed)
 }
 
 // registerLocalIdentity hands the machine and account names to redact so they
@@ -196,8 +205,12 @@ func main() {
 			slog.Error("install worker failed", "error", errNoWorkerSpec)
 			os.Exit(1)
 		}
-		if err := install.RunWorker(os.Args[2]); err != nil {
+		specPath, specSHA256 := install.ParseWorkerArgs(os.Args[2:])
+		if err := install.RunWorker(specPath, specSHA256); err != nil {
 			slog.Error("install worker failed", "error", err)
+			if errors.Is(err, install.ErrWorkerSpecRejected) {
+				os.Exit(install.WorkerSpecRejectedExit)
+			}
 			os.Exit(1)
 		}
 		return
@@ -227,6 +240,11 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	qaArgs, err := qaStart()
+	if err != nil {
+		fatal("start qa build", err)
 	}
 
 	// При автозапуске и запуске из фонового процесса передавать нечего:
@@ -351,7 +369,11 @@ func main() {
 		fatal("start discovery service", err)
 	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
-	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService)
+	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
+	if err != nil {
+		fatal("start save backup service", err)
+	}
+	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
 	}
@@ -447,6 +469,7 @@ func main() {
 		return accountService.CurrentProfileSettings().Showcase
 	})
 	libraryService.AddSessionWatcher(presenceWatcher)
+	libraryService.AddSessionWatcher(saveBackupService)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
@@ -520,6 +543,13 @@ func main() {
 
 	current := settingsService.GetSettings()
 
+	overlayService, err := overlay.NewService(current.OverlayEnabled, current.OverlayHotkey)
+	if err != nil {
+		fatal("start overlay service", err)
+	}
+
+	mediaService := media.NewService()
+
 	var trayController *tray.Controller
 
 	services := []application.Service{
@@ -540,6 +570,7 @@ func main() {
 		application.NewService(sourcesService),
 		application.NewService(searchService),
 		application.NewService(updateService),
+		application.NewService(saveBackupService),
 		application.NewService(metadataService),
 		application.NewService(discoveryService),
 		application.NewService(discordService),
@@ -553,6 +584,8 @@ func main() {
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
+		application.NewService(overlayService),
+		application.NewService(mediaService),
 	}
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)
@@ -561,7 +594,7 @@ func main() {
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
 		Windows: application.WindowsOptions{
-			AdditionalBrowserArgs: browserArgs(current.HardwareAcceleration),
+			AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: singleInstanceID,
@@ -583,7 +616,7 @@ func main() {
 		Services: services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: metadataService.Middleware,
+			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware),
 		},
 		Mac: application.MacOptions{
 			// С включённым сворачиванием в трей приложение обязано пережить
@@ -615,7 +648,9 @@ func main() {
 
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
+	chatDesktop.SetSuppress(overlayService.Visible)
 	defer chatDesktop.Close()
+	overlayService.Attach(wails)
 	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
 	if err != nil {
 		fatal("start autostart service", err)
@@ -641,6 +676,9 @@ func main() {
 		return trayController.Apply(next.MinimizeToTray)
 	}); err != nil {
 		fatal("register tray applier", err)
+	}
+	if err := settingsService.AddApplier(overlayService.Apply); err != nil {
+		fatal("register overlay applier", err)
 	}
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
@@ -850,5 +888,5 @@ func windowTitle() string {
 	if devmock.Enabled {
 		return "Typhon [devmock]"
 	}
-	return "Typhon"
+	return "Typhon" + qaTitleSuffix
 }

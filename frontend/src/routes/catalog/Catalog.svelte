@@ -4,6 +4,7 @@
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
+  import { latestRunner, serialQueue } from '../../lib/catalog/serial';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
@@ -25,10 +26,13 @@
   import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
+  import { canPlay } from '../../lib/library/launch';
   import {
     compatOnlyWorking,
+    isCancelledRequest,
     queryCatalogGames,
     type CatalogGame,
+    type CatalogQuery,
     type CompatInfo,
     type GenreFacet,
     type Source,
@@ -39,7 +43,7 @@
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo } from '../../lib/stores/metadata';
-  import { currentRouteKey, navigate, recallRoute, stashRoute } from '../../lib/stores/router';
+  import { currentRouteKey, navigate, recallRoute, route, stashRoute } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
@@ -97,7 +101,7 @@
   let sourceState = restored?.sourceState;
   let snapshot = $state(restored?.snapshot ?? '');
 
-  let search = $state(restored?.search ?? '');
+  let search = $state(restored?.search ?? get(route).params.q ?? '');
   let genre = $state(restored?.genre ?? '');
   let sort = $state<Sort>(restored?.sort ?? 'auto');
   let compatOnly = $state(restored?.compatOnly ?? false);
@@ -149,6 +153,7 @@
   }
 
   let token = 0;
+  let catalogAbort = new AbortController();
   let debounce: ReturnType<typeof setTimeout> | undefined;
   let identityRefreshKey = '';
   let identityRefreshRunning = false;
@@ -161,6 +166,7 @@
     clearTimeout(debounce);
     token++;
     reloadToken++;
+    catalogAbort.abort();
     stashRoute(routeKey, 'catalog', {
       revision, offline, incomplete, platform, kind, facets, platforms,
       sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
@@ -186,6 +192,8 @@
     return map;
   });
 
+  const playableIds = $derived(new Set($installedGames.filter(canPlay).map((game) => game.id)));
+
   const libraryByGame = $derived.by(() => {
     const map = new Map<string, string>();
     for (const game of $libraryGames) {
@@ -210,6 +218,7 @@
   async function fetchPage(next: number) {
     const current = ++token;
     const requestedSources = get(sources);
+    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
     loading = true;
     appending = next > 1;
     try {
@@ -224,8 +233,8 @@
         pageSize,
       };
       const continuation = await loadCatalogContinuation(
-        request, items, queryCatalogGames,
-        () => prefetch.take(JSON.stringify(request), () => queryCatalogGames(request)),
+        request, items, load,
+        () => prefetch.take(JSON.stringify(request), () => load(request)),
         () => current === token,
         offline,
       );
@@ -248,10 +257,10 @@
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
       if (!offline && items.length < total) {
         const upcoming = { ...request, page: page + 1, revision, snapshot };
-        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
     } catch (err) {
-      if (current !== token) return;
+      if (current !== token || isCancelledRequest(err)) return;
       backendOutdated = errorCode(err) === "catalog.backend_outdated";
       prefetch.clear();
       if (next === 1) {
@@ -278,6 +287,8 @@
     if (!ready) return;
     const active = ++reloadToken;
     token++;
+    catalogAbort.abort();
+    catalogAbort = new AbortController();
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
@@ -354,7 +365,9 @@
     hideNotInterested = preferences.hideNotInterested;
   }
 
-  async function preferencesChanged() {
+  const preferenceWrites = serialQueue();
+
+  const applyPreferences = latestRunner(() => preferenceWrites(async () => {
     preferenceBusy = true;
     try {
       const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
@@ -367,22 +380,27 @@
       restoreChoices();
       toast(msg('games.recommendationError'), 'danger');
     } finally { preferenceBusy = false; }
+  }));
+
+  function preferencesChanged() {
+    return applyPreferences();
   }
 
   function isDismissed(game: CatalogGame) {
     return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
   }
 
-  async function dismiss(game: CatalogGame, on = true) {
-    if (preferenceBusy) return;
-    preferenceBusy = true;
-    try {
-      await setNotInterested(game.id, on);
-      preferences = await getRecommendationPreferences();
-      lastDismissed = on ? { id: game.id, title: game.title } : null;
-      await reload();
-    } catch { toast(msg('games.recommendationError'), 'danger'); }
-    finally { preferenceBusy = false; }
+  function dismiss(game: CatalogGame, on = true) {
+    return preferenceWrites(async () => {
+      preferenceBusy = true;
+      try {
+        await setNotInterested(game.id, on);
+        preferences = await getRecommendationPreferences();
+        lastDismissed = on ? { id: game.id, title: game.title } : null;
+        await reload();
+      } catch { toast(msg('games.recommendationError'), 'danger'); }
+      finally { preferenceBusy = false; }
+    });
   }
 
   async function undoDismissal() {
@@ -399,6 +417,7 @@
     loading = true;
     appending = false;
     prefetch.clear();
+    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
     try {
       const request = {
         ...personalQuery(), revision, search, genre, platform, kind, sort,
@@ -406,8 +425,8 @@
         page: targetPage, pageSize,
       };
       const prefix = validateSnapshot
-        ? await refreshCatalogSnapshot(request, items, compatByGame, queryCatalogGames, () => current === token, offline)
-        : await reloadCatalogPrefix(request, targetPage, queryCatalogGames, () => current === token);
+        ? await refreshCatalogSnapshot(request, items, compatByGame, load, () => current === token, offline)
+        : await reloadCatalogPrefix(request, targetPage, load, () => current === token);
       if (current !== token) return;
       sourceState = get(sources);
       items = prefix.items;
@@ -435,7 +454,7 @@
           page: page + 1,
           pageSize,
         };
-        prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming));
+        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
     } catch {
       if (current === token) prefetch.clear();
@@ -462,7 +481,7 @@
 
   function onSearch() {
     clearTimeout(debounce);
-    debounce = setTimeout(reload, 250);
+    debounce = setTimeout(() => void reload(false), 350);
   }
 
   function onSort(value: Sort) {
@@ -560,7 +579,7 @@
     <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
   </div>
 
-  <fieldset class="filter-row" disabled={preferenceBusy || !ready}>
+  <fieldset class="filter-row" disabled={!ready}>
     <div class="chips">
       {#each chips as label (label)}
         <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
@@ -678,7 +697,7 @@
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={catalogMeta(shown)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
-            onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
+            onplay={playableIds.has(installedByGame.get(game.id) ?? '') ? () => toggleRun(installedByGame.get(game.id) ?? '') : undefined}
           >
             {#snippet footer()}
               <span class="status" class:on={isInstalled}>

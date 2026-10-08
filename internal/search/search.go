@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strings"
@@ -68,7 +69,7 @@ type installedGames interface {
 }
 
 type gameCatalog interface {
-	BrowseGames(catalog.GameQuery) (catalog.GamePage, error)
+	BrowseGames(context.Context, catalog.GameQuery) (catalog.GamePage, error)
 }
 
 type releaseIndex interface {
@@ -95,7 +96,7 @@ type query struct {
 	normalized string
 }
 
-func (s *Service) Search(raw string) (Result, error) {
+func (s *Service) Search(ctx context.Context, raw string) (Result, error) {
 	trimmed := strings.Join(strings.Fields(raw), " ")
 	result := Result{Query: trimmed, Games: []GameHit{}, Releases: []ReleaseHit{}}
 	if len([]rune(trimmed)) < minQueryLen {
@@ -105,7 +106,7 @@ func (s *Service) Search(raw string) (Result, error) {
 
 	installed := s.installed()
 	entries := map[string]*entry{}
-	total, err := s.collectCatalog(entries, q)
+	total, err := s.collectCatalog(ctx, entries, q)
 	if err != nil {
 		return result, err
 	}
@@ -136,11 +137,11 @@ func (s *Service) installed() []library.Game {
 	return s.library.GetInstalledGames()
 }
 
-func (s *Service) collectCatalog(entries map[string]*entry, q query) (int, error) {
+func (s *Service) collectCatalog(ctx context.Context, entries map[string]*entry, q query) (int, error) {
 	if s.catalog == nil {
 		return 0, errors.New("catalog backend unavailable")
 	}
-	page, err := s.catalog.BrowseGames(catalog.GameQuery{Search: q.raw, Kind: "all", Page: 1, PageSize: catalogScan, Sort: "title"})
+	page, err := s.catalog.BrowseGames(ctx, catalog.GameQuery{Search: q.raw, Kind: "all", Page: 1, PageSize: catalogScan, Sort: "title"})
 	if err != nil {
 		return 0, err
 	}

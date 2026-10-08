@@ -3,21 +3,15 @@ package asset
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/sha256"
 	"debug/pe"
-	"encoding/hex"
 	"os"
 	"testing"
 )
 
 func TestEmbeddedBridgeMatchesSources(t *testing.T) {
-	hash := sha256.New()
-	for _, path := range []string{"../../../cmd/installguard/main_windows.go", "../guard_windows.go", "../job_windows.go", "../policy.go", "../options_windows.go", "../checklist_wine_windows.go", "../../../go.mod", "../../../go.sum", "generate.go"} {
-		source, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		hash.Write(source)
+	want, err := SourceHash("../../..")
+	if err != nil {
+		t.Fatal(err)
 	}
 	r, err := gzip.NewReader(bytes.NewReader(helper))
 	if err != nil {
@@ -25,7 +19,7 @@ func TestEmbeddedBridgeMatchesSources(t *testing.T) {
 	}
 	//nolint:errcheck // read-only in-memory/file reader cleanup cannot affect the result.
 	defer r.Close()
-	if r.Comment != "source-sha256:"+hex.EncodeToString(hash.Sum(nil)) {
+	if r.Comment != "source-sha256:"+want {
 		t.Fatal("stale Win32 bridge: run go generate ./internal/installguard/asset")
 	}
 	path, cleanup, err := Extract(t.TempDir())

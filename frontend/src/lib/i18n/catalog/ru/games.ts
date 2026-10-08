@@ -135,6 +135,7 @@ export const games = {
   'games.actionStatus': 'Статус: {status}',
   'games.actionRemoveLibrary': 'Удалить из библиотеки',
   'games.actionOpenSaves': 'Открыть сохранения',
+  'games.actionSavesBackups': 'Сохранения…',
   'games.actionVerify': 'Проверить файлы',
   'games.actionMove': 'Переместить на другой диск',
   'games.actionLanUnshare': 'Не раздавать в локальной сети',

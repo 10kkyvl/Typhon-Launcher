@@ -142,3 +142,17 @@ func TestLiveKeychainRoundTrip(t *testing.T) {
 		t.Fatalf("Load after Delete = %v, want ErrNoCredential", err)
 	}
 }
+
+func TestNamedKeychainStoreUsesItsOwnItem(t *testing.T) {
+	store, err := NewNamedCredentialStore("Typhon Launcher Proxy")
+	if err != nil {
+		t.Fatalf("NewNamedCredentialStore() error = %v", err)
+	}
+	kc, ok := store.(keychainStore)
+	if !ok {
+		t.Fatalf("store is %T, want keychainStore", store)
+	}
+	if kc.service != "Typhon Launcher Proxy" || kc.service == keychainService {
+		t.Fatalf("service = %q, want the requested name and not the account item", kc.service)
+	}
+}

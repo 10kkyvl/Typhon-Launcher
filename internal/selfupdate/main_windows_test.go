@@ -15,6 +15,9 @@ import (
 // directory is a temporary build path: without this, running the suite would
 // point the next installer run at a directory that no longer exists.
 func TestMain(m *testing.M) {
+	if mode := os.Getenv(applyHelperEnv); mode != "" {
+		os.Exit(runApplyHelper(mode))
+	}
 	installDirKey = `Software\Typhon-test-suite`
 	code := m.Run()
 	if err := registry.DeleteKey(registry.CURRENT_USER, installDirKey); err != nil && !os.IsNotExist(err) {

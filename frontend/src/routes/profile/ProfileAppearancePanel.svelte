@@ -7,6 +7,8 @@
   import { ArrowDown, ArrowUp, Upload, X, RotateCcw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import { removeCoverPrompt, resetProfileAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { SHOWCASE_KINDS, type ProfileSettings, type AvatarImage } from '../../lib/services/account';
@@ -38,6 +40,7 @@
   let error = $state('');
   let alive = true;
   let sequence = 0;
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => void } | null>(null);
   const owner = $currentUser?.id;
   const disabled = $derived(busy || reading || cropOpen || $savingProfile || $isOffline);
   $effect(() => onpreview({ ...draft, appearance: { ...appearance } }));
@@ -129,7 +132,7 @@
       <p class="hint">{msg('profile.coverHint')}</p>
       {#if appearance.coverUrl}
         {#if originalSource}<Button size="sm" variant="ghost" onclick={() => { cropSource = originalSource; cropOpen = true; }}>{msg('profile.editCrop')}</Button>{/if}
-        <Button size="sm" variant="ghost" onclick={removeCover}>{msg('profile.removeCover')}</Button>
+        <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover })}>{msg('profile.removeCover')}</Button>
       {/if}
     </section>
     <section>
@@ -159,7 +162,7 @@
         <div class="showcase-row"><span>{showcaseLabel(kind)}</span><Toggle label={showcaseLabel(kind)} checked={false} disabled={disabled} onchange={(v) => toggle(kind, v)} /></div>
       {/each}
     </section>
-    <Button size="sm" variant="ghost" onclick={reset}><RotateCcw size="1.4rem" />{msg('profile.reset')}</Button>
+    <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: resetProfileAppearancePrompt(), run: reset })}><RotateCcw size="1.4rem" />{msg('profile.reset')}</Button>
   </fieldset>
   </div>
   <div class="foot">
@@ -171,6 +174,9 @@
 </aside>
 {#if cropOpen}
   <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} />
+{/if}
+{#if pending}
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
 <style>
   aside { width: 30rem; flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.8rem; align-self: start; position: sticky; top: 1.6rem; max-height: calc(100dvh - 12rem); display: flex; flex-direction: column; overflow: hidden; }

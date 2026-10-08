@@ -19,6 +19,8 @@ export const profile = {
   'profile.coverInvalid': 'Выберите JPG, PNG или WebP до 8 МБ.',
   'profile.coverDecode': 'Не удалось прочитать изображение. Выберите другой файл.',
   'profile.removeCover': 'Убрать обложку',
+  'profile.removeCoverConfirm': 'Убрать обложку? Изменение применится после сохранения.',
+  'profile.resetConfirm': 'Сбросить оформление профиля к стандартному? Изменение применится после сохранения.',
   'profile.showcases': 'Витрины',
   'profile.showcaseEmpty': 'Пока нет игр для этой витрины',
   'profile.privacy': 'Приватность профиля',

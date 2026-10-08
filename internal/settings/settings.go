@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -41,6 +45,27 @@ const (
 	KeepPreviousFirstLaunch = "first_launch"
 	KeepPreviousDay         = "24h"
 
+	DefaultSaveBackupLimit = 5
+	MinSaveBackupLimit     = 1
+	MaxSaveBackupLimit     = 50
+
+	NetworkDirect    = "direct"
+	NetworkInterface = "interface"
+	NetworkProxy     = "proxy"
+
+	ProxySOCKS5 = "socks5"
+	ProxyHTTP   = "http"
+
+	OverlayHotkeyAltBacktick = "Alt+`"
+	OverlayHotkeyShiftF1     = "Shift+F1"
+	OverlayHotkeyShiftF2     = "Shift+F2"
+	OverlayHotkeyCtrlShiftO  = "Ctrl+Shift+O"
+
+	maxNetworkInterfaceLen = 256
+	maxProxyHostLen        = 253
+	maxProxyLabelLen       = 63
+	maxProxyUsernameLen    = 255
+
 	LibraryFolderName = "TyphonLibrary"
 
 	// CurrentTelemetryConsent is the version of the consent prompt this build
@@ -69,7 +94,22 @@ var (
 	ErrLibraryPathRelative  = uierr.New("settings.library_path_relative", "путь библиотеки должен быть абсолютным")
 	ErrLibraryPathRoot      = uierr.New("settings.library_path_root", "библиотека не может быть корнем диска")
 	ErrLibraryParentEmpty   = uierr.New("settings.library_parent_empty", "не выбрана папка для библиотеки")
+
+	ErrNetworkModeInvalid       = uierr.New("settings.network_mode_invalid", "неизвестный режим сети")
+	ErrNetworkInterfaceRequired = uierr.New("settings.network_interface_required", "не выбран сетевой адаптер")
+	ErrNetworkInterfaceInvalid  = uierr.New("settings.network_interface_invalid", "недопустимое имя сетевого адаптера")
+	ErrProxyTypeInvalid         = uierr.New("settings.proxy_type_invalid", "неизвестный тип прокси")
+	ErrProxyHostRequired        = uierr.New("settings.proxy_host_required", "не указан адрес прокси")
+	ErrProxyHostInvalid         = uierr.New("settings.proxy_host_invalid", "недопустимый адрес прокси")
+	ErrProxyPortInvalid         = uierr.New("settings.proxy_port_invalid", "порт прокси должен быть от 1 до 65535")
+	ErrProxyUsernameInvalid     = uierr.New("settings.proxy_username_invalid", "недопустимое имя пользователя прокси")
+
+	ErrOverlayHotkeyInvalid = uierr.New("settings.overlay_hotkey_invalid", "недопустимая клавиша оверлея")
 )
+
+func OverlayHotkeys() []string {
+	return []string{OverlayHotkeyAltBacktick, OverlayHotkeyShiftF1, OverlayHotkeyShiftF2, OverlayHotkeyCtrlShiftO}
+}
 
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
 const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
@@ -101,6 +141,7 @@ type Settings struct {
 	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
 	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
 	InstallSkipExtras      bool    `json:"installSkipExtras"`
+	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
 	DesktopShortcuts       bool    `json:"desktopShortcuts"`
 
 	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
@@ -110,7 +151,20 @@ type Settings struct {
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
+	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
+	SaveBackupLimit        int  `json:"saveBackupLimit"`
+
 	LANSharing bool `json:"lanSharing"`
+
+	NetworkMode      string `json:"networkMode"`
+	NetworkInterface string `json:"networkInterface"`
+	ProxyType        string `json:"proxyType"`
+	ProxyHost        string `json:"proxyHost"`
+	ProxyPort        int    `json:"proxyPort"`
+	ProxyUsername    string `json:"proxyUsername"`
+
+	OverlayEnabled bool   `json:"overlayEnabled"`
+	OverlayHotkey  string `json:"overlayHotkey"`
 
 	PresenceStatus   string `json:"presenceStatus"`
 	PresenceAutoAway bool   `json:"presenceAutoAway"`
@@ -170,6 +224,7 @@ func Defaults() Settings {
 		VerifyAfterInstall:     true,
 		InstallSkipShortcuts:   true,
 		InstallSkipExtras:      true,
+		InstallVerifyRepack:    false,
 		DesktopShortcuts:       true,
 
 		UpdateCheckAutomatically: true,
@@ -179,7 +234,16 @@ func Defaults() Settings {
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
 
+		SaveBackupAfterSession: true,
+		SaveBackupLimit:        DefaultSaveBackupLimit,
+
 		LANSharing: false,
+
+		NetworkMode: NetworkDirect,
+		ProxyType:   ProxySOCKS5,
+
+		OverlayEnabled: true,
+		OverlayHotkey:  OverlayHotkeyAltBacktick,
 
 		PresenceStatus:   PresenceOnline,
 		PresenceAutoAway: true,
@@ -305,6 +369,100 @@ func legacyLibraryPath(gamesPath string) string {
 	return root
 }
 
+func validProxyHost(host string) bool {
+	if host == "" || len(host) > maxProxyHostLen {
+		return false
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.Zone() == ""
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > maxProxyLabelLen || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func hasControl(text string) bool {
+	return strings.IndexFunc(text, unicode.IsControl) >= 0
+}
+
+// sanitizeNetwork never repairs a value: a mode or an address that is not
+// understood must stop the save, because falling back to direct would send
+// torrent traffic outside the tunnel the user asked for.
+func sanitizeNetwork(s Settings) (Settings, error) {
+	s.NetworkInterface = strings.TrimSpace(s.NetworkInterface)
+	s.ProxyHost = strings.TrimSpace(s.ProxyHost)
+
+	switch s.NetworkMode {
+	case NetworkDirect, NetworkInterface, NetworkProxy:
+	default:
+		return Settings{}, fmt.Errorf("%w: %q", ErrNetworkModeInvalid, s.NetworkMode)
+	}
+
+	if s.NetworkMode == NetworkInterface && s.NetworkInterface == "" {
+		return Settings{}, ErrNetworkInterfaceRequired
+	}
+	if len(s.NetworkInterface) > maxNetworkInterfaceLen || hasControl(s.NetworkInterface) || !utf8.ValidString(s.NetworkInterface) {
+		return Settings{}, ErrNetworkInterfaceInvalid
+	}
+
+	switch s.ProxyType {
+	case ProxySOCKS5, ProxyHTTP:
+	case "":
+		if s.NetworkMode == NetworkProxy {
+			return Settings{}, ErrProxyTypeInvalid
+		}
+	default:
+		return Settings{}, fmt.Errorf("%w: %q", ErrProxyTypeInvalid, s.ProxyType)
+	}
+
+	if s.ProxyHost == "" && s.NetworkMode == NetworkProxy {
+		return Settings{}, ErrProxyHostRequired
+	}
+	if s.ProxyHost != "" && !validProxyHost(s.ProxyHost) {
+		return Settings{}, ErrProxyHostInvalid
+	}
+
+	if s.ProxyPort < 0 || s.ProxyPort > 65535 || (s.ProxyPort == 0 && s.NetworkMode == NetworkProxy) {
+		return Settings{}, ErrProxyPortInvalid
+	}
+
+	user, err := NormalizeProxyUsername(s.ProxyUsername)
+	if err != nil {
+		return Settings{}, err
+	}
+	s.ProxyUsername = user
+	return s, nil
+}
+
+// NormalizeProxyUsername is the one rule for a proxy login, shared by the
+// settings save and by whoever takes a password for a login that is not saved
+// yet: what it refuses here, the save would refuse too.
+func NormalizeProxyUsername(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if len(name) > maxProxyUsernameLen || hasControl(name) ||
+		strings.ContainsRune(name, ':') || !utf8.ValidString(name) {
+		return "", ErrProxyUsernameInvalid
+	}
+	return name, nil
+}
+
+func sanitizeOverlay(s Settings) error {
+	if !slices.Contains(OverlayHotkeys(), s.OverlayHotkey) {
+		return fmt.Errorf("%w: %q", ErrOverlayHotkeyInvalid, s.OverlayHotkey)
+	}
+	return nil
+}
+
 func sanitize(s Settings) (Settings, error) {
 	if s.AccentColor != "" {
 		if len(s.AccentColor) != 7 || s.AccentColor[0] != '#' || strings.IndexFunc(s.AccentColor[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) >= 0 {
@@ -318,6 +476,13 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	s.LibraryPath = library
 	s = derivePaths(s)
+	s, err = sanitizeNetwork(s)
+	if err != nil {
+		return Settings{}, err
+	}
+	if err := sanitizeOverlay(s); err != nil {
+		return Settings{}, err
+	}
 	if s.UIScale < 0.9 || s.UIScale > 1.25 {
 		s.UIScale = 1
 	}
@@ -356,6 +521,12 @@ func sanitize(s Settings) (Settings, error) {
 	case KeepPreviousOff, KeepPreviousFirstLaunch, KeepPreviousDay:
 	default:
 		s.KeepPreviousVersion = KeepPreviousFirstLaunch
+	}
+	if s.SaveBackupLimit < MinSaveBackupLimit {
+		s.SaveBackupLimit = MinSaveBackupLimit
+	}
+	if s.SaveBackupLimit > MaxSaveBackupLimit {
+		s.SaveBackupLimit = MaxSaveBackupLimit
 	}
 	return s, nil
 }
@@ -493,32 +664,42 @@ func (s *Service) SaveSettings(next Settings) error {
 	copy(appliers, s.appliers)
 	s.mu.Unlock()
 
-	// The consent version only ever moves forward. Every other field here
-	// comes straight from a caller that may have assembled the struct without
-	// knowing this field exists, and a zero from such a caller would erase the
-	// record that the user was asked — after which the prompt reappears and
-	// the defaults apply again to somebody who already answered.
-	if next.TelemetryConsentVersion < prev.TelemetryConsentVersion {
-		next.TelemetryConsentVersion = prev.TelemetryConsentVersion
-	}
+	next = keepNewerConsent(next, prev)
 
-	for _, apply := range appliers {
+	for i, apply := range appliers {
 		if err := apply(prev, next); err != nil {
-			return fmt.Errorf("apply settings: %w", err)
+			return undoAppliers(fmt.Errorf("apply settings: %w", err), appliers[:i], prev, next)
 		}
 	}
 
-	next, subs, err := s.persist(next)
+	saved, subs, err := s.persist(next)
 	if err != nil {
-		return err
+		return undoAppliers(err, appliers, prev, next)
 	}
 	if app := application.Get(); app != nil {
-		app.Event.Emit("settings:updated", next)
+		app.Event.Emit("settings:updated", saved)
 	}
 	for _, notify := range subs {
-		notify(next)
+		notify(saved)
 	}
 	return nil
+}
+
+// An applier compares the pair it is handed and acts on what differs, so
+// handing it the pair reversed puts back what the forward call changed. Only
+// the appliers that returned nil are undone, newest first: one that failed
+// owns whatever it left behind.
+func undoAppliers(cause error, applied []func(prev, next Settings) error, prev, next Settings) error {
+	var failed []error
+	for i := len(applied) - 1; i >= 0; i-- {
+		if err := applied[i](next, prev); err != nil {
+			failed = append(failed, fmt.Errorf("undo settings: %w", err))
+		}
+	}
+	if len(failed) == 0 {
+		return cause
+	}
+	return errors.Join(append([]error{cause}, failed...)...)
 }
 
 // SaveConsent records the answer to the consent prompt together with the
@@ -542,6 +723,23 @@ func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
 	return s.GetSettings(), nil
 }
 
+// The consent version only ever moves forward. Every other field of a save
+// comes straight from a caller that may have assembled the struct without
+// knowing this field exists, and a zero from such a caller would erase the
+// record that the user was asked — after which the prompt reappears and the
+// defaults apply again to somebody who already answered. The two switches
+// are the answer that version belongs to, so they move with it: a version
+// raised over switches the caller never answered with would hand the newer
+// consent to whatever preselection that caller happened to hold.
+func keepNewerConsent(next, stored Settings) Settings {
+	if next.TelemetryConsentVersion < stored.TelemetryConsentVersion {
+		next.TelemetryConsentVersion = stored.TelemetryConsentVersion
+		next.AnonymousUsageStats = stored.AnonymousUsageStats
+		next.AnonymousDiagnostics = stored.AnonymousDiagnostics
+	}
+	return next
+}
+
 func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -549,6 +747,10 @@ func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
 	if s.path == "" {
 		return next, nil, errors.New("settings path unavailable")
 	}
+	// SaveSettings read the stored settings before it ran the appliers, and a
+	// consent answered while they ran is only visible here, under the lock
+	// that also publishes the write.
+	next = keepNewerConsent(next, s.current)
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return next, nil, fmt.Errorf("create config dir: %w", err)
 	}

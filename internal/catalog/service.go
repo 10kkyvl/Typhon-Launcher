@@ -189,6 +189,18 @@ func (s *Service) addToIndexLocked(game Game) {
 	s.epoch++
 }
 
+// updateIndexAtLocked refreshes the index entry at pos after s.games[pos] was
+// overwritten in place (a durable catalog page merge or a link-reconciliation
+// pass touching an existing record). Unlike rebuildLocked it does not walk or
+// re-canonicalize the whole catalog — only the postings for pos change — but
+// it still moves the epoch: the record's new content can change matching
+// outcomes exactly like an edit through rebuildLocked would.
+func (s *Service) updateIndexAtLocked(pos int, old Game) {
+	s.idx.games = s.games
+	s.idx.update(pos, old)
+	s.epoch++
+}
+
 // Epoch — версия того, от чего зависит матчинг: содержимого каталога и
 // активного словаря названий. Числа сворачиваются в одно через FNV-1a, чтобы
 // в релизе хранилось одно поле, а не два: сравнивается оно только на

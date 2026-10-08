@@ -38,6 +38,9 @@ func (s *Service) run(ctx context.Context, id string) {
 	if err != nil {
 		s.fail(id, err)
 	}
+	if external(item.Type) {
+		s.releaseWorkerFiles(id, err)
+	}
 }
 
 func (s *Service) runPortable(ctx context.Context, id string, item Installation) error {
@@ -105,10 +108,9 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 
 func (s *Service) runInstaller(ctx context.Context, id string, item Installation) error {
 	// Брокер поднимается заранее (HandleDownloadStarted), пока лаунчер ещё не
-	// знает, какой веткой пойдёт эта установка: только runSilent реально
-	// отдаёт ему задание (brokerFor), а интерактивная ветка вообще к нему не
-	// обращается. Освобождать его нужно на любом выходе из этой функции, а
-	// не только из silent-ветки — иначе интерактивный репак, для которого
+	// знает, какой веткой пойдёт эта установка: задание ему отдаёт и тихая, и
+	// интерактивная ветка (brokerFor). Освобождать его нужно на любом выходе
+	// из этой функции, а не только из одной ветки — иначе репак, для которого
 	// брокер подняли заранее, держит процесс с правами администратора до
 	// закрытия лаунчера.
 	defer s.DropBroker(item.DownloadID)
@@ -121,15 +123,15 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	beforeEntries, err := readUninstallEntries()
+	beforeEntries, err := s.readEntries()
 	if err != nil {
 		return err
 	}
-	shell := s.shellBaseline(ctx, id, cfg)
+	shell := s.shellBaseline(ctx, id)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if item.Silent && item.Destination != "" {
+	if runsSilently(item) {
 		if err := s.rememberInstallerDestination(id, item.Destination); err != nil {
 			return err
 		}
@@ -142,15 +144,23 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		return err
 	}
 
+	engine := item.Engine
+	if item.Type == TypeMsiInstaller {
+		engine = EngineMsi
+	}
+	handoff := s.brokerFor(item.DownloadID)
 	for _, installer := range installerChain(item) {
-		spec := runSpec{Path: installer, Dir: item.WorkingDir}
-		if item.Type == TypeMsiInstaller {
-			msiexec, err := systemExecutable("msiexec.exe")
-			if err != nil {
-				return err
-			}
-			spec = runSpec{Path: msiexec, Args: []string{"/i", installer}, Dir: item.WorkingDir}
+		spec, err := interactiveRunSpec(engine, installer, item.WorkingDir)
+		if err != nil {
+			return err
 		}
+		spec.ID = item.ID
+		spec.Engine = engine
+		spec.InstallerPath = installer
+		// Shell не передаётся: каталог игры мастер выбирает пользователь, и до
+		// конца установки он неизвестен, а воркеру цель уборки ярлыков нужна в
+		// задании. Ярлыки после интерактивной установки убирает лаунчер.
+		spec = s.bindWorker(spec, handoff, nil)
 
 		s.setExternal(id, true)
 		code, err := s.runner.run(ctx, spec)
@@ -158,9 +168,9 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 		if err != nil {
 			return err
 		}
-		if code != 0 && code != rebootExitCode {
+		if exitErr := exitError(item.Engine, code); exitErr != nil {
 			slog.Error("installer exit code", "id", id, "path", installer, "code", code)
-			return errInstallerFail
+			return exitErr
 		}
 	}
 
@@ -168,7 +178,7 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 	if err != nil {
 		return err
 	}
-	dirs := diffSnapshot(before, after)
+	dirs := shallowest(append(diffSnapshot(before, after), s.entryDirs(id, item, roots, beforeEntries)...))
 	candidates, err := gather(ctx, dirs, item.Name)
 	if err != nil {
 		return err
@@ -179,41 +189,38 @@ func (s *Service) runInstaller(ctx context.Context, id string, item Installation
 			return err
 		}
 	}
-	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+	if err := s.setRemoval(id, dest, before.withUnseen(dest), beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest)
+	s.dropShortcuts(ctx, id, shell, dest, cfg.InstallSkipShortcuts, nil)
 	return s.waitForUser(id, candidates)
 }
 
 func (s *Service) runSilent(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry, shell shellSnapshot) error {
 	logPath := s.installerLogPath(id)
-	statePath := s.workerStatePath(id)
-	infPath := s.workerInfPath(id)
-	cancelPath := s.workerCancelPath(id)
 	opts := installOptionsFrom(s.config())
 	chain := installerChain(item)
 	// DropBroker освобождается один раз для всей установки в runInstaller —
 	// дальше по цепочке установщиков этот же брокер ещё нужен.
 	handoff := s.brokerFor(item.DownloadID)
-	specs := make([]runSpec, 0, len(chain))
-	for _, installer := range chain {
-		spec, err := silentSpec(item, installer, logPath, opts)
-		if err != nil {
-			return err
-		}
-		spec.StatePath = statePath
-		spec.InfPath = infPath
-		spec.CancelPath = cancelPath
-		spec.Broker = handoff
-		specs = append(specs, spec)
+	shared, err := newShellHandoff(shell, opts.SkipShortcuts)
+	if err != nil {
+		slog.Warn("shortcut cleanup stays with the launcher", "id", id, "error", err)
+	}
+	steps, err := s.chainSteps(item, chain, 0, logPath, opts, handoff, shared)
+	if err != nil {
+		return err
+	}
+	workers := make([]*shellHandoff, 0, len(steps))
+	for _, step := range steps {
+		workers = append(workers, step.spec.Shell)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
 		return err
 	}
 
-	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath)
-	runErr := s.runSilentChain(ctx, id, item, chain, specs, logPath)
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath, opts.VerifyRepack)
+	runErr := s.runSilentChain(ctx, id, item, steps, logPath)
 	stop()
 	if runErr != nil {
 		s.discardSilent(item, before, runErr)
@@ -222,45 +229,181 @@ func (s *Service) runSilent(ctx context.Context, id string, item Installation, r
 
 	dropInstallerLog(logPath)
 
-	dest, err := s.silentDestination(ctx, id, item, roots, before)
+	dest, err := s.silentDestination(ctx, id, item, roots, before, beforeEntries)
 	if err != nil {
 		s.discardSilent(item, before, err)
 		return err
 	}
-	if err := s.setRemoval(id, dest, before, beforeEntries, item.Name); err != nil {
+	seen := before
+	if dest != item.Destination {
+		seen = before.withUnseen(dest)
+	}
+	if err := s.setRemoval(id, dest, seen, beforeEntries, item.Name); err != nil {
 		return err
 	}
-	s.dropShortcuts(ctx, id, shell, dest)
+	s.dropShortcuts(ctx, id, shell, dest, opts.SkipShortcuts, workers)
 	return s.finalize(ctx, id)
+}
+
+type chainStep struct {
+	number int
+	path   string
+	spec   runSpec
+}
+
+// chainSteps строит задания для установщиков chain начиная с индекса from:
+// общий кусок для первого запуска (runSilent) и для продолжения цепочки после
+// перезапуска лаунчера (finishResumed), чтобы пути состояния, брокер и ярлыки
+// задавались в одном месте.
+func (s *Service) chainSteps(item Installation, chain []string, from int, logPath string, opts installOptions, handoff *brokerHandoff, shared *shellHandoff) ([]chainStep, error) {
+	steps := make([]chainStep, 0, len(chain)-from)
+	for i := from; i < len(chain); i++ {
+		spec, err := silentSpec(item, chain[i], logPath, opts)
+		if err != nil {
+			return nil, err
+		}
+		spec = s.bindWorker(spec, handoff, shared.forInstaller())
+		steps = append(steps, chainStep{number: i + 1, path: chain[i], spec: spec})
+	}
+	return steps, nil
+}
+
+// bindWorker привязывает задание к повышенному воркеру: файлы состояния,
+// отмены и разведки, брокер и уборка ярлыков. Единственное место, где они
+// задаются, — и для тихой цепочки, и для ручной установки (runInstaller),
+// иначе запуск, которому понадобился UAC, не находит, через что говорить с
+// воркером (errWorkerStatePath).
+func (s *Service) bindWorker(spec runSpec, handoff *brokerHandoff, shell *shellHandoff) runSpec {
+	spec.StatePath = s.workerStatePath(spec.ID)
+	spec.InfPath = s.workerInfPath(spec.ID)
+	spec.CancelPath = s.workerCancelPath(spec.ID)
+	spec.Broker = handoff
+	spec.Shell = shell
+	return spec
+}
+
+// runsSilently — единственное правило, по которому установка идёт тихой
+// веткой: им решают и runInstaller, и ServiceStartup, чтобы воркер ручной
+// установки после перезапуска не приняли за тихий.
+func runsSilently(item Installation) bool {
+	return item.Silent && item.Destination != ""
+}
+
+// beginChainStep записывает номер установщика цепочки до его запуска: если
+// лаунчер умрёт посреди шага, после перезапуска только по этому номеру видно,
+// остались ли за ним ещё установщики. Файл состояния воркера один на всю
+// цепочку, поэтому результат предыдущего шага убирается раньше номера: иначе
+// смерть между двумя записями оставила бы чужой Done рядом с новым номером.
+func (s *Service) beginChainStep(id string, number int) error {
+	if path := s.workerStatePath(id); path != "" {
+		if err := os.Remove(path); err != nil && !alreadyGone(err) {
+			return fmt.Errorf("remove worker state %s: %w", path, err)
+		}
+	}
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil {
+		s.mu.Unlock()
+		return errNotFound
+	}
+	if !active(item.Status) {
+		s.mu.Unlock()
+		return errUnavailable
+	}
+	prev := item.ChainStep
+	item.ChainStep = number
+	if err := s.persistLocked(); err != nil {
+		item.ChainStep = prev
+		s.mu.Unlock()
+		return wrapPersistError(err)
+	}
+	s.mu.Unlock()
+	return nil
 }
 
 // runSilentChain прогоняет установщики набора по очереди: дополнение GOG ставится
 // только поверх уже установленной игры, поэтому порядок из плана обязателен, а
 // первая же неудача останавливает цепочку.
-func (s *Service) runSilentChain(ctx context.Context, id string, item Installation, chain []string, specs []runSpec, logPath string) error {
-	for i, spec := range specs {
+func (s *Service) runSilentChain(ctx context.Context, id string, item Installation, steps []chainStep, logPath string) error {
+	track := len(installerChain(item)) > 1
+	for _, step := range steps {
+		if track {
+			if err := s.beginChainStep(id, step.number); err != nil {
+				return err
+			}
+		}
 		dropInstallerLog(logPath)
-		code, err := s.runner.run(ctx, spec)
+		code, err := s.runner.run(ctx, step.spec)
 		if err != nil {
 			return err
 		}
-		exitErr := exitError(item.Engine, code)
-		if exitErr == nil {
-			continue
-		}
-		done, logErr := installerLogSucceeded(item.Engine, logPath)
+		done, logErr := installerFinished(item.Engine, code, logPath)
 		if logErr != nil {
 			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 		}
 		if !done {
 			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
-				"path", chain[i], "code", code, "log", installerLogTail(logPath))
-			return exitErr
+				"path", step.path, "code", code, "log", installerLogTail(logPath))
+			return installerFailure(item.Engine, code, logPath)
 		}
-		// Установщики GOG падают при завершении уже после того, как файлы
-		// разложены: свой лог они при этом закрывают отметкой об успехе.
-		slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
-			"path", chain[i], "code", code)
+		if exitErr := exitError(item.Engine, code); exitErr != nil {
+			// Установщики GOG падают при завершении уже после того, как файлы
+			// разложены: свой лог они при этом закрывают отметкой об успехе.
+			slog.Warn("installer crashed after finishing", "id", id, "engine", string(item.Engine),
+				"path", step.path, "code", code)
+		}
+	}
+	return nil
+}
+
+var errResumedCancelled = errors.New("отмена запрошена до продолжения цепочки установщиков")
+
+// resumeChain вызывается, когда воркер подтвердил успех текущего установщика
+// уже после перезапуска лаунчера. Цепочка из одного установщика на этом
+// закончена. В длинной номер текущего шага читается из записи: нет номера
+// (старая запись) или он вне цепочки значит, что нельзя сказать, чем кончилась
+// установка, и объявлять её готовой нельзя. Остаток цепочки идёт тем же
+// runSilentChain, что и обычный запуск, но без снимков до установки: брокера
+// и общих ярлыков у такого продолжения нет.
+func (s *Service) resumeChain(ctx context.Context, id string, item Installation, logPath string) error {
+	chain := installerChain(item)
+	if len(chain) <= 1 {
+		return nil
+	}
+	if item.ChainStep < 1 || item.ChainStep > len(chain) {
+		return fmt.Errorf("%w: в цепочке %d установщиков, записан шаг %d", errChainStepUnknown, len(chain), item.ChainStep)
+	}
+	if item.ChainStep == len(chain) {
+		return nil
+	}
+	next := item.ChainStep
+	for i := next; i < len(chain); i++ {
+		info, err := os.Stat(chain[i])
+		if err != nil {
+			return fmt.Errorf("установщик %d из %d, %s: %w: %w", i+1, len(chain), chain[i], errChainInstallerMissing, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("установщик %d из %d, %s: %w: не обычный файл", i+1, len(chain), chain[i], errChainInstallerMissing)
+		}
+	}
+	if workerCancelRequested(s.workerCancelPath(id)) {
+		return errResumedCancelled
+	}
+	opts := installOptionsFrom(s.config())
+	steps, err := s.chainSteps(item, chain, next, logPath, opts, s.brokerFor(item.DownloadID), nil)
+	if err != nil {
+		return fmt.Errorf("установщик %d из %d: %w", next+1, len(chain), err)
+	}
+	slog.Warn("continuing installer chain after launcher restart", "id", id, "done", item.ChainStep, "total", len(chain))
+	stop := s.trackInstallSize(ctx, id, item.Destination, item.BytesTotal, logPath, opts.VerifyRepack)
+	err = s.runSilentChain(ctx, id, item, steps, logPath)
+	stop()
+	if err != nil {
+		failedAt := next + 1
+		if cur, ok := s.snapshot(id); ok && cur.ChainStep > failedAt {
+			failedAt = cur.ChainStep
+		}
+		return fmt.Errorf("установщик %d из %d: %w", failedAt, len(chain), err)
 	}
 	return nil
 }
@@ -274,17 +417,15 @@ func installerChain(item Installation) []string {
 }
 
 func installOptionsFrom(cfg settings.Settings) installOptions {
-	return installOptions{SkipShortcuts: cfg.InstallSkipShortcuts, SkipExtras: cfg.InstallSkipExtras}
+	return installOptions{SkipShortcuts: cfg.InstallSkipShortcuts, SkipExtras: cfg.InstallSkipExtras, VerifyRepack: cfg.InstallVerifyRepack}
 }
 
 // Снимок ярлыков берётся до запуска установщика: без него не отличить ярлык,
 // созданный установкой, от ярлыка пользователя, поэтому ошибка обхода отменяет
-// уборку целиком, а не разрешает удалять наугад.
-func (s *Service) shellBaseline(ctx context.Context, id string, cfg settings.Settings) shellSnapshot {
-	if !cfg.InstallSkipShortcuts {
-		return shellSnapshot{}
-	}
-	roots, err := shortcutRoots()
+// уборку целиком, а не разрешает удалять наугад. Берётся всегда, а не только
+// при InstallSkipShortcuts: ярлык сайта репака убирается независимо от неё.
+func (s *Service) shellBaseline(ctx context.Context, id string) shellSnapshot {
+	roots, err := shortcutRootsFn()
 	if err != nil {
 		slog.Error("resolve shortcut folders", "id", id, "error", err)
 		return shellSnapshot{}
@@ -298,13 +439,20 @@ func (s *Service) shellBaseline(ctx context.Context, id string, cfg settings.Set
 }
 
 // Ярлыки, созданные установщиком под UAC в общих каталогах, лаунчер удалить не
-// может: он работает без прав администратора. Это не повод считать установку
-// неудачной, поэтому ошибка только логируется.
-func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string) {
-	if !before.taken || dest == "" {
+// может: он работает без прав администратора. Если после каждого установщика
+// цепочки их убрал повышенный воркер, лаунчер чистит только свои каталоги;
+// общие каталоги берутся из того же задания, что ушло воркеру, и заново не
+// определяются. Это не повод считать установку неудачной, поэтому ошибка
+// только логируется: канала для предупреждений у задания установки нет.
+func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnapshot, dest string, game bool, workers []*shellHandoff) {
+	if !before.taken {
 		return
 	}
-	removed, err := cleanShellShortcuts(ctx, before, dest)
+	logShellReports(id, workerReports(workers))
+	if shared := delegatedRoots(workers); len(shared) > 0 {
+		before = before.without(shared)
+	}
+	removed, err := cleanShellShortcuts(ctx, before, dest, game)
 	if err != nil {
 		slog.Warn("remove installer shortcuts", "id", id, "dest", dest, "error", err)
 	}
@@ -316,7 +464,7 @@ func (s *Service) dropShortcuts(ctx context.Context, id string, before shellSnap
 // silentDestination доверяет заданному каталогу только после того, как убедился,
 // что установщик действительно в него писал: часть установщиков игнорирует
 // ключ каталога и ставит игру по своему пути, и тогда его надо найти по снимку.
-func (s *Service) silentDestination(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot) (string, error) {
+func (s *Service) silentDestination(ctx context.Context, id string, item Installation, roots []string, before fsSnapshot, beforeEntries map[string]uninstallEntry) (string, error) {
 	empty, err := dirEmpty(item.Destination)
 	if err != nil {
 		return "", err
@@ -328,7 +476,7 @@ func (s *Service) silentDestination(ctx context.Context, id string, item Install
 	if err != nil {
 		return "", err
 	}
-	dirs := diffSnapshot(before, after)
+	dirs := shallowest(append(diffSnapshot(before, after), s.entryDirs(id, item, roots, beforeEntries)...))
 	candidates, err := gather(ctx, dirs, item.Name)
 	if err != nil {
 		return "", err
@@ -372,7 +520,7 @@ func (s *Service) discardSilent(item Installation, before fsSnapshot, cause erro
 	}
 }
 
-func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string) func() {
+func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total int64, logPath string, verifyRepack bool) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	s.wg.Add(1)
 	done := make(chan struct{})
@@ -390,13 +538,17 @@ func (s *Service) trackInstallSize(ctx context.Context, id, dir string, total in
 				if ctx.Err() != nil {
 					return
 				}
-				if !verifying && installerLogVerifying(logPath) {
+				if verifyRepack && !verifying && installerLogVerifying(logPath) {
 					if err := s.setInstallerVerifying(id); err == nil {
 						verifying = true
 					}
 				}
 				size, err := DirSize(ctx, dir)
 				if err != nil {
+					// Каталог меняется под обходом (установщик создаёт и удаляет
+					// файлы): пропущенный замер — это тик без обновления, а не
+					// сбой установки, следующий тик замерит заново.
+					slog.Debug("measure install size", "id", id, "dir", dir, "error", err)
 					continue
 				}
 				s.updateProgress(id, Progress{BytesDone: size, BytesTotal: total})
@@ -425,6 +577,20 @@ func silentSpec(item Installation, installer, logPath string, opts installOption
 	}, nil
 }
 
+// interactiveRunSpec — запуск установщика без ключей тишины: общий для
+// лаунчера (runInstaller) и повышенного воркера (mainRunSpec), чтобы то, что
+// видит пользователь, не зависело от того, понадобились ли права администратора.
+func interactiveRunSpec(engine Engine, installer, dir string) (runSpec, error) {
+	if engine != EngineMsi {
+		return runSpec{Path: installer, Dir: dir, Interactive: true}, nil
+	}
+	msiexec, err := systemExecutable("msiexec.exe")
+	if err != nil {
+		return runSpec{}, err
+	}
+	return runSpec{Path: msiexec, Args: []string{"/i", installer}, Dir: dir, Interactive: true}, nil
+}
+
 func dirEmpty(dir string) (bool, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -445,10 +611,44 @@ func dropInstallerLog(path string) {
 	}
 }
 
+// installerFinished — единственное правило, по которому установщик считается
+// отработавшим: им решает и лаунчер (runSilentChain), и повышенный воркер,
+// прежде чем убирать ярлыки (workerShellCleanup).
+func installerFinished(engine Engine, code int, logPath string) (bool, error) {
+	if exitError(engine, code) == nil {
+		return true, nil
+	}
+	return installerLogSucceeded(engine, logPath)
+}
+
 // installerLogSucceeded отвечает на вопрос, разложил ли установщик файлы, когда
 // код возврата говорит об обратном: Inno закрывает свой лог отметкой об успехе
 // до кода возврата, и падение на выходе не отменяет уже сделанную установку.
 func installerLogSucceeded(engine Engine, path string) (bool, error) {
+	return innoLogContains(engine, path, innoSuccessMarker)
+}
+
+// installerFailure превращает неуспех тихой установки в ошибку: код возврата
+// Inno не отличает «установщик не умеет тишину» от обычного сбоя, это видно
+// только по логу, где мастер отказался переходить на следующую страницу.
+// Нечитаемый лог не отменяет сам неуспех, поэтому возвращается ошибка по коду.
+func installerFailure(engine Engine, code int, logPath string) error {
+	exitErr := exitError(engine, code)
+	if exitErr == nil {
+		return nil
+	}
+	refused, err := innoLogContains(engine, logPath, innoWizardRefusedMarker)
+	if err != nil {
+		slog.Warn("read installer log", "path", logPath, "error", err)
+		return exitErr
+	}
+	if refused {
+		return exitCodeError(errInstallerNeedsInteractive, engine, code)
+	}
+	return exitErr
+}
+
+func innoLogContains(engine Engine, path, marker string) (bool, error) {
 	if engine != EngineInno || path == "" {
 		return false, nil
 	}
@@ -459,7 +659,7 @@ func installerLogSucceeded(engine Engine, path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(decodeLogText(data), innoSuccessMarker), nil
+	return strings.Contains(decodeLogText(data), marker), nil
 }
 
 func installerLogTail(path string) string {
@@ -533,7 +733,7 @@ func (s *Service) setRemoval(id, destination string, before fsSnapshot, beforeEn
 		owned = !existed
 	}
 	uninstall, unknown := library.Uninstall{}, false
-	afterEntries, err := readUninstallEntries()
+	afterEntries, err := s.readEntries()
 	if err != nil {
 		slog.Error("read uninstall entries", "id", id, "error", err)
 		unknown = true
@@ -844,6 +1044,39 @@ func (s *Service) workerCancelPath(id string) string {
 	return workerCancelPath(s.store.dir, id)
 }
 
+func (s *Service) workerSpecFilePath(id string) string {
+	if s.store == nil || s.store.dir == "" {
+		return ""
+	}
+	return workerSpecFilePath(s.store.dir, id)
+}
+
+// workerFiles — всё, что лаунчер и воркер оставляют на диске ради одного
+// прогона. Пустые пути отбрасываются в removeWorkerFiles.
+func (s *Service) workerFiles(id string) []string {
+	return []string{s.workerSpecFilePath(id), s.workerStatePath(id), s.workerCancelPath(id), s.workerInfPath(id)}
+}
+
+// releaseWorkerFiles убирает файлы воркера, когда итог прогона уже в записи.
+// Остаются они в двух случаях: воркер не подтвердил остановку и мог не
+// закончить писать (по ним Retry и Cancel узнают, что он жив), либо запись ещё в
+// работе и после перезапуска её продолжат по этим файлам. Статус читается под
+// тем же замком, что и удаление: Retry не успеет занять запись между ними.
+func (s *Service) releaseWorkerFiles(id string, cause error) {
+	if errors.Is(cause, errInstallerNotConfirmedStopped) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil || transient(item.Status) {
+		return
+	}
+	if err := removeWorkerFiles(s.workerFiles(id)...); err != nil {
+		slog.Warn("remove worker files of a settled install", "id", id, "error", err)
+	}
+}
+
 func (s *Service) forceDestination(id, destination string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -957,3 +1190,17 @@ func pickInstallDir(dirs []string, candidates []Candidate) string {
 }
 
 var removeInstalledSource = os.RemoveAll
+
+// adoptJob заводит запись job для продолжения цепочки после перезапуска:
+// без неё Cancel не видел бы идущий установщик и объявил бы отмену над
+// процессом, который продолжает писать.
+func (s *Service) adoptJob(ctx context.Context, id string) (context.Context, func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.jobs[id] != nil {
+		return ctx, func() {}
+	}
+	jobCtx, cancel := context.WithCancel(ctx)
+	s.jobs[id] = &job{cancel: cancel}
+	return jobCtx, func() { s.endJob(id) }
+}

@@ -228,7 +228,7 @@ describe('release notes', () => {
     expect(get(store.releaseNotesHistory)).toHaveLength(2);
   });
 
-  it('lets the what-is-new window replace the success toast', async () => {
+  it('announces a successful update with the outcome card instead of a toast', async () => {
     const { service, store } = await load();
     vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
     vi.mocked(service.getReleaseNotes).mockResolvedValue({
@@ -246,16 +246,41 @@ describe('release notes', () => {
     expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
   });
 
-  it('still toasts a successful update when there is nothing to show', async () => {
-    const { service, store } = await load();
-    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
-    vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
+  it('hides the success card on its own after two seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, store } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
 
-    const toasts = await import('./toasts');
-    toasts.toasts.set([]);
-    await store.initSelfUpdate();
+      const toasts = await import('./toasts');
+      toasts.toasts.set([]);
+      await store.initSelfUpdate();
 
-    expect(get(toasts.toasts)).toHaveLength(1);
+      expect(get(toasts.toasts)).toHaveLength(0);
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS - 1);
+      expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
+      vi.advanceTimersByTime(1);
+      expect(get(store.selfUpdateOutcome)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a failed outcome until the player closes it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, store } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: false, finishedAt: '' } as never);
+
+      await store.initSelfUpdate();
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS * 10);
+
+      expect(get(store.selfUpdateOutcome)?.ok).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('still toasts a failed update even when notes are waiting', async () => {

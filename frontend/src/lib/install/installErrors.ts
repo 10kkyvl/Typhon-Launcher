@@ -2,6 +2,16 @@ import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
 
 export const REASONS: Record<string, MessageKey> = {
+  'install.archive_corrupt': 'errInstall.installArchiveCorrupt',
+  'install.archive_encrypted': 'errInstall.installArchiveEncrypted',
+  'install.archive_incomplete': 'errInstall.installArchiveIncomplete',
+  'install.archive_result_mismatch': 'errInstall.installArchiveResultMismatch',
+  'install.archive_tool_failed': 'errInstall.installArchiveToolFailed',
+  'install.archive_tool_outdated': 'errInstall.installArchiveToolOutdated',
+  'install.archive_tool_missing': 'errInstall.installArchiveToolMissing',
+  'install.archive_tool_write_failed': 'errInstall.installArchiveToolWriteFailed',
+  'install.archive_unsafe_entries': 'errInstall.installArchiveUnsafeEntries',
+  'install.archive_verify_failed': 'errInstall.installArchiveVerifyFailed',
   'install.bad_command': 'errInstall.installBadCommand',
   'install.busy': 'errInstall.installBusy',
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',
@@ -20,8 +30,11 @@ export const REASONS: Record<string, MessageKey> = {
   'install.game_running': 'errInstall.installGameRunning',
   'install.incomplete_source': 'errInstall.installIncompleteSource',
   'install.installer_busy': 'errInstall.installInstallerBusy',
+  'install.installer_changed': 'errInstall.installInstallerChanged',
   'install.installer_cancelled': 'errInstall.installInstallerCancelled',
   'install.installer_failed': 'errInstall.installInstallerFailed',
+  'install.installer_needs_interactive': 'errInstall.installInstallerNeedsInteractive',
+  'install.interrupted': 'errInstall.installInterrupted',
   'install.installer_no_output': 'errInstall.installInstallerNoOutput',
   'install.installer_not_confirmed_stopped': 'errInstall.installInstallerNotConfirmedStopped',
   'install.installer_still_running': 'errInstall.installInstallerStillRunning',
@@ -55,6 +68,8 @@ export const REASONS: Record<string, MessageKey> = {
   'install.unsafe_removal': 'errInstall.installUnsafeRemoval',
   'install.unsupported_archive': 'errInstall.installUnsupportedArchive',
   'install.worker_not_finished': 'errInstall.installWorkerNotFinished',
+  'install.worker_state_missing': 'errInstall.installWorkerStateMissing',
+  'install.worker_spec_rejected': 'errInstall.installWorkerSpecRejected',
 
   'download.add_torrent_failed': 'errInstall.downloadAddTorrentFailed',
   'download.bad_paths': 'errInstall.downloadBadPaths',
@@ -67,6 +82,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.empty_destination': 'errInstall.downloadEmptyDestination',
   'download.empty_source': 'errInstall.downloadEmptySource',
   'download.file_incomplete': 'errInstall.downloadFileIncomplete',
+  'download.part_promotion_failed': 'errInstall.downloadPartPromotionFailed',
   'download.file_missing': 'errInstall.downloadFileMissing',
   'download.file_oversized': 'errInstall.downloadFileOversized',
   'download.file_stat_failed': 'errInstall.downloadFileStatFailed',
@@ -75,6 +91,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.invalid_magnet': 'errInstall.downloadInvalidMagnet',
   'download.metadata_required': 'errInstall.downloadMetadataRequired',
   'download.no_client': 'errInstall.downloadNoClient',
+  'download.client_start_failed': 'errInstall.downloadClientStartFailed',
   'download.no_files_selected': 'errInstall.downloadNoFilesSelected',
   'download.no_free_space': 'errInstall.downloadNoFreeSpace',
   'download.no_metadata': 'errInstall.downloadNoMetadata',
@@ -84,6 +101,24 @@ export const REASONS: Record<string, MessageKey> = {
   'download.seeding': 'errInstall.downloadSeeding',
   'download.torrent_read_failed': 'errInstall.downloadTorrentReadFailed',
   'download.unavailable': 'errInstall.downloadUnavailable',
+  'download.net_interface_down': 'errInstall.downloadNetInterfaceDown',
+  'download.net_interface_host_check_failed': 'errInstall.downloadNetInterfaceHostCheckFailed',
+  'download.net_interface_list_failed': 'errInstall.downloadNetInterfaceListFailed',
+  'download.net_interface_missing': 'errInstall.downloadNetInterfaceMissing',
+  'download.net_interface_no_address': 'errInstall.downloadNetInterfaceNoAddress',
+  'download.net_interface_no_dns': 'errInstall.downloadNetInterfaceNoDns',
+  'download.net_interface_unsupported': 'errInstall.downloadNetInterfaceUnsupported',
+  'download.net_interface_weak_host': 'errInstall.downloadNetInterfaceWeakHost',
+  'download.network_down': 'errInstall.downloadNetworkDown',
+  'download.network_checking': 'errInstall.downloadNetworkChecking',
+  'download.no_metadata_proxy': 'errInstall.downloadNoMetadataProxy',
+  'download.proxy_auth_failed': 'errInstall.downloadProxyAuthFailed',
+  'download.proxy_credentials_failed': 'errInstall.downloadProxyCredentialsFailed',
+  'download.proxy_credentials_mismatch': 'errInstall.downloadProxyCredentialsMismatch',
+  'download.proxy_failed': 'errInstall.downloadProxyFailed',
+  'download.proxy_not_configured': 'errInstall.downloadProxyNotConfigured',
+  'download.proxy_password_invalid': 'errInstall.downloadProxyPasswordInvalid',
+  'download.proxy_unreachable': 'errInstall.downloadProxyUnreachable',
   'wine.bottle_create_failed': 'errInstall.wineBottleCreateFailed',
   'wine.not_installed': 'errInstall.wineNotInstalled',
 };
@@ -91,4 +126,8 @@ export const REASONS: Record<string, MessageKey> = {
 export function installErrorText(err: unknown, fallback: string = msg('errInstall.fallback')): string {
   const key = REASONS[errorCode(err)];
   return key ? msg(key) : fallback;
+}
+
+export function needsInteractiveInstall(err: unknown): boolean {
+  return errorCode(err) === 'install.installer_needs_interactive';
 }

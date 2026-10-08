@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -295,7 +296,7 @@ func TestRunWorkerRecordsStateWhenSpecStatePathIsKnown(t *testing.T) {
 		t.Fatalf("write raw spec: %v", err)
 	}
 
-	if err := RunWorker(specPath); err == nil {
+	if err := RunWorker(specPath, fileDigest(t, specPath)); err == nil {
 		t.Fatal("RunWorker on a broken spec returned nil error")
 	}
 
@@ -309,7 +310,7 @@ func TestRunWorkerRecordsStateWhenSpecStatePathIsKnown(t *testing.T) {
 }
 
 func TestRunWorkerReturnsErrorWhenSpecUnreadable(t *testing.T) {
-	if err := RunWorker(filepath.Join(t.TempDir(), "missing.json")); err == nil {
+	if err := RunWorker(filepath.Join(t.TempDir(), "missing.json"), strings.Repeat("0", 64)); err == nil {
 		t.Fatal("RunWorker on a missing spec file returned nil error")
 	}
 }
