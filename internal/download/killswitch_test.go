@@ -3,8 +3,8 @@ package download
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
+	"syscall"
 	"testing"
 
 	"typhon/internal/settings"
@@ -205,39 +205,18 @@ func TestRestorePassStopsWhenItsClientIsGone(t *testing.T) {
 	assertStatuses(t, r.m, map[string]Status{"a": StatusQueued})
 }
 
-func TestNewClientFallsBackWhenTheFixedPortIsReallyTaken(t *testing.T) {
-	holder, err := net.Listen("tcp", fmt.Sprintf(":%d", listenPort))
-	if err != nil {
-		probe, dialErr := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", listenPort))
-		if dialErr != nil {
-			t.Fatalf("cannot occupy port %d and nothing else holds it: %v / %v", listenPort, err, dialErr)
-		}
-		if closeErr := probe.Close(); closeErr != nil {
-			t.Fatal(closeErr)
-		}
-	} else {
-		t.Cleanup(func() {
-			if err := holder.Close(); err != nil {
-				t.Errorf("close the occupied port: %v", err)
-			}
-		})
-	}
-	// The client binds TCP and UDP on the same number; a TCP holder alone does
-	// not stop it on every Windows build, a UDP holder does. A failed UDP bind
-	// means another process holds the port already, which serves the same end.
-	if udp, err := net.ListenPacket("udp", fmt.Sprintf(":%d", listenPort)); err == nil {
-		t.Cleanup(func() {
-			if err := udp.Close(); err != nil {
-				t.Errorf("close the occupied UDP port: %v", err)
-			}
-		})
-	}
-
+// Whether a held port really stops the client depends on the Windows build:
+// the CI runner let it bind 42815 under both a TCP and a UDP holder. The
+// refusal is therefore the error the client returns for a taken port.
+func TestNewClientFallsBackWhenTheFixedPortIsTaken(t *testing.T) {
 	var attempts []int
 	orig := openTorrentClient
 	t.Cleanup(func() { openTorrentClient = orig })
 	openTorrentClient = func(tc *torrent.ClientConfig) (*torrent.Client, error) {
 		attempts = append(attempts, tc.ListenPort)
+		if tc.ListenPort == listenPort {
+			return nil, &net.OpError{Op: "listen", Net: "udp", Err: syscall.EADDRINUSE}
+		}
 		tc.NoDHT = true
 		tc.DisableTrackers = true
 		tc.DisablePEX = true
