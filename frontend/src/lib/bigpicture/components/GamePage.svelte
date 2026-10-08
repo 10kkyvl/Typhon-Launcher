@@ -27,6 +27,7 @@
   import { installErrorText } from '../../install/installErrors';
   import { installTotalUnknown } from '../../install/progress';
   import { sourceErrorText } from '../../sources/sourceErrors';
+  import { metadataErrorText } from '../../metadata/metadataErrors';
   import { errorCode, hasMessage } from '../../i18n';
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
@@ -161,14 +162,25 @@
     catalogGame = null;
     metadata = null;
     activeTab = 'overview';
-    const result = await gameRequests.settle(ticket, Promise.all([getCatalogGame(gameId), getMetadataView(gameId)]));
-    if (result.kind === 'stale') return;
-    if (result.kind === 'error') {
+    pageError = '';
+    const [catalog, view] = await Promise.all([
+      gameRequests.settle(ticket, getCatalogGame(gameId)),
+      gameRequests.settle(ticket, getMetadataView(gameId)),
+    ]);
+    if (catalog.kind === 'stale' || view.kind === 'stale') return;
+    if (catalog.kind === 'error') {
       detailsFailed = true;
     } else {
-      [catalogGame, metadata] = result.value;
+      catalogGame = catalog.value;
       if (!catalogGame && !game) detailsFailed = true;
-      void ensureMetadataFresh(gameId).catch(() => undefined);
+    }
+    if (view.kind === 'error') {
+      pageError = metadataErrorText(view.error, bp('bp.game.loadFailed'));
+    } else {
+      metadata = view.value;
+      ensureMetadataFresh(gameId).catch((error) => {
+        if (gameRequests.isCurrent(ticket)) pageError = metadataErrorText(error, bp('bp.game.loadFailed'));
+      });
     }
     if (gameRequests.isCurrent(ticket)) detailsLoading = false;
   }

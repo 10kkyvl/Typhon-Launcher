@@ -56,6 +56,10 @@ vi.mock('../services/selfupdate', () => ({
   emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
 }));
 
+// Первый import графа уведомлений идёт через общий сервер трансформации vite и под нагрузкой
+// полного прогона упирался в 5 с таймаута теста; на сборе файла таймаута нет.
+await import('./notifications');
+
 const READ_KEY = 'typhon.notifications.read';
 
 function makeStorage(initial: Record<string, string> = {}) {
