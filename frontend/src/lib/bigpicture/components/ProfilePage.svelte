@@ -8,7 +8,7 @@
   import type { RequestText } from '../contracts';
   import { focusControl } from '../navigation';
   import { recentLocalGames } from '../profile';
-  import { profileSnapshot, initProfile } from '../../stores/profile';
+  import { profileFailed, profileSnapshot, initProfile } from '../../stores/profile';
   import { libraryGames } from '../../stores/library';
   import { authState, currentUser, saveProfile } from '../../stores/user';
   import { t } from '../../i18n';
@@ -126,6 +126,7 @@
 
     <section class="stats-section">
       <h2>{$t('bp.profile.stats')}</h2>
+      {#if $profileFailed}<p class="load-error" role="alert">{$t('bp.profile.loadFailed')}</p>{/if}
       <div class="stat-grid">
         <article class="bp-card stat-card"><Gamepad2 size="1.45em" /><strong>{stats.games}</strong><span>{$t('bp.profile.gamesCount')}</span></article>
         <article class="bp-card stat-card"><Clock3 size="1.45em" /><strong>{stats.hours}</strong><span>{$t('bp.profile.hoursCount')}</span></article>
@@ -174,6 +175,7 @@
   .identity-copy p.edit-message.danger { color: var(--danger); }
   .identity-actions { flex: none; }
   .identity-actions .bp-button { min-height: 3.25rem; padding: .7rem 1.1rem; }
+  .stats-section .load-error { margin: 0; color: var(--danger); font-size: 1.4rem; }
   .stats-section h2, .section-title h2 { margin: 0; font-size: clamp(1.25rem, 1.8vw, 2rem); }
   .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(.65rem, 1.2vw, 1.2rem); margin-top: .75rem; }
   .stat-card { min-height: 7.5rem; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: .7rem; row-gap: .08rem; padding: clamp(1rem, 1.6vw, 1.7rem); }

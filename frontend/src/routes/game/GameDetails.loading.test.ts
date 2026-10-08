@@ -41,3 +41,58 @@ describe('game releases navigation', () => {
     expect(h.state().releaseGroups).toEqual(['B']);
   });
 });
+
+function metaHarness(deps: { getMetadataView: () => Promise<unknown>; ensureMetadataFresh: () => Promise<boolean> }) {
+  const start = source.indexOf('  async function loadMetaView(');
+  const end = source.indexOf('\n  $effect', start);
+  const js = ts.transpile(source.slice(start, end), { target: ts.ScriptTarget.ES2022 });
+  const toast = vi.fn();
+  const run = new Function('deps', 'toast', `
+    const { getMetadataView, ensureMetadataFresh } = deps;
+    const metadataErrorText = (err, fallback) => fallback;
+    const msg = (key) => key;
+    const preferView = (current, next) => next;
+    let metaToken = 0, metaEventVersion = 0, metaReading = false, metaView = null, metaSearching = false;
+    ${js}
+    return { loadMetaView, state: () => ({ metaReading, metaView, metaSearching }) };
+  `)(deps, toast) as { loadMetaView: (id: string) => Promise<void>; state: () => { metaReading: boolean; metaView: unknown; metaSearching: boolean } };
+  return { ...run, toast };
+}
+
+describe('game metadata loading', () => {
+  it('tells the user when the metadata view could not be read, and stops the spinner', async () => {
+    const h = metaHarness({
+      getMetadataView: () => Promise.reject(new Error('disk offline')),
+      ensureMetadataFresh: () => Promise.resolve(false),
+    });
+
+    await expect(h.loadMetaView('g1')).resolves.toBeUndefined();
+
+    expect(h.toast).toHaveBeenCalledWith('games.detailMetaLoadError', 'danger');
+    expect(h.state()).toMatchObject({ metaReading: false, metaView: null });
+  });
+
+  it('tells the user when the freshness check could not start', async () => {
+    const h = metaHarness({
+      getMetadataView: () => Promise.resolve({ match: 'idle' }),
+      ensureMetadataFresh: () => Promise.reject(new Error('disk offline')),
+    });
+
+    await h.loadMetaView('g1');
+
+    expect(h.toast).toHaveBeenCalledWith('games.detailMetaLoadError', 'danger');
+    expect(h.state().metaReading).toBe(false);
+  });
+
+  it('shows nothing when both calls succeed', async () => {
+    const h = metaHarness({
+      getMetadataView: () => Promise.resolve({ match: 'idle' }),
+      ensureMetadataFresh: () => Promise.resolve(true),
+    });
+
+    await h.loadMetaView('g1');
+
+    expect(h.toast).not.toHaveBeenCalled();
+    expect(h.state()).toMatchObject({ metaReading: false, metaSearching: true });
+  });
+});

@@ -235,6 +235,8 @@
       const started = await ensureMetadataFresh(gameId);
       if (current !== metaToken || eventVersion !== metaEventVersion) return;
       metaSearching = started || view.match === 'searching';
+    } catch (err) {
+      if (current === metaToken) toast(metadataErrorText(err, msg('games.detailMetaLoadError')), 'danger');
     } finally {
       if (current === metaToken) metaReading = false;
     }

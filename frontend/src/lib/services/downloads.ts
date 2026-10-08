@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { locale } from '../i18n/locale';
 import { Manager } from '../../../bindings/typhon/internal/download';
+import { withFiles } from '../utils/downloadFiles';
 import { inWails } from './backend';
 
 export type DownloadStatus =
@@ -72,17 +73,17 @@ const unavailable = () => new Error('unavailable in browser');
 
 export async function listDownloads(): Promise<Download[]> {
   if (!inWails) return [];
-  return (await Manager.List()) as unknown as Download[];
+  return (((await Manager.List()) ?? []) as unknown as Download[]).map(withFiles);
 }
 
 export async function getDownload(id: string): Promise<Download> {
   if (!inWails) throw unavailable();
-  return (await Manager.Get(id)) as unknown as Download;
+  return withFiles((await Manager.Get(id)) as unknown as Download);
 }
 
 export async function fetchMetadata(source: string): Promise<TorrentInfo> {
   if (!inWails) throw unavailable();
-  return (await Manager.FetchMetadata(source)) as unknown as TorrentInfo;
+  return withFiles((await Manager.FetchMetadata(source)) as unknown as TorrentInfo);
 }
 
 export async function discardMetadata(infoHash: string): Promise<void> {
@@ -101,7 +102,7 @@ export async function startDownload(
   selectedIndices: number[],
 ): Promise<Download> {
   if (!inWails) throw unavailable();
-  return (await Manager.StartDownload(infoHash, destination, selectedIndices)) as unknown as Download;
+  return withFiles((await Manager.StartDownload(infoHash, destination, selectedIndices)) as unknown as Download);
 }
 
 export async function startDownloadFrom(
@@ -111,12 +112,9 @@ export async function startDownloadFrom(
   origin: DownloadOrigin,
 ): Promise<Download> {
   if (!inWails) throw unavailable();
-  return (await Manager.StartDownloadFrom(
-    infoHash,
-    destination,
-    selectedIndices,
-    origin as never,
-  )) as unknown as Download;
+  return withFiles(
+    (await Manager.StartDownloadFrom(infoHash, destination, selectedIndices, origin as never)) as unknown as Download,
+  );
 }
 
 export async function selectTorrentFile(): Promise<string> {
