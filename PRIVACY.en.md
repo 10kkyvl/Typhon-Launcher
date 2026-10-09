@@ -213,13 +213,15 @@ Local data is deleted by deleting the `%APPDATA%\Typhon` directory (section 1). 
 
 Cross-device synced data (section 2.3) is deleted from the server in the app, in the sync settings. Turning sync off does not by itself delete it; it is deleted automatically together with the account.
 
-There is currently no way to delete an account directly from the app or from the website — that capability is not implemented yet, and deletion does not happen automatically. To request deletion of an account and the personal data associated with it, send a request to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from the email address linked to the account. The request is handled by the project operator manually.
+The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the profile and bio, the avatar and cover files, synced settings and the game list, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
+
+If signing in is impossible (lost password or device), a deletion request is accepted at [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from the email address linked to the account; the project operator carries it out manually through the same mechanism.
 
 ## 6. User rights
 
 Depending on applicable law, a user may have the right to request access to their personal data, its correction, its deletion, or a restriction of its processing.
 
-Username, display name, email address and avatar can be viewed and changed in the app, in the profile settings. For other requests: [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com). The operator answers on the merits, within a reasonable time and free of charge.
+Username, display name, email address and avatar can be viewed and changed in the app, in the profile settings; the account as a whole is deleted there too (section 5). For other requests: [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com). The operator answers on the merits, within a reasonable time and free of charge.
 
 A request about data outside the Typhon server services — for example about data on the BitTorrent network or at a third-party source — cannot be fulfilled by the operator: that data is not under the operator's control.
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"sync"
 	"time"
@@ -312,6 +313,43 @@ func (s *Service) Logout() error {
 	}
 
 	return errors.Join(revokeErr, deleteErr, forgetErr)
+}
+
+func (s *Service) DeleteAccount(password string) error {
+	if password == "" {
+		return &Error{Code: CodeBadRequest, Field: "password"}
+	}
+	cred, err := s.store.Load()
+	if errors.Is(err, ErrNoCredential) || (err == nil && cred.Token == "") {
+		return &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized}
+	}
+	if err != nil {
+		return fmt.Errorf("load stored credential: %w", err)
+	}
+
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	client := *s.client
+	client.token = func() (string, error) { return cred.Token, nil }
+	if err := client.DeleteAccount(ctx, password); err != nil {
+		return err
+	}
+
+	// The account is gone on the server: every step below runs even if an earlier one fails.
+	guestErr := s.setGuest(false)
+	deleteErr := s.store.Delete()
+	if deleteErr != nil {
+		deleteErr = fmt.Errorf("delete stored credential: %w", deleteErr)
+	}
+	forgetErr := s.forgetProfile()
+	if forgetErr != nil {
+		forgetErr = fmt.Errorf("delete cached profile: %w", forgetErr)
+	}
+	return errors.Join(guestErr, deleteErr, forgetErr)
 }
 
 func (s *Service) GetCurrentUser() (CurrentUser, error) {

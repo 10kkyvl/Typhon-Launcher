@@ -48,6 +48,17 @@ export const profile = {
   'profile.recentWindow': '{value} за 2 недели',
   'profile.loadFailed': 'Не удалось загрузить статистику профиля',
   'profile.previewLoadFailed': 'Не удалось загрузить витрину для предпросмотра',
+  'profile.dangerZoneTitle': 'Опасная зона',
+  'profile.deleteAccountIntro': 'Удаление аккаунта необратимо: с сервера удаляются профиль, друзья, сообщения, отзывы и синхронизированные данные. Игры и файлы на этом компьютере останутся.',
+  'profile.deleteAccountButton': 'Удалить аккаунт',
+  'profile.deleteAccountConfirmTitle': 'Удалить аккаунт?',
+  'profile.deleteAccountConfirmText': 'Это действие нельзя отменить. Профиль, друзья, сообщения, отзывы и синхронизированные данные будут удалены с сервера. Игры и файлы на этом компьютере останутся. Введите пароль, чтобы подтвердить.',
+  'profile.deleteAccountPassword': 'Пароль',
+  'profile.deleteAccountConfirmButton': 'Удалить навсегда',
+  'profile.deleteAccountBusy': 'Удаляем…',
+  'profile.deleteAccountDone': 'Аккаунт удалён',
+  'profile.deleteAccountWrongPassword': 'Неверный пароль',
+  'profile.deleteAccountFailed': 'Не удалось удалить аккаунт',
 } as const;
 
 export type ProfileKey = keyof typeof profile;

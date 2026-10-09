@@ -3,6 +3,8 @@ import { resetHistory } from './router';
 import {
   AccountError,
   bootstrapSession,
+  deleteAccount as requestAccountDeletion,
+  fetchCurrentUser,
   continueAsGuest,
   login,
   logout,
@@ -188,6 +190,47 @@ export async function signOut(): Promise<void> {
     resetHistory();
     authState.set('unauthenticated');
   }
+}
+
+const ACCOUNT_INTACT_CODES = new Set([
+  'invalid_credentials',
+  'bad_request',
+  'unauthenticated',
+  'rate_limited',
+  'network_error',
+]);
+
+// A non-contract failure from the Go service arrives as server_error, whether the
+// request failed or only the local cleanup after a successful delete did.
+async function accountSurvived(err: unknown): Promise<boolean> {
+  const code = err instanceof AccountError ? err.code : '';
+  if (ACCOUNT_INTACT_CODES.has(code)) return true;
+  if (code !== 'server_error' && code !== 'internal') return false;
+  try {
+    await fetchCurrentUser();
+    return true;
+  } catch (probe) {
+    return !(probe instanceof AccountError && probe.code === 'unauthenticated');
+  }
+}
+
+function leaveSession() {
+  currentUser.set(null);
+  authReason.set('');
+  authView.set('login');
+  resetHistory();
+  authState.set('unauthenticated');
+}
+
+export async function deleteAccount(password: string): Promise<void> {
+  try {
+    await requestAccountDeletion(password);
+  } catch (err) {
+    if (await accountSurvived(err)) throw err;
+    leaveSession();
+    throw err;
+  }
+  leaveSession();
 }
 
 function onUnauthenticated(err: unknown) {
