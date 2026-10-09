@@ -282,6 +282,8 @@ export const modals = {
   'modals.sourceDetailsColStatus': 'Статус',
   'modals.sourceDetailsLoading': 'Загрузка…',
   'modals.sourceDetailsNoReleases': 'Релизов не найдено',
+  'modals.sourceDetailsLoadFailed': 'Не удалось загрузить сведения об источнике',
+  'modals.sourceDetailsReleasesFailed': 'Не удалось загрузить раздачи',
   'modals.sourceDetailsUnavailable': 'Недоступен',
   'modals.sourceDetailsNewBadge': 'Новое',
   'modals.sourceDetailsRange': '{from}–{to} из {total}',

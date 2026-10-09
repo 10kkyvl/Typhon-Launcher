@@ -285,6 +285,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsColStatus': 'Status',
   'modals.sourceDetailsLoading': 'Loading…',
   'modals.sourceDetailsNoReleases': 'No releases found',
+  'modals.sourceDetailsLoadFailed': 'Failed to load the source details',
+  'modals.sourceDetailsReleasesFailed': 'Failed to load the releases',
   'modals.sourceDetailsUnavailable': 'Unavailable',
   'modals.sourceDetailsNewBadge': 'New',
   'modals.sourceDetailsRange': '{from}–{to} of {total}',
