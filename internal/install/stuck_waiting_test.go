@@ -119,6 +119,7 @@ func TestCancelReleasesARecordThatNoWorkerOrDownloadBacks(t *testing.T) {
 		InstallerPath: filepath.Join(t.TempDir(), "GamersGoMakers 1.1.7.exe"),
 		Uninstall:     library.Uninstall{Key: `HKLM32\GamersGoMakers 1.1.7`, Command: `G:\games\GamersGoMakers\Uninstall.exe`},
 	})
+	r.downloads.getErr["d367d65370c78e18"] = errors.New("download manager is busy")
 	r.restart()
 	before := r.stateFiles()
 
