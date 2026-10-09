@@ -50,6 +50,7 @@ export interface Settings {
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
   telemetryConsentVersion: number;
+  legalAcceptedVersion: string;
   accountSync: boolean;
   presenceStatus: string;
   presenceAutoAway: boolean;
@@ -107,6 +108,7 @@ const fallbackDefaults: Settings = {
   anonymousUsageStats: false,
   anonymousDiagnostics: true,
   telemetryConsentVersion: 0,
+  legalAcceptedVersion: '',
   accountSync: false,
   presenceStatus: 'online',
   presenceAutoAway: true,
@@ -166,6 +168,11 @@ export async function setupLibrary(parent: string): Promise<Settings> {
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+}
+
+export async function saveLegalAcceptance(version: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await SettingsService.SaveLegalAcceptance(version)) as Settings;
 }
 
 export async function openGameFolder(path: string, executable: string): Promise<void> {

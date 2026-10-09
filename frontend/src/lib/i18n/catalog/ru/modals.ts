@@ -19,7 +19,7 @@ export const modals = {
   'modals.sourcesNoticeReviewTitle': 'Уведомление об источниках',
   'modals.sourcesNoticeGateTitle': 'Прежде чем добавить источник',
   'modals.sourcesNoticeBody':
-    'Typhon не предоставляет и не проверяет содержимое сторонних источников. Добавляйте только источники и материалы, которыми вы имеете право пользоваться. Адрес источника и его содержимое обрабатываются на этом устройстве — Typhon не передаёт их своим серверам.',
+    'Typhon не предоставляет и не проверяет содержимое сторонних источников. Добавляйте только источники и материалы, которыми вы имеете право пользоваться. Адрес источника, ссылки и файлы остаются на этом устройстве. Чтобы подобрать обложки и описания, сервису Typhon передаются только названия игр из фида — без адреса источника и ссылок; сервер их не сохраняет.',
   'modals.sourcesNoticeSaving': 'Сохранение…',
   'modals.sourcesNoticeContinue': 'Понятно, продолжить',
 
@@ -336,6 +336,26 @@ export const modals = {
   'modals.installConfirm': 'Подтвердить',
   'modals.installDismiss': 'Убрать',
   'modals.installManually': 'Установить вручную',
+  // LegalAcceptanceScreen.svelte
+  'modals.legalAcceptTitle': 'Условия использования Typhon',
+  'modals.legalAcceptUpdated': 'Условия обновлены {date}',
+  'modals.legalAcceptIntro': 'Прежде чем продолжить, ознакомьтесь с краткими положениями. Полные тексты — по ссылкам ниже.',
+  'modals.legalAcceptPoint1':
+    'Typhon не содержит игр и предустановленных источников. Источники вы добавляете сами и отвечаете за право использовать их содержимое.',
+  'modals.legalAcceptPoint2':
+    'Загрузка через BitTorrent может передавать части файлов другим участникам сети. Раздача выключена по умолчанию.',
+  'modals.legalAcceptPoint3':
+    'Учётная запись не обязательна. Что обрабатывается с ней и без неё, описано в политике конфиденциальности.',
+  'modals.legalAcceptPoint4':
+    'Приложение предоставляется «как есть». Оператор не отвечает за содержимое сторонних источников.',
+  'modals.legalAcceptTermsLink': 'Условия использования',
+  'modals.legalAcceptPrivacyLink': 'Политика конфиденциальности',
+  'modals.legalAcceptButton': 'Принимаю',
+  'modals.legalAcceptSaving': 'Сохранение…',
+  'modals.legalAcceptVersionFailed': 'Не удалось получить версию условий. Проверьте, что приложение работает корректно, и повторите.',
+  'modals.legalAcceptRetry': 'Повторить',
+  'modals.legalAcceptSaveFailed': 'Не удалось сохранить принятие условий: нет доступа к папке настроек. Проверьте права и попробуйте ещё раз.',
+  'modals.legalAcceptSaveFallback': 'Не удалось сохранить принятие условий. Попробуйте ещё раз.',
 } as const;
 
 export type ModalsKey = keyof typeof modals;

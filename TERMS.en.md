@@ -1,6 +1,6 @@
 # Typhon Terms of Use
 
-Revision of 25 August 2026.
+Revision of 10 October 2026.
 
 This document sets out the terms of use of the Typhon launcher (the "app") and of the related server services: the account, metadata and update services (the "Typhon services").
 
@@ -14,7 +14,7 @@ The **user** is the person who downloads, installs or uses the app, or who acces
 
 The **Typhon project operator** is the independent developer who builds and maintains the app, the `typhon-launcher.com` website and the Typhon services. The project has no separate legal entity.
 
-By starting to use the app or the services, the user accepts these terms. A user who does not agree does not use them.
+The terms are accepted explicitly: during installation and on first launch the app shows a summary of them and an "I Agree" button, and does not run until it is pressed. If the revision changes, the app shows them again. Using the website and the Typhon services also means accepting these terms. A user who does not agree does not use them.
 
 ## 2. What Typhon is
 

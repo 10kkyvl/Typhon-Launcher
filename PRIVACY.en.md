@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 4 September 2026.
+Revision of 10 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -69,7 +69,8 @@ Points worth understanding:
 
 - **The game title is sent to the service.** When already-installed games are detected automatically, the title is derived from **the folder name on disk**. If the folder has an arbitrary name, that arbitrary name is what gets sent as the search query.
 - **Metadata requests made from an account carry its token.** This means the service is technically able to link an account with which game titles were requested. Requests made in guest mode carry no token.
-- The metadata service is **not** sent: source addresses, feed contents, magnet links, infohashes, download contents, download history or installation paths.
+- **Game titles from source feeds are sent to the service too** — for the same cover and description matching. From a feed entry's name the app extracts the game title (without the packager's name, version or other tags) and the year, and sends only those. The server matches them against the catalog and stores nothing from that request.
+- The metadata service is **not** sent: source addresses, links from feeds, magnet links, infohashes, download contents, download history or installation paths.
 
 ### 2.3. Cross-device sync
 
@@ -97,7 +98,9 @@ As with any network request, the server can see the device's IP address and the 
 
 The server records in its log the method, request path, response code and processing time. Search queries, request bodies and IP addresses do not go into that log.
 
-The IP address is used as a temporary rate-limiting key for requests made without an account: it is held in the service's memory, is not written to the database and is not linked to an account. For requests made with an account, the account identifier serves as that key instead of the address.
+The IP address is used as a temporary rate-limiting key for requests made without an account: it is held in the service's memory, is not written to the database and is not linked to an account. For requests made with an account, the account identifier serves as that key instead of the address. The same kind of short-lived IP key is used for session state (section 8.1), so that one address cannot count as a thousand running launchers; it lives in the in-memory store and disappears together with the state.
+
+Catalog search strings — what the user types into the game search — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
 
 ### 2.6. Session state, anonymous usage statistics and anonymous diagnostics
 
@@ -142,6 +145,28 @@ The activity feed is visible only to friends, and only while the author of the e
 
 An event in the feed can be given a reaction — one of eight fixed icons. A reaction is stored as a triple of event, user and icon; it is visible to everyone who can see the event itself, and the user can remove their reaction at any time.
 
+The author of an event can add a caption to it — a short text entered by hand. The caption is stored with the event, is visible to the same people as the event, and is deleted together with it; the author can remove or change it at any time.
+
+### 2.9. Reviews, chat, profile cover
+
+This is what the user writes and uploads themselves. Everything below requires an account and exists only through the user's own action: until they have written a review, sent a message or uploaded a cover, none of it exists.
+
+**Game reviews.** A review consists of a "recommended" or "not recommended" verdict and a text of 20 to 5000 characters without links. A review is public: it is shown on the game page to every user of the app, including those without an account, together with the author's display name, avatar and playtime in that game according to sync. A review can be posted after 30 minutes in the game through Typhon and no sooner than a day after registration. Other users can mark a review as helpful or report it; a report is stored with a reason from a fixed list and the reporter's identifier. A review that gathers five reports is hidden automatically; the operator can also hide or delete a review. The author can edit or delete their review at any time. Reviews are stored until the author deletes them or until the account is deleted.
+
+**Messages between friends.** Messaging is possible only between users who are friends. A message is a text of up to 4000 characters; a reaction can be added to it. Messages are stored on the server for 7 days from sending and are then deleted together with reactions and read marks; the server keeps no archive of conversations. Message contents are not analyzed and are used for nothing but delivery.
+
+**Profile cover.** A JPG, PNG or WebP image of up to 8 MB that the user uploads to decorate their profile. It is stored as a file in object storage and is available by direct link to anyone who knows the link — the same as the avatar. On replacement and on deletion the previous file is deleted; when the account is deleted, all of its files are deleted.
+
+The operator may remove an avatar, cover, bio, event caption, review or messages in response to a notice of infringement of rights or law — the procedure is described in [COPYRIGHT.en.md](COPYRIGHT.en.md). Every such action is recorded in an internal journal with its reason and basis.
+
+### 2.10. Log upload at the user's request
+
+Under Settings → About there is a "Send to us" button: it sends an archive of the app's log to the Typhon server. This happens only on that press and after confirmation; on its own the app sends the log nowhere (section 8.4).
+
+Before sending, the app states plainly what the archive contains: the operating-system user name, folder paths on disk and the names of games and torrents. Log lines go through the same scrubbing as error reports (section 8.3): local paths, source addresses, magnet links and tokens are replaced with placeholders. The archive is limited to 8 MB compressed; what does not fit is dropped, and the app shows which files were left out.
+
+On the server the archive is stored for 72 hours and is then deleted. It is not linked to an account; the operator uses it only to investigate the reported problem.
+
 ## 3. Why data is processed
 
 The Typhon server services process data only for the following:
@@ -177,6 +202,8 @@ Anonymous usage statistics events (section 8.2) are stored on the server for 30 
 Game compatibility reports (section 8.5) are stored on the server for 180 days — the period is a service setting. The period runs from the last update of a record rather than from its creation: the app periodically sends the verdict again, and while the game remains on the device its record is refreshed and not deleted. Once the app stops sending a verdict — because the game was removed, the toggle was turned off, or the device stopped being used — the record lives out its 180 days and is deleted. The period is longer than for usage statistics because a share of successful launches is only meaningful once accumulated: in 30 days most games would not gather enough observations even to show a number.
 
 Anonymous diagnostics reports (section 8.3) are stored on the server for 30 days — the period is a service setting — and are then deleted. Identical errors are stored as a group rather than individually: a group has a fingerprint, a counter, first- and last-seen times and the set of affected app versions.
+
+Manually uploaded log archives (section 2.10) are stored for 72 hours. Messages between friends (section 2.9) — 7 days from sending. Activity feed events and their captions (section 2.8) — 90 days. Reviews and the profile cover (section 2.9) — until the user deletes them or until the account is deleted. The catalog search-string cache (section 2.5) — one day.
 
 No separate retention periods are set for infrastructure backups and technical copies, so no specific timeframe for complete deletion is claimed here.
 

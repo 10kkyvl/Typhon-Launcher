@@ -114,6 +114,10 @@ func OverlayHotkeys() []string {
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
 const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 
+// ErrCodeLegalAcceptanceSaveFailed marks an acceptance of the terms that could
+// not be written.
+const ErrCodeLegalAcceptanceSaveFailed = "settings.legal_acceptance_save_failed"
+
 type Settings struct {
 	Theme                  string  `json:"theme"`
 	AccentColor            string  `json:"accentColor"`
@@ -175,6 +179,8 @@ type Settings struct {
 	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
 
 	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
+
+	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
 }
 
 // TelemetryConsentRecorded reports whether the user has answered the consent
@@ -787,6 +793,34 @@ func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
 	return saved, nil
 }
 
+// SaveLegalAcceptance records the revision of the terms and the privacy policy
+// the user agreed to. The revision is a date, so an empty one would record
+// nothing while looking like an answer.
+func (s *Service) SaveLegalAcceptance(version string) (Settings, error) {
+	if version == "" {
+		return Settings{}, errors.New("legal acceptance version is empty")
+	}
+	saved, err := s.Update(func(next *Settings) error {
+		next.LegalAcceptedVersion = version
+		return nil
+	})
+	if err != nil {
+		return Settings{}, uierr.Wrap(ErrCodeLegalAcceptanceSaveFailed, fmt.Errorf("save legal acceptance: %w", err))
+	}
+	return saved, nil
+}
+
+// The accepted revision, like the consent version, only moves forward: a save
+// from a caller that predates the field carries an empty string, and that must
+// not make the user accept the same documents again. Revisions are ISO dates,
+// so string order is date order.
+func keepNewerLegalAcceptance(next, stored Settings) Settings {
+	if next.LegalAcceptedVersion < stored.LegalAcceptedVersion {
+		next.LegalAcceptedVersion = stored.LegalAcceptedVersion
+	}
+	return next
+}
+
 // The consent version only ever moves forward. Every other field of a save
 // comes straight from a caller that may have assembled the struct without
 // knowing this field exists, and a zero from such a caller would erase the
@@ -818,6 +852,7 @@ func (s *Service) persist(next Settings, base *uint64) (Settings, []func(Setting
 	// consent answered while they ran is only visible here, under the lock
 	// that also publishes the write.
 	next = keepNewerConsent(next, s.current)
+	next = keepNewerLegalAcceptance(next, s.current)
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return next, nil, false, fmt.Errorf("create config dir: %w", err)
 	}

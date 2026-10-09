@@ -22,7 +22,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourcesNoticeReviewTitle': 'Sources notice',
   'modals.sourcesNoticeGateTitle': 'Before you add a source',
   'modals.sourcesNoticeBody':
-    'Typhon does not provide or verify the contents of third-party sources. Only add sources and materials you have the right to use. The source address and its contents are processed on this device — Typhon does not send them to its servers.',
+    'Typhon does not provide or verify the contents of third-party sources. Only add sources and materials you have the right to use. The source address, links and files stay on this device. To match covers and descriptions, only game titles from the feed are sent to the Typhon service — without the source address or links; the server does not store them.',
   'modals.sourcesNoticeSaving': 'Saving…',
   'modals.sourcesNoticeContinue': 'Got it, continue',
 
@@ -339,4 +339,23 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installConfirm': 'Confirm',
   'modals.installDismiss': 'Dismiss',
   'modals.installManually': 'Install manually',
+  'modals.legalAcceptTitle': 'Typhon Terms of Use',
+  'modals.legalAcceptUpdated': 'The terms were updated on {date}',
+  'modals.legalAcceptIntro': 'Before you continue, read the short summary. The full texts are linked below.',
+  'modals.legalAcceptPoint1':
+    'Typhon contains no games and no preinstalled sources. You add sources yourself and are responsible for your right to use their content.',
+  'modals.legalAcceptPoint2':
+    'Downloading over BitTorrent may send parts of files to other peers in the network. Seeding is off by default.',
+  'modals.legalAcceptPoint3':
+    'An account is optional. What is processed with and without one is described in the privacy policy.',
+  'modals.legalAcceptPoint4':
+    'The app is provided "as is". The operator is not responsible for the content of third-party sources.',
+  'modals.legalAcceptTermsLink': 'Terms of Use',
+  'modals.legalAcceptPrivacyLink': 'Privacy Policy',
+  'modals.legalAcceptButton': 'I Agree',
+  'modals.legalAcceptSaving': 'Saving…',
+  'modals.legalAcceptVersionFailed': 'Could not get the terms version. Check that the app works correctly and try again.',
+  'modals.legalAcceptRetry': 'Retry',
+  'modals.legalAcceptSaveFailed': 'Could not save your acceptance: the settings folder is not writable. Check the permissions and try again.',
+  'modals.legalAcceptSaveFallback': 'Could not save your acceptance. Try again.',
 };

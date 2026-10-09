@@ -32,6 +32,11 @@ export async function listLegalDocuments(): Promise<LegalMeta[]> {
   return raw.map(toMeta);
 }
 
+export async function legalVersion(): Promise<string> {
+  if (!inWails) throw unavailable();
+  return await LegalService.Version();
+}
+
 export async function getLegalDocument(id: string): Promise<LegalDocument> {
   if (!inWails) throw unavailable();
   const raw = await LegalService.Get(id, get(locale));
