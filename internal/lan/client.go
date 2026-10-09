@@ -1,20 +1,18 @@
 package lan
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"path/filepath"
-	"strings"
 
 	// classicio must be initialized before any anacrolix storage read: its
 	// mmap-based file IO corrupts piece verification and blocks incoming
 	// peer connections on Windows (see internal/download/manager.go for the
 	// same fix on the download client's own, separate torrent.Client).
 	_ "typhon/internal/download/classicio"
+	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
 
 	g "github.com/anacrolix/generics"
@@ -62,21 +60,30 @@ type lanClient struct {
 	dataDir string
 }
 
+var openTorrentClient = torrent.NewClient
+
 func newLANClient(cfg settings.Settings, dataDir string, preferredPort int) (*lanClient, error) {
-	tc := newClientConfig(cfg, dataDir, preferredPort)
-	cl, err := torrent.NewClient(tc)
-	if err != nil && isListenError(err) {
-		slog.Warn("lan torrent port unavailable, retrying on a random port", "port", preferredPort, "error", err)
+	port := preferredPort
+	for attempt := 0; ; attempt++ {
+		tc := newClientConfig(cfg, dataDir, port)
+		cl, err := openTorrentClient(tc)
+		if err == nil {
+			slog.Info("lan torrent client started", "port", cl.LocalPort())
+			return &lanClient{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, dataDir: dataDir}, nil
+		}
 		closeDefaultStorage(tc)
-		tc = newClientConfig(cfg, dataDir, 0)
-		cl, err = torrent.NewClient(tc)
+		if !listenport.IsListenError(err) || attempt == listenport.Attempts {
+			return nil, fmt.Errorf("start lan torrent client: %w", err)
+		}
+		// Port 0 hands out the next number in a row on Windows, which stays
+		// inside a UDP range Hyper-V or Docker excluded, so retries pick their own.
+		slog.Warn("lan torrent port unavailable, retrying on a random port", "port", port, "error", err)
+		next, pickErr := listenport.Random()
+		if pickErr != nil {
+			return nil, pickErr
+		}
+		port = next
 	}
-	if err != nil {
-		closeDefaultStorage(tc)
-		return nil, fmt.Errorf("start lan torrent client: %w", err)
-	}
-	slog.Info("lan torrent client started", "port", cl.LocalPort())
-	return &lanClient{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, dataDir: dataDir}, nil
 }
 
 func (c *lanClient) applyLimits(down, up int64) {
@@ -182,17 +189,6 @@ func closeDefaultStorage(tc *torrent.ClientConfig) {
 			slog.Warn("close lan default storage", "error", err)
 		}
 	}
-}
-
-func isListenError(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "bind") ||
-		strings.Contains(text, "listen") ||
-		strings.Contains(text, "address already in use")
 }
 
 func newLimiter(bytesPerSecond int64) *rate.Limiter {

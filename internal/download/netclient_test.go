@@ -109,20 +109,27 @@ func TestInterfaceClientListensAndDialsOnlyFromTheBoundAddress(t *testing.T) {
 
 	plan := netPlan{mode: settings.NetworkInterface, iface: "test", ip4: netip.MustParseAddr("127.0.0.2")}
 	completion := nonClosingCompletion{storage.NewMapPieceCompletion()}
-	tc, attach, err := networkedConfig(t.Context(), settings.Defaults(), t.TempDir(), 0, completion, plan)
+	dataDir := t.TempDir()
+	var attach netAttach
+	cl, tc, err := openTestClient(func() (*torrent.ClientConfig, error) {
+		attach.later.stop()
+		tc, next, err := networkedConfig(t.Context(), settings.Defaults(), dataDir, 0, completion, plan)
+		attach = next
+		if err != nil {
+			closeDefaultStorage(tc)
+			return nil, err
+		}
+		// Discovery would reach for the internet from a test; what is checked
+		// here is which socket carries a peer connection.
+		tc.NoDHT = true
+		tc.DisableTrackers = true
+		tc.DisablePEX = true
+		tc.NoDefaultPortForwarding = true
+		return tc, nil
+	})
 	if err != nil {
-		t.Fatalf("networkedConfig: %v", err)
-	}
-	// Discovery would reach for the internet from a test; what is checked
-	// here is which socket carries a peer connection.
-	tc.NoDHT = true
-	tc.DisableTrackers = true
-	tc.DisablePEX = true
-	tc.NoDefaultPortForwarding = true
-	cl, err := torrent.NewClient(tc)
-	if err != nil {
-		closeDefaultStorage(tc)
-		t.Fatalf("NewClient: %v", err)
+		attach.later.stop()
+		t.Fatalf("open client: %v", err)
 	}
 	attach.attach(cl)
 	c := &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: t.TempDir(), completion: completion}

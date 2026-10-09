@@ -7,12 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"typhon/internal/winpath"
 
+	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
 
@@ -24,10 +24,9 @@ import (
 )
 
 const (
-	listenPort         = 42815
-	randomPortAttempts = 8
-	minLimiterBurst    = 256 * 1024
-	maxTorrentConns    = 60
+	listenPort      = 42815
+	minLimiterBurst = 256 * 1024
+	maxTorrentConns = 60
 )
 
 var openTorrentClient = torrent.NewClient
@@ -121,15 +120,24 @@ func newClient(ctx context.Context, cfg settings.Settings, metaDir string, compl
 		}
 		closeDefaultStorage(tc)
 		attach.later.stop()
-		if !isListenError(err) || attempt == randomPortAttempts {
+		if !listenport.IsListenError(err) || attempt == listenport.Attempts {
 			return nil, err
 		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		// The client takes one port number for TCP and UDP over both IPv4 and
-		// IPv6. A random port is only free for the first of them, so the same
-		// number can still be held in UDP by another process (Windows services
-		// keep ephemeral UDP ports), and the next random port usually is not.
+		// IPv6. A port the system hands out for TCP can still be held in UDP by
+		// another process or sit in a range Windows excludes from UDP (Hyper-V and
+		// Docker reserve hundreds of ports at a time). Port 0 does not help: the
+		// system hands out the next number in a row, and the next number sits in
+		// the same excluded range, so the retries pick their own port.
 		slog.Warn("torrent port unavailable, retrying on a random port", "port", port, "error", err)
-		port = 0
+		next, pickErr := listenport.Random()
+		if pickErr != nil {
+			return nil, pickErr
+		}
+		port = next
 	}
 }
 
@@ -157,17 +165,6 @@ func closeDefaultStorage(tc *torrent.ClientConfig) {
 			slog.Warn("close default storage", "error", err)
 		}
 	}
-}
-
-func isListenError(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "bind") ||
-		strings.Contains(text, "listen") ||
-		strings.Contains(text, "address already in use")
 }
 
 func (c *client) applyLimits(down, up int64) {
