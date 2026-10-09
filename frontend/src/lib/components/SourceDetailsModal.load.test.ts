@@ -16,6 +16,7 @@ interface State {
   releases: unknown[];
   total: number;
   loadingReleases: boolean;
+  page: number;
   detailsError: string;
   releasesError: string;
   search: string;
@@ -44,13 +45,15 @@ function harness(deps: Deps) {
       show: (id, releaseId = null) => { sourceId = id; focusReleaseId = releaseId; },
       loadDetails,
       loadReleases,
-      state: () => ({ details, releases, total, loadingReleases, detailsError, releasesError, search }),
+      state: () => ({ details, releases, total, loadingReleases, detailsError, releasesError, search, page }),
+      setPage: (n) => { page = n; },
     };
   `)(deps, LatestRequestGate, toast, (fn: () => void) => { effect = fn; }) as {
     show: (id: string | null, releaseId?: string | null) => void;
     loadDetails: (id: string) => Promise<void>;
     loadReleases: (id: string) => Promise<void>;
     state: () => State;
+    setPage: (n: number) => void;
   };
   return { ...run, toast, rerun: () => effect() };
 }
@@ -149,6 +152,15 @@ describe('source details loading', () => {
     expect(h.state().releasesError).toBe('');
   });
 
+  it('keeps the page after a failed load, so the previous page can be requested', async () => {
+    const h = harness({ ...base, queryReleases: () => Promise.reject(new Error('ipc down')) });
+    h.setPage(3);
+
+    await h.loadReleases('s1');
+
+    expect(h.state()).toMatchObject({ page: 3, releasesError: 'modals.sourceDetailsReleasesFailed' });
+  });
+
   it('forgets the previous source while the next one loads', async () => {
     const h = harness({
       ...base,
@@ -166,6 +178,27 @@ describe('source details loading', () => {
 });
 
 describe('focusing a release from a notification', () => {
+  it('shows the loading state, not the empty one, while the release is looked up', async () => {
+    const lookup = deferred<unknown>();
+    const h = harness({ ...base, getRelease: () => lookup.promise });
+    h.show('a', 'r1');
+
+    h.rerun();
+
+    expect(h.state()).toMatchObject({ loadingReleases: true, releases: [] });
+    lookup.resolve({ release: { rawTitle: 'Game v1' } });
+    await vi.waitFor(() => expect(h.state()).toMatchObject({ search: 'Game v1', loadingReleases: false }));
+  });
+
+  it('stops loading when the lookup fails and the list then loads', async () => {
+    const h = harness({ ...base, getRelease: () => Promise.reject(new Error('ipc down')), queryReleases: () => ok(['r1'], 1) });
+    h.show('a', 'r1');
+
+    h.rerun();
+
+    await vi.waitFor(() => expect(h.state()).toMatchObject({ releases: ['r1'], loadingReleases: false }));
+  });
+
   it('toasts when the release lookup fails and still loads the list', async () => {
     const queryReleases = vi.fn(() => ok());
     const h = harness({ ...base, getRelease: () => Promise.reject(new Error('ipc down')), queryReleases });
@@ -210,7 +243,8 @@ describe('source details template', () => {
     expect(/\{:else if releasesError\}\s*<div class="empty load-error" role="alert">[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
   });
 
-  it('hides the range footer while the release list is in error', () => {
-    expect(/\{#if !releasesError\}\s*<div class="tfoot">/.test(source)).toBe(true);
+  it('keeps the pager on a later page in error, with the range text hidden', () => {
+    expect(/\{#if !releasesError \|\| page > 1\}\s*<div class="tfoot">\s*\{#if !releasesError\}\s*<span class="range">/.test(source)).toBe(true);
+    expect(/<Button size="sm" disabled=\{page <= 1\} onclick=\{prevPage\}>/.test(source)).toBe(true);
   });
 });

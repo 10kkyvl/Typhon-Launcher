@@ -102,6 +102,7 @@
 
   async function focusRelease(id: string, releaseId: string) {
     const ticket = releaseRequests.begin();
+    loadingReleases = true;
     const result = await releaseRequests.settle(ticket, getRelease(releaseId));
     if (result.kind === 'stale') return;
     if (result.kind === 'error') toast(sourceErrorText(result.error, msg('modals.sourceDetailsReleaseLoadFailed')), 'danger');
@@ -296,9 +297,11 @@
             </button>
           {/each}
         {/if}
-        {#if !releasesError}
+        {#if !releasesError || page > 1}
           <div class="tfoot">
-            <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
+            {#if !releasesError}
+              <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
+            {/if}
             <div class="pager">
               <Button size="sm" disabled={page <= 1} onclick={prevPage}>
                 <ChevronLeft size="1.5rem" strokeWidth={1.8} />
@@ -516,6 +519,7 @@
 
   .pager {
     display: flex;
+    margin-left: auto;
     gap: 0.6rem;
   }
 </style>

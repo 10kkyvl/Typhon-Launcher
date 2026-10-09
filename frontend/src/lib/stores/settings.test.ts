@@ -10,7 +10,11 @@ globalThis.document = {
   },
 } as unknown as Document;
 
-vi.mock('../services/backend', () => ({ inWails: false }));
+const listeners: ((event: { data: unknown }) => void)[] = [];
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: (_name: string, fn: (event: { data: unknown }) => void) => { listeners.push(fn); } },
+}));
+vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
@@ -21,7 +25,7 @@ vi.mock('../services/settings', () => ({
 }));
 
 const { getSettings, saveSettingsPatch } = await import('../services/settings');
-const { settings, initSettings, updateSettings, updateSettingsResult } = await import('./settings');
+const { settings, initSettings, updateSettings, updateSettingsResult, updateSettingsReporting } = await import('./settings');
 
 function makeSettings(): Settings {
   return {
@@ -56,8 +60,13 @@ beforeEach(async () => {
   vi.mocked(getSettings).mockImplementation(async () => ({ ...stored }));
   vi.mocked(saveSettingsPatch).mockReset();
   vi.mocked(saveSettingsPatch).mockImplementation(applyPatch);
+  listeners.length = 0;
   await initSettings();
 });
+
+function emitUpdated(data: Settings) {
+  for (const fn of listeners) fn({ data });
+}
 
 describe('updateSettings', () => {
   it('sends each queued patch with only its own key, never a stale copy of the other field', async () => {
@@ -175,4 +184,74 @@ it('rolls back personal accent and icon after a failed save and shows a translat
   expect(get(settings)?.tintLogo).toBe(false);
   const { toast } = await import('./toasts');
   expect(toast).toHaveBeenLastCalledWith(msg('state.settingsSaveFailed'), 'danger');
+});
+
+describe('settings:updated while saves are pending', () => {
+  it('rolls a failed save back to the value Go changed meanwhile, not the stale baseline', async () => {
+    const write = deferred<Settings>();
+    vi.mocked(saveSettingsPatch).mockImplementationOnce(() => write.promise);
+    const pending = updateSettings({ uiScale: 1.5 });
+
+    emitUpdated({ ...makeSettings(), uiScale: 1.25 });
+    write.reject(new Error('disk full'));
+    await pending;
+
+    expect(get(settings)!.uiScale).toBe(1.25);
+  });
+
+  it('keeps the optimistic value of a queued patch when the event arrives', async () => {
+    const write = deferred<Settings>();
+    vi.mocked(saveSettingsPatch).mockImplementationOnce(() => write.promise);
+    const pending = updateSettings({ animationsEnabled: false });
+
+    emitUpdated({ ...makeSettings(), uiScale: 1.25 });
+    const shown = get(settings);
+    write.resolve(await applyPatch({ animationsEnabled: false }));
+    await pending;
+
+    expect(shown).toMatchObject({ animationsEnabled: false, uiScale: 1.25 });
+  });
+
+  it('applies the event as is once nothing is pending', async () => {
+    await updateSettings({ uiScale: 1.5 });
+
+    emitUpdated({ ...makeSettings(), uiScale: 1.25 });
+
+    expect(get(settings)!.uiScale).toBe(1.25);
+  });
+
+  it('does not reapply a patch that has already been saved', async () => {
+    const second = deferred<Settings>();
+    vi.mocked(saveSettingsPatch).mockImplementationOnce(applyPatch).mockImplementationOnce(() => second.promise);
+    const a = updateSettings({ uiScale: 1.5 });
+    const b = updateSettings({ animationsEnabled: false });
+    await a;
+
+    emitUpdated({ ...makeSettings(), uiScale: 1.25, animationsEnabled: true });
+    const shown = get(settings);
+    second.resolve(await applyPatch({ animationsEnabled: false }));
+    await b;
+
+    expect(shown).toMatchObject({ uiScale: 1.25, animationsEnabled: false });
+  });
+});
+
+describe('error callback', () => {
+  it('rolls back even when the caller onError throws', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('disk full'));
+
+    const ok = await updateSettingsReporting({ uiScale: 1.9 }, () => { throw new Error('handler broke'); });
+
+    expect(ok).toBe(false);
+    expect(get(settings)!.uiScale).toBe(1);
+  });
+
+  it('calls onError after the rollback', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('disk full'));
+    let seen: number | undefined;
+
+    await updateSettingsReporting({ uiScale: 1.9 }, () => { seen = get(settings)!.uiScale; });
+
+    expect(seen).toBe(1);
+  });
 });
