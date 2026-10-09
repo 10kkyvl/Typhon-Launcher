@@ -686,7 +686,7 @@ func main() {
 	}
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
-	// from starting: the toggle in settings goes through SaveSettings, which
+	// from starting: the toggle in settings goes through SaveSettingsPatch, which
 	// runs the same appliers and does report the failure to the user.
 	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
 		slog.Error("apply autostart", "error", err)

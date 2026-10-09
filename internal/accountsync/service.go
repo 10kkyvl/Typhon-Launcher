@@ -260,12 +260,14 @@ func (s *Service) ForgetRemote() error {
 	s.state = empty
 	s.mu.Unlock()
 
-	current := s.settings.Get()
-	if current.AccountSync {
-		current.AccountSync = false
-		if err := s.settings.Save(current); err != nil {
-			return fmt.Errorf("disable account sync after wipe: %w", err)
-		}
+	if !s.settings.Get().AccountSync {
+		return nil
+	}
+	if _, err := s.settings.Update(func(next *settings.Settings) error {
+		next.AccountSync = false
+		return nil
+	}); err != nil {
+		return fmt.Errorf("disable account sync after wipe: %w", err)
 	}
 	return nil
 }
@@ -637,9 +639,10 @@ func upToDate(st syncState, results map[string]gameCompute, remote map[string]wi
 }
 
 func (s *Service) applyRemoteSettings(remote settings.Portable) error {
-	current := s.settings.Get()
-	merged := settings.ApplyPortable(current, remote)
-	if err := s.settings.Save(merged); err != nil {
+	if _, err := s.settings.Update(func(next *settings.Settings) error {
+		*next = settings.ApplyPortable(*next, remote)
+		return nil
+	}); err != nil {
 		return fmt.Errorf("save synced settings: %w", err)
 	}
 	return nil

@@ -134,12 +134,13 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function saveSettings(next: Settings): Promise<void> {
+export async function saveSettingsPatch(patch: Partial<Settings>): Promise<Settings> {
   if (inWails) {
-    await SettingsService.SaveSettings(next);
-    return;
+    return (await SettingsService.SaveSettingsPatch(patch)) as Settings;
   }
-  localStorage.setItem(FALLBACK_KEY, JSON.stringify(next));
+  const merged = { ...(await getSettings()), ...patch };
+  localStorage.setItem(FALLBACK_KEY, JSON.stringify(merged));
+  return merged;
 }
 
 export async function selectFolder(title: string): Promise<string> {

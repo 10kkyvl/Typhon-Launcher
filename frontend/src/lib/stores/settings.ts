@@ -2,7 +2,7 @@ import { applyPersonalAccent } from '../theme/apply';
 import { get, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getSettings, saveSettings, setupLibrary, type Settings } from '../services/settings';
+import { getSettings, saveSettingsPatch, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
 import { applyLanguage, msg } from '../i18n';
 
@@ -25,9 +25,9 @@ export async function initSettings() {
   }
 }
 
-// Saves run one at a time. saveSettings writes the whole object, so two of
-// them in flight together race over every field, not just the one the user
-// clicked, and Go stores whichever request happens to arrive last.
+// Saves run one at a time so that clicks on the same field reach Go in the
+// order they were made, and so that a failed save is rolled back against the
+// settings the previous save confirmed.
 let saving: Promise<void> = Promise.resolve();
 let revision = 0;
 let queued = 0;
@@ -46,15 +46,8 @@ function enqueueSettingsUpdate(patch: Partial<Settings>, onError?: (err: unknown
   settings.set({ ...before, ...patch });
 
   const operation = saving.then(async () => {
-    // Apply each patch to the last confirmed snapshot. A later optimistic
-    // update may already be visible in the store, but must not be included in
-    // this write or count as saved if this operation fails.
-    const base = confirmed ?? get(settings);
-    if (!base) return false;
-    const next = { ...base, ...patch };
     try {
-      await saveSettings(next);
-      confirmed = { ...next };
+      confirmed = { ...(await saveSettingsPatch(patch)) };
       return true;
     } catch (err) {
       console.error('save settings', err);
@@ -76,7 +69,7 @@ function enqueueSettingsUpdate(patch: Partial<Settings>, onError?: (err: unknown
       return false;
     }
   }).catch((err) => {
-    // Nothing above is expected to throw -- saveSettings is already caught --
+    // Nothing above is expected to throw -- saveSettingsPatch is already caught --
     // but a rejected link would poison every later save in the chain.
     console.error('settings save chain', err);
     return false;

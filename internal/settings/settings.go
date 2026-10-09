@@ -653,6 +653,7 @@ func (s *Service) GetSettings() Settings {
 	return s.current
 }
 
+//wails:ignore
 func (s *Service) SaveSettings(next Settings) error {
 	next, err := sanitize(next)
 	if err != nil {
