@@ -47,6 +47,7 @@ export const profile = {
   'profile.yesterday': 'Вчера',
   'profile.recentWindow': '{value} за 2 недели',
   'profile.loadFailed': 'Не удалось загрузить статистику профиля',
+  'profile.previewLoadFailed': 'Не удалось загрузить витрину для предпросмотра',
 } as const;
 
 export type ProfileKey = keyof typeof profile;

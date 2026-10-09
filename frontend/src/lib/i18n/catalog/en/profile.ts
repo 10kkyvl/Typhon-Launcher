@@ -50,4 +50,5 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.yesterday': 'Yesterday',
   'profile.recentWindow': '{value} in the last 2 weeks',
   'profile.loadFailed': 'Failed to load profile statistics',
+  'profile.previewLoadFailed': 'Failed to load the showcase preview',
 };

@@ -262,6 +262,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsStatusUnmatched': 'Unmatched',
   'modals.sourceDetailsStatusRemoved': 'Removed',
   'modals.sourceDetailsStatusNew': 'New',
+  'modals.sourceDetailsReleaseLoadFailed': 'Failed to load the release',
   'modals.sourceDetailsStatusActive': 'Active',
   'modals.sourceDetailsStatusDisabled': 'Disabled',
   'modals.sourceDetailsStatusUpdating': 'Updating',

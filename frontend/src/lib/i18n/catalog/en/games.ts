@@ -207,6 +207,7 @@ export const games: Record<GamesKey, Message> = {
   'games.detailMetaRefreshedToast': 'Metadata updated',
   'games.detailMetaRefreshError': 'Failed to refresh metadata',
   'games.detailMetaLoadError': 'Failed to load game metadata',
+  'games.detailCatalogLoadError': 'Failed to load the game',
   'games.detailMetaSkipError': 'Failed to skip the metadata search',
   'games.detailRetryDownloadError': 'Failed to retry the download',
   'games.detailRemoveDownloadError': 'Failed to remove the download',

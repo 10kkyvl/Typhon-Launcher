@@ -58,6 +58,7 @@
   let releasesFailed = $state(false);
   let activeTab = $state<'overview' | 'releases'>('overview');
   let pageError = $state('');
+  let metadataError = $state('');
   let dialog = $state<Dialog>(null);
   let dialogRoot: HTMLElement | undefined = $state();
   let dialogReturnFocus = '';
@@ -163,6 +164,7 @@
     metadata = null;
     activeTab = 'overview';
     pageError = '';
+    metadataError = '';
     const [catalog, view] = await Promise.all([
       gameRequests.settle(ticket, getCatalogGame(gameId)),
       gameRequests.settle(ticket, getMetadataView(gameId)),
@@ -170,16 +172,17 @@
     if (catalog.kind === 'stale' || view.kind === 'stale') return;
     if (catalog.kind === 'error') {
       detailsFailed = true;
+      metadataError = metadataErrorText(catalog.error, bp('bp.game.loadFailed'));
     } else {
       catalogGame = catalog.value;
       if (!catalogGame && !game) detailsFailed = true;
     }
     if (view.kind === 'error') {
-      pageError = metadataErrorText(view.error, bp('bp.game.loadFailed'));
+      metadataError = metadataErrorText(view.error, bp('bp.game.loadFailed'));
     } else {
       metadata = view.value;
       ensureMetadataFresh(gameId).catch((error) => {
-        if (gameRequests.isCurrent(ticket)) pageError = metadataErrorText(error, bp('bp.game.loadFailed'));
+        if (gameRequests.isCurrent(ticket)) metadataError = metadataErrorText(error, bp('bp.game.loadFailed'));
       });
     }
     if (gameRequests.isCurrent(ticket)) detailsLoading = false;
@@ -576,6 +579,7 @@
         </div>
       </section>
 
+      {#if metadataError}<div class="page-error" role="alert">{metadataError}</div>{/if}
       {#if pageError}<div class="page-error" role="alert">{pageError}</div>{/if}
 
       {#if currentDownload}

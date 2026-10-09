@@ -174,16 +174,22 @@
 
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
+  let catalogFailed = $state(false);
   let catalogToken = 0;
 
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
+    catalogFailed = false;
     catalogGame = null;
     try {
       const found = await getCatalogGame(gameId);
       if (current !== catalogToken) return;
       catalogGame = found;
+    } catch (err) {
+      if (current !== catalogToken) return;
+      catalogFailed = true;
+      toast(metadataErrorText(err, msg('games.detailCatalogLoadError')), 'danger');
     } finally {
       if (current === catalogToken) catalogLoading = false;
     }
@@ -196,6 +202,7 @@
       if (known) {
         catalogToken++;
         catalogLoading = false;
+        catalogFailed = false;
         catalogGame = null;
         return;
       }
@@ -739,6 +746,7 @@
   }
 
   const missing = $derived(
+    !catalogFailed &&
     isGameMissing({
       hasLocalGame: Boolean(localGame),
       hasCatalogGame: Boolean(catalogGame),
@@ -751,6 +759,13 @@
 {#if missing}
   <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
     {#snippet actions()}
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
+  <EmptyState title={msg('games.detailCatalogLoadError')}>
+    {#snippet actions()}
+      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
       <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
     {/snippet}
   </EmptyState>

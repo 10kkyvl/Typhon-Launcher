@@ -205,6 +205,7 @@ export const games = {
   'games.detailMetaRefreshedToast': 'Метаданные обновлены',
   'games.detailMetaRefreshError': 'Не удалось обновить метаданные',
   'games.detailMetaLoadError': 'Не удалось загрузить метаданные игры',
+  'games.detailCatalogLoadError': 'Не удалось загрузить игру',
   'games.detailMetaSkipError': 'Не удалось отложить поиск метаданных',
   'games.detailRetryDownloadError': 'Не удалось повторить загрузку',
   'games.detailRemoveDownloadError': 'Не удалось удалить загрузку',

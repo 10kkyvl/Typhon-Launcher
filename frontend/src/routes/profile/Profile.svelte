@@ -26,6 +26,7 @@
   let appearanceOpen = $state(false);
   let preview = $state<ProfileSettings | null>(null);
   let allShowcases = $state<ProfileSnapshot | null>(null);
+  let previewFailed = $state(false);
   let settingsOpen = $state(false);
 
   const isGuest = $derived($authState === 'guest');
@@ -58,8 +59,11 @@
   $effect(() => {
     let active = true;
     $currentUser?.id;
+    previewFailed = false;
     if (appearanceOpen) {
-      getProfilePreview().then((snapshot) => { if (active) allShowcases = snapshot; }).catch((err) => console.error('profile preview failed', err));
+      getProfilePreview()
+        .then((snapshot) => { if (active) allShowcases = snapshot; })
+        .catch(() => { if (active) previewFailed = true; });
     } else { allShowcases = null; }
     return () => { active = false; };
   });
@@ -73,6 +77,9 @@
 
 {#if $profileFailed}
   <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+{/if}
+{#if previewFailed}
+  <p class="load-error" role="alert">{msg('profile.previewLoadFailed')}</p>
 {/if}
 
 <div class="workspace" class:customizing={appearanceOpen}>

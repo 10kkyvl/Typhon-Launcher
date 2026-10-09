@@ -11,6 +11,7 @@
     type SourceDetails,
   } from '../services/sources';
   import { removeSourcePrompt, type ConfirmPrompt } from '../confirm/prompts';
+  import { toast } from '../stores/toasts';
   import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
   import Button from './Button.svelte';
@@ -86,8 +87,12 @@
   });
 
   async function focusRelease(id: string, releaseId: string) {
-    const view = await getRelease(releaseId);
-    if (view) search = view.release.rawTitle;
+    try {
+      const view = await getRelease(releaseId);
+      if (view) search = view.release.rawTitle;
+    } catch (err) {
+      toast(sourceErrorText(err, msg('modals.sourceDetailsReleaseLoadFailed')), 'danger');
+    }
     loadReleases(id);
   }
 

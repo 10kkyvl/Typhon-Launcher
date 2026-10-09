@@ -259,6 +259,7 @@ export const modals = {
   'modals.sourceDetailsStatusUnmatched': 'Без совпадения',
   'modals.sourceDetailsStatusRemoved': 'Удалённые',
   'modals.sourceDetailsStatusNew': 'Новые',
+  'modals.sourceDetailsReleaseLoadFailed': 'Не удалось загрузить раздачу',
   'modals.sourceDetailsStatusActive': 'Активен',
   'modals.sourceDetailsStatusDisabled': 'Отключен',
   'modals.sourceDetailsStatusUpdating': 'Обновление',
