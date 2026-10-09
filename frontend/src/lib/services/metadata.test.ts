@@ -169,3 +169,49 @@ describe('backend failures reach the caller', () => {
     await expect(metadata.ensureMetadataFresh('g1')).resolves.toBe(true);
   });
 });
+
+describe('store links', () => {
+  it('passes storeLinks from the view through untouched', async () => {
+    answer('metadata.GetView', { game: { id: 'g1' }, storeLinks: { steam: 'https://store.steampowered.com/app/1', gog: 'https://www.gog.com/game/x' } });
+    const { metadata } = await load(true);
+
+    const view = (await metadata.getMetadataView('g1')) as { storeLinks?: Record<string, string> };
+
+    expect(view.storeLinks).toEqual({ steam: 'https://store.steampowered.com/app/1', gog: 'https://www.gog.com/game/x' });
+  });
+
+  it('lists present stores in Steam, GOG, Epic order and drops the rest', async () => {
+    const mod = (await load(true)).metadata as unknown as { storeEntries: (l: unknown) => string[] };
+
+    expect(mod.storeEntries({ epic: 'e', steam: 's', gog: 'g' })).toEqual(['steam', 'gog', 'epic']);
+    expect(mod.storeEntries({ gog: 'g', itch: 'i', epic: '' })).toEqual(['gog']);
+    expect(mod.storeEntries(undefined)).toEqual([]);
+    expect(mod.storeEntries(null)).toEqual([]);
+    expect(mod.storeEntries({})).toEqual([]);
+  });
+
+  it('sends the store key, not a url, to the backend', async () => {
+    answer('metadata.OpenStoreLink', undefined);
+    const { metadata } = await load(true);
+
+    await metadata.openStoreLink('g1', 'gog');
+
+    const call = calls.find((c) => c.key === 'metadata.OpenStoreLink');
+    expect(call?.args).toEqual(['g1', 'gog']);
+  });
+
+  it('surfaces a backend error instead of swallowing it', async () => {
+    const { metadata } = await load(true);
+    answer('metadata.OpenStoreLink', () => {
+      throw new Error('metadata.store_link_missing');
+    });
+
+    await expect(metadata.openStoreLink('g1', 'steam')).rejects.toThrow('metadata.store_link_missing');
+  });
+
+  it('refuses outside the app', async () => {
+    const { metadata } = await load(false);
+
+    await expect(metadata.openStoreLink('g1', 'steam')).rejects.toThrow('unavailable in browser');
+  });
+});

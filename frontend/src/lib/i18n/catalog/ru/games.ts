@@ -321,6 +321,10 @@ export const games = {
   'games.catalogShowMore': 'Показать ещё',
   'games.catalogShownOf': 'Загружено {shown} из {total}',
   'games.recommendationRefreshFailed': 'Не удалось обновить подборку. Пока показываем предыдущую.',
+  'games.storeLinksTitle': 'Где купить',
+  'games.storeSteam': 'Steam',
+  'games.storeGog': 'GOG',
+  'games.storeEpic': 'Epic Games Store',
 } as const;
 
 export type GamesKey = keyof typeof games;

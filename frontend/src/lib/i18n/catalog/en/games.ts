@@ -323,4 +323,8 @@ export const games: Record<GamesKey, Message> = {
   'games.catalogShowMore': 'Show more',
   'games.catalogShownOf': 'Loaded {shown} of {total}',
   'games.recommendationRefreshFailed': 'Could not refresh your picks. Showing the previous selection for now.',
+  'games.storeLinksTitle': 'Where to buy',
+  'games.storeSteam': 'Steam',
+  'games.storeGog': 'GOG',
+  'games.storeEpic': 'Epic Games Store',
 };

@@ -23,6 +23,8 @@ export const REASONS: Record<string, MessageKey> = {
   'metadata.no_match': 'errMetadata.metadataNoMatch',
   'metadata.rate_limited': 'errMetadata.metadataRateLimited',
   'metadata.save_failed': 'errMetadata.metadataSaveFailed',
+  'metadata.store_link_missing': 'errMetadata.metadataStoreLinkMissing',
+  'metadata.store_link_invalid': 'errMetadata.metadataStoreLinkInvalid',
 };
 
 export function metadataErrorText(err: unknown, fallback: string = msg('errMetadata.fallback')): string {

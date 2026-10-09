@@ -21,4 +21,6 @@ export const errMetadata: Record<ErrMetadataKey, Message> = {
   'errMetadata.metadataNoMatch': 'The metadata provider has no match for this game',
   'errMetadata.metadataRateLimited': 'The metadata server rate-limited requests',
   'errMetadata.metadataSaveFailed': 'Failed to save metadata',
+  'errMetadata.metadataStoreLinkMissing': 'The store link is unavailable',
+  'errMetadata.metadataStoreLinkInvalid': 'The store link failed validation',
 };

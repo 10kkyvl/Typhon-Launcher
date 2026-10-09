@@ -3,6 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Download, Heart, Play, RotateCw, Square, X } from '@lucide/svelte';
   import Artwork from '../../components/Artwork.svelte';
+  import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero } from '../../game/view';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
@@ -14,7 +15,7 @@
   import { addCatalogGame, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
   import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type TorrentInfo } from '../../services/downloads';
   import { getCatalogGame, getReleasesForGame, getReleasesForTitle, type CatalogGame, type ReleaseGroup } from '../../services/sources';
-  import { getMetadataView, ensureMetadataFresh, type MetadataView } from '../../services/metadata';
+  import { getMetadataView, ensureMetadataFresh, openStoreLink, type MetadataView, type StoreId } from '../../services/metadata';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
@@ -308,6 +309,15 @@
     return hasMessage(code) ? $t(code) : fallback;
   }
 
+  async function openStore(store: StoreId) {
+    pageError = '';
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (error) {
+      pageError = metadataErrorText(error, bp('bp.game.loadFailed'));
+    }
+  }
+
   async function toggleFavorite() {
     if (!localGame || changingFavorite) return;
     changingFavorite = true;
@@ -546,6 +556,7 @@
           <h1>{title}</h1>
           {#if gameMeta}<p class="meta-line">{gameMeta}</p>{/if}
           {#if genres.length}<div class="genre-list">{#each genres.slice(0, 5) as genre (genre)}<span>{genre}</span>{/each}</div>{/if}
+          <StoreLinks links={metadata?.storeLinks} onopen={(store) => void openStore(store)} focusPrefix="game:store:" />
           <div class="badges">
             {#if running}<span class="badge running"><span class="dot"></span>{bp('bp.game.running')}</span>
             {:else if installed}<span class="badge installed">{bp('bp.game.installed')}</span>

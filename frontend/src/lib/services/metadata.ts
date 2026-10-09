@@ -42,6 +42,16 @@ export interface MetadataView {
   stale: boolean;
   provider: string;
   match: MetadataMatch;
+  storeLinks?: Record<string, string> | null;
+}
+
+export type StoreId = 'steam' | 'gog' | 'epic';
+
+export const STORE_ORDER: readonly StoreId[] = ['steam', 'gog', 'epic'];
+
+export function storeEntries(links: Record<string, string> | null | undefined): StoreId[] {
+  if (!links) return [];
+  return STORE_ORDER.filter((store) => Boolean(links[store]));
 }
 
 let languageQueue: Promise<void> = Promise.resolve();
@@ -136,4 +146,9 @@ export async function ensureMetadataFresh(gameId: string): Promise<boolean> {
     if (unknownGame(err)) return false;
     throw err;
   }
+}
+
+export async function openStoreLink(gameId: string, store: StoreId): Promise<void> {
+  if (!inWails) throw unavailable();
+  await MetadataService.OpenStoreLink(gameId, store);
 }

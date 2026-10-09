@@ -31,6 +31,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
@@ -83,8 +84,10 @@
     dismissMetadataMatch,
     ensureMetadataFresh,
     getMetadataView,
+    openStoreLink,
     refreshMetadata,
     type MetadataView,
+    type StoreId,
   } from '../../lib/services/metadata';
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
@@ -581,6 +584,15 @@
     }
   }
 
+  async function openStore(store: StoreId) {
+    if (!canonicalId) return;
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (err) {
+      toast(metadataErrorText(err, msg('errMetadata.fallback')), 'danger');
+    }
+  }
+
   function openShot(index: number) {
     lightboxIndex = index;
     lightboxOpen = true;
@@ -987,6 +999,10 @@
             {/each}
           </div>
         {/if}
+
+        <div class="stores">
+          <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+        </div>
 
         {#if showUpdateCard && update}
           <section class="section">
@@ -1433,6 +1449,10 @@
     color: var(--text-2);
     font-size: var(--font-xs);
     white-space: nowrap;
+  }
+
+  .stores {
+    margin-top: var(--space-5);
   }
 
   .section {
