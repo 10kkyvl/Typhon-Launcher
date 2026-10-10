@@ -24,6 +24,7 @@
   } from '../../lib/profile/appearance';
   import { artStatus } from '../../lib/profile/artPalette';
   import { STATUS_EMOJI } from '../../lib/profile/appearanceEmoji';
+  import { layoutErrorText, statusIssue } from '../../lib/profile/layout';
   import { currentUser } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
 
@@ -37,6 +38,7 @@
     appearanceAccentStyle(a).split(';').filter((rule) => rule.startsWith('--accent')).join(';'),
   );
   const statusLength = $derived([...(draft.statusText ?? '')].length);
+  const statusError = $derived(statusIssue(draft.statusText));
 
   let accentText = $state('');
   let fromText = $state('');
@@ -73,7 +75,7 @@
   }
   function setStatusText(event: Event) {
     const field = event.currentTarget as HTMLInputElement;
-    const text = [...field.value.replace(/\p{Cc}/gu, '')].slice(0, MAX_STATUS_TEXT).join('');
+    const text = [...field.value].slice(0, MAX_STATUS_TEXT).join('');
     field.value = text;
     draft.statusText = text;
   }
@@ -253,6 +255,7 @@
           aria-label={msg('profileStyle.status')} value={draft.statusText ?? ''} oninput={setStatusText} />
         <span class="counter" class:full={statusLength >= MAX_STATUS_TEXT}>{statusLength}/{MAX_STATUS_TEXT}</span>
       </div>
+      {#if statusError}<p class="status-error" role="alert">{layoutErrorText(statusError)}</p>{/if}
       {#if emojiOpen}
         <div class="emoji-grid" role="group" aria-label={msg('profileStyle.emojiPick')}>
           {#each STATUS_EMOJI as emoji}
@@ -279,6 +282,7 @@
   h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.2rem; }
   fieldset { border: 0; padding: 0; min-width: 0; } fieldset:disabled { opacity: .65; }
   section { padding: 1.7rem 0; border-bottom: 1px solid var(--border); }
+  .status-error { color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .hint { color: var(--text-3); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .danger { color: var(--danger); }
   .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }

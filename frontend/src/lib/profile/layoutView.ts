@@ -22,7 +22,7 @@ export type BlockBody =
   | { kind: 'pinned'; game: BlockGame | null; caption: string }
   | { kind: 'collection'; title: string; games: BlockGame[]; dated: boolean; hearts: boolean }
   | { kind: 'genres'; breakdown: GenreBreakdown }
-  | { kind: 'fingerprint'; breakdown: GenreBreakdown; hours: number; games: number; completed: number }
+  | { kind: 'fingerprint'; breakdown: GenreBreakdown; hours: number | null; games: number | null; completed: number | null }
   | { kind: 'text'; title: string; body: string }
   | { kind: 'external'; empty: boolean }
   | { kind: 'error' }
@@ -225,9 +225,9 @@ function publicBody(block: PublicBlock, ctx: PublicContext): BlockBody {
       return {
         kind: 'fingerprint',
         breakdown: breakdownOf({ genres: data.genres, other: data.other, unknown: data.unknown }),
-        hours: data.hours ?? stats?.hours ?? 0,
-        games: typeof count === 'number' ? count : (stats?.games ?? 0),
-        completed: data.completed ?? stats?.completed ?? 0,
+        hours: data.hours ?? stats?.hours ?? null,
+        games: typeof count === 'number' ? count : (stats?.games ?? null),
+        completed: data.completed ?? stats?.completed ?? null,
       };
     }
     case 'text':

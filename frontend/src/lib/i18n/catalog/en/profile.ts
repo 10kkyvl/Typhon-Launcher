@@ -8,11 +8,9 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.applyCrop': 'Apply crop',
   'profile.editCrop': 'Adjust crop',
 
-  'profile.appearance': 'Appearance',
   'profile.theme': 'Profile theme',
   'profile.cover': 'Cover',
   'profile.upload': 'Upload cover',
-  'profile.coverHint': 'JPG, PNG or WebP · up to 8 MB. Best at 2560 × 640 (4:1).',
   'profile.coverPosition': 'Cover position',
   'profile.dim': 'Cover dimming',
   'profile.accent': 'Accent',
@@ -136,4 +134,7 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.layoutErrDuplicateSource': 'A collection with this source already exists',
   'profile.layoutErrConfig': 'Invalid value in the block settings',
   'profile.layoutErrIncomplete': 'The block is incomplete',
+  'profile.layoutErrChars': 'The text has characters that are not allowed: control characters, line separators or text direction overrides. Remove them.',
+  'profile.saveBusy': 'The previous save is still running. Try again in a moment.',
+  'profile.blocksFromNewer': 'Some blocks were created by a newer version of the launcher: they are not shown here but still take up places ({hidden} of {count}). Update the launcher or free a place to add new ones.',
 };

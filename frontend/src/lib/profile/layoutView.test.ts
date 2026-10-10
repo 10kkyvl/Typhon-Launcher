@@ -350,6 +350,21 @@ describe('resolvePublic', () => {
     expect(bodyOf(blocks, 's')).toMatchObject({ kind: 'fingerprint', games: 10 });
   });
 
+  it('keeps hidden playtime as null instead of turning it into zero hours', () => {
+    const genres = [{ name: 'RPG', share: 0.7 }];
+    const hidden = profileOf({ stats: { games: 10, completed: 2, hours: null } });
+
+    const blocks = resolve([{ ...block('f', 'fingerprint'), data: { genres, games: 38 as unknown as GameCard[], completed: 12 } }], hidden);
+
+    expect(bodyOf(blocks, 'f')).toMatchObject({ kind: 'fingerprint', hours: null, games: 38, completed: 12 });
+  });
+
+  it('keeps every counter null when neither the block nor the stats carry it', () => {
+    const blocks = resolve([{ ...block('f', 'fingerprint'), data: { genres: [] } }], profileOf({ stats: null }));
+
+    expect(bodyOf(blocks, 'f')).toMatchObject({ kind: 'fingerprint', hours: null, games: null, completed: null });
+  });
+
   it('renders text from the config and an unknown type as nothing', () => {
     const blocks = resolve([block('t', 'text', { title: 'T', body: 'B' }), block('x', 'future')]);
 

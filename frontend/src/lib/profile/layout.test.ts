@@ -11,7 +11,10 @@ import {
   ADD_PRESETS,
   defaultLayout,
   effectiveLayout,
+  hasRejectedRune,
   hiddenFromOthers,
+  statusIssue,
+  unknownBlockCount,
   layoutPatch,
   moveBlock,
   newBlockId,
@@ -383,6 +386,65 @@ describe('blockIssue and validateLayout', () => {
 
     expect(validateLayout(texts).map((issue) => issue.error.code)).toEqual(['max_text']);
     expect(validateLayout(many).map((issue) => issue.error.code)).toEqual(['max_blocks']);
+  });
+});
+
+describe('characters the backend rejects', () => {
+  it.each([
+    ['a tab', 'a\tb'],
+    ['a null', 'a\u0000b'],
+    ['a delete', 'a\u007fb'],
+    ['a C1 control', 'a\u0085b'],
+    ['a lone carriage return', 'a\rb'],
+    ['a line separator', 'a\u2028b'],
+    ['a paragraph separator', 'a\u2029b'],
+    ['a bidi override', 'a\u202eb'],
+    ['a bidi embedding', 'a\u202ab'],
+    ['a bidi isolate', 'a\u2066b'],
+    ['a pop isolate', 'a\u2069b'],
+  ])('refuses %s everywhere', (_name, value) => {
+    expect(hasRejectedRune(value, false)).toBe(true);
+    expect(hasRejectedRune(value, true)).toBe(true);
+  });
+
+  it.each(['plain', 'Привет, мир', '🎮 game', 'é', 'a\u200db', 'a\u00a0b', '\u2065', '\u202f'])('accepts %j', (value) => {
+    expect(hasRejectedRune(value, false)).toBe(false);
+    expect(hasRejectedRune(value, true)).toBe(false);
+  });
+
+  it('allows newlines only in multi-line text', () => {
+    expect(hasRejectedRune('a\nb', true)).toBe(false);
+    expect(hasRejectedRune('a\r\nb', true)).toBe(false);
+    expect(hasRejectedRune('a\nb', false)).toBe(true);
+  });
+
+  it.each([
+    ['pinned caption', block('p', 'pinned', { igdbId: 5, caption: 'x\ty' }), 'caption'],
+    ['collection title', block('c', 'collection', { source: 'manual', title: 'x\u202ey', igdbIds: [1] }), 'title'],
+    ['text title with a newline', block('t', 'text', { title: 'x\ny', body: 'b' }), 'title'],
+    ['text body with a tab', block('t', 'text', { title: '', body: 'x\ty' }), 'body'],
+    ['text body with a bidi isolate', block('t', 'text', { title: '', body: 'x\u2067y' }), 'body'],
+  ])('points at the field: %s', (_name, item, field) => {
+    expect(blockIssue(item)).toEqual({ code: 'bad_chars', field });
+    expect(validateLayout(layoutOf(item))).toEqual([{ id: item.id, error: { code: 'bad_chars', field } }]);
+  });
+
+  it('keeps newlines in a text body valid', () => {
+    expect(blockIssue(block('t', 'text', { title: '', body: 'one\ntwo\n\nthree' }))).toBeNull();
+  });
+
+  it('judges the status text like a title', () => {
+    expect(statusIssue('фармлю боссов')).toBeNull();
+    expect(statusIssue(undefined)).toBeNull();
+    expect(statusIssue('boss\u202e')).toEqual({ code: 'bad_chars', field: 'statusText' });
+    expect(statusIssue('a\tb')).toEqual({ code: 'bad_chars', field: 'statusText' });
+  });
+});
+
+describe('unknownBlockCount', () => {
+  it('counts the blocks the editor cannot show', () => {
+    expect(unknownBlockCount(layoutOf(block('a', 'about'), unknown, block('y', 'later')))).toBe(2);
+    expect(unknownBlockCount(layoutOf(block('a', 'about')))).toBe(0);
   });
 });
 

@@ -31,6 +31,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
+  import HiddenBadge from '../profile/HiddenBadge.svelte';
   import ProfilePlaying from '../profile/ProfilePlaying.svelte';
   import UserActivity from './UserActivity.svelte';
   import UserCommon from './UserCommon.svelte';
@@ -227,6 +228,10 @@
   {/if}
 {/snippet}
 
+{#snippet masked()}
+  <HiddenBadge text={msg('social.statsHiddenHint')} />
+{/snippet}
+
 {#if isGuest}
   <EmptyState
     title={msg('social.userGuestTitle')}
@@ -272,7 +277,7 @@
     {:else}
       <div class="columns">
         <div class="main">
-          <BlockGrid blocks={gridBlocks} {external} accent={appearanceOf(data.appearance).accent} />
+          <BlockGrid blocks={gridBlocks} {external} {masked} accent={appearanceOf(data.appearance).accent} />
           {#if common}
             <UserCommon {common} {name} />
           {/if}

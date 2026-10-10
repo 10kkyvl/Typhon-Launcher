@@ -243,14 +243,15 @@ function onUnauthenticated(err: unknown) {
   }
 }
 
-export async function saveProfile(patch: ProfilePatch): Promise<void> {
-  if (get(savingProfile)) return;
+export async function saveProfile(patch: ProfilePatch): Promise<boolean> {
+  if (get(savingProfile)) return false;
   savingProfile.set(true);
   const owner = get(currentUser)?.id;
   try {
     const updated = await updateProfile(patch);
     if (get(currentUser)?.id !== owner) throw new AccountError('unauthenticated');
     currentUser.set(updated);
+    return true;
   } catch (err) {
     if (get(currentUser)?.id === owner) onUnauthenticated(err);
     throw err;

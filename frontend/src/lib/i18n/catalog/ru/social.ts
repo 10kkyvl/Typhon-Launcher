@@ -166,8 +166,6 @@ export const social = {
   'social.flagActivitySub': 'Сыгранные игры по дням, без времени запуска',
   'social.flagStatsLabel': 'Статистика',
   'social.flagStatsSub': 'Игры, часы, пройдено, играю сейчас',
-  'social.showcaseHeading': 'Витрина',
-  'social.showcaseExplain': 'До трёх блоков, в выбранном порядке.',
   'social.moveUp': 'Выше: {title}',
   'social.moveDown': 'Ниже: {title}',
   'social.removeButton': 'Убрать',

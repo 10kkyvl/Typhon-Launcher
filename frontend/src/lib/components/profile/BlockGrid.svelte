@@ -20,6 +20,7 @@
     blocks,
     external,
     flag,
+    masked,
     accent,
     editing = false,
     selectedId = '',
@@ -31,6 +32,7 @@
     blocks: GridBlock[];
     external?: Snippet<[GridBlock]>;
     flag?: Snippet;
+    masked?: Snippet;
     accent?: string;
     editing?: boolean;
     selectedId?: string;
@@ -153,7 +155,7 @@
   {:else if body.kind === 'genres'}
     <GenresBlock breakdown={body.breakdown} />
   {:else if body.kind === 'fingerprint'}
-    <FingerprintBlock genres={body.breakdown.genres} hours={body.hours} games={body.games} completed={body.completed} {accent} />
+    <FingerprintBlock genres={body.breakdown.genres} hours={body.hours} games={body.games} completed={body.completed} {accent} {masked} />
   {:else if body.kind === 'text'}
     {#if body.body.trim() === ''}
       {@render placeholder(block, msg('profile.blockEmptyText'))}

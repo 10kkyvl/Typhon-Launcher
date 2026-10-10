@@ -171,6 +171,23 @@ describe('BlockGrid block types', () => {
     expect(out).toContain('12');
   });
 
+  it('shows the hidden mark instead of hours the owner keeps private, and never a zero', () => {
+    const masked = createRawSnippet(() => ({ render: () => '<b class="masked-mark">hidden</b>' }));
+    const body: BlockBody = {
+      kind: 'fingerprint',
+      breakdown: { genres: [{ name: 'RPG', share: 0.6 }], other: 0, unknown: 0 },
+      hours: null,
+      games: 38,
+      completed: 12,
+    };
+
+    const out = html([cell('f', body)], { masked });
+
+    expect(out.match(/masked-mark/g)).toHaveLength(1);
+    expect(out).toContain('38');
+    expect(out).not.toMatch(/class="num[^"]*">\s*(<!---->)?0\b/);
+  });
+
   it('keeps the newlines of a text block and shows markup and links as plain text', () => {
     const out = html([cell('t', { kind: 'text', title: 'Notes', body: 'line one\nline two <b>bold</b> https://example.com' })]);
 

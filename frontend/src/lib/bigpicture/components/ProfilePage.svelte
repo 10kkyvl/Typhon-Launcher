@@ -65,8 +65,11 @@
     editMessage = '';
     editFailed = false;
     try {
-      await saveProfile({ displayName });
-      if ($currentUser?.id === owner) editMessage = $t('bp.profile.nameSaved');
+      const saved = await saveProfile({ displayName });
+      if ($currentUser?.id === owner) {
+        editMessage = saved ? $t('bp.profile.nameSaved') : $t('profile.saveBusy');
+        editFailed = !saved;
+      }
     } catch (err) {
       if ($currentUser?.id === owner) {
         editMessage = accountErrorText(err, $t('bp.profile.nameSaveFailed'));

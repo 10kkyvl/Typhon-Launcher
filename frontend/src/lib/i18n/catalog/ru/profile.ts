@@ -5,11 +5,9 @@ export const profile = {
   'profile.applyCrop': 'Применить кадр',
   'profile.editCrop': 'Изменить кадр',
 
-  'profile.appearance': 'Оформление',
   'profile.theme': 'Тема профиля',
   'profile.cover': 'Обложка',
   'profile.upload': 'Загрузить обложку',
-  'profile.coverHint': 'JPG, PNG или WebP · до 8 МБ. Лучше 2560 × 640 (4:1).',
   'profile.coverPosition': 'Положение обложки',
   'profile.dim': 'Затемнение обложки',
   'profile.accent': 'Акцент',
@@ -133,6 +131,9 @@ export const profile = {
   'profile.layoutErrDuplicateSource': 'Коллекция с этим источником уже есть',
   'profile.layoutErrConfig': 'Недопустимое значение в настройках блока',
   'profile.layoutErrIncomplete': 'Блок не заполнен',
+  'profile.layoutErrChars': 'В тексте есть недопустимые символы: управляющие знаки, разделители строк или переключатели направления текста. Уберите их.',
+  'profile.saveBusy': 'Предыдущее сохранение ещё идёт. Повторите через мгновение.',
+  'profile.blocksFromNewer': 'Часть блоков создана более новой версией лаунчера: здесь их не видно, но они занимают места ({hidden} из {count}). Чтобы добавить новые, обновите лаунчер или освободите место.',
 } as const;
 
 export type ProfileKey = keyof typeof profile;

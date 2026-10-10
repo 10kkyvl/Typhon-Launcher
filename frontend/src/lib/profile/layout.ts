@@ -27,7 +27,8 @@ export type LayoutErrorCode =
   | 'duplicate'
   | 'duplicate_source'
   | 'invalid_config'
-  | 'incomplete';
+  | 'incomplete'
+  | 'bad_chars';
 
 export interface LayoutError {
   code: LayoutErrorCode;
@@ -81,12 +82,33 @@ const ERROR_KEYS: Record<LayoutErrorCode, ProfileKey> = {
   duplicate_source: 'profile.layoutErrDuplicateSource',
   invalid_config: 'profile.layoutErrConfig',
   incomplete: 'profile.layoutErrIncomplete',
+  bad_chars: 'profile.layoutErrChars',
 };
 
 export function layoutErrorText(error: LayoutError): string {
   if (error.code === 'max_blocks') return msg(ERROR_KEYS.max_blocks, { count: MAX_BLOCKS });
   if (error.code === 'max_text') return msg(ERROR_KEYS.max_text, { count: MAX_TEXT_BLOCKS });
   return msg(ERROR_KEYS[error.code]);
+}
+
+export function hasRejectedRune(value: string, multiline: boolean): boolean {
+  const text = multiline ? value.replace(/\r\n/g, '\n') : value;
+  for (const ch of text) {
+    if (multiline && ch === '\n') continue;
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+    if (code === 0x2028 || code === 0x2029) return true;
+    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) return true;
+  }
+  return false;
+}
+
+export function statusIssue(text: string | undefined): LayoutError | null {
+  return hasRejectedRune(text ?? '', false) ? { code: 'bad_chars', field: 'statusText' } : null;
+}
+
+export function unknownBlockCount(layout: ProfileLayout): number {
+  return layout.blocks.filter((block) => !isKnownType(block.type)).length;
 }
 
 export function isKnownType(type: string): type is BlockType {
@@ -276,6 +298,17 @@ export function blockIssue(block: ProfileBlock): LayoutError | null {
   const invalid = configError(block.type, block.config);
   if (invalid) return invalid;
   const config = block.config;
+  const lines: [string, boolean][] = [
+    ['caption', false],
+    ['title', false],
+    ['body', true],
+  ];
+  if (block.type === 'pinned' || block.type === 'collection' || block.type === 'text') {
+    for (const [field, multiline] of lines) {
+      const value = config[field];
+      if (typeof value === 'string' && hasRejectedRune(value, multiline)) return { code: 'bad_chars', field };
+    }
+  }
   if (block.type === 'pinned' && !(typeof config.igdbId === 'number' && config.igdbId > 0)) {
     return { code: 'incomplete', field: 'igdbId' };
   }

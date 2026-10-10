@@ -4,7 +4,7 @@
   import IconButton from '../IconButton.svelte';
   import Select from '../Select.svelte';
   import { msg } from '../../i18n';
-  import { runeCount } from '../../profile/layout';
+  import { layoutErrorText, runeCount, type LayoutError } from '../../profile/layout';
   import { showcaseTitle } from '../../profile/layoutView';
   import {
     COLLECTION_SOURCES,
@@ -23,6 +23,7 @@
     block,
     layout,
     titleOf,
+    issue = null,
     disabled = false,
     onconfig,
     onremember,
@@ -32,6 +33,7 @@
     block: ProfileBlock;
     layout: ProfileLayout;
     titleOf: (igdbId: number) => string;
+    issue?: LayoutError | null;
     disabled?: boolean;
     onconfig: (patch: Record<string, unknown>) => void;
     onremember: (pick: { igdbId: number; game: GameRef }) => void;
@@ -41,6 +43,7 @@
 
   const config = $derived(block.config);
   const name = $derived(blockLabel(block.type));
+  const charError = (field: string) => (issue?.code === 'bad_chars' && issue.field === field ? layoutErrorText(issue) : '');
   const text = (key: string) => (typeof config[key] === 'string' ? (config[key] as string) : '');
   const igdbId = $derived(typeof config.igdbId === 'number' ? config.igdbId : 0);
   const source = $derived(text('source'));
@@ -106,6 +109,7 @@
             value={text('caption')}
             oninput={(event) => onconfig({ caption: event.currentTarget.value })}
           ></textarea>
+          {#if charError('caption')}<span class="error" role="alert">{charError('caption')}</span>{/if}
         </label>
       {:else if block.type === 'collection'}
         <div class="field">
@@ -125,6 +129,7 @@
               value={text('title')}
               oninput={(event) => onconfig({ title: event.currentTarget.value })}
             />
+            {#if charError('title')}<span class="error" role="alert">{charError('title')}</span>{/if}
           </label>
           <div class="field">
             <span class="field-label">
@@ -176,6 +181,7 @@
             value={text('title')}
             oninput={(event) => onconfig({ title: event.currentTarget.value })}
           />
+          {#if charError('title')}<span class="error" role="alert">{charError('title')}</span>{/if}
         </label>
         <label class="field">
           <span class="field-label">
@@ -189,6 +195,7 @@
             value={text('body')}
             oninput={(event) => onconfig({ body: event.currentTarget.value })}
           ></textarea>
+          {#if charError('body')}<span class="error" role="alert">{charError('body')}</span>{/if}
         </label>
       {:else}
         <p class="hint">{msg('profile.blockNoSettings')}</p>
@@ -327,6 +334,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .error {
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--danger);
   }
 
   .hint {

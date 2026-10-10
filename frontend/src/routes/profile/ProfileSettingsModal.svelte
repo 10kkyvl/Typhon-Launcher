@@ -6,6 +6,7 @@
   import Toggle from '../../lib/components/Toggle.svelte';
   import { VISIBILITIES, type ProfileSettings, type Visibility } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
+  import { privacyPatch } from '../../lib/profile/settingsPatch';
   import { visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -53,7 +54,10 @@
     if ($savingProfile || $isOffline) return;
     error = '';
     try {
-      await saveProfile({ profile: { ...$state.snapshot(draft), visibility: toVisibility(visibility) } });
+      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility)) }))) {
+        error = msg('profile.saveBusy');
+        return;
+      }
       open = false;
       toast(msg('social.settingsSaved'), 'success');
     } catch (err) {

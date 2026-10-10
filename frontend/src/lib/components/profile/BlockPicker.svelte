@@ -2,9 +2,9 @@
   import { Plus } from '@lucide/svelte';
   import Button from '../Button.svelte';
   import { msg } from '../../i18n';
-  import { ADD_PRESETS, canAdd, layoutErrorText, type AddPreset } from '../../profile/layout';
+  import { ADD_PRESETS, canAdd, layoutErrorText, unknownBlockCount, type AddPreset } from '../../profile/layout';
   import { showcaseTitle } from '../../profile/layoutView';
-  import type { ProfileLayout } from '../../services/account';
+  import { MAX_BLOCKS, type ProfileLayout } from '../../services/account';
   import { blockLabel } from './blockLabels';
 
   let {
@@ -14,6 +14,8 @@
   }: { layout: ProfileLayout; disabled?: boolean; onadd: (preset: AddPreset) => void } = $props();
 
   let open = $state(false);
+
+  const hiddenByVersion = $derived(layout.blocks.length >= MAX_BLOCKS && unknownBlockCount(layout) > 0);
 
   function label(preset: AddPreset): string {
     if (preset.id === 'collection') return msg('profile.presetCollection');
@@ -31,6 +33,9 @@
   <Button {disabled} pressed={open} onclick={() => (open = !open)}>
     <Plus size="1.5rem" strokeWidth={1.8} />{msg('profile.addBlock')}
   </Button>
+  {#if hiddenByVersion}
+    <p class="hint">{msg('profile.blocksFromNewer', { hidden: unknownBlockCount(layout), count: MAX_BLOCKS })}</p>
+  {/if}
   {#if open}
     <ul class="presets">
       {#each ADD_PRESETS as preset (preset.id)}
@@ -52,6 +57,13 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-3);
+  }
+
+  .hint {
+    margin: 0;
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--warning);
   }
 
   .presets {

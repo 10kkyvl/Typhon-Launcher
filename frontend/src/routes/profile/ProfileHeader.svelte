@@ -103,7 +103,10 @@
     if (draft.username !== $currentUser.username) patch.username = draft.username;
     if (draft.bio !== $currentUser.bio) patch.bio = draft.bio;
     try {
-      await saveProfile(patch);
+      if (!(await saveProfile(patch))) {
+        fieldErrors = { general: msg('profile.saveBusy') };
+        return;
+      }
       editing = false;
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {

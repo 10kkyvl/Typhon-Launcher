@@ -19,6 +19,7 @@
   import {
     addBlock,
     defaultLayout,
+    blockIssue,
     effectiveLayout,
     layoutErrorText,
     layoutPatch,
@@ -26,6 +27,7 @@
     removeBlock,
     sameLayout,
     setWidth,
+    statusIssue,
     updateConfig,
     validateLayout,
     visibleBlocks,
@@ -98,7 +100,8 @@
         !sameLayout(draft.layout, origin.layout) ||
         withoutLayout($state.snapshot(draft) as ProfileSettings) !== withoutLayout(origin)),
   );
-  const canSave = $derived(dirty && issues.length === 0 && !saving && !$isOffline);
+  const statusProblem = $derived(editing ? statusIssue(draft.statusText) : null);
+  const canSave = $derived(dirty && issues.length === 0 && statusProblem === null && !saving && !$isOffline);
 
   function empty(type: string): boolean {
     const snapshot = $profileSnapshot;
@@ -264,7 +267,11 @@
       const patch = layoutPatch(settings, layout, resetLayout);
       if (patch.send) profile.layout = patch.layout;
       else delete profile.layout;
-      await saveProfile({ profile });
+      const saved = await saveProfile({ profile });
+      if (!saved) {
+        saveError = msg('profile.saveBusy');
+        return;
+      }
       if ($currentUser?.id !== owner) return;
       toast(msg('social.settingsSaved'), 'success');
       leaveEditing();
@@ -374,6 +381,8 @@
           <strong>{msg('profile.editingTitle')}</strong>
           {#if saveError || layoutError}
             <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
+          {:else if statusProblem}
+            <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
           {:else if issues.length > 0}
             <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
           {:else}
@@ -433,6 +442,7 @@
             block={selected}
             {layout}
             {titleOf}
+            issue={blockIssue(selected)}
             disabled={saving}
             onconfig={(patch) => configure(selected.id, patch)}
             onremember={remember}
