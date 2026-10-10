@@ -1,10 +1,10 @@
 # Typhon Privacy Policy
 
-Revision of 10 October 2026.
+Revision of 11 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
-Typhon is developed and maintained by an independent developer (the "Typhon project operator"). The operator is responsible for data processing in the Typhon server services: the account service, the metadata service and the distribution of app updates.
+Typhon is developed and maintained by an independent developer (the "Typhon project operator"). The operator is responsible for data processing in the Typhon server services: the account service, the metadata service, the support desk, sending email, and the distribution of app updates.
 
 The operator does not control the BitTorrent network, DHT nodes, peer exchange (PEX), third-party sources added by the user, or third-party services. What happens to data there is described in section 7, but the operator cannot influence it.
 
@@ -21,7 +21,7 @@ The following data is stored locally only and is not sent to the Typhon services
 - **Installations** — installation paths, the set of installed files, the history of installations and removals, and update manifests.
 - **Library** — the list of games, paths to executables, and the times and durations of play sessions. If cross-device sync is enabled (section 2.3), some of this — the game's identifier in the external IGDB catalog, the last launch date, playtime, the "favorite" mark and the completion status — is sent to the service; paths, file names and release names are not.
 - **App settings**, including BitTorrent parameters. With sync enabled, some settings are sent to the service (section 2.3); directory paths, speed limits and data-collection consents are not.
-- **The activity log** `typhon.log` and its previous copies `typhon.log.1` … `typhon.log.5` — these stay on the device and are never sent anywhere automatically in full. The log is size-limited: 10 MB per file and no more than six files, with the oldest overwritten.
+- **The activity log** `typhon.log` and its previous copies `typhon.log.1` … `typhon.log.5` — these stay on the device and are never sent anywhere automatically in full: the user can export a scrubbed log archive themselves, with a button (sections 2.10 and 2.11). The log is size-limited: 10 MB per file and no more than six files, with the oldest overwritten.
 - **The play session log** — which game was launched and finished and when, for the last 90 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
 - **The compatibility log** — which games start on this computer and which do not: the number of attempts, the number of failures, the longest session, and the code and text of the last error. It is kept always and is never sent anywhere on its own; with usage statistics enabled, an anonymized record derived from it is sent, as described in section 8.5. The error text is never sent.
 
@@ -47,13 +47,16 @@ The app can run without an account, in guest mode. In that mode no requests are 
 
 When an account is used, the following is sent to the service:
 
-- on registration — email address, username, display name and password;
+- on registration — email address, username, display name and password; an email asking to confirm the address is sent to that address (section 2.12);
 - on sign-in — username or email address, and password;
+- on password recovery — the email address, then the token from the email that was sent and the new password (section 2.12);
 - when working with the profile — requests to read and change the profile, and to upload and delete the avatar.
 
-Stored on the server are: the account identifier, username, display name, email address, a link to the avatar file, and the record's creation and modification dates. The password is not stored in its original form, but as a hash. For each session, a hash of the token, the creation time, the expiry and a revocation flag are stored. An uploaded avatar is stored as a file in object storage and is available at a direct link to anyone who knows that link. The account also stores profile settings: which profile blocks to show to other users, which showcases are selected, the profile layout (which blocks, in what order and width, and which games are picked in them — by the game's catalog identifier) and the styling (theme, colours, avatar frame, name style).
+Stored on the server are: the account identifier, username, display name, email address, the time the email address was confirmed, a link to the avatar file, and the record's creation and modification dates. The password is not stored in its original form, but as a hash. For each session, a hash of the token, the creation time, the expiry and a revocation flag are stored. An uploaded avatar is stored as a file in object storage and is available at a direct link to anyone who knows that link. The account also stores profile settings: which profile blocks to show to other users, which showcases are selected, the profile layout (which blocks, in what order and width, and which games are picked in them — by the game's catalog identifier) and the styling (theme, colours, avatar frame, name style).
 
 The session token is stored on the device in the Windows credential store (Credential Manager), not in the settings file.
+
+The same account works on the `typhon-launcher.com` website: there you can register, sign in, write to support, and confirm an address or change a password through a link from an email. A website session is the same kind of session record as an app session (token hash, creation time, expiry, revocation flag), but the token itself lives not in the Windows credential store but in a browser cookie (section 8.4). The checkbox accepting the Terms and the Privacy Policy when registering on the website is checked in the browser; neither the checkbox itself nor the time and version of the acceptance is sent to the server or stored there. In the app, the accepted revision is recorded only in the settings on the device.
 
 ### 2.2. Game metadata
 
@@ -163,11 +166,39 @@ The operator may remove an avatar, cover, bio, status, profile block texts, even
 
 ### 2.10. Log upload at the user's request
 
-Under Settings → About there is a "Send to us" button: it sends an archive of the app's log to the Typhon server. This happens only on that press and after confirmation; on its own the app sends the log nowhere (section 8.4).
+Under Settings → About, in the "Launcher logs" card, there are the "Download logs" and "Send to us" buttons. The first saves an archive to the "Downloads" folder on the device, the second sends the same archive to the Typhon server. Sending happens only on that press and after confirmation; on its own the app sends the log nowhere (section 8.4). The same archive can be attached to a support request (section 2.11).
 
-Before sending, the app states plainly what the archive contains: the operating-system user name, folder paths on disk and the names of games and torrents. Log lines go through the same scrubbing as error reports (section 8.3): local paths, source addresses, magnet links and tokens are replaced with placeholders. The archive is limited to 8 MB compressed; what does not fit is dropped, and the app shows which files were left out.
+**What is in the archive.** The `info.txt` file and the activity log — `typhon.log` and its previous copies, taking no more than the last 16 MB of each file. `info.txt` records the app version, the time the archive was built, the platform and architecture, the data directory (the path is replaced with a placeholder), the name of the operating system, the processor model, the number of threads and the amount of RAM.
 
-On the server the archive is stored for 72 hours and is then deleted. It is not linked to an account; the operator uses it only to investigate the reported problem.
+**What is scrubbed.** Every line goes through the same replacement rules as error reports (section 8.3) and is replaced with placeholders: local paths — `<path>`; the operating-system user name, which is taken from the name of the home folder, — `<user>`, and the computer name — `<host>`; IP addresses — `<ip>`; email addresses — `<email>`; MAC addresses — `<mac>`; magnet links, infohashes and long hexadecimal strings — `<hash>`; the values of fields holding tokens, passwords and keys — `<token>`. Of a web address, the scheme and the host name stay and the path and parameters are dropped. A user name shorter than three characters and generic names such as `user` or `admin` are not replaced: they would cut out ordinary words.
+
+**What stays.** The names of games and releases as they are written in the source; file names outside paths; the names of the sources the user added; host names in web addresses, including a source's host if the app contacted it and logged an error. The display name and username of the Typhon account have no scrubbing rule of their own and stay in the text if they got into the log. A path written in an unusual form may not be recognised by the rules and then stays. So the scrubbing comes with no guarantees.
+
+Unlike error reports, the archive has no "refuse rather than let through" check (section 8.3): if something that looks like a sensitive value is left in the text after scrubbing, the archive is still built and sent. That is why the app warns about the contents before sending, and why the archive can be downloaded and read first: an archive with the same contents is what gets sent.
+
+The archive is limited to 8 MB compressed; what does not fit (older copies of the log) is dropped, and the app shows which files were left out.
+
+On the server an archive sent on its own is stored for 72 hours and is then deleted. It is not linked to an account: it is described only by the installation identifier, the session identifier, the app version and the operating system. An archive attached to a request is linked to that request and is stored longer (sections 2.11 and 4). The operator uses it only to investigate the reported problem.
+
+### 2.11. Support requests
+
+This is what the user writes themselves: until they send a request, nothing described below exists. From the app a request is created from an account. On the website it can be left both from an account and without signing in — as a guest, with a confirmed email address.
+
+**What is sent and stored.** The subject of the request (up to 120 characters) and the text (up to 5,000 characters per message), all later messages from the user and replies from support, with timestamps; a category from a closed list (installation, game launch, account, launcher, other); the status of the request; the interface language — Russian or English — in which the emails will arrive. From the app, the request also carries the app version, the operating system and the architecture, and, if the user picked a game, its numeric identifier in the IGDB catalog. A request from an account is linked to it. A guest request is linked to the email address the guest gave: it is stored in the request, and next to it its normalized form (lower case, no tag after "+", no dots for Gmail), by which the server limits the number of unconfirmed requests from one address. The key that opens a guest request is stored by the server only as a hash: it cannot issue it again or put it into another email.
+
+**Logs.** A log archive can be attached to a request and to later messages from the app — with a separate checkbox, after confirmation. It is the same scrubbed archive with the same contents as for a manual upload (section 2.10). It is uploaded to the server as a separate file described only by the installation identifier, the session identifier, the app version and the operating system, and once attached to a request it is linked to that request and, through it, to the account. A log cannot be attached from the website or from a guest request. No more than five archives can be attached to one request.
+
+**Who sees it.** The request and the attached archive are visible to the support staff and the project administrator. The account's email address is not shown to an ordinary support agent, only to the administrator; a guest's address is visible to both, because there is no other way to reply. The content of requests is not analysed automatically and is used for nothing except answering the request. Do not put passwords, sign-in or password-reset links from emails, payment details or source addresses into a request: support does not need them, and people read the text.
+
+**Notifications.** When support replies, an email arrives at the email address with the number of the request and a link to the page where it can be read; the text of the reply is not included in the email (section 2.12). Retention periods are in section 4.
+
+### 2.12. Email
+
+The service sends emails only in connection with a user's action and only in four cases: address confirmation after registration (the link is valid for 48 hours); a password reset on request (the link is valid for 2 hours); confirmation of a guest request (the link is the only way to the conversation, and an unconfirmed request is deleted after 48 hours); a notification about a support reply. There are no advertising or informational mailings and no product emails.
+
+An email is first written to a sending queue in the service's database: the recipient's address, the email type, the language and the template data, that is, the link and, if there is one, the username. Once it is sent or has finally failed, the template data is erased at once, and the record stays for the period given in section 4. Address-confirmation and password-reset tokens are stored by the server as a hash together with the purpose, the address and the expiry.
+
+Emails are sent through the Spaceship mail service (Spacemail), from the address `no-reply@typhon-launcher.com`, over an encrypted connection. The provider sees the recipient's address and the text of the email, including the link; the provider's servers are in the United States. Details are in section 7.1.
 
 ## 3. Why data is processed
 
@@ -179,11 +210,13 @@ The Typhon server services process data only for the following:
 - friends and profile visibility: friend requests, the lists of friends and blocked users, the friend code, showing the profile to other users according to the visibility level (section 2.8);
 - serving game metadata at the app's request;
 - serving the update manifest and app update files;
+- answering support requests (section 2.11);
+- sending the emails without which the account and support do not work: address confirmation, password reset, guest request confirmation, reply notification (section 2.12);
 - rate limiting, so that the services stay available;
 - aggregated real-time counting: how many launchers are running right now, how many of them are in a game, which games are being played and which app versions are in use (section 8.1);
 - where the user has explicitly enabled the toggle — product usage analytics: how often downloads, installations and updates complete successfully, and which operations the app fails on most often (section 8.2).
 
-The data is not used for advertising, marketing or profiling: no advertising or marketing profiles are built from it and it is not passed to third parties. Analytics is limited to what is described in section 8: aggregated session state and — only with the user's explicit consent — the outcomes of app operations. Clicks, screen navigation and other interface behavior are not tracked. There are no mailing lists: the email address is needed to sign in and to recover access to an account, not to send product mail.
+The data is not used for advertising, marketing or profiling: no advertising or marketing profiles are built from it and it is not passed to third parties. Analytics is limited to what is described in section 8: aggregated session state and — only with the user's explicit consent — the outcomes of app operations. Clicks, screen navigation and other interface behavior are not tracked. There are no mailing lists: the email address is needed to sign in, to confirm the address, to recover access to an account and for notifications about support replies, not to send product mail.
 
 ## 4. Retention periods
 
@@ -205,7 +238,17 @@ Game compatibility reports (section 8.5) are stored on the server for 180 days �
 
 Anonymous diagnostics reports (section 8.3) are stored on the server for 30 days — the period is a service setting — and are then deleted. Identical errors are stored as a group rather than individually: a group has a fingerprint, a counter, first- and last-seen times and the set of affected app versions.
 
-Manually uploaded log archives (section 2.10) are stored for 72 hours. Messages between friends (section 2.9) — 7 days from sending. Activity feed events and their captions (section 2.8) — 90 days. Reviews and the profile cover (section 2.9) — until the user deletes them or until the account is deleted. The catalog search-string cache (section 2.5) — one day.
+Manually uploaded log archives (section 2.10) that are not attached to a request are stored for 72 hours. Messages between friends (section 2.9) — 7 days from sending. Activity feed events and their captions (section 2.8) — 90 days. Reviews and the profile cover (section 2.9) — until the user deletes them or until the account is deleted. The catalog search-string cache (section 2.5) — one day.
+
+Support requests (section 2.11) are stored as follows:
+
+- an open request — until the user or support closes it; such a request has no storage period of its own;
+- a request that support has answered and the user has not replied to for 14 days is closed automatically;
+- a closed request with its whole conversation is stored for 365 days from closing and is then deleted; a reply from the user in a closed request reopens it, and the period runs from the next closing;
+- an unconfirmed guest request, which nobody has seen, is deleted 48 hours after it was created; a confirmed guest request has the same periods as the rest;
+- a log archive attached to a request is stored while the request is open and for 30 more days after it is closed; if the request is reopened, the archive stays with it. The check runs hourly.
+
+Emails (section 2.12): once an email is sent, or has finally failed, its text is erased from the queue at once, and the record of it — the recipient address, the email type, the language, the time and a service note about the sending error — is stored for 30 days and then deleted. Address-confirmation and password-reset tokens are stored as a hash and are deleted no later than 7 days after use or expiry (the links themselves are valid for 48 hours and 2 hours). Copies of sent emails at the mail service are kept under its own rules (section 7.1).
 
 No separate retention periods are set for infrastructure backups and technical copies, so no specific timeframe for complete deletion is claimed here.
 
@@ -215,7 +258,9 @@ Local data is deleted by deleting the `%APPDATA%\Typhon` directory (section 1). 
 
 Cross-device synced data (section 2.3) is deleted from the server in the app, in the sync settings. Turning sync off does not by itself delete it; it is deleted automatically together with the account.
 
-The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the profile and bio, the avatar and cover files, synced settings and the game list, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
+The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the profile and bio, the avatar and cover files, synced settings and the game list, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports, support requests with their whole conversations, address-confirmation and password-reset tokens, and every mail-queue record addressed to the account's email address. Website sessions are the same records as app sessions and are deleted with them. Log archives attached to deleted requests are detached from them and are deleted by the next hourly cleanup, but not earlier than 72 hours after they were received. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
+
+Deleting the account does not delete guest requests left from the same email address before registering or without signing in: they are not linked to the account and are stored for the general periods of section 4. A request to delete them sooner can be sent to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from that address; the operator handles it as described in section 6. A user with an account can close their own request, in the app or on the website, but cannot delete an individual request from the interface before its period ends: only together with the account.
 
 If signing in is impossible (lost password or device), a deletion request is accepted at [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from the email address linked to the account; the project operator carries it out manually through the same mechanism.
 
@@ -235,6 +280,7 @@ Three different cases need to be told apart here: what the Typhon services pass 
 
 - **Hosting and infrastructure.** The services run on a rented server, account data lives in a database and avatar files in object storage. The providers of that infrastructure technically have access to the data hosted with them.
 - **IGDB (Twitch).** The metadata service keeps no game database of its own: on receiving a request it queries IGDB and returns the answer to the app. What goes there is the search string — that is, the game title or folder name. Account data is not sent to IGDB.
+- **Spaceship mail service (Spacemail).** All of the service's emails (section 2.12) are sent through it from the address `no-reply@typhon-launcher.com`. The provider is given the recipient's address and the full text of the email, including the link with a token or key that it contains; it keeps copies of sent emails under its own rules, and the operator has no influence over that. The provider's servers are in the United States, so the email address and the content of the emails are transferred outside the user's country, including outside Ukraine and the European Union. The transfer is part of an action the user requested themselves (registering, recovering a password, writing to support): without it the email cannot be delivered.
 
 There are no other recipients: account data is not passed to advertising networks, analytics services or data brokers, and is not sold.
 
@@ -315,7 +361,7 @@ While the toggle is off, nothing is sent out: error reports are neither collecte
 
 When the toggle is on, the app sends an anonymized report when an error or crash occurs. The report contains only: the report identifier, a timestamp, the app version, the operating system, the architecture, the subsystem and operation in which the failure occurred, a normalized error code, an anonymized message text, an anonymized call stack, and a flag for whether the failure was a crash.
 
-Before sending, every text field is scrubbed: local paths are removed in full — written with backslashes and with forward slashes alike, including paths with spaces in folder names and game installation paths — as are the device name and the operating system account name, IP addresses (IPv4 and IPv6) and MAC addresses, magnet links, infohashes, source, tracker and release addresses, and access and session tokens. The scrubbing is built to refuse rather than to let something through: if a sensitive value is still recognizable in the text after scrubbing, the report is not sent at all. The server scrubs the received fields again and does not rely on the app having already done it. Of an address, only the scheme and host name remain: the path and query string are dropped wholesale rather than by a list of known parameter names, so a signature or temporary credentials in an address cannot survive because of an unfamiliar parameter. What is removed is replaced with a marker (`<path>`, `<host>`, `<ip>`) rather than silently cut out, so that the stack stays readable.
+Before sending, every text field is scrubbed: local paths are removed in full — written with backslashes and with forward slashes alike, including paths with spaces in folder names and game installation paths — as are the device name and the operating system account name, IP addresses (IPv4 and IPv6) and MAC addresses, magnet links, infohashes, source, tracker and release addresses, and access and session tokens. The scrubbing is built to refuse rather than to let something through: if a sensitive value is still recognizable in the text after scrubbing, the report is not sent at all. The server scrubs the received fields again and does not rely on the app having already done it. Of an address, only the scheme and host name remain: the path and query string are dropped wholesale rather than by a list of known parameter names, so a signature or temporary credentials in an address cannot survive because of an unfamiliar parameter. What is removed is replaced with a marker (`<path>`, `<host>`, `<ip>`) rather than silently cut out, so that the stack stays readable. The "refuse rather than let through" rule applies to error reports; the log archive the user exports themselves (section 2.10) has no such check.
 
 **Only the structured report is sent.** The app does not send the log in full, does not send "the last N lines of the log", does not attach crash dumps and does not transmit interface state.
 
@@ -334,13 +380,13 @@ Why this is needed: to see that a new version of the app is breaking for users, 
 Neither session state, nor usage statistics, nor error diagnostics contains — or will come to contain — the following:
 
 - **crash dumps** — process memory dumps are not collected and not sent; the diagnostics of section 8.3 is limited to a structured report with an anonymized call stack;
-- **logs** — `typhon.log` stays on the device and is never sent anywhere automatically, whole or in fragments (section 1). The user can export it manually from the settings and send it themselves — that is a separate action requiring an explicit decision;
+- **logs** — `typhon.log` stays on the device and is never sent anywhere automatically, whole or in fragments (section 1). The user can export a scrubbed archive manually from the settings — download it or press "Send to us" — or attach it to a support request (sections 2.10 and 2.11); that is a separate action requiring an explicit decision;
 - **performance telemetry** — frame rate, response times, processor load and similar measurements are not collected;
-- **hardware information** — the exact processor model, the graphics card, the amount of memory and device serial numbers are not collected. Of the device's properties, the operating system name and the architecture are sent, and in a compatibility report on macOS also the OS version to two components (`15.6`, without the build number), the CrossOver version and the processor **family** as a single word from a closed list: `apple_m1` … `apple_m5`, `intel` or `unknown`. The processor brand string the system reports never leaves the device: on Intel machines it names a specific model. Why those three values are needed is explained in section 8.5;
+- **hardware information** — the exact processor model, the graphics card, the amount of memory and device serial numbers are not collected. Of the device's properties, the operating system name and the architecture are sent, and in a compatibility report on macOS also the OS version to two components (`15.6`, without the build number), the CrossOver version and the processor **family** as a single word from a closed list: `apple_m1` … `apple_m5`, `intel` or `unknown`. The processor brand string the system reports never leaves the device: on Intel machines it names a specific model. Why those three values are needed is explained in section 8.5. The exception is the log archive the user exports themselves: its `info.txt` holds the name of the operating system, the processor model, the number of threads and the amount of RAM (section 2.10);
 - **interface behavior** — clicks, screen navigation and time spent on a screen are not tracked;
 - **advertising analytics** — the app contains no third-party counters, advertising pixels or analytics kits.
 
-The `typhon-launcher.com` website uses no counters, advertising pixels or third-party fonts, sets no cookies and stores nothing in the browser.
+The `typhon-launcher.com` website uses no counters, advertising pixels or third-party fonts. It stores exactly two things in the browser. The first is a service session cookie, `__Host-typhon_session`: it appears only after signing in to or registering an account on the website, contains the session token, is not readable by page scripts (`HttpOnly`), is sent only over HTTPS and only to the site (`Secure`, `SameSite=Lax`), lasts until the session ends (the period is a service setting, currently 30 days) and is removed by signing out. It is needed for sign-in to work, so consent is not asked for it; there are no advertising or analytics cookies. The second is the chosen language (`ru` or `en`) in the browser's local storage under the key `typhon_lang`: it is written only when the user switches the language themselves. A guest request (section 2.11) sets no cookie: access to it is given by the key in the link from the email.
 
 ### 8.5. Game compatibility statistics
 
