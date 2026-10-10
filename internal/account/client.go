@@ -113,11 +113,14 @@ func (c *Client) Me(ctx context.Context) (CurrentUser, error) {
 }
 
 func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, error) {
-	body, err := json.Marshal(patch)
-	if err != nil {
+	var body bytes.Buffer
+	enc := json.NewEncoder(&body)
+	// Escaping < > & would rewrite the raw config of layout blocks this launcher does not know.
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(patch); err != nil {
 		return CurrentUser{}, fmt.Errorf("encode profile patch: %w", err)
 	}
-	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient)
+	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", &body, "application/json", c.httpClient)
 }
 
 func (c *Client) UploadAvatar(ctx context.Context, data []byte, crop AvatarCrop) (CurrentUser, error) {

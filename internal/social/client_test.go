@@ -826,7 +826,7 @@ func TestClient_FeedKeepsTheWideShot(t *testing.T) {
 }
 
 func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
-	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15}`, `null`} {
+	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15,"customFrom":"#1a1033","customTo":"#0b2a3a","customAngle":90,"autoSource":"pinned","avatarFrame":"orbit","nameStyle":"gradient","parallax":false}`, `null`} {
 		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`); err != nil {
