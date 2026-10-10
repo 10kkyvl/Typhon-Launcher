@@ -6,6 +6,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 import DownloadItem from './DownloadItem.svelte';
 import { locale } from '../i18n';
 import type { Download } from '../services/downloads';
+import { speedBytes } from '../utils/format';
 
 function download(patch: Partial<Download> = {}): Download {
   return {
@@ -54,8 +55,10 @@ describe('download card', () => {
 
     expect(out).toContain('Game One');
     expect(out).toContain('42%');
-    expect(out).toContain('↓');
-    expect(out).toContain('↑');
+    expect(out).toContain('class="down');
+    expect(out).toContain(speedBytes(2048));
+    expect(out).toContain('class="up');
+    expect(out).toContain(speedBytes(512));
     expect(out).toContain('Pause');
     expect(out).not.toContain('Continue');
   });
