@@ -48,7 +48,7 @@
 
   const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
-  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility' | 'appearance'>; label: string; sub: string }[] = [
+  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility' | 'appearance' | 'statusEmoji' | 'statusText' | 'layout'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: msg('social.flagOnlineLabel'), sub: msg('social.flagOnlineSub') },
     { key: 'showPlaying', label: msg('social.flagPlayingLabel'), sub: msg('social.flagPlayingSub') },
     { key: 'showLibrary', label: msg('social.flagLibraryLabel'), sub: msg('social.flagLibrarySub') },

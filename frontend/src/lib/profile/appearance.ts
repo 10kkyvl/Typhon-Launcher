@@ -3,6 +3,8 @@ import type { ProfileAppearance } from '../services/account';
 
 export const DEFAULT_APPEARANCE: ProfileAppearance = {
   theme: 'midnight', accent: '#67d8ef', coverUrl: '', coverDim: 35, coverPosition: 50,
+  customFrom: '#142235', customTo: '#111923', customAngle: 125, autoSource: 'playing',
+  avatarFrame: 'none', nameStyle: 'plain', parallax: true,
 };
 export const PROFILE_THEMES = [
   { id: 'midnight', background: '#0e141e', surface: '#151d29', banner: 'linear-gradient(125deg, #142235, #29394d 55%, #111923)' },
@@ -23,6 +25,13 @@ export function appearanceOf(value?: Partial<ProfileAppearance> | null): Profile
     coverUrl: typeof a.coverUrl === 'string' ? a.coverUrl : '',
     coverDim: Number.isFinite(a.coverDim) ? Math.min(100, Math.max(0, a.coverDim)) : 35,
     coverPosition: Number.isFinite(a.coverPosition) ? Math.min(100, Math.max(0, a.coverPosition)) : 50,
+    customFrom: a.customFrom,
+    customTo: a.customTo,
+    customAngle: a.customAngle,
+    autoSource: a.autoSource,
+    avatarFrame: a.avatarFrame,
+    nameStyle: a.nameStyle,
+    parallax: a.parallax,
   };
 }
 

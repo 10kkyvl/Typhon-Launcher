@@ -11,12 +11,63 @@ export type ShowcaseKind = (typeof SHOWCASE_KINDS)[number];
 export const VISIBILITIES = ['public', 'friends', 'private'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
+export const AVATAR_FRAMES = ['none', 'ring', 'glow', 'neon', 'orbit', 'pixel'] as const;
+export type AvatarFrame = (typeof AVATAR_FRAMES)[number];
+
+export const NAME_STYLES = ['plain', 'gradient', 'glow'] as const;
+export type NameStyle = (typeof NAME_STYLES)[number];
+
+export const AUTO_SOURCES = ['playing', 'pinned', 'most_played'] as const;
+export type AutoSource = (typeof AUTO_SOURCES)[number];
+
 export interface ProfileAppearance {
   theme: string;
   accent: string;
   coverUrl: string;
   coverDim: number;
   coverPosition: number;
+  customFrom: string;
+  customTo: string;
+  customAngle: number;
+  autoSource: AutoSource;
+  avatarFrame: AvatarFrame;
+  nameStyle: NameStyle;
+  parallax: boolean;
+}
+
+export const BLOCK_TYPES = [
+  'pinned', 'collection', 'genres', 'fingerprint', 'text', 'recent', 'activity', 'stats', 'playing', 'about',
+] as const;
+export type BlockType = (typeof BLOCK_TYPES)[number];
+
+export const BLOCK_WIDTHS = ['full', 'half', 'third'] as const;
+export type BlockWidth = (typeof BLOCK_WIDTHS)[number];
+
+export const COLLECTION_SOURCES = ['manual', 'favorites', 'recently_completed', 'most_played'] as const;
+export type CollectionSource = (typeof COLLECTION_SOURCES)[number];
+
+export const MAX_BLOCKS = 16;
+export const MAX_TEXT_BLOCKS = 4;
+export const MAX_COLLECTION_GAMES = 12;
+export const MAX_CAPTION = 140;
+export const MAX_BLOCK_TITLE = 40;
+export const MAX_TEXT_BODY = 1000;
+export const MAX_STATUS_TEXT = 60;
+
+export interface PinnedConfig { igdbId: number; caption: string }
+export interface CollectionConfig { source: CollectionSource; title?: string; igdbIds?: number[] }
+export interface TextConfig { title: string; body: string }
+
+export interface ProfileBlock {
+  id: string;
+  type: string;
+  width: BlockWidth;
+  config: Record<string, unknown>;
+}
+
+export interface ProfileLayout {
+  version: 1;
+  blocks: ProfileBlock[];
 }
 
 export interface ProfileSettings {
@@ -29,6 +80,9 @@ export interface ProfileSettings {
   showActivity: boolean;
   showStats: boolean;
   showcase: ShowcaseKind[];
+  statusEmoji?: string;
+  statusText?: string;
+  layout?: ProfileLayout | null;
 }
 
 export const DEFAULT_PROFILE: ProfileSettings = {

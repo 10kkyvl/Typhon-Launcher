@@ -1,14 +1,29 @@
 import { Service as SocialService } from '../../../bindings/typhon/internal/social';
-import { type ProfileAppearance, AccountError, toAccountError } from './account';
+import { type AvatarFrame, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
 import { inWails } from './backend';
 
 export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'blocked';
+
+export interface PlayerCardStyle {
+  accent: string;
+  avatarFrame: AvatarFrame;
+  nameStyle: NameStyle;
+  statusEmoji?: string;
+  statusText?: string;
+  theme?: string;
+  customFrom?: string;
+  customTo?: string;
+  customAngle?: number;
+  coverUrl?: string;
+  pinned?: GameCard | null;
+}
 
 export interface UserCard {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string;
+  card?: PlayerCardStyle | null;
 }
 
 export interface PresenceView {
@@ -111,8 +126,52 @@ export interface ShowcaseBlock {
   games: GameCard[];
 }
 
+export interface GenreShare {
+  name: string;
+  share: number;
+}
+
+export interface GenreBreakdown {
+  genres: GenreShare[];
+  other: number;
+  unknown: number;
+}
+
+export interface FingerprintData extends GenreBreakdown {
+  hours: number;
+  games: number;
+  completed: number;
+}
+
+export type PinnedGame = PlayedGame & { completedAt?: string | null };
+
+export interface BlockData {
+  error?: string;
+  game?: PinnedGame;
+  title?: string;
+  games?: GameCard[];
+  genres?: GenreShare[];
+  other?: number;
+  unknown?: number;
+  hours?: number;
+  completed?: number;
+}
+
+export interface PublicBlock extends ProfileBlock {
+  data?: BlockData;
+}
+
+export interface PublicLayout {
+  version: number;
+  blocks: PublicBlock[];
+}
+
 export interface PublicProfile extends UserCard {
   appearance?: ProfileAppearance;
+  statusEmoji?: string;
+  statusText?: string;
+  layout?: PublicLayout | null;
+  autoGame?: GameCard | null;
   bio: string;
   relation: string;
   visibility: string;
