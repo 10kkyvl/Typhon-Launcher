@@ -16,7 +16,10 @@ const (
 	MAC   = "<mac>"
 	Host  = "<host>"
 	User  = "<user>"
+	Email = "<email>"
 )
+
+const apos = `'[\pL\pN_]`
 
 // MaxMessage and MaxStack bound anything crossing the process boundary; the
 // caller truncates before the value reaches a payload, not after.
@@ -66,10 +69,17 @@ var (
 	// leaking; trimPath gives back the readable tail that over-matching would
 	// otherwise have swallowed.
 	//
-	// The \b before the drive letter keeps "https://" from reading as a drive
-	// path: between "p" and "s" there is no word boundary.
-	reWinPath = regexp.MustCompile(`(?i)\b[a-z]:[\\/][^"'<>|\r\n]*`)
-	reUNCPath = regexp.MustCompile(`\\\\[^"'<>|\r\n]*`)
+	// The boundary before the drive letter keeps "https://" from reading as a
+	// drive path: between "p" and "s" there is no word boundary. It also
+	// accepts the literal \n, \r and \t that slog writes into a quoted
+	// multi-line value: there the "n" of "\n" is a word character, so a plain
+	// \b would hide every path that starts a line.
+	//
+	// A quote ends a path, except an apostrophe followed by a letter or digit:
+	// "Assassin's Creed" is a folder name, while the closing quote of
+	// 'C:\x\y' is followed by a space, a comma or the end of the line.
+	reWinPath = regexp.MustCompile(`(?i)(^|\W|\\[nrt])([a-z]:[\\/](?:[^"'<>|\r\n]|` + apos + `)*)`)
+	reUNCPath = regexp.MustCompile(`\\\\(?:[^"'<>|\r\n]|` + apos + `)*`)
 
 	// Absolute POSIX paths are matched by shape, not by a whitelist of leading
 	// segments: a library on /data or /srv is as identifying as one on /home.
@@ -81,7 +91,14 @@ var (
 	// after "/Users/egor/Games/" was replaced. A space is absorbed only when
 	// another slash follows it in the same run, which keeps a bare "/tmp"
 	// mentioned in prose from swallowing the rest of the sentence.
-	reUnixPath = regexp.MustCompile(`(^|[\s"'(\[=,])(/[^\s"'<>|\r\n/]+(?:[^"'<>|\r\n]*/[^\s"'<>|\r\n/]*)*)`)
+	reUnixPath = regexp.MustCompile(`(^|[\s"'(\[=,]|\\[nrt])(/(?:[^\s"'<>|\r\n/]|` + apos + `)+(?:(?:[^"'<>|\r\n]|` + apos + `)*/(?:[^\s"'<>|\r\n/]|` + apos + `)*)*)`)
+
+	// An address names the account owner and is typed into the login and
+	// registration forms, so it reaches error text the launcher never
+	// formats itself. A dot in the domain is required: "git@github" in prose
+	// is not an address. URLs are scrubbed before this rule runs, which is
+	// what keeps "https://user@host/" from being read as one.
+	reEmail = regexp.MustCompile(`[\pL\pN._%+-]+@[\pL\pN-]+(?:\.[\pL\pN-]+)+`)
 
 	// A trailing "file.go:305 +0x1a4" is put back after the path is replaced:
 	// line numbers carry no identity and are what makes a stack actionable.
@@ -167,15 +184,7 @@ func Text(s string) string {
 		}
 		return g[1] + "://" + host + "/" + Query
 	})
-	s = reWinPath.ReplaceAllStringFunc(s, func(m string) string { return trimPath(m, 2) })
-	s = reUNCPath.ReplaceAllStringFunc(s, func(m string) string { return trimPath(m, 2) })
-	s = reUnixPath.ReplaceAllStringFunc(s, func(m string) string {
-		g := reUnixPath.FindStringSubmatch(m)
-		if len(g) < 3 {
-			return Path
-		}
-		return g[1] + trimPath(g[2], 1)
-	})
+	s = scrubPaths(s)
 
 	s = reBearer.ReplaceAllString(s, "bearer "+Token)
 	s = reTokenKV.ReplaceAllStringFunc(s, func(m string) string {
@@ -187,6 +196,7 @@ func Text(s string) string {
 	})
 	s = reBTIH.ReplaceAllString(s, "btih:"+Hash)
 
+	s = reEmail.ReplaceAllString(s, Email)
 	s = reMAC.ReplaceAllString(s, MAC)
 	s = reIPv6Full.ReplaceAllString(s, IP)
 	s = reIPv6Comp.ReplaceAllString(s, IP)
@@ -206,11 +216,32 @@ func Text(s string) string {
 	return s
 }
 
+func scrubPaths(s string) string {
+	s = reWinPath.ReplaceAllStringFunc(s, func(m string) string {
+		g := reWinPath.FindStringSubmatch(m)
+		if len(g) < 3 {
+			return Path
+		}
+		return g[1] + trimPath(g[2], 2)
+	})
+	s = reUNCPath.ReplaceAllStringFunc(s, func(m string) string { return trimPath(m, 2) })
+	return reUnixPath.ReplaceAllStringFunc(s, func(m string) string {
+		g := reUnixPath.FindStringSubmatch(m)
+		if len(g) < 3 {
+			return Path
+		}
+		return g[1] + trimPath(g[2], 1)
+	})
+}
+
 // trimPath replaces a greedily matched path with the placeholder and gives
 // back the tail the greedy match swallowed: the "op path: message" separator
 // Go errors use, and a trailing source location. skip is the offset past the
 // prefix that carries its own colon, so the "D:" of a drive and the leading
-// slashes of a UNC share are not mistaken for that separator.
+// slashes of a UNC share are not mistaken for that separator. The tail is
+// scrubbed again because the greedy match ran through everything after the
+// separator, including further paths: an installer's multi-line output is one
+// slog line with a literal \n between its paths.
 func trimPath(m string, skip int) string {
 	if len(m) < skip {
 		return Path
@@ -218,7 +249,7 @@ func trimPath(m string, skip int) string {
 	body, tail := m, ""
 	if i := strings.Index(body[skip:], ": "); i >= 0 {
 		cut := skip + i
-		body, tail = body[:cut], body[cut:]
+		body, tail = body[:cut], scrubPaths(body[cut:])
 	}
 	if loc := reLocSuffix.FindString(body); loc != "" {
 		tail = loc + tail
@@ -249,7 +280,7 @@ func Sanitize(s string) (string, error) {
 func unsafeText(s string) bool {
 	for _, re := range []*regexp.Regexp{
 		reMagnet, reBTIH, reHex40, reBearer, reTokenKV, reURLQuery,
-		reWinPath, reUNCPath, reUnixPath,
+		reWinPath, reUNCPath, reUnixPath, reEmail,
 		reMAC, reIPv6Full, reIPv6Comp, reIPv4, reGenericHost,
 	} {
 		if re.MatchString(s) {
