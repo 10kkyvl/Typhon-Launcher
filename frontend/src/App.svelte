@@ -18,7 +18,8 @@
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
   import { locale } from './lib/i18n';
-  import { route } from './lib/stores/router';
+  import { confirmLeave, leaveRequest, route, stayHere } from './lib/stores/router';
+  import ConfirmModal from './lib/components/ConfirmModal.svelte';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
   import { initMessaging } from './lib/stores/messaging';
@@ -127,6 +128,9 @@
       <ReleaseNotesModal />
       <MoveGameModal />
       <SaveBackupsModal />
+      {#if $leaveRequest}
+        <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
+      {/if}
     <UpdateOverlay />
   {:else}
     <AuthScreen />
