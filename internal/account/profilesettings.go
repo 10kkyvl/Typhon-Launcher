@@ -1,6 +1,9 @@
 package account
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 const (
 	VisibilityPublic  = "public"
@@ -16,8 +19,8 @@ type ProfileSettings struct {
 	ShowLibrary  bool              `json:"showLibrary"`
 	ShowActivity bool              `json:"showActivity"`
 	ShowStats    bool              `json:"showStats"`
-	Showcase     []string          `json:"showcase"`
-	Appearance   ProfileAppearance `json:"appearance"`
+	Showcase     []string          `json:"showcase,omitzero"`
+	Appearance   ProfileAppearance `json:"appearance,omitzero"`
 	StatusEmoji  *string           `json:"statusEmoji,omitempty"`
 	StatusText   *string           `json:"statusText,omitempty"`
 	Layout       OptionalLayout    `json:"layout,omitzero"`
@@ -39,6 +42,9 @@ type ProfileAppearance struct {
 }
 
 func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil
+	}
 	type fields struct {
 		Theme         *string `json:"theme"`
 		Accent        *string `json:"accent"`

@@ -14,7 +14,7 @@ function harness(saveProfile: () => Promise<boolean>) {
   const end = source.indexOf('\n  $effect(', start);
   const js = source
     .slice(start, end)
-    .replace('$state.snapshot(draft) as ProfileSettings', 'JSON.parse(JSON.stringify(draft))')
+    .replace('$state.snapshot(draft) as ProfileSettingsPatch', 'JSON.parse(JSON.stringify(draft))')
     .replace(/\$currentUser/g, 'currentUser');
   const calls: Calls = { saveProfile: vi.fn(saveProfile), toast: vi.fn(), leaveEditing: vi.fn() };
   const run = new Function(
@@ -28,7 +28,7 @@ function harness(saveProfile: () => Promise<boolean>) {
     `
     let saving = false, saveError = '';
     const canSave = true, owner = 'u1', resetLayout = false;
-    const draft = { layout: { version: 1, blocks: [] } };
+    const draft = { showcase: ['favorites'], layout: { version: 1, blocks: [] } };
     const settings = { showcase: [], layout: null };
     const layout = draft.layout;
     ${js}
@@ -48,6 +48,15 @@ function harness(saveProfile: () => Promise<boolean>) {
 }
 
 describe('profile save', () => {
+  it('leaves the showcase out, so the server keeps the one derived from the stored layout', async () => {
+    const h = harness(() => Promise.resolve(true));
+
+    await h.save();
+
+    expect(h.calls.saveProfile).toHaveBeenCalledTimes(1);
+    expect(h.calls.saveProfile.mock.calls[0][0].profile).not.toHaveProperty('showcase');
+  });
+
   it('stays in edit mode and says so when another save is still in flight', async () => {
     const h = harness(() => Promise.resolve(false));
 

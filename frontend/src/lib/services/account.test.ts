@@ -76,6 +76,48 @@ describe('account service errors', () => {
   });
 });
 
+describe('updateProfile profile payload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function sentProfile(profile: Record<string, unknown>) {
+    const { updateProfile, DEFAULT_PROFILE } = await import('./account');
+    bindings.UpdateProfile.mockResolvedValueOnce(user);
+    await updateProfile({ profile: { ...DEFAULT_PROFILE, ...profile } as never });
+    return bindings.UpdateProfile.mock.calls[0][0].profile as Record<string, unknown>;
+  }
+
+  it('does not invent an appearance when the caller sent none', async () => {
+    const sent = await sentProfile({ visibility: 'private' });
+
+    expect(Object.keys(sent)).not.toContain('appearance');
+    expect(sent.visibility).toBe('private');
+  });
+
+  it('treats a null appearance as none', async () => {
+    const sent = await sentProfile({ appearance: null });
+
+    expect(Object.keys(sent)).not.toContain('appearance');
+  });
+
+  it('sends a normalised appearance when the caller sent one', async () => {
+    const sent = await sentProfile({ appearance: { theme: 'forest', coverDim: 500 } });
+
+    expect(sent.appearance).toMatchObject({ theme: 'forest', coverDim: 100, accent: '#67d8ef' });
+  });
+
+  it('keeps an empty showcase as a value and an absent one as absent', async () => {
+    const { updateProfile } = await import('./account');
+    bindings.UpdateProfile.mockResolvedValue(user);
+    await updateProfile({ profile: { visibility: 'friends', showOnline: true, showPlaying: true, showPlaytime: true, showLibrary: true, showActivity: true, showStats: true, showcase: [] } });
+    await updateProfile({ profile: { visibility: 'friends', showOnline: true, showPlaying: true, showPlaytime: true, showLibrary: true, showActivity: true, showStats: true } as never });
+
+    expect(bindings.UpdateProfile.mock.calls[0][0].profile.showcase).toEqual([]);
+    expect(Object.keys(bindings.UpdateProfile.mock.calls[1][0].profile)).not.toContain('showcase');
+  });
+});
+
 describe('auth calls', () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -37,7 +37,7 @@
   } from '../../lib/profile/layout';
   import { ownAutoArt, resolveOwn, type GridBlock } from '../../lib/profile/layoutView';
   import { coverOf } from '../../lib/profile/view';
-  import { type ProfileSettings, type BlockWidth, DEFAULT_PROFILE } from '../../lib/services/account';
+  import { type ProfileSettings, type ProfileSettingsPatch, type BlockWidth, DEFAULT_PROFILE } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { getProfilePreview, type GameRef, type ProfileSnapshot } from '../../lib/services/profile';
   import { libraryGames } from '../../lib/stores/library';
@@ -263,7 +263,8 @@
     saving = true;
     saveError = '';
     try {
-      const profile = $state.snapshot(draft) as ProfileSettings;
+      const profile = $state.snapshot(draft) as ProfileSettingsPatch;
+      delete profile.showcase;
       const patch = layoutPatch(settings, layout, resetLayout);
       if (patch.send) profile.layout = patch.layout;
       else delete profile.layout;
