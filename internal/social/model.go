@@ -1,6 +1,7 @@
 package social
 
 import (
+	"encoding/json"
 	"time"
 	"typhon/internal/account"
 )
@@ -10,6 +11,33 @@ type UserCard struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	AvatarURL   string `json:"avatarUrl"`
+	// Card is nil when the backend predates player cards.
+	Card *PlayerCardStyle `json:"card,omitempty"`
+}
+
+type PlayerCardStyle struct {
+	Accent      string    `json:"accent"`
+	AvatarFrame string    `json:"avatarFrame"`
+	NameStyle   string    `json:"nameStyle"`
+	StatusEmoji string    `json:"statusEmoji,omitempty"`
+	StatusText  string    `json:"statusText,omitempty"`
+	Theme       string    `json:"theme,omitempty"`
+	CustomFrom  string    `json:"customFrom,omitempty"`
+	CustomTo    string    `json:"customTo,omitempty"`
+	CustomAngle *int      `json:"customAngle,omitempty"`
+	CoverURL    string    `json:"coverUrl,omitempty"`
+	Pinned      *GameCard `json:"pinned,omitempty"`
+}
+
+type PublicBlock struct {
+	account.LayoutBlock
+	// Data is passed through untouched: its shape depends on the block type and the backend version.
+	Data json.RawMessage `json:"data,omitempty"`
+}
+
+type PublicLayout struct {
+	Version int           `json:"version"`
+	Blocks  []PublicBlock `json:"blocks"`
 }
 
 type GameCard struct {
@@ -62,6 +90,10 @@ type PresenceView struct {
 type PublicProfile struct {
 	UserCard
 	Appearance     *account.ProfileAppearance `json:"appearance,omitempty"`
+	StatusEmoji    string                     `json:"statusEmoji,omitempty"`
+	StatusText     string                     `json:"statusText,omitempty"`
+	Layout         *PublicLayout              `json:"layout,omitempty"`
+	AutoGame       *GameCard                  `json:"autoGame,omitempty"`
 	Bio            string                     `json:"bio"`
 	Relation       string                     `json:"relation"`
 	Visibility     string                     `json:"visibility"`
