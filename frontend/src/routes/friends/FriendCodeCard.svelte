@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Copy } from '@lucide/svelte';
+  import { Check, Copy } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
@@ -15,6 +14,7 @@
   let loading = $state(!code);
   let rotating = $state(false);
   let confirmOpen = $state(false);
+  let copied = $state('');
 
   async function load() {
     loading = true;
@@ -31,6 +31,7 @@
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
+      copied = code;
       toast(msg('social.copied'), 'info');
     } catch {
       toast(msg('social.copyFailed'), 'danger');
@@ -60,12 +61,22 @@
   <div class="card">
     <div class="text">
       <span class="label">{msg('social.friendsYourCode')}</span>
-      <span class="code" class:pending={loading}>{loading ? msg('social.loadingEllipsis') : code || '—'}</span>
+      {#if loading || !code}
+        <span class="code pending">{loading ? msg('social.loadingEllipsis') : '—'}</span>
+      {:else}
+        <button class="code copy" type="button" title={msg('social.friendsCopyCode')} onclick={copy}>{code}</button>
+      {/if}
     </div>
     <div class="actions">
-      <IconButton label={msg('social.friendsCopyCode')} size="sm" disabled={!code} onclick={copy}>
-        <Copy size="1.6rem" strokeWidth={1.8} />
-      </IconButton>
+      <Button size="sm" disabled={!code} onclick={copy}>
+        {#if copied === code && code}
+          <span class="mark"><Check size="1.5rem" strokeWidth={2} /></span>
+          {msg('social.copied')}
+        {:else}
+          <Copy size="1.5rem" strokeWidth={1.8} />
+          {msg('social.friendsCopyCode')}
+        {/if}
+      </Button>
       <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
         {msg('social.friendsGenerateNew')}
       </Button>
@@ -111,6 +122,26 @@
     font-weight: 600;
     letter-spacing: 0.12em;
     font-variant-numeric: tabular-nums;
+  }
+
+  .code.copy {
+    padding: 0.2rem 0.8rem;
+    margin: -0.2rem -0.8rem;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    text-align: left;
+    user-select: text;
+    transition: background var(--dur) var(--ease);
+  }
+
+  .code.copy:hover {
+    background: var(--hover-strong);
+  }
+
+  .mark {
+    display: inline-flex;
+    color: var(--success);
+    animation: pop-in var(--dur-slow) var(--ease-spring);
   }
 
   .code.pending {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Minus, Square, X } from '@lucide/svelte';
+  import { CircleAlert, Minus, Square, X } from '@lucide/svelte';
   import { Window } from '@wailsio/runtime';
   import Button from '../../lib/components/Button.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
@@ -125,6 +125,8 @@
       </div>
       <p class="note">{msg('transfers.authOfflineNote')}</p>
     {:else}
+      {#key isRegister}
+      <div class="view">
       <h1 class="title">{isRegister ? msg('transfers.authRegisterTitle') : msg('transfers.authLoginTitle')}</h1>
 
       <form class="form" onsubmit={onSubmit}>
@@ -139,7 +141,7 @@
               bind:value={email}
               disabled={busy}
             />
-            {#if errors.email}<span class="error">{errors.email}</span>{/if}
+            {#if errors.email}<span class="error" role="alert">{errors.email}</span>{/if}
           </label>
 
           <label class="field">
@@ -153,7 +155,7 @@
               bind:value={username}
               disabled={busy}
             />
-            {#if errors.username}<span class="error">{errors.username}</span>{/if}
+            {#if errors.username}<span class="error" role="alert">{errors.username}</span>{/if}
           </label>
 
           <label class="field">
@@ -167,7 +169,7 @@
               bind:value={displayName}
               disabled={busy}
             />
-            {#if errors.displayName}<span class="error">{errors.displayName}</span>{/if}
+            {#if errors.displayName}<span class="error" role="alert">{errors.displayName}</span>{/if}
           </label>
         {:else}
           <label class="field">
@@ -180,7 +182,7 @@
               bind:value={identifier}
               disabled={busy}
             />
-            {#if errors.username}<span class="error">{errors.username}</span>{/if}
+            {#if errors.username}<span class="error" role="alert">{errors.username}</span>{/if}
           </label>
         {/if}
 
@@ -194,11 +196,14 @@
             bind:value={password}
             disabled={busy}
           />
-          {#if errors.password}<span class="error">{errors.password}</span>{/if}
+          {#if errors.password}<span class="error" role="alert">{errors.password}</span>{/if}
         </label>
 
         {#if errors.general}
-          <p class="error general">{errors.general}</p>
+          <p class="error general" role="alert">
+            <CircleAlert size="1.6rem" strokeWidth={1.8} />
+            <span>{errors.general}</span>
+          </p>
         {/if}
 
         <button class="submit" type="submit" disabled={busy}>
@@ -210,12 +215,6 @@
         </button>
       </form>
 
-      <div class="guest">
-        <span class="guest-divider"><span>{msg('transfers.authOrDivider')}</span></span>
-        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</button>
-        <p class="guest-hint">{msg('transfers.authGuestHint')}</p>
-      </div>
-
       <p class="switch">
         {#if isRegister}
           {msg('transfers.authHaveAccount')}
@@ -225,6 +224,14 @@
           <button class="link" type="button" onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</button>
         {/if}
       </p>
+      </div>
+      {/key}
+
+      <div class="guest">
+        <span class="guest-divider"><span>{msg('transfers.authOrDivider')}</span></span>
+        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</button>
+        <p class="guest-hint">{msg('transfers.authGuestHint')}</p>
+      </div>
     {/if}
   </div>
 </div>
@@ -233,11 +240,13 @@
   .auth {
     position: relative;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     height: 100vh;
+    padding: var(--space-8) 0 var(--space-5);
+    overflow-y: auto;
     background:
-      radial-gradient(120rem 60rem at 50% -20%, rgba(104, 117, 232, 0.16), transparent 60%),
+      radial-gradient(120rem 60rem at 50% -20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
       var(--bg);
   }
 
@@ -267,30 +276,36 @@
   }
 
   .wc.close:hover {
-    background: #c9403f;
-    color: #fff;
+    background: var(--danger);
+    color: var(--bg);
   }
 
   .panel {
     width: 40rem;
-    padding: var(--space-8);
+    margin: auto;
+    padding: var(--space-6) var(--space-8);
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
-    animation: rise var(--dur-panel) var(--ease);
+    animation: rise-in var(--dur-panel) var(--ease);
+  }
+
+  .view {
+    animation: media-in var(--dur-panel) var(--ease);
   }
 
   .brand {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 1rem;
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-4);
   }
 
   .brand-mark {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 3.6rem;
+    height: 3.6rem;
   }
 
   .brand-name {
@@ -300,15 +315,18 @@
   }
 
   .title {
-    font-size: var(--font-xl);
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: 500;
     letter-spacing: var(--tracking-heading);
+    color: var(--text-2);
+    text-align: center;
   }
 
   .subtitle {
     margin-top: 0.8rem;
     font-size: var(--font-sm);
     color: var(--text-2);
+    text-align: center;
   }
 
   .note {
@@ -316,9 +334,12 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     line-height: 1.5;
+    text-align: center;
   }
 
   .offline-actions {
+    display: flex;
+    justify-content: center;
     margin-top: var(--space-5);
   }
 
@@ -374,7 +395,20 @@
   }
 
   .error.general {
-    margin-top: -0.4rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    padding: 0.9rem 1.2rem;
+    border-radius: var(--radius-md);
+    background: var(--danger-subtle);
+    font-size: var(--font-sm);
+    line-height: 1.4;
+    animation: rise-in var(--dur-panel) var(--ease);
+  }
+
+  .error.general :global(svg) {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
   }
 
   .submit {
@@ -387,15 +421,19 @@
     border-radius: var(--radius-md);
     transition:
       background var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease),
       transform var(--dur-fast) var(--ease);
   }
 
   .submit:hover:not(:disabled) {
     background: var(--accent-hover);
+    box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
+    transform: translateY(-1px);
   }
 
   .submit:active:not(:disabled) {
-    transform: translateY(1px);
+    transform: scale(0.98);
+    box-shadow: none;
   }
 
   .submit:disabled {
@@ -427,16 +465,20 @@
     width: 100%;
     height: var(--control-md);
     margin-top: var(--space-3);
-    background: var(--surface-3);
-    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-2);
     font-size: var(--font-sm);
     font-weight: 500;
     border-radius: var(--radius-md);
-    transition: background var(--dur) var(--ease);
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
   }
 
   .guest-btn:hover:not(:disabled) {
-    background: var(--surface-4);
+    background: var(--hover-strong);
+    color: var(--text);
   }
 
   .guest-btn:disabled {
@@ -453,7 +495,7 @@
   }
 
   .switch {
-    margin-top: var(--space-5);
+    margin-top: var(--space-4);
     font-size: var(--font-sm);
     color: var(--text-3);
     text-align: center;
@@ -469,16 +511,5 @@
 
   .link:hover {
     color: var(--text);
-  }
-
-  @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(0.8rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 </style>

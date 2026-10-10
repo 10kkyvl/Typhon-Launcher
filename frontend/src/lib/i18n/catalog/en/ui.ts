@@ -109,6 +109,7 @@ export const ui: Record<UiKey, Message> = {
     'Typhon Launcher will close right now, install update {version}, and restart. Unfinished downloads and installs will continue after the restart.',
 
   'ui.updateAvailable': 'Update available',
+  'ui.updateAvailableHint': 'A newer version of the installed game is out.',
   'ui.newReleaseAvailable': 'New release available',
   'ui.latestVersionInstalled': 'Latest version installed',
   'ui.updateInProgress': 'Update in progress',
@@ -117,6 +118,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.newRelease': 'new release',
   'ui.readyToInstall': 'Ready to install',
   'ui.versionsNotComparable': 'Versions not comparable',
+  'ui.versionsNotComparableHint': 'Versions not comparable: it is unknown whether this release is newer than the installed one.',
   'ui.distributionUpdated': 'Distribution updated',
   'ui.newDistributionRevisionReason': 'The source published a new revision of your distribution.',
   'ui.calculatingDownloadSize': 'Calculating download size…',

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { LogIn, Users } from '@lucide/svelte';
+  import { LogIn, UserPlus, Users } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -143,7 +143,17 @@
           <EmptyState
             title={msg('transfers.activityFeedEmptyTitle')}
             description={msg('transfers.activityFeedEmptyDescription')}
-          />
+          >
+            {#snippet icon()}
+              <Users size="2.2rem" strokeWidth={1.6} />
+            {/snippet}
+            {#snippet actions()}
+              <Button variant="primary" onclick={() => navigate('friends')}>
+                <UserPlus size="1.5rem" strokeWidth={1.8} />
+                {msg('social.friendsAddFriend')}
+              </Button>
+            {/snippet}
+          </EmptyState>
         {/if}
       {:else}
         {#each feedGroups as group (group.key)}
@@ -213,6 +223,12 @@
     max-height: calc(100vh - var(--topbar-h) - var(--space-8));
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
+  }
+
+  .left::-webkit-scrollbar,
+  .right::-webkit-scrollbar {
+    display: none;
   }
 
   .center {
@@ -281,11 +297,26 @@
   }
 
   .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
     font-size: 1.2rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-3);
+  }
+
+  .eyebrow::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .eyebrow:first-child {
+    margin-top: 0;
   }
 
   @media (max-width: 1400px) {

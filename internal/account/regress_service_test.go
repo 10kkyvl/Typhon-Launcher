@@ -349,7 +349,7 @@ func TestUploadCoverThroughTheService(t *testing.T) {
 	t.Run("rejects bad payloads before any request", func(t *testing.T) {
 		srv, hits := quietServer(t)
 		s := startedService(t, &fakeStore{cred: Credential{Token: "live"}, present: true}, srv.URL)
-		for _, encoded := range []string{"", "!!!", base64.StdEncoding.EncodeToString(gifBytes)} {
+		for _, encoded := range []string{"", "!!!", base64.StdEncoding.EncodeToString([]byte("plain text"))} {
 			if _, err := s.UploadCover(encoded); err == nil {
 				t.Fatalf("payload %q was accepted", encoded)
 			}

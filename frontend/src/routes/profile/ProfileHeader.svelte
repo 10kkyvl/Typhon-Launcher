@@ -7,6 +7,9 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
+  import StyledName from '../../lib/components/StyledName.svelte';
+  import { appearanceOf } from '../../lib/profile/appearance';
+  import type { ProfileAppearance } from '../../lib/services/account';
   import { signOutPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { accountErrorField, accountErrorText } from '../../lib/services/accountMessages';
   import type { GameRef, ProfileStats as ProfileStatsData } from '../../lib/services/profile';
@@ -28,7 +31,10 @@
     showPlaying,
     showStats,
     onsettings,
-    onappearance,
+    onedit,
+    appearance,
+    statusEmoji,
+    statusText,
   }: {
     running: GameRef[];
     stats: ProfileStatsData;
@@ -36,8 +42,13 @@
     showPlaying: boolean;
     showStats: boolean;
     onsettings: () => void;
-    onappearance: () => void;
+    onedit: () => void;
+    appearance: ProfileAppearance;
+    statusEmoji: string;
+    statusText: string;
   } = $props();
+
+  const look = $derived(appearanceOf(appearance));
 
   const BIO_LIMIT = 150;
 
@@ -92,7 +103,10 @@
     if (draft.username !== $currentUser.username) patch.username = draft.username;
     if (draft.bio !== $currentUser.bio) patch.bio = draft.bio;
     try {
-      await saveProfile(patch);
+      if (!(await saveProfile(patch))) {
+        fieldErrors = { general: msg('profile.saveBusy') };
+        return;
+      }
       editing = false;
       toast(msg('social.profileUpdated'), 'success');
     } catch (err) {
@@ -137,6 +151,7 @@
         name={avatarName}
         src={isGuest ? undefined : $currentUser?.avatarUrl}
         status={isGuest ? undefined : statusDot($shownPresence)}
+        frame={isGuest ? 'none' : look.avatarFrame}
       />
 
       <div class="identity">
@@ -144,18 +159,21 @@
           <h2 class="display-name">{msg('social.guestName')}</h2>
           <span class="username">{msg('social.guestProfileHint')}</span>
         {:else if $currentUser}
-          <h2 class="display-name">{$currentUser.displayName}</h2>
+          <h2 class="display-name"><StyledName name={$currentUser.displayName} styleName={look.nameStyle} /></h2>
           <span class="username">@{$currentUser.username}</span>
+          {#if statusEmoji || statusText}
+            <p class="status">{#if statusEmoji}<span class="status-emoji">{statusEmoji}</span>{/if}{#if statusText}<span>{statusText}</span>{/if}</p>
+          {/if}
           {#if bio}
             <p class="bio">{bio}</p>
           {/if}
           <div class="meta">
             {#if playing}
-              <span class="meta-item">
+              <span class="meta-item now">
                 <Gamepad2 size="1.5rem" strokeWidth={1.8} />
                 {msg('social.playingIn', { name: playing.title })}
-                {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
               </span>
+              {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
             {/if}
             {#if memberSince}
               <span class="meta-item">
@@ -181,7 +199,7 @@
               {msg('social.createAccountButton')}
             </Button>
           {:else}
-            <Button size="sm" onclick={onappearance}>{msg('profile.appearance')}</Button>
+            <Button size="sm" onclick={onedit}>{msg('profileStyle.edit')}</Button>
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
@@ -289,6 +307,15 @@
     color: var(--text-3);
   }
 
+  .status {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+
   .bio {
     font-size: var(--font-sm);
     color: var(--text-2);
@@ -296,8 +323,8 @@
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -321,6 +348,20 @@
   .meta-item :global(svg) {
     color: var(--text-3);
     flex-shrink: 0;
+  }
+
+  .meta-item.now {
+    min-width: 0;
+    height: 2.8rem;
+    padding: 0 1.1rem;
+    border-radius: var(--radius-xl);
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+
+  .meta-item.now :global(svg) {
+    color: inherit;
   }
 
   .right {

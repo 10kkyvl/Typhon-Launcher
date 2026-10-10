@@ -206,6 +206,6 @@ describe('personal accent without a loaded theme', () => {
     expect(get(displayedAccent)).toBe('#E45D87');
     applyPersonalAccent('');
     expect(rootProps.has('--accent')).toBe(false);
-    expect(get(displayedAccent)).toBe('#6673F2');
+    expect(get(displayedAccent)).toBe('#4F6BFF');
   });
 });

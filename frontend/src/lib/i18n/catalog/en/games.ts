@@ -279,6 +279,7 @@ export const games: Record<GamesKey, Message> = {
   'games.installedLegendGames': 'Games',
   'games.installedLegendOther': 'Other',
   'games.installedLegendFree': 'Free',
+  'games.installedLegendUsed': 'Used',
   'games.installedManageStorage': 'Manage storage',
   'games.installedNoGamesTitle': 'No games added yet',
   'games.installedNoGamesDescription':
@@ -322,6 +323,7 @@ export const games: Record<GamesKey, Message> = {
   'games.catalogLoadingMore': 'Loading…',
   'games.catalogShowMore': 'Show more',
   'games.catalogShownOf': 'Loaded {shown} of {total}',
+  'games.catalogTotalCount': { one: '{count} game', other: '{count} games' },
   'games.recommendationRefreshFailed': 'Could not refresh your picks. Showing the previous selection for now.',
   'games.storeLinksTitle': 'Where to buy',
   'games.storeSteam': 'Steam',

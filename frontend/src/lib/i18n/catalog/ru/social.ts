@@ -34,6 +34,7 @@ export const social = {
   'social.reactionParty': 'Праздник',
   'social.reactionEyes': 'Глаза',
   'social.reactionJoy': 'Смех',
+  'social.reactionAdd': 'Добавить реакцию',
 
   // lib/social/feed.ts — event kind labels
   'social.feedCompleted': 'Пройдена',
@@ -165,8 +166,6 @@ export const social = {
   'social.flagActivitySub': 'Сыгранные игры по дням, без времени запуска',
   'social.flagStatsLabel': 'Статистика',
   'social.flagStatsSub': 'Игры, часы, пройдено, играю сейчас',
-  'social.showcaseHeading': 'Витрина',
-  'social.showcaseExplain': 'До трёх блоков, в выбранном порядке.',
   'social.moveUp': 'Выше: {title}',
   'social.moveDown': 'Ниже: {title}',
   'social.removeButton': 'Убрать',

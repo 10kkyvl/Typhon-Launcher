@@ -3,10 +3,18 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import { EMPTY_SNAPSHOT, getProfileSnapshot, type ProfileSnapshot } from '../services/profile';
 import { currentUser } from './user';
-import type { CurrentUser } from '../services/account';
+import type { CurrentUser, ProfileSettings } from '../services/account';
 
 export const profileSnapshot = writable<ProfileSnapshot>(EMPTY_SNAPSHOT);
 export const profileFailed = writable(false);
+
+export interface ProfileDraft {
+  owner: string;
+  draft: ProfileSettings;
+  reset: boolean;
+}
+
+export const profileDraft = writable<ProfileDraft | null>(null);
 
 let started = false;
 let seq = 0;
@@ -24,8 +32,8 @@ export async function refreshProfile() {
   }
 }
 
-function showcaseKey(user: CurrentUser | null): string | null {
-  return user ? JSON.stringify(user.profile?.showcase ?? []) : null;
+function snapshotKey(user: CurrentUser | null): string | null {
+  return user ? JSON.stringify([user.profile?.showcase ?? [], user.profile?.layout ?? null]) : null;
 }
 
 export function initProfile() {
@@ -36,9 +44,9 @@ export function initProfile() {
   for (const name of ['library:updated', 'game:started', 'game:stopped', 'playlog:recorded']) {
     Events.On(name, () => void refreshProfile());
   }
-  let seen = showcaseKey(get(currentUser));
+  let seen = snapshotKey(get(currentUser));
   currentUser.subscribe((user) => {
-    const key = showcaseKey(user);
+    const key = snapshotKey(user);
     if (key === seen) return;
     seen = key;
     void refreshProfile();

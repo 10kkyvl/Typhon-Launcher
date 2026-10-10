@@ -36,7 +36,12 @@
     transition:
       background var(--dur) var(--ease),
       border-color var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+      color var(--dur) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+
+  .chip:active {
+    transform: scale(0.96);
   }
 
   .outline {

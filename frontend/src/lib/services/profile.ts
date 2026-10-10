@@ -1,5 +1,6 @@
 import { Service as ProfileService } from '../../../bindings/typhon/internal/profile';
 import { inWails } from './backend';
+import type { GenreBreakdown } from './social';
 
 export interface GameRef {
   archived?: boolean;
@@ -42,12 +43,20 @@ export interface ShowcaseBlock {
   games: GameRef[];
 }
 
+export interface LayoutGame {
+  game?: GameRef;
+  error?: string;
+}
+
 export interface ProfileSnapshot {
   stats: ProfileStats;
   playing: PlayingEntry[];
   activity: ActivityDay[];
   running: GameRef[];
   showcase: ShowcaseBlock[];
+  genres: GenreBreakdown;
+  fingerprint: { hours: number; games: number; completed: number };
+  layoutGames: Record<string, LayoutGame>;
 }
 
 export const EMPTY_SNAPSHOT: ProfileSnapshot = {
@@ -56,6 +65,9 @@ export const EMPTY_SNAPSHOT: ProfileSnapshot = {
   activity: [],
   running: [],
   showcase: [],
+  genres: { genres: [], other: 0, unknown: 0 },
+  fingerprint: { hours: 0, games: 0, completed: 0 },
+  layoutGames: {},
 };
 
 export async function getProfileSnapshot(): Promise<ProfileSnapshot> {
@@ -66,4 +78,9 @@ export async function getProfileSnapshot(): Promise<ProfileSnapshot> {
 export async function getProfilePreview(): Promise<ProfileSnapshot> {
   if (!inWails) return EMPTY_SNAPSHOT;
   return (await ProfileService.Preview()) as unknown as ProfileSnapshot;
+}
+
+export async function igdbIdsOf(canonicalGameIds: string[]): Promise<Record<string, string>> {
+  if (!inWails || canonicalGameIds.length === 0) return {};
+  return ((await ProfileService.IGDBIDs(canonicalGameIds)) ?? {}) as Record<string, string>;
 }

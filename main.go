@@ -469,9 +469,17 @@ func main() {
 		return shared.Works, shared.Total, true
 	})
 
-	profileService := profile.NewService(libraryService, playlogService, func() []string {
+	profileService, err := profile.NewService(libraryService, playlogService, catalogService, func() []string {
 		return accountService.CurrentProfileSettings().Showcase
+	}, func() []account.LayoutBlock {
+		if layout := accountService.CurrentProfileSettings().Layout.Value; layout != nil {
+			return layout.Blocks
+		}
+		return nil
 	})
+	if err != nil {
+		fatal("start profile service", err)
+	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
 	presenceWatcher.Apply(settingsService.GetSettings())

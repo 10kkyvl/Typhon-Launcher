@@ -38,7 +38,8 @@
     display: flex;
     gap: var(--space-4);
     overflow-x: auto;
-    padding-bottom: var(--space-2);
+    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
+    padding: var(--space-2) var(--space-2) var(--space-3);
   }
 
   .capsule {
@@ -61,11 +62,15 @@
     width: 100%;
     border-radius: var(--radius-md);
     overflow: hidden;
-    transition: transform var(--dur) var(--ease);
+    transition:
+      transform var(--dur-panel) var(--ease),
+      box-shadow var(--dur-panel) var(--ease);
   }
 
-  .capsule:hover .cover {
-    transform: scale(1.01);
+  .capsule:hover .cover,
+  .capsule:focus-visible .cover {
+    transform: translateY(-0.4rem);
+    box-shadow: var(--shadow-lift);
   }
 
   .title {

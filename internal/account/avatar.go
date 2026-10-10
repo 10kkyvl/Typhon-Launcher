@@ -69,11 +69,6 @@ func readAvatarImage(path string) (AvatarImage, error) {
 	return avatarImage(data)
 }
 
-func coverMIME(data []byte) (string, bool) {
-	mime, ok := avatarMIME(data)
-	return mime, ok && mime != "image/gif"
-}
-
 func coverImage(data []byte) (AvatarImage, error) {
 	if len(data) == 0 {
 		return AvatarImage{}, &Error{Code: CodeInvalidCover}
@@ -81,7 +76,7 @@ func coverImage(data []byte) (AvatarImage, error) {
 	if len(data) > maxCoverSize {
 		return AvatarImage{}, &Error{Code: CodeCoverTooLarge}
 	}
-	mime, ok := coverMIME(data)
+	mime, ok := avatarMIME(data)
 	if !ok {
 		return AvatarImage{}, &Error{Code: CodeUnsupportedCover}
 	}
@@ -117,7 +112,7 @@ func decodeCover(encoded string) ([]byte, error) {
 	if err != nil {
 		return nil, &Error{Code: CodeInvalidCover, cause: err}
 	}
-	if _, ok := coverMIME(data); !ok {
+	if _, ok := avatarMIME(data); !ok {
 		return nil, &Error{Code: CodeUnsupportedCover}
 	}
 	return data, nil

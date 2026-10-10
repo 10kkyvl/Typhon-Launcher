@@ -81,11 +81,14 @@ var allowedTokens = []Token{
 	{"--control-lg", KindLength},
 	{"--font-sans", KindFont},
 	{"--ease", KindEase},
+	{"--ease-spring", KindEase},
 	{"--dur", KindTime},
 	{"--dur-fast", KindTime},
 	{"--dur-panel", KindTime},
+	{"--dur-slow", KindTime},
 	{"--shadow-pop", KindShadow},
 	{"--shadow-modal", KindShadow},
+	{"--shadow-lift", KindShadow},
 }
 
 var allowedTokenSet = func() map[string]Kind {

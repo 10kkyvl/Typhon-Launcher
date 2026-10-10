@@ -277,6 +277,7 @@ export const games = {
   'games.installedLegendGames': 'Игры',
   'games.installedLegendOther': 'Другое',
   'games.installedLegendFree': 'Свободно',
+  'games.installedLegendUsed': 'Занято',
   'games.installedManageStorage': 'Управление хранилищем',
   'games.installedNoGamesTitle': 'Игры ещё не добавлены',
   'games.installedNoGamesDescription':
@@ -320,6 +321,7 @@ export const games = {
   'games.catalogLoadingMore': 'Загрузка…',
   'games.catalogShowMore': 'Показать ещё',
   'games.catalogShownOf': 'Загружено {shown} из {total}',
+  'games.catalogTotalCount': { one: '{count} игра', few: '{count} игры', many: '{count} игр', other: '{count} игры' },
   'games.recommendationRefreshFailed': 'Не удалось обновить подборку. Пока показываем предыдущую.',
   'games.storeLinksTitle': 'Где купить',
   'games.storeSteam': 'Steam',

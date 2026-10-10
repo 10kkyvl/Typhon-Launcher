@@ -2,6 +2,7 @@
   import {
     ArrowDownUp,
     ChevronDown,
+    ChevronRight,
     Clock,
     LayoutGrid,
     List,
@@ -11,6 +12,7 @@
     X,
   } from '@lucide/svelte';
   import { untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -18,7 +20,6 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -33,6 +34,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
+  import { revealImage } from '../../lib/utils/revealImage';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
@@ -215,6 +217,23 @@
 
   const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null && entry.playable));
 
+  let heroArtFailed = $state('');
+  const heroArt = $derived(hero?.hero ?? '');
+  const heroArtShown = $derived(heroArt !== '' && heroArtFailed !== heroArt);
+
+  let lastView = get(libraryView);
+  let viewSwitched = $state(false);
+
+  $effect(() => {
+    if ($libraryView === lastView) return;
+    lastView = $libraryView;
+    viewSwitched = true;
+  });
+
+  function endViewSwitch(event: AnimationEvent) {
+    if (event.target === event.currentTarget) viewSwitched = false;
+  }
+
   const recentGames = $derived(
     playedGames.filter((entry) => entry.lastPlayed !== null && entry.id !== hero?.id),
   );
@@ -242,44 +261,69 @@
   <PageHeader title={msg('games.libraryWord')} />
 
   {#if hero && !heroHidden}
-    <div class="continue" role="presentation" oncontextmenu={(event) => openGameMenu(event, hero.id)}>
-      <Card title={msg('games.libraryContinuePlayingTitle')}>
-        {#snippet action()}
-          <IconButton label={msg('games.libraryHideLabel')} size="sm" onclick={() => (heroHidden = true)}>
-            <X size="1.6rem" strokeWidth={1.8} />
-          </IconButton>
-        {/snippet}
-        <div class="continue-body">
-          <div class="continue-cover">
-            <Artwork src={hero.hero || hero.cover} alt={hero.title} ratio="8 / 5" radius="var(--radius-md)" />
+    {#key hero.id}
+      <section
+        class="hero"
+        class:plain={!heroArtShown}
+        aria-label={msg('games.libraryContinuePlayingTitle')}
+        oncontextmenu={(event) => openGameMenu(event, hero.id)}
+      >
+        {#if heroArtShown}
+          <div class="hero-art">
+            {#key heroArt}
+              <img
+                src={heroArt}
+                alt=""
+                class="media-reveal"
+                use:revealImage
+                decoding="async"
+                draggable="false"
+                onerror={() => (heroArtFailed = heroArt)}
+              />
+            {/key}
           </div>
-          <div class="continue-info">
-            <h3 class="continue-title">{hero.title}</h3>
-            <p class="continue-meta">{msg('games.libraryLastSessionLabel', { date: relativeDate(hero.lastPlayed) })}</p>
-            <p class="continue-meta">{msg('games.libraryPlaytimeLabel', { time: playtime(hero.playtimeSeconds) })}</p>
-            <div class="continue-actions">
-              <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
-                {#if $runningGames.has(hero.id)}
-                  <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-                  {msg('games.stop')}
-                {:else}
-                  <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-                  {msg('common.continue')}
-                {/if}
-              </Button>
-              <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
-            </div>
+          <div class="hero-scrim"></div>
+        {/if}
+        <div class="hero-body">
+          <span class="hero-eyebrow">{msg('games.libraryContinuePlayingTitle')}</span>
+          <h2 class="hero-title">{hero.title}</h2>
+          <p class="hero-meta">
+            <span>{msg('games.libraryLastSessionLabel', { date: relativeDate(hero.lastPlayed) })}</span>
+            <span>{msg('games.libraryPlaytimeLabel', { time: playtime(hero.playtimeSeconds) })}</span>
+          </p>
+          <div class="hero-actions">
+            <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
+              {#if $runningGames.has(hero.id)}
+                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+                {msg('games.stop')}
+              {:else}
+                <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
+                {msg('common.continue')}
+              {/if}
+            </Button>
+            <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
           </div>
         </div>
-      </Card>
-    </div>
+        <button
+          class="hero-close"
+          aria-label={msg('games.libraryHideLabel')}
+          title={msg('games.libraryHideLabel')}
+          onclick={() => (heroHidden = true)}
+        >
+          <X size="1.6rem" strokeWidth={1.8} />
+        </button>
+      </section>
+    {/key}
   {/if}
 
   {#if recentGames.length > 0}
     <section class="section">
       <div class="section-head">
         <h2>{msg('games.recentLabel')}</h2>
-        <button class="link" onclick={() => (filter = 'recent')}>{msg('games.libraryShowAllButton')}</button>
+        <button class="link" onclick={() => (filter = 'recent')}>
+          {msg('games.libraryShowAllButton')}
+          <ChevronRight size="1.4rem" strokeWidth={1.8} />
+        </button>
       </div>
       <div class="recent-row">
         {#each recentGames as entry (entry.id)}
@@ -369,7 +413,7 @@
         />
       {/if}
     {:else if $libraryView === 'grid'}
-      <div class="grid">
+      <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch}>
         {#each visibleGames as entry (entry.id)}
           <GameCard
             id={entry.id}
@@ -383,7 +427,7 @@
         {/each}
       </div>
     {:else}
-      <div class="list">
+      <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch}>
         {#each visibleGames as entry (entry.id)}
           <button
             class="list-row"
@@ -404,46 +448,141 @@
 </Card>
 
 <style>
-  .continue {
-    margin-bottom: var(--space-8);
-  }
-
-  .continue-body {
+  .hero {
+    position: relative;
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-6);
+    align-items: flex-end;
+    min-height: clamp(20rem, 17vw, 28rem);
+    margin-bottom: var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    overflow: hidden;
+    isolation: isolate;
   }
 
-  .continue-cover {
-    width: 28rem;
-    flex-shrink: 0;
+  .hero.plain {
+    background:
+      linear-gradient(115deg, var(--accent-subtle), transparent 62%),
+      var(--surface-2);
   }
 
-  .continue-info {
+  .hero-art,
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .hero-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 28%;
+    transition: transform var(--dur-slow) var(--ease);
+  }
+
+  .hero-art img:global([data-ready]) {
+    animation: media-in var(--dur-slow) var(--ease);
+  }
+
+  .hero:hover .hero-art img {
+    transform: scale(1.03);
+  }
+
+  .hero-scrim {
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--surface-2) 96%, transparent) 0%,
+        color-mix(in srgb, var(--surface-2) 86%, transparent) 40%,
+        color-mix(in srgb, var(--surface-2) 30%, transparent) 72%,
+        color-mix(in srgb, var(--surface-2) 6%, transparent) 100%
+      ),
+      linear-gradient(0deg, color-mix(in srgb, var(--surface-2) 55%, transparent) 0%, transparent 62%);
+  }
+
+  .hero-body {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6rem;
+    gap: var(--space-2);
     min-width: 0;
-    padding-top: 0.4rem;
+    max-width: min(64rem, 100%);
+    padding: var(--space-6) var(--space-8);
+    color: var(--text);
   }
 
-  .continue-title {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
+  .hero-body > * {
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
-  .continue-meta {
+  .hero-body > .hero-title {
+    animation-duration: var(--dur-slow);
+  }
+
+  .hero-body > .hero-meta {
+    animation-duration: var(--dur-slow);
+    animation-delay: calc(var(--dur-fast) / 2);
+  }
+
+  .hero-eyebrow {
     font-size: var(--font-sm);
+    font-weight: 500;
     color: var(--text-2);
   }
 
-  .continue-actions {
+  .hero-title {
+    max-width: 100%;
+    font-size: var(--font-title);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem var(--space-5);
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero-actions {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     margin-top: var(--space-3);
+  }
+
+  .hero-close {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    color: var(--text);
+    opacity: 0.75;
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+
+  .hero-close:hover,
+  .hero-close:focus-visible {
+    opacity: 1;
+  }
+
+  .hero-close:active {
+    transform: scale(0.9);
   }
 
   .section {
@@ -462,20 +601,32 @@
   }
 
   .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
     font-size: var(--font-sm);
     color: var(--text-3);
     transition: color var(--dur) var(--ease);
+  }
+
+  .link :global(svg) {
+    transition: transform var(--dur) var(--ease);
   }
 
   .link:hover {
     color: var(--text);
   }
 
+  .link:hover :global(svg) {
+    transform: translateX(0.3rem);
+  }
+
   .recent-row {
     display: flex;
     gap: var(--space-4);
     overflow-x: auto;
-    padding-bottom: var(--space-2);
+    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
+    padding: var(--space-2) var(--space-2) var(--space-3);
   }
 
   .recent-item {
@@ -504,7 +655,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-4);
+    gap: var(--space-3) var(--space-4);
     margin-bottom: var(--space-5);
     flex-wrap: wrap;
   }
@@ -512,7 +663,7 @@
   .search-wrap {
     flex: 1;
     min-width: 22rem;
-    max-width: 34rem;
+    max-width: 38rem;
   }
 
   .toolbar-right {
@@ -531,6 +682,11 @@
   .list {
     display: flex;
     flex-direction: column;
+  }
+
+  .grid.switched,
+  .list.switched {
+    animation: rise-in var(--dur-panel) var(--ease);
   }
 
   .list-row {

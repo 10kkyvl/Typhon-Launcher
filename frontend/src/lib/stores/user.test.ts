@@ -441,6 +441,22 @@ describe('saveProfile', () => {
 
     expect(accountMock.updateProfile).toHaveBeenCalledTimes(1);
   });
+
+  it('tells the caller whether anything was saved', async () => {
+    const { accountMock, userStore } = await loadModules();
+    let resolveFirst!: (value: ReturnType<typeof makeUser>) => void;
+    const first = new Promise<ReturnType<typeof makeUser>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(accountMock.updateProfile).mockReturnValueOnce(first);
+
+    const call1 = userStore.saveProfile({ displayName: 'A' });
+    const call2 = userStore.saveProfile({ displayName: 'B' });
+    resolveFirst(makeUser({ displayName: 'A' }));
+
+    expect(await call2).toBe(false);
+    expect(await call1).toBe(true);
+  });
 });
 
 describe('chooseAvatar', () => {

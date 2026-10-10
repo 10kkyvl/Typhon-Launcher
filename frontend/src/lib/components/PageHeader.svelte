@@ -4,17 +4,24 @@
   let {
     title,
     subtitle,
+    count,
     actions,
   }: {
     title: string;
     subtitle?: string;
+    count?: string;
     actions?: Snippet;
   } = $props();
 </script>
 
 <header class="page-header">
   <div class="text">
-    <h1>{title}</h1>
+    <div class="heading">
+      <h1>{title}</h1>
+      {#if count}
+        <span class="count">{count}</span>
+      {/if}
+    </div>
     {#if subtitle}
       <p>{subtitle}</p>
     {/if}
@@ -38,6 +45,20 @@
 
   .text {
     min-width: 0;
+  }
+
+  .heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .count {
+    font-size: var(--font-md);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   h1 {

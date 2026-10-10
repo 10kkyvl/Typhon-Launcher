@@ -51,7 +51,7 @@ So that a notice can be reviewed, please state:
 
 A notice that contains everything listed in section 3 and concerns material in the Typhon infrastructure is acted on within the timeframes set by Article 56 of the Law of Ukraine "On Copyright and Related Rights": access to the material is disabled no later than 24 hours after the notice is received, and a reply on the measures taken is sent to the complainant at the contact given no later than 48 hours after receipt. Notices that do not meet section 3 are reviewed within a reasonable time, with a request for the missing information.
 
-Where the material was uploaded by a user — that is, where it concerns an avatar, profile cover, bio, event caption, review or message — that user may be notified and is entitled to submit a counter-statement. The notice and the counter-statement are considered on their merits; material removed in error may be restored.
+Where the material was uploaded by a user — that is, where it concerns an avatar, profile cover, bio, status or profile block texts, event caption, review or message — that user may be notified and is entitled to submit a counter-statement. The notice and the counter-statement are considered on their merits; material removed in error may be restored.
 
 Notices that do not identify the material and its location, and notices about material outside the Typhon infrastructure, are rejected with an explanation of the reason.
 
