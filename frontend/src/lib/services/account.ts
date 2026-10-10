@@ -3,6 +3,7 @@ import { locale } from '../i18n/locale';
 import { Service as AccountService } from '../../../bindings/typhon/internal/account';
 import { appearanceOf } from '../profile/appearance';
 import { inWails } from './backend';
+import { SUPPORT_CODES, SUPPORT_CODE_FIELDS } from './supportCodes';
 import type { CropRect } from '../utils/crop';
 
 export const SHOWCASE_KINDS = ['favorites', 'recently_completed', 'most_played'] as const;
@@ -193,6 +194,7 @@ const KNOWN_CODES = new Set([
   'review_edit_cooldown',
   'review_report_limit',
   'review_bad_reason',
+  ...SUPPORT_CODES,
 ]);
 
 const CODE_FIELDS: Record<string, string> = {
@@ -215,6 +217,7 @@ const CODE_FIELDS: Record<string, string> = {
   review_links: 'body',
   review_duplicate: 'body',
   review_bad_reason: 'reason',
+  ...SUPPORT_CODE_FIELDS,
 };
 
 export class AccountError extends Error {
@@ -296,6 +299,24 @@ export async function logout(): Promise<void> {
   if (!inWails) throw unauthenticated();
   try {
     await AccountService.Logout();
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function openForgotPassword(): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.OpenForgotPassword();
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function openSupportSite(): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.OpenSupportSite();
   } catch (err) {
     throw toAccountError(err);
   }

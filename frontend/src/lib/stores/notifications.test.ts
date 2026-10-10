@@ -310,3 +310,35 @@ it('retranslates live notifications without resurrecting read errors', async () 
     expect(get(notifications.notifications)).toEqual([]);
   } finally { stop(); applyLanguage('ru'); }
 });
+
+describe('ответы поддержки в списке уведомлений', () => {
+  it('непрочитанные ответы дают запись, которая ведёт в раздел поддержки', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(2);
+
+    const items = get(notifications.notifications).filter((item) => item.route === 'support');
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('support-unread:2');
+    expect(items[0].text).toBe('Новых ответов: 2');
+  });
+
+  it('без непрочитанных ответов записи нет', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(0);
+
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toEqual([]);
+  });
+
+  it('прочитанная запись возвращается, когда ответов стало больше', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(1);
+    notifications.markAllRead();
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toEqual([]);
+
+    unreadReplies.set(2);
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toHaveLength(1);
+  });
+});

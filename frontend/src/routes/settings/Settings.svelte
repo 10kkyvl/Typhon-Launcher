@@ -1,7 +1,7 @@
 <script lang="ts">
   import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
-  import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -50,6 +50,7 @@
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
+  import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
@@ -1109,6 +1110,16 @@
           {#if logsSendFailure}
             <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
           {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('tickets.settingsLabel')}</span>
+              <span class="row-sub">{msg('tickets.settingsHint')}</span>
+            </div>
+            <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
+              <LifeBuoy size="1.5rem" strokeWidth={1.8} />
+              {msg('tickets.writeSupport')}
+            </Button>
+          </div>
         </div>
       </Card>
 

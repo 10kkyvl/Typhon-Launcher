@@ -30,6 +30,7 @@
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
+  import { initSupport } from './lib/stores/support';
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
@@ -48,6 +49,7 @@
   import Profile from './routes/profile/Profile.svelte';
   import Settings from './routes/settings/Settings.svelte';
   import Sources from './routes/sources/Sources.svelte';
+  import Support from './routes/support/Support.svelte';
   import UserProfile from './routes/user/UserProfile.svelte';
 
   onDestroy(initNativeLanguage());
@@ -68,6 +70,7 @@
   initHistory();
   initLan();
   initSocial();
+  onDestroy(initSupport());
   initPresence();
   initSaveBackups();
   initLegalAcceptance();
@@ -121,6 +124,8 @@
           <UserProfile username={$route.params.username} />
         {:else if $route.name === 'profile'}
           <Profile />
+        {:else if $route.name === 'support'}
+          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} />
         {:else if $route.name === 'settings'}
           <Settings tab={$route.params.tab} />
         {/if}

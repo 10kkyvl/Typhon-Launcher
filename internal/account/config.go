@@ -16,6 +16,28 @@ const APIPrefix = "/v1"
 
 var apiBaseURL = "https://api.typhon-launcher.com"
 
+const siteBaseURL = "https://typhon-launcher.com"
+
+const (
+	forgotPasswordPath = "/account/forgot"
+	supportPath        = "/support"
+)
+
+func sitePageURL(language, path string) string {
+	if language == "en" {
+		return siteBaseURL + "/en" + path
+	}
+	return siteBaseURL + path
+}
+
+func ForgotPasswordURL(language string) string {
+	return sitePageURL(language, forgotPasswordPath)
+}
+
+func SupportURL(language string) string {
+	return sitePageURL(language, supportPath)
+}
+
 var UserAgent = fmt.Sprintf("Typhon/%s (%s/%s)", app.Version, runtime.GOOS, runtime.GOARCH)
 
 var (

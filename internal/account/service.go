@@ -27,6 +27,8 @@ const (
 
 var errNotStarted = errors.New("account service is not started")
 
+var errNoApplication = errors.New("application is not running")
+
 type State struct {
 	Status string      `json:"status"`
 	User   CurrentUser `json:"user"`
@@ -49,6 +51,9 @@ type Service struct {
 	cancel       context.CancelFunc
 
 	profileMu sync.Mutex
+
+	language func() string
+	openURL  func(string) error
 }
 
 func NewService() (*Service, error) {
@@ -81,7 +86,7 @@ func newService(store CredentialStore, baseURL, path string) (*Service, error) {
 		return nil, fmt.Errorf("load cached profile: %w", err)
 	}
 
-	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile}
+	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile, openURL: openSystemBrowser}
 	client, err := NewClient(baseURL, s.token)
 	if err != nil {
 		return nil, err
@@ -220,12 +225,53 @@ func (s *Service) signedOutState() State {
 	return State{Status: StatusUnauthenticated}
 }
 
+//wails:ignore
+func (s *Service) SetLanguage(language func() string) {
+	s.mu.Lock()
+	s.language = language
+	s.mu.Unlock()
+}
+
+func (s *Service) uiLanguage() string {
+	s.mu.Lock()
+	language := s.language
+	s.mu.Unlock()
+	if language == nil {
+		return ""
+	}
+	return language()
+}
+
+func openSystemBrowser(link string) error {
+	app := application.Get()
+	if app == nil {
+		return errNoApplication
+	}
+	return app.Browser.OpenURL(link)
+}
+
+func (s *Service) OpenForgotPassword() error {
+	if err := s.openURL(ForgotPasswordURL(s.uiLanguage())); err != nil {
+		return fmt.Errorf("open password reset page: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) OpenSupportSite() error {
+	if err := s.openURL(SupportURL(s.uiLanguage())); err != nil {
+		return fmt.Errorf("open support page: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
 	}
 	defer cancel()
+
+	input.Lang = s.uiLanguage()
 
 	session, err := s.client.Register(ctx, input)
 	if err != nil {

@@ -10,6 +10,8 @@ const bindings = {
   PickAvatar: vi.fn(),
   UploadAvatar: vi.fn(),
   RemoveAvatar: vi.fn(),
+  OpenForgotPassword: vi.fn(),
+  OpenSupportSite: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/account', () => ({ Service: bindings }));
@@ -152,6 +154,32 @@ describe('auth calls', () => {
 
     await expect(logout()).resolves.toBeUndefined();
     expect(bindings.Logout).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.each([
+  ['openForgotPassword', 'OpenForgotPassword'],
+  ['openSupportSite', 'OpenSupportSite'],
+] as const)('%s', (name, binding) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('asks the backend to open the page', async () => {
+    const service = await import('./account');
+    bindings[binding].mockResolvedValueOnce(undefined);
+
+    await expect(service[name]()).resolves.toBeUndefined();
+    expect(bindings[binding]).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a browser failure as an AccountError instead of swallowing it', async () => {
+    const service = await import('./account');
+    bindings[binding].mockRejectedValueOnce(new Error('open page: no default browser'));
+
+    const err = await service[name]().catch((e) => e);
+    expect(err).toBeInstanceOf(service.AccountError);
+    expect(err.code).toBe('server_error');
   });
 });
 

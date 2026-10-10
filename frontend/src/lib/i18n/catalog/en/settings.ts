@@ -256,7 +256,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.aboutLogsSendIdCopiedToast': 'Ticket ID copied',
   'settings.aboutLogsSendIdCopyFailedToast': 'Failed to copy the ticket ID',
   'settings.aboutLogsSendDroppedNote': 'These old log files did not fit in the compressed archive and were not sent: {files}',
-  'settings.aboutLogsSendFailedHint': 'Download the archive and send it to support yourself.',
+  'settings.aboutLogsSendFailedHint': 'Download the archive and keep it, then describe the problem in the Support section.',
   'settings.aboutLegalCardTitle': 'Legal information',
   'settings.aboutLegalDocTerms': 'Terms of use',
   'settings.aboutLegalDocPrivacy': 'Privacy policy',

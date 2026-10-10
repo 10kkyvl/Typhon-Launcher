@@ -14,6 +14,7 @@ export type RouteName =
   | 'activity'
   | 'user'
   | 'profile'
+  | 'support'
   | 'settings';
 
 export interface Route {

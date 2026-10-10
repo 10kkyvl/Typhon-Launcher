@@ -46,13 +46,17 @@ func (s *Service) UILanguage() string {
 	return "en"
 }
 
-func (s *Service) GetAppInfo() AppInfo {
+func CurrentInfo() AppInfo {
 	return AppInfo{
 		Version:  Version,
 		Platform: runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		DevMock:  devmock.Enabled,
 	}
+}
+
+func (s *Service) GetAppInfo() AppInfo {
+	return CurrentInfo()
 }
 
 func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {

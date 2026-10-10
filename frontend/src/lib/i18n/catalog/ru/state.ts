@@ -122,7 +122,7 @@ export const state = {
   'state.accountErrorNetwork': 'Нет связи с сервером',
   'state.accountErrorRateLimited': 'Слишком много попыток, подождите немного и повторите',
   'state.accountErrorBadRequest': 'Сервер отклонил запрос',
-  'state.accountErrorRequestBlocked': 'Запрос заблокирован на подступах к серверу, напишите в поддержку',
+  'state.accountErrorRequestBlocked': 'Запрос заблокирован на подступах к серверу. Если повторится, опишите проблему в разделе «Поддержка»',
   'state.accountErrorUserNotFound': 'Пользователь не найден',
   'state.accountErrorAlreadyFriends': 'Вы уже друзья',
   'state.accountErrorLimitReached': 'Достигнут лимит',

@@ -3,6 +3,7 @@
   import { Window } from '@wailsio/runtime';
   import Button from '../../lib/components/Button.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
+  import { openForgotPassword, openSupportSite } from '../../lib/services/account';
   import { inWails } from '../../lib/services/backend';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -78,6 +79,24 @@
       errors = { general: accountErrorText(err, msg('transfers.authGuestError')) };
     } finally {
       busy = false;
+    }
+  }
+
+  async function onForgot() {
+    try {
+      await openForgotPassword();
+    } catch (err) {
+      console.error('open password reset page', err);
+      toast(msg('tickets.forgotOpenFailed'), 'danger');
+    }
+  }
+
+  async function onCantSignIn() {
+    try {
+      await openSupportSite();
+    } catch (err) {
+      console.error('open support page', err);
+      toast(msg('tickets.siteOpenFailed'), 'danger');
     }
   }
 
@@ -198,6 +217,11 @@
           />
           {#if errors.password}<span class="error" role="alert">{errors.password}</span>{/if}
         </label>
+
+        {#if !isRegister}
+          <button class="link forgot" type="button" disabled={busy} onclick={onForgot}>{msg('tickets.forgotPassword')}</button>
+          <button class="link forgot" type="button" disabled={busy} onclick={onCantSignIn}>{msg('tickets.cantSignIn')}</button>
+        {/if}
 
         {#if errors.general}
           <p class="error general" role="alert">
@@ -511,5 +535,10 @@
 
   .link:hover {
     color: var(--text);
+  }
+
+  .forgot {
+    align-self: flex-start;
+    margin-top: -0.4rem;
   }
 </style>
