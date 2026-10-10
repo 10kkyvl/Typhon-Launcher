@@ -8,12 +8,13 @@
   import { getStorageInfoFor, type StorageInfo } from '../services/system';
   import { libraryGames } from '../stores/library';
   import { closeMoveGame, moves, moveTarget } from '../stores/relocate';
+  import { navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
   import { bytesSize, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
-  import { msg } from '../i18n';
+  import { errorCode, msg } from '../i18n';
 
   const game = $derived(
     $moveTarget ? ($libraryGames.find((g) => g.id === $moveTarget?.gameId) ?? null) : null,
@@ -127,6 +128,11 @@
   function close() {
     closeMoveGame();
   }
+
+  function contactSupport() {
+    closeMoveGame();
+    navigate('support', { view: 'new', topic: 'other' });
+  }
 </script>
 
 <Modal open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
@@ -154,6 +160,11 @@
       {:else}
         {#if jobFailed}
           <p class="failure">{moveErrorText(jobFailed.error, msg('modals.moveGameFailed'))}</p>
+          {#if errorCode(jobFailed.error) === 'relocate.ambiguous_recovery'}
+            <div class="support">
+              <Button size="sm" onclick={contactSupport}>{msg('tickets.writeSupport')}</Button>
+            </div>
+          {/if}
         {/if}
 
         <div class="field">
@@ -322,5 +333,9 @@
     margin: 0;
     font-size: var(--font-xs);
     color: var(--danger);
+  }
+
+  .support {
+    margin-top: var(--space-2);
   }
 </style>

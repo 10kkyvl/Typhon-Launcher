@@ -125,7 +125,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorNetwork': 'No connection to the server',
   'state.accountErrorRateLimited': 'Too many attempts — wait a bit and try again',
   'state.accountErrorBadRequest': 'Server rejected the request',
-  'state.accountErrorRequestBlocked': 'Request was blocked before reaching the server — contact support',
+  'state.accountErrorRequestBlocked': 'Request was blocked before reaching the server. If it keeps happening, describe the problem in the Support section',
   'state.accountErrorUserNotFound': 'User not found',
   'state.accountErrorAlreadyFriends': 'You are already friends',
   'state.accountErrorLimitReached': 'Limit reached',

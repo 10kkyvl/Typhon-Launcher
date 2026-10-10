@@ -252,7 +252,7 @@ export const settings = {
   'settings.aboutLogsSendIdCopiedToast': 'Номер обращения скопирован',
   'settings.aboutLogsSendIdCopyFailedToast': 'Не удалось скопировать номер обращения',
   'settings.aboutLogsSendDroppedNote': 'В сжатый архив не поместились и не были отправлены старые файлы журнала: {files}',
-  'settings.aboutLogsSendFailedHint': 'Скачайте архив и отправьте его в поддержку вручную.',
+  'settings.aboutLogsSendFailedHint': 'Скачайте архив и сохраните его, а проблему опишите в разделе «Поддержка».',
   'settings.aboutLegalCardTitle': 'Правовая информация',
   'settings.aboutLegalDocTerms': 'Условия использования',
   'settings.aboutLegalDocPrivacy': 'Политика конфиденциальности',

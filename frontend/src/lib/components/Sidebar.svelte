@@ -5,13 +5,14 @@
   const logoChannels = $derived(rgb($displayedAccent).map(v => v / 255));
   // Replace the blue chroma (B-R), retaining neutral shadows and highlights.
   const logoMatrix = $derived(logoChannels.map(k => `${1-k} 0 ${k} 0 0`).join(' ') + ' 0 0 0 1 0');
-  import { Activity, Database, Download, Gamepad2, History, LayoutGrid, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
+  import { Activity, Database, Download, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
   import { STATUS_LABELS, statusDot } from '../social/presence';
   import { autoAway, presenceStatus, shownPresence, updatePresenceStatus } from '../stores/presence';
   import { incomingCount } from '../stores/social';
+  import { unreadReplies } from '../stores/support';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
@@ -45,6 +46,8 @@
   ];
 
   const lanItem: NavItem = { name: 'lan', label: msg('ui.localNetwork'), icon: Wifi };
+
+  const supportItem: NavItem = { name: 'support', label: msg('tickets.nav'), icon: LifeBuoy };
 
   const settingsItem: NavItem = { name: 'settings', label: msg('ui.settingsNav'), icon: Settings };
 
@@ -147,6 +150,8 @@
     <span class="nav-label">{item.label}</span>
     {#if item.name === 'friends' && $incomingCount > 0}
       <span class="count">{$incomingCount}</span>
+    {:else if item.name === 'support' && $unreadReplies > 0}
+      <span class="count">{$unreadReplies}</span>
     {/if}
   </button>
 {/snippet}
@@ -183,6 +188,7 @@
   </nav>
 
   <div class="bottom">
+    {@render navButton(supportItem)}
     {@render navButton(settingsItem)}
     <DropdownMenu items={profileMenu} placement="up" align="left" onselect={onProfileSelect}>
       {#snippet trigger({ open, toggle })}

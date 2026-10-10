@@ -50,6 +50,7 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/social"
 	"typhon/internal/sources"
+	"typhon/internal/support"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
 	"typhon/internal/titles"
@@ -279,6 +280,7 @@ func main() {
 	if err != nil {
 		fatal("start account service", err)
 	}
+	accountService.SetLanguage(appService.UILanguage)
 	historyService, err := history.NewService()
 	if err != nil {
 		fatal("start history service", err)
@@ -507,6 +509,8 @@ func main() {
 
 	var extraServices []application.Service
 
+	var uploadLogs func(ctx context.Context) (string, error)
+
 	// Битый или недоступный installation.json — не повод не пускать пользователя
 	// играть: presence и телеметрия в этом запуске просто не поднимаются, лаунчер
 	// работает дальше без них.
@@ -538,6 +542,10 @@ func main() {
 		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
 		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
+		uploadLogs = func(ctx context.Context) (string, error) {
+			sent, err := diagnosticsService.SendLogsContext(ctx)
+			return sent.ID, err
+		}
 		slog.SetDefault(slog.New(diagnostics.NewLogHandler(slog.Default().Handler(), diagnosticsService)))
 
 		libraryService.AddSessionWatcher(heartbeatService)
@@ -551,6 +559,12 @@ func main() {
 			application.NewService(usageService),
 			application.NewService(diagnosticsService),
 		)
+	}
+
+	supportService, err := support.NewService(account.BaseURL(), accountService.SessionToken,
+		support.Deps{Language: appService.UILanguage, UploadLogs: uploadLogs})
+	if err != nil {
+		fatal("start support service", err)
 	}
 
 	current := settingsService.GetSettings()
@@ -572,6 +586,7 @@ func main() {
 		application.NewService(messagingService),
 		application.NewService(onlineService),
 		application.NewService(reviewsService),
+		application.NewService(supportService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),

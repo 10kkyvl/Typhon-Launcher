@@ -15,6 +15,7 @@ import type { SelfUpdateStatus } from '../services/selfupdate';
 import { bytesSize, progressPercent } from '../utils/format';
 import { installTotalUnknown } from '../install/progress';
 import { sources } from './sources';
+import { unreadReplies } from './support';
 import { updates } from './updates';
 
 function pct(value: number) {
@@ -95,7 +96,18 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
 }
 
 const allNotifications = derived(
-  [active, installations, updates, sources, selfUpdateStatus, historyRecent, incomingCount, incomingPeak, locale],
+  [
+    active,
+    installations,
+    updates,
+    sources,
+    selfUpdateStatus,
+    historyRecent,
+    incomingCount,
+    incomingPeak,
+    unreadReplies,
+    locale,
+  ],
   ([
     $active,
     $installations,
@@ -105,8 +117,19 @@ const allNotifications = derived(
     $historyRecent,
     $incomingCount,
     $incomingPeak,
+    $unreadReplies,
   ]): Notification[] => {
     const items: Notification[] = [];
+
+    if ($unreadReplies > 0) {
+      items.push({
+        id: `support-unread:${$unreadReplies}`,
+        title: msg('tickets.notifTitle'),
+        text: msg('tickets.notifText', { count: $unreadReplies }),
+        route: 'support',
+        terminal: false,
+      });
+    }
 
     const launcherUpdate = launcherUpdateNotification($selfUpdateStatus);
     if (launcherUpdate) items.push(launcherUpdate);

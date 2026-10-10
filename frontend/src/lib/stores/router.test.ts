@@ -50,3 +50,19 @@ describe('router', () => {
     expect(get(canGoForward)).toBe(false);
   });
 });
+
+describe('support route', () => {
+  it('keeps the ticket, view and topic params and treats each as its own history entry', async () => {
+    const { navigate, route, goBack } = await loadRouter();
+
+    navigate('support');
+    navigate('support', { view: 'new', topic: 'launcher' });
+    expect(get(route)).toMatchObject({ name: 'support', params: { view: 'new', topic: 'launcher' } });
+
+    navigate('support', { ticket: '12' });
+    expect(get(route).params).toEqual({ ticket: '12' });
+
+    goBack();
+    expect(get(route).params).toEqual({ view: 'new', topic: 'launcher' });
+  });
+});
