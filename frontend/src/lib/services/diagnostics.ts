@@ -1,3 +1,4 @@
+import { CancelledRejectionError } from '@wailsio/runtime';
 import { Service as DiagnosticsService } from '../../../bindings/typhon/internal/diagnostics';
 import { inWails } from './backend';
 
@@ -119,9 +120,24 @@ function handleError(event: ErrorEvent) {
   }
 }
 
+// A binding call cancelled from the frontend still answers from Go with its
+// own context error, and the Wails runtime rethrows that late answer as an
+// unhandled CancelledRejectionError nobody can attach a handler to. Only that
+// exact answer is dropped: a real failure that lost the race to the cancel
+// still reaches the report.
+function isCancelledCall(reason: unknown): boolean {
+  if (!(reason instanceof CancelledRejectionError)) return false;
+  const cause: unknown = reason.cause;
+  return cause instanceof Error && /\bcontext canceled$/.test(cause.message);
+}
+
 function handleRejection(event: PromiseRejectionEvent) {
   try {
     const reason = event.reason;
+    if (isCancelledCall(reason)) {
+      event.preventDefault();
+      return;
+    }
     const message = reason instanceof Error ? reason.message : String(reason);
     const stack = reason instanceof Error && reason.stack ? reason.stack : '';
     void send('frontend', 'window.unhandledrejection', message, stack, false);

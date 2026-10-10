@@ -6,6 +6,7 @@ import { currentUser } from './user';
 import type { CurrentUser } from '../services/account';
 
 export const profileSnapshot = writable<ProfileSnapshot>(EMPTY_SNAPSHOT);
+export const profileFailed = writable(false);
 
 let started = false;
 let seq = 0;
@@ -16,9 +17,10 @@ export async function refreshProfile() {
     const snap = await getProfileSnapshot();
     if (id !== seq) return;
     profileSnapshot.set(snap);
-  } catch (err) {
+    profileFailed.set(false);
+  } catch {
     if (id !== seq) return;
-    console.error('profile snapshot failed', err);
+    profileFailed.set(true);
   }
 }
 

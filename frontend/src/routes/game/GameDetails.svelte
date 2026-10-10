@@ -33,6 +33,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
@@ -85,8 +86,10 @@
     dismissMetadataMatch,
     ensureMetadataFresh,
     getMetadataView,
+    openStoreLink,
     refreshMetadata,
     type MetadataView,
+    type StoreId,
   } from '../../lib/services/metadata';
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
@@ -101,6 +104,7 @@
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
+  import { installIndeterminate } from '../../lib/install/progress';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -188,16 +192,22 @@
 
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
+  let catalogFailed = $state(false);
   let catalogToken = 0;
 
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
+    catalogFailed = false;
     catalogGame = null;
     try {
       const found = await getCatalogGame(gameId);
       if (current !== catalogToken) return;
       catalogGame = found;
+    } catch (err) {
+      if (current !== catalogToken) return;
+      catalogFailed = true;
+      toast(metadataErrorText(err, msg('games.detailCatalogLoadError')), 'danger');
     } finally {
       if (current === catalogToken) catalogLoading = false;
     }
@@ -210,6 +220,7 @@
       if (known) {
         catalogToken++;
         catalogLoading = false;
+        catalogFailed = false;
         catalogGame = null;
         return;
       }
@@ -249,6 +260,8 @@
       const started = await ensureMetadataFresh(gameId);
       if (current !== metaToken || eventVersion !== metaEventVersion) return;
       metaSearching = started || view.match === 'searching';
+    } catch (err) {
+      if (current === metaToken) toast(metadataErrorText(err, msg('games.detailMetaLoadError')), 'danger');
     } finally {
       if (current === metaToken) metaReading = false;
     }
@@ -417,7 +430,7 @@
 
   const busy = $derived(
     busyState([
-      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: ownInstall.status === 'verifying' } : null,
+      ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: installIndeterminate(ownInstall) } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
         ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,
@@ -592,6 +605,15 @@
     }
   }
 
+  async function openStore(store: StoreId) {
+    if (!canonicalId) return;
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (err) {
+      toast(metadataErrorText(err, msg('errMetadata.fallback')), 'danger');
+    }
+  }
+
   function openShot(index: number) {
     lightboxIndex = index;
     lightboxOpen = true;
@@ -757,6 +779,7 @@
   }
 
   const missing = $derived(
+    !catalogFailed &&
     isGameMissing({
       hasLocalGame: Boolean(localGame),
       hasCatalogGame: Boolean(catalogGame),
@@ -769,6 +792,13 @@
 {#if missing}
   <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
     {#snippet actions()}
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
+  <EmptyState title={msg('games.detailCatalogLoadError')}>
+    {#snippet actions()}
+      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
       <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
     {/snippet}
   </EmptyState>
@@ -1004,6 +1034,10 @@
             {/each}
           </div>
         {/if}
+
+        <div class="stores">
+          <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+        </div>
 
         {#if showUpdateCard && update}
           <section class="section">
@@ -1507,6 +1541,10 @@
     color: var(--text-2);
     font-size: var(--font-xs);
     white-space: nowrap;
+  }
+
+  .stores {
+    margin-top: var(--space-5);
   }
 
   .section {

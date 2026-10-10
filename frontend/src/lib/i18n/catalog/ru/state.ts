@@ -45,6 +45,7 @@ export const state = {
   'state.librarySessionEnded': 'Сессия завершена: {minutes} мин',
 
   'state.metadataLoadFailed': 'Не удалось загрузить обложки',
+  'state.metadataCheckFailed': 'Не удалось проверить доступность метаданных',
 
   'state.notifLauncherUpdateTitle': 'Обновление лаунчера',
   'state.notifUpdateCheckFailed': 'Не удалось проверить обновления',

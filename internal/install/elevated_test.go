@@ -501,6 +501,7 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 	}
 
 	var proc *testProcHandle
+	started := make(chan struct{})
 	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
 		h := longRunningProcess(t, 30)
 		ok := false
@@ -508,13 +509,23 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 		if !ok {
 			t.Fatalf("longRunningProcess returned %T, want *testProcHandle", h)
 		}
+		close(started)
 		return h, nil
 	})
 
+	// Отмена приходит только после запуска воркера: на нагруженной машине
+	// runElevated доходит до запуска дольше любой фиксированной паузы, и отмена
+	// раньше него оставила бы proc пустым.
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan struct{})
+	defer close(finished)
 	go func() {
-		<-time.After(30 * time.Millisecond)
-		cancel()
+		select {
+		case <-started:
+			cancel()
+		case <-finished:
+		}
 	}()
 	// Воркер никогда не отвечает на маркер отмены: единственный способ узнать,
 	// что процесс остановлен, — дедлайн workerCancelWait и принудительное
@@ -522,6 +533,9 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 	if _, err := runElevated(ctx, spec); err == nil {
 		t.Fatal("runElevated returned nil error though the worker never confirmed stopping")
+	}
+	if proc == nil {
+		t.Fatal("the worker was never started")
 	}
 
 	pid := proc.cmd.Process.Pid
@@ -536,13 +550,13 @@ func TestRunElevatedKillsWorkerAfterCancelTimeout(t *testing.T) {
 
 // TestRunElevatedKeepsNotConfirmedStoppedEvenAfterConfirmedWorkerKill
 // закрывает разбор с ревью: terminate() доказывает только смерть ВОРКЕРА, а
-// не дерева процессов, которое он запустил. Воркер держит установщик живым
-// через job-объект с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
-// limitJob), но SetInformationJobObject может отказать (там же — «отказ
-// воспроизведён на этой машине, похоже на вмешательство защитного ПО»), и
-// limitJob в этом случае молча откатывается на лимиты без этого флага.
-// Значит убитый воркер не гарантирует убитый установщик, и класс ошибки
-// обязан остаться errInstallerNotConfirmedStopped: discardSilent (flow.go)
+// не дерева процессов, которое он запустил. Воркер держит установщик в
+// job-объекте с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
+// limitJob), и смерть воркера гасит дерево, но асинхронно и без подтверждения
+// для вызывающего; groupProcess к тому же может не завестись, и тогда
+// установщик живёт вне job-объекта. Значит убитый воркер не гарантирует
+// убитый установщик, и класс ошибки обязан остаться
+// errInstallerNotConfirmedStopped: discardSilent (flow.go)
 // делает RemoveAll только когда его нет, а RemoveAll по каталогу, в который
 // ещё может писать не убитый установщик, — гонка на единственной копии
 // данных (инвариант 9, тот же класс бага, что уже был закрыт КРИТ для

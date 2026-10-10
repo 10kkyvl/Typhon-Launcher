@@ -1,6 +1,6 @@
 # Copyright Infringement Notices
 
-Revision of 25 August 2026.
+Revision of 10 October 2026.
 
 This document explains how to send the Typhon project operator a copyright infringement notice, and what can and cannot be done in response to one.
 
@@ -24,7 +24,7 @@ That leads to the following distinction, which determines what can be done about
 
 ### 2.1. Typhon infrastructure and services
 
-This covers what the operator controls: the project website, the repository, the account service, the metadata service and the update service — the texts, images and other materials they serve. It also covers the little that users upload themselves: profile avatars and user-filled profile fields.
+This covers what the operator controls: the project website, the repository, the account service, the metadata service and the update service — the texts, images and other materials they serve. It also covers what users upload and write themselves: profile avatars and covers, the bio and other profile fields, captions on feed events, game reviews and messages between friends.
 
 For a notice concerning such material, review and removal — or restriction of access to the material — are possible.
 
@@ -49,9 +49,9 @@ So that a notice can be reviewed, please state:
 
 ## 4. Review and response
 
-Notices are reviewed by the project operator within a reasonable time. A reply is sent to the complainant at the contact given.
+A notice that contains everything listed in section 3 and concerns material in the Typhon infrastructure is acted on within the timeframes set by Article 56 of the Law of Ukraine "On Copyright and Related Rights": access to the material is disabled no later than 24 hours after the notice is received, and a reply on the measures taken is sent to the complainant at the contact given no later than 48 hours after receipt. Notices that do not meet section 3 are reviewed within a reasonable time, with a request for the missing information.
 
-Where the material was uploaded by a user — that is, where it concerns an avatar or a profile field — that user may be notified and is entitled to submit a counter-statement. The notice and the counter-statement are considered on their merits; material removed in error may be restored.
+Where the material was uploaded by a user — that is, where it concerns an avatar, profile cover, bio, event caption, review or message — that user may be notified and is entitled to submit a counter-statement. The notice and the counter-statement are considered on their merits; material removed in error may be restored.
 
 Notices that do not identify the material and its location, and notices about material outside the Typhon infrastructure, are rejected with an explanation of the reason.
 

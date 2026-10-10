@@ -66,7 +66,7 @@
     saving = true;
     error = '';
     try {
-      await respondTelemetryConsent(usageStats, diagnostics);
+      await respondTelemetryConsent(diagnostics && usageStats, diagnostics);
     } catch (err) {
       error = consentErrorText(err);
     } finally {

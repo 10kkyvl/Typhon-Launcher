@@ -38,7 +38,7 @@ export const errSources = {
   'errSources.srcFeedNoHost': 'URL не содержит хост',
   'errSources.srcFeedInvalidUrl': 'некорректный URL',
   'errSources.srcFeedBadStatus': 'сервер источника вернул ошибку',
-  'errSources.srcFeedChallenge': 'источник закрыт защитой Cloudflare: скачайте файл фида в браузере и добавьте его кнопкой «Выбрать файл фида»',
+  'errSources.srcFeedChallenge': 'источник не отдаёт фид программам. Если он открывается в браузере, сохраните файл и добавьте его кнопкой «Выбрать файл фида»',
 
   'errSources.discoveryBusy': 'поиск игр уже выполняется',
   'errSources.discoveryNotStarted': 'сервис поиска игр не запущен',

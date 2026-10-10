@@ -20,8 +20,15 @@ const pending = new Set<string>();
 const taken = new Map<string, number>();
 let pumping = false;
 
+let artFailureShown = false;
+
 export async function initMetadata() {
-  metadataAvailable.set(await isMetadataAvailable());
+  try {
+    metadataAvailable.set(await isMetadataAvailable());
+  } catch (err) {
+    metadataAvailable.set(false);
+    toast(metadataErrorText(err, msg('state.metadataCheckFailed')), 'danger');
+  }
   if (!inWails) return;
 
   Events.On('metadata:updated', (event) => {
@@ -42,13 +49,24 @@ export async function initMetadata() {
   });
 }
 
-export async function loadArt(ids: string[]) {
+async function fetchArt(ids: string[]) {
   const known = get(gameArt);
   const missing = [...new Set(ids)].filter((id) => id && !(id in known));
   if (missing.length === 0) return;
   const art = await getGameArt(missing);
+  artFailureShown = false;
   if (Object.keys(art).length === 0) return;
   gameArt.update((map) => ({ ...map, ...art }));
+}
+
+export async function loadArt(ids: string[]) {
+  try {
+    await fetchArt(ids);
+  } catch (err) {
+    if (artFailureShown) return;
+    artFailureShown = true;
+    toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
+  }
 }
 
 export function requestArt(ids: string[]) {
@@ -74,7 +92,7 @@ async function pump() {
   try {
     while (pending.size > 0 && idleRounds < maxIdleRounds) {
       const chunk = [...pending].slice(0, chunkSize);
-      await loadArt(chunk);
+      await fetchArt(chunk);
       const accepted = await ensureArt(chunk);
       const now = Date.now();
       for (const id of accepted) {
@@ -89,8 +107,13 @@ async function pump() {
       await wait(retryDelay);
     }
   } catch (err) {
+    const now = Date.now();
+    for (const id of pending) taken.set(id, now);
     pending.clear();
-    toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
+    if (!artFailureShown) {
+      artFailureShown = true;
+      toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
+    }
   } finally {
     pumping = false;
   }

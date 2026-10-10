@@ -54,7 +54,16 @@ func mkText(t *testing.T, path, content string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir for %s: %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("open %s: %v", filepath.Dir(path), err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			t.Errorf("close %s: %v", filepath.Dir(path), err)
+		}
+	}()
+	if err := root.WriteFile(filepath.Base(path), []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

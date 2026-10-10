@@ -67,6 +67,16 @@ func (r mockRunner) run(ctx context.Context, spec runSpec) (int, error) {
 			return 0, err
 		}
 		if elevate {
+			// Воркер не знает каталог библиотеки лаунчера, а у ручной установки
+			// каталога нет: фальшивый мастер кладёт игру туда же, куда и без
+			// воркера, поэтому путь выбирается здесь и уходит воркеру в задании.
+			if spec.Interactive && spec.Destination == "" {
+				_, dest, err := r.placement(spec)
+				if err != nil {
+					return 0, err
+				}
+				spec.Destination = dest
+			}
 			return runElevated(ctx, spec)
 		}
 	}
@@ -133,21 +143,28 @@ func devmockUninstallTarget(path string) (dir string, marked bool, err error) {
 	return dir, false, nil
 }
 
+func (r mockRunner) placement(spec runSpec) (name, dest string, err error) {
+	name, err = devmockGameName(spec)
+	if err != nil {
+		return "", "", err
+	}
+	if spec.Destination != "" {
+		return name, spec.Destination, nil
+	}
+	gamesPath := ""
+	if r.gamesPath != nil {
+		gamesPath = r.gamesPath()
+	}
+	if gamesPath == "" {
+		return "", "", errDevmockNoGamesPath
+	}
+	return name, filepath.Join(gamesPath, name), nil
+}
+
 func (r mockRunner) install(ctx context.Context, spec runSpec) (int, error) {
-	name, err := devmockGameName(spec)
+	name, dest, err := r.placement(spec)
 	if err != nil {
 		return 0, err
-	}
-	dest := spec.Destination
-	if dest == "" {
-		gamesPath := ""
-		if r.gamesPath != nil {
-			gamesPath = r.gamesPath()
-		}
-		if gamesPath == "" {
-			return 0, errDevmockNoGamesPath
-		}
-		dest = filepath.Join(gamesPath, name)
 	}
 
 	delay, err := devmockInstallDelay()

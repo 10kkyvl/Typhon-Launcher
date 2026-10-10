@@ -245,6 +245,15 @@ export async function logout(): Promise<void> {
   }
 }
 
+export async function deleteAccount(password: string): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.DeleteAccount(password);
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
 export async function fetchCurrentUser(): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {

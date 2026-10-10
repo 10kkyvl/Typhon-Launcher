@@ -21,6 +21,13 @@ describe('provider labels in game details and recommendations', () => {
     expect(genreLabel('  SPORTS  ')).toBe('Sport');
     expect(themeLabel('Открытый мир')).toBe('Open world');
   });
+  it('translates the Steam store genres that are not game genres', () => {
+    applyLanguage('ru');
+    expect(['Design & Illustration', 'Movie', 'Utilities', 'Free to Play', 'Early Access'].map(genreLabel))
+      .toEqual(['Дизайн и иллюстрация', 'Фильмы', 'Утилиты', 'Бесплатные', 'Ранний доступ']);
+    applyLanguage('en');
+    expect(genreLabel('Дизайн и иллюстрация')).toBe('Design & Illustration');
+  });
   it('preserves unknown provider labels', () => {
     expect(genreLabel('constructor')).toBe('constructor');
     expect(themeLabel('__proto__')).toBe('__proto__');

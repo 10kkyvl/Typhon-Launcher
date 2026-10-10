@@ -1,8 +1,12 @@
 package selfupdate
 
 import (
+	"errors"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
+	"typhon/internal/winpath"
 
 	"typhon/internal/uierr"
 )
@@ -11,6 +15,8 @@ var (
 	ErrEmptyConfigDir     = uierr.New("selfupdate.empty_config_dir", "selfupdate: config dir is empty")
 	ErrInvalidVersionPath = uierr.New("selfupdate.invalid_version_path", "selfupdate: version is not a safe path component")
 )
+
+var errNotCached = errors.New("selfupdate: path is not an artifact inside the selfupdate cache")
 
 const pathInvalidChars = `/\:*?"<>|`
 
@@ -55,5 +61,57 @@ func validatePathSegment(s string) error {
 			return ErrInvalidVersionPath
 		}
 	}
+	if isWindowsUnsafeName(s) {
+		return ErrInvalidVersionPath
+	}
 	return nil
+}
+
+// isWindowsUnsafeName is checked on every host because the manifest is signed
+// once and served to all of them. Windows opens a device instead of a file for
+// these names whatever the extension, and silently strips a trailing dot or
+// space, so two names the manifest keeps apart would land on one file.
+func isWindowsUnsafeName(name string) bool {
+	return winpath.Reserved(name)
+}
+
+// artifactRel accepts only the shape the downloader produces, <version>/<name>
+// directly under the cache: state.json is a file the user's own account can
+// rewrite, so the path it records is input and not something to delete or
+// install from on trust.
+func artifactRel(configDir, p string) (cacheDir, rel string, err error) {
+	cacheDir, err = CacheDir(configDir)
+	if err != nil {
+		return "", "", err
+	}
+	if !filepath.IsAbs(p) || p != filepath.Clean(p) {
+		return "", "", errNotCached
+	}
+	rel, err = filepath.Rel(cacheDir, p)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", "", errNotCached
+	}
+	if dir := filepath.Dir(rel); dir == "." || filepath.Dir(dir) != "." {
+		return "", "", errNotCached
+	}
+	return cacheDir, rel, nil
+}
+
+// removeCached deletes through an os.Root scoped to the cache directory, so a
+// version directory swapped for a link cannot carry the removal out of it.
+func removeCached(configDir, p string) error {
+	cacheDir, rel, err := artifactRel(configDir, p)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(cacheDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := root.Close(); cerr != nil {
+			slog.Warn("close selfupdate cache root", "error", cerr)
+		}
+	}()
+	return root.Remove(rel)
 }

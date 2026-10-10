@@ -30,7 +30,7 @@
   import {
     active,
     completed,
-    downloads,
+    failed,
     forceStart,
     moveDown,
     moveUp,
@@ -40,6 +40,7 @@
     stats,
   } from '../../lib/stores/downloads';
   import { installErrorText } from '../../lib/install/installErrors';
+  import { installIndeterminate } from '../../lib/install/progress';
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -62,9 +63,8 @@
   let installOpen = $state(false);
   let installDownloadId = $state<string | null>(null);
 
-  const failedItems = $derived($downloads.filter((d) => d.status === 'failed'));
   const nothing = $derived(
-    $active.length === 0 && $queue.length === 0 && $completed.length === 0 && failedItems.length === 0,
+    $active.length === 0 && $queue.length === 0 && $completed.length === 0 && $failed.length === 0,
   );
 
   function openDetails(id: string) {
@@ -93,7 +93,7 @@
   }
 
   $effect(() => {
-    const ids = [...$queue, ...$completed]
+    const ids = [...$queue, ...$failed, ...$completed]
       .map((d) => d.origin.gameId)
       .filter((id): id is string => Boolean(id));
     if (ids.length > 0) requestArt(ids);
@@ -179,11 +179,11 @@
   </section>
 {/if}
 
-{#if failedItems.length > 0}
+{#if $failed.length > 0}
   <section class="section">
-    <h2>{msg('transfers.downloadsFailedHeading')} <span class="count">{failedItems.length}</span></h2>
+    <h2>{msg('transfers.downloadsFailedHeading')} <span class="count">{$failed.length}</span></h2>
     <div class="rows">
-      {#each failedItems as item (item.id)}
+      {#each $failed as item (item.id)}
         <div class="row failed">
           <div class="thumb">
             <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
@@ -289,7 +289,7 @@
             {:else if installActive(install.status)}
               <div class="install-progress">
                 <span class="install-status">{installStatusLabels(install.status)}</span>
-                <ProgressBar value={install.progress * 100} height={4} />
+                <ProgressBar value={install.progress * 100} indeterminate={installIndeterminate(install)} height={4} />
               </div>
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
@@ -426,6 +426,26 @@
     border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
   }
 
+  .error-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: 100%;
+    font-size: var(--font-xs);
+    color: var(--danger);
+  }
+
+  .error-text span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .error-text :global(svg) {
+    flex-shrink: 0;
+  }
+
   .thumb {
     width: 3.6rem;
     flex-shrink: 0;
@@ -447,26 +467,6 @@
   }
 
   .tags {
-    flex-shrink: 0;
-  }
-
-  .error-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    max-width: 100%;
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
-  .error-text span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .error-text :global(svg) {
     flex-shrink: 0;
   }
 

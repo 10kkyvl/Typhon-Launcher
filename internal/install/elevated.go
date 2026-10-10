@@ -15,7 +15,7 @@ import (
 const installWorkerFlag = "--install-worker"
 
 var (
-	errWorkerStatePath   = errors.New("путь состояния установки не задан")
+	errWorkerStatePath   = uierr.New("install.worker_state_missing", "у задания установки нет файла состояния, через который можно говорить с повышенным воркером")
 	errWorkerNotFinished = uierr.New("install.worker_not_finished", "повышенный воркер установки не подтвердил завершение")
 
 	// Подменяются в тестах, чтобы не поднимать настоящий UAC-запрос и не ждать
@@ -73,7 +73,8 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 		CancelPath:    spec.CancelPath,
 		Options:       spec.Options,
 		Background:    spec.Background,
-		Hidden:        true,
+		Hidden:        !spec.Interactive,
+		Interactive:   spec.Interactive,
 	}
 	if spec.Shell != nil {
 		job := spec.Shell.Job
@@ -128,19 +129,18 @@ func runElevated(ctx context.Context, spec runSpec) (int, error) {
 			//
 			// Но класс ошибки НЕ меняется даже при успешном terminate():
 			// убитый воркер не значит убитый установщик. Воркер держит
-			// установщик живым через job-объект с
-			// JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (runner_windows.go,
-			// limitJob), а SetInformationJobObject может отказать
-			// (там же — «отказ воспроизведён на этой машине, похоже на
-			// вмешательство защитного ПО») и limitJob в этом случае молча
-			// откатывается на лимиты без этого флага. Значит подтверждённая
-			// смерть воркера не доказывает смерть дерева процессов, которое
-			// он запустил, и discardSilent (flow.go) обязан остаться в
-			// консервативной ветке: RemoveAll по каталогу, в который ещё
-			// может писать не убитый установщик, — гонка на единственной
-			// копии данных (инвариант 9). Цена — каталог отменённой
-			// установки остаётся на диске после принудительного убийства;
-			// это осознанно и совпадает с поведением до этого фикса.
+			// установщик в job-объекте с JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+			// (runner_windows.go, limitJob), и смерть воркера гасит дерево,
+			// но асинхронно: terminate() этого не ждёт и ничем не
+			// подтверждает. К тому же groupProcess может не завестись (это
+			// лишь предупреждение в журнале), и тогда установщик живёт вне
+			// job-объекта. Значит смерть воркера не доказывает смерть дерева
+			// процессов, которое он запустил, и discardSilent (flow.go)
+			// обязан остаться в консервативной ветке: RemoveAll по каталогу,
+			// в который ещё может писать не убитый установщик, — гонка на
+			// единственной копии данных (инвариант 9). Цена — каталог
+			// отменённой установки остаётся на диске после принудительного
+			// убийства; это осознанно.
 			if killErr := terminate(); killErr != nil {
 				slog.Warn("kill installer worker after cancel timeout", "path", spec.Path, "error", killErr)
 			}

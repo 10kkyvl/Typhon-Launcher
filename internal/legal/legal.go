@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const Version = "2026-10-10"
+
 type Meta struct {
 	ID    string
 	Title string
@@ -65,6 +67,10 @@ func NewService(fsys fs.FS) (*Service, error) {
 		return nil, err
 	}
 	return &Service{docs: docs}, nil
+}
+
+func (s *Service) Version() string {
+	return Version
 }
 
 func Validate(fsys fs.FS) error {

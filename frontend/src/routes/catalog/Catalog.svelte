@@ -4,6 +4,7 @@
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
+  import { latestRunner, serialQueue } from '../../lib/catalog/serial';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
@@ -25,6 +26,7 @@
   import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
+  import { canPlay } from '../../lib/library/launch';
   import {
     compatOnlyWorking,
     isCancelledRequest,
@@ -189,6 +191,8 @@
     }
     return map;
   });
+
+  const playableIds = $derived(new Set($installedGames.filter(canPlay).map((game) => game.id)));
 
   const libraryByGame = $derived.by(() => {
     const map = new Map<string, string>();
@@ -361,7 +365,9 @@
     hideNotInterested = preferences.hideNotInterested;
   }
 
-  async function preferencesChanged() {
+  const preferenceWrites = serialQueue();
+
+  const applyPreferences = latestRunner(() => preferenceWrites(async () => {
     preferenceBusy = true;
     try {
       const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
@@ -374,22 +380,27 @@
       restoreChoices();
       toast(msg('games.recommendationError'), 'danger');
     } finally { preferenceBusy = false; }
+  }));
+
+  function preferencesChanged() {
+    return applyPreferences();
   }
 
   function isDismissed(game: CatalogGame) {
     return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
   }
 
-  async function dismiss(game: CatalogGame, on = true) {
-    if (preferenceBusy) return;
-    preferenceBusy = true;
-    try {
-      await setNotInterested(game.id, on);
-      preferences = await getRecommendationPreferences();
-      lastDismissed = on ? { id: game.id, title: game.title } : null;
-      await reload();
-    } catch { toast(msg('games.recommendationError'), 'danger'); }
-    finally { preferenceBusy = false; }
+  function dismiss(game: CatalogGame, on = true) {
+    return preferenceWrites(async () => {
+      preferenceBusy = true;
+      try {
+        await setNotInterested(game.id, on);
+        preferences = await getRecommendationPreferences();
+        lastDismissed = on ? { id: game.id, title: game.title } : null;
+        await reload();
+      } catch { toast(msg('games.recommendationError'), 'danger'); }
+      finally { preferenceBusy = false; }
+    });
   }
 
   async function undoDismissal() {
@@ -650,7 +661,7 @@
       <div class="search-wrap">
         <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
       </div>
-      <fieldset class="controls" disabled={preferenceBusy || !ready}>
+      <fieldset class="controls" disabled={!ready}>
         <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
           options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
         <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
@@ -687,7 +698,7 @@
       </fieldset>
     </div>
   </div>
-  <fieldset class="chips" disabled={preferenceBusy || !ready}>
+  <fieldset class="chips" disabled={!ready}>
     {#each chips as label (label)}
       <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
         {label === allGenres ? label : genreLabel(label)}
@@ -771,7 +782,7 @@
             compat={compatRelevant ? compatByGame[game.id] : undefined}
             actions={cardActions(game, libId, isFav)}
             footer={isInstalled ? installedStatus : undefined}
-            onplay={() => toggleRun(installedByGame.get(game.id) ?? '')}
+            onplay={playableIds.has(installedByGame.get(game.id) ?? '') ? () => toggleRun(installedByGame.get(game.id) ?? '') : undefined}
           />
         </div>
       {/each}

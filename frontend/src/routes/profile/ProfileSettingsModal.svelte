@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowDown, ArrowUp } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
+  import DeleteAccountModal from '../../lib/components/DeleteAccountModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -43,6 +44,7 @@
   let draft = $state<ProfileSettings>(initialDraft());
   let visibility = $state<string>(initialDraft().visibility);
   let error = $state('');
+  let deleting = $state(false);
 
   const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
@@ -153,6 +155,14 @@
     </ul>
   </div>
 
+  <div class="group danger">
+    <h4>{msg('profile.dangerZoneTitle')}</h4>
+    <p class="hint">{msg('profile.deleteAccountIntro')}</p>
+    <Button variant="danger" disabled={$isOffline || $savingProfile} onclick={() => (deleting = true)}>
+      {msg('profile.deleteAccountButton')}
+    </Button>
+  </div>
+
   {#snippet footer()}
     {#if error}<span class="error">{error}</span>{/if}
     <Button variant="ghost" disabled={$savingProfile} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
@@ -162,9 +172,18 @@
   {/snippet}
 </Modal>
 
+{#if deleting}
+  <DeleteAccountModal onclose={() => (deleting = false)} />
+{/if}
+
 <style>
   .group + .group {
     margin-top: var(--space-6);
+  }
+
+  .danger {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
   }
 
   h4 {

@@ -38,9 +38,9 @@ export async function hasProxyPassword(): Promise<boolean> {
   return await Manager.HasProxyPassword();
 }
 
-export async function setProxyPassword(password: string): Promise<void> {
+export async function setProxyPassword(username: string, password: string): Promise<void> {
   if (!inWails) throw unavailable();
-  await Manager.SetProxyPassword(password);
+  await Manager.SetProxyPassword(username, password);
 }
 
 export async function testProxy(): Promise<void> {

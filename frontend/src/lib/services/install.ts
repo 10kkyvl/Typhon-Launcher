@@ -188,6 +188,11 @@ export async function retryInstall(id: string): Promise<void> {
   await InstallService.Retry(id);
 }
 
+export async function retryInstallInteractive(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await InstallService.RetryInteractive(id);
+}
+
 export async function dismissInstall(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await InstallService.Dismiss(id);

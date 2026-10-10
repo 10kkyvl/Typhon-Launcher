@@ -242,6 +242,11 @@ func main() {
 		return
 	}
 
+	qaArgs, err := qaStart()
+	if err != nil {
+		fatal("start qa build", err)
+	}
+
 	// При автозапуске и запуске из фонового процесса передавать нечего:
 	// ErrNoForegroundRight там — ожидаемый исход, а не сбой.
 	if err := platform.AllowForegroundHandoff(); err != nil {
@@ -412,7 +417,11 @@ func main() {
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
-	downloadManager.SetOnGone(installService.DropBroker)
+	downloadManager.SetOnGone(func(downloadID string) {
+		if err := installService.HandleDownloadGone(downloadID); err != nil {
+			slog.Error("release installs of a gone download", "download_id", downloadID, "error", err)
+		}
+	})
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
@@ -589,7 +598,7 @@ func main() {
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
 		Windows: application.WindowsOptions{
-			AdditionalBrowserArgs: browserArgs(current.HardwareAcceleration),
+			AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: singleInstanceID,
@@ -677,7 +686,7 @@ func main() {
 	}
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
-	// from starting: the toggle in settings goes through SaveSettings, which
+	// from starting: the toggle in settings goes through SaveSettingsPatch, which
 	// runs the same appliers and does report the failure to the user.
 	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
 		slog.Error("apply autostart", "error", err)
@@ -883,5 +892,5 @@ func windowTitle() string {
 	if devmock.Enabled {
 		return "Typhon [devmock]"
 	}
-	return "Typhon"
+	return "Typhon" + qaTitleSuffix
 }

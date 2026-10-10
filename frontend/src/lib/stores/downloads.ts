@@ -14,6 +14,7 @@ import {
   type DownloadStatus,
 } from '../services/downloads';
 import { installErrorText } from '../install/installErrors';
+import { withFiles } from '../utils/downloadFiles';
 import { msg } from '../i18n';
 import { toast } from './toasts';
 
@@ -53,6 +54,8 @@ export const active = derived(downloads, ($downloads) =>
 );
 
 export const queue = derived(downloads, ($downloads) => $downloads.filter((d) => d.status === 'queued'));
+
+export const failed = derived(downloads, ($downloads) => $downloads.filter((d) => d.status === 'failed'));
 
 export const completed = derived(downloads, ($downloads) =>
   $downloads
@@ -125,24 +128,24 @@ export async function initDownloads() {
   if (!inWails) return;
 
   Events.On('download:added', (event) => {
-    const item = event.data as Download;
+    const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsAddedToast', { name: item.name }));
   });
   Events.On('download:updated', (event) => {
-    upsert(event.data as Download);
+    upsert(withFiles(event.data as Download));
   });
   Events.On('download:progress', (event) => {
     const patch = event.data as DownloadProgress;
     downloads.update((list) => mergeProgress(list, patch));
   });
   Events.On('download:completed', (event) => {
-    const item = event.data as Download;
+    const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsCompletedToast', { name: item.name }), 'success');
   });
   Events.On('download:failed', (event) => {
-    const item = event.data as Download;
+    const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });

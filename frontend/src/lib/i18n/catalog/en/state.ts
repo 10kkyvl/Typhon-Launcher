@@ -48,6 +48,7 @@ export const state: Record<StateKey, Message> = {
   'state.librarySessionEnded': 'Session ended: {minutes} min',
 
   'state.metadataLoadFailed': 'Failed to load cover art',
+  'state.metadataCheckFailed': 'Failed to check metadata availability',
 
   'state.notifLauncherUpdateTitle': 'Launcher update',
   'state.notifUpdateCheckFailed': 'Failed to check for updates',

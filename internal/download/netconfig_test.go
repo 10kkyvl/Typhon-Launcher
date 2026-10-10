@@ -269,7 +269,7 @@ func TestProxyClientKeepsTheFullTrackerListInStoredMetainfo(t *testing.T) {
 		"&tr=udp%3A%2F%2Ftracker.example%3A6969%2Fannounce&tr=http%3A%2F%2Fhttp.example%2Fannounce&tr=wss%3A%2F%2Fws.example"
 	cl := offlineClient(t)
 	cl.httpTrackersOnly = true
-	cl.filterTrackers = httpTrackerTiers
+	cl.filterTrackers = func(tiers [][]string) ([][]string, []lostTracker) { return httpTrackerTiers(tiers), nil }
 	lt, err := cl.addMagnet(uri, cl.metaDir, storageOpts{})
 	if err != nil {
 		t.Fatalf("addMagnet: %v", err)

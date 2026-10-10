@@ -514,19 +514,33 @@ func (s *Service) RemoveSource(id string) error {
 			continue
 		}
 		name := src.Name
-		s.sources = append(s.sources[:i], s.sources[i+1:]...)
-		delete(s.releases, id)
-		delete(s.failures, id)
-		delete(s.retryAt, id)
-		if err := s.store.saveSources(flatten(s.sources)); err != nil {
+		remaining := make([]*Source, 0, len(s.sources)-1)
+		remaining = append(remaining, s.sources[:i]...)
+		remaining = append(remaining, s.sources[i+1:]...)
+		if err := s.store.saveSources(flatten(remaining)); err != nil {
 			s.mu.Unlock()
 			return err
 		}
-		s.store.removeReleases(id)
+		var removeErr error
+		if err := s.store.removeReleases(id); err != nil {
+			// Put the source back on disk while its releases file is still
+			// there; if that fails too, sources.json is what the next start
+			// reads, so memory follows it and the file stays as a leftover.
+			restoreErr := s.store.saveSources(flatten(s.sources))
+			if restoreErr == nil {
+				s.mu.Unlock()
+				return err
+			}
+			removeErr = errors.Join(err, fmt.Errorf("restore sources after a failed removal: %w", restoreErr))
+		}
+		s.sources = remaining
+		delete(s.releases, id)
+		delete(s.failures, id)
+		delete(s.retryAt, id)
 		s.mu.Unlock()
 		slog.Info("source removed", "source_id", id, "name", name)
 		emit(eventUpdated, Source{ID: id})
-		return nil
+		return removeErr
 	}
 	s.mu.Unlock()
 	return errSourceNotFound
@@ -539,9 +553,11 @@ func (s *Service) SetSourceEnabled(id string, enabled bool) error {
 		s.mu.Unlock()
 		return errSourceNotFound
 	}
+	before := *src
 	src.Enabled = enabled
 	src.Status = statusOf(src)
 	if err := s.store.saveSources(flatten(s.sources)); err != nil {
+		*src = before
 		s.mu.Unlock()
 		return err
 	}
@@ -641,7 +657,15 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	defer func() {
 		s.mu.Lock()
 		delete(s.refreshing, id)
+		current := s.findLocked(id)
+		if current == nil || current.Status != StatusUpdating {
+			s.mu.Unlock()
+			return
+		}
+		current.Status = statusOf(current)
+		settled := *current
 		s.mu.Unlock()
+		emit(eventUpdated, settled)
 	}()
 
 	slog.Info("source refresh started", "source_id", id, "name", name, "source_type", string(kind), "scheduled", scheduled, "timeout_ms", refreshTimeout.Milliseconds())

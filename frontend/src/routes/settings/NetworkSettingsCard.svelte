@@ -7,7 +7,13 @@
   import Select from '../../lib/components/Select.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
-  import { networkCodeText, networkErrorText, networkReasonText, networkWarningText } from '../../lib/network/networkText';
+  import {
+    networkChecking,
+    networkCodeText,
+    networkErrorText,
+    networkReasonText,
+    networkWarningText,
+  } from '../../lib/network/networkText';
   import {
     hasProxyPassword,
     listNetworkInterfaces,
@@ -148,15 +154,14 @@
     }
     applying = true;
     try {
-      if (mode === 'proxy' && password !== '') {
+      const sentPassword = mode === 'proxy' && password !== '';
+      if (sentPassword) {
         try {
-          await setProxyPassword(password);
+          await setProxyPassword(username.trim(), password);
         } catch (err) {
           failure = networkErrorText(err);
           return;
         }
-        hasPassword = true;
-        password = '';
       }
       const patch: Partial<Settings> = { networkMode: mode };
       if (mode === 'interface') patch.networkInterface = iface.trim();
@@ -169,7 +174,12 @@
       const ok = await updateSettingsReporting(patch, (err) => {
         failure = networkErrorText(err);
       });
-      if (ok) toast(msg('settings.networkAppliedToast'), 'success');
+      if (!ok) return;
+      if (sentPassword) {
+        hasPassword = true;
+        password = '';
+      }
+      toast(msg('settings.networkAppliedToast'), 'success');
     } finally {
       applying = false;
     }
@@ -180,7 +190,7 @@
     passwordBusy = true;
     failure = '';
     try {
-      await setProxyPassword('');
+      await setProxyPassword(saved.username, '');
       hasPassword = false;
       password = '';
       toast(msg('settings.networkProxyPasswordDeletedToast'), 'success');
@@ -206,8 +216,9 @@
   }
 
   const status = $derived($networkState);
-  const statusDown = $derived(status?.state === 'down');
-  const statusDetail = $derived(status ? (statusDown ? networkReasonText(status) : status.address) : '');
+  const statusChecking = $derived(networkChecking(status));
+  const statusDown = $derived(status?.state === 'down' && !statusChecking);
+  const statusDetail = $derived(status && !statusChecking ? (statusDown ? networkReasonText(status) : status.address) : '');
   const statusWarning = $derived(networkWarningText(status));
 </script>
 
@@ -364,8 +375,12 @@
           {/if}
         </div>
         <StatusBadge
-          kind={statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
-          label={statusDown ? msg('settings.networkStatusDown') : msg('settings.networkStatusOk')}
+          kind={statusChecking ? 'accent' : statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
+          label={statusChecking
+            ? msg('settings.networkStatusChecking')
+            : statusDown
+              ? msg('settings.networkStatusDown')
+              : msg('settings.networkStatusOk')}
         />
       </div>
     {/if}

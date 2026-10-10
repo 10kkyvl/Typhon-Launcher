@@ -1,0 +1,13 @@
+﻿Typhon Terms of Use (short version)
+
+Typhon is a tool for managing a personal game library: it finds installed games, downloads files from links in sources you add yourself, and installs and updates them.
+
+1. The application contains no games and no preinstalled sources. You add sources yourself and are responsible for having the right to use their content.
+
+2. Downloading over BitTorrent may send parts of files to other peers. Seeding is off by default; if you enable it, you are responsible for what you share.
+
+3. An account is optional. What data is processed with and without one is described in the privacy policy.
+
+4. The application is provided "as is", without warranties. To the extent permitted by law, the operator is not liable for third-party source content or the consequences of using it.
+
+The full terms and the privacy policy are available in the app (Settings → About) and at typhon-launcher.com. By clicking "I Agree" you accept them.

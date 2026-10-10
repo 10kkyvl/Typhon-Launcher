@@ -19,7 +19,7 @@
   import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, noteEvent, reactToEvent } from '../../lib/stores/feed';
   import { loadArt } from '../../lib/stores/metadata';
   import { shownPresence } from '../../lib/stores/presence';
-  import { initProfile, profileSnapshot } from '../../lib/stores/profile';
+  import { initProfile, profileFailed, profileSnapshot } from '../../lib/stores/profile';
   import { navigate } from '../../lib/stores/router';
   import { friendsPage, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
@@ -82,6 +82,10 @@
 </script>
 
 <PageHeader title={msg('transfers.activityTitle')} subtitle={msg('transfers.activitySubtitle')} />
+
+{#if $profileFailed}
+  <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+{/if}
 
 {#if isGuest}
   <EmptyState
@@ -194,6 +198,12 @@
 <SocialConsentScreen bind:open={consentOpen} />
 
 <style>
+  .load-error {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-sm);
+    color: var(--danger);
+  }
+
   .layout {
     display: grid;
     grid-template-columns: 30rem minmax(0, 92rem) 30rem;

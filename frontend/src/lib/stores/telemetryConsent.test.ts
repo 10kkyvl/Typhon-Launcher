@@ -13,7 +13,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  saveSettingsPatch: vi.fn(),
   saveConsent: vi.fn(),
   setupLibrary: vi.fn(),
   proposeLibraryPath: vi.fn(),

@@ -15,6 +15,7 @@ const (
 
 var (
 	errNetworkDown       = uierr.New("download.network_down", "сеть недоступна: VPN или прокси не отвечает, загрузки остановлены")
+	errNetworkChecking   = uierr.New("download.network_checking", "проверка сети")
 	errNetIfaceMissing   = uierr.New("download.net_interface_missing", "сетевой адаптер не найден")
 	errNetIfaceDown      = uierr.New("download.net_interface_down", "сетевой адаптер отключён")
 	errNetIfaceNoAddr    = uierr.New("download.net_interface_no_address", "у сетевого адаптера нет подходящего IP-адреса")
@@ -30,6 +31,7 @@ var (
 	errProxyMismatch     = uierr.New("download.proxy_credentials_mismatch", "сохранённый пароль относится к другому имени пользователя прокси: введите пароль заново")
 	errProxyNotSet       = uierr.New("download.proxy_not_configured", "прокси не настроен")
 	errProxyPasswordSize = uierr.New("download.proxy_password_invalid", "пароль прокси не должен быть длиннее 255 байт")
+	errClientStart       = uierr.New("download.client_start_failed", "торрент-клиент не запустился")
 	errNoMetadataProxy   = uierr.New("download.no_metadata_proxy", "метаданные не получены: через прокси работают только HTTP-трекеры, поиск по DHT и UDP-трекерам отключён")
 )
 

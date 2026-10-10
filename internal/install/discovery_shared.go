@@ -17,7 +17,7 @@ import (
 func (s runSpec) discovery() discoverySpec {
 	return discoverySpec{
 		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.Dir, InfPath: s.InfPath, Options: s.Options,
+		WorkingDir: s.Dir, InfPath: s.InfPath, Options: s.Options, Interactive: s.Interactive,
 	}
 }
 

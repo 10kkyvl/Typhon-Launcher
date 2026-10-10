@@ -83,6 +83,7 @@ type Installation struct {
 	ExtraInstallers  []string          `json:"extraInstallers,omitempty"`
 	ChainStep        int               `json:"chainStep,omitempty"`
 	ManualInstaller  bool              `json:"manualInstaller,omitempty"`
+	Interactive      bool              `json:"interactive,omitempty"`
 	WorkingDir       string            `json:"workingDir"`
 	Engine           Engine            `json:"engine"`
 	Silent           bool              `json:"silent"`

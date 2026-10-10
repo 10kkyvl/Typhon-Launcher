@@ -31,20 +31,32 @@
   const plan = $derived(update.plan ?? null);
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
   const isUpdate = $derived(availability.kind === 'update');
-  const headline = $derived(isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable'));
+  const noRelease = $derived(availability.kind === 'none');
+  const headline = $derived.by(() => {
+    if (noRelease) {
+      if (busy) return msg('ui.updateInProgress');
+      if (update.state === 'update_failed') return msg('ui.updateFailedTitle');
+      return msg('ui.latestVersionInstalled');
+    }
+    return isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable');
+  });
   const reasonKey = $derived(
     !isUpdate && availability.reason ? updateReasonKey(availability.reason) : 'ui.versionsNotComparable',
   );
   const cautious = $derived(
-    !isUpdate && reasonKey !== 'ui.versionsNotComparable' && reasonKey !== 'ui.newDistributionRevisionReason',
+    !isUpdate &&
+      !noRelease &&
+      reasonKey !== 'ui.versionsNotComparable' &&
+      reasonKey !== 'ui.newDistributionRevisionReason',
   );
   const explanation = $derived.by(() => {
+    if (noRelease) return '';
     if (isUpdate) return msg('ui.updateAvailableHint');
     if (reasonKey === 'ui.versionsNotComparable') return msg('ui.versionsNotComparableHint');
     return msg(reasonKey);
   });
-  const fromVersion = $derived(availability.installedVersion);
-  const toVersion = $derived(availability.targetVersion);
+  const fromVersion = $derived(availability.installedVersion || (noRelease ? msg('ui.versionUnknown') : ''));
+  const toVersion = $derived(noRelease ? '' : availability.targetVersion);
   const versionsLabel = $derived(
     fromVersion && toVersion ? 'games.detailFactVersion' : fromVersion ? 'ui.currentVersion' : 'ui.newVersion',
   );
@@ -89,7 +101,9 @@
     </span>
     <div class="titles">
       <h3 class="card-title">{headline}</h3>
-      <p class="explain" class:cautious>{explanation}</p>
+      {#if explanation}
+        <p class="explain" class:cautious>{explanation}</p>
+      {/if}
     </div>
     {#if update.state === 'update_ready'}
       <div class="badges">
@@ -120,7 +134,7 @@
           </dd>
         </div>
       {/if}
-      {#if !update.planning && !busy}
+      {#if !update.planning && !busy && (!noRelease || plan)}
         <div>
           <dt>{msg('ui.downloadLabel')}</dt>
           <dd>{sizeLabel}</dd>
@@ -175,7 +189,7 @@
           <ChevronDown size="1.5rem" strokeWidth={1.8} />
         </span>
       </Button>
-    {:else}
+    {:else if !noRelease}
       <Button variant="primary" disabled={update.planning} onclick={() => preparePlan(update.gameId)}>
         {msg('ui.calculateUpdate')}
       </Button>

@@ -25,11 +25,12 @@ import (
 type fakeDownloads struct {
 	mu      sync.Mutex
 	items   map[string]download.Download
+	getErr  map[string]error
 	deleted []string
 }
 
 func newFakeDownloads() *fakeDownloads {
-	return &fakeDownloads{items: map[string]download.Download{}}
+	return &fakeDownloads{items: map[string]download.Download{}, getErr: map[string]error{}}
 }
 
 func (f *fakeDownloads) add(id, name, destination string) {
@@ -46,9 +47,12 @@ func (f *fakeDownloads) add(id, name, destination string) {
 func (f *fakeDownloads) Get(id string) (download.Download, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.getErr[id]; err != nil {
+		return download.Download{}, err
+	}
 	d, ok := f.items[id]
 	if !ok {
-		return download.Download{}, errors.New("загрузка не найдена")
+		return download.Download{}, download.ErrNotFound
 	}
 	return d, nil
 }
@@ -836,7 +840,7 @@ func TestTransientRecordsBecomeInterrupted(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("items = %+v", items)
 	}
-	if items[0].Status != StatusInterrupted || items[0].Error != interruptedMessage {
+	if items[0].Status != StatusInterrupted || items[0].Error != errInterrupted.Error() {
 		t.Fatalf("first = %+v", items[0])
 	}
 	if items[1].Status != StatusWaitingForUser {
@@ -909,7 +913,7 @@ func TestExeInstallerFailsOnExitCode(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	failed := s.waitStatus(t, item.ID, StatusFailed)
-	if failed.Error != errInstallerFail.Error() {
+	if !strings.HasPrefix(failed.Error, errInstallerFail.Error()+": код 1") {
 		t.Fatalf("error = %q", failed.Error)
 	}
 }

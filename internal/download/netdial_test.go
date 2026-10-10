@@ -298,9 +298,10 @@ type connectServer struct {
 	// garbage replaces the whole answer.
 	garbage string
 
-	mu      sync.Mutex
-	targets []string
-	auths   []string
+	mu       sync.Mutex
+	accepted int
+	targets  []string
+	auths    []string
 }
 
 func startConnect(t *testing.T, s *connectServer) *connectServer {
@@ -329,6 +330,9 @@ func startConnect(t *testing.T, s *connectServer) *connectServer {
 
 func (s *connectServer) serve(c net.Conn) {
 	defer closeQuietly(c) // the peer may be gone already
+	s.mu.Lock()
+	s.accepted++
+	s.mu.Unlock()
 	br := bufio.NewReader(c)
 	req, err := http.ReadRequest(br)
 	if err != nil {
@@ -843,5 +847,131 @@ func TestTestProxyWhenTheProxyHangsUp(t *testing.T) {
 		if err := testProxy(t.Context(), p); !errors.Is(err, errProxyFailed) {
 			t.Errorf("%s: error = %v, want errProxyFailed", kind, err)
 		}
+	}
+}
+
+var unsafeTargets = map[string]string{
+	"crlf in the host":    "a\r\nX-Injected: 1:80",
+	"crlf in the port":    "example.com:80\r\nX-Injected: 1",
+	"lf only":             "example.com\n:80",
+	"space in the host":   "exa mple.com:80",
+	"tab in the host":     "example\t.com:80",
+	"nul in the host":     "example\x00.com:80",
+	"no port":             "example.com",
+	"empty port":          "example.com:",
+	"port zero":           "example.com:0",
+	"port too big":        "example.com:70000",
+	"port with a sign":    "example.com:+80",
+	"port is a word":      "example.com:http",
+	"empty host":          ":80",
+	"empty target":        "",
+	"label too long":      strings.Repeat("a", 64) + ".example:80",
+	"name too long":       strings.Repeat("a.", 130) + "com:80",
+	"empty label":         "a..b:80",
+	"leading hyphen":      "-a.example:80",
+	"non ascii name":      "пир.example:80",
+	"ipv6 with a zone":    "[fe80::1%eth0]:80",
+	"ipv6 without braces": "2001:db8::1:80",
+	"an url":              "http://example.com:80",
+	"userinfo":            "user@example.com:80",
+	"target too long":     strings.Repeat("a", 300) + ":80",
+}
+
+func TestProxyTargetValidation(t *testing.T) {
+	good := []string{
+		"203.0.113.5:6881",
+		"[2001:db8::1]:6881",
+		"tracker.example:80",
+		"tracker.example.:80",
+		"_dmarc.example:80",
+		"203.0.113.5:1",
+		"203.0.113.5:65535",
+		"xn--e1afmkfd.example:80",
+	}
+	for _, target := range good {
+		t.Run("accepts "+target, func(t *testing.T) {
+			if err := validProxyTarget(target); err != nil {
+				t.Fatalf("validProxyTarget(%q) = %v", target, err)
+			}
+		})
+	}
+	for name, target := range unsafeTargets {
+		t.Run("refuses "+name, func(t *testing.T) {
+			if err := validProxyTarget(target); !errors.Is(err, errBadTarget) {
+				t.Fatalf("validProxyTarget(%q) = %v, want errBadTarget", target, err)
+			}
+		})
+	}
+}
+
+func TestConnectStatusSendsNothingForAnUnsafeTarget(t *testing.T) {
+	for name, target := range unsafeTargets {
+		t.Run(name, func(t *testing.T) {
+			client, server := net.Pipe()
+			t.Cleanup(func() { closeQuietly(client); closeQuietly(server) })
+			if err := client.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			got := make(chan []byte, 1)
+			go func() {
+				data, err := io.ReadAll(server) // ends when the client side is closed
+				if err != nil {
+					data = append(data, "read error: "+err.Error()...)
+				}
+				got <- data
+			}()
+			_, _, err := connectStatus(client, bufio.NewReader(client), target, "")
+			closeQuietly(client)
+			if !errors.Is(err, errBadTarget) {
+				t.Fatalf("connectStatus(%q) = %v, want errBadTarget", target, err)
+			}
+			if data := <-got; len(data) != 0 {
+				t.Fatalf("%q reached the proxy: %q", target, data)
+			}
+		})
+	}
+}
+
+func TestHTTPConnectDialRefusesAnUnsafeTargetBeforeTouchingTheProxy(t *testing.T) {
+	for name, target := range unsafeTargets {
+		t.Run(name, func(t *testing.T) {
+			srv := startConnect(t, &connectServer{})
+			conn, err := httpConnectDial(srv.plan(t, "u", "p"))(t.Context(), "tcp", target)
+			if err == nil {
+				closeQuietly(conn) // the dial was meant to fail
+				t.Fatalf("dial of %q succeeded", target)
+			}
+			if !errors.Is(err, errBadTarget) {
+				t.Fatalf("dial of %q = %v, want errBadTarget", target, err)
+			}
+			srv.mu.Lock()
+			defer srv.mu.Unlock()
+			if srv.accepted != 0 || len(srv.targets) != 0 {
+				t.Fatalf("the proxy saw %d connections and %v", srv.accepted, srv.targets)
+			}
+		})
+	}
+}
+
+func TestSOCKS5DialRefusesAnUnsafeTargetBeforeTouchingTheProxy(t *testing.T) {
+	for name, target := range unsafeTargets {
+		t.Run(name, func(t *testing.T) {
+			srv := startSOCKS(t, &socksServer{})
+			dial, err := socks5Dial(socksPlan(t, srv, "", ""))
+			if err != nil {
+				t.Fatal(err)
+			}
+			conn, err := dial(t.Context(), "tcp", target)
+			if err == nil {
+				closeQuietly(conn) // the dial was meant to fail
+				t.Fatalf("dial of %q succeeded", target)
+			}
+			if !errors.Is(err, errBadTarget) {
+				t.Fatalf("dial of %q = %v, want errBadTarget", target, err)
+			}
+			if n := len(srv.accepted); n != 0 || len(srv.seen()) != 0 {
+				t.Fatalf("the proxy saw %d connections and %v", n, srv.seen())
+			}
+		})
 	}
 }

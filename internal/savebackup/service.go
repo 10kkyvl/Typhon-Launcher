@@ -27,7 +27,7 @@ const (
 // playerBackups gates everything the player can reach: the window, the Wails
 // methods and the copy after a session. The pre-update snapshot goes through
 // SnapshotPath and keeps working either way, as it did before this service.
-const playerBackups = false
+const playerBackups = true
 
 type games interface {
 	Find(id string) (library.Game, error)

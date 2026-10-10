@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 	"unicode"
 )
 
@@ -428,4 +429,20 @@ func headings(body string) int {
 		}
 	}
 	return n
+}
+
+func TestVersionIsADate(t *testing.T) {
+	if Version == "" {
+		t.Fatal("Version is empty")
+	}
+	if _, err := time.Parse("2006-01-02", Version); err != nil {
+		t.Fatalf("Version %q is not YYYY-MM-DD: %v", Version, err)
+	}
+	svc, err := NewService(validFS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Version(); got != Version {
+		t.Fatalf("Service.Version() = %q, want %q", got, Version)
+	}
 }

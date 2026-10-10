@@ -7,10 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"typhon/internal/winpath"
 
+	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
 
@@ -26,6 +28,8 @@ const (
 	minLimiterBurst = 256 * 1024
 	maxTorrentConns = 60
 )
+
+var openTorrentClient = torrent.NewClient
 
 var errBadPaths = uierr.New("download.bad_paths", "недопустимые пути файлов в торренте")
 
@@ -79,50 +83,62 @@ type client struct {
 	metaDir    string
 	completion storage.PieceCompletion
 
-	// gen is the manager's number for this client, set once it is installed.
-	gen uint64
-	// httpTrackersOnly is set for a client behind a proxy, which can carry
-	// nothing but HTTP trackers.
+	gen              uint64
 	httpTrackersOnly bool
-	// filterTrackers rewrites the tracker list of every torrent before the
-	// engine sees it: a proxy drops what it cannot carry, an adapter has the
-	// host names of UDP trackers resolved through it.
-	filterTrackers func([][]string) [][]string
+	filterTrackers   func([][]string) ([][]string, []lostTracker)
+	retryTrackers    func(*torrent.Torrent, []lostTracker)
+	later            *retrier
+	stopped          atomic.Bool
 }
 
 func newClient(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error) {
 	wrapped := nonClosingCompletion{completion}
-	tc, attach, err := networkedConfig(ctx, cfg, metaDir, listenPort, wrapped, plan)
-	if err != nil {
-		closeDefaultStorage(tc)
-		return nil, err
-	}
-	cl, err := torrent.NewClient(tc)
-	if err != nil && isListenError(err) {
-		slog.Warn("torrent port unavailable, retrying on a random port", "port", listenPort, "error", err)
-		closeDefaultStorage(tc)
-		tc, attach, err = networkedConfig(ctx, cfg, metaDir, 0, wrapped, plan)
+	port := listenPort
+	for attempt := 0; ; attempt++ {
+		tc, attach, err := networkedConfig(ctx, cfg, metaDir, port, wrapped, plan)
 		if err != nil {
 			closeDefaultStorage(tc)
 			return nil, err
 		}
-		cl, err = torrent.NewClient(tc)
-	}
-	if err != nil {
+		c := &client{
+			down:             tc.DownloadRateLimiter,
+			up:               tc.UploadRateLimiter,
+			metaDir:          metaDir,
+			completion:       wrapped,
+			httpTrackersOnly: plan.mode == settings.NetworkProxy,
+			filterTrackers:   attach.trackers,
+			retryTrackers:    attach.retry,
+			later:            attach.later,
+		}
+		guardNetwork(tc, c.halted)
+		cl, err := openTorrentClient(tc)
+		if err == nil {
+			attach.attach(cl)
+			c.cl = cl
+			slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
+			return c, nil
+		}
 		closeDefaultStorage(tc)
-		return nil, err
+		attach.later.stop()
+		if !listenport.IsListenError(err) || attempt == listenport.Attempts {
+			return nil, err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		// The client takes one port number for TCP and UDP over both IPv4 and
+		// IPv6. A port the system hands out for TCP can still be held in UDP by
+		// another process or sit in a range Windows excludes from UDP (Hyper-V and
+		// Docker reserve hundreds of ports at a time). Port 0 does not help: the
+		// system hands out the next number in a row, and the next number sits in
+		// the same excluded range, so the retries pick their own port.
+		slog.Warn("torrent port unavailable, retrying on a random port", "port", port, "error", err)
+		next, pickErr := listenport.Random()
+		if pickErr != nil {
+			return nil, pickErr
+		}
+		port = next
 	}
-	attach.attach(cl)
-	slog.Info("torrent client started", "port", cl.LocalPort(), "network", plan.mode)
-	return &client{
-		cl:               cl,
-		down:             tc.DownloadRateLimiter,
-		up:               tc.UploadRateLimiter,
-		metaDir:          metaDir,
-		completion:       wrapped,
-		httpTrackersOnly: plan.mode == settings.NetworkProxy,
-		filterTrackers:   attach.trackers,
-	}, nil
 }
 
 func networkedConfig(ctx context.Context, cfg settings.Settings, dataDir string, port int, completion storage.PieceCompletion, plan netPlan) (*torrent.ClientConfig, netAttach, error) {
@@ -151,26 +167,43 @@ func closeDefaultStorage(tc *torrent.ClientConfig) {
 	}
 }
 
-func isListenError(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "bind") ||
-		strings.Contains(text, "listen") ||
-		strings.Contains(text, "address already in use")
-}
-
 func (c *client) applyLimits(down, up int64) {
 	applyLimit(c.down, down)
 	applyLimit(c.up, up)
 }
 
 func (c *client) close() {
+	c.later.stop()
 	for _, err := range c.cl.Close() {
 		slog.Error("close torrent client", "error", err)
 	}
+	c.later.wait()
+}
+
+func (c *client) halted() bool { return c.stopped.Load() }
+
+// halt cuts the client off from the network ahead of its close. Closing the
+// client is the last step of a teardown, after jobs that may take long to
+// notice they were cancelled, and a client closed before they end would hang
+// them (a verify that starts on a closed torrent returns with the client lock
+// held). So the client stays open and stops carrying data instead: no torrent
+// moves a byte either way, every peer connection is dropped and none is
+// accepted or dialled again.
+func (c *client) halt() {
+	// Set first: a torrent added while the sweep runs is halted by add.
+	c.stopped.Store(true)
+	c.later.stop()
+	for _, t := range c.cl.Torrents() {
+		haltTorrent(t)
+	}
+}
+
+func haltTorrent(t *torrent.Torrent) {
+	t.DisallowDataDownload()
+	t.DisallowDataUpload()
+	// Dropping the connections is what closes the sockets; with the gates alone
+	// they stay open and the swarm keeps seeing the address.
+	t.SetMaxEstablishedConns(0)
 }
 
 func (c *client) addMetainfo(mi *metainfo.MetaInfo, destination string, opts storageOpts) (*liveTorrent, error) {
@@ -209,15 +242,19 @@ func newStorage(destination string, opts storageOpts, completion storage.PieceCo
 }
 
 func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storageOpts) (*liveTorrent, error) {
+	if c.halted() {
+		return nil, errNetworkDown
+	}
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
 	st := newStorage(destination, opts, c.completion)
 	spec.Storage = st
 	var announce [][]string
+	var lost []lostTracker
 	if c.filterTrackers != nil {
 		announce = cloneTiers(spec.Trackers)
-		spec.Trackers = c.filterTrackers(spec.Trackers)
+		spec.Trackers, lost = c.filterTrackers(spec.Trackers)
 	}
 
 	t, isNew, err := c.cl.AddTorrentSpec(spec)
@@ -242,6 +279,12 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.SetMaxEstablishedConns(maxTorrentConns)
+	if c.halted() {
+		haltTorrent(t)
+	}
+	if len(lost) > 0 && c.retryTrackers != nil {
+		c.retryTrackers(t, lost)
+	}
 	return &liveTorrent{t: t, storage: st, flat: opts.flat, announce: announce, gen: c.gen}, nil
 }
 
@@ -393,6 +436,48 @@ func (l *liveTorrent) verifyEach(ctx context.Context, done func(index int, lengt
 	return nil
 }
 
+// settlePieces waits until no piece is queued for a hash, being hashed or being
+// marked in the storage. A piece check returns as soon as the hash is known,
+// but the engine tells the storage and publishes the verdict a moment later, so
+// the completion read right after the last check can still show pieces that
+// passed as not complete. The wait ends with ctx or when the torrent is gone.
+func (l *liveTorrent) settlePieces(ctx context.Context) error {
+	// Subscribed before the first look, so a change between the look and the
+	// wait is delivered and not missed.
+	sub := l.t.SubscribePieceStateChanges()
+	defer sub.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-l.t.Closed():
+			return errNetworkDown
+		default:
+		}
+		if !l.piecesBusy() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+		case <-l.t.Closed():
+		case _, open := <-sub.Values:
+			if !open {
+				return errNetworkDown
+			}
+		}
+	}
+}
+
+func (l *liveTorrent) piecesBusy() bool {
+	for _, run := range l.t.PieceStateRuns() {
+		if run.Marking || run.Checking {
+			return true
+		}
+	}
+	return false
+}
+
 func (l *liveTorrent) completePieces() (complete, total int) {
 	total = l.t.NumPieces()
 	for i := 0; i < total; i++ {
@@ -446,6 +531,9 @@ func isSafeTorrentPath(path string) bool {
 			return false
 		}
 		if !filepath.IsLocal(component) {
+			return false
+		}
+		if winpath.Reserved(component) {
 			return false
 		}
 	}

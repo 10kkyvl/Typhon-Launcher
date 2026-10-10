@@ -27,6 +27,7 @@ type MetadataPatch struct {
 	Themes       []string
 	Platforms    []string
 	GameType     string
+	StoreLinks   map[string]string
 	CoverAssetID string
 	HeroAssetID  string
 	UpdatedAt    time.Time
@@ -101,6 +102,9 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 	game.Themes = copyStrings(patch.Themes)
 	game.Platforms = copyStrings(patch.Platforms)
 	game.GameType = strings.TrimSpace(patch.GameType)
+	if patch.StoreLinks != nil {
+		game.StoreLinks = nilIfEmpty(SanitizeStoreLinks(patch.StoreLinks))
+	}
 	if patch.ReleaseDate != nil {
 		released := *patch.ReleaseDate
 		game.ReleaseDate = &released
@@ -141,4 +145,11 @@ func copyStrings(in []string) []string {
 		return nil
 	}
 	return out
+}
+
+func nilIfEmpty(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	return in
 }

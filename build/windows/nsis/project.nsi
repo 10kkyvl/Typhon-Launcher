@@ -62,7 +62,7 @@ ManifestDPIAware true
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
-# !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
+!insertmacro MUI_PAGE_LICENSE $(eula) # EULA page in the language of the installer
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipComponentsOnUpgrade
 !insertmacro MUI_PAGE_COMPONENTS # Which shortcuts to create.
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
@@ -73,6 +73,9 @@ ManifestDPIAware true
 
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Russian"
+
+LicenseLangString eula ${LANG_ENGLISH} "resources\eula.en.txt"
+LicenseLangString eula ${LANG_RUSSIAN} "resources\eula.ru.txt"
 
 LangString StartMenuShortcut ${LANG_ENGLISH} "Start Menu shortcut"
 LangString StartMenuShortcut ${LANG_RUSSIAN} "Ярлык в меню Пуск"

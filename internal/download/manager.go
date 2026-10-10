@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +70,13 @@ const restoreFailedMessage = "не удалось восстановить за�
 var ErrNotFound = uierr.New("download.not_found", "загрузка не найдена")
 
 var (
+	errStateUnread      = errors.New("список загрузок не прочитан, запись отменена, чтобы не затереть файл")
+	errSelectionLost    = errors.New("выбор файлов потерян: без него нельзя понять, что скачивать")
+	errMetainfoNotSaved = errors.New("не удалось сохранить torrent-файл: загрузку нельзя будет восстановить после перезапуска")
+	errRootUnknown      = errors.New("не удалось определить папку загрузки, данные не удалены")
+)
+
+var (
 	errNotFound          = ErrNotFound
 	errUnavailable       = uierr.New("download.unavailable", "недоступно для этой загрузки")
 	errNoClient          = uierr.New("download.no_client", "торрент-клиент недоступен")
@@ -121,6 +129,11 @@ type Manager struct {
 	metaDir         string
 	pieceCompletion storage.PieceCompletion
 
+	// loadErr is the reason the stored list could not be read. While it is set
+	// the in-memory list is not the user's list, so nothing may be written over
+	// the file: persistLocked refuses, whoever asks, shutdown included.
+	loadErr error
+
 	items    []*Download
 	engines  map[string]engineTorrent
 	rates    map[string]*rateState
@@ -129,6 +142,7 @@ type Manager struct {
 	reserved map[string]bool
 	fetching map[string]fetchEntry
 	fetchSeq int64
+	promoter *partPromoter
 
 	client          *client
 	max             int
@@ -150,11 +164,17 @@ type Manager struct {
 	// never while holding it. Everything below except the hooks is guarded by
 	// mu. gen counts the clients the manager has had, so that work started on
 	// one client can tell that it is over.
-	netMu        sync.Mutex
+	netMu sync.Mutex
+	// saveMu orders the writes of the proxy store and guards typedPass. It is
+	// taken before passMu and never under mu: the store is a keychain call.
+	saveMu       sync.Mutex
+	typedPass    *pendingPass
 	passMu       sync.Mutex
 	passCache    *proxySecret
+	passGen      uint64
 	verified     map[string]bool
 	netState     NetworkState
+	startErr     error
 	switching    bool
 	netActive    *netPlan
 	netKey       netKey
@@ -213,6 +233,7 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		jobs:     map[string]*jobState{},
 		reserved: map[string]bool{},
 		fetching: map[string]fetchEntry{},
+		promoter: newPartPromoter(),
 
 		netKick:     make(chan struct{}, 1),
 		netInterval: netPollInterval,
@@ -256,7 +277,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	// Until the route is checked nothing may start, and a window that asks
 	// meanwhile should be told the network is not ready, not that no client
 	// exists.
-	m.netState = NetworkState{Mode: cfg.NetworkMode, State: NetworkDown, Code: uierr.Code(errNetworkDown), Reason: "проверка сети"}
+	m.netState = checkingState(cfg.NetworkMode)
 	if err := m.loadLocked(); err != nil {
 		cancel := m.cancel
 		m.cancel = nil
@@ -348,8 +369,10 @@ func (m *Manager) ServiceShutdown() error {
 func (m *Manager) loadLocked() error {
 	records, err := m.store.load()
 	if err != nil {
+		m.loadErr = err
 		return err
 	}
+	m.loadErr = nil
 	for _, r := range records {
 		d := &Download{
 			ID:          r.ID,
@@ -365,6 +388,7 @@ func (m *Manager) loadLocked() error {
 			Seeding:     r.Seeding,
 			Flat:        r.Flat,
 			InPlace:     r.InPlace,
+			root:        r.Root,
 			Origin:      r.Origin,
 			AddedAt:     r.AddedAt,
 			CompletedAt: r.CompletedAt,
@@ -373,12 +397,7 @@ func (m *Manager) loadLocked() error {
 		if d.Type == "" {
 			d.Type = TypeTorrent
 		}
-		if mi, err := m.store.loadMetainfo(r.InfoHash); err == nil {
-			if info, err := mi.UnmarshalInfo(); err == nil {
-				d.Files = fileStates(&info, r.Selected)
-				d.Total = selectedTotal(d.Files)
-			}
-		}
+		m.loadFilesLocked(d, r.Selected)
 		if occupiesSlot(d.Status) {
 			d.Status = StatusQueued
 		}
@@ -386,6 +405,58 @@ func (m *Manager) loadLocked() error {
 		m.items = append(m.items, d)
 	}
 	return nil
+}
+
+// loadFilesLocked rebuilds the file list of a stored download from the cached
+// torrent. When the cache is missing, unreadable or does not apply the stored
+// selection, the list stays empty and the selection is held as recorded: the
+// file list and the total are filled in from the torrent by settleRestored
+// once its metadata is known, and nothing is widened in the meantime.
+func (m *Manager) loadFilesLocked(d *Download, selected []int) {
+	d.heldSelection = slices.Clone(selected)
+	mi, err := m.store.loadMetainfo(d.InfoHash)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("read cached torrent", "download_id", d.ID, "error", err)
+		}
+		return
+	}
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		slog.Warn("read info of cached torrent", "download_id", d.ID, "error", err)
+		return
+	}
+	if d.root == "" {
+		d.root = info.BestName()
+	}
+	files, err := applySelection(&info, selected)
+	if err != nil {
+		slog.Warn("apply stored selection", "download_id", d.ID, "error", err)
+		return
+	}
+	d.Files = files
+	d.Total = selectedTotal(files)
+	d.heldSelection = nil
+}
+
+// applySelection lays a stored selection over a torrent's files. A nil
+// selection names no subset and takes every file; a selection that is empty or
+// points outside the torrent cannot be applied and is an error, because the
+// only way out of it would be to guess what the user chose.
+func applySelection(info *metainfo.Info, selected []int) ([]FileState, error) {
+	if selected == nil {
+		return fileStates(info, nil), nil
+	}
+	count := len(info.UpvertedFiles())
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("%w: ни один файл не выбран", errSelectionLost)
+	}
+	for _, i := range selected {
+		if i < 0 || i >= count {
+			return nil, fmt.Errorf("%w: файла %d нет в торренте из %d файлов", errSelectionLost, i, count)
+		}
+	}
+	return fileStates(info, selected), nil
 }
 
 // persistLocked writes the current in-memory queue to disk. On failure it
@@ -396,6 +467,12 @@ func (m *Manager) loadLocked() error {
 // whether to also roll that change back — persistLocked only knows about
 // records, not about which Download field motivated this call.
 func (m *Manager) persistLocked() error {
+	if m.loadErr != nil {
+		err := fmt.Errorf("%w: %w", errStateUnread, m.loadErr)
+		m.degraded = degradedStatus{Degraded: true, Message: err.Error()}
+		emit(eventDegraded, m.degraded)
+		return err
+	}
 	records := make([]record, 0, len(m.items))
 	for _, d := range m.items {
 		records = append(records, record{
@@ -406,12 +483,13 @@ func (m *Manager) persistLocked() error {
 			InfoHash:    d.InfoHash,
 			Destination: d.Destination,
 			Status:      d.Status,
-			Selected:    selectedIndices(d),
+			Selected:    selectionRecord(d),
 			Downloaded:  d.Downloaded,
 			Total:       d.Total,
 			Seeding:     d.Seeding,
 			Flat:        d.Flat,
 			InPlace:     d.InPlace,
+			Root:        d.root,
 			Origin:      d.Origin,
 			AddedAt:     d.AddedAt,
 			CompletedAt: d.CompletedAt,
@@ -612,12 +690,13 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 	return torrentInfoOf(infoHash, info), nil
 }
 
-// fetchCancelled tells a fetch that the client it ran on was replaced from one
-// the caller cancelled.
 func (m *Manager) fetchCancelled(cl *client) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.client != cl {
+		if m.offlineLocked() {
+			return m.offlineErrLocked()
+		}
 		return errNetworkDown
 	}
 	return errNoMetadata
@@ -631,9 +710,9 @@ func buildSpec(source string) (*torrent.TorrentSpec, error) {
 		}
 		return spec, nil
 	}
-	mi, err := metainfo.LoadFromFile(source)
+	mi, err := loadMetainfoFile(source)
 	if err != nil {
-		return nil, errTorrentReadFailed
+		return nil, fmt.Errorf("%w: %w", errTorrentReadFailed, err)
 	}
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
 	if err != nil || spec.InfoHash.IsZero() {
@@ -741,8 +820,9 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
 	m.mu.Lock()
 	if m.offlineLocked() {
+		err := m.offlineErrLocked()
 		m.mu.Unlock()
-		return Download{}, errNetworkDown
+		return Download{}, err
 	}
 	p := m.pending[infoHash]
 	if p != nil {
@@ -812,6 +892,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 		Total:       needed,
 		ETASeconds:  -1,
 		Files:       files,
+		root:        info.BestName(),
 		Origin:      origin,
 		AddedAt:     time.Now(),
 	}
@@ -825,12 +906,15 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 		lt.drop()
 		return Download{}, errNetworkDown
 	}
+	if err := m.keepMetainfo(infoHash, &mi, p.source, d.ID); err != nil {
+		delete(m.reserved, infoHash)
+		m.mu.Unlock()
+		lt.drop()
+		return Download{}, err
+	}
 	m.items = append(m.items, d)
 	m.engines[d.ID] = lt
 	m.markVerifiedLocked(d.ID)
-	if err := m.store.saveMetainfo(infoHash, &mi); err != nil {
-		slog.Warn("save metainfo", "download_id", d.ID, "error", err)
-	}
 	if err := m.persistLocked(); err != nil {
 		m.items = m.items[:len(m.items)-1]
 		delete(m.engines, d.ID)
@@ -856,6 +940,23 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	m.schedule()
 	m.mu.Unlock()
 	return snapshot(d), nil
+}
+
+// keepMetainfo caches the torrent for the restore after a restart. A magnet
+// link can be resolved again from the swarm and the selection no longer depends
+// on the cache, so for it a failed write costs only a wait and is logged. A
+// torrent file is never read again after it is added: without the cache the
+// download could not be restored, so the add is refused. The caller holds m.mu.
+func (m *Manager) keepMetainfo(infoHash string, mi *metainfo.MetaInfo, source, id string) error {
+	err := m.store.saveMetainfo(infoHash, mi)
+	if err == nil {
+		return nil
+	}
+	if strings.HasPrefix(source, "magnet:") {
+		slog.Warn("save metainfo", "download_id", id, "error", err)
+		return nil
+	}
+	return fmt.Errorf("%w: %w", errMetainfoNotSaved, err)
 }
 
 // spawnTrackedLocked starts fn in a goroutine registered with m.wg, unless
@@ -1118,6 +1219,12 @@ func (m *Manager) DeleteData(id string) error {
 		m.mu.Unlock()
 		return errUnavailable
 	}
+	root, haveRoot := removalRoot(d)
+	if !d.Flat && !haveRoot {
+		slog.Warn("download folder unknown, data kept", "download_id", id, "root", d.root)
+		m.mu.Unlock()
+		return errRootUnknown
+	}
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
 	flat := d.Flat
@@ -1162,7 +1269,7 @@ func (m *Manager) DeleteData(id string) error {
 				}
 			}
 		} else {
-			removeContent(destination, name)
+			removeContent(destination, root)
 		}
 	})
 	m.mu.Unlock()
@@ -1182,6 +1289,8 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
 	purge := deleteData && d.Status != StatusCompleted && !d.InPlace
+	root, haveRoot := removalRoot(d)
+	flat := d.Flat
 
 	if err := m.dropLocked(id); err != nil {
 		m.mu.Unlock()
@@ -1217,8 +1326,14 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
 	started := m.startTeardownLocked(id, job, eng, infoHash, func() {
-		if purge {
-			removeContent(destination, name)
+		switch {
+		case !purge:
+		case haveRoot:
+			removeContent(destination, root)
+		default:
+			// Cancel has to stop the download whatever it finds; what it cannot
+			// do is guess which folder is the download's, so the data stays.
+			slog.Warn("download folder unknown, data kept", "download_id", id, "flat", flat)
 		}
 	})
 	m.mu.Unlock()
@@ -1569,7 +1684,11 @@ func (m *Manager) verifyCompletion(ctx context.Context, id string, eng engineTor
 	}
 	defer m.endJob(id)
 
-	err := verifyFilesOnDisk(jobCtx, files, eng.filePaths(dest))
+	paths := eng.filePaths(dest)
+	err := m.promoter.promoteComplete(jobCtx, files, paths, eng.filesHashed())
+	if err == nil {
+		err = verifyFilesOnDisk(jobCtx, files, paths)
+	}
 	if err != nil {
 		if jobCtx.Err() != nil {
 			return
@@ -1717,6 +1836,13 @@ func differs(a, b *Download) bool {
 }
 
 func (m *Manager) applySettings(next settings.Settings) {
+	if err := m.settlePending(next.ProxyUsername); err != nil {
+		// No caller to return this to. The password stays queued and every check
+		// of the proxy retries it, so the monitor is woken to put the failure
+		// into the network state, where the window shows it.
+		slog.Error("store the proxy password", "error", err)
+		m.kickNetwork()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if key := netKeyOf(next); key != m.netKey {
@@ -1914,7 +2040,7 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 
 	lt, err := m.reattach(jobCtx, cl, j)
 	if err != nil {
-		if jobCtx.Err() != nil {
+		if jobCtx.Err() != nil || m.replaced(j.gen) {
 			return
 		}
 		slog.Error("restore download", "download_id", j.id, "error", err)
@@ -1929,19 +2055,40 @@ func (m *Manager) restoreOne(ctx context.Context, cl *client, j restoreJob) {
 	m.settleRestored(jobCtx, j, lt, lt.t.Info())
 }
 
+func (m *Manager) replaced(gen uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return gen != m.gen
+}
+
 func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTorrent, info *metainfo.Info) {
 	m.mu.Lock()
 	d := m.findLocked(j.id)
 	if d == nil || j.gen != m.gen {
-		// Either the download is gone or the client this engine belongs to was
-		// replaced while the job ran; in both cases nobody owns the engine.
 		m.mu.Unlock()
 		eng.drop()
 		return
 	}
+	if d.root == "" && info != nil {
+		d.root = info.BestName()
+	}
 	if len(d.Files) == 0 && info != nil {
-		d.Files = fileStates(info, nil)
-		d.Total = selectedTotal(d.Files)
+		files, err := applySelection(info, d.heldSelection)
+		switch {
+		case err == nil:
+			d.Files = files
+			d.Total = selectedTotal(files)
+			d.heldSelection = nil
+		case j.complete:
+			// The data is all there; only its list of files is unusable, which
+			// is no reason to fail a finished download.
+			slog.Warn("stored selection does not apply to a finished download", "download_id", j.id, "error", err)
+		default:
+			m.mu.Unlock()
+			eng.drop()
+			m.markFailed(j.id, err.Error(), err)
+			return
+		}
 	}
 	m.engines[j.id] = eng
 	// The engine is now recorded, which is itself enough for
@@ -2030,7 +2177,9 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 		return nil, errors.New("metainfo unavailable")
 	}
 
-	m.setStatus(j.id, StatusMetadata)
+	if !m.setStatus(j.id, StatusMetadata, j.gen) {
+		return nil, errClientGone
+	}
 	lt, err := cl.addMagnet(j.source, j.dest, opts)
 	if err != nil {
 		return nil, err
@@ -2057,22 +2206,28 @@ func (m *Manager) reattach(ctx context.Context, cl *client, j restoreJob) (*live
 		return nil, errNotFound
 	}
 
-	mi := lt.t.Metainfo()
+	mi := lt.metainfo()
 	if err := m.store.saveMetainfo(j.infoHash, &mi); err != nil {
 		slog.Warn("save metainfo", "download_id", j.id, "error", err)
 	}
 	return lt, nil
 }
 
-func (m *Manager) setStatus(id string, status Status) {
+// setStatus is false when the client the caller works for is gone: the
+// teardown has parked the download by then, and a status set now would stay.
+func (m *Manager) setStatus(id string, status Status, gen uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if gen != m.gen {
+		return false
+	}
 	d := m.findLocked(id)
 	if d == nil {
-		return
+		return true
 	}
 	d.Status = status
 	emit(eventUpdated, snapshot(d))
+	return true
 }
 
 func (m *Manager) setSeeding(id string, seeding bool) {
@@ -2084,6 +2239,18 @@ func (m *Manager) setSeeding(id string, seeding bool) {
 	}
 	d.Seeding = seeding
 	emit(eventUpdated, snapshot(d))
+}
+
+// removalRoot is the folder a download's files are deleted from: the name the
+// torrent carries, recorded when its metadata became known, never the title
+// the download is shown under. A flat download writes into the destination
+// itself and has no folder of its own to delete, and a stored value that is
+// not a plain name is not trusted.
+func removalRoot(d *Download) (string, bool) {
+	if d.Flat || !isSafeTorrentPath(d.root) {
+		return "", false
+	}
+	return d.root, true
 }
 
 func removeContent(destination, name string) {

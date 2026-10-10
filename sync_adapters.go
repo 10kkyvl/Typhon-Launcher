@@ -15,7 +15,9 @@ type syncSettings struct{ svc *settings.Service }
 
 func (a syncSettings) Get() settings.Settings { return a.svc.GetSettings() }
 
-func (a syncSettings) Save(next settings.Settings) error { return a.svc.SaveSettings(next) }
+func (a syncSettings) Update(mutate func(*settings.Settings) error) (settings.Settings, error) {
+	return a.svc.Update(mutate)
+}
 
 type socialSettings struct{ svc *settings.Service }
 

@@ -1,10 +1,12 @@
 package download
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -31,6 +33,7 @@ type record struct {
 	Seeding     bool       `json:"seeding"`
 	Flat        bool       `json:"flat,omitempty"`
 	InPlace     bool       `json:"inPlace,omitempty"`
+	Root        string     `json:"root,omitempty"`
 	Origin      Origin     `json:"origin,omitempty"`
 	AddedAt     time.Time  `json:"addedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
@@ -104,7 +107,7 @@ func (s *store) loadMetainfo(infoHash string) (*metainfo.MetaInfo, error) {
 	if s.dir == "" {
 		return nil, errors.New("downloads path unavailable")
 	}
-	return metainfo.LoadFromFile(s.metainfoPath(infoHash))
+	return loadMetainfoFile(s.metainfoPath(infoHash))
 }
 
 func (s *store) hasMetainfo(infoHash string) bool {
@@ -151,4 +154,35 @@ func (s *store) removeMetainfo(infoHash string) {
 	if err := os.Remove(s.metainfoPath(infoHash)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		slog.Warn("remove torrent file", "operation", "sweep_metainfo", "error", err)
 	}
+}
+
+// maxMetainfoSize bounds every torrent file the launcher parses from disk, the
+// ones a user points at and the cached ones alike. The engine takes at most
+// 16 MiB of info from the swarm, so a real torrent with its trackers and web
+// seeds stays far below this.
+const maxMetainfoSize = 32 << 20
+
+var errMetainfoTooLarge = errors.New("torrent-файл больше допустимого размера")
+
+// loadMetainfoFile is the one way the package reads a torrent file. The
+// decoder allocates what the file declares, so the size is capped before it
+// sees a byte.
+func loadMetainfoFile(path string) (*metainfo.MetaInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	limited := &io.LimitedReader{R: f, N: maxMetainfoSize + 1}
+	mi, loadErr := metainfo.Load(bufio.NewReader(limited))
+	closeErr := f.Close()
+	if limited.N <= 0 {
+		return nil, fmt.Errorf("%s: %w", path, errMetainfoTooLarge)
+	}
+	if loadErr != nil {
+		return nil, loadErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	return mi, nil
 }

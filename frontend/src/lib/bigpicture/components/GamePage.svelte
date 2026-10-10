@@ -3,6 +3,8 @@
   import { Events } from '@wailsio/runtime';
   import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Download, Heart, Play, RotateCw, Square, X } from '@lucide/svelte';
   import Artwork from '../../components/Artwork.svelte';
+  import StoreLinks from '../../components/StoreLinks.svelte';
+  import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero } from '../../game/view';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
@@ -13,7 +15,7 @@
   import { addCatalogGame, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
   import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type TorrentInfo } from '../../services/downloads';
   import { getCatalogGame, getReleasesForGame, getReleasesForTitle, type CatalogGame, type ReleaseGroup } from '../../services/sources';
-  import { getMetadataView, ensureMetadataFresh, type MetadataView } from '../../services/metadata';
+  import { getMetadataView, ensureMetadataFresh, openStoreLink, type MetadataView, type StoreId } from '../../services/metadata';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
@@ -24,7 +26,9 @@
   import type { RequestText } from '../contracts';
   import { bytesSize, progressPercent, relativeDate } from '../../utils/format';
   import { installErrorText } from '../../install/installErrors';
+  import { installTotalUnknown } from '../../install/progress';
   import { sourceErrorText } from '../../sources/sourceErrors';
+  import { metadataErrorText } from '../../metadata/metadataErrors';
   import { errorCode, hasMessage } from '../../i18n';
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
@@ -55,6 +59,7 @@
   let releasesFailed = $state(false);
   let activeTab = $state<'overview' | 'releases'>('overview');
   let pageError = $state('');
+  let metadataError = $state('');
   let dialog = $state<Dialog>(null);
   let dialogRoot: HTMLElement | undefined = $state();
   let dialogReturnFocus = '';
@@ -159,14 +164,27 @@
     catalogGame = null;
     metadata = null;
     activeTab = 'overview';
-    const result = await gameRequests.settle(ticket, Promise.all([getCatalogGame(gameId), getMetadataView(gameId)]));
-    if (result.kind === 'stale') return;
-    if (result.kind === 'error') {
+    pageError = '';
+    metadataError = '';
+    const [catalog, view] = await Promise.all([
+      gameRequests.settle(ticket, getCatalogGame(gameId)),
+      gameRequests.settle(ticket, getMetadataView(gameId)),
+    ]);
+    if (catalog.kind === 'stale' || view.kind === 'stale') return;
+    if (catalog.kind === 'error') {
       detailsFailed = true;
+      metadataError = metadataErrorText(catalog.error, bp('bp.game.loadFailed'));
     } else {
-      [catalogGame, metadata] = result.value;
+      catalogGame = catalog.value;
       if (!catalogGame && !game) detailsFailed = true;
-      void ensureMetadataFresh(gameId).catch(() => undefined);
+    }
+    if (view.kind === 'error') {
+      metadataError = metadataErrorText(view.error, bp('bp.game.loadFailed'));
+    } else {
+      metadata = view.value;
+      ensureMetadataFresh(gameId).catch((error) => {
+        if (gameRequests.isCurrent(ticket)) metadataError = metadataErrorText(error, bp('bp.game.loadFailed'));
+      });
     }
     if (gameRequests.isCurrent(ticket)) detailsLoading = false;
   }
@@ -289,6 +307,15 @@
   function mappedError(error: unknown, fallback: string) {
     const code = errorCode(error);
     return hasMessage(code) ? $t(code) : fallback;
+  }
+
+  async function openStore(store: StoreId) {
+    pageError = '';
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (error) {
+      pageError = metadataErrorText(error, bp('bp.game.loadFailed'));
+    }
   }
 
   async function toggleFavorite() {
@@ -529,6 +556,7 @@
           <h1>{title}</h1>
           {#if gameMeta}<p class="meta-line">{gameMeta}</p>{/if}
           {#if genres.length}<div class="genre-list">{#each genres.slice(0, 5) as genre (genre)}<span>{genre}</span>{/each}</div>{/if}
+          <StoreLinks links={metadata?.storeLinks} onopen={(store) => void openStore(store)} focusPrefix="game:store:" />
           <div class="badges">
             {#if running}<span class="badge running"><span class="dot"></span>{bp('bp.game.running')}</span>
             {:else if installed}<span class="badge installed">{bp('bp.game.installed')}</span>
@@ -562,6 +590,7 @@
         </div>
       </section>
 
+      {#if metadataError}<div class="page-error" role="alert">{metadataError}</div>{/if}
       {#if pageError}<div class="page-error" role="alert">{pageError}</div>{/if}
 
       {#if currentDownload}
@@ -591,8 +620,12 @@
         <section class="state-card install-card" aria-label={installStatusText()}>
           <div class="state-heading"><div><span class="section-kicker">{bp('bp.game.installation')}</span><h2>{currentInstall.name}</h2></div><span class="state-label">{installStatusText()}</span></div>
           {#if installActive(currentInstall.status)}
-            <div class="progress-track" role="progressbar" aria-valuenow={progressPercent(currentInstall.progress)} aria-valuemin="0" aria-valuemax="100"><span style:width={`${progressPercent(currentInstall.progress)}%`}></span></div>
-            <div class="progress-foot"><span>{currentInstall.currentFile || installStatusLabels(currentInstall.status)}</span><span>{progressPercent(currentInstall.progress)}%</span></div>
+            {#if installTotalUnknown(currentInstall)}
+              <div class="progress-unknown"><ProgressBar value={0} indeterminate height={10} /></div>
+            {:else}
+              <div class="progress-track" role="progressbar" aria-valuenow={progressPercent(currentInstall.progress)} aria-valuemin="0" aria-valuemax="100"><span style:width={`${progressPercent(currentInstall.progress)}%`}></span></div>
+            {/if}
+            <div class="progress-foot"><span>{currentInstall.currentFile || installStatusLabels(currentInstall.status)}</span><span>{installTotalUnknown(currentInstall) ? $t('bp.transfers.installWritten', { size: bytesSize(currentInstall.bytesDone) }) : `${progressPercent(currentInstall.progress)}%`}</span></div>
           {:else if currentInstall.status === 'failed' || currentInstall.status === 'interrupted'}
             <p class="install-error">{installErrorText(currentInstall.error, bp('bp.game.installFailed'))}</p>
           {/if}
@@ -772,6 +805,7 @@
   .state-heading, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
   .state-heading h2, .section-title h2, .description-card h2, .screenshots-card h2 { margin: .5rem 0 0; font-size: 2.2rem; line-height: 1.2; }
   .state-label { color: var(--text-2); font-size: 1.45rem; text-align: right; }
+  .progress-unknown { margin-top: 2rem; }
   .progress-track { height: 1rem; margin-top: 2rem; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
   .progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 200ms ease; }
   .progress-foot { display: flex; justify-content: space-between; gap: 2rem; margin-top: .8rem; color: var(--text-3); font-size: 1.3rem; font-variant-numeric: tabular-nums; }

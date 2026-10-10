@@ -10,6 +10,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 
 	"github.com/anacrolix/torrent/storage"
 )
@@ -46,11 +47,8 @@ func netKeyOf(cfg settings.Settings) netKey {
 type netEnv struct {
 	interfaces func() ([]ifaceInfo, error)
 	probe      func(ctx context.Context, addr string) error
-	// dns lists the name servers of one adapter and hostCheck says whether a
-	// socket bound to its addresses is held to that adapter. Both are asked
-	// for the chosen adapter only, on every check.
-	dns       func(ifaceInfo) ([]netip.Addr, error)
-	hostCheck func(ifc ifaceInfo, v4, v6 bool) error
+	dns        func(ifaceInfo) ([]netip.Addr, error)
+	hostCheck  func(ifc ifaceInfo, v4, v6 bool) error
 }
 
 func systemNetEnv() netEnv {
@@ -59,8 +57,6 @@ func systemNetEnv() netEnv {
 
 type clientBuilder func(ctx context.Context, cfg settings.Settings, metaDir string, completion storage.PieceCompletion, plan netPlan) (*client, error)
 
-// resumeEntry says how one download comes back: trusted skips the full
-// recheck, force starts it at once instead of leaving it to the queue.
 type resumeEntry struct {
 	trusted bool
 	force   bool
@@ -75,17 +71,41 @@ type resumeSet struct {
 	ids map[string]resumeEntry
 }
 
-// offlineLocked is true while there is no route for torrent traffic: the
-// network is down, or the client is being replaced and the new one is not up.
 func (m *Manager) offlineLocked() bool {
 	return m.netState.State == NetworkDown || m.switching
 }
 
+var errClientGone = errors.New("the client this restore was made for is gone")
+
+func checkingState(mode string) NetworkState {
+	return NetworkState{Mode: mode, State: NetworkDown, Code: uierr.Code(errNetworkChecking), Reason: "проверка сети"}
+}
+
+// buildFailure is the cause a failed client start goes down with: the code of
+// the reason when it has one, so the window shows what is wrong and not that
+// there is no client.
+func buildFailure(err error) error {
+	if uierr.Code(err) != "" {
+		return err
+	}
+	return fmt.Errorf("%w: %w", errNoClient, err)
+}
+
 func (m *Manager) noClientLocked() error {
 	if m.offlineLocked() {
-		return errNetworkDown
+		return m.offlineErrLocked()
 	}
 	return errNoClient
+}
+
+func (m *Manager) offlineErrLocked() error {
+	if m.netState.State == NetworkDown && m.netState.Mode == settings.NetworkDirect && m.netState.Code == uierr.Code(errNoClient) && m.startErr != nil {
+		return fmt.Errorf("%w: %w", errClientStart, m.startErr)
+	}
+	if m.netState.Code == uierr.Code(errNetworkChecking) {
+		return errNetworkChecking
+	}
+	return errNetworkDown
 }
 
 func (m *Manager) setSwitching(on bool) {
@@ -116,8 +136,6 @@ func (m *Manager) markVerifiedLocked(id string) {
 	m.verified[id] = true
 }
 
-// jobsLocked turns downloads into restore jobs. pick says whether a download
-// takes part and how it comes back.
 func (m *Manager) jobsLocked(pick func(*Download) (bool, resumeEntry)) []restoreJob {
 	jobs := make([]restoreJob, 0, len(m.items))
 	for _, d := range m.items {
@@ -164,8 +182,6 @@ func (m *Manager) resumeJobsLocked() []restoreJob {
 	})
 }
 
-// NetworkStatus tells whether torrent traffic currently has the route the
-// user asked for.
 func (m *Manager) NetworkStatus() NetworkState {
 	mode := m.config().NetworkMode
 	m.mu.Lock()
@@ -189,26 +205,103 @@ type proxySecret struct {
 	pass string
 }
 
+// clearPasswordCache drops the cached password and invalidates every read of
+// the store that started before it, so that a read which raced with a save
+// cannot put the old password back.
 func (m *Manager) clearPasswordCache() {
 	m.passMu.Lock()
 	m.passCache = nil
+	m.passGen++
 	m.passMu.Unlock()
 }
 
-func (m *Manager) SetProxyPassword(password string) error {
+// pendingPass is a password typed for a login the settings do not carry yet.
+// The store has room for one credential, which belongs to the saved login, so
+// the new one waits here until settings with its login are accepted. base is
+// the login that was saved when it was typed: while the settings stay on it the
+// entry is still on its way, once they move to a third name it is abandoned.
+type pendingPass struct {
+	user string
+	pass string
+	base string
+}
+
+// SetProxyPassword takes the password for the login it is given, which is the
+// one the window is about to save with the settings and not necessarily the one
+// saved now. A password for the saved login goes to the store at once, and an
+// empty one removes it. One for another login only waits in memory, and an
+// empty one only forgets it: the store keeps the password of the login that
+// works until the settings with the new login are accepted, so a save that is
+// refused cannot cost the old password, and the monitor is not woken for it.
+func (m *Manager) SetProxyPassword(username, password string) error {
 	if len(password) > maxProxyPassLen {
 		return errProxyPasswordSize
 	}
+	username, err := settings.NormalizeProxyUsername(username)
+	if err != nil {
+		return err
+	}
 	if m.proxyStore == nil {
 		return fmt.Errorf("%w: no credential store", errProxyCredentials)
+	}
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	saved := m.config().ProxyUsername
+	if password != "" && username != saved {
+		m.typedPass = &pendingPass{user: username, pass: password, base: saved}
+		// The settings may have taken the login over while this call was reading
+		// them; then nobody else will come for the entry.
+		return m.settleLocked(m.config().ProxyUsername)
+	}
+	if password == "" && username != saved {
+		if m.typedPass != nil && m.typedPass.user == username {
+			m.typedPass = nil
+		}
+		return nil
 	}
 	if password == "" {
 		if err := m.proxyStore.Delete(); err != nil {
 			return fmt.Errorf("%w: %w", errProxyCredentials, err)
 		}
-	} else if err := m.proxyStore.Save(account.Credential{Token: password, Username: m.config().ProxyUsername}); err != nil {
+	} else if err := m.proxyStore.Save(account.Credential{Token: password, Username: username}); err != nil {
 		return fmt.Errorf("%w: %w", errProxyCredentials, err)
 	}
+	m.typedPass = nil
+	m.clearPasswordCache()
+	m.kickNetwork()
+	return nil
+}
+
+func (m *Manager) settlePending(login string) error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+	return m.settleLocked(login)
+}
+
+// settleLocked is what the settings with this login do to the waiting
+// password: it goes to the store when the login is its own, stays while the
+// settings are still on the login it was typed against, and is dropped when
+// they have moved to another one, so it can never be stored under a login it
+// was not typed for. A failed write keeps it: the settings are already
+// accepted, and every check of the proxy tries again until the store takes it.
+func (m *Manager) settleLocked(login string) error {
+	p := m.typedPass
+	if p == nil {
+		return nil
+	}
+	if login != p.user {
+		if login != p.base {
+			m.typedPass = nil
+		}
+		return nil
+	}
+	if m.proxyStore == nil {
+		return fmt.Errorf("%w: no credential store", errProxyCredentials)
+	}
+	if err := m.proxyStore.Save(account.Credential{Token: p.pass, Username: p.user}); err != nil {
+		return fmt.Errorf("%w: %w", errProxyCredentials, err)
+	}
+	m.typedPass = nil
 	m.clearPasswordCache()
 	m.kickNetwork()
 	return nil
@@ -230,8 +323,6 @@ func (m *Manager) HasProxyPassword() (bool, error) {
 	return cred.Username == m.config().ProxyUsername, nil
 }
 
-// TestProxy checks the saved proxy settings, whatever the current mode: the
-// proxy is reached and the login is accepted, nothing is connected through it.
 func (m *Manager) TestProxy(ctx context.Context) error {
 	cfg := m.config()
 	if cfg.ProxyHost == "" || cfg.ProxyPort == 0 {
@@ -265,12 +356,18 @@ func (m *Manager) proxyPassword(user string) (string, error) {
 		return pass, nil
 	}
 	m.passMu.Unlock()
+	if err := m.settlePending(user); err != nil {
+		return "", err
+	}
+	m.passMu.Lock()
+	gen := m.passGen
+	m.passMu.Unlock()
 	if m.proxyStore == nil {
 		return "", fmt.Errorf("%w: no credential store", errProxyCredentials)
 	}
 	cred, err := m.proxyStore.Load()
 	if errors.Is(err, account.ErrNoCredential) {
-		return m.cachePassword(user, ""), nil
+		return m.cachePassword(user, "", gen), nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", errProxyCredentials, err)
@@ -278,12 +375,17 @@ func (m *Manager) proxyPassword(user string) (string, error) {
 	if cred.Username != user {
 		return "", errProxyMismatch
 	}
-	return m.cachePassword(user, cred.Token), nil
+	return m.cachePassword(user, cred.Token, gen), nil
 }
 
-func (m *Manager) cachePassword(user, pass string) string {
+// cachePassword remembers what a read of the store returned, unless the cache
+// was cleared since gen was taken: then the answer is the one the caller
+// asked for, but it is already out of date for the next one.
+func (m *Manager) cachePassword(user, pass string, gen uint64) string {
 	m.passMu.Lock()
-	m.passCache = &proxySecret{user: user, pass: pass}
+	if m.passGen == gen {
+		m.passCache = &proxySecret{user: user, pass: pass}
+	}
 	m.passMu.Unlock()
 	return pass
 }
@@ -314,9 +416,6 @@ func (m *Manager) netMonitor(ctx context.Context) {
 	}
 }
 
-// resolveNetwork works out what the client should be bound to right now. An
-// error means the route the user asked for is not there, and traffic must not
-// flow until it is.
 func (m *Manager) resolveNetwork(ctx context.Context, cfg settings.Settings, active *netPlan) (netPlan, error) {
 	switch cfg.NetworkMode {
 	case settings.NetworkDirect:
@@ -337,6 +436,9 @@ func (m *Manager) resolveInterface(cfg settings.Settings, active *netPlan) (netP
 	ifc, ok := findInterface(list, cfg.NetworkInterface)
 	if !ok {
 		return netPlan{}, fmt.Errorf("%w: %s", errNetIfaceMissing, cfg.NetworkInterface)
+	}
+	if ifc.Index == 0 {
+		return netPlan{}, fmt.Errorf("%w: %s: no interface index to pin the sockets to", errNetIfaceMissing, ifc.Name)
 	}
 	if !ifc.Up {
 		return netPlan{}, fmt.Errorf("%w: %s", errNetIfaceDown, ifc.Name)
@@ -433,6 +535,18 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 	hasClient := m.client != nil
 	m.mu.Unlock()
 
+	// The client is on a route the settings no longer ask for: it comes down
+	// before the new route is checked, not after, since the check of a proxy
+	// can take as long as the proxy takes to time out.
+	retired := hasClient && active != nil && !active.servesSettings(cfg)
+	if retired {
+		m.setSwitching(true)
+		defer m.setSwitching(false)
+		m.teardownClient()
+		m.enterChecking(cfg.NetworkMode)
+		hasClient, active = false, nil
+	}
+
 	plan, err := m.resolveNetwork(ctx, cfg, active)
 	if ctx.Err() != nil {
 		return
@@ -440,14 +554,23 @@ func (m *Manager) reconcileNetwork(ctx context.Context) {
 	if err == nil && hasClient && active != nil && *active == plan {
 		return
 	}
-	m.setSwitching(true)
-	defer m.setSwitching(false)
+	if !retired {
+		m.setSwitching(true)
+		defer m.setSwitching(false)
+	}
 	if err != nil {
 		m.enterDown(cfg.NetworkMode, err)
 		return
 	}
 	m.teardownClient()
 	m.bringUp(ctx, cfg, plan)
+}
+
+func (m *Manager) enterChecking(mode string) {
+	m.mu.Lock()
+	m.netActive = nil
+	m.setNetStateLocked(checkingState(mode))
+	m.mu.Unlock()
 }
 
 func (m *Manager) enterDown(mode string, cause error) {
@@ -492,7 +615,10 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	cl, err := build(clientCtx, cfg, m.metaDir, completion, plan)
 	if err != nil {
 		cancelClient()
-		m.enterDown(cfg.NetworkMode, fmt.Errorf("%w: %w", errNoClient, err))
+		m.mu.Lock()
+		m.startErr = err
+		m.mu.Unlock()
+		m.enterDown(cfg.NetworkMode, buildFailure(err))
 		return
 	}
 
@@ -510,6 +636,7 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	// Cleared in the step that installs the client: a request that comes in
 	// afterwards finds a client, and one that came in before was told to wait.
 	m.switching = false
+	m.startErr = nil
 	active := plan
 	m.netActive = &active
 	if m.setNetStateLocked(NetworkState{Mode: plan.mode, State: NetworkOK, Address: plan.address(), Warning: plan.warning()}) {
@@ -523,10 +650,10 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	m.mu.Unlock()
 }
 
-// teardownClient stops everything that runs on the current client, closes it
-// and parks the downloads that were active as queued. It is the same for a
-// lost route and for a change of settings: in both the client the data was
-// served by is gone, and the downloads wait for the next one.
+// teardownClient: the order is the point. The client is cut off from the network before
+// anything that can take long: the write of the parked downloads, which may
+// sit on a disk or a scanner, and the wait for jobs, which can be in the middle
+// of a recheck. Until the very last step the client stays open for them.
 func (m *Manager) teardownClient() {
 	m.mu.Lock()
 	cl := m.client
@@ -535,6 +662,8 @@ func (m *Manager) teardownClient() {
 		return
 	}
 	m.client = nil
+	// From here every job of the old client is stale: what it fails on from now
+	// on is not a failure of its download.
 	m.gen++
 	cancelClient := m.clientCancel
 	m.clientCtx, m.clientCancel = nil, nil
@@ -572,7 +701,22 @@ func (m *Manager) teardownClient() {
 	for _, j := range m.jobs {
 		jobs = append(jobs, j)
 	}
+	m.mu.Unlock()
 
+	// Told to stop, not waited for, and before the cut: a job that finds the
+	// client refusing work then already knows why.
+	if cancelClient != nil {
+		cancelClient()
+	}
+	for _, cancel := range fetches {
+		cancel()
+	}
+	for _, j := range jobs {
+		j.cancel()
+	}
+	cl.halt()
+
+	m.mu.Lock()
 	persist := false
 	for _, d := range m.items {
 		delete(m.rates, d.ID)
@@ -598,14 +742,7 @@ func (m *Manager) teardownClient() {
 	}
 	m.mu.Unlock()
 
-	if cancelClient != nil {
-		cancelClient()
-	}
-	for _, cancel := range fetches {
-		cancel()
-	}
 	for _, j := range jobs {
-		j.cancel()
 		<-j.done
 	}
 	for _, p := range pendings {
@@ -617,7 +754,6 @@ func (m *Manager) teardownClient() {
 	cl.close()
 }
 
-// restorePass brings the given downloads back on cl, one after another.
 func (m *Manager) restorePass(ctx context.Context, cl *client, jobs []restoreJob, seed bool) {
 	for _, j := range jobs {
 		if ctx.Err() != nil {
@@ -641,9 +777,6 @@ func (m *Manager) restorePass(ctx context.Context, cl *client, jobs []restoreJob
 	m.mu.Unlock()
 }
 
-// queueWhileDownLocked is Resume and ForceStart while there is no client:
-// nothing can start, so the download waits in the queue and comes back with
-// the client.
 func (m *Manager) queueWhileDownLocked(d *Download, what string, force bool) error {
 	before := *d
 	d.Status = StatusQueued

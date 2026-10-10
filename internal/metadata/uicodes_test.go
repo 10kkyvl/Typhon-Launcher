@@ -36,7 +36,7 @@ func metadataCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []st
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := metadataCodesIn(t, metadataGoCodePattern, "service.go", "provider.go", "store.go", "attempts.go")
+	goCodes := metadataCodesIn(t, metadataGoCodePattern, "service.go", "provider.go", "store.go", "attempts.go", "storelinks.go")
 	if len(goCodes) < 10 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 10", len(goCodes))
 	}

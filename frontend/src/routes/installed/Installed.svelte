@@ -46,7 +46,7 @@
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { settings } from '../../lib/stores/settings';
-  import { storageInfo } from '../../lib/stores/storage';
+  import { refreshStorage, storageFailed, storageInfo } from '../../lib/stores/storage';
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
@@ -426,6 +426,21 @@
       </div>
     </Card>
   </div>
+{:else if $storageFailed}
+  <div class="storage-block">
+    <Card>
+      <div class="storage-empty" role="alert">
+        <div class="disk">
+          <HardDrive size="1.8rem" strokeWidth={1.8} />
+          <span class="storage-error">{msg('games.installedStorageLoadFailed')}</span>
+        </div>
+        <Button size="sm" onclick={refreshStorage}>
+          <RefreshCw size="1.5rem" strokeWidth={1.8} />
+          {msg('common.retry')}
+        </Button>
+      </div>
+    </Card>
+  </div>
 {/if}
 
 {#if $installedGames.length === 0}
@@ -626,6 +641,11 @@
 
   .storage-block {
     margin-bottom: var(--space-6);
+  }
+
+  .storage-error {
+    font-size: var(--font-sm);
+    color: var(--danger);
   }
 
   .storage-empty {

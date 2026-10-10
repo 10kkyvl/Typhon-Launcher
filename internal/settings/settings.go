@@ -114,6 +114,10 @@ func OverlayHotkeys() []string {
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
 const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 
+// ErrCodeLegalAcceptanceSaveFailed marks an acceptance of the terms that could
+// not be written.
+const ErrCodeLegalAcceptanceSaveFailed = "settings.legal_acceptance_save_failed"
+
 type Settings struct {
 	Theme                  string  `json:"theme"`
 	AccentColor            string  `json:"accentColor"`
@@ -175,6 +179,8 @@ type Settings struct {
 	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
 
 	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
+
+	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
 }
 
 // TelemetryConsentRecorded reports whether the user has answered the consent
@@ -401,7 +407,6 @@ func hasControl(text string) bool {
 func sanitizeNetwork(s Settings) (Settings, error) {
 	s.NetworkInterface = strings.TrimSpace(s.NetworkInterface)
 	s.ProxyHost = strings.TrimSpace(s.ProxyHost)
-	s.ProxyUsername = strings.TrimSpace(s.ProxyUsername)
 
 	switch s.NetworkMode {
 	case NetworkDirect, NetworkInterface, NetworkProxy:
@@ -437,11 +442,24 @@ func sanitizeNetwork(s Settings) (Settings, error) {
 		return Settings{}, ErrProxyPortInvalid
 	}
 
-	if len(s.ProxyUsername) > maxProxyUsernameLen || hasControl(s.ProxyUsername) ||
-		strings.ContainsRune(s.ProxyUsername, ':') || !utf8.ValidString(s.ProxyUsername) {
-		return Settings{}, ErrProxyUsernameInvalid
+	user, err := NormalizeProxyUsername(s.ProxyUsername)
+	if err != nil {
+		return Settings{}, err
 	}
+	s.ProxyUsername = user
 	return s, nil
+}
+
+// NormalizeProxyUsername is the one rule for a proxy login, shared by the
+// settings save and by whoever takes a password for a login that is not saved
+// yet: what it refuses here, the save would refuse too.
+func NormalizeProxyUsername(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if len(name) > maxProxyUsernameLen || hasControl(name) ||
+		strings.ContainsRune(name, ':') || !utf8.ValidString(name) {
+		return "", ErrProxyUsernameInvalid
+	}
+	return name, nil
 }
 
 func sanitizeOverlay(s Settings) error {
@@ -552,6 +570,7 @@ type Service struct {
 	subs     map[int]func(Settings)
 	nextSub  int
 	appliers []func(prev, next Settings) error
+	version  uint64
 }
 
 func NewService() (*Service, error) {
@@ -640,6 +659,7 @@ func (s *Service) GetSettings() Settings {
 	return s.current
 }
 
+//wails:ignore
 func (s *Service) SaveSettings(next Settings) error {
 	next, err := sanitize(next)
 	if err != nil {
@@ -648,36 +668,106 @@ func (s *Service) SaveSettings(next Settings) error {
 
 	s.mu.Lock()
 	prev := s.current
+	s.mu.Unlock()
+
+	next = keepNewerConsent(next, prev)
+	_, _, err = s.publish(prev, next, nil)
+	return err
+}
+
+// Update changes some settings without owning the rest. The callback gets a
+// copy of what is stored and edits only its own fields, so a field somebody
+// else saved while this change was being applied is not overwritten by a
+// stale copy. If the stored settings moved on before the write, the appliers
+// are undone and the callback runs again on the newer settings, so it must
+// not have effects of its own. Appliers and subscribers must not call Update
+// or SaveSettings from inside the call.
+//
+//wails:ignore
+func (s *Service) Update(mutate func(*Settings) error) (Settings, error) {
+	if mutate == nil {
+		return Settings{}, errors.New("settings: nil update")
+	}
+	for {
+		s.mu.Lock()
+		prev, version := s.current, s.version
+		s.mu.Unlock()
+
+		next := prev
+		if err := mutate(&next); err != nil {
+			return Settings{}, err
+		}
+		next, err := sanitize(next)
+		if err != nil {
+			return Settings{}, err
+		}
+		next = keepNewerConsent(next, prev)
+
+		saved, stale, err := s.publish(prev, next, &version)
+		if stale {
+			continue
+		}
+		if err != nil {
+			return Settings{}, err
+		}
+		return saved, nil
+	}
+}
+
+// publish runs the appliers, writes, and announces the result. With base set
+// the write happens only while the stored settings are still at that version;
+// otherwise stale is true and no applier is left applied.
+func (s *Service) publish(prev, next Settings, base *uint64) (saved Settings, stale bool, err error) {
+	s.mu.Lock()
 	appliers := make([]func(prev, next Settings) error, len(s.appliers))
 	copy(appliers, s.appliers)
 	s.mu.Unlock()
 
-	// The consent version only ever moves forward. Every other field here
-	// comes straight from a caller that may have assembled the struct without
-	// knowing this field exists, and a zero from such a caller would erase the
-	// record that the user was asked — after which the prompt reappears and
-	// the defaults apply again to somebody who already answered.
-	if next.TelemetryConsentVersion < prev.TelemetryConsentVersion {
-		next.TelemetryConsentVersion = prev.TelemetryConsentVersion
-	}
-
-	for _, apply := range appliers {
+	for i, apply := range appliers {
 		if err := apply(prev, next); err != nil {
-			return fmt.Errorf("apply settings: %w", err)
+			return Settings{}, false, undoAppliers(fmt.Errorf("apply settings: %w", err), appliers[:i], prev, next)
 		}
 	}
 
-	next, subs, err := s.persist(next)
+	saved, subs, stale, err := s.persist(next, base)
+	if stale {
+		if failed := undoAll(appliers, prev, next); len(failed) > 0 {
+			return Settings{}, false, errors.Join(failed...)
+		}
+		return Settings{}, true, nil
+	}
 	if err != nil {
-		return err
+		return Settings{}, false, undoAppliers(err, appliers, prev, next)
 	}
 	if app := application.Get(); app != nil {
-		app.Event.Emit("settings:updated", next)
+		app.Event.Emit("settings:updated", saved)
 	}
 	for _, notify := range subs {
-		notify(next)
+		notify(saved)
 	}
-	return nil
+	return saved, false, nil
+}
+
+// An applier compares the pair it is handed and acts on what differs, so
+// handing it the pair reversed puts back what the forward call changed. Only
+// the appliers that returned nil are undone, newest first: one that failed
+// owns whatever it left behind.
+func undoAppliers(cause error, applied []func(prev, next Settings) error, prev, next Settings) error {
+	failed := undoAll(applied, prev, next)
+	if len(failed) == 0 {
+		return cause
+	}
+	return errors.Join(append([]error{cause}, failed...)...)
+}
+
+func undoAll(applied []func(prev, next Settings) error, prev, next Settings) []error {
+	var failed []error
+	for i := len(applied) - 1; i >= 0; i-- {
+		if err := applied[i](next, prev); err != nil {
+			failed = append(failed, fmt.Errorf("undo settings: %w", err))
+		}
+	}
+	return failed
 }
 
 // SaveConsent records the answer to the consent prompt together with the
@@ -688,43 +778,99 @@ func (s *Service) SaveSettings(next Settings) error {
 // Callers get the stored settings back so the prompt closes on what was
 // written rather than on what it sent.
 func (s *Service) SaveConsent(usageStats, diagnostics bool) (Settings, error) {
-	next := s.GetSettings()
-	next.AnonymousUsageStats = usageStats
-	next.AnonymousDiagnostics = diagnostics
-	next.TelemetryConsentVersion = CurrentTelemetryConsent
-	if err := s.SaveSettings(next); err != nil {
+	saved, err := s.Update(func(next *Settings) error {
+		next.AnonymousUsageStats = usageStats
+		next.AnonymousDiagnostics = diagnostics
+		next.TelemetryConsentVersion = CurrentTelemetryConsent
+		return nil
+	})
+	if err != nil {
 		// The consent screen closes only on a successful answer, so its error
 		// text is the one thing the user is left with. Give it a code the
 		// frontend can translate instead of a raw Go string.
 		return Settings{}, uierr.Wrap(ErrCodeConsentSaveFailed, fmt.Errorf("save telemetry consent: %w", err))
 	}
-	return s.GetSettings(), nil
+	return saved, nil
 }
 
-func (s *Service) persist(next Settings) (Settings, []func(Settings), error) {
+// SaveLegalAcceptance records the revision of the terms and the privacy policy
+// the user agreed to. The revision is a date, so an empty one would record
+// nothing while looking like an answer.
+func (s *Service) SaveLegalAcceptance(version string) (Settings, error) {
+	if version == "" {
+		return Settings{}, errors.New("legal acceptance version is empty")
+	}
+	saved, err := s.Update(func(next *Settings) error {
+		next.LegalAcceptedVersion = version
+		return nil
+	})
+	if err != nil {
+		return Settings{}, uierr.Wrap(ErrCodeLegalAcceptanceSaveFailed, fmt.Errorf("save legal acceptance: %w", err))
+	}
+	return saved, nil
+}
+
+// The accepted revision, like the consent version, only moves forward: a save
+// from a caller that predates the field carries an empty string, and that must
+// not make the user accept the same documents again. Revisions are ISO dates,
+// so string order is date order.
+func keepNewerLegalAcceptance(next, stored Settings) Settings {
+	if next.LegalAcceptedVersion < stored.LegalAcceptedVersion {
+		next.LegalAcceptedVersion = stored.LegalAcceptedVersion
+	}
+	return next
+}
+
+// The consent version only ever moves forward. Every other field of a save
+// comes straight from a caller that may have assembled the struct without
+// knowing this field exists, and a zero from such a caller would erase the
+// record that the user was asked — after which the prompt reappears and the
+// defaults apply again to somebody who already answered. The two switches
+// are the answer that version belongs to, so they move with it: a version
+// raised over switches the caller never answered with would hand the newer
+// consent to whatever preselection that caller happened to hold.
+func keepNewerConsent(next, stored Settings) Settings {
+	if next.TelemetryConsentVersion < stored.TelemetryConsentVersion {
+		next.TelemetryConsentVersion = stored.TelemetryConsentVersion
+		next.AnonymousUsageStats = stored.AnonymousUsageStats
+		next.AnonymousDiagnostics = stored.AnonymousDiagnostics
+	}
+	return next
+}
+
+func (s *Service) persist(next Settings, base *uint64) (Settings, []func(Settings), bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.path == "" {
-		return next, nil, errors.New("settings path unavailable")
+	if base != nil && s.version != *base {
+		return next, nil, true, nil
 	}
+	if s.path == "" {
+		return next, nil, false, errors.New("settings path unavailable")
+	}
+	// SaveSettings read the stored settings before it ran the appliers, and a
+	// consent answered while they ran is only visible here, under the lock
+	// that also publishes the write.
+	next = keepNewerConsent(next, s.current)
+	next = keepNewerLegalAcceptance(next, s.current)
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return next, nil, fmt.Errorf("create config dir: %w", err)
+		return next, nil, false, fmt.Errorf("create config dir: %w", err)
 	}
 	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
-		return next, nil, err
+		return next, nil, false, err
 	}
 	if err := storage.WriteAtomic(s.path, data); err != nil {
-		return next, nil, fmt.Errorf("write settings: %w", err)
+		return next, nil, false, fmt.Errorf("write settings: %w", err)
 	}
 	s.current = next
+	s.version++
 
 	subs := make([]func(Settings), 0, len(s.subs))
 	for _, fn := range s.subs {
 		subs = append(subs, fn)
 	}
-	return next, subs, nil
+	return next, subs, false, nil
 }
 
 func libraryRootFor(parent string) (string, error) {
@@ -755,12 +901,10 @@ func (s *Service) SetupLibrary(parent string) (Settings, error) {
 	if err := createLibrary(root); err != nil {
 		return Settings{}, err
 	}
-	next := s.GetSettings()
-	next.LibraryPath = root
-	if err := s.SaveSettings(next); err != nil {
-		return Settings{}, err
-	}
-	return s.GetSettings(), nil
+	return s.Update(func(next *Settings) error {
+		next.LibraryPath = root
+		return nil
+	})
 }
 
 func createLibrary(root string) error {

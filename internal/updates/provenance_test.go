@@ -209,7 +209,9 @@ func writeDistributionFeed(t *testing.T, path string, releases ...feedRelease) {
 func TestLegacyInstallBindsOnlyThroughExactSavedRelease(t *testing.T) {
 	h := newHarness(t)
 	h.library.games[0].DistributionID = ""
-	h.releases.list = []sources.Release{release("r1", "1.0", 1), release("r2", "2.0", 2)}
+	h.releases.edit(func(list []sources.Release) []sources.Release {
+		return []sources.Release{release("r1", "1.0", 1), release("r2", "2.0", 2)}
+	})
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +230,7 @@ func TestLegacyInstallBackfillsRevisionDateOnlyForExactInstalledVersion(t *testi
 	stamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	current := release("r1", "1.0", 1)
 	current.UploadedAt = &stamp
-	h.releases.list = []sources.Release{current}
+	h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{current} })
 
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
@@ -242,7 +244,7 @@ func TestLegacyInstallBackfillsRevisionDateOnlyForExactInstalledVersion(t *testi
 	h.library.games[0].DistributionID = ""
 	changedScheme := release("r1", "build-20260910", 1)
 	changedScheme.UploadedAt = &stamp
-	h.releases.list = []sources.Release{changedScheme}
+	h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{changedScheme} })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -259,11 +261,14 @@ func TestLegacyInstallBackfillsRevisionDateOnlyForExactInstalledVersion(t *testi
 func TestStartUpdateRejectsPlanWhoseTargetChangedDistribution(t *testing.T) {
 	h := newHarness(t)
 	plan := h.plan(t)
-	for i := range h.releases.list {
-		if h.releases.list[i].ID == plan.TargetReleaseID {
-			h.releases.list[i].DistributionID = "foreign"
+	h.releases.edit(func(list []sources.Release) []sources.Release {
+		for i := range list {
+			if list[i].ID == plan.TargetReleaseID {
+				list[i].DistributionID = "foreign"
+			}
 		}
-	}
+		return list
+	})
 	if err := h.service.StartUpdate("local-1"); !errors.Is(err, errNoTarget) {
 		t.Fatalf("StartUpdate = %v, want stale plan rejection", err)
 	}
@@ -297,7 +302,7 @@ func TestPrefetchedRevisionIsReusedAfterPlanIsRecreated(t *testing.T) {
 	installedStamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	targetStamp := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	h.library.games[0].ReleaseUploadedAt = &installedStamp
-	h.releases.list[1].UploadedAt = &targetStamp
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[1].UploadedAt = &targetStamp; return list })
 	plan := h.plan(t)
 	target, _ := h.releases.FindRelease(plan.TargetReleaseID)
 	destination := h.service.config().DownloadsPath
@@ -340,7 +345,7 @@ func TestTargetRevisionDateChangeInvalidatesReadyPlan(t *testing.T) {
 	h.library.games[0].ReleaseUploadedAt = &installedStamp
 	target := release("r2", "2.0", 2)
 	target.UploadedAt = &firstTargetStamp
-	h.releases.list = []sources.Release{target}
+	h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{target} })
 
 	plan := h.plan(t)
 	h.service.mutate("local-1", func(u *Update) {
@@ -348,7 +353,7 @@ func TestTargetRevisionDateChangeInvalidatesReadyPlan(t *testing.T) {
 		u.State = StateReady
 		u.DownloadID = "old-download"
 	})
-	h.releases.list[0].UploadedAt = &secondTargetStamp
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[0].UploadedAt = &secondTargetStamp; return list })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +369,7 @@ func TestTargetRevisionDateChangeInvalidatesReadyPlan(t *testing.T) {
 
 func TestSameReleaseIDVersionChangeInvalidatesReadyPlan(t *testing.T) {
 	h := newHarness(t)
-	h.releases.list = []sources.Release{release("r1", "2.0", 2)}
+	h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{release("r1", "2.0", 2)} })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +382,7 @@ func TestSameReleaseIDVersionChangeInvalidatesReadyPlan(t *testing.T) {
 		u.State = StateReady
 		u.DownloadID = "old-download"
 	})
-	h.releases.list[0].Version = "3.0"
+	h.releases.edit(func(list []sources.Release) []sources.Release { list[0].Version = "3.0"; return list })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}

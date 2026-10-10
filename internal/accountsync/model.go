@@ -37,5 +37,5 @@ type MetadataPort interface {
 
 type SettingsPort interface {
 	Get() settings.Settings
-	Save(settings.Settings) error
+	Update(func(*settings.Settings) error) (settings.Settings, error)
 }

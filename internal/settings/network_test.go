@@ -185,3 +185,34 @@ func TestNetworkFieldsAreLocal(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeProxyUsernameIsTheRuleOfTheSave(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+		err  error
+	}{
+		{"plain", "bob", "bob", nil},
+		{"trimmed", "  bob\t", "bob", nil},
+		{"empty", "", "", nil},
+		{"colon", "a:b", "", ErrProxyUsernameInvalid},
+		{"newline", "a\nb", "", ErrProxyUsernameInvalid},
+		{"too long", strings.Repeat("u", 256), "", ErrProxyUsernameInvalid},
+		{"invalid utf-8", "a\xffb", "", ErrProxyUsernameInvalid},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := NormalizeProxyUsername(tc.in)
+			if !errors.Is(err, tc.err) || got != tc.want {
+				t.Fatalf("NormalizeProxyUsername(%q) = %q, %v, want %q, %v", tc.in, got, err, tc.want, tc.err)
+			}
+			s := Defaults()
+			s.ProxyUsername = tc.in
+			saved, saveErr := sanitize(s)
+			if !errors.Is(saveErr, tc.err) || (tc.err == nil && saved.ProxyUsername != tc.want) {
+				t.Fatalf("sanitize disagrees with NormalizeProxyUsername for %q: %q, %v", tc.in, saved.ProxyUsername, saveErr)
+			}
+		})
+	}
+}

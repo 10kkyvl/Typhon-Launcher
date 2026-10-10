@@ -7,6 +7,7 @@
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
+  import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
@@ -28,6 +29,7 @@
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
+  import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
   import { authState, initAuth } from './lib/stores/user';
@@ -67,6 +69,7 @@
   initSocial();
   initPresence();
   initSaveBackups();
+  initLegalAcceptance();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -78,7 +81,7 @@
   });
 </script>
 
-{#if $bigPictureActive && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
+{#if $bigPictureActive && !$showLegalAcceptance && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
   <BigPictureShell />
   <UpdateOverlay />
 {:else}
@@ -87,6 +90,8 @@
     <div class="boot">
       <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
     </div>
+  {:else if $showLegalAcceptance}
+    <LegalAcceptanceScreen />
   {:else if $showTelemetryConsent}
     <TelemetryConsentScreen />
   {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}

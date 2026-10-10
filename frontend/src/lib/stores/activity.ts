@@ -6,6 +6,7 @@ import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format
 import { locale, msg } from '../i18n';
 import { downloads, statusLabels } from './downloads';
 import { installActive, installStatusLabels, installations } from './install';
+import { installIndeterminate, installTotalUnknown } from '../install/progress';
 import { libraryGames } from './library';
 import { verifications } from './updates';
 
@@ -45,6 +46,7 @@ function installDetail(item: Installation) {
   if (item.status === 'waiting_for_user') return msg('state.activityWaitingForUser');
   if (item.currentFile) return truncateMiddle(item.currentFile, 44);
   if (item.bytesTotal > 0) return `${bytesSize(item.bytesDone)} / ${bytesSize(item.bytesTotal)}`;
+  if (installTotalUnknown(item)) return msg('modals.installWritten', { size: bytesSize(item.bytesDone) });
   return '';
 }
 
@@ -79,7 +81,7 @@ function fromInstall(item: Installation): ActivityItem {
     name: item.name,
     status: installStatusLabels(item.status),
     detail: installDetail(item),
-    indeterminate: item.status === 'verifying',
+    indeterminate: installIndeterminate(item),
     progress: item.progress,
     tone: waiting ? 'warning' : 'accent',
     attention: waiting,

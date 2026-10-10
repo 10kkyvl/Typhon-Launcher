@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"typhon/internal/storage"
 )
@@ -46,7 +47,11 @@ type workerSpec struct {
 	Options       installOptions `json:"options"`
 	Background    bool           `json:"background"`
 	Hidden        bool           `json:"hidden"`
-	Shell         *shellJob      `json:"shell,omitempty"`
+	// Interactive просит воркер запустить сам установщик без ключей тишины,
+	// с видимым окном и без разведки компонентов: пользователь проходит мастер
+	// сам, воркер нужен только ради прав администратора.
+	Interactive bool      `json:"interactive"`
+	Shell       *shellJob `json:"shell,omitempty"`
 }
 
 // discoverySpec — минимальный набор полей, нужных именно для разведки
@@ -61,12 +66,15 @@ type discoverySpec struct {
 	WorkingDir    string
 	InfPath       string
 	Options       installOptions
+	// Interactive отключает разведку: она существует только ради тихого
+	// прогона, а мастер установщика пользователь проходит сам.
+	Interactive bool
 }
 
 func (s workerSpec) discovery() discoverySpec {
 	return discoverySpec{
 		Engine: s.Engine, InstallerPath: s.InstallerPath, Destination: s.Destination,
-		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options,
+		WorkingDir: s.WorkingDir, InfPath: s.InfPath, Options: s.Options, Interactive: s.Interactive,
 	}
 }
 
@@ -188,6 +196,28 @@ func writeWorkerCancel(path string) error {
 		return errors.New("worker cancel path unavailable")
 	}
 	return writeWorkerFile(path, []byte{})
+}
+
+// removeWorkerFiles убирает файлы прогона воркера. Отсутствие файла не ошибка,
+// любая другая причина возвращается: оставшееся состояние прошлого прогона
+// иначе принималось бы за итог следующего.
+// A parent that is not a directory answers ENOTDIR on POSIX and "path not
+// found" on Windows; either way the file cannot be there.
+func alreadyGone(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func removeWorkerFiles(paths ...string) error {
+	var errs []error
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !alreadyGone(err) {
+			errs = append(errs, fmt.Errorf("remove worker file %s: %w", path, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func clearWorkerCancel(path string) error {

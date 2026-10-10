@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "golangci-lint run --fast-only ./... 2>&1 | head -50"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/heavy.sh\" --try golangci-lint run --fast-only ./... 2>&1 | head -50"
           }
         ]
       }

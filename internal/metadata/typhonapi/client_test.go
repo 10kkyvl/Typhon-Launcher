@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -637,5 +638,35 @@ func TestBrowseRejectsLegacyAlphabeticalResultsForRankedQueries(t *testing.T) {
 		if _, err := client.Browse(context.Background(), catalog.GameQuery{Sort: sortName}); err != nil {
 			t.Fatalf("legacy %s: %v", sortName, err)
 		}
+	}
+}
+
+func TestGameMetadataStoreLinks(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want map[string]string
+	}{
+		{"absent", `{"providerId":"1","title":"A"}`, nil},
+		{"empty object", `{"providerId":"1","title":"A","storeLinks":{}}`, map[string]string{}},
+		{"valid", `{"providerId":"1","title":"A","storeLinks":{"steam":"https://store.steampowered.com/app/1"}}`,
+			map[string]string{"steam": "https://store.steampowered.com/app/1"}},
+		{"invalid dropped", `{"providerId":"1","title":"A","storeLinks":{"steam":"http://store.steampowered.com/app/1","gog":"https://evil.example/g","epic":"https://store.epicgames.com/p/a","itch":"https://gog.com/x"}}`,
+			map[string]string{"epic": "https://store.epicgames.com/p/a"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var payload gameResponse
+			if err := json.Unmarshal([]byte(tc.body), &payload); err != nil {
+				t.Fatal(err)
+			}
+			meta, err := gameMetadata(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(meta.StoreLinks, tc.want) {
+				t.Fatalf("store links = %#v, want %#v", meta.StoreLinks, tc.want)
+			}
+		})
 	}
 }

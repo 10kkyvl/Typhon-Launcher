@@ -8,6 +8,8 @@ import (
 
 var ErrNoCredential = errors.New("no stored credential")
 
+var ErrNoCredentialStore = errors.New("no OS credential store is available on this platform")
+
 type Credential struct {
 	Token    string
 	Username string

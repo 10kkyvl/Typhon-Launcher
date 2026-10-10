@@ -4,7 +4,7 @@
   import GameCard from '../../lib/components/GameCard.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { type ProfileSettings, DEFAULT_PROFILE } from '../../lib/services/account';
-  import { initProfile, profileSnapshot } from '../../lib/stores/profile';
+  import { initProfile, profileFailed, profileSnapshot } from '../../lib/stores/profile';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -27,6 +27,7 @@
   let appearanceOpen = $state(false);
   let preview = $state<ProfileSettings | null>(null);
   let allShowcases = $state<ProfileSnapshot | null>(null);
+  let previewFailed = $state(false);
   let settingsOpen = $state(false);
 
   const isGuest = $derived($authState === 'guest');
@@ -59,8 +60,11 @@
   $effect(() => {
     let active = true;
     $currentUser?.id;
+    previewFailed = false;
     if (appearanceOpen) {
-      getProfilePreview().then((snapshot) => { if (active) allShowcases = snapshot; }).catch((err) => console.error('profile preview failed', err));
+      getProfilePreview()
+        .then((snapshot) => { if (active) allShowcases = snapshot; })
+        .catch(() => { if (active) previewFailed = true; });
     } else { allShowcases = null; }
     return () => { active = false; };
   });
@@ -71,6 +75,13 @@
 </script>
 
 <PageHeader title={msg('social.profileLabel')} />
+
+{#if $profileFailed}
+  <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+{/if}
+{#if previewFailed}
+  <p class="load-error" role="alert">{msg('profile.previewLoadFailed')}</p>
+{/if}
 
 <div class="workspace" class:customizing={appearanceOpen}>
 <div class="profile">
@@ -140,6 +151,12 @@
 {/if}
 
 <style>
+  .load-error {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-sm);
+    color: var(--danger);
+  }
+
   .workspace { display: flex; gap: 1.6rem; align-items: flex-start; }
   .profile {
     flex: 1; min-width: 0;
