@@ -112,11 +112,13 @@ export interface AvatarImage {
   mime: string;
 }
 
+export type ProfileSettingsPatch = Omit<ProfileSettings, 'showcase'> & { showcase?: ShowcaseKind[] };
+
 export interface ProfilePatch {
   username?: string;
   displayName?: string;
   bio?: string;
-  profile?: ProfileSettings;
+  profile?: ProfileSettingsPatch;
 }
 
 export interface RegisterInput {
@@ -317,10 +319,15 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
   }
 }
 
+function withAppearanceChecked(profile: ProfileSettingsPatch): ProfileSettingsPatch {
+  const { appearance, ...rest } = profile;
+  return appearance == null ? rest : { ...rest, appearance: appearanceOf(appearance) };
+}
+
 export async function updateProfile(patch: ProfilePatch): Promise<CurrentUser> {
   if (!inWails) throw unauthenticated();
   try {
-    return (await AccountService.UpdateProfile({ ...patch, profile: patch.profile ? { ...patch.profile, appearance: appearanceOf(patch.profile.appearance) } : undefined })) as CurrentUser;
+    return (await AccountService.UpdateProfile({ ...patch, profile: patch.profile ? withAppearanceChecked(patch.profile) : undefined })) as CurrentUser;
   } catch (err) {
     throw toAccountError(err);
   }
