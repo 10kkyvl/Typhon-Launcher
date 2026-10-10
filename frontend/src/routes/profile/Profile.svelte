@@ -43,7 +43,7 @@
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { initProfile, profileDraft, profileFailed, profileSnapshot } from '../../lib/stores/profile';
-  import { navigate } from '../../lib/stores/router';
+  import { navigate, registerLeaveGuard } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, isOffline, saveProfile } from '../../lib/stores/user';
   import { playtime, relativeDate } from '../../lib/utils/format';
@@ -296,6 +296,19 @@
 
   $effect(() => {
     if (editing && $currentUser?.id !== owner) leaveEditing();
+  });
+
+  $effect(() => {
+    if (!dirty) return;
+    return registerLeaveGuard({
+      dirty: () => dirty,
+      prompt: () => ({
+        title: msg('profile.leaveTitle'),
+        text: msg('profile.leaveText'),
+        confirm: msg('profile.leaveConfirm'),
+        cancel: msg('profile.leaveStay'),
+      }),
+    });
   });
 
   $effect(() => {
