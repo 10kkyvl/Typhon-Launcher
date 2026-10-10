@@ -163,6 +163,19 @@ describe('profile refresh triggers', () => {
     expect(vi.mocked(runtime.Events.On)).toHaveBeenCalledTimes(4);
   });
 
+  it('reloads when the layout changes', async () => {
+    const { store, currentUser } = await load();
+    fetchSnapshot.mockResolvedValue(snapshot('x'));
+    currentUser.set(user(['a']));
+    store.initProfile();
+    await Promise.resolve();
+    fetchSnapshot.mockClear();
+
+    currentUser.set({ id: 'u1', profile: { showcase: ['a'], layout: { version: 1, blocks: [] } } } as unknown as CurrentUser);
+
+    expect(fetchSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it('reloads when the showcase changes and not when something else about the user does', async () => {
     const { store, currentUser } = await load();
     fetchSnapshot.mockResolvedValue(snapshot('x'));

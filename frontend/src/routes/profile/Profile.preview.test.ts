@@ -11,14 +11,14 @@ function harness(getProfilePreview: () => Promise<unknown>) {
     .replace('$effect(', 'effect(')
     .replace('$currentUser', 'currentUser');
   const run = new Function('getProfilePreview', 'effect', 'currentUser', `
-    let appearanceOpen = false, allShowcases = null, previewFailed = false;
+    let wantsFull = false, full = null, previewFailed = false;
     ${js}
-    return { setOpen: (value) => { appearanceOpen = value; }, state: () => ({ allShowcases, previewFailed }) };
+    return { setOpen: (value) => { wantsFull = value; }, state: () => ({ full, previewFailed }) };
   `);
   let rerun!: () => (() => void) | void;
   const api = run(getProfilePreview, (fn: () => (() => void) | void) => { rerun = fn; }, { id: 'u1' }) as {
     setOpen: (value: boolean) => void;
-    state: () => { allShowcases: unknown; previewFailed: boolean };
+    state: () => { full: unknown; previewFailed: boolean };
   };
   return { ...api, rerun: () => rerun() };
 }
@@ -31,7 +31,7 @@ describe('profile appearance preview', () => {
     h.rerun();
     await vi.waitFor(() => expect(h.state().previewFailed).toBe(true));
 
-    expect(h.state().allShowcases).toBeNull();
+    expect(h.state().full).toBeNull();
   });
 
   it('clears the failure when the preview loads on the next open', async () => {
@@ -42,7 +42,7 @@ describe('profile appearance preview', () => {
     await vi.waitFor(() => expect(h.state().previewFailed).toBe(true));
 
     h.rerun();
-    await vi.waitFor(() => expect(h.state().allShowcases).toEqual({ showcase: [] }));
+    await vi.waitFor(() => expect(h.state().full).toEqual({ showcase: [] }));
 
     expect(h.state().previewFailed).toBe(false);
   });

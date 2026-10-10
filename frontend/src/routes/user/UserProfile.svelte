@@ -3,9 +3,12 @@
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
+  import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import type { PublicProfile } from '../../lib/services/social';
@@ -19,7 +22,8 @@
     unfriend,
   } from '../../lib/services/social';
   import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { showcaseLabel } from '../../lib/profile/view';
+  import { appearanceOf } from '../../lib/profile/appearance';
+  import { publicLayout, resolvePublic, type GridBlock } from '../../lib/profile/layoutView';
   import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
@@ -30,10 +34,10 @@
   import ProfilePlaying from '../profile/ProfilePlaying.svelte';
   import UserActivity from './UserActivity.svelte';
   import UserCommon from './UserCommon.svelte';
-  import UserCovers from './UserCovers.svelte';
   import UserHeader from './UserHeader.svelte';
   import UserMutual from './UserMutual.svelte';
   import UserRecent from './UserRecent.svelte';
+  import UserStats from './UserStats.svelte';
 
   let { username }: { username?: string } = $props();
 
@@ -70,6 +74,21 @@
       heroUrl: known?.heroUrl ?? '',
     };
   });
+
+  function empty(type: string): boolean {
+    if (type === 'playing') return !presenceGame;
+    if (type === 'recent') return recent.length === 0;
+    if (type === 'activity') return activity.length === 0;
+    if (type === 'about') return !data || data.bio.trim() === '';
+    return false;
+  }
+
+  const gridBlocks = $derived(
+    data && !closed
+      ? resolvePublic(publicLayout(data), { profile: data, open: (card) => void openGameByIGDB(card.igdbId, card.title), empty })
+      : [],
+  );
+  const autoArt = $derived(wideArt(data?.autoGame) || undefined);
 
   async function load(target: string, quiet = false) {
     if (quiet) {
@@ -186,6 +205,28 @@
 
 <PageHeader title={username ? `@${username}` : msg('social.profileLabel')} />
 
+{#snippet external(block: GridBlock)}
+  {#if data}
+    {#if block.type === 'playing' && presenceGame}
+      <ProfilePlaying
+        title={presenceGame.title}
+        art={wideArt(presenceGame)}
+        onopen={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}
+      />
+    {:else if block.type === 'recent'}
+      <UserRecent games={recent} />
+    {:else if block.type === 'activity'}
+      <UserActivity items={activity} />
+    {:else if block.type === 'stats'}
+      <Card title={msg('profile.blockStats')}>
+        <UserStats stats={data.stats} />
+      </Card>
+    {:else if block.type === 'about'}
+      <AboutBlock bio={data.bio} />
+    {/if}
+  {/if}
+{/snippet}
+
 {#if isGuest}
   <EmptyState
     title={msg('social.userGuestTitle')}
@@ -221,8 +262,8 @@
   </EmptyState>
 {:else if data}
   <div class="profile" class:refreshing>
-    <ProfileCanvas appearance={data.appearance}>
-    <ProfileCover appearance={data.appearance} />
+    <ProfileCanvas appearance={data.appearance} {autoArt}>
+    <ProfileCover appearance={data.appearance} {autoArt} />
     <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
     {#if closed}
       <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
@@ -231,27 +272,12 @@
     {:else}
       <div class="columns">
         <div class="main">
-          {#if presenceGame}
-            <ProfilePlaying
-              title={presenceGame.title}
-              art={wideArt(presenceGame)}
-              onopen={() => openGameByIGDB(presenceGame.igdbId, presenceGame.title)}
-            />
-          {/if}
-          {#each data.showcase ?? [] as block (block.kind)}
-            <UserCovers title={showcaseLabel(block.kind)} games={block.games} hearts={block.kind === 'favorites'} />
-          {/each}
-          {#if recent.length > 0}
-            <UserRecent games={recent} />
-          {/if}
+          <BlockGrid blocks={gridBlocks} {external} accent={appearanceOf(data.appearance).accent} />
           {#if common}
             <UserCommon {common} {name} />
           {/if}
           {#if mutual.length > 0}
             <UserMutual friends={mutual} count={data.mutualCount} />
-          {/if}
-          {#if activity.length > 0}
-            <UserActivity items={activity} />
           {/if}
         </div>
       </div>

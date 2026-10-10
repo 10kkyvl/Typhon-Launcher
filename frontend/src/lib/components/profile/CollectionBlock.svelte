@@ -1,38 +1,44 @@
 <script lang="ts">
   import { Heart } from '@lucide/svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
-  import Card from '../../lib/components/Card.svelte';
-  import type { GameCard } from '../../lib/services/social';
-  import { openGameByIGDB } from '../../lib/social/openGame';
+  import Artwork from '../Artwork.svelte';
+  import Card from '../Card.svelte';
+  import { msg } from '../../i18n';
+  import type { BlockGame } from '../../profile/layoutView';
+  import { shortDate } from '../../profile/view';
 
-  let {
-    title,
-    games,
-    hearts = false,
-  }: { title: string; games: GameCard[]; hearts?: boolean } = $props();
-
-  const shown = $derived(games.slice(0, 6));
+  let { title, games, dated, hearts = false }: { title: string; games: BlockGame[]; dated: boolean; hearts?: boolean } = $props();
 </script>
 
-{#if shown.length > 0}
-  <Card {title}>
+<Card title={title || undefined}>
+  {#if games.length === 0}
+    <p class="empty">{msg('profile.showcaseEmpty')}</p>
+  {:else}
     <div class="grid">
-      {#each shown as game (game.igdbId)}
-        <button class="tile" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
+      {#each games as game (game.key)}
+        <button class="tile" type="button" onclick={game.open}>
           <span class="cover">
-            <Artwork src={game.coverUrl} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+            <Artwork src={game.cover} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
             {#if hearts}
               <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
             {/if}
           </span>
           <span class="caption">{game.title}</span>
+          {#if dated && game.completedAt}
+            <span class="completed">{msg('social.completedOn', { date: shortDate(game.completedAt) })}</span>
+          {/if}
         </button>
       {/each}
     </div>
-  </Card>
-{/if}
+  {/if}
+</Card>
 
 <style>
+  .empty {
+    padding: var(--space-4) 0;
+    font-size: var(--font-sm);
+    color: var(--text-3);
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
@@ -57,6 +63,7 @@
     position: relative;
     display: block;
     border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--border);
     transition:
       transform var(--dur-panel) var(--ease),
       box-shadow var(--dur-panel) var(--ease);
@@ -93,5 +100,10 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .completed {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 </style>

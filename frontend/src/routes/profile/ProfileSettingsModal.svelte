@@ -1,20 +1,12 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import DeleteAccountModal from '../../lib/components/DeleteAccountModal.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import {
-    SHOWCASE_KINDS,
-    VISIBILITIES,
-    type ProfileSettings,
-    type ShowcaseKind,
-    type Visibility,
-  } from '../../lib/services/account';
+  import { VISIBILITIES, type ProfileSettings, type Visibility } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { showcaseLabel, visibilityLabel } from '../../lib/profile/view';
+  import { visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
@@ -57,26 +49,6 @@
     { key: 'showStats', label: msg('social.flagStatsLabel'), sub: msg('social.flagStatsSub') },
   ];
 
-  const selected = $derived(draft.showcase);
-  const unselected = $derived(SHOWCASE_KINDS.filter((kind) => !draft.showcase.includes(kind)));
-
-  function add(kind: ShowcaseKind) {
-    if (draft.showcase.length >= 3) return;
-    draft.showcase = [...draft.showcase, kind];
-  }
-
-  function remove(kind: ShowcaseKind) {
-    draft.showcase = draft.showcase.filter((k) => k !== kind);
-  }
-
-  function move(index: number, delta: number) {
-    const next = [...draft.showcase];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    draft.showcase = next;
-  }
-
   async function save() {
     if ($savingProfile || $isOffline) return;
     error = '';
@@ -116,43 +88,6 @@
         </div>
       {/each}
     </div>
-  </div>
-
-  <div class="group">
-    <h4>{msg('social.showcaseHeading')}</h4>
-    <p class="hint">{msg('social.showcaseExplain')}</p>
-    <ul class="showcase">
-      {#each selected as kind, index (kind)}
-        <li class="showcase-row">
-          <span class="row-label">{showcaseLabel(kind)}</span>
-          <span class="showcase-actions">
-            <IconButton
-              label={msg('social.moveUp', { title: showcaseLabel(kind) })}
-              size="sm"
-              disabled={index === 0 || $isOffline}
-              onclick={() => move(index, -1)}
-            >
-              <ArrowUp size="1.5rem" strokeWidth={1.8} />
-            </IconButton>
-            <IconButton
-              label={msg('social.moveDown', { title: showcaseLabel(kind) })}
-              size="sm"
-              disabled={index === selected.length - 1 || $isOffline}
-              onclick={() => move(index, 1)}
-            >
-              <ArrowDown size="1.5rem" strokeWidth={1.8} />
-            </IconButton>
-            <Button size="sm" variant="ghost" disabled={$isOffline} onclick={() => remove(kind)}>{msg('social.removeButton')}</Button>
-          </span>
-        </li>
-      {/each}
-      {#each unselected as kind (kind)}
-        <li class="showcase-row muted">
-          <span class="row-label">{showcaseLabel(kind)}</span>
-          <Button size="sm" disabled={selected.length >= 3 || $isOffline} onclick={() => add(kind)}>{msg('common.add')}</Button>
-        </li>
-      {/each}
-    </ul>
   </div>
 
   <div class="group danger">
@@ -201,15 +136,13 @@
     margin-bottom: var(--space-3);
   }
 
-  .rows,
-  .showcase {
+  .rows {
     display: flex;
     flex-direction: column;
     list-style: none;
   }
 
-  .row,
-  .showcase-row {
+  .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -217,8 +150,7 @@
     padding: 1.3rem 0;
   }
 
-  .row + .row,
-  .showcase-row + .showcase-row {
+  .row + .row {
     border-top: 1px solid var(--border);
   }
 
@@ -237,16 +169,6 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .muted .row-label {
-    color: var(--text-3);
-  }
-
-  .showcase-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
   }
 
   .error {
