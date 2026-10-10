@@ -2,7 +2,9 @@
   import type { Snippet } from 'svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import type { UserCard } from '../../lib/services/social';
+  import PlayerCardPopover from '../../lib/components/PlayerCardPopover.svelte';
+  import { playerCardOf } from '../../lib/profile/appearanceCard';
+  import type { FriendView, UserCard } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { msg } from '../../lib/i18n';
 
@@ -29,6 +31,10 @@
   } = $props();
 
   const avatarSize = $derived(variant === 'list' ? 'sm' : 'md');
+  const look = $derived(playerCardOf(user.card));
+  const edge = $derived(user.card ? look.accent : undefined);
+  const presence = $derived((user as Partial<FriendView>).presence);
+  let whoEl = $state<HTMLElement>();
 
   function openGame(event: MouseEvent) {
     event.stopPropagation();
@@ -37,7 +43,7 @@
 </script>
 
 {#snippet who()}
-  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} />
+  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} frame={look.appearance.avatarFrame} frameColor={look.accent} />
   <span class="names">
     <span class="name">{user.displayName || user.username}</span>
     {#if !compact}<span class="handle">@{user.username}</span>{/if}
@@ -46,14 +52,15 @@
 
 {#snippet identity()}
   {#if onopen}
-    <button class="who" type="button" onclick={onopen}>
+    <button class="who" type="button" bind:this={whoEl} onclick={onopen}>
       {@render who()}
     </button>
   {:else}
-    <div class="who">
+    <div class="who" bind:this={whoEl}>
       {@render who()}
     </div>
   {/if}
+  <PlayerCardPopover anchor={whoEl} {user} {presence} />
 {/snippet}
 
 {#snippet metaLine()}
@@ -66,7 +73,7 @@
 
 {#if variant === 'grid'}
   <Card padding="var(--space-4)">
-    <div class="grid-card" class:offline={status === 'offline'}>
+    <div class="grid-card edged" class:offline={status === 'offline'} style:--edge={edge}>
       {@render identity()}
       <span class="presence">
         {#if status}<span class="presence-dot {status}"></span>{/if}
@@ -79,7 +86,7 @@
   </Card>
 {:else if variant === 'card'}
   <Card padding="var(--space-4)">
-    <div class="card-row">
+    <div class="card-row edged" style:--edge={edge}>
       {@render identity()}
       {#if stats && stats.length > 0}
         <div class="stats">
@@ -92,7 +99,7 @@
     </div>
   </Card>
 {:else}
-  <div class="row" class:compact class:offline={status === 'offline'}>
+  <div class="row" class:compact class:edged={!!edge} class:offline={status === 'offline'} style:--edge={edge}>
     {@render identity()}
     {#if compact}
       {@render metaLine()}
@@ -149,6 +156,27 @@
     padding: 0.8rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
+  }
+
+  .row.edged {
+    box-shadow: inset 2px 0 0 var(--edge);
+  }
+
+  .grid-card.edged,
+  .card-row.edged {
+    position: relative;
+  }
+
+  .grid-card.edged::before,
+  .card-row.edged::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--space-4) * -1);
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--edge);
   }
 
   .row:hover,

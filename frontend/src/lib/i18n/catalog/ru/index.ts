@@ -8,6 +8,7 @@ import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
+import { profileStyle } from './profileStyle';
 import { search } from './search';
 import { install } from './install';
 import { downloads } from './downloads';
@@ -40,6 +41,7 @@ export const ru = {
   ...format,
   ...friends,
   ...profile,
+  ...profileStyle,
   ...search,
   ...install,
   ...downloads,
@@ -65,4 +67,4 @@ export const ru = {
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, saves, overlay };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, saves, overlay };

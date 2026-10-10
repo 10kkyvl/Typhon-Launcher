@@ -5,6 +5,8 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import StyledName from '../../lib/components/StyledName.svelte';
+  import { appearanceOf } from '../../lib/profile/appearance';
   import type { PublicProfile } from '../../lib/services/social';
   import { presenceDot } from '../../lib/social/presence';
   import { memberSince, relationLabel } from '../../lib/social/view';
@@ -26,6 +28,7 @@
   type MenuItem = { id: string; label: string; danger?: boolean; separator?: boolean };
 
   const name = $derived(profile.displayName || profile.username);
+  const look = $derived(appearanceOf(profile.appearance));
   const since = $derived(memberSince(profile.createdAt));
   const presence = $derived(presenceDot(profile.presence));
   const playing = $derived(presence !== 'offline' && profile.presence?.gameId != null);
@@ -45,11 +48,14 @@
 <section class="user-header">
   <div class="header-surface">
     <div class="head">
-      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} />
+      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} frame={look.avatarFrame} />
 
       <div class="identity">
-        <h2 class="display-name">{name}</h2>
+        <h2 class="display-name"><StyledName {name} styleName={look.nameStyle} /></h2>
         <span class="username">@{profile.username}</span>
+        {#if profile.statusEmoji || profile.statusText}
+          <p class="status">{#if profile.statusEmoji}<span class="status-emoji">{profile.statusEmoji}</span>{/if}{#if profile.statusText}<span>{profile.statusText}</span>{/if}</p>
+        {/if}
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="meta">
           {#if playingLine}
@@ -143,6 +149,15 @@
   .username {
     font-size: var(--font-md);
     color: var(--text-3);
+  }
+
+  .status {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
   }
 
   .bio {
