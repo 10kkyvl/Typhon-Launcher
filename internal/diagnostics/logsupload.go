@@ -156,9 +156,8 @@ func (s *Service) sendLogs(caller context.Context) (result SendLogsResult, err e
 		return SendLogsResult{}, err
 	}
 
-	ctx, cancel := context.WithTimeout(base, logUploadHTTPTimeout)
+	ctx, cancel := context.WithTimeout(caller, logUploadHTTPTimeout)
 	defer cancel()
-	defer context.AfterFunc(caller, cancel)()
 
 	id, err := postLogBundleWithCallbacks(ctx, cl.httpClient, cl.baseURL, s.identity, data,
 		func(sent, total int64) {

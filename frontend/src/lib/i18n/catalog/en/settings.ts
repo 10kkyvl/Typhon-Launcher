@@ -245,7 +245,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.aboutLogsSendConfirmText':
     'The archive holds the launcher log and system details: the OS version, the processor model and the amount of memory. The log keeps the names of games and releases, file names, the names of your sources, and website addresses without the path and parameters. Folder paths, your system username, email addresses, IP addresses and tokens are replaced with placeholders, but scrubbing is not guaranteed: you can download the archive first and review it.',
   'settings.aboutLogsSendConfirmNote':
-    'The file goes to the Typhon support server. Sent on its own, it is kept for 3 days; attached to a request, it is kept while the request is open and for 30 days after it is closed.',
+    'The file goes to the Typhon support server. Sent on its own, it is kept for 3 days and then deleted; attached to a request, it is kept while the request is open and for 30 days after it is closed.',
   'settings.aboutLogsSendConfirmButton': 'Send',
   'settings.aboutLogsSendingEllipsis': 'Sending…',
   'settings.aboutLogsPreparingEllipsis': 'Preparing archive…',
