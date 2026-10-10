@@ -79,3 +79,8 @@ export async function getProfilePreview(): Promise<ProfileSnapshot> {
   if (!inWails) return EMPTY_SNAPSHOT;
   return (await ProfileService.Preview()) as unknown as ProfileSnapshot;
 }
+
+export async function igdbIdsOf(canonicalGameIds: string[]): Promise<Record<string, string>> {
+  if (!inWails || canonicalGameIds.length === 0) return {};
+  return ((await ProfileService.IGDBIDs(canonicalGameIds)) ?? {}) as Record<string, string>;
+}
