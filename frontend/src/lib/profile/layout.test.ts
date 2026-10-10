@@ -44,7 +44,7 @@ function code(result: { ok: boolean; error?: { code: string } }): string | undef
 const unknown = block('x1', 'future', { shape: 'star' });
 
 describe('defaultLayout', () => {
-  it('follows the contract order for the legacy showcase', () => {
+  it('builds the legacy showcase into blocks and leaves bio and stats to the header', () => {
     const layout = defaultLayout({ showcase: ['favorites', 'most_played'] });
 
     expect(layout.version).toBe(1);
@@ -53,16 +53,14 @@ describe('defaultLayout', () => {
       ['collection', 'full', 'favorites'],
       ['collection', 'full', 'most_played'],
       ['recent', 'full', undefined],
-      ['activity', 'half', undefined],
-      ['stats', 'half', undefined],
-      ['about', 'full', undefined],
+      ['activity', 'full', undefined],
     ]);
   });
 
   it('has no collection when the showcase is empty', () => {
     const layout = defaultLayout({ showcase: [] });
 
-    expect(layout.blocks.map((item) => item.type)).toEqual(['playing', 'recent', 'activity', 'stats', 'about']);
+    expect(layout.blocks.map((item) => item.type)).toEqual(['playing', 'recent', 'activity']);
   });
 
   it('gives every block a valid unique id', () => {

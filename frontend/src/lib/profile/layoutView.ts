@@ -246,10 +246,7 @@ function publicBody(block: PublicBlock, ctx: PublicContext): BlockBody {
 export function publicLayout(profile: PublicProfile): PublicLayout {
   if (profile.layout) return profile.layout;
   const showcase = list(profile.showcase).map((block) => block.kind as ShowcaseKind);
-  const blocks = defaultLayout({ showcase })
-    .blocks.filter((block) => block.type !== 'stats' && block.type !== 'about')
-    .map((block) => (block.type === 'activity' ? { ...block, width: 'full' as const } : block));
-  return { version: 1, blocks };
+  return defaultLayout({ showcase });
 }
 
 export function resolvePublic(layout: PublicLayout, ctx: PublicContext): GridBlock[] {

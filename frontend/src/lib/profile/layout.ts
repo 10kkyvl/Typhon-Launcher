@@ -108,9 +108,7 @@ export function defaultLayout(settings: Pick<ProfileSettings, 'showcase'>): Prof
   });
   blocks.push(
     { id: 'recent', type: 'recent', width: 'full', config: {} },
-    { id: 'activity', type: 'activity', width: 'half', config: {} },
-    { id: 'stats', type: 'stats', width: 'half', config: {} },
-    { id: 'about', type: 'about', width: 'full', config: {} },
+    { id: 'activity', type: 'activity', width: 'full', config: {} },
   );
   return { version: 1, blocks };
 }
