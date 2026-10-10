@@ -81,26 +81,49 @@ func (s *Service) snapshot(showcase []string) (Snapshot, error) {
 }
 
 func (s *Service) playedGenres(games []library.Game) []PlayedGenres {
-	genresOf := map[string][]string{}
-	played := make([]PlayedGenres, 0, len(games))
+	counted := make([]library.Game, 0, len(games))
+	var ids []string
+	seen := map[string]bool{}
 	for _, g := range games {
-		if g.PlaytimeSeconds <= 0 {
+		if g.Archived || g.PlaytimeSeconds <= 0 {
 			continue
 		}
-		entry := PlayedGenres{Seconds: g.PlaytimeSeconds}
-		if g.CanonicalGameID != "" {
-			genres, known := genresOf[g.CanonicalGameID]
-			if !known {
-				if found := s.catalog.GetGames([]string{g.CanonicalGameID}); len(found) == 1 {
-					genres = found[0].Genres
-				}
-				genresOf[g.CanonicalGameID] = genres
-			}
-			entry.Genres = genres
+		counted = append(counted, g)
+		if g.CanonicalGameID != "" && !seen[g.CanonicalGameID] {
+			seen[g.CanonicalGameID] = true
+			ids = append(ids, g.CanonicalGameID)
 		}
-		played = append(played, entry)
+	}
+
+	genresOf := s.genresByCanonicalID(ids)
+	played := make([]PlayedGenres, 0, len(counted))
+	for _, g := range counted {
+		played = append(played, PlayedGenres{Seconds: g.PlaytimeSeconds, Genres: genresOf[g.CanonicalGameID]})
 	}
 	return played
+}
+
+// The batch lookup returns games under their resolved id and drops duplicates, so an id it cannot match
+// back (an alias, or a game the catalog lacks) is asked for alone; a game the catalog lacks stays genreless.
+func (s *Service) genresByCanonicalID(ids []string) map[string][]string {
+	genresOf := make(map[string][]string, len(ids))
+	if len(ids) == 0 {
+		return genresOf
+	}
+	found := map[string][]string{}
+	for _, g := range s.catalog.GetGames(ids) {
+		found[g.ID] = g.Genres
+	}
+	for _, id := range ids {
+		if genres, ok := found[id]; ok {
+			genresOf[id] = genres
+			continue
+		}
+		if single := s.catalog.GetGames([]string{id}); len(single) == 1 {
+			genresOf[id] = single[0].Genres
+		}
+	}
+	return genresOf
 }
 
 func minTime(a, b time.Time) time.Time {

@@ -189,3 +189,62 @@ func TestIGDBIDs(t *testing.T) {
 		t.Fatal("cancelled context was ignored")
 	}
 }
+
+func TestPlayedGenresSkipsArchivedGames(t *testing.T) {
+	cat := stubCatalog{games: map[string]catalog.Game{
+		"a": catalogGame("a", "1", "A", "RPG"),
+		"b": catalogGame("b", "2", "B", "Shooter"),
+	}}
+	games := []library.Game{
+		{ID: "ga", CanonicalGameID: "a", PlaytimeSeconds: 100},
+		{ID: "gb", CanonicalGameID: "b", PlaytimeSeconds: 9000, Archived: true},
+	}
+	snap, err := newSnapshotService(t, games, cat, nil).Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := GenreBreakdown{Genres: []GenreShare{{"RPG", 1}}}
+	if !reflect.DeepEqual(snap.Genres, want) {
+		t.Fatalf("genres = %+v, want %+v (the removed game must not count)", snap.Genres, want)
+	}
+}
+
+func TestPlayedGenresBatchesCatalogLookups(t *testing.T) {
+	var calls [][]string
+	cat := stubCatalog{
+		calls: &calls,
+		games: map[string]catalog.Game{
+			"a": catalogGame("a", "1", "A", "RPG"),
+			"b": catalogGame("b", "2", "B", "Shooter"),
+			"c": catalogGame("c", "3", "C", "Puzzle"),
+		},
+		aliases: map[string]string{"c-alias": "c"},
+	}
+	games := []library.Game{
+		{ID: "1", CanonicalGameID: "a", PlaytimeSeconds: 100},
+		{ID: "2", CanonicalGameID: "a", PlaytimeSeconds: 100},
+		{ID: "3", CanonicalGameID: "b", PlaytimeSeconds: 100},
+		{ID: "4", CanonicalGameID: "c", PlaytimeSeconds: 100},
+		{ID: "5", CanonicalGameID: "c-alias", PlaytimeSeconds: 100},
+		{ID: "6", CanonicalGameID: "missing", PlaytimeSeconds: 100},
+	}
+	s := newSnapshotService(t, games, cat, nil)
+
+	got := s.playedGenres(games)
+	wantGenres := [][]string{{"RPG"}, {"RPG"}, {"Shooter"}, {"Puzzle"}, {"Puzzle"}, nil}
+	for i, entry := range got {
+		if !reflect.DeepEqual(entry.Genres, wantGenres[i]) {
+			t.Errorf("game %d genres = %v, want %v", i+1, entry.Genres, wantGenres[i])
+		}
+	}
+	if len(calls) != 3 || len(calls[0]) != 5 {
+		t.Fatalf("catalog calls = %v, want one batch of 5 distinct ids, then one lookup each for the alias and the missing id", calls)
+	}
+
+	calls = nil
+	clean := []library.Game{{ID: "1", CanonicalGameID: "a", PlaytimeSeconds: 1}, {ID: "2", CanonicalGameID: "b", PlaytimeSeconds: 1}}
+	s.playedGenres(clean)
+	if len(calls) != 1 {
+		t.Fatalf("catalog calls = %v, want a single batch when every id resolves", calls)
+	}
+}

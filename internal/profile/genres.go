@@ -3,13 +3,10 @@ package profile
 import (
 	"math"
 	"sort"
+	"strings"
 )
 
-const (
-	maxGenres = 5
-	// Splitting playtime across genres accumulates float error far below one rounding step; ties must survive it.
-	shareEpsilon = 1e-9
-)
+const maxGenres = 5
 
 type GenreShare struct {
 	Name  string  `json:"name"`
@@ -27,70 +24,71 @@ type PlayedGenres struct {
 	Genres  []string
 }
 
-// ComputeGenres is mirrored by the backend and both are tested on the same fixture, so the algorithm must not drift.
+// shareKey makes shares that differ only by float error compare equal, so ties fall back to the name
+// with a transitive ordering.
+func shareKey(v float64) int64 { return int64(math.Round(v * 1e9)) }
+
+func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
+
+// ComputeGenres mirrors the backend's BreakdownGenres; both run the same table test, so the algorithm must not drift.
 func ComputeGenres(played []PlayedGenres) GenreBreakdown {
-	bySeconds := map[string]float64{}
+	out := GenreBreakdown{Genres: []GenreShare{}}
 	var total, unknown float64
+	seconds := map[string]float64{}
 	for _, p := range played {
 		if p.Seconds <= 0 {
 			continue
 		}
-		seconds := float64(p.Seconds)
-		total += seconds
-		names := uniqueNames(p.Genres)
+		total += float64(p.Seconds)
+		names := distinctGenres(p.Genres)
 		if len(names) == 0 {
-			unknown += seconds
+			unknown += float64(p.Seconds)
 			continue
 		}
-		part := seconds / float64(len(names))
+		part := float64(p.Seconds) / float64(len(names))
 		for _, name := range names {
-			bySeconds[name] += part
+			seconds[name] += part
 		}
 	}
 	if total == 0 {
-		return GenreBreakdown{Genres: []GenreShare{}}
+		return out
 	}
 
-	shares := make([]GenreShare, 0, len(bySeconds))
-	for name, seconds := range bySeconds {
-		shares = append(shares, GenreShare{Name: name, Share: seconds / total})
+	ranked := make([]GenreShare, 0, len(seconds))
+	for name, sec := range seconds {
+		ranked = append(ranked, GenreShare{Name: name, Share: sec / total})
 	}
-	sort.Slice(shares, func(i, j int) bool {
-		if math.Abs(shares[i].Share-shares[j].Share) > shareEpsilon {
-			return shares[i].Share > shares[j].Share
+	sort.Slice(ranked, func(i, j int) bool {
+		a, b := shareKey(ranked[i].Share), shareKey(ranked[j].Share)
+		if a != b {
+			return a > b
 		}
-		return shares[i].Name < shares[j].Name
+		return ranked[i].Name < ranked[j].Name
 	})
 
 	var other float64
-	if len(shares) > maxGenres {
-		for _, rest := range shares[maxGenres:] {
-			other += rest.Share
-		}
-		shares = shares[:maxGenres]
-	}
-	for i := range shares {
-		shares[i].Share = round3(shares[i].Share)
-	}
-	return GenreBreakdown{Genres: shares, Other: round3(other), Unknown: round3(unknown / total)}
-}
-
-func uniqueNames(names []string) []string {
-	seen := make(map[string]struct{}, len(names))
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		if name == "" {
+	for i, g := range ranked {
+		if i < maxGenres {
+			out.Genres = append(out.Genres, GenreShare{Name: g.Name, Share: round3(g.Share)})
 			continue
 		}
-		if _, dup := seen[name]; dup {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
+		other += g.Share
 	}
+	out.Other = round3(other)
+	out.Unknown = round3(unknown / total)
 	return out
 }
 
-func round3(v float64) float64 {
-	return math.Round(v*1000) / 1000
+func distinctGenres(names []string) []string {
+	seen := make(map[string]bool, len(names))
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
 }

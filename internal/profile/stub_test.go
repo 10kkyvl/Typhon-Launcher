@@ -6,13 +6,23 @@ import (
 )
 
 type stubCatalog struct {
-	games map[string]catalog.Game
+	games   map[string]catalog.Game
+	aliases map[string]string
+	calls   *[][]string
 }
 
 func (c stubCatalog) GetGames(ids []string) []catalog.Game {
+	if c.calls != nil {
+		*c.calls = append(*c.calls, ids)
+	}
 	var out []catalog.Game
+	seen := map[string]bool{}
 	for _, id := range ids {
-		if g, ok := c.games[id]; ok {
+		if canonical, ok := c.aliases[id]; ok {
+			id = canonical
+		}
+		if g, ok := c.games[id]; ok && !seen[id] {
+			seen[id] = true
 			out = append(out, g)
 		}
 	}
