@@ -67,7 +67,7 @@
   --control-md: 3.8rem;
   --control-lg: 4.4rem;
 
-  --font-sans: "Inter Tight Variable", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-sans: Inter Tight Variable, Inter, Segoe UI, system-ui, sans-serif;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 160ms;

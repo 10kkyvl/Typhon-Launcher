@@ -202,7 +202,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.appearanceSavedToast': 'Theme “{name}” saved',
   'settings.appearanceDeleteConfirm': 'Delete theme “{name}”?',
   'settings.appearanceDeleteTitle': 'Delete theme',
-  'settings.appearanceResetConfirm': 'Restore the built-in dark theme and reset your personal accent and icon tint?',
+  'settings.appearanceResetConfirm': 'Restore the built-in dark theme, reset your personal accent and icon tint, and delete all your themes, including imported ones? This cannot be undone.',
   'settings.appearanceDeletedToast': 'Theme “{name}” deleted',
   'settings.appearanceImportedToast': 'Theme “{name}” imported',
   'settings.appearanceExportedToast': 'Theme “{name}” exported',

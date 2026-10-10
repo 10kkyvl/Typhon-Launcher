@@ -98,3 +98,12 @@ var allowedTokenSet = func() map[string]Kind {
 	}
 	return m
 }()
+
+func isSettingsOwned(name string) bool {
+	for _, owned := range settingsOwnedTokens {
+		if name == owned {
+			return true
+		}
+	}
+	return false
+}
