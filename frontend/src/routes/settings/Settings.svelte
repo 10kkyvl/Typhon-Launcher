@@ -1073,7 +1073,7 @@
                 {:else if logsSendFailure}
                   {logsSendFailure}
                 {:else if logsSendResult}
-                  {msg('settings.aboutLogsSendResultLabel')}
+                  {msg('settings.aboutLogsSentStatus')}
                 {:else}
                   {msg('settings.aboutLogsSendConfirmNote')}
                 {/if}
