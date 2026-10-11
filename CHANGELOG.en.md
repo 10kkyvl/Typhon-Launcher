@@ -6,6 +6,40 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.0.0 — 2026-10-11
+A new interface, a profile you build yourself and support right inside the launcher. The launcher's online status can now be turned off, and without consent to usage statistics it no longer tells the server which computer it is or what you are playing.
+
+### Added
+- Your profile is built from blocks: a pinned game, a hand-picked or automatic collection, a genre breakdown, a play fingerprint and free text. Blocks are arranged and resized right on the profile page, and one button saves all the edits
+- Profile styling without limits: any accent colour, a custom gradient, a theme taken from the art of the game you are playing, avatar frames, name styles and a status with an emoji
+- Hovering a friend in the friends list opens their player card in the style they picked
+- A Support section: open a ticket, keep the conversation going and close it without leaving the launcher. A badge and a notification tell you about a new reply. You can attach your logs to a ticket, and the launcher says how long the server keeps them before you do
+- The sign-in screen has a "Forgot your password?" link and a way to the support page on the website for anyone who cannot sign in
+- You can delete your account in the profile settings, under "Danger zone", after entering your password. Games and files on your computer stay where they are
+- A game's page has a "Where to buy" block with links to the official Steam, GOG and Epic stores, which open in your browser
+- On first launch and whenever the terms of use change, the launcher shows a short summary with an "I Agree" button; the installer shows the same during installation
+- If a page has unsaved edits, for example in the profile editor, the launcher asks before you leave it
+
+### Changed
+- The whole interface is refreshed: "Continue playing" in the library is a large banner over the game's art, "Play" is the main button on a game's page with the update next to it, the catalog's filter bar sticks to the top, and buttons on covers appear on hover
+- The dark theme is now blue, with a brighter accent that is easier to read. Pages animate smoothly, and when the system asks for reduced motion, animations no longer delay elements from appearing
+- Downloads line up in even columns and stay still while speeds change; failed downloads get their own section instead of vanishing from the screen. History is grouped by day, and the disk bar under "Installed" matches its labels even when some game sizes are unknown
+- The launcher's online status can be turned off in "Settings → General → Privacy". Without consent to usage statistics, the signal carries only a random session number, the launcher version and the system: the installation number and the game you are playing are no longer sent
+- Because of this the launcher asks about sending data once more, with your previous answers already selected. In the consent window all switches start off, and diagnostics has its own switch, separate from statistics
+- The launcher's source code is open under the GPL-3.0 licence
+
+### Fixed
+- Downloads and game sharing over the local network did not start when the usual port was taken on a computer with Hyper-V or Docker: the launcher kept trying ports from one range the system had reserved
+- An install waiting for an exe to be picked after its download was removed stayed in the dock as "Action required" forever and could not be cleared. Such an install can be cancelled, and the launcher clears old ones by itself
+- A game could not be removed while its install was waiting for an exe to be picked
+- When two parts of the launcher saved settings at almost the same moment, one of the settings went back to its old value
+- A server failure looked like an empty screen: a game "was missing" from the catalog, a source "had" no releases, a profile stayed blank. The launcher shows the error and a "Retry" button instead
+- The log archive for support kept parts of game folder paths and the account's email address
+- A built-in theme could not be saved as your own, and an exported theme could not be imported back
+- Steam categories such as "Utilities" or "Movie" showed up untranslated in the catalog's genre filter
+- A cover art error was repeated as a notification on every progress update of the downloads page
+- Double-clicking cancel on an install in the dock showed an error even though the install was cancelled
+
 ## 0.9.0 — 2026-10-08
 Chat, friends and music right over your game, save backups, and torrents through a VPN or a proxy. Installs and downloads no longer get stuck or lose data.
 
