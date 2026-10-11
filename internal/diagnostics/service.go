@@ -419,13 +419,13 @@ func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint6
 			}
 			continue
 		}
-		batch, dropped := withinServerWindow(batch, s.clock())
+		batch, dropped := sendablePending(batch, s.clock())
 		if dropped > 0 {
-			slog.Warn("diagnostics: drop pending reports outside the server time window", "path", name, "count", dropped)
-			if len(batch) == 0 {
-				s.discardPending(path, name)
-				continue
-			}
+			slog.Warn("diagnostics: drop pending reports the server would refuse", "path", name, "count", dropped)
+		}
+		if len(batch) == 0 {
+			s.discardPending(path, name)
+			continue
 		}
 		if err := s.client.send(ctx, s.identity, batch); err != nil {
 			s.logDeliveryFailure(err, len(batch))

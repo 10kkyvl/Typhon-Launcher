@@ -114,7 +114,7 @@ func cleanContext(fields map[string]string) map[string]string {
 		if !contextKeyAllowed(key) || len(out) >= MaxContextFields {
 			continue
 		}
-		value, err := sanitizeText(strings.ToValidUTF8(fields[key], ""))
+		value, err := sanitizeText(stripControl(strings.ToValidUTF8(fields[key], "")))
 		if err != nil {
 			continue
 		}
@@ -129,11 +129,11 @@ func sanitizeDetails(d *Details, at time.Time) *Details {
 	}
 	out := &Details{Context: cleanContext(d.Context)}
 	for _, b := range d.Breadcrumbs {
-		component, err := sanitizeText(strings.ToValidUTF8(b.Component, ""))
+		component, err := sanitizeText(dropControl(strings.ToValidUTF8(b.Component, "")))
 		if err != nil {
 			continue
 		}
-		message, err := sanitizeText(strings.ToValidUTF8(b.Message, ""))
+		message, err := sanitizeText(stripControl(strings.ToValidUTF8(b.Message, "")))
 		if err != nil {
 			continue
 		}

@@ -417,3 +417,96 @@ func TestPendingReportsOutsideServerWindowAreDroppedNotSent(t *testing.T) {
 		})
 	}
 }
+
+func TestPendingReportsFromOlderLaunchersAreCleanedBeforeSending(t *testing.T) {
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name   string
+		mutate func(*reportPayload)
+	}{
+		{"newline in operation", func(r *reportPayload) { r.Operation = "peer closed\r\n\tconnection reset" }},
+		{"empty component", func(r *reportPayload) { r.Component = "" }},
+		{"breadcrumb after the report", func(r *reportPayload) {
+			r.Details = &Details{Breadcrumbs: []Breadcrumb{{Timestamp: now.Add(-time.Hour + time.Second), Level: "INFO", Component: "download", Message: "late"}}}
+		}},
+		{"breadcrumbs out of order", func(r *reportPayload) {
+			r.Details = &Details{Breadcrumbs: []Breadcrumb{
+				{Timestamp: now.Add(-time.Hour - time.Second), Level: "INFO", Component: "download", Message: "b"},
+				{Timestamp: now.Add(-time.Hour - 2*time.Second), Level: "INFO", Component: "download", Message: "a"},
+			}}
+		}},
+		{"invalid utf-8 message", func(r *reportPayload) { r.Message = strings.Repeat("\xc0", 3000) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, reqs := newCapturingServer(t, http.StatusNoContent)
+			svc := newTestService(t, srv, nil)
+			svc.clock = func() time.Time { return now }
+			r := pendingReport("legacy", now.Add(-time.Hour))
+			tc.mutate(&r)
+			if err := savePending(svc.pendingDir, now, []reportPayload{r}); err != nil {
+				t.Fatal(err)
+			}
+
+			svc.flush(context.Background())
+
+			if len(reqs) != 1 {
+				t.Fatalf("requests = %d, want 1", len(reqs))
+			}
+			var decoded batchPayload
+			if err := json.Unmarshal((<-reqs).body, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			for _, sent := range decoded.Reports {
+				if err := serverValidate(sent, now); err != nil {
+					t.Fatalf("sent a pending report the server rejects: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestEmptyPendingFileIsDiscardedNotSent(t *testing.T) {
+	srv, reqs := newCapturingServer(t, http.StatusNoContent)
+	svc := newTestService(t, srv, nil)
+	if err := savePending(svc.pendingDir, time.Now(), []reportPayload{}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.flush(context.Background())
+
+	if len(reqs) != 0 {
+		t.Fatalf("an empty pending file was sent: %d requests", len(reqs))
+	}
+	left, err := filepath.Glob(filepath.Join(svc.pendingDir, "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Fatalf("empty pending file left on disk: %v", left)
+	}
+}
+
+func TestControlCharacterCannotHideAPathFromRedaction(t *testing.T) {
+	sep := string(rune(92))
+	esc := string(rune(0x1b))
+	path := "C:" + esc + sep + "Users" + sep + "someone" + sep + "AppData"
+	cases := []struct {
+		name string
+		in   Report
+		get  func(reportPayload) string
+	}{
+		{"operation", Report{Component: "download", Operation: path}, func(r reportPayload) string { return r.Operation }},
+		{"component", Report{Component: path, Operation: "x"}, func(r reportPayload) string { return r.Component }},
+		{"context value", Report{Component: "download", Operation: "x", Details: &Details{Context: map[string]string{"stage": path}}}, func(r reportPayload) string { return r.Details.Context["stage"] }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.in.Timestamp = time.Now().Round(0)
+			got := tc.get(sanitizedPayload(t, tc.in))
+			if strings.Contains(got, "someone") {
+				t.Fatalf("%s = %q still carries the user's path", tc.name, got)
+			}
+		})
+	}
+}

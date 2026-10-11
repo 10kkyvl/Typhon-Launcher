@@ -38,19 +38,19 @@ func sanitizeReport(r Report) (out Report, err error) {
 		}
 	}()
 
-	component, err := sanitizeText(strings.ToValidUTF8(r.Component, ""))
+	component, err := sanitizeText(dropControl(strings.ToValidUTF8(r.Component, "")))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize component: %w", err)
 	}
-	operation, err := sanitizeText(strings.ToValidUTF8(r.Operation, ""))
+	operation, err := sanitizeText(dropControl(strings.ToValidUTF8(r.Operation, "")))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize operation: %w", err)
 	}
-	message, err := sanitizeText(strings.ToValidUTF8(r.Message, "�"))
+	message, err := sanitizeText(strings.ToValidUTF8(r.Message, "\uFFFD"))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize message: %w", err)
 	}
-	stack, err := sanitizeText(strings.ToValidUTF8(r.Stack, "�"))
+	stack, err := sanitizeText(strings.ToValidUTF8(r.Stack, "\uFFFD"))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize stack: %w", err)
 	}
@@ -67,16 +67,23 @@ func sanitizeReport(r Report) (out Report, err error) {
 // character and DEL is refused there, newline and tab included, and an empty
 // value is refused too.
 func singleLine(s string, max int, fallback string) string {
-	s = capText(strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
-			return -1
-		}
-		return r
-	}, s), max)
+	s = capText(dropControl(s), max)
 	if s == "" {
 		return fallback
 	}
 	return s
+}
+
+// dropControl runs before redaction as well as after it: a path split by a
+// control character slips past the redactor and joins up again once the
+// character is dropped.
+func dropControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // stripControl drops C0 control characters and DEL, keeping the three that

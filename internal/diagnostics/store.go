@@ -41,6 +41,23 @@ func withinServerWindow(batch []reportPayload, now time.Time) (kept []reportPayl
 	return kept, dropped
 }
 
+// sendablePending applies the rules of a fresh capture to reports read back
+// from disk: files written by an older launcher, or before an update to these
+// rules, would otherwise reach the server unchecked and be refused as a whole.
+func sendablePending(batch []reportPayload, now time.Time) (kept []reportPayload, dropped int) {
+	batch, dropped = withinServerWindow(batch, now)
+	kept = make([]reportPayload, 0, len(batch))
+	for _, r := range batch {
+		clean, err := sanitizeReport(Report(r))
+		if err != nil {
+			dropped++
+			continue
+		}
+		kept = append(kept, toPayload(clean))
+	}
+	return kept, dropped
+}
+
 func pendingDirFrom(configDir string) string {
 	if configDir == "" {
 		return ""
