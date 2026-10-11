@@ -62,7 +62,10 @@ func TestConcurrentRetriesAdmitExactlyOne(t *testing.T) {
 			run := newRgRunner(t, rgStep{wait: true})
 			r.setRunner(run)
 			const callers = 8
-			r.s.downloads = &barrierDownloads{downloadSource: r.downloads, want: callers, open: make(chan struct{})}
+			// Источник подменяется перезапуском, а не записью в поле живого
+			// сервиса: его читает фоновая проверка ServiceStartup.
+			r.source = &barrierDownloads{downloadSource: r.downloads, want: callers, open: make(chan struct{})}
+			r.restart()
 
 			errs := callTogether(callers, func(int) error { return tc.retry(r.s, item.ID) })
 
