@@ -34,7 +34,7 @@ CJEU C-527/15 Filmspeler (предустановленные ссылки = на
 | L7 | Раздача и отдача во время загрузки выключены по умолчанию | `internal/settings` `Defaults()` |
 | L8 | Любая новая передача данных на сервер, любой новый тип пользовательского контента и любой новый срок хранения описаны в PRIVACY.md и PRIVACY.en.md до мержа | разделы 2.x и 4 |
 | L9 | Любой новый пользовательский контент (текст, файл) имеет действие удаления в админке бэкенда с записью в `admin_actions` и входит в список takedown | бэкенд `internal/moderation`, `adminpage.moderation.js`, COPYRIGHT.md раздел 2.1 |
-| L10 | Редакция документов меняется вместе с `legal.Version`; сайт синхронизирован (`npm run sync:legal` в typhon-site) | `internal/legal/legal.go`, `typhon-site/src/legal/*`, `tests/legal.test.ts` |
+| L10 | Редакция документов меняется вместе с `legal.Version`; сайт синхронизирован (`npm run sync:legal` в typhon-site, он же пишет `src/legal/version.ts`); новая редакция добавлена в список опубликованных в бэкенде, иначе регистрация с ней получит 400 `terms_required` | `internal/legal/legal.go`, `typhon-site/src/legal/*`, `tests/legal.test.ts`, typhon-backend `internal/legal/terms.go` |
 | L11 | Сайт и README не утверждают ничего, чего код не делает («телеметрии нет», «данные не покидают устройство») | `typhon-site/src/lib/i18n/catalog/*.ts`, README.md, README.ru.md |
 | L12 | Ошибка сохранения согласия или принятия условий не превращается в «принято» | `internal/settings` `SaveConsent`, `SaveLegalAcceptance` и их фронтовые сторы |
 
@@ -92,7 +92,7 @@ L8: ок — PRIVACY.md 8.2 дополнен, PRIVACY.en.md 8.2 дополнен
 | --- | --- |
 | Документы ru/en, встраиваются в exe | `TERMS*.md`, `PRIVACY*.md`, `COPYRIGHT*.md`, `THIRD_PARTY_NOTICES*.md`, `legal.go` (`go:embed`) |
 | Версия редакции и сервис документов | `internal/legal/legal.go` (`Version`, `Service.Version()`) |
-| Принятие условий, согласие на статистику | `internal/settings/settings.go` (`SaveLegalAcceptance`, `SaveConsent`), `frontend/src/lib/stores/legalAcceptance.ts`, `telemetryConsent.ts`, экраны в `frontend/src/lib/components/*Screen.svelte` |
+| Принятие условий, согласие на статистику | `internal/account/terms.go` (отправка принятия на сервер), `internal/settings/settings.go` (`SaveLegalAcceptance`, `SaveConsent`), `frontend/src/lib/stores/legalAcceptance.ts`, `telemetryConsent.ts`, экраны в `frontend/src/lib/components/*Screen.svelte` |
 | EULA инсталлятора | `build/windows/nsis/project.nsi`, `build/windows/nsis/resources/eula.*.txt` |
 | Уведомление об источниках | `frontend/src/lib/i18n/catalog/*/modals.ts` (`modals.sourcesNotice*`), `stores/sourcesNotice.ts` |
 | Что уходит на сервер | `internal/heartbeat`, `usagestats`, `diagnostics`, `compat`, `accountsync`, `online`, `metadata/typhonapi` |

@@ -14,7 +14,7 @@ The **user** is the person who downloads, installs or uses the app, or who acces
 
 The **Typhon project operator** is the independent developer who builds and maintains the app, the `typhon-launcher.com` website and the Typhon services. The project has no separate legal entity.
 
-The terms are accepted explicitly: during installation and on first launch the app shows a summary of them and an "I Agree" button, and does not run until it is pressed. If the revision changes, the app shows them again. When registering on the website, acceptance of the Terms of Use and the Privacy Policy is marked with a checkbox. Using the website and the Typhon services also means accepting these terms. A user who does not agree does not use them.
+The terms are accepted explicitly: during installation and on first launch the app shows a summary of them and an "I Agree" button, and does not run until it is pressed. If the revision changes, the app shows them again. When registering on the website, the Terms of Use are accepted with a checkbox, with which the user also confirms having read the Privacy Policy. The accepted revision and the time of acceptance — on the website and, for a signed-in user, in the app — are stored in the account on the server. Using the website and the Typhon services also means accepting these terms. A user who does not agree does not use them.
 
 ## 2. What Typhon is
 
