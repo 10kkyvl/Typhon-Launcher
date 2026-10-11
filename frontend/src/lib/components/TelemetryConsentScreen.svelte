@@ -57,7 +57,7 @@
   "app_version": "0.4.1",
   "env": { "os_version": "15.6", "crossover": "26.3", "chip": "apple_m4" },
   "games": [
-    { "game_id": "232567", "repacker": "fitgirl", "version": "1.0.28518",
+    { "game_id": "232567", "repacker": "unknown", "version": "1.0.28518",
       "state": "works" }
   ]
 }`;
