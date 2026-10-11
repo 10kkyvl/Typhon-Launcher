@@ -52,6 +52,11 @@ type Service struct {
 
 	profileMu sync.Mutex
 
+	wg               sync.WaitGroup
+	accepted         func() string
+	termsConfirmedID string
+	termsTriedID     string
+
 	language func() string
 	openURL  func(string) error
 }
@@ -126,10 +131,13 @@ func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil
-	s.mu.Unlock()
 	if cancel != nil {
+		// Under the lock so that startTermsSync, which registers in wg under the same
+		// lock after checking ctx, cannot Add concurrently with the Wait below.
 		cancel()
 	}
+	s.mu.Unlock()
+	s.wg.Wait()
 	return nil
 }
 
@@ -170,6 +178,7 @@ func (s *Service) Bootstrap() (State, error) {
 		if rememberErr := s.rememberProfile(ctx, user); rememberErr != nil {
 			return State{}, rememberErr
 		}
+		s.syncTermsOf(cred.Token, user)
 		return State{Status: StatusAuthenticated, User: user}, nil
 	}
 
@@ -272,6 +281,7 @@ func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	defer cancel()
 
 	input.Lang = s.uiLanguage()
+	input.TermsVersion = s.registerTermsVersion()
 
 	session, err := s.client.Register(ctx, input)
 	if err != nil {
@@ -309,6 +319,8 @@ func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, erro
 			// costs offline mode on the next launch and must not read as a failed sign-in.
 			slog.Warn("cache profile after sign-in", "error", err)
 		}
+		//nolint:contextcheck // инвариант 19: синхронизация живёт дольше запроса входа, поэтому привязана к ctx сервиса и учтена в wg, а не к ctx вызова
+		s.syncTermsOf(session.Token, session.User)
 		return session.User, nil
 	}
 

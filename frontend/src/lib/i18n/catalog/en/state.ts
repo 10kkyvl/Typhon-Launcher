@@ -114,6 +114,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorInvalidPassword': '8 to 128 characters',
   'state.accountErrorEmailImmutable': 'Email can’t be changed yet',
   'state.accountErrorLauncherOutdated': 'Launcher version is outdated — update Typhon to use your account',
+  'state.accountErrorTermsRequired': 'The server does not recognise this revision of the Terms. Update Typhon and accept the Terms again',
   'state.accountErrorNoChanges': 'Nothing to save',
   'state.accountErrorAvatarTooLarge': 'File is larger than 10 MB',
   'state.accountErrorUnsupportedAvatar': 'PNG, JPEG, and WebP are supported',

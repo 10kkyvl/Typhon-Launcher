@@ -24,6 +24,7 @@ const (
 	CodeNetwork           = "network_error"
 	CodeServer            = "server_error"
 	CodeOutdated          = "launcher_outdated"
+	CodeTermsRequired     = "terms_required"
 )
 
 type Error struct {

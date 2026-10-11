@@ -34,6 +34,13 @@ type CurrentUser struct {
 	Bio         string          `json:"bio"`
 	Profile     ProfileSettings `json:"profile"`
 	CreatedAt   time.Time       `json:"createdAt"`
+
+	TermsAccepted *TermsAcceptance `json:"termsAccepted"`
+}
+
+type TermsAcceptance struct {
+	Version    string    `json:"version"`
+	AcceptedAt time.Time `json:"acceptedAt"`
 }
 
 type CoverUpload struct {
@@ -110,6 +117,14 @@ func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
 
 func (c *Client) Me(ctx context.Context) (CurrentUser, error) {
 	return c.doUser(ctx, http.MethodGet, APIPrefix+"/me", nil, "", c.httpClient)
+}
+
+func (c *Client) AcceptTerms(ctx context.Context, version string) (CurrentUser, error) {
+	body, err := json.Marshal(map[string]string{"termsVersion": version})
+	if err != nil {
+		return CurrentUser{}, fmt.Errorf("encode terms acceptance: %w", err)
+	}
+	return c.doUser(ctx, http.MethodPost, APIPrefix+"/me/terms", bytes.NewReader(body), "application/json", c.httpClient)
 }
 
 func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, error) {

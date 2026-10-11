@@ -17,6 +17,8 @@ type RegisterInput struct {
 	DisplayName string `json:"displayName"`
 	Password    string `json:"password"`
 	Lang        string `json:"lang,omitempty"`
+
+	TermsVersion string `json:"termsVersion,omitempty"`
 }
 
 type LoginInput struct {
