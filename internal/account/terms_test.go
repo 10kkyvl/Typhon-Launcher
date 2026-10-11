@@ -27,7 +27,67 @@ type termsBackend struct {
 	postAuth   []string
 	posted     chan struct{}
 	holdPost   chan struct{}
+	ignorePost bool
 	server     *httptest.Server
+}
+
+func (b *termsBackend) setPost(status int, ignore bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.postStatus = status
+	b.ignorePost = ignore
+}
+
+func (b *termsBackend) serverTerms() *TermsAcceptance {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.meTerms
+}
+
+type termsClock struct {
+	mu     sync.Mutex
+	delays []time.Duration
+	chans  []chan time.Time
+	parked chan struct{}
+}
+
+func newTermsClock() *termsClock {
+	return &termsClock{parked: make(chan struct{}, 32)}
+}
+
+func (c *termsClock) timer(d time.Duration) (<-chan time.Time, func()) {
+	ch := make(chan time.Time, 1)
+	c.mu.Lock()
+	c.delays = append(c.delays, d)
+	c.chans = append(c.chans, ch)
+	c.mu.Unlock()
+	c.parked <- struct{}{}
+	return ch, func() {}
+}
+
+func (c *termsClock) awaitWait(t *testing.T) {
+	t.Helper()
+	select {
+	case <-c.parked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("terms sync did not schedule a retry")
+	}
+}
+
+func (c *termsClock) fire(t *testing.T) {
+	t.Helper()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.chans) == 0 {
+		t.Fatal("no retry timer to fire")
+	}
+	c.chans[len(c.chans)-1] <- time.Now()
+}
+
+func (c *termsClock) waits() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Duration(nil), c.delays...)
 }
 
 func newTermsBackend(t *testing.T, meTerms *TermsAcceptance) *termsBackend {
@@ -78,6 +138,7 @@ func (b *termsBackend) acceptTerms(w http.ResponseWriter, r *http.Request) {
 	b.posts = append(b.posts, body)
 	b.postAuth = append(b.postAuth, r.Header.Get("Authorization"))
 	status := b.postStatus
+	ignore := b.ignorePost
 	hold := b.holdPost
 	b.mu.Unlock()
 	b.posted <- struct{}{}
@@ -92,9 +153,11 @@ func (b *termsBackend) acceptTerms(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
 		return
 	}
-	b.mu.Lock()
-	b.meTerms = &TermsAcceptance{Version: body["termsVersion"], AcceptedAt: time.Now().UTC()}
-	b.mu.Unlock()
+	if !ignore {
+		b.mu.Lock()
+		b.meTerms = &TermsAcceptance{Version: body["termsVersion"], AcceptedAt: time.Now().UTC()}
+		b.mu.Unlock()
+	}
 	writeJSON(b.t, w, http.StatusOK, b.user())
 }
 
@@ -123,9 +186,17 @@ func (a *acceptedTerms) set(version string) {
 
 func termsService(t *testing.T, b *termsBackend, store *fakeStore, accepted *acceptedTerms) *Service {
 	t.Helper()
+	s, _ := termsServiceClock(t, b, store, accepted)
+	return s
+}
+
+func termsServiceClock(t *testing.T, b *termsBackend, store *fakeStore, accepted *acceptedTerms) (*Service, *termsClock) {
+	t.Helper()
 	s := startedService(t, store, b.server.URL)
 	s.SetAcceptedTerms(accepted.get)
-	return s
+	clock := newTermsClock()
+	s.termsTimer = clock.timer
+	return s, clock
 }
 
 func settled(s *Service) {
@@ -352,7 +423,7 @@ func TestTermsSyncFailureNeitherBreaksSignInNorTouchesTheLocalAcceptance(t *test
 			b.postStatus = status
 			accepted := &acceptedTerms{version: legal.Version}
 			store := &fakeStore{present: true, cred: Credential{Token: "stored-token", Username: "playerone"}}
-			s := termsService(t, b, store, accepted)
+			s, clock := termsServiceClock(t, b, store, accepted)
 
 			state, err := s.Bootstrap()
 			if err != nil {
@@ -361,6 +432,7 @@ func TestTermsSyncFailureNeitherBreaksSignInNorTouchesTheLocalAcceptance(t *test
 			if state.Status != StatusAuthenticated {
 				t.Fatalf("status = %q, want %q", state.Status, StatusAuthenticated)
 			}
+			clock.awaitWait(t)
 			user, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"})
 			if err != nil {
 				t.Fatalf("Login() error = %v", err)
@@ -368,10 +440,10 @@ func TestTermsSyncFailureNeitherBreaksSignInNorTouchesTheLocalAcceptance(t *test
 			if user.Username != "playerone" {
 				t.Errorf("user = %+v", user)
 			}
-			settled(s)
+			clock.awaitWait(t)
 
 			if n := b.postCount(); n != 2 {
-				t.Errorf("POST /me/terms calls = %d, want 2 (restore and login each try once)", n)
+				t.Errorf("POST /me/terms calls = %d, want 2 (restore and login each try once before waiting)", n)
 			}
 			if got := accepted.get(); got != legal.Version {
 				t.Errorf("local acceptance = %q, want it untouched (%q)", got, legal.Version)
@@ -420,7 +492,7 @@ func TestSyncTermsDoesNotRetryAFailureOnEverySettingsChange(t *testing.T) {
 	b := newTermsBackend(t, nil)
 	b.postStatus = http.StatusInternalServerError
 	accepted := &acceptedTerms{}
-	s := termsService(t, b, &fakeStore{}, accepted)
+	s, clock := termsServiceClock(t, b, &fakeStore{}, accepted)
 	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -428,18 +500,286 @@ func TestSyncTermsDoesNotRetryAFailureOnEverySettingsChange(t *testing.T) {
 
 	for range 3 {
 		s.SyncTerms()
-		settled(s)
 	}
+	clock.awaitWait(t)
 	if n := b.postCount(); n != 1 {
-		t.Fatalf("POST calls = %d, want 1: a failure is retried on the next sign-in or launch", n)
+		t.Fatalf("POST calls = %d, want 1: a settings change must not start another attempt", n)
+	}
+
+	clock.fire(t)
+	clock.awaitWait(t)
+	if n := b.postCount(); n != 2 {
+		t.Fatalf("POST calls after the retry timer = %d, want 2: the retry is driven by the timer", n)
+	}
+	for range 3 {
+		s.SyncTerms()
+	}
+	if n := b.postCount(); n != 2 {
+		t.Fatalf("POST calls after more settings changes = %d, want still 2", n)
 	}
 
 	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
 		t.Fatalf("second Login() error = %v", err)
 	}
+	clock.awaitWait(t)
+	if n := b.postCount(); n != 3 {
+		t.Fatalf("POST calls after the next sign-in = %d, want 3", n)
+	}
+}
+
+func TestTermsSyncRetriesWithoutARestart(t *testing.T) {
+	stale := &TermsAcceptance{Version: "2020-01-01", AcceptedAt: time.Now().UTC()}
+	tests := []struct {
+		name      string
+		status    int
+		ignore    bool
+		serverHas *TermsAcceptance
+	}{
+		{name: "bad gateway", status: http.StatusBadGateway},
+		{name: "service unavailable", status: http.StatusServiceUnavailable},
+		{name: "too many requests", status: http.StatusTooManyRequests},
+		{name: "ok without any recorded acceptance", status: http.StatusOK, ignore: true},
+		{name: "ok with an older recorded revision", status: http.StatusOK, ignore: true, serverHas: stale},
+	}
+	flows := []string{"sign in", "settings change"}
+	for _, flow := range flows {
+		for _, tt := range tests {
+			t.Run(flow+"/"+tt.name, func(t *testing.T) {
+				b := newTermsBackend(t, tt.serverHas)
+				b.setPost(tt.status, tt.ignore)
+				accepted := &acceptedTerms{}
+				if flow == "sign in" {
+					accepted.set(legal.Version)
+				}
+				s, clock := termsServiceClock(t, b, &fakeStore{}, accepted)
+				if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+					t.Fatalf("Login() error = %v", err)
+				}
+				if flow == "settings change" {
+					accepted.set(legal.Version)
+					s.SyncTerms()
+				}
+
+				clock.awaitWait(t)
+				if n := b.postCount(); n != 1 {
+					t.Fatalf("POST calls before the retry = %d, want 1", n)
+				}
+				if got := clock.waits(); len(got) != 1 || got[0] != time.Minute {
+					t.Fatalf("waits = %v, want [1m0s]", got)
+				}
+				if has := b.serverTerms(); has != nil && has.Version == legal.Version {
+					t.Fatalf("server already holds the acceptance: %+v", has)
+				}
+
+				b.setPost(http.StatusOK, false)
+				clock.fire(t)
+				settled(s)
+
+				if n := b.postCount(); n != 2 {
+					t.Fatalf("POST calls after the retry = %d, want 2", n)
+				}
+				if has := b.serverTerms(); has == nil || has.Version != legal.Version {
+					t.Fatalf("server acceptance = %+v, want version %q recorded without a restart", has, legal.Version)
+				}
+				s.SyncTerms()
+				settled(s)
+				if n := b.postCount(); n != 2 {
+					t.Fatalf("POST calls after the server confirmed = %d, want still 2", n)
+				}
+			})
+		}
+	}
+}
+
+func TestTermsSyncRetryPauseGrowsToACeiling(t *testing.T) {
+	b := newTermsBackend(t, nil)
+	b.setPost(http.StatusBadGateway, false)
+	s, clock := termsServiceClock(t, b, &fakeStore{}, &acceptedTerms{version: legal.Version})
+	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	want := []time.Duration{
+		time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute,
+		16 * time.Minute, 30 * time.Minute, 30 * time.Minute, 30 * time.Minute,
+	}
+	for i := range want {
+		clock.awaitWait(t)
+		if i < len(want)-1 {
+			clock.fire(t)
+		}
+	}
+	got := clock.waits()
+	if len(got) != len(want) {
+		t.Fatalf("waits = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("waits = %v, want %v", got, want)
+		}
+	}
+	if n := b.postCount(); n != len(want) {
+		t.Fatalf("POST calls = %d, want %d: one per timer", n, len(want))
+	}
+}
+
+func TestTermsSyncStartsAtTheCeilingWhenTheServerRejectsTheRevision(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   time.Duration
+	}{
+		{name: "terms_required", status: http.StatusBadRequest, want: 30 * time.Minute},
+		{name: "endpoint missing", status: http.StatusNotFound, want: 30 * time.Minute},
+		{name: "server error", status: http.StatusInternalServerError, want: time.Minute},
+		{name: "request timeout", status: http.StatusRequestTimeout, want: time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newTermsBackend(t, nil)
+			b.setPost(tt.status, false)
+			s, clock := termsServiceClock(t, b, &fakeStore{}, &acceptedTerms{version: legal.Version})
+			if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+				t.Fatalf("Login() error = %v", err)
+			}
+			clock.awaitWait(t)
+			if got := clock.waits(); len(got) != 1 || got[0] != tt.want {
+				t.Fatalf("first wait = %v, want [%v]", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTermsSyncRetryStopsWhenItNoLongerApplies(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(t *testing.T, s *Service, store *fakeStore, accepted *acceptedTerms)
+	}{
+		{name: "signed out", change: func(t *testing.T, _ *Service, store *fakeStore, _ *acceptedTerms) {
+			if err := store.Delete(); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "another session replaced the token", change: func(t *testing.T, _ *Service, store *fakeStore, _ *acceptedTerms) {
+			if err := store.Save(Credential{Token: "someone-else", Username: "other"}); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "account identity forgotten", change: func(t *testing.T, s *Service, _ *fakeStore, _ *acceptedTerms) {
+			if err := s.forgetProfile(); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "acceptance withdrawn", change: func(_ *testing.T, _ *Service, _ *fakeStore, accepted *acceptedTerms) {
+			accepted.set("")
+		}},
+		{name: "a newer revision is current", change: func(_ *testing.T, _ *Service, _ *fakeStore, accepted *acceptedTerms) {
+			accepted.set("2999-01-01")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newTermsBackend(t, nil)
+			b.setPost(http.StatusBadGateway, false)
+			accepted := &acceptedTerms{version: legal.Version}
+			store := &fakeStore{}
+			s, clock := termsServiceClock(t, b, store, accepted)
+			if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+				t.Fatalf("Login() error = %v", err)
+			}
+			clock.awaitWait(t)
+
+			tt.change(t, s, store, accepted)
+			b.setPost(http.StatusOK, false)
+			clock.fire(t)
+			settled(s)
+
+			if n := b.postCount(); n != 1 {
+				t.Fatalf("POST calls = %d, want 1: the retry must stop instead of posting", n)
+			}
+			if got := clock.waits(); len(got) != 1 {
+				t.Fatalf("waits = %v, want no further timer", got)
+			}
+			if has := b.serverTerms(); has != nil {
+				t.Fatalf("server acceptance = %+v, want none recorded", has)
+			}
+		})
+	}
+}
+
+func TestTermsSyncRetryEndsWithTheService(t *testing.T) {
+	b := newTermsBackend(t, nil)
+	b.setPost(http.StatusBadGateway, false)
+	s, clock := termsServiceClock(t, b, &fakeStore{}, &acceptedTerms{version: legal.Version})
+	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	clock.awaitWait(t)
+
+	done := make(chan error, 1)
+	go func() { done <- s.ServiceShutdown() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServiceShutdown() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ServiceShutdown() did not return: the retry goroutine ignores ctx while waiting")
+	}
 	settled(s)
+	s.mu.Lock()
+	run := s.termsRun
+	s.mu.Unlock()
+	if run != nil {
+		t.Errorf("termsRun = %+v after shutdown, want it released", run)
+	}
+	if n := b.postCount(); n != 1 {
+		t.Fatalf("POST calls = %d, want 1", n)
+	}
+}
+
+func TestSyncTermsNeverRunsTwoAttemptsForOneUser(t *testing.T) {
+	b := newTermsBackend(t, nil)
+	b.setPost(http.StatusBadGateway, false)
+	b.holdPost = make(chan struct{})
+	accepted := &acceptedTerms{}
+	s, clock := termsServiceClock(t, b, &fakeStore{}, accepted)
+	if _, err := s.Login(LoginInput{Identifier: "playerone", Password: "secret pass"}); err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	accepted.set(legal.Version)
+	s.SyncTerms()
+	select {
+	case <-b.posted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("terms request was not sent")
+	}
+
+	for range 5 {
+		s.SyncTerms()
+	}
+	if n := b.postCount(); n != 1 {
+		t.Fatalf("POST calls while the first attempt is in flight = %d, want 1", n)
+	}
+	close(b.holdPost)
+	clock.awaitWait(t)
+
+	for range 5 {
+		s.SyncTerms()
+	}
+	if n := b.postCount(); n != 1 {
+		t.Fatalf("POST calls while waiting to retry = %d, want 1", n)
+	}
+	if got := clock.waits(); len(got) != 1 {
+		t.Fatalf("waits = %v, want one timer for one user", got)
+	}
+
+	clock.fire(t)
+	clock.awaitWait(t)
 	if n := b.postCount(); n != 2 {
-		t.Fatalf("POST calls after the next sign-in = %d, want 2", n)
+		t.Fatalf("POST calls after the timer = %d, want 2", n)
+	}
+	if got := clock.waits(); len(got) != 2 {
+		t.Fatalf("waits = %v, want 2 timers in sequence", got)
 	}
 }
 
