@@ -17,7 +17,6 @@ import (
 	"typhon/internal/app"
 	"typhon/internal/clientid"
 	"typhon/internal/settings"
-	"typhon/internal/storage"
 	"typhon/internal/usagestats"
 
 	"github.com/google/uuid"
@@ -426,9 +425,6 @@ func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint6
 			if len(batch) == 0 {
 				s.discardPending(path, name)
 				continue
-			}
-			if err := storage.Save(path, pendingVersion, batch); err != nil {
-				slog.Warn("diagnostics: rewrite pending file without stale reports", "path", name, "error", err)
 			}
 		}
 		if err := s.client.send(ctx, s.identity, batch); err != nil {
