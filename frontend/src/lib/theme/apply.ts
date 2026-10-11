@@ -4,7 +4,7 @@ import type { Theme } from '../../../bindings/typhon/internal/theme';
 import { msg, type MessageKey } from '../i18n';
 
 const STYLE_ELEMENT_ID = 'typhon-theme';
-export const displayedAccent = writable('#6673F2');
+export const displayedAccent = writable('#4F6BFF');
 
 interface NamedTheme {
   id: string;
@@ -49,12 +49,12 @@ export function applyPersonalAccent(color: string): void {
   appliedTokenNames = [];
   const computed = typeof getComputedStyle === 'function' ? getComputedStyle(root) : null;
   const tokens = Object.fromEntries(['--bg', '--surface', '--surface-2', '--surface-3', '--surface-4', '--bg-sidebar'].map(name => [name, computed?.getPropertyValue(name).trim()]));
-  const background = tokens['--bg'] || '#0a0f15';
+  const background = tokens['--bg'] || '#090d17';
   const base = contrast(background, '#000000') > contrast(background, '#ffffff') ? 'light' : 'dark';
   const vars = accentPalette(personalColor, base, tokens);
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value, 'important');
   appliedTokenNames = Object.keys(vars);
-  displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || '#6673F2');
+  displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || '#4F6BFF');
 }
 
 export function personalThemeVars(theme: Theme): Record<string, string> {
@@ -97,7 +97,7 @@ export function applyTheme(theme: Theme): void {
   const themeAccent = typeof getComputedStyle === 'function'
     ? getComputedStyle(root).getPropertyValue('--accent').trim()
     : vars['--accent'];
-  displayedAccent.set(personalColor || themeAccent || '#6673F2');
+  displayedAccent.set(personalColor || themeAccent || '#4F6BFF');
 }
 
 export function clearTheme(): void {

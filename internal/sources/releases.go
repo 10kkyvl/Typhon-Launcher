@@ -271,10 +271,13 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 		return err
 	}
 	learnPattern := !cat.HasRemoteCatalog()
+	var undo catalog.MatchUndo
 	if learnPattern {
-		if err := cat.LearnMatch(normalized, gameID); err != nil {
+		learned, err := cat.LearnMatch(normalized, gameID)
+		if err != nil {
 			return err
 		}
+		undo = learned
 	}
 
 	s.mu.Lock()
@@ -300,10 +303,20 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 			touched[sourceID] = true
 		}
 	}
-	if err := s.persistTouchedLocked(touched, before); err != nil {
+	saved, err := s.persistTouchedCountLocked(touched, before)
+	if err != nil {
 		s.markDegradedLocked(err)
 		s.mu.Unlock()
-		return fmt.Errorf("save matched releases: %w", err)
+		err = fmt.Errorf("save matched releases: %w", err)
+		if saved > 0 {
+			return err
+		}
+		// A rule with no saved release behind it would match the next
+		// refresh on its own, which is a decision the user was told failed.
+		if undoErr := cat.UndoMatch(undo); undoErr != nil {
+			return errors.Join(err, fmt.Errorf("take back the learned rule: %w", undoErr))
+		}
+		return err
 	}
 	s.clearDegradedLocked()
 	if err := s.recountLocked(touched); err != nil {
@@ -491,14 +504,25 @@ func (s *Service) restoreReleasesLocked(sourceID string, before []Release) {
 // file on disk (invariant I.4), while sources that saved successfully keep
 // their change. All failures are combined with errors.Join for the caller.
 func (s *Service) persistTouchedLocked(touched map[string]bool, before map[string][]Release) error {
+	_, err := s.persistTouchedCountLocked(touched, before)
+	return err
+}
+
+// persistTouchedCountLocked also reports how many sources were saved, for a
+// caller that has to undo something outside the release files and must know
+// whether any of them still carries the change.
+func (s *Service) persistTouchedCountLocked(touched map[string]bool, before map[string][]Release) (int, error) {
 	var errs []error
+	saved := 0
 	for sourceID := range touched {
 		if err := s.store.saveReleases(sourceID, s.releases[sourceID]); err != nil {
 			s.restoreReleasesLocked(sourceID, before[sourceID])
 			errs = append(errs, fmt.Errorf("save releases for source %s: %w", sourceID, err))
+			continue
 		}
+		saved++
 	}
-	return errors.Join(errs...)
+	return saved, errors.Join(errs...)
 }
 
 // recountLocked recomputes the cached Matched/Review/Unmatched counters on

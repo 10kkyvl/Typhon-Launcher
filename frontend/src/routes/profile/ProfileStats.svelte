@@ -35,7 +35,9 @@
 <style>
   .stats-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
+    row-gap: var(--space-4);
   }
 
   .stat {

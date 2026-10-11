@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"sync"
 	"time"
@@ -25,6 +26,8 @@ const (
 )
 
 var errNotStarted = errors.New("account service is not started")
+
+var errNoApplication = errors.New("application is not running")
 
 type State struct {
 	Status string      `json:"status"`
@@ -48,6 +51,15 @@ type Service struct {
 	cancel       context.CancelFunc
 
 	profileMu sync.Mutex
+
+	wg               sync.WaitGroup
+	accepted         func() string
+	termsConfirmedID string
+	termsRun         *termsRun
+	termsTimer       func(time.Duration) (<-chan time.Time, func())
+
+	language func() string
+	openURL  func(string) error
 }
 
 func NewService() (*Service, error) {
@@ -80,7 +92,7 @@ func newService(store CredentialStore, baseURL, path string) (*Service, error) {
 		return nil, fmt.Errorf("load cached profile: %w", err)
 	}
 
-	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile}
+	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile, openURL: openSystemBrowser, termsTimer: newTermsTimer}
 	client, err := NewClient(baseURL, s.token)
 	if err != nil {
 		return nil, err
@@ -120,10 +132,13 @@ func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil
-	s.mu.Unlock()
 	if cancel != nil {
+		// Under the lock so that startTermsSync, which registers in wg under the same
+		// lock after checking ctx, cannot Add concurrently with the Wait below.
 		cancel()
 	}
+	s.mu.Unlock()
+	s.wg.Wait()
 	return nil
 }
 
@@ -164,6 +179,7 @@ func (s *Service) Bootstrap() (State, error) {
 		if rememberErr := s.rememberProfile(ctx, user); rememberErr != nil {
 			return State{}, rememberErr
 		}
+		s.syncTermsOf(cred.Token, user)
 		return State{Status: StatusAuthenticated, User: user}, nil
 	}
 
@@ -219,12 +235,54 @@ func (s *Service) signedOutState() State {
 	return State{Status: StatusUnauthenticated}
 }
 
+//wails:ignore
+func (s *Service) SetLanguage(language func() string) {
+	s.mu.Lock()
+	s.language = language
+	s.mu.Unlock()
+}
+
+func (s *Service) uiLanguage() string {
+	s.mu.Lock()
+	language := s.language
+	s.mu.Unlock()
+	if language == nil {
+		return ""
+	}
+	return language()
+}
+
+func openSystemBrowser(link string) error {
+	app := application.Get()
+	if app == nil {
+		return errNoApplication
+	}
+	return app.Browser.OpenURL(link)
+}
+
+func (s *Service) OpenForgotPassword() error {
+	if err := s.openURL(ForgotPasswordURL(s.uiLanguage())); err != nil {
+		return fmt.Errorf("open password reset page: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) OpenSupportSite() error {
+	if err := s.openURL(SupportURL(s.uiLanguage())); err != nil {
+		return fmt.Errorf("open support page: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) Register(input RegisterInput) (CurrentUser, error) {
 	ctx, cancel, err := s.requestContext()
 	if err != nil {
 		return CurrentUser{}, err
 	}
 	defer cancel()
+
+	input.Lang = s.uiLanguage()
+	input.TermsVersion = s.registerTermsVersion()
 
 	session, err := s.client.Register(ctx, input)
 	if err != nil {
@@ -262,6 +320,8 @@ func (s *Service) adopt(ctx context.Context, session Session) (CurrentUser, erro
 			// costs offline mode on the next launch and must not read as a failed sign-in.
 			slog.Warn("cache profile after sign-in", "error", err)
 		}
+		//nolint:contextcheck // инвариант 19: синхронизация живёт дольше запроса входа, поэтому привязана к ctx сервиса и учтена в wg, а не к ctx вызова
+		s.syncTermsOf(session.Token, session.User)
 		return session.User, nil
 	}
 
@@ -312,6 +372,43 @@ func (s *Service) Logout() error {
 	}
 
 	return errors.Join(revokeErr, deleteErr, forgetErr)
+}
+
+func (s *Service) DeleteAccount(password string) error {
+	if password == "" {
+		return &Error{Code: CodeBadRequest, Field: "password"}
+	}
+	cred, err := s.store.Load()
+	if errors.Is(err, ErrNoCredential) || (err == nil && cred.Token == "") {
+		return &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized}
+	}
+	if err != nil {
+		return fmt.Errorf("load stored credential: %w", err)
+	}
+
+	ctx, cancel, err := s.requestContext()
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	client := *s.client
+	client.token = func() (string, error) { return cred.Token, nil }
+	if err := client.DeleteAccount(ctx, password); err != nil {
+		return err
+	}
+
+	// The account is gone on the server: every step below runs even if an earlier one fails.
+	guestErr := s.setGuest(false)
+	deleteErr := s.store.Delete()
+	if deleteErr != nil {
+		deleteErr = fmt.Errorf("delete stored credential: %w", deleteErr)
+	}
+	forgetErr := s.forgetProfile()
+	if forgetErr != nil {
+		forgetErr = fmt.Errorf("delete cached profile: %w", forgetErr)
+	}
+	return errors.Join(guestErr, deleteErr, forgetErr)
 }
 
 func (s *Service) GetCurrentUser() (CurrentUser, error) {

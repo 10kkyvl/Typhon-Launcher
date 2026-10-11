@@ -23,8 +23,7 @@ import (
 func TestTeardownCutsTheClientOffBeforeItPersists(t *testing.T) {
 	r := newNetRig(t, viaInterface)
 	r.net.set(vpnIface("10.8.0.2"))
-	r.reconcile(t)
-	old := r.client()
+	old := r.up(t)
 	r.m.addTestDownload("dl")
 
 	var parked, cutWhenParked bool
@@ -50,8 +49,7 @@ func TestTeardownCutsTheClientOffBeforeItPersists(t *testing.T) {
 func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 	r := newNetRig(t, viaInterface)
 	r.net.set(vpnIface("10.8.0.2"))
-	r.reconcile(t)
-	old := r.client()
+	old := r.up(t)
 	r.m.addTestItem("dl", StatusVerifying)
 
 	jobCtx, ok := r.m.beginJob(t.Context(), "dl")
@@ -61,11 +59,16 @@ func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 	release := make(chan struct{})
 	jobEnded := make(chan struct{})
 	go func() {
+		defer close(jobEnded)
+		defer r.m.endJob("dl")
 		<-jobCtx.Done()
-		// A recheck that is slow to notice it was cancelled.
-		<-release
-		r.m.endJob("dl")
-		close(jobEnded)
+		// A recheck that is slow to notice it was cancelled. The test context
+		// ends the wait when the test is over, so a test that failed early
+		// does not leave the job behind.
+		select {
+		case <-release:
+		case <-t.Context().Done():
+		}
 	}()
 	t.Cleanup(func() {
 		select {
@@ -79,13 +82,13 @@ func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 	r.net.set()
 	torn := make(chan struct{})
 	go func() {
+		defer close(torn)
 		r.reconcile(t)
-		close(torn)
 	}()
 
 	// The job is cancelled after the persist and right before the wait, so
 	// once it is, the teardown is sitting in the wait.
-	<-jobCtx.Done()
+	await(t, jobCtx.Done(), "the teardown to cancel the job")
 	if !old.halted() {
 		t.Fatal("the client still carried data while the teardown waited for a job to end")
 	}
@@ -95,7 +98,7 @@ func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 	default:
 	}
 	close(release)
-	<-torn
+	await(t, torn, "the teardown to finish after the job ended")
 	if !clientClosed(old) {
 		t.Fatal("the old client was not closed in the end")
 	}
@@ -128,7 +131,7 @@ func TestHaltedClientCarriesNoDataEvenWhenAnEngineIsAllowedAgain(t *testing.T) {
 		t.Fatalf("add seeder torrent: %v", err)
 	}
 	t.Cleanup(seed.drop)
-	<-seed.t.GotInfo()
+	await(t, seed.t.GotInfo(), "the seeder to know its metadata")
 	total := seed.t.Length()
 	select {
 	case <-seed.t.Complete().On():
@@ -146,7 +149,7 @@ func TestHaltedClientCarriesNoDataEvenWhenAnEngineIsAllowedAgain(t *testing.T) {
 		t.Fatalf("add leecher torrent: %v", err)
 	}
 	t.Cleanup(leech.drop)
-	<-leech.t.GotInfo()
+	await(t, leech.t.GotInfo(), "the leecher to know its metadata")
 	leech.allowDownload()
 	leech.setPriorities([]bool{true})
 	if n := leech.t.AddClientPeer(seedCl.cl); n == 0 {
@@ -170,11 +173,7 @@ func TestHaltedClientCarriesNoDataEvenWhenAnEngineIsAllowedAgain(t *testing.T) {
 // to time out.
 func TestSettingsChangeTakesTheOldClientDownBeforeTheNewRouteIsProbed(t *testing.T) {
 	r := newNetRig(t, viaProxy)
-	r.reconcile(t)
-	first := r.client()
-	if first == nil {
-		t.Fatalf("no client to start from: %+v", r.state())
-	}
+	first := r.up(t)
 
 	entered, release := r.net.holdProbe()
 	t.Cleanup(release)
@@ -185,10 +184,10 @@ func TestSettingsChangeTakesTheOldClientDownBeforeTheNewRouteIsProbed(t *testing
 	}
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		r.reconcile(t)
-		close(done)
 	}()
-	<-entered
+	await(t, entered, "the probe of the new route to start")
 
 	if !clientClosed(first) || r.client() != nil {
 		t.Fatal("the client of the old proxy is still up while the new one is probed")
@@ -200,7 +199,7 @@ func TestSettingsChangeTakesTheOldClientDownBeforeTheNewRouteIsProbed(t *testing
 		t.Fatal("requests during the probe must be told the network is down, not that there is no client")
 	}
 	release()
-	<-done
+	await(t, done, "the check of the new route to finish")
 
 	st := r.state()
 	if st.State != NetworkOK || st.Address != "127.0.0.1:1081" {
@@ -213,22 +212,21 @@ func TestSettingsChangeTakesTheOldClientDownBeforeTheNewRouteIsProbed(t *testing
 
 func TestSlowProbeOfAnUnchangedRouteKeepsTheClient(t *testing.T) {
 	r := newNetRig(t, viaProxy)
-	r.reconcile(t)
-	first := r.client()
+	first := r.up(t)
 
 	entered, release := r.net.holdProbe()
 	t.Cleanup(release)
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		r.reconcile(t)
-		close(done)
 	}()
-	<-entered
+	await(t, entered, "the probe of the unchanged route to start")
 	if clientClosed(first) || r.client() != first {
 		t.Fatal("a probe of the same proxy that is merely slow took the client down")
 	}
 	release()
-	<-done
+	await(t, done, "the check of the unchanged route to finish")
 	if r.client() != first || r.builds.built() != 1 {
 		t.Fatal("an unchanged route rebuilt the client")
 	}
@@ -276,8 +274,7 @@ func TestPlanServesSettings(t *testing.T) {
 func TestRestoreRefusedByAClientThatIsGoingAwayDoesNotFailTheDownload(t *testing.T) {
 	const hash = "a748597437835a2fd0d2e06f8edd86fee316a84d"
 	r := newNetRig(t, nil)
-	r.reconcile(t)
-	cl := r.client()
+	cl := r.up(t)
 	d := r.m.addTestItem("dl", StatusQueued)
 	r.m.mu.Lock()
 	d.Source = "magnet:?xt=urn:btih:" + hash + "&dn=x"
@@ -479,7 +476,7 @@ func TestHaltStopsTheRetryOfLostTrackers(t *testing.T) {
 func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 	r := newNetRig(t, viaProxy)
 	log := recordEmits(t)
-	r.reconcile(t)
+	r.up(t)
 	if st := r.state(); st.State != NetworkOK || st.Address != "127.0.0.1:1080" {
 		t.Fatalf("no route to start from: %+v", st)
 	}
@@ -493,10 +490,10 @@ func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		r.reconcile(t)
-		close(done)
 	}()
-	<-entered
+	await(t, entered, "the probe of the new route to start")
 
 	st := r.state()
 	if st.State == NetworkOK || st.Address != "" {
@@ -522,7 +519,7 @@ func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 		t.Fatalf("the window was last told %+v, want the check state", last)
 	}
 	release()
-	<-done
+	await(t, done, "the check of the new route to finish")
 	if st := r.state(); st.State != NetworkOK || st.Address != "127.0.0.1:1081" {
 		t.Fatalf("state after the probe = %+v", st)
 	}
@@ -534,8 +531,7 @@ func TestRouteChangeShowsTheCheckNotTheOldRoute(t *testing.T) {
 func TestRestoreOfAGoneClientLeavesTheStatusAlone(t *testing.T) {
 	const hash = "a748597437835a2fd0d2e06f8edd86fee316a84d"
 	r := newNetRig(t, nil)
-	r.reconcile(t)
-	cl := r.client()
+	cl := r.up(t)
 	d := r.m.addTestItem("dl", StatusQueued)
 	r.m.mu.Lock()
 	d.Source = "magnet:?xt=urn:btih:" + hash + "&dn=x"

@@ -1,6 +1,9 @@
 package account
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 const (
 	VisibilityPublic  = "public"
@@ -16,8 +19,11 @@ type ProfileSettings struct {
 	ShowLibrary  bool              `json:"showLibrary"`
 	ShowActivity bool              `json:"showActivity"`
 	ShowStats    bool              `json:"showStats"`
-	Showcase     []string          `json:"showcase"`
-	Appearance   ProfileAppearance `json:"appearance"`
+	Showcase     []string          `json:"showcase,omitzero"`
+	Appearance   ProfileAppearance `json:"appearance,omitzero"`
+	StatusEmoji  *string           `json:"statusEmoji,omitempty"`
+	StatusText   *string           `json:"statusText,omitempty"`
+	Layout       OptionalLayout    `json:"layout,omitzero"`
 }
 
 type ProfileAppearance struct {
@@ -26,15 +32,32 @@ type ProfileAppearance struct {
 	CoverURL      string `json:"coverUrl"`
 	CoverDim      int    `json:"coverDim"`
 	CoverPosition int    `json:"coverPosition"`
+	CustomFrom    string `json:"customFrom"`
+	CustomTo      string `json:"customTo"`
+	CustomAngle   int    `json:"customAngle"`
+	AutoSource    string `json:"autoSource"`
+	AvatarFrame   string `json:"avatarFrame"`
+	NameStyle     string `json:"nameStyle"`
+	Parallax      bool   `json:"parallax"`
 }
 
 func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil
+	}
 	type fields struct {
 		Theme         *string `json:"theme"`
 		Accent        *string `json:"accent"`
 		CoverURL      *string `json:"coverUrl"`
 		CoverDim      *int    `json:"coverDim"`
 		CoverPosition *int    `json:"coverPosition"`
+		CustomFrom    *string `json:"customFrom"`
+		CustomTo      *string `json:"customTo"`
+		CustomAngle   *int    `json:"customAngle"`
+		AutoSource    *string `json:"autoSource"`
+		AvatarFrame   *string `json:"avatarFrame"`
+		NameStyle     *string `json:"nameStyle"`
+		Parallax      *bool   `json:"parallax"`
 	}
 	var in fields
 	if err := json.Unmarshal(data, &in); err != nil {
@@ -56,12 +79,45 @@ func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
 	if in.CoverPosition != nil {
 		out.CoverPosition = *in.CoverPosition
 	}
+	if in.CustomFrom != nil {
+		out.CustomFrom = *in.CustomFrom
+	}
+	if in.CustomTo != nil {
+		out.CustomTo = *in.CustomTo
+	}
+	if in.CustomAngle != nil {
+		out.CustomAngle = *in.CustomAngle
+	}
+	if in.AutoSource != nil {
+		out.AutoSource = *in.AutoSource
+	}
+	if in.AvatarFrame != nil {
+		out.AvatarFrame = *in.AvatarFrame
+	}
+	if in.NameStyle != nil {
+		out.NameStyle = *in.NameStyle
+	}
+	if in.Parallax != nil {
+		out.Parallax = *in.Parallax
+	}
 	*a = out
 	return nil
 }
 
 func DefaultProfileAppearance() ProfileAppearance {
-	return ProfileAppearance{Theme: "midnight", Accent: "#67d8ef", CoverDim: 35, CoverPosition: 50}
+	return ProfileAppearance{
+		Theme:         "midnight",
+		Accent:        "#67d8ef",
+		CoverDim:      35,
+		CoverPosition: 50,
+		CustomFrom:    "#142235",
+		CustomTo:      "#111923",
+		CustomAngle:   125,
+		AutoSource:    "playing",
+		AvatarFrame:   "none",
+		NameStyle:     "plain",
+		Parallax:      true,
+	}
 }
 
 func DefaultProfileSettings() ProfileSettings {
@@ -80,9 +136,15 @@ func DefaultProfileSettings() ProfileSettings {
 
 func withProfileDefaults(user CurrentUser) CurrentUser {
 	if user.Profile.Showcase == nil {
-		legacyAppearance := user.Profile.Appearance
+		legacy := user.Profile
 		user.Profile = DefaultProfileSettings()
-		user.Profile.Appearance = legacyAppearance
+		user.Profile.Appearance = legacy.Appearance
+		user.Profile.StatusEmoji = legacy.StatusEmoji
+		user.Profile.StatusText = legacy.StatusText
+		user.Profile.Layout = legacy.Layout
+	}
+	if user.Profile.Layout.Value == nil {
+		user.Profile.Layout = OptionalLayout{}
 	}
 	if user.Profile.Visibility == "" {
 		user.Profile.Visibility = VisibilityFriends
@@ -110,5 +172,24 @@ func mergeAppearance(defaults, value ProfileAppearance) ProfileAppearance {
 	if value.CoverPosition >= 0 && value.CoverPosition <= 100 {
 		defaults.CoverPosition = value.CoverPosition
 	}
+	if value.CustomFrom != "" {
+		defaults.CustomFrom = value.CustomFrom
+	}
+	if value.CustomTo != "" {
+		defaults.CustomTo = value.CustomTo
+	}
+	if value.CustomAngle >= 0 && value.CustomAngle <= 360 {
+		defaults.CustomAngle = value.CustomAngle
+	}
+	if value.AutoSource != "" {
+		defaults.AutoSource = value.AutoSource
+	}
+	if value.AvatarFrame != "" {
+		defaults.AvatarFrame = value.AvatarFrame
+	}
+	if value.NameStyle != "" {
+		defaults.NameStyle = value.NameStyle
+	}
+	defaults.Parallax = value.Parallax
 	return defaults
 }

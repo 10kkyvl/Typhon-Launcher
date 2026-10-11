@@ -2,7 +2,6 @@
   import { RefreshCw, ThumbsDown } from '@lucide/svelte';
   import Button from './Button.svelte';
   import GameCard from './GameCard.svelte';
-  import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
   import { genreLabel, recommendationReason, type Recommendation } from '../recommendations/display';
   import { gameArt } from '../stores/metadata';
@@ -35,11 +34,16 @@
             cover={item.game.coverUrl || $gameArt[item.game.id]?.cover || ''}
             meta={recommendationReason(item)} {installed}
             running={$runningGames.has(item.libraryId || '')}
+            actions={[{
+              id: 'dismiss',
+              label: msg('games.recommendationNotInterested'),
+              icon: ThumbsDown,
+              disabled: loading,
+              onclick: () => ondismiss(item),
+            }]}
             onplay={item.libraryId && onplay ? () => onplay?.(item.libraryId!) : undefined}>
             {#snippet footer()}
               <span class="genre">{item.game.genres?.slice(0, 2).map(genreLabel).join(' · ') || ''}</span>
-              <IconButton label={msg('games.recommendationNotInterested')} size="sm" disabled={loading}
-                onclick={() => ondismiss(item)}><ThumbsDown size="1.4rem" /></IconButton>
             {/snippet}
           </GameCard>
         </div>

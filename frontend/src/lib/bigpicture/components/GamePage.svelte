@@ -3,6 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Download, Heart, Play, RotateCw, Square, X } from '@lucide/svelte';
   import Artwork from '../../components/Artwork.svelte';
+  import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero } from '../../game/view';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
@@ -14,7 +15,7 @@
   import { addCatalogGame, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
   import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type TorrentInfo } from '../../services/downloads';
   import { getCatalogGame, getReleasesForGame, getReleasesForTitle, type CatalogGame, type ReleaseGroup } from '../../services/sources';
-  import { getMetadataView, ensureMetadataFresh, type MetadataView } from '../../services/metadata';
+  import { getMetadataView, ensureMetadataFresh, openStoreLink, type MetadataView, type StoreId } from '../../services/metadata';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
@@ -27,6 +28,7 @@
   import { installErrorText } from '../../install/installErrors';
   import { installTotalUnknown } from '../../install/progress';
   import { sourceErrorText } from '../../sources/sourceErrors';
+  import { metadataErrorText } from '../../metadata/metadataErrors';
   import { errorCode, hasMessage } from '../../i18n';
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
@@ -57,6 +59,7 @@
   let releasesFailed = $state(false);
   let activeTab = $state<'overview' | 'releases'>('overview');
   let pageError = $state('');
+  let metadataError = $state('');
   let dialog = $state<Dialog>(null);
   let dialogRoot: HTMLElement | undefined = $state();
   let dialogReturnFocus = '';
@@ -161,14 +164,27 @@
     catalogGame = null;
     metadata = null;
     activeTab = 'overview';
-    const result = await gameRequests.settle(ticket, Promise.all([getCatalogGame(gameId), getMetadataView(gameId)]));
-    if (result.kind === 'stale') return;
-    if (result.kind === 'error') {
+    pageError = '';
+    metadataError = '';
+    const [catalog, view] = await Promise.all([
+      gameRequests.settle(ticket, getCatalogGame(gameId)),
+      gameRequests.settle(ticket, getMetadataView(gameId)),
+    ]);
+    if (catalog.kind === 'stale' || view.kind === 'stale') return;
+    if (catalog.kind === 'error') {
       detailsFailed = true;
+      metadataError = metadataErrorText(catalog.error, bp('bp.game.loadFailed'));
     } else {
-      [catalogGame, metadata] = result.value;
+      catalogGame = catalog.value;
       if (!catalogGame && !game) detailsFailed = true;
-      void ensureMetadataFresh(gameId).catch(() => undefined);
+    }
+    if (view.kind === 'error') {
+      metadataError = metadataErrorText(view.error, bp('bp.game.loadFailed'));
+    } else {
+      metadata = view.value;
+      ensureMetadataFresh(gameId).catch((error) => {
+        if (gameRequests.isCurrent(ticket)) metadataError = metadataErrorText(error, bp('bp.game.loadFailed'));
+      });
     }
     if (gameRequests.isCurrent(ticket)) detailsLoading = false;
   }
@@ -291,6 +307,15 @@
   function mappedError(error: unknown, fallback: string) {
     const code = errorCode(error);
     return hasMessage(code) ? $t(code) : fallback;
+  }
+
+  async function openStore(store: StoreId) {
+    pageError = '';
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (error) {
+      pageError = metadataErrorText(error, bp('bp.game.loadFailed'));
+    }
   }
 
   async function toggleFavorite() {
@@ -531,6 +556,7 @@
           <h1>{title}</h1>
           {#if gameMeta}<p class="meta-line">{gameMeta}</p>{/if}
           {#if genres.length}<div class="genre-list">{#each genres.slice(0, 5) as genre (genre)}<span>{genre}</span>{/each}</div>{/if}
+          <StoreLinks links={metadata?.storeLinks} onopen={(store) => void openStore(store)} focusPrefix="game:store:" />
           <div class="badges">
             {#if running}<span class="badge running"><span class="dot"></span>{bp('bp.game.running')}</span>
             {:else if installed}<span class="badge installed">{bp('bp.game.installed')}</span>
@@ -564,6 +590,7 @@
         </div>
       </section>
 
+      {#if metadataError}<div class="page-error" role="alert">{metadataError}</div>{/if}
       {#if pageError}<div class="page-error" role="alert">{pageError}</div>{/if}
 
       {#if currentDownload}

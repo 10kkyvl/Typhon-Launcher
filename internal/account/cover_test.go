@@ -23,7 +23,7 @@ func TestReadCoverImage(t *testing.T) {
 		{name: "directory", path: t.TempDir(), code: CodeInvalidCover},
 		{name: "empty file", path: writeTempFile(t, "empty.png", nil), code: CodeInvalidCover},
 		{name: "not an image", path: writeTempFile(t, "notes.txt", []byte("plain text")), code: CodeUnsupportedCover},
-		{name: "animated gif is not a cover", path: writeTempFile(t, "a.gif", gifBytes), code: CodeUnsupportedCover},
+		{name: "gif goes to the server, which decides on animation", path: writeTempFile(t, "a.gif", gifBytes), mime: "image/gif"},
 		{name: "oversized", path: oversized, code: CodeCoverTooLarge},
 		{name: "png", path: writeTempFile(t, "a.png", pngBytes), mime: "image/png"},
 		{name: "jpeg", path: writeTempFile(t, "a.jpg", jpegBytes), mime: "image/jpeg"},
@@ -73,7 +73,7 @@ func TestDecodeCover(t *testing.T) {
 		{name: "not base64", encoded: "!!!not base64!!!", code: CodeInvalidCover},
 		{name: "decodes to nothing", encoded: "====", code: CodeInvalidCover},
 		{name: "not an image", encoded: base64.StdEncoding.EncodeToString([]byte("plain text")), code: CodeUnsupportedCover},
-		{name: "gif", encoded: base64.StdEncoding.EncodeToString(gifBytes), code: CodeUnsupportedCover},
+		{name: "gif", encoded: base64.StdEncoding.EncodeToString(gifBytes), payload: gifBytes},
 		{name: "oversized", encoded: base64.StdEncoding.EncodeToString(make([]byte, maxCoverSize+1)), code: CodeCoverTooLarge},
 		{name: "png", encoded: base64.StdEncoding.EncodeToString(pngBytes), payload: pngBytes},
 		{name: "jpeg", encoded: base64.StdEncoding.EncodeToString(jpegBytes), payload: jpegBytes},
@@ -98,25 +98,5 @@ func TestDecodeCover(t *testing.T) {
 				t.Fatalf("payload = %v", data)
 			}
 		})
-	}
-}
-
-func TestCoverFormatsAreAStrictSubsetOfAvatarFormats(t *testing.T) {
-	samples := map[string][]byte{"png": pngBytes, "jpeg": jpegBytes, "webp": webpBytes, "gif": gifBytes}
-	for name, data := range samples {
-		avatarMime, avatarOK := avatarMIME(data)
-		coverMime, coverOK := coverMIME(data)
-		if !avatarOK {
-			t.Fatalf("%s is not an avatar format", name)
-		}
-		if name == "gif" {
-			if coverOK {
-				t.Fatalf("gif accepted as a cover: %q", coverMime)
-			}
-			continue
-		}
-		if !coverOK || coverMime != avatarMime {
-			t.Fatalf("%s: cover (%q, %v) disagrees with avatar %q", name, coverMime, coverOK, avatarMime)
-		}
 	}
 }

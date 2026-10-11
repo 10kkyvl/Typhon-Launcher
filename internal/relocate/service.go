@@ -1223,10 +1223,11 @@ func (s *Service) applyLibrarySettings(jobID, root string) error {
 	if _, err := s.transition(jobID, StageRepoint, nil); err != nil {
 		return err
 	}
-	next := s.settings.GetSettings()
-	next.LibraryPath = root
-	if err := s.settings.SaveSettings(next); err != nil {
-		// Left at StageRepoint: recoverAll retries SaveSettings on next
+	if _, err := s.settings.Update(func(next *settings.Settings) error {
+		next.LibraryPath = root
+		return nil
+	}); err != nil {
+		// Left at StageRepoint: recoverAll retries the settings write on next
 		// startup, per the task's own note that every directory has already
 		// moved by this point.
 		return err

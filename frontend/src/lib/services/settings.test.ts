@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Settings } from './settings';
 
 const bindings = {
   GetSettings: vi.fn(),
-  SaveSettings: vi.fn(),
+  SaveSettingsPatch: vi.fn(),
   ProposeLibraryPath: vi.fn(),
   SetupLibrary: vi.fn(),
   SaveConsent: vi.fn(),
@@ -87,11 +86,12 @@ describe('settings in a browser preview', () => {
     const settings = await load(false);
     const current = await settings.getSettings();
 
-    await settings.saveSettings({ ...current, theme: 'light', uiScale: 1.25 });
+    const saved = await settings.saveSettingsPatch({ theme: 'light', uiScale: 1.25 });
     const again = await settings.getSettings();
 
-    expect(again).toMatchObject({ theme: 'light', uiScale: 1.25 });
-    expect(bindings.SaveSettings).not.toHaveBeenCalled();
+    expect(again).toMatchObject({ ...current, theme: 'light', uiScale: 1.25 });
+    expect(saved).toEqual(again);
+    expect(bindings.SaveSettingsPatch).not.toHaveBeenCalled();
   });
 
   it('refuses the actions that need the desktop app', async () => {
@@ -114,15 +114,16 @@ describe('settings in the desktop app', () => {
     await expect(settings.getSettings()).resolves.toEqual({ theme: 'light' });
   });
 
-  it('sends the whole object to the backend and lets a refusal reach the caller', async () => {
-    bindings.SaveSettings.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('typhon:settings.network_mode_invalid: x'));
+  it('sends exactly the patch to the backend, returns what it stored and lets a refusal reach the caller', async () => {
+    const stored = { theme: 'dark', proxyPort: 1080, uiScale: 1 };
+    bindings.SaveSettingsPatch.mockResolvedValueOnce(stored).mockRejectedValueOnce(new Error('typhon:settings.network_mode_invalid: x'));
     const settings = await load(true);
-    const current = { theme: 'dark', proxyPort: 1080 } as unknown as Settings;
+    const patch = { proxyPort: 1080 };
 
-    await settings.saveSettings(current);
-    expect(bindings.SaveSettings).toHaveBeenCalledWith(current);
+    await expect(settings.saveSettingsPatch(patch)).resolves.toEqual(stored);
+    expect(bindings.SaveSettingsPatch).toHaveBeenCalledWith({ proxyPort: 1080 });
 
-    await expect(settings.saveSettings(current)).rejects.toThrow('network_mode_invalid');
+    await expect(settings.saveSettingsPatch(patch)).rejects.toThrow('network_mode_invalid');
   });
 
   it('passes the library questions through to the backend', async () => {

@@ -60,7 +60,9 @@ var localNames = []string{
 	"sourcesNoticeAccepted",
 	"anonymousUsageStats",
 	"anonymousDiagnostics",
+	"sessionHeartbeat",
 	"telemetryConsentVersion",
+	"legalAcceptedVersion",
 	"presenceStatus",
 }
 

@@ -50,6 +50,7 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/social"
 	"typhon/internal/sources"
+	"typhon/internal/support"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
 	"typhon/internal/titles"
@@ -279,6 +280,9 @@ func main() {
 	if err != nil {
 		fatal("start account service", err)
 	}
+	accountService.SetLanguage(appService.UILanguage)
+	accountService.SetAcceptedTerms(func() string { return settingsService.GetSettings().LegalAcceptedVersion })
+	settingsService.Subscribe(func(settings.Settings) { accountService.SyncTerms() })
 	historyService, err := history.NewService()
 	if err != nil {
 		fatal("start history service", err)
@@ -417,7 +421,11 @@ func main() {
 	relocateService.SetHistoryRecorder(historyService.Record)
 	downloadManager.SetOnCompleted(installService.HandleDownloadCompleted)
 	downloadManager.SetOnStarted(installService.HandleDownloadStarted)
-	downloadManager.SetOnGone(installService.DropBroker)
+	downloadManager.SetOnGone(func(downloadID string) {
+		if err := installService.HandleDownloadGone(downloadID); err != nil {
+			slog.Error("release installs of a gone download", "download_id", downloadID, "error", err)
+		}
+	})
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
@@ -465,9 +473,17 @@ func main() {
 		return shared.Works, shared.Total, true
 	})
 
-	profileService := profile.NewService(libraryService, playlogService, func() []string {
+	profileService, err := profile.NewService(libraryService, playlogService, catalogService, func() []string {
 		return accountService.CurrentProfileSettings().Showcase
+	}, func() []account.LayoutBlock {
+		if layout := accountService.CurrentProfileSettings().Layout.Value; layout != nil {
+			return layout.Blocks
+		}
+		return nil
 	})
+	if err != nil {
+		fatal("start profile service", err)
+	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
 	presenceWatcher.Apply(settingsService.GetSettings())
@@ -495,6 +511,8 @@ func main() {
 
 	var extraServices []application.Service
 
+	var uploadLogs func(ctx context.Context) (string, error)
+
 	// Битый или недоступный installation.json — не повод не пускать пользователя
 	// играть: presence и телеметрия в этом запуске просто не поднимаются, лаунчер
 	// работает дальше без них.
@@ -506,10 +524,15 @@ func main() {
 		if err != nil {
 			fatal("start presence", err)
 		}
-		// Both services ask *Allowed, never the switch itself: on a fresh
-		// install the diagnostics switch already reads true so the consent
-		// prompt can start with it selected, and sending on the strength of
-		// that would be collecting from someone who has not been asked yet.
+		// The heartbeat identifies the installation and the game only under the
+		// current consent: an answer to an older prompt did not cover them.
+		settingsService.Subscribe(func(s settings.Settings) { heartbeatService.SetPolicy(heartbeatPolicy(s)) })
+		heartbeatService.SetPolicy(heartbeatPolicy(settingsService.GetSettings()))
+
+		// Both services ask *Allowed, never the switch itself: a switch read
+		// before the consent prompt is answered holds a preselection, and
+		// sending on the strength of that would be collecting from someone
+		// who has not been asked yet.
 		usageService, err := usagestats.NewService(identity,
 			func() bool { return settingsService.GetSettings().UsageStatsAllowed() }, resolveGameID)
 		if err != nil {
@@ -526,6 +549,10 @@ func main() {
 		diagnosticsService.SetEnabled(settingsService.GetSettings().DiagnosticsAllowed())
 		settingsService.Subscribe(func(s settings.Settings) { diagnosticsService.SetEnabled(s.DiagnosticsAllowed()) })
 		diagService = diagnosticsService
+		uploadLogs = func(ctx context.Context) (string, error) {
+			sent, err := diagnosticsService.SendLogsContext(ctx)
+			return sent.ID, err
+		}
 		slog.SetDefault(slog.New(diagnostics.NewLogHandler(slog.Default().Handler(), diagnosticsService)))
 
 		libraryService.AddSessionWatcher(heartbeatService)
@@ -539,6 +566,12 @@ func main() {
 			application.NewService(usageService),
 			application.NewService(diagnosticsService),
 		)
+	}
+
+	supportService, err := support.NewService(account.BaseURL(), accountService.SessionToken,
+		support.Deps{Language: appService.UILanguage, UploadLogs: uploadLogs})
+	if err != nil {
+		fatal("start support service", err)
 	}
 
 	current := settingsService.GetSettings()
@@ -560,6 +593,7 @@ func main() {
 		application.NewService(messagingService),
 		application.NewService(onlineService),
 		application.NewService(reviewsService),
+		application.NewService(supportService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
@@ -682,7 +716,7 @@ func main() {
 	}
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
-	// from starting: the toggle in settings goes through SaveSettings, which
+	// from starting: the toggle in settings goes through SaveSettingsPatch, which
 	// runs the same appliers and does report the failure to the user.
 	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
 		slog.Error("apply autostart", "error", err)
@@ -877,6 +911,10 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 		return release.Title
 	}
 	return ""
+}
+
+func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
+	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
 }
 
 func fatal(stage string, err error) {

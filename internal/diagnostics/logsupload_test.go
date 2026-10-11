@@ -15,6 +15,8 @@ import (
 	"typhon/internal/app"
 	"typhon/internal/clientid"
 	"typhon/internal/uierr"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func gunzip(t *testing.T, data []byte) []byte {
@@ -311,6 +313,28 @@ func TestSendLogsRejectsConcurrentUpload(t *testing.T) {
 	defer svc.logUploadMu.Unlock()
 	if _, err := svc.SendLogs(); !errors.Is(err, errLogUploadBusy) {
 		t.Fatalf("SendLogs error = %v, want busy", err)
+	}
+}
+
+func TestSendLogsContextStopsWhenTheCallerGivesUp(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := newServiceAt(dir, clientid.Identity{InstallationID: "i", SessionID: "s"}, func() bool { return true })
+	if err != nil {
+		t.Fatalf("newServiceAt: %v", err)
+	}
+	if err := svc.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("ServiceStartup: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := svc.ServiceShutdown(); err != nil {
+			t.Errorf("ServiceShutdown: %v", err)
+		}
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := svc.SendLogsContext(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendLogsContext error = %v, want context.Canceled", err)
 	}
 }
 

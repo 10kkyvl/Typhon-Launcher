@@ -147,7 +147,7 @@ func TestLearnMatchAppliesToNextResolve(t *testing.T) {
 	}
 
 	normalized := titles.Parse(raw).Normalized
-	if err := s.LearnMatch(normalized, games[0].ID); err != nil {
+	if _, err := s.LearnMatch(normalized, games[0].ID); err != nil {
 		t.Fatalf("learn match: %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestLearnMatchRollsBackOverrideOnGamesPersistFailure(t *testing.T) {
 	}
 
 	normalized := titles.Parse("CP2077 Ultimate v2.31").Normalized
-	if err := s.LearnMatch(normalized, games[0].ID); err == nil {
+	if _, err := s.LearnMatch(normalized, games[0].ID); err == nil {
 		t.Fatal("LearnMatch() error = nil, want the write failure")
 	}
 
@@ -203,7 +203,7 @@ func TestLearnMatchSurvivesRestart(t *testing.T) {
 	s := mustServiceAt(t, dir)
 	games := seed(t, s, Game{Title: "Cyberpunk 2077"})
 	normalized := titles.Parse("CP2077 Ultimate v2.31").Normalized
-	if err := s.LearnMatch(normalized, games[0].ID); err != nil {
+	if _, err := s.LearnMatch(normalized, games[0].ID); err != nil {
 		t.Fatalf("learn match: %v", err)
 	}
 

@@ -237,7 +237,7 @@ export const transfers = {
   'transfers.moveErrNoInstallDir': 'У игры не задан каталог установки',
   'transfers.moveErrJobNotFound': 'Операция переноса не найдена — возможно, она уже завершилась',
   'transfers.moveErrGameNotFound': 'Игра не найдена в библиотеке',
-  'transfers.moveErrAmbiguousRecovery': 'Перенос прервался и требует ручной проверки. Обратитесь в поддержку',
+  'transfers.moveErrAmbiguousRecovery': 'Перенос прервался и требует ручной проверки. Опишите ситуацию в разделе «Поддержка»',
   'transfers.moveErrDialogUnavailable': 'Диалог выбора папки недоступен',
   'transfers.moveErrShuttingDown': 'Лаунчер завершает работу, повторите позже',
   'transfers.moveErrNotReady': 'Служба переноса ещё не готова, повторите через момент',

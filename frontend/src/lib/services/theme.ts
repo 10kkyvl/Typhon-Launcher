@@ -79,7 +79,7 @@ export async function getTheme(id: string): Promise<Theme> {
 
 export async function saveTheme(theme: Theme): Promise<Theme> {
   if (!inWails) throw unavailable();
-  return toTheme(await Service.Save(fromTheme(theme)));
+  return toTheme(await Service.Save(fromTheme({ ...theme, builtIn: false })));
 }
 
 export async function deleteTheme(id: string): Promise<void> {

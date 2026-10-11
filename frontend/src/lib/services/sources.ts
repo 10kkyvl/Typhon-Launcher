@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { CancelError } from '@wailsio/runtime';
 import { locale } from '../i18n/locale';
+import { errorCode } from '../i18n/errors';
 import { Service as SourcesService } from '../../../bindings/typhon/internal/sources';
 import { Service as CatalogService } from '../../../bindings/typhon/internal/catalog';
 import { inWails } from './backend';
@@ -378,8 +379,9 @@ export async function getRelease(releaseId: string): Promise<ReleaseView | null>
   if (!inWails) return null;
   try {
     return (await SourcesService.GetRelease(releaseId)) as unknown as ReleaseView;
-  } catch {
-    return null;
+  } catch (err) {
+    if (errorCode(err) === 'sources.release_not_found') return null;
+    throw err;
   }
 }
 
@@ -392,8 +394,9 @@ export async function getCatalogGame(id: string): Promise<CatalogGame | null> {
   if (!inWails) return null;
   try {
     return (await CatalogService.GetGame(id)) as unknown as CatalogGame;
-  } catch {
-    return null;
+  } catch (err) {
+    if (errorCode(err) === 'catalog.game_not_found') return null;
+    throw err;
   }
 }
 

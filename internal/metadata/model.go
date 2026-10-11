@@ -38,17 +38,18 @@ type Candidate struct {
 }
 
 type GameMetadata struct {
-	SteamAppID  string     `json:"steamAppId,omitempty"`
-	ProviderID  string     `json:"providerId"`
-	Title       string     `json:"title"`
-	Summary     string     `json:"summary"`
-	ReleaseDate *time.Time `json:"releaseDate,omitempty"`
-	Developer   string     `json:"developer"`
-	Publisher   string     `json:"publisher"`
-	Genres      []string   `json:"genres,omitempty"`
-	Themes      []string   `json:"themes,omitempty"`
-	Platforms   []string   `json:"platforms,omitempty"`
-	GameType    string     `json:"gameType,omitempty"`
-	Cover       *ImageRef  `json:"cover,omitempty"`
-	Screenshots []ImageRef `json:"screenshots,omitempty"`
+	SteamAppID  string            `json:"steamAppId,omitempty"`
+	ProviderID  string            `json:"providerId"`
+	Title       string            `json:"title"`
+	Summary     string            `json:"summary"`
+	ReleaseDate *time.Time        `json:"releaseDate,omitempty"`
+	Developer   string            `json:"developer"`
+	Publisher   string            `json:"publisher"`
+	Genres      []string          `json:"genres,omitempty"`
+	Themes      []string          `json:"themes,omitempty"`
+	Platforms   []string          `json:"platforms,omitempty"`
+	GameType    string            `json:"gameType,omitempty"`
+	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
+	Cover       *ImageRef         `json:"cover,omitempty"`
+	Screenshots []ImageRef        `json:"screenshots,omitempty"`
 }

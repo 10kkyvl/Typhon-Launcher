@@ -1,8 +1,9 @@
 <script lang="ts">
   import {
+    ArrowDown,
+    ArrowUp,
     ChevronDown,
     CircleAlert,
-    CircleCheck,
     Download,
     FolderOpen,
     Menu,
@@ -14,6 +15,7 @@
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Card from '../../lib/components/Card.svelte';
   import DownloadDetailsModal from '../../lib/components/DownloadDetailsModal.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -61,13 +63,8 @@
   let installOpen = $state(false);
   let installDownloadId = $state<string | null>(null);
 
-  const summary = $derived(
-    [
-      `↓ ${speedBytes($stats.downSpeed)}`,
-      `↑ ${speedBytes($stats.upSpeed)}`,
-      msg('downloads.active', { count: $stats.activeCount }),
-      msg('transfers.downloadsQueuedCount', { count: $queue.length }),
-    ].join(' · '),
+  const nothing = $derived(
+    $active.length === 0 && $queue.length === 0 && $completed.length === 0 && $failed.length === 0,
   );
 
   function openDetails(id: string) {
@@ -120,7 +117,8 @@
   }
 </script>
 
-<PageHeader title={msg('transfers.downloadsTitle')} subtitle={summary}>
+<Card surface="panel">
+<PageHeader title={msg('transfers.downloadsTitle')}>
   {#snippet actions()}
     <DropdownMenu
       items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}
@@ -143,28 +141,43 @@
   {/snippet}
 </PageHeader>
 
-<section class="section">
-  <h2>{msg('transfers.downloadsActiveHeading')} <span class="count">{$active.length}</span></h2>
-  {#if $active.length === 0}
-    <EmptyState
-      title={msg('transfers.downloadsEmptyActiveTitle')}
-      description={msg('transfers.downloadsEmptyActiveDescription')}
-    >
-      {#snippet icon()}
-        <Download size="2rem" strokeWidth={1.8} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={() => (addOpen = true)}>{msg('transfers.downloadsAddAction')}</Button>
-      {/snippet}
-    </EmptyState>
-  {:else}
-    <div class="rows">
-      {#each $active as download (download.id)}
-        <DownloadItem {download} onopen={(d) => openDetails(d.id)} />
-      {/each}
-    </div>
-  {/if}
-</section>
+{#if nothing}
+  <EmptyState
+    title={msg('transfers.downloadsEmptyActiveTitle')}
+    description={msg('transfers.downloadsEmptyActiveDescription')}
+  >
+    {#snippet icon()}
+      <Download size="2rem" strokeWidth={1.8} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={() => (addOpen = true)}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        {msg('transfers.downloadsAddAction')}
+      </Button>
+    {/snippet}
+  </EmptyState>
+{:else}
+  <div class="summary">
+    <span class="sum speed"><ArrowDown size="1.5rem" strokeWidth={2} />{speedBytes($stats.downSpeed)}</span>
+    <span class="sum speed dim"><ArrowUp size="1.5rem" strokeWidth={2} />{speedBytes($stats.upSpeed)}</span>
+    <span class="sum-sep" aria-hidden="true"></span>
+    <span class="sum dim">{msg('downloads.active', { count: $stats.activeCount })}</span>
+    <span class="sum dim">{msg('transfers.downloadsQueuedCount', { count: $queue.length })}</span>
+  </div>
+
+  <section class="section">
+    <h2>{msg('transfers.downloadsActiveHeading')} <span class="count">{$active.length}</span></h2>
+    {#if $active.length === 0}
+      <p class="muted">{msg('transfers.downloadsEmptyActiveTitle')}</p>
+    {:else}
+      <div class="rows">
+        {#each $active as download (download.id)}
+          <DownloadItem {download} onopen={(d) => openDetails(d.id)} />
+        {/each}
+      </div>
+    {/if}
+  </section>
+{/if}
 
 {#if $failed.length > 0}
   <section class="section">
@@ -176,7 +189,7 @@
             <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info">
-            <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+            <button class="title link" title={item.name} onclick={() => openDetails(item.id)}>{item.name}</button>
             <span class="error-text">
               <CircleAlert size="1.4rem" strokeWidth={1.8} />
               <span>{installErrorText(item.error)}</span>
@@ -197,19 +210,17 @@
   </section>
 {/if}
 
+{#if $queue.length > 0}
 <section class="section">
   <h2>{msg('transfers.downloadsQueueHeading')} <span class="count">{$queue.length}</span></h2>
-  {#if $queue.length === 0}
-    <p class="muted">{msg('transfers.downloadsQueueEmpty')}</p>
-  {:else}
     <div class="rows">
       {#each $queue as q, i (q.id)}
         <div class="row">
           <div class="thumb">
             <Artwork src={coverOf(q)} alt={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
-          <div class="info">
-            <span class="title">{q.name}</span>
+          <div class="info inline">
+            <span class="title" title={q.name}>{q.name}</span>
             {#if typeTag(q) || sourceTag(q)}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
@@ -218,8 +229,7 @@
             {/if}
           </div>
           <div class="status">
-            <span class="status-main">{msg('transfers.downloadsStatusQueued')}</span>
-            <span class="status-sub">{msg('transfers.downloadsStatusWaiting')}</span>
+            <span class="status-main">{msg('transfers.downloadsStatusWaiting')}</span>
           </div>
           <div class="row-actions">
             <DropdownMenu
@@ -247,8 +257,8 @@
         </div>
       {/each}
     </div>
-  {/if}
 </section>
+{/if}
 
 {#if $completed.length > 0}
   <section class="section">
@@ -260,8 +270,8 @@
           <div class="thumb">
             <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
-          <div class="info">
-            <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+          <div class="info inline">
+            <button class="title link" title={item.name} onclick={() => openDetails(item.id)}>{item.name}</button>
             {#if typeTag(item) || sourceTag(item)}
               <div class="tags">
                 {#if typeTag(item)}<StatusBadge kind="neutral" label={typeTag(item)} dot={false} />{/if}
@@ -269,13 +279,10 @@
               </div>
             {/if}
           </div>
-          <div class="status">
-            <span class="status-main">{msg('transfers.downloadsDoneSize', { size: bytesSize(item.total) })}</span>
-            <span class="status-sub">{msg('transfers.downloadsDoneWhen', { when: completedWhen(item.completedAt) })}</span>
+          <div class="status" title={msg('transfers.downloadsDoneWhen', { when: completedWhen(item.completedAt) })}>
+            <span class="status-main">{bytesSize(item.total)}</span>
+            <span class="status-sub">{completedWhen(item.completedAt)}</span>
           </div>
-          <span class="done-check" aria-hidden="true">
-            <CircleCheck size="1.8rem" strokeWidth={1.8} />
-          </span>
           <div class="install-cell">
             {#if !install}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsInstallAction')}</Button>
@@ -314,14 +321,61 @@
   {msg('transfers.downloadsFooterHintQuestion')}
   <button class="link" onclick={() => navigate('history')}>{msg('transfers.downloadsOpenHistoryLog')}</button>
 </p>
+</Card>
 
 <AddDownloadModal bind:open={addOpen} />
 <DownloadDetailsModal bind:open={detailsOpen} id={detailsId} />
 <InstallModal bind:open={installOpen} downloadId={installDownloadId} />
 
 <style>
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    max-width: 140rem;
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    font-size: var(--font-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .sum {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .sum.speed {
+    min-width: 10.5rem;
+  }
+
+  .sum.dim {
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
+  .sum :global(svg) {
+    color: var(--accent-text);
+  }
+
+  .sum.dim :global(svg) {
+    color: var(--text-3);
+  }
+
+  .sum-sep {
+    width: 1px;
+    height: 1.8rem;
+    background: var(--border-strong);
+  }
+
   .section {
-    margin-bottom: var(--space-10);
+    margin-bottom: var(--space-8);
     max-width: 140rem;
   }
 
@@ -329,8 +383,8 @@
     display: flex;
     align-items: baseline;
     gap: 0.8rem;
-    font-size: var(--font-xl);
-    margin-bottom: var(--space-4);
+    font-size: var(--font-lg);
+    margin-bottom: var(--space-3);
   }
 
   .count {
@@ -355,10 +409,17 @@
     display: flex;
     align-items: center;
     gap: var(--space-5);
-    padding: var(--space-4) var(--space-5);
+    min-height: 6.4rem;
+    padding: var(--space-2) var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    transition: border-color var(--dur) var(--ease);
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
+  }
+
+  .row:hover {
+    border-color: var(--border-strong);
   }
 
   .row.failed {
@@ -386,7 +447,7 @@
   }
 
   .thumb {
-    width: 5.6rem;
+    width: 3.6rem;
     flex-shrink: 0;
   }
 
@@ -395,10 +456,23 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .info.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .tags {
+    flex-shrink: 0;
   }
 
   .title {
+    min-width: 0;
+    max-width: 100%;
     font-size: var(--font-md);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
@@ -426,8 +500,9 @@
     flex-direction: column;
     gap: 0.3rem;
     flex-shrink: 0;
-    min-width: 15rem;
+    width: 17rem;
     font-size: var(--font-sm);
+    font-variant-numeric: tabular-nums;
   }
 
   .status-main {
@@ -437,12 +512,9 @@
   .status-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .done-check {
-    display: inline-flex;
-    flex-shrink: 0;
-    color: var(--success);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .row-actions {
@@ -455,7 +527,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-width: 15rem;
+    width: 17rem;
     flex-shrink: 0;
   }
 
@@ -474,7 +546,6 @@
 
   .footer-hint {
     margin-top: var(--space-6);
-    text-align: center;
     font-size: var(--font-sm);
     color: var(--text-3);
   }

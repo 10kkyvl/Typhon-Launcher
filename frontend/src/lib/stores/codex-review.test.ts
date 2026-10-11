@@ -13,13 +13,13 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  saveSettingsPatch: vi.fn(),
   saveConsent: vi.fn(),
   setupLibrary: vi.fn(),
   proposeLibraryPath: vi.fn(),
 }));
 
-const { getSettings, saveSettings } = await import('../services/settings');
+const { getSettings, saveSettingsPatch } = await import('../services/settings');
 const { settings, initSettings, updateSettings } = await import('./settings');
 
 function makeSettings(): Settings {
@@ -45,14 +45,14 @@ function deferred<T>() {
 
 beforeEach(async () => {
   vi.mocked(getSettings).mockResolvedValue(makeSettings());
-  vi.mocked(saveSettings).mockReset();
-  vi.mocked(saveSettings).mockResolvedValue(undefined as never);
+  vi.mocked(saveSettingsPatch).mockReset();
+  vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...makeSettings(), ...patch }));
   await initSettings();
 });
 
 it('preserves the latest edit of the same setting when an earlier save fails', async () => {
- const first = deferred<void>();
- vi.mocked(saveSettings).mockImplementationOnce(() => first.promise as never);
+ const first = deferred<Settings>();
+ vi.mocked(saveSettingsPatch).mockImplementationOnce(() => first.promise);
  const a = updateSettings({uiScale: 1.1});
  await Promise.resolve();
  const b = updateSettings({uiScale: 1.2});

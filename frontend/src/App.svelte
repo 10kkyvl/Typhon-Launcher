@@ -7,6 +7,7 @@
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
+  import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
@@ -17,7 +18,8 @@
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
   import { locale } from './lib/i18n';
-  import { route } from './lib/stores/router';
+  import { confirmLeave, leaveRequest, route, stayHere } from './lib/stores/router';
+  import ConfirmModal from './lib/components/ConfirmModal.svelte';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
   import { initMessaging } from './lib/stores/messaging';
@@ -28,6 +30,8 @@
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
+  import { initSupport } from './lib/stores/support';
+  import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
   import { authState, initAuth } from './lib/stores/user';
@@ -45,6 +49,7 @@
   import Profile from './routes/profile/Profile.svelte';
   import Settings from './routes/settings/Settings.svelte';
   import Sources from './routes/sources/Sources.svelte';
+  import Support from './routes/support/Support.svelte';
   import UserProfile from './routes/user/UserProfile.svelte';
 
   onDestroy(initNativeLanguage());
@@ -65,8 +70,10 @@
   initHistory();
   initLan();
   initSocial();
+  onDestroy(initSupport());
   initPresence();
   initSaveBackups();
+  initLegalAcceptance();
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -78,7 +85,7 @@
   });
 </script>
 
-{#if $bigPictureActive && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
+{#if $bigPictureActive && !$showLegalAcceptance && !$showTelemetryConsent && ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline')}
   <BigPictureShell />
   <UpdateOverlay />
 {:else}
@@ -87,6 +94,8 @@
     <div class="boot">
       <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
     </div>
+  {:else if $showLegalAcceptance}
+    <LegalAcceptanceScreen />
   {:else if $showTelemetryConsent}
     <TelemetryConsentScreen />
   {:else if $authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'}
@@ -115,6 +124,8 @@
           <UserProfile username={$route.params.username} />
         {:else if $route.name === 'profile'}
           <Profile />
+        {:else if $route.name === 'support'}
+          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} />
         {:else if $route.name === 'settings'}
           <Settings tab={$route.params.tab} />
         {/if}
@@ -122,6 +133,9 @@
       <ReleaseNotesModal />
       <MoveGameModal />
       <SaveBackupsModal />
+      {#if $leaveRequest}
+        <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
+      {/if}
     <UpdateOverlay />
   {:else}
     <AuthScreen />

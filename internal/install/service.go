@@ -318,6 +318,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.loadErr = nil
 	resume := make([]string, 0, 2)
 	toFinalize := make([]string, 0, 2)
+	waitingDownloads := make([]string, 0, 2)
 	for _, rec := range stored {
 		item := rec
 		wasTransient := transient(item.Status)
@@ -358,6 +359,9 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		if wasTransient && item.Destination != "" {
 			staleItems = append(staleItems, item)
 		}
+		if item.Status == StatusWaitingForUser && item.DownloadID != "" && item.Destination == "" {
+			waitingDownloads = append(waitingDownloads, item.DownloadID)
+		}
 		s.items = append(s.items, &item)
 	}
 	if err := s.persistLocked(); err != nil {
@@ -383,6 +387,9 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		}
 		s.sweepPartial(base, staleItems)
 		s.sweepRemovals()
+		if err := s.releaseOrphanedWaiting(base, waitingDownloads); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("release installs of downloads removed earlier", "error", err)
+		}
 	}()
 
 	base, err := s.baseContext()
@@ -614,9 +621,11 @@ func (s *Service) finishResumed(ctx context.Context, id string, state workerStat
 		slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 	}
 	if !done {
+		failure := installerFailure(engine, state.Code, logPath)
+		tail := installerLogTail(logPath)
 		slog.Error("resumed silent installer failed", "id", id, "engine", string(engine),
-			"code", state.Code, "log", installerLogTail(logPath))
-		s.fail(id, installerFailure(engine, state.Code, logPath))
+			"code", state.Code, "log", tail, "error", withLogTail(failure, tail))
+		s.fail(id, failure)
 		return
 	}
 	chainCtx, endJob := s.adoptJob(ctx, id)

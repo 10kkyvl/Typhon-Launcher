@@ -56,6 +56,10 @@ vi.mock('../services/selfupdate', () => ({
   emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
 }));
 
+// Первый import графа уведомлений идёт через общий сервер трансформации vite и под нагрузкой
+// полного прогона упирался в 5 с таймаута теста; на сборе файла таймаута нет.
+await import('./notifications');
+
 const READ_KEY = 'typhon.notifications.read';
 
 function makeStorage(initial: Record<string, string> = {}) {
@@ -305,4 +309,36 @@ it('retranslates live notifications without resurrecting read errors', async () 
     applyLanguage('ru');
     expect(get(notifications.notifications)).toEqual([]);
   } finally { stop(); applyLanguage('ru'); }
+});
+
+describe('ответы поддержки в списке уведомлений', () => {
+  it('непрочитанные ответы дают запись, которая ведёт в раздел поддержки', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(2);
+
+    const items = get(notifications.notifications).filter((item) => item.route === 'support');
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('support-unread:2');
+    expect(items[0].text).toBe('Новых ответов: 2');
+  });
+
+  it('без непрочитанных ответов записи нет', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(0);
+
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toEqual([]);
+  });
+
+  it('прочитанная запись возвращается, когда ответов стало больше', async () => {
+    const { notifications } = await load(makeStorage());
+    const { unreadReplies } = await import('./support');
+    unreadReplies.set(1);
+    notifications.markAllRead();
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toEqual([]);
+
+    unreadReplies.set(2);
+    expect(get(notifications.notifications).filter((item) => item.route === 'support')).toHaveLength(1);
+  });
 });

@@ -21,6 +21,16 @@ type Snapshot struct {
 	Activity []ActivityDay   `json:"activity"`
 	Running  []GameRef       `json:"running"`
 	Showcase []ShowcaseBlock `json:"showcase"`
+
+	Genres      GenreBreakdown        `json:"genres"`
+	Fingerprint Fingerprint           `json:"fingerprint"`
+	LayoutGames map[string]LayoutGame `json:"layoutGames"`
+}
+
+type Fingerprint struct {
+	Hours     int `json:"hours"`
+	Games     int `json:"games"`
+	Completed int `json:"completed"`
 }
 
 type Stats struct {
@@ -75,6 +85,9 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		Activity: []ActivityDay{},
 		Running:  []GameRef{},
 		Showcase: []ShowcaseBlock{},
+
+		Genres:      GenreBreakdown{Genres: []GenreShare{}},
+		LayoutGames: map[string]LayoutGame{},
 	}
 
 	var totalSeconds int64
@@ -90,6 +103,7 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 		}
 	}
 	snap.Stats.Hours = int(totalSeconds / 3600)
+	snap.Fingerprint = Fingerprint{Hours: snap.Stats.Hours, Games: snap.Stats.Games, Completed: snap.Stats.Completed}
 
 	windowStart := now.Add(-recentWindow)
 	recent := map[string]int64{}

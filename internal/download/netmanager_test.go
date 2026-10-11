@@ -285,14 +285,15 @@ func (b *buildLog) build(_ context.Context, cfg settings.Settings, metaDir strin
 		return nil, b.failing
 	}
 	wrapped := nonClosingCompletion{completion}
-	tc := clientConfig(cfg, metaDir, 0, wrapped)
-	tc.NoDHT = true
-	tc.DisableTrackers = true
-	tc.DisablePEX = true
-	tc.NoDefaultPortForwarding = true
-	cl, err := torrent.NewClient(tc)
+	cl, tc, err := openTestClient(func() (*torrent.ClientConfig, error) {
+		tc := clientConfig(cfg, metaDir, 0, wrapped)
+		tc.NoDHT = true
+		tc.DisableTrackers = true
+		tc.DisablePEX = true
+		tc.NoDefaultPortForwarding = true
+		return tc, nil
+	})
 	if err != nil {
-		closeDefaultStorage(tc)
 		return nil, err
 	}
 	c := &client{
@@ -369,6 +370,49 @@ func viaProxy(s *settings.Settings) {
 func (r *netRig) reconcile(t *testing.T) {
 	t.Helper()
 	r.m.reconcileNetwork(t.Context())
+}
+
+// up runs the first check and returns the client it brought up. A check that
+// leaves no client (the port was refused, the route is down) ends the test
+// with the reason: everything after it would wait for a teardown that has
+// nothing to tear down.
+func (r *netRig) up(t *testing.T) *client {
+	t.Helper()
+	r.reconcile(t)
+	c := r.client()
+	if c == nil {
+		st := r.state()
+		t.Fatalf("the check brought no client up: state=%s code=%s reason=%q", st.State, st.Code, st.Reason)
+	}
+	return c
+}
+
+// stepTimeout is how long a test waits for something that must already be
+// under way: half of what the test binary has left, so a stuck step fails with
+// its own name before the package timeout kills the whole run.
+func stepTimeout(t *testing.T) time.Duration {
+	t.Helper()
+	d := 30 * time.Second
+	if deadline, ok := t.Deadline(); ok {
+		if left := time.Until(deadline) / 2; left < d {
+			d = left
+		}
+	}
+	return d
+}
+
+func await[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+	timer := time.NewTimer(stepTimeout(t))
+	defer timer.Stop()
+	select {
+	case v := <-ch:
+		return v
+	case <-timer.C:
+		t.Fatalf("timed out waiting for %s", what)
+	}
+	var zero T
+	return zero
 }
 
 func (r *netRig) state() NetworkState {
@@ -1633,7 +1677,7 @@ func TestRequestsWhileTheClientIsBeingReplacedReportTheNetwork(t *testing.T) {
 		defer close(done)
 		r.reconcile(t)
 	}()
-	<-hold
+	await(t, hold, "the replacement client to start building")
 
 	if _, err := r.m.FetchMetadata("magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d"); !errors.Is(err, errNetworkDown) {
 		t.Errorf("FetchMetadata while the client is replaced: %v, want errNetworkDown", err)
@@ -1649,7 +1693,7 @@ func TestRequestsWhileTheClientIsBeingReplacedReportTheNetwork(t *testing.T) {
 	}
 
 	close(release)
-	<-done
+	await(t, done, "the check to finish")
 	if _, err := r.m.FetchMetadata("magnet:?xt=urn:btih:a748597437835a2fd0d2e06f8edd86fee316a84d&x.pe=203.0.113.9:1"); errors.Is(err, errNetworkDown) || errors.Is(err, errNoClient) {
 		t.Errorf("FetchMetadata after the replacement: %v", err)
 	}
@@ -1767,10 +1811,18 @@ func TestUnsettledDownloadsAreRecheckedAfterTheNetworkFlaps(t *testing.T) {
 	mark := log.mark()
 	r.net.set(vpnIface("10.8.0.9"))
 	r.reconcile(t)
-	waitUntil(t, "both to be restored", func() bool { return hasEngine(r.m, "not reached") && hasEngine(r.m, "was checking") })
-	waitUntil(t, "the rechecks to finish", func() bool {
-		return r.m.statusOf(t, "not reached") != StatusVerifying && r.m.statusOf(t, "was checking") != StatusVerifying
-	})
+	// The pass restores one download after the other and each recheck syncs
+	// the pieces it marks, so how long it takes depends on the disk and the
+	// load; its end is the event to wait for, not a deadline.
+	r.m.wg.Wait()
+	for _, id := range []string{"not reached", "was checking"} {
+		if !hasEngine(r.m, id) {
+			t.Fatalf("%s was not restored on the new client", id)
+		}
+		if st := r.m.statusOf(t, id); st == StatusVerifying {
+			t.Fatalf("%s is still %s after the restore pass ended", id, st)
+		}
+	}
 	for _, id := range []string{"not reached", "was checking"} {
 		seen := false
 		for _, st := range log.statusesSince(id, mark) {
@@ -2030,7 +2082,7 @@ func TestPasswordReadBeforeASaveDoesNotOutliveIt(t *testing.T) {
 		}
 		read <- pass
 	}()
-	<-entered
+	await(t, entered, "the password read to start")
 	r.store.mu.Lock()
 	r.store.loadHold = nil
 	r.store.mu.Unlock()
@@ -2039,7 +2091,7 @@ func TestPasswordReadBeforeASaveDoesNotOutliveIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	close(hold)
-	if got := <-read; got != "old" {
+	if got := await(t, read, "the interrupted read to return"); got != "old" {
 		t.Fatalf("the interrupted read returned %q", got)
 	}
 	pass, err := r.m.proxyPassword("user")

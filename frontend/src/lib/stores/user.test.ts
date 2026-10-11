@@ -25,6 +25,7 @@ vi.mock('../services/account', () => {
     pickAvatar: vi.fn(),
     uploadAvatar: vi.fn(),
     removeAvatar: vi.fn(),
+    deleteAccount: vi.fn(),
   };
 });
 
@@ -314,6 +315,77 @@ describe('signOut', () => {
   });
 });
 
+describe('deleteAccount', () => {
+  async function signedIn() {
+    const mods = await loadModules();
+    vi.mocked(mods.accountMock.register).mockResolvedValue(makeUser());
+    await mods.userStore.signUp({ email: 'egor@example.com', username: 'egor', displayName: 'Egor', password: 'password' });
+    return mods;
+  }
+
+  it('signs the user out locally after the account is deleted', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockResolvedValue(undefined);
+
+    await userStore.deleteAccount('password');
+
+    expect(accountMock.deleteAccount).toHaveBeenCalledWith('password');
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+    expect(get(userStore.authView)).toBe('login');
+  });
+
+  it('keeps the user signed in on a wrong password', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('invalid_credentials'));
+
+    await expect(userStore.deleteAccount('nope')).rejects.toMatchObject({ code: 'invalid_credentials' });
+
+    expect(get(userStore.authState)).toBe('authenticated');
+    expect(get(userStore.currentUser)).not.toBeNull();
+  });
+
+  it('keeps the user signed in when the server is unreachable', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('network_error'));
+
+    await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code: 'network_error' });
+
+    expect(get(userStore.authState)).toBe('authenticated');
+  });
+
+  it('signs out and rethrows when the failure code means the account is already gone', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('sync_disabled'));
+
+    await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code: 'sync_disabled' });
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+
+  it('signs out after a generic failure when the session no longer exists on the server', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('server_error'));
+    vi.mocked(accountMock.fetchCurrentUser).mockRejectedValue(new accountMock.AccountError('unauthenticated'));
+
+    await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code: 'server_error' });
+
+    expect(get(userStore.authState)).toBe('unauthenticated');
+    expect(get(userStore.currentUser)).toBeNull();
+  });
+
+  it('keeps the user after a generic failure when the account still answers', async () => {
+    const { accountMock, userStore } = await signedIn();
+    vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('server_error'));
+    vi.mocked(accountMock.fetchCurrentUser).mockResolvedValue(makeUser());
+
+    await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code: 'server_error' });
+
+    expect(get(userStore.authState)).toBe('authenticated');
+  });
+});
+
 describe('saveProfile', () => {
   it('replaces currentUser with the server response on success', async () => {
     const { accountMock, userStore } = await loadModules();
@@ -368,6 +440,22 @@ describe('saveProfile', () => {
     await Promise.all([call1, call2]);
 
     expect(accountMock.updateProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the caller whether anything was saved', async () => {
+    const { accountMock, userStore } = await loadModules();
+    let resolveFirst!: (value: ReturnType<typeof makeUser>) => void;
+    const first = new Promise<ReturnType<typeof makeUser>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(accountMock.updateProfile).mockReturnValueOnce(first);
+
+    const call1 = userStore.saveProfile({ displayName: 'A' });
+    const call2 = userStore.saveProfile({ displayName: 'B' });
+    resolveFirst(makeUser({ displayName: 'A' }));
+
+    expect(await call2).toBe(false);
+    expect(await call1).toBe(true);
   });
 });
 

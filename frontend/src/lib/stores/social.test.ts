@@ -14,7 +14,7 @@ vi.mock('./settings', async () => {
 });
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  saveSettingsPatch: vi.fn(),
   saveConsent: vi.fn(),
   setupLibrary: vi.fn(),
   proposeLibraryPath: vi.fn(),

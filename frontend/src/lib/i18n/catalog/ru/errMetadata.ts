@@ -18,6 +18,8 @@ export const errMetadata = {
   'errMetadata.metadataNoMatch': 'игра не найдена у провайдера метаданных',
   'errMetadata.metadataRateLimited': 'сервер метаданных ограничил частоту запросов',
   'errMetadata.metadataSaveFailed': 'не удалось сохранить данные метаданных',
+  'errMetadata.metadataStoreLinkMissing': 'ссылка на магазин недоступна',
+  'errMetadata.metadataStoreLinkInvalid': 'ссылка на магазин не прошла проверку',
 } as const;
 
 export type ErrMetadataKey = keyof typeof errMetadata;

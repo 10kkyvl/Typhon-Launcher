@@ -10,6 +10,8 @@ const bindings = {
   PickAvatar: vi.fn(),
   UploadAvatar: vi.fn(),
   RemoveAvatar: vi.fn(),
+  OpenForgotPassword: vi.fn(),
+  OpenSupportSite: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/account', () => ({ Service: bindings }));
@@ -76,6 +78,48 @@ describe('account service errors', () => {
   });
 });
 
+describe('updateProfile profile payload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function sentProfile(profile: Record<string, unknown>) {
+    const { updateProfile, DEFAULT_PROFILE } = await import('./account');
+    bindings.UpdateProfile.mockResolvedValueOnce(user);
+    await updateProfile({ profile: { ...DEFAULT_PROFILE, ...profile } as never });
+    return bindings.UpdateProfile.mock.calls[0][0].profile as Record<string, unknown>;
+  }
+
+  it('does not invent an appearance when the caller sent none', async () => {
+    const sent = await sentProfile({ visibility: 'private' });
+
+    expect(Object.keys(sent)).not.toContain('appearance');
+    expect(sent.visibility).toBe('private');
+  });
+
+  it('treats a null appearance as none', async () => {
+    const sent = await sentProfile({ appearance: null });
+
+    expect(Object.keys(sent)).not.toContain('appearance');
+  });
+
+  it('sends a normalised appearance when the caller sent one', async () => {
+    const sent = await sentProfile({ appearance: { theme: 'forest', coverDim: 500 } });
+
+    expect(sent.appearance).toMatchObject({ theme: 'forest', coverDim: 100, accent: '#67d8ef' });
+  });
+
+  it('keeps an empty showcase as a value and an absent one as absent', async () => {
+    const { updateProfile } = await import('./account');
+    bindings.UpdateProfile.mockResolvedValue(user);
+    await updateProfile({ profile: { visibility: 'friends', showOnline: true, showPlaying: true, showPlaytime: true, showLibrary: true, showActivity: true, showStats: true, showcase: [] } });
+    await updateProfile({ profile: { visibility: 'friends', showOnline: true, showPlaying: true, showPlaytime: true, showLibrary: true, showActivity: true, showStats: true } as never });
+
+    expect(bindings.UpdateProfile.mock.calls[0][0].profile.showcase).toEqual([]);
+    expect(Object.keys(bindings.UpdateProfile.mock.calls[1][0].profile)).not.toContain('showcase');
+  });
+});
+
 describe('auth calls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -110,6 +154,32 @@ describe('auth calls', () => {
 
     await expect(logout()).resolves.toBeUndefined();
     expect(bindings.Logout).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.each([
+  ['openForgotPassword', 'OpenForgotPassword'],
+  ['openSupportSite', 'OpenSupportSite'],
+] as const)('%s', (name, binding) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('asks the backend to open the page', async () => {
+    const service = await import('./account');
+    bindings[binding].mockResolvedValueOnce(undefined);
+
+    await expect(service[name]()).resolves.toBeUndefined();
+    expect(bindings[binding]).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a browser failure as an AccountError instead of swallowing it', async () => {
+    const service = await import('./account');
+    bindings[binding].mockRejectedValueOnce(new Error('open page: no default browser'));
+
+    const err = await service[name]().catch((e) => e);
+    expect(err).toBeInstanceOf(service.AccountError);
+    expect(err.code).toBe('server_error');
   });
 });
 

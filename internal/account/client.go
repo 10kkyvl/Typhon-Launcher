@@ -34,6 +34,13 @@ type CurrentUser struct {
 	Bio         string          `json:"bio"`
 	Profile     ProfileSettings `json:"profile"`
 	CreatedAt   time.Time       `json:"createdAt"`
+
+	TermsAccepted *TermsAcceptance `json:"termsAccepted"`
+}
+
+type TermsAcceptance struct {
+	Version    string    `json:"version"`
+	AcceptedAt time.Time `json:"acceptedAt"`
 }
 
 type CoverUpload struct {
@@ -112,12 +119,23 @@ func (c *Client) Me(ctx context.Context) (CurrentUser, error) {
 	return c.doUser(ctx, http.MethodGet, APIPrefix+"/me", nil, "", c.httpClient)
 }
 
-func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, error) {
-	body, err := json.Marshal(patch)
+func (c *Client) AcceptTerms(ctx context.Context, version string) (CurrentUser, error) {
+	body, err := json.Marshal(map[string]string{"termsVersion": version})
 	if err != nil {
+		return CurrentUser{}, fmt.Errorf("encode terms acceptance: %w", err)
+	}
+	return c.doUser(ctx, http.MethodPost, APIPrefix+"/me/terms", bytes.NewReader(body), "application/json", c.httpClient)
+}
+
+func (c *Client) UpdateProfile(ctx context.Context, patch Patch) (CurrentUser, error) {
+	var body bytes.Buffer
+	enc := json.NewEncoder(&body)
+	// Escaping < > & would rewrite the raw config of layout blocks this launcher does not know.
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(patch); err != nil {
 		return CurrentUser{}, fmt.Errorf("encode profile patch: %w", err)
 	}
-	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient)
+	return c.doUser(ctx, http.MethodPatch, APIPrefix+"/me", &body, "application/json", c.httpClient)
 }
 
 func (c *Client) UploadAvatar(ctx context.Context, data []byte, crop AvatarCrop) (CurrentUser, error) {

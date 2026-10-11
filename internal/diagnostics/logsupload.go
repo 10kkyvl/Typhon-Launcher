@@ -105,7 +105,22 @@ type logUploadResponse struct {
 // this package, just over headers instead of a JSON body field: the
 // request body here is the opaque gzip archive itself, so there is no JSON
 // envelope to carry installation_id/session_id inside.
-func (s *Service) SendLogs() (result SendLogsResult, err error) {
+func (s *Service) SendLogs() (SendLogsResult, error) {
+	s.mu.Lock()
+	base := s.ctx
+	s.mu.Unlock()
+	return s.sendLogs(base)
+}
+
+// SendLogsContext is SendLogs for a caller inside the launcher: cancelling ctx
+// abandons the upload.
+//
+//wails:ignore
+func (s *Service) SendLogsContext(ctx context.Context) (SendLogsResult, error) {
+	return s.sendLogs(ctx)
+}
+
+func (s *Service) sendLogs(caller context.Context) (result SendLogsResult, err error) {
 	if !s.logUploadMu.TryLock() {
 		return SendLogsResult{}, errLogUploadBusy
 	}
@@ -123,8 +138,11 @@ func (s *Service) SendLogs() (result SendLogsResult, err error) {
 	s.mu.Lock()
 	base := s.ctx
 	s.mu.Unlock()
-	if base == nil {
+	if base == nil || caller == nil {
 		return SendLogsResult{}, errDiagnosticsNotStarted
+	}
+	if err := caller.Err(); err != nil {
+		return SendLogsResult{}, err
 	}
 
 	data, dropped, err := app.BuildLogUpload(maxLogUploadGzipBytes)
@@ -138,7 +156,7 @@ func (s *Service) SendLogs() (result SendLogsResult, err error) {
 		return SendLogsResult{}, err
 	}
 
-	ctx, cancel := context.WithTimeout(base, logUploadHTTPTimeout)
+	ctx, cancel := context.WithTimeout(caller, logUploadHTTPTimeout)
 	defer cancel()
 
 	id, err := postLogBundleWithCallbacks(ctx, cl.httpClient, cl.baseURL, s.identity, data,

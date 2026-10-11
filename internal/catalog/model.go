@@ -32,6 +32,7 @@ type Game struct {
 	Themes            []string            `json:"themes,omitempty"`
 	Platforms         []string            `json:"platforms,omitempty"`
 	GameType          string              `json:"gameType,omitempty"`
+	StoreLinks        map[string]string   `json:"storeLinks,omitempty"`
 	ExternalIDs       ExternalIDs         `json:"externalIds"`
 	Aliases           []string            `json:"aliases,omitempty"`
 	LocalExternalIDs  ExternalIDs         `json:"localExternalIds,omitempty"`

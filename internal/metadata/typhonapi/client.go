@@ -197,6 +197,7 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 		Themes:      payload.Themes,
 		Platforms:   payload.Platforms,
 		GameType:    strings.TrimSpace(payload.GameType),
+		StoreLinks:  catalog.SanitizeStoreLinks(payload.StoreLinks),
 	}
 	if payload.SteamAppID > 0 {
 		meta.SteamAppID = strconv.FormatInt(payload.SteamAppID, 10)

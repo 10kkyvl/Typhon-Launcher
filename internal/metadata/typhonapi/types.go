@@ -21,19 +21,20 @@ type imagePayload struct {
 }
 
 type gameResponse struct {
-	SteamAppID  int64          `json:"steamAppId"`
-	ProviderID  string         `json:"providerId"`
-	Title       string         `json:"title"`
-	Summary     string         `json:"summary"`
-	ReleaseDate *time.Time     `json:"releaseDate"`
-	Developer   string         `json:"developer"`
-	Publisher   string         `json:"publisher"`
-	Genres      []string       `json:"genres"`
-	Themes      []string       `json:"themes"`
-	Platforms   []string       `json:"platforms"`
-	GameType    string         `json:"gameType"`
-	Cover       *imagePayload  `json:"cover"`
-	Screenshots []imagePayload `json:"screenshots"`
+	SteamAppID  int64             `json:"steamAppId"`
+	ProviderID  string            `json:"providerId"`
+	Title       string            `json:"title"`
+	Summary     string            `json:"summary"`
+	ReleaseDate *time.Time        `json:"releaseDate"`
+	Developer   string            `json:"developer"`
+	Publisher   string            `json:"publisher"`
+	Genres      []string          `json:"genres"`
+	Themes      []string          `json:"themes"`
+	Platforms   []string          `json:"platforms"`
+	GameType    string            `json:"gameType"`
+	StoreLinks  map[string]string `json:"storeLinks"`
+	Cover       *imagePayload     `json:"cover"`
+	Screenshots []imagePayload    `json:"screenshots"`
 }
 
 type resolveRequest struct {

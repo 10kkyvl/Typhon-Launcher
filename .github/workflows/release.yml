@@ -33,6 +33,10 @@
 # runs without TLS. Publishing therefore copies the files to the VPS over SSH
 # and uploads them from there over loopback, so the object-store credentials
 # never leave the server -- they are read from /opt/typhon-backend/.env.
+#
+# When that .env also names a Cloudflare R2 store (RELEASES_S3_*), the same
+# files go there too: a backend configured with it redirects downloads to R2,
+# one without it still serves Garage, so either can be live during the move.
 
 name: Release
 
@@ -388,7 +392,7 @@ jobs:
             -out manifest-legacy.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
 
-      - name: Publish installer and manifest to Garage over SSH
+      - name: Publish installer and manifest over SSH
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
@@ -434,6 +438,33 @@ jobs:
           run_aws s3 cp /data/typhon-darwin-arm64.zip \
             "s3://$bucket/launcher/releases/$version/typhon-darwin-arm64.zip" \
             --endpoint-url http://127.0.0.1:3900
+
+          if [ -n "${RELEASES_S3_ENDPOINT:-}" ]; then
+            r2_bucket="${RELEASES_S3_BUCKET:?RELEASES_S3_ENDPOINT is set without RELEASES_S3_BUCKET}"
+            run_r2() {
+              docker run --rm \
+                -e AWS_ACCESS_KEY_ID="$RELEASES_S3_ACCESS_KEY" \
+                -e AWS_SECRET_ACCESS_KEY="$RELEASES_S3_SECRET_KEY" \
+                -e AWS_DEFAULT_REGION="${RELEASES_S3_REGION:-auto}" \
+                -v "$remote_dir":/data \
+                amazon/aws-cli:2.36.30@sha256:da37c08f8e00a64c09acd46e8ce5c3dd30b291046029def45566aa9ccd7b398b "$@" \
+                --endpoint-url "https://$RELEASES_S3_ENDPOINT"
+            }
+
+            for file in typhon-amd64-installer.exe typhon-darwin-arm64.zip; do
+              run_r2 s3 cp "/data/$file" \
+                "s3://$r2_bucket/launcher/releases/$version/$file" \
+                --cache-control "public, max-age=31536000, immutable"
+            done
+            for file in manifest.json manifest-legacy.json; do
+              run_r2 s3 cp "/data/$file" \
+                "s3://$r2_bucket/launcher/$file" \
+                --content-type application/json \
+                --cache-control "no-cache, no-store, must-revalidate"
+            done
+          else
+            echo "::warning::RELEASES_S3_ENDPOINT is not set in /opt/typhon-backend/.env; this release is in Garage only, and a backend serving releases from R2 will not see it"
+          fi
 
           run_aws s3 cp /data/manifest.json \
             "s3://$bucket/launcher/manifest.json" \

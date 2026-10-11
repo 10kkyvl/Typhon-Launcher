@@ -1,19 +1,13 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
+  import DeleteAccountModal from '../../lib/components/DeleteAccountModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import {
-    SHOWCASE_KINDS,
-    VISIBILITIES,
-    type ProfileSettings,
-    type ShowcaseKind,
-    type Visibility,
-  } from '../../lib/services/account';
+  import { VISIBILITIES, type ProfileSettings, type Visibility } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { showcaseLabel, visibilityLabel } from '../../lib/profile/view';
+  import { privacyPatch } from '../../lib/profile/settingsPatch';
+  import { visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
@@ -43,10 +37,11 @@
   let draft = $state<ProfileSettings>(initialDraft());
   let visibility = $state<string>(initialDraft().visibility);
   let error = $state('');
+  let deleting = $state(false);
 
   const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
-  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility' | 'appearance'>; label: string; sub: string }[] = [
+  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility' | 'appearance' | 'statusEmoji' | 'statusText' | 'layout'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: msg('social.flagOnlineLabel'), sub: msg('social.flagOnlineSub') },
     { key: 'showPlaying', label: msg('social.flagPlayingLabel'), sub: msg('social.flagPlayingSub') },
     { key: 'showLibrary', label: msg('social.flagLibraryLabel'), sub: msg('social.flagLibrarySub') },
@@ -55,31 +50,14 @@
     { key: 'showStats', label: msg('social.flagStatsLabel'), sub: msg('social.flagStatsSub') },
   ];
 
-  const selected = $derived(draft.showcase);
-  const unselected = $derived(SHOWCASE_KINDS.filter((kind) => !draft.showcase.includes(kind)));
-
-  function add(kind: ShowcaseKind) {
-    if (draft.showcase.length >= 3) return;
-    draft.showcase = [...draft.showcase, kind];
-  }
-
-  function remove(kind: ShowcaseKind) {
-    draft.showcase = draft.showcase.filter((k) => k !== kind);
-  }
-
-  function move(index: number, delta: number) {
-    const next = [...draft.showcase];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    draft.showcase = next;
-  }
-
   async function save() {
     if ($savingProfile || $isOffline) return;
     error = '';
     try {
-      await saveProfile({ profile: { ...$state.snapshot(draft), visibility: toVisibility(visibility) } });
+      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility)) }))) {
+        error = msg('profile.saveBusy');
+        return;
+      }
       open = false;
       toast(msg('social.settingsSaved'), 'success');
     } catch (err) {
@@ -116,41 +94,12 @@
     </div>
   </div>
 
-  <div class="group">
-    <h4>{msg('social.showcaseHeading')}</h4>
-    <p class="hint">{msg('social.showcaseExplain')}</p>
-    <ul class="showcase">
-      {#each selected as kind, index (kind)}
-        <li class="showcase-row">
-          <span class="row-label">{showcaseLabel(kind)}</span>
-          <span class="showcase-actions">
-            <IconButton
-              label={msg('social.moveUp', { title: showcaseLabel(kind) })}
-              size="sm"
-              disabled={index === 0 || $isOffline}
-              onclick={() => move(index, -1)}
-            >
-              <ArrowUp size="1.5rem" strokeWidth={1.8} />
-            </IconButton>
-            <IconButton
-              label={msg('social.moveDown', { title: showcaseLabel(kind) })}
-              size="sm"
-              disabled={index === selected.length - 1 || $isOffline}
-              onclick={() => move(index, 1)}
-            >
-              <ArrowDown size="1.5rem" strokeWidth={1.8} />
-            </IconButton>
-            <Button size="sm" variant="ghost" disabled={$isOffline} onclick={() => remove(kind)}>{msg('social.removeButton')}</Button>
-          </span>
-        </li>
-      {/each}
-      {#each unselected as kind (kind)}
-        <li class="showcase-row muted">
-          <span class="row-label">{showcaseLabel(kind)}</span>
-          <Button size="sm" disabled={selected.length >= 3 || $isOffline} onclick={() => add(kind)}>{msg('common.add')}</Button>
-        </li>
-      {/each}
-    </ul>
+  <div class="group danger">
+    <h4>{msg('profile.dangerZoneTitle')}</h4>
+    <p class="hint">{msg('profile.deleteAccountIntro')}</p>
+    <Button variant="danger" disabled={$isOffline || $savingProfile} onclick={() => (deleting = true)}>
+      {msg('profile.deleteAccountButton')}
+    </Button>
   </div>
 
   {#snippet footer()}
@@ -162,9 +111,18 @@
   {/snippet}
 </Modal>
 
+{#if deleting}
+  <DeleteAccountModal onclose={() => (deleting = false)} />
+{/if}
+
 <style>
   .group + .group {
     margin-top: var(--space-6);
+  }
+
+  .danger {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
   }
 
   h4 {
@@ -182,15 +140,13 @@
     margin-bottom: var(--space-3);
   }
 
-  .rows,
-  .showcase {
+  .rows {
     display: flex;
     flex-direction: column;
     list-style: none;
   }
 
-  .row,
-  .showcase-row {
+  .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -198,8 +154,7 @@
     padding: 1.3rem 0;
   }
 
-  .row + .row,
-  .showcase-row + .showcase-row {
+  .row + .row {
     border-top: 1px solid var(--border);
   }
 
@@ -218,16 +173,6 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .muted .row-label {
-    color: var(--text-3);
-  }
-
-  .showcase-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
   }
 
   .error {

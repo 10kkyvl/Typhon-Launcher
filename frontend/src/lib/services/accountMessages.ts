@@ -12,6 +12,7 @@ function messages(): Record<string, string> {
     invalid_password: msg('state.accountErrorInvalidPassword'),
     email_immutable: msg('state.accountErrorEmailImmutable'),
     launcher_outdated: msg('state.accountErrorLauncherOutdated'),
+    terms_required: msg('state.accountErrorTermsRequired'),
     no_changes: msg('state.accountErrorNoChanges'),
     avatar_too_large: msg('state.accountErrorAvatarTooLarge'),
     unsupported_avatar: msg('state.accountErrorUnsupportedAvatar'),

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { updateErrorText } from '../updates/updateErrors';
-  import { ChevronDown, History, RotateCcw, X } from '@lucide/svelte';
+  import { ArrowUp, ChevronDown, History, RotateCcw, Sparkles, X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -31,7 +31,6 @@
   const plan = $derived(update.plan ?? null);
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
   const isUpdate = $derived(availability.kind === 'update');
-  const isNewRevision = $derived(availability.reason === 'new_distribution_revision');
   const noRelease = $derived(availability.kind === 'none');
   const headline = $derived.by(() => {
     if (noRelease) {
@@ -41,6 +40,26 @@
     }
     return isUpdate ? msg('ui.updateAvailable') : msg('ui.newReleaseAvailable');
   });
+  const reasonKey = $derived(
+    !isUpdate && availability.reason ? updateReasonKey(availability.reason) : 'ui.versionsNotComparable',
+  );
+  const cautious = $derived(
+    !isUpdate &&
+      !noRelease &&
+      reasonKey !== 'ui.versionsNotComparable' &&
+      reasonKey !== 'ui.newDistributionRevisionReason',
+  );
+  const explanation = $derived.by(() => {
+    if (noRelease) return '';
+    if (isUpdate) return msg('ui.updateAvailableHint');
+    if (reasonKey === 'ui.versionsNotComparable') return msg('ui.versionsNotComparableHint');
+    return msg(reasonKey);
+  });
+  const fromVersion = $derived(availability.installedVersion || (noRelease ? msg('ui.versionUnknown') : ''));
+  const toVersion = $derived(noRelease ? '' : availability.targetVersion);
+  const versionsLabel = $derived(
+    fromVersion && toVersion ? 'games.detailFactVersion' : fromVersion ? 'ui.currentVersion' : 'ui.newVersion',
+  );
 
   const sizeLabel = $derived.by(() => {
     if (plan) return bytesSize(plan.downloadBytes);
@@ -73,64 +92,82 @@
 <div class="section">
 <Card>
   <div class="head">
+    <span class="mark" class:cautious aria-hidden="true">
+      {#if isUpdate}
+        <ArrowUp size="2rem" strokeWidth={2} />
+      {:else}
+        <Sparkles size="2rem" strokeWidth={1.8} />
+      {/if}
+    </span>
     <div class="titles">
       <h3 class="card-title">{headline}</h3>
-      <p class="versions">
-        {#if noRelease}
-          <span class="to">{availability.installedVersion || msg('ui.versionUnknown')}</span>
-        {:else}
-          <span class="from">{availability.installedVersion || msg('ui.versionUnknown')}</span>
-          <span class="arrow">→</span>
-          <span class="to">{availability.targetVersion || msg('ui.newRelease')}</span>
-        {/if}
-      </p>
-    </div>
-    <div class="badges">
-      {#if update.state === 'update_ready'}
-        <StatusBadge kind="success" label={msg('ui.readyToInstall')} />
-      {:else if busy}
-        <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
-      {:else if !isUpdate && !noRelease}
-        <StatusBadge kind="accent" label={msg(isNewRevision ? 'ui.distributionUpdated' : 'ui.versionsNotComparable')} dot={false} />
+      {#if explanation}
+        <p class="explain" class:cautious>{explanation}</p>
       {/if}
     </div>
+    {#if update.state === 'update_ready'}
+      <div class="badges">
+        <StatusBadge kind="success" label={msg('ui.readyToInstall')} />
+      </div>
+    {:else if busy}
+      <div class="badges">
+        <StatusBadge kind="accent" label={stepLabels(update.step ?? 'download')} />
+      </div>
+    {/if}
+  </div>
+
+  <div class="facts-clip">
+    <dl class="summary facts">
+      {#if fromVersion || toVersion}
+        <div>
+          <dt>{msg(versionsLabel)}</dt>
+          <dd class="versions">
+            {#if fromVersion}
+              <span class="version" class:from={Boolean(toVersion)} title={fromVersion}>{fromVersion}</span>
+            {/if}
+            {#if fromVersion && toVersion}
+              <span class="arrow" aria-hidden="true">→</span>
+            {/if}
+            {#if toVersion}
+              <span class="version" title={toVersion}>{toVersion}</span>
+            {/if}
+          </dd>
+        </div>
+      {/if}
+      {#if !update.planning && !busy && (!noRelease || plan)}
+        <div>
+          <dt>{msg('ui.downloadLabel')}</dt>
+          <dd>{sizeLabel}</dd>
+        </div>
+        <div>
+          <dt>{msg('ui.method')}</dt>
+          <dd title={strategyLabel}>{strategyLabel}</dd>
+        </div>
+        {#if plan && plan.reusedBytes > 0}
+          <div>
+            <dt>{msg('ui.alreadyHave')}</dt>
+            <dd>{bytesSize(plan.reusedBytes)}</dd>
+          </div>
+        {/if}
+        {#if plan && availability.patchCount > 0}
+          <div>
+            <dt>{msg('ui.patches')}</dt>
+            <dd>{availability.patchCount}</dd>
+          </div>
+        {/if}
+      {/if}
+    </dl>
   </div>
 
   {#if update.planning}
-    <p class="muted">{msg('ui.calculatingDownloadSize')}</p>
+    <p class="muted reason">{msg('ui.calculatingDownloadSize')}</p>
   {:else if busy}
     <div class="progress">
       <ProgressBar value={update.progress * 100} />
       <span class="muted">{progressPercent(update.progress)}%</span>
     </div>
-  {:else if !noRelease || plan}
-    <dl class="summary">
-      <div>
-        <dt>{msg('ui.downloadLabel')}</dt>
-        <dd>{sizeLabel}</dd>
-      </div>
-      <div>
-        <dt>{msg('ui.method')}</dt>
-        <dd>{strategyLabel}</dd>
-      </div>
-      {#if plan && plan.reusedBytes > 0}
-        <div>
-          <dt>{msg('ui.alreadyHave')}</dt>
-          <dd>{bytesSize(plan.reusedBytes)}</dd>
-        </div>
-      {/if}
-      {#if plan && availability.patchCount > 0}
-        <div>
-          <dt>{msg('ui.patches')}</dt>
-          <dd>{availability.patchCount}</dd>
-        </div>
-      {/if}
-    </dl>
   {/if}
 
-  {#if availability.reason && !isUpdate && !noRelease}
-    <p class="muted reason">{msg(updateReasonKey(availability.reason))}</p>
-  {/if}
   {#if update.error}
     <p class="error">{updateErrorText(update.error)}</p>
   {/if}
@@ -148,7 +185,9 @@
       <Button variant="primary" disabled={running} onclick={() => (confirmOpen = true)}>{msg('ui.updateAction')}</Button>
       <Button onclick={() => (detailsOpen = !detailsOpen)}>
         {msg('ui.details')}
-        <ChevronDown size="1.5rem" strokeWidth={1.8} />
+        <span class="chevron" class:open={detailsOpen}>
+          <ChevronDown size="1.5rem" strokeWidth={1.8} />
+        </span>
       </Button>
     {:else if !noRelease}
       <Button variant="primary" disabled={update.planning} onclick={() => preparePlan(update.gameId)}>
@@ -271,10 +310,27 @@
 
   .head {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
     gap: var(--space-4);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+
+  .mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 4.4rem;
+    height: 4.4rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+    animation: mark-in var(--dur-slow) var(--ease-spring) both;
+  }
+
+  .titles {
+    flex: 1;
+    min-width: 0;
   }
 
   .card-title {
@@ -283,38 +339,18 @@
     margin: 0;
   }
 
-  .versions {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin: 0.6rem 0 0;
-    font-size: var(--font-md);
-    font-variant-numeric: tabular-nums;
-    min-width: 0;
-  }
-
-  .versions span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .from {
-    color: var(--text-3);
-  }
-
-  .arrow {
-    color: var(--text-3);
-  }
-
-  .to {
-    font-weight: 500;
+  .explain {
+    margin: 0.4rem 0 0;
+    font-size: var(--font-sm);
+    line-height: 1.45;
+    color: var(--text-2);
   }
 
   .badges {
     display: flex;
     gap: 0.8rem;
+    flex-shrink: 0;
+    align-self: flex-start;
   }
 
   .summary {
@@ -322,6 +358,86 @@
     flex-wrap: wrap;
     gap: var(--space-5);
     margin: 0 0 var(--space-4);
+  }
+
+  .mark.cautious {
+    background: var(--warning-subtle);
+    color: var(--warning);
+  }
+
+  .explain.cautious {
+    color: var(--warning);
+  }
+
+  .facts-clip {
+    overflow: hidden;
+    margin-bottom: var(--space-5);
+  }
+
+  .facts {
+    gap: var(--space-4) 0;
+    margin: 0 0 0 calc(var(--space-5) * -1 - 1px);
+  }
+
+  .facts > div {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 var(--space-5);
+    border-left: 1px solid var(--border);
+  }
+
+  .facts dd {
+    max-width: 28ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .facts .versions {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    max-width: none;
+  }
+
+  .version {
+    min-width: 0;
+    max-width: 24ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .version.from,
+  .arrow {
+    color: var(--text-2);
+  }
+
+  .arrow {
+    flex-shrink: 0;
+  }
+
+  .chevron {
+    display: inline-flex;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .chevron.open {
+    transform: rotate(180deg);
+  }
+
+  @keyframes mark-in {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes details-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.6rem);
+    }
   }
 
   .summary dt {
@@ -369,6 +485,7 @@
     margin-top: var(--space-5);
     padding-top: var(--space-5);
     border-top: 1px solid var(--border);
+    animation: details-in var(--dur-panel) var(--ease) both;
   }
 
   .steps {

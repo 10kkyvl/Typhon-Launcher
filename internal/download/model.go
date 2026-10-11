@@ -151,7 +151,8 @@ func progressOf(d *Download) ProgressUpdate {
 
 func snapshot(d *Download) Download {
 	out := *d
-	out.Files = append([]FileState(nil), d.Files...)
+	out.Files = make([]FileState, len(d.Files))
+	copy(out.Files, d.Files)
 	if d.CompletedAt != nil {
 		at := *d.CompletedAt
 		out.CompletedAt = &at

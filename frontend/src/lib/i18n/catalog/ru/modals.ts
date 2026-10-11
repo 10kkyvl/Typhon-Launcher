@@ -19,7 +19,7 @@ export const modals = {
   'modals.sourcesNoticeReviewTitle': 'Уведомление об источниках',
   'modals.sourcesNoticeGateTitle': 'Прежде чем добавить источник',
   'modals.sourcesNoticeBody':
-    'Typhon не предоставляет и не проверяет содержимое сторонних источников. Добавляйте только источники и материалы, которыми вы имеете право пользоваться. Адрес источника и его содержимое обрабатываются на этом устройстве — Typhon не передаёт их своим серверам.',
+    'Typhon не предоставляет и не проверяет содержимое сторонних источников. Добавляйте только источники и материалы, которыми вы имеете право пользоваться. Адрес источника, ссылки и файлы остаются на этом устройстве. Чтобы подобрать обложки и описания, сервису Typhon передаются только названия игр из фида — без адреса источника и ссылок; сервер их не сохраняет.',
   'modals.sourcesNoticeSaving': 'Сохранение…',
   'modals.sourcesNoticeContinue': 'Понятно, продолжить',
 
@@ -105,20 +105,23 @@ export const modals = {
   'modals.socialConsentEnable': 'Включить синхронизацию',
 
   // TelemetryConsentScreen.svelte
-  'modals.telemetryConsentTitle': 'Отправлять анонимные отчёты об ошибках?',
+  'modals.telemetryConsentTitle': 'Какие анонимные данные отправлять?',
   'modals.telemetryConsentIntro':
-    'Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и сетевые адреса удаляются перед отправкой.',
-  'modals.telemetryConsentUsageTitle': 'Ещё и статистика использования',
+    'Это помогает быстрее чинить баги. Переключатели независимы: включите только то, чем готовы делиться. Пути, имя устройства и сетевые адреса удаляются перед отправкой. Анонимный сигнал «лаунчер онлайн» к этому вопросу не относится: он выключается в настройках, в разделе «Приватность».',
+  'modals.telemetryConsentUsageTitle': 'Статистика использования',
   'modals.telemetryConsentUsageNote':
-    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
+    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Кроме того, в сигнал «лаунчер онлайн» добавляются идентификатор установки и идентификатор игры из каталога. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
   'modals.telemetryConsentUsageToggleLabel': 'Анонимная статистика использования',
   'modals.telemetryConsentDisclosureSummary': 'Что именно отправляется',
   'modals.telemetryConsentErrorReportLabel': 'Отчёт об ошибке',
   'modals.telemetryConsentUsageEventLabel': 'Событие статистики использования',
   'modals.telemetryConsentCompatReportLabel': 'Отчёт о совместимости игры',
+  'modals.telemetryConsentHeartbeatLabel': 'Сигнал «лаунчер онлайн»',
+  'modals.telemetryConsentHeartbeatNote':
+    'Без статистики использования уходят только эти поля. Со статистикой добавляются installation_id и game_id. Сигнал отключается в настройках.',
   'modals.telemetryConsentSaving': 'Сохранение…',
-  'modals.telemetryConsentDecline': 'Не отправлять',
-  'modals.telemetryConsentAccept': 'Да, отправлять',
+  'modals.telemetryConsentDecline': 'Выключить оба',
+  'modals.telemetryConsentAccept': 'Сохранить выбор',
 
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Диагностика',
@@ -259,6 +262,7 @@ export const modals = {
   'modals.sourceDetailsStatusUnmatched': 'Без совпадения',
   'modals.sourceDetailsStatusRemoved': 'Удалённые',
   'modals.sourceDetailsStatusNew': 'Новые',
+  'modals.sourceDetailsReleaseLoadFailed': 'Не удалось загрузить раздачу',
   'modals.sourceDetailsStatusActive': 'Активен',
   'modals.sourceDetailsStatusDisabled': 'Отключен',
   'modals.sourceDetailsStatusUpdating': 'Обновление',
@@ -281,6 +285,8 @@ export const modals = {
   'modals.sourceDetailsColStatus': 'Статус',
   'modals.sourceDetailsLoading': 'Загрузка…',
   'modals.sourceDetailsNoReleases': 'Релизов не найдено',
+  'modals.sourceDetailsLoadFailed': 'Не удалось загрузить сведения об источнике',
+  'modals.sourceDetailsReleasesFailed': 'Не удалось загрузить раздачи',
   'modals.sourceDetailsUnavailable': 'Недоступен',
   'modals.sourceDetailsNewBadge': 'Новое',
   'modals.sourceDetailsRange': '{from}–{to} из {total}',
@@ -333,6 +339,26 @@ export const modals = {
   'modals.installConfirm': 'Подтвердить',
   'modals.installDismiss': 'Убрать',
   'modals.installManually': 'Установить вручную',
+  // LegalAcceptanceScreen.svelte
+  'modals.legalAcceptTitle': 'Условия использования Typhon',
+  'modals.legalAcceptUpdated': 'Условия обновлены {date}',
+  'modals.legalAcceptIntro': 'Прежде чем продолжить, ознакомьтесь с краткими положениями. Полные тексты — по ссылкам ниже.',
+  'modals.legalAcceptPoint1':
+    'Typhon не содержит игр и предустановленных источников. Источники вы добавляете сами и отвечаете за право использовать их содержимое.',
+  'modals.legalAcceptPoint2':
+    'Загрузка через BitTorrent может передавать части файлов другим участникам сети. Раздача выключена по умолчанию.',
+  'modals.legalAcceptPoint3':
+    'Учётная запись не обязательна. Что обрабатывается с ней и без неё, описано в политике конфиденциальности.',
+  'modals.legalAcceptPoint4':
+    'Приложение предоставляется «как есть». Оператор не отвечает за содержимое сторонних источников.',
+  'modals.legalAcceptTermsLink': 'Условия использования',
+  'modals.legalAcceptPrivacyLink': 'Политика конфиденциальности',
+  'modals.legalAcceptButton': 'Принимаю',
+  'modals.legalAcceptSaving': 'Сохранение…',
+  'modals.legalAcceptVersionFailed': 'Не удалось получить версию условий. Проверьте, что приложение работает корректно, и повторите.',
+  'modals.legalAcceptRetry': 'Повторить',
+  'modals.legalAcceptSaveFailed': 'Не удалось сохранить принятие условий: нет доступа к папке настроек. Проверьте права и попробуйте ещё раз.',
+  'modals.legalAcceptSaveFallback': 'Не удалось сохранить принятие условий. Попробуйте ещё раз.',
 } as const;
 
 export type ModalsKey = keyof typeof modals;

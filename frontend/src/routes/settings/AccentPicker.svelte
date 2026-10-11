@@ -17,7 +17,7 @@
   ];
   let editing = $state(false);
   let draft = $state('');
-  let lastValid = $state('#6673F2');
+  let lastValid = $state('#4F6BFF');
   let busy = $state(false);
   const selected = $derived($settings?.accentColor ?? '');
   function cancel() {
@@ -27,7 +27,7 @@
   onDestroy(cancel);
   $effect(() => {
     $appearanceResetVersion;
-    untrack(() => { editing = false; draft = ''; lastValid = '#6673F2'; });
+    untrack(() => { editing = false; draft = ''; lastValid = '#4F6BFF'; });
   });
   function preview(value: string) {
     draft = value;
@@ -54,7 +54,7 @@
     {#each accentPresets as color, i}
       <button class="swatch" class:chosen={selected.toUpperCase() === color && !editing} style={`--swatch: ${color}`} disabled={busy} aria-label={msg(presetLabels[i])} aria-pressed={selected.toUpperCase() === color && !editing} onclick={() => save(color)}><span></span></button>
     {/each}
-    <button class:chosen={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} disabled={busy} aria-pressed={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} onclick={() => { draft = selected || (validAccent($displayedAccent) ? $displayedAccent : '#6673F2'); lastValid = draft; editing = true; }}>{msg('settings.accentCustom')}</button>
+    <button class:chosen={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} disabled={busy} aria-pressed={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} onclick={() => { draft = selected || (validAccent($displayedAccent) ? $displayedAccent : '#4F6BFF'); lastValid = draft; editing = true; }}>{msg('settings.accentCustom')}</button>
   </div>
   {#if editing}
     <ColorPalette value={lastValid} onchange={preview} disabled={busy} />

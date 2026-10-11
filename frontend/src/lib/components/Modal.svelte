@@ -137,11 +137,11 @@
   @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(0.4rem);
+      transform: translateY(0.8rem) scale(0.98);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
   }
 </style>

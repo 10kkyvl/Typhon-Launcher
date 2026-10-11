@@ -9,6 +9,7 @@ import { bigpicture } from './bigpicture';
 import { format } from './format';
 import { friends } from './friends';
 import { profile } from './profile';
+import { profileStyle } from './profileStyle';
 import { search } from './search';
 import { install } from './install';
 import { downloads } from './downloads';
@@ -28,7 +29,9 @@ import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 import { errSaves } from './errSaves';
+import { errSupport } from './errSupport';
 import { saves } from './saves';
+import { tickets } from './tickets';
 import { overlay } from './overlay';
 
 export const en: Record<MessageKey, Message> = {
@@ -41,6 +44,7 @@ export const en: Record<MessageKey, Message> = {
   ...format,
   ...friends,
   ...profile,
+  ...profileStyle,
   ...search,
   ...install,
   ...downloads,
@@ -60,8 +64,10 @@ export const en: Record<MessageKey, Message> = {
   ...errLibrary,
   ...errLogs,
   ...errSaves,
+  ...errSupport,
   ...saves,
+  ...tickets,
   ...overlay,
 };
 
-export { common, format, friends, profile, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, saves, overlay };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, tickets, overlay };

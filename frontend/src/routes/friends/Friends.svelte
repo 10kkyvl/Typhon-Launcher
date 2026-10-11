@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { fade, fly } from 'svelte/transition';
   import {
     ArrowDownUp,
     ChevronDown,
@@ -7,12 +8,14 @@
     LayoutGrid,
     List,
     LogIn,
+    MessageCircle,
     ShieldCheck,
     UserPlus,
     Users,
   } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import Chip from '../../lib/components/Chip.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -62,10 +65,20 @@
   let busy = $state('');
   let myCode = $state('');
   let search = $state('');
-  let sortBy = $state<'name' | 'status'>('name');
+  let sortBy = $state<'name' | 'status'>('status');
 
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
+
+  function motion(token: string): number {
+    const root = document.documentElement;
+    if (root.classList.contains('no-anim') || matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    return parseFloat(getComputedStyle(root).getPropertyValue(token)) || 0;
+  }
+
+  function settling(id: string): boolean {
+    return busy.endsWith(`:${id}`);
+  }
 
   const onlineFriends = $derived(
     page.friends.filter((f) => {
@@ -241,6 +254,54 @@
   });
 </script>
 
+{#snippet incomingCards()}
+  <div class="cards">
+    {#each page.incoming as request (request.id)}
+      <div
+        class="request"
+        class:settling={settling(request.id)}
+        in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+        out:fade={{ duration: motion('--dur') }}
+      >
+        <FriendRow user={request} variant="card" stats={incomingStats(request)} onopen={() => openProfile(request)}>
+          {#snippet actions()}
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!!busy}
+              onclick={() =>
+                run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
+            >
+              {msg('social.relationIncoming')}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!!busy}
+              onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
+            >
+              {msg('social.declineButton')}
+            </Button>
+          {/snippet}
+        </FriendRow>
+      </div>
+    {/each}
+  </div>
+{/snippet}
+
+{#snippet friendActions(friend: FriendView)}
+  <Button variant="ghost" size="sm" onclick={() => openMessage(friend)}>
+    <MessageCircle size="1.4rem" strokeWidth={1.8} />
+    {msg('social.chatWrite')}
+  </Button>
+  <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
+    {#snippet trigger({ toggle })}
+      <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
+        <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
+      </IconButton>
+    {/snippet}
+  </DropdownMenu>
+{/snippet}
+
 <Card surface="panel">
   <PageHeader title={msg('social.friendsTitle')} subtitle={msg('social.friendsSubtitle')}>
     {#snippet actions()}
@@ -292,47 +353,70 @@
     <Tabs {tabs} bind:value={tab} variant="pill" />
 
     {#if presenceTabs.has(tab)}
-      <div class="toolbar">
-        <div class="search-wrap">
-          <SearchInput bind:value={search} placeholder={msg('social.friendsSearchFriendsPlaceholder')} />
+      {#if page.incoming.length > 0}
+        <section class="incoming" aria-label={msg('social.friendsIncomingHeading')}>
+          <h4 class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            {msg('social.friendsIncomingHeading')}
+            <span class="eyebrow-count">{page.incoming.length}</span>
+          </h4>
+          {@render incomingCards()}
+        </section>
+      {/if}
+
+      {#if page.friends.length > 0}
+        <div class="toolbar">
+          <div class="search-wrap">
+            <SearchInput bind:value={search} placeholder={msg('social.friendsSearchFriendsPlaceholder')} />
+          </div>
+          <div class="toolbar-right">
+            <DropdownMenu
+              items={[
+                { id: 'status', label: sortLabels.status },
+                { id: 'name', label: sortLabels.name },
+              ]}
+              onselect={(id) => (sortBy = id as 'name' | 'status')}
+            >
+              {#snippet trigger({ open, toggle })}
+                <Chip selected={open} onclick={toggle}>
+                  <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+                  {sortLabels[sortBy]}
+                  <ChevronDown size="1.4rem" strokeWidth={1.8} />
+                </Chip>
+              {/snippet}
+            </DropdownMenu>
+            <SegmentedControl
+              bind:value={$friendsView}
+              options={[
+                { id: 'grid', label: msg('social.friendsViewGrid') },
+                { id: 'list', label: msg('social.friendsViewList') },
+              ]}
+            >
+              {#snippet item(option)}
+                {#if option.id === 'list'}
+                  <List size="1.6rem" strokeWidth={1.8} />
+                {:else}
+                  <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+                {/if}
+              {/snippet}
+            </SegmentedControl>
+          </div>
         </div>
-        <div class="toolbar-right">
-          <DropdownMenu
-            items={[
-              { id: 'name', label: sortLabels.name },
-              { id: 'status', label: sortLabels.status },
-            ]}
-            onselect={(id) => (sortBy = id as 'name' | 'status')}
-          >
-            {#snippet trigger({ open, toggle })}
-              <button class="sort" class:open onclick={toggle}>
-                <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-                {msg('social.friendsSortLabel', { value: sortLabels[sortBy] })}
-                <ChevronDown size="1.4rem" strokeWidth={1.8} />
-              </button>
-            {/snippet}
-          </DropdownMenu>
-          <SegmentedControl
-            bind:value={$friendsView}
-            options={[
-              { id: 'list', label: msg('social.friendsViewList') },
-              { id: 'grid', label: msg('social.friendsViewGrid') },
-            ]}
-          >
-            {#snippet item(option)}
-              {#if option.id === 'list'}
-                <List size="1.6rem" strokeWidth={1.8} />
-              {:else}
-                <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-              {/if}
-            {/snippet}
-          </SegmentedControl>
-        </div>
-      </div>
+      {/if}
 
       {#if visibleFriends.length === 0}
         {#if page.friends.length === 0}
-          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
+          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')}>
+            {#snippet icon()}
+              <Users size="2.2rem" strokeWidth={1.6} />
+            {/snippet}
+            {#snippet actions()}
+              <Button variant="primary" onclick={() => (addOpen = true)}>
+                <UserPlus size="1.5rem" strokeWidth={1.8} />
+                {msg('social.friendsAddFriend')}
+              </Button>
+            {/snippet}
+          </EmptyState>
         {:else if search.trim()}
           <EmptyState title={msg('social.friendsEmptySearchTitle')} description={msg('social.friendsEmptySearchDesc')} />
         {:else if groupEmptyCopy[tab]}
@@ -352,14 +436,7 @@
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
-                <Button size="sm" onclick={() => openMessage(friend)}>{msg('social.chatWrite')}</Button>
-                <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
-                  {#snippet trigger({ toggle })}
-                    <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
-                      <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
-                    </IconButton>
-                  {/snippet}
-                </DropdownMenu>
+                {@render friendActions(friend)}
               {/snippet}
             </FriendRow>
           {/each}
@@ -376,14 +453,7 @@
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
-                <Button size="sm" onclick={() => openMessage(friend)}>{msg('social.chatWrite')}</Button>
-                <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
-                  {#snippet trigger({ toggle })}
-                    <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
-                      <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
-                    </IconButton>
-                  {/snippet}
-                </DropdownMenu>
+                {@render friendActions(friend)}
               {/snippet}
             </FriendRow>
           {/each}
@@ -394,50 +464,37 @@
         <EmptyState title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
       {:else}
         {#if page.incoming.length > 0}
-          <h4 class="eyebrow">{msg('social.friendsIncomingHeading')}</h4>
-          <div class="cards">
-            {#each page.incoming as request (request.id)}
-              <FriendRow user={request} variant="card" stats={incomingStats(request)} onopen={() => openProfile(request)}>
-                {#snippet actions()}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={!!busy}
-                    onclick={() =>
-                      run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
-                  >
-                    {msg('social.relationIncoming')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!!busy}
-                    onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
-                  >
-                    {msg('social.declineButton')}
-                  </Button>
-                {/snippet}
-              </FriendRow>
-            {/each}
-          </div>
+          <h4 class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            {msg('social.friendsIncomingHeading')}
+            <span class="eyebrow-count">{page.incoming.length}</span>
+          </h4>
+          {@render incomingCards()}
         {/if}
 
         {#if page.outgoing.length > 0}
           <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
           <div class="cards">
             {#each page.outgoing as request (request.id)}
-              <FriendRow user={request} variant="card" stats={outgoingStats(request)} onopen={() => openProfile(request)}>
-                {#snippet actions()}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!!busy}
-                    onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
-                  >
-                    {msg('social.cancelRequestButton')}
-                  </Button>
-                {/snippet}
-              </FriendRow>
+              <div
+                class="request"
+                class:settling={settling(request.id)}
+                in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+                out:fade={{ duration: motion('--dur') }}
+              >
+                <FriendRow user={request} variant="card" stats={outgoingStats(request)} onopen={() => openProfile(request)}>
+                  {#snippet actions()}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!!busy}
+                      onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
+                    >
+                      {msg('social.cancelRequestButton')}
+                    </Button>
+                  {/snippet}
+                </FriendRow>
+              </div>
             {/each}
           </div>
         {/if}
@@ -458,18 +515,25 @@
     {:else}
       <div class="cards">
         {#each blocked as user (user.id)}
-          <FriendRow {user} variant="card">
-            {#snippet actions()}
-              <Button
-                size="sm"
-                disabled={!!busy}
-                onclick={() =>
-                  run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
-              >
-                {msg('social.unblockButton')}
-              </Button>
-            {/snippet}
-          </FriendRow>
+          <div
+            class="request"
+            class:settling={settling(user.id)}
+            in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+            out:fade={{ duration: motion('--dur') }}
+          >
+            <FriendRow {user} variant="card">
+              {#snippet actions()}
+                <Button
+                  size="sm"
+                  disabled={!!busy}
+                  onclick={() =>
+                    run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
+                >
+                  {msg('social.unblockButton')}
+                </Button>
+              {/snippet}
+            </FriendRow>
+          </div>
         {/each}
       </div>
     {/if}
@@ -511,26 +575,37 @@
     flex-shrink: 0;
   }
 
-  .sort {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    height: var(--control-sm);
-    padding: 0 1.1rem;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-3);
-    white-space: nowrap;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+  .incoming {
+    margin-top: var(--space-5);
+    padding: 0 var(--space-4) var(--space-4);
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius-lg);
+    background: var(--accent-subtle);
   }
 
-  .sort:hover,
-  .sort.open {
-    background: var(--hover);
-    color: var(--text);
+  .incoming .eyebrow {
+    margin-top: var(--space-4);
+    color: var(--accent-text);
+  }
+
+  .request {
+    transition: opacity var(--dur) var(--ease);
+  }
+
+  .request.settling {
+    opacity: 0.55;
+  }
+
+  .eyebrow-dot {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .eyebrow-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
   }
 
   .list {
@@ -555,6 +630,9 @@
   }
 
   .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
     margin: var(--space-6) 0 var(--space-3);
     padding: 0 0.2rem;
     font-size: 1.2rem;

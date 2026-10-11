@@ -42,6 +42,7 @@ type rig struct {
 	dir       string
 	cfg       *settings.Service
 	downloads *fakeDownloads
+	source    downloadSource
 	reg       *fakeRegistrar
 	lib       registrar
 	games     string
@@ -80,6 +81,9 @@ func (r *rig) boot() {
 	s := mustServiceAt(r.t, r.dir)
 	s.settings = r.cfg
 	s.downloads = r.downloads
+	if r.source != nil {
+		s.downloads = r.source
+	}
 	s.library = r.reg
 	if r.lib != nil {
 		s.library = r.lib

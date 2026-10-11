@@ -64,7 +64,7 @@ func TestManualOverrideStillReachesAnAddon(t *testing.T) {
 	s := newTestService(t)
 	dlc := seed(t, s, Game{Title: "Some Add-on", GameType: "DLC"})[0]
 
-	if err := s.LearnMatch("some add on", dlc.ID); err != nil {
+	if _, err := s.LearnMatch("some add on", dlc.ID); err != nil {
 		t.Fatalf("LearnMatch() error = %v", err)
 	}
 	match := s.Resolve(Query{Title: "Some Add-on"})

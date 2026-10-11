@@ -25,11 +25,12 @@ import (
 type fakeDownloads struct {
 	mu      sync.Mutex
 	items   map[string]download.Download
+	getErr  map[string]error
 	deleted []string
 }
 
 func newFakeDownloads() *fakeDownloads {
-	return &fakeDownloads{items: map[string]download.Download{}}
+	return &fakeDownloads{items: map[string]download.Download{}, getErr: map[string]error{}}
 }
 
 func (f *fakeDownloads) add(id, name, destination string) {
@@ -46,9 +47,12 @@ func (f *fakeDownloads) add(id, name, destination string) {
 func (f *fakeDownloads) Get(id string) (download.Download, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.getErr[id]; err != nil {
+		return download.Download{}, err
+	}
 	d, ok := f.items[id]
 	if !ok {
-		return download.Download{}, errors.New("загрузка не найдена")
+		return download.Download{}, download.ErrNotFound
 	}
 	return d, nil
 }

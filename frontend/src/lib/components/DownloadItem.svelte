@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Pause, Play, X } from '@lucide/svelte';
+  import { ArrowDown, ArrowUp, ChevronRight, Pause, Play, X } from '@lucide/svelte';
   import type { Download } from '../services/downloads';
   import { cancelDownloadPrompt } from '../confirm/prompts';
   import { cancel, pause, resume, statusLabels } from '../stores/downloads';
@@ -63,18 +63,20 @@
     <Artwork src={cover} alt={download.name} ratio="3 / 4" radius="var(--radius-sm)" />
   </div>
   <div class="main">
-    <span class="title">{download.name}</span>
-    {#if typeTag || sourceTag}
-      <div class="tags">
-        {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
-        {#if sourceTag}<StatusBadge kind="neutral" label={sourceTag} dot={false} />{/if}
-      </div>
-    {/if}
+    <div class="head">
+      <span class="title" title={download.name}>{download.name}</span>
+      {#if typeTag || sourceTag}
+        <div class="tags">
+          {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
+          {#if sourceTag}<StatusBadge kind="neutral" label={sourceTag} dot={false} />{/if}
+        </div>
+      {/if}
+    </div>
     <div class="progress-row">
       <div class="bar">
-        <ProgressBar value={pct} color={barColor} height={6} />
+        <ProgressBar value={pct} color={barColor} height={6} indeterminate={download.status === 'metadata'} />
       </div>
-      <span class="pct">{Math.floor(pct)}%</span>
+      <span class="pct">{download.status === 'metadata' ? '' : `${Math.floor(pct)}%`}</span>
     </div>
     <div class="meta">
       {#if downloading && download.stalled}
@@ -85,63 +87,67 @@
         <span>{msg('ui.bytesOfBytes', { done: bytesSize(download.downloaded), total: bytesSize(download.total) })}</span>
         {#if download.etaSeconds >= 0}
           <span class="sep">·</span>
-          <span>{msg('ui.timeLeft', { eta: etaLabel(download.etaSeconds) })}</span>
+          <span class="eta">{msg('ui.timeLeft', { eta: etaLabel(download.etaSeconds) })}</span>
         {/if}
       {:else}
-        <span>{statusLabels(download.status)}</span>
+        <span class="state" class:paused={download.status === 'paused'}>{statusLabels(download.status)}</span>
       {/if}
     </div>
   </div>
-  {#if downloading}
-    <div class="speeds">
-      <span>↓ {speedBytes(download.downloadSpeed)}</span>
-      <span>↑ {speedBytes(download.uploadSpeed)}</span>
-    </div>
-  {/if}
-  <div class="controls">
+  <div class="speeds" aria-hidden={!downloading}>
     {#if downloading}
-      <Button
-        size="sm"
-        onclick={(e) => {
-          stop(e);
-          pause(download.id);
-        }}
-      >
-        <Pause size="1.5rem" strokeWidth={1.8} />
-        {msg('ui.pause')}
-      </Button>
-    {:else if download.status === 'paused'}
-      <Button
-        size="sm"
-        onclick={(e) => {
-          stop(e);
-          resume(download.id);
-        }}
-      >
-        <Play size="1.5rem" strokeWidth={1.8} />
-        {msg('common.continue')}
-      </Button>
+      <span class="down"><ArrowDown size="1.3rem" strokeWidth={2} />{speedBytes(download.downloadSpeed)}</span>
+      <span class="up"><ArrowUp size="1.3rem" strokeWidth={2} />{speedBytes(download.uploadSpeed)}</span>
     {/if}
-    <Button
+  </div>
+  <div class="controls">
+    <span class="toggle">
+      {#if downloading}
+        <Button
+          size="sm"
+          onclick={(e) => {
+            stop(e);
+            pause(download.id);
+          }}
+        >
+          <Pause size="1.5rem" strokeWidth={1.8} />
+          {msg('ui.pause')}
+        </Button>
+      {:else if download.status === 'paused'}
+        <Button
+          size="sm"
+          variant="primary"
+          onclick={(e) => {
+            stop(e);
+            resume(download.id);
+          }}
+        >
+          <Play size="1.5rem" strokeWidth={1.8} />
+          {msg('common.continue')}
+        </Button>
+      {/if}
+    </span>
+    <IconButton
+      label={msg('ui.cancelVerb')}
       size="sm"
       onclick={(e) => {
         stop(e);
         confirmOpen = true;
       }}
     >
-      <X size="1.5rem" strokeWidth={1.8} />
-      {msg('ui.cancelVerb')}
-    </Button>
+      <X size="1.6rem" strokeWidth={1.8} />
+    </IconButton>
+    <IconButton
+      label={msg('ui.moreAboutDownload')}
+      size="sm"
+      onclick={(e) => {
+        stop(e);
+        onopen?.(download);
+      }}
+    >
+      <ChevronRight size="1.8rem" strokeWidth={1.8} />
+    </IconButton>
   </div>
-  <IconButton
-    label={msg('ui.moreAboutDownload')}
-    onclick={(e) => {
-      stop(e);
-      onopen?.(download);
-    }}
-  >
-    <ChevronRight size="1.8rem" strokeWidth={1.8} />
-  </IconButton>
 </div>
 
 {#if confirmOpen}
@@ -154,35 +160,39 @@
 
 <style>
   .item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 4.8rem minmax(0, 1fr) 10.5rem 20.5rem;
     align-items: center;
-    gap: var(--space-5);
-    padding: var(--space-4) var(--space-5);
+    column-gap: var(--space-5);
+    padding: var(--space-3) var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     cursor: pointer;
     transition: border-color var(--dur) var(--ease);
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .item:hover {
     border-color: var(--border-strong);
   }
 
-  .thumb {
-    width: 6.4rem;
-    flex-shrink: 0;
-  }
-
   .main {
-    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.6rem;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
   }
 
   .title {
+    min-width: 0;
     font-size: var(--font-md);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
@@ -194,12 +204,14 @@
   .tags {
     display: flex;
     gap: 0.6rem;
+    flex-shrink: 0;
   }
 
   .progress-row {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    min-height: 2.2rem;
   }
 
   .bar {
@@ -209,10 +221,11 @@
 
   .pct {
     flex-shrink: 0;
-    min-width: 3.8rem;
+    width: 4.2rem;
     text-align: right;
     font-size: var(--font-sm);
-    color: var(--text-2);
+    font-weight: 500;
+    color: var(--text);
     font-variant-numeric: tabular-nums;
   }
 
@@ -238,21 +251,66 @@
     color: var(--warning, var(--text-2));
   }
 
+  .eta,
+  .state.paused {
+    color: var(--text-2);
+  }
+
   .speeds {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 0.4rem;
-    flex-shrink: 0;
+    min-width: 0;
     font-size: var(--font-sm);
-    color: var(--text-2);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
+  .speeds span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .down {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .up {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
   .controls {
     display: flex;
-    gap: 0.6rem;
-    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .toggle {
+    display: flex;
+    justify-content: flex-end;
+    flex: 1;
+    min-width: 0;
+    margin-right: 0.4rem;
+  }
+
+  .toggle :global(.btn) {
+    min-width: 12.4rem;
+  }
+
+  @media (max-width: 1300px) {
+    .item {
+      grid-template-columns: 4.8rem minmax(0, 1fr) 9.5rem 20.5rem;
+      column-gap: var(--space-4);
+    }
+
+    .tags {
+      display: none;
+    }
   }
 </style>

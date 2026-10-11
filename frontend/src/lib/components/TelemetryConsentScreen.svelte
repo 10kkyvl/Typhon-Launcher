@@ -1,17 +1,19 @@
 <script lang="ts">
   import { TriangleAlert } from '@lucide/svelte';
   import { settings } from '../stores/settings';
-  import { respondTelemetryConsent } from '../stores/telemetryConsent';
+  import { consentPreselection, respondTelemetryConsent } from '../stores/telemetryConsent';
   import { consentErrorText } from '../services/consentErrors';
   import Button from './Button.svelte';
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
 
-  // На свежей установке статистика не отмечена — её включают отдельным
+  // На свежей установке оба переключателя выключены — их включают отдельным
   // действием. Но этот же экран показывается повторно, когда состав данных
   // расширился, и там предвыбор обязан повторять прошлый ответ: иначе человек,
-  // у которого статистика была включена, соглашается — и молча её выключает.
-  let usageStats = $state(($settings?.telemetryConsentVersion ?? 0) > 0 && Boolean($settings?.anonymousUsageStats));
+  // у которого что-то было включено, сохраняет выбор — и молча это выключает.
+  const initial = consentPreselection($settings);
+  let usageStats = $state(initial.usageStats);
+  let diagnostics = $state(initial.diagnostics);
   let saving = $state(false);
   let error = $state('');
 
@@ -57,16 +59,24 @@
   "app_version": "0.4.1",
   "env": { "os_version": "15.6", "crossover": "26.3", "chip": "apple_m4" },
   "games": [
-    { "game_id": "232567", "repacker": "fitgirl", "version": "1.0.28518",
+    { "game_id": "232567", "repacker": "unknown", "version": "1.0.28518",
       "state": "works" }
   ]
 }`;
 
-  async function respond(diagnostics: boolean) {
+  const heartbeat = `{
+  "session_id": "b2d1e8a4-77c3-4f10-9e2a-51c7d3f9a806",
+  "state": "idle",
+  "app_version": "0.2.4",
+  "os": "windows",
+  "arch": "amd64"
+}`;
+
+  async function respond(sendUsageStats: boolean, sendDiagnostics: boolean) {
     saving = true;
     error = '';
     try {
-      await respondTelemetryConsent(usageStats, diagnostics);
+      await respondTelemetryConsent(sendUsageStats, sendDiagnostics);
     } catch (err) {
       error = consentErrorText(err);
     } finally {
@@ -103,6 +113,16 @@
         <Toggle checked={usageStats} label={msg('modals.telemetryConsentUsageToggleLabel')} onchange={(v) => (usageStats = v)} />
       </div>
 
+      <div class="row">
+        <div class="row-text">
+          <span class="row-title">{msg('settings.generalPrivacyDiagLabel')}</span>
+          <span class="row-note">
+            {msg('settings.generalPrivacyDiagSub')}
+          </span>
+        </div>
+        <Toggle checked={diagnostics} label={msg('settings.generalPrivacyDiagLabel')} onchange={(v) => (diagnostics = v)} />
+      </div>
+
       <details class="disclosure">
         <summary>{msg('modals.telemetryConsentDisclosureSummary')}</summary>
         <div class="examples">
@@ -118,6 +138,11 @@
             <span class="example-label">{msg('modals.telemetryConsentCompatReportLabel')}</span>
             <pre class="example-pre">{compatReport}</pre>
           </div>
+          <div class="example">
+            <span class="example-label">{msg('modals.telemetryConsentHeartbeatLabel')}</span>
+            <pre class="example-pre">{heartbeat}</pre>
+            <span class="example-label">{msg('modals.telemetryConsentHeartbeatNote')}</span>
+          </div>
         </div>
       </details>
 
@@ -130,10 +155,10 @@
     </div>
 
     <div class="foot">
-      <Button size="lg" disabled={saving} onclick={() => respond(false)}>
+      <Button size="lg" disabled={saving} onclick={() => respond(false, false)}>
         {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentDecline')}
       </Button>
-      <Button size="lg" disabled={saving} onclick={() => respond(true)}>
+      <Button size="lg" disabled={saving} onclick={() => respond(usageStats, diagnostics)}>
         {saving ? msg('modals.telemetryConsentSaving') : msg('modals.telemetryConsentAccept')}
       </Button>
     </div>

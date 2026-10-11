@@ -12,13 +12,13 @@ globalThis.document = {
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  saveSettingsPatch: vi.fn(),
   saveConsent: vi.fn(),
   setupLibrary: vi.fn(),
 }));
 vi.mock('../stores/toasts', () => ({ toast: vi.fn() }));
 
-const { getSettings, saveSettings } = await import('../services/settings');
+const { getSettings, saveSettingsPatch } = await import('../services/settings');
 const { settings, initSettings } = await import('../stores/settings');
 const { saveBigPicturePreference } = await import('./preferences');
 
@@ -42,45 +42,45 @@ function deferred<T>() {
 
 beforeEach(async () => {
   vi.mocked(getSettings).mockResolvedValue(makeSettings());
-  vi.mocked(saveSettings).mockReset();
-  vi.mocked(saveSettings).mockResolvedValue(undefined as never);
+  vi.mocked(saveSettingsPatch).mockReset();
+  vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...makeSettings(), ...patch }));
   await initSettings();
 });
 
 describe('Big Picture preferences', () => {
   it('reports success only after the persisted setting has been written', async () => {
     expect(await saveBigPicturePreference({ animationsEnabled: false })).toBe('saved');
-    expect(vi.mocked(saveSettings)).toHaveBeenCalledOnce();
-    expect(vi.mocked(saveSettings).mock.calls[0][0].animationsEnabled).toBe(false);
+    expect(vi.mocked(saveSettingsPatch)).toHaveBeenCalledOnce();
+    expect(vi.mocked(saveSettingsPatch).mock.calls[0][0]).toEqual({ animationsEnabled: false });
     expect(get(settings)?.animationsEnabled).toBe(false);
   });
 
   it('shows a failed result and restores the previous value when storage rejects', async () => {
-    vi.mocked(saveSettings).mockRejectedValueOnce(new Error('disk full'));
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('disk full'));
 
     expect(await saveBigPicturePreference({ animationsEnabled: false })).toBe('failed');
-    expect(vi.mocked(saveSettings)).toHaveBeenCalledOnce();
+    expect(vi.mocked(saveSettingsPatch)).toHaveBeenCalledOnce();
     expect(get(settings)?.animationsEnabled).toBe(true);
   });
 
   it('serializes concurrent patches and does not include a later change in a failed write', async () => {
-    const firstWrite = deferred<void>();
-    vi.mocked(saveSettings)
+    const firstWrite = deferred<Settings>();
+    vi.mocked(saveSettingsPatch)
       .mockImplementationOnce(() => firstWrite.promise)
-      .mockResolvedValueOnce(undefined as never);
+      .mockImplementationOnce(async (patch) => ({ ...makeSettings(), ...patch }));
 
     const first = saveBigPicturePreference({ animationsEnabled: false });
     const second = saveBigPicturePreference({ launchOnStartup: true });
     await Promise.resolve();
 
-    expect(vi.mocked(saveSettings)).toHaveBeenCalledOnce();
-    expect(vi.mocked(saveSettings).mock.calls[0][0]).toMatchObject({ animationsEnabled: false, launchOnStartup: false });
+    expect(vi.mocked(saveSettingsPatch)).toHaveBeenCalledOnce();
+    expect(vi.mocked(saveSettingsPatch).mock.calls[0][0]).toEqual({ animationsEnabled: false });
     firstWrite.reject(new Error('disk full'));
 
     expect(await first).toBe('failed');
     expect(await second).toBe('saved');
-    expect(vi.mocked(saveSettings)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(saveSettings).mock.calls[1][0]).toMatchObject({ animationsEnabled: true, launchOnStartup: true });
+    expect(vi.mocked(saveSettingsPatch)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(saveSettingsPatch).mock.calls[1][0]).toEqual({ launchOnStartup: true });
     expect(get(settings)).toMatchObject({ animationsEnabled: true, launchOnStartup: true });
   });
 });

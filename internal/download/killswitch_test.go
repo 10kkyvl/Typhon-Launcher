@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"testing"
 
+	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
 
 	"github.com/anacrolix/torrent"
@@ -217,6 +218,7 @@ func TestNewClientFallsBackWhenTheFixedPortIsTaken(t *testing.T) {
 		if tc.ListenPort == listenPort {
 			return nil, &net.OpError{Op: "listen", Net: "udp", Err: syscall.EADDRINUSE}
 		}
+		tc.ListenPort = 0
 		tc.NoDHT = true
 		tc.DisableTrackers = true
 		tc.DisablePEX = true
@@ -235,8 +237,8 @@ func TestNewClientFallsBackWhenTheFixedPortIsTaken(t *testing.T) {
 		t.Fatalf("ports tried = %v, want the fixed one first and a retry after it", attempts)
 	}
 	for _, p := range attempts[1:] {
-		if p != 0 {
-			t.Fatalf("ports tried = %v, want every retry on a random port", attempts)
+		if p < listenport.First || p > 65535 {
+			t.Fatalf("ports tried = %v, want every retry on a random port of the dynamic range", attempts)
 		}
 	}
 	if port == listenPort {

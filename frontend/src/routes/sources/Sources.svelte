@@ -33,7 +33,7 @@
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
   import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
-  import { formatCount, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { clockTime, formatCount, numericDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
   let addOpen = $state(false);
@@ -114,6 +114,12 @@
     statusFilter === 'all' ? $sources : $sources.filter((source) => source.status === statusFilter),
   );
 
+  function exactTime(iso: string | null) {
+    if (!iso) return undefined;
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? undefined : `${numericDate(date)}, ${clockTime(date)}`;
+  }
+
   function openDetails(id: string) {
     detailsId = id;
     detailsReleaseId = null;
@@ -185,6 +191,7 @@
     {#if filteredSources.length === 0}
       <EmptyState title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
     {:else}
+      {#key statusFilter}
       <div class="table">
         <div class="thead">
           <span class="th">{msg('transfers.sourcesColName')}</span>
@@ -216,10 +223,16 @@
                   {/if}
                 </span>
                 <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
+                {#if source.lastError}
+                  <span class="source-error" title={sourceErrorText(source.lastError)}>{sourceErrorText(source.lastError)}</span>
+                {/if}
               </span>
             </button>
             <span class="cell status">
               <StatusBadge kind={badge.kind} label={badge.label} plain />
+              {#if source.status === 'updating'}
+                <span class="spin on busy"><RefreshCw size="1.3rem" strokeWidth={2} /></span>
+              {/if}
               {#if source.lastError}
                 <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
                   <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
@@ -232,7 +245,7 @@
                 </Tooltip>
               {/if}
             </span>
-            <span class="cell">{relativeDate(source.lastUpdatedAt)}</span>
+            <span class="cell" title={exactTime(source.lastUpdatedAt)}>{relativeDate(source.lastUpdatedAt)}</span>
             <span class="cell nums">{formatCount(source.entries)}</span>
             <span class="cell nums counts">
               <Tooltip
@@ -262,6 +275,7 @@
           </div>
         {/each}
       </div>
+      {/key}
     {/if}
   {/if}
 </Card>
@@ -278,11 +292,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-3);
-    margin-bottom: var(--space-6);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
+    margin-bottom: var(--space-5);
     color: var(--text-3);
   }
 
@@ -303,6 +313,26 @@
     flex-direction: column;
     max-width: 140rem;
     margin-top: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
+  }
+
+  .row:last-child {
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+
+  .source-error {
+    font-size: var(--font-xs);
+    color: var(--danger);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .busy {
+    color: var(--text-3);
   }
 
   .thead,
@@ -314,7 +344,7 @@
   }
 
   .thead {
-    padding: 0 1.2rem 0.8rem;
+    padding: 1rem 1.2rem;
     border-bottom: 1px solid var(--border);
   }
 

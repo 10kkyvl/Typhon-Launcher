@@ -19,8 +19,14 @@ type previewLog struct{}
 func (previewLog) Since(time.Time) []playlog.Session { return nil }
 
 func TestPreviewIncludesDisabledShowcasesWithoutSaving(t *testing.T) {
-	s := NewService(previewLibrary{}, previewLog{}, func() []string { return []string{"favorites"} })
-	preview := s.Preview()
+	s, err := NewService(previewLibrary{}, previewLog{}, stubCatalog{}, func() []string { return []string{"favorites"} }, noLayout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.Preview()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(preview.Showcase) != 3 {
 		t.Fatalf("preview missing disabled showcases: %+v", preview.Showcase)
 	}
@@ -29,7 +35,10 @@ func TestPreviewIncludesDisabledShowcasesWithoutSaving(t *testing.T) {
 			t.Fatalf("preview missing games: %+v", block)
 		}
 	}
-	saved := s.Snapshot()
+	saved, err := s.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(saved.Showcase) != 1 || saved.Showcase[0].Kind != "favorites" {
 		t.Fatalf("preview mutated saved order: %+v", saved.Showcase)
 	}

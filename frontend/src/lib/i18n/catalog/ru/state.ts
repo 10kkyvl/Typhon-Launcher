@@ -45,6 +45,7 @@ export const state = {
   'state.librarySessionEnded': 'Сессия завершена: {minutes} мин',
 
   'state.metadataLoadFailed': 'Не удалось загрузить обложки',
+  'state.metadataCheckFailed': 'Не удалось проверить доступность метаданных',
 
   'state.notifLauncherUpdateTitle': 'Обновление лаунчера',
   'state.notifUpdateCheckFailed': 'Не удалось проверить обновления',
@@ -110,6 +111,7 @@ export const state = {
   'state.accountErrorInvalidPassword': 'От 8 до 128 символов',
   'state.accountErrorEmailImmutable': 'Email пока нельзя изменить',
   'state.accountErrorLauncherOutdated': 'Версия лаунчера устарела, обновите Typhon, чтобы пользоваться аккаунтом',
+  'state.accountErrorTermsRequired': 'Сервер не знает эту редакцию Условий. Обновите Typhon и примите Условия заново',
   'state.accountErrorNoChanges': 'Нечего сохранять',
   'state.accountErrorAvatarTooLarge': 'Файл больше 10 МБ',
   'state.accountErrorUnsupportedAvatar': 'Поддерживаются PNG, JPEG и WebP',
@@ -121,7 +123,7 @@ export const state = {
   'state.accountErrorNetwork': 'Нет связи с сервером',
   'state.accountErrorRateLimited': 'Слишком много попыток, подождите немного и повторите',
   'state.accountErrorBadRequest': 'Сервер отклонил запрос',
-  'state.accountErrorRequestBlocked': 'Запрос заблокирован на подступах к серверу, напишите в поддержку',
+  'state.accountErrorRequestBlocked': 'Запрос заблокирован на подступах к серверу. Если повторится, опишите проблему в разделе «Поддержка»',
   'state.accountErrorUserNotFound': 'Пользователь не найден',
   'state.accountErrorAlreadyFriends': 'Вы уже друзья',
   'state.accountErrorLimitReached': 'Достигнут лимит',

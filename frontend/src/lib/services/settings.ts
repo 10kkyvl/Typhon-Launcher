@@ -49,7 +49,9 @@ export interface Settings {
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
+  sessionHeartbeat: boolean;
   telemetryConsentVersion: number;
+  legalAcceptedVersion: string;
   accountSync: boolean;
   presenceStatus: string;
   presenceAutoAway: boolean;
@@ -105,8 +107,10 @@ const fallbackDefaults: Settings = {
   proxyUsername: '',
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
-  anonymousDiagnostics: true,
+  anonymousDiagnostics: false,
+  sessionHeartbeat: true,
   telemetryConsentVersion: 0,
+  legalAcceptedVersion: '',
   accountSync: false,
   presenceStatus: 'online',
   presenceAutoAway: true,
@@ -134,12 +138,13 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function saveSettings(next: Settings): Promise<void> {
+export async function saveSettingsPatch(patch: Partial<Settings>): Promise<Settings> {
   if (inWails) {
-    await SettingsService.SaveSettings(next);
-    return;
+    return (await SettingsService.SaveSettingsPatch(patch)) as Settings;
   }
-  localStorage.setItem(FALLBACK_KEY, JSON.stringify(next));
+  const merged = { ...(await getSettings()), ...patch };
+  localStorage.setItem(FALLBACK_KEY, JSON.stringify(merged));
+  return merged;
 }
 
 export async function selectFolder(title: string): Promise<string> {
@@ -165,6 +170,11 @@ export async function setupLibrary(parent: string): Promise<Settings> {
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+}
+
+export async function saveLegalAcceptance(version: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return (await SettingsService.SaveLegalAcceptance(version)) as Settings;
 }
 
 export async function openGameFolder(path: string, executable: string): Promise<void> {

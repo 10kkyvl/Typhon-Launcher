@@ -1,6 +1,7 @@
 import { Service as MetadataService } from '../../../bindings/typhon/internal/metadata';
 import { get } from 'svelte/store';
 import { locale } from '../i18n/locale';
+import { errorCode } from '../i18n/errors';
 import { inWails } from './backend';
 import type { CatalogGame } from './sources';
 
@@ -41,6 +42,16 @@ export interface MetadataView {
   stale: boolean;
   provider: string;
   match: MetadataMatch;
+  storeLinks?: Record<string, string> | null;
+}
+
+export type StoreId = 'steam' | 'gog' | 'epic';
+
+export const STORE_ORDER: readonly StoreId[] = ['steam', 'gog', 'epic'];
+
+export function storeEntries(links: Record<string, string> | null | undefined): StoreId[] {
+  if (!links) return [];
+  return STORE_ORDER.filter((store) => Boolean(links[store]));
 }
 
 let languageQueue: Promise<void> = Promise.resolve();
@@ -65,14 +76,12 @@ const emptyView = (gameId: string): MetadataView => ({
   match: 'idle',
 });
 
+const unknownGame = (err: unknown) => errorCode(err) === 'catalog.game_not_found';
+
 export async function isMetadataAvailable(): Promise<boolean> {
   if (!inWails) return false;
   await syncLanguage();
-  try {
-    return await MetadataService.Available();
-  } catch {
-    return false;
-  }
+  return await MetadataService.Available();
 }
 
 export async function getMetadataView(gameId: string): Promise<MetadataView> {
@@ -80,19 +89,16 @@ export async function getMetadataView(gameId: string): Promise<MetadataView> {
   await syncLanguage();
   try {
     return (await MetadataService.GetView(gameId)) as unknown as MetadataView;
-  } catch {
-    return emptyView(gameId);
+  } catch (err) {
+    if (unknownGame(err)) return emptyView(gameId);
+    throw err;
   }
 }
 
 export async function getGameArt(gameIds: string[]): Promise<Record<string, GameArt>> {
   if (!inWails || gameIds.length === 0) return {};
   await syncLanguage();
-  try {
-    return ((await MetadataService.GetArt(gameIds)) ?? {}) as unknown as Record<string, GameArt>;
-  } catch {
-    return {};
-  }
+  return ((await MetadataService.GetArt(gameIds)) ?? {}) as unknown as Record<string, GameArt>;
 }
 
 export async function ensureArt(gameIds: string[]): Promise<string[]> {
@@ -136,7 +142,13 @@ export async function ensureMetadataFresh(gameId: string): Promise<boolean> {
   await syncLanguage();
   try {
     return await MetadataService.EnsureFresh(gameId);
-  } catch {
-    return false;
+  } catch (err) {
+    if (unknownGame(err)) return false;
+    throw err;
   }
+}
+
+export async function openStoreLink(gameId: string, store: StoreId): Promise<void> {
+  if (!inWails) throw unavailable();
+  await MetadataService.OpenStoreLink(gameId, store);
 }

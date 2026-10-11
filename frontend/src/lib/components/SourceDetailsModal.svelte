@@ -10,7 +10,9 @@
     type ReleaseView,
     type SourceDetails,
   } from '../services/sources';
+  import { LatestRequestGate } from '../bigpicture/latestRequest';
   import { removeSourcePrompt, type ConfirmPrompt } from '../confirm/prompts';
+  import { toast } from '../stores/toasts';
   import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
   import Button from './Button.svelte';
@@ -54,7 +56,11 @@
     }
   }
 
+  const detailsRequests = new LatestRequestGate();
+  const releaseRequests = new LatestRequestGate();
   let details = $state<SourceDetails | null>(null);
+  let detailsError = $state('');
+  let releasesError = $state('');
   let filterStatus = $state('all');
   let search = $state('');
   let page = $state(1);
@@ -74,6 +80,15 @@
     const isOpen = open;
     const releaseId = focusReleaseId;
     untrack(() => {
+      clearTimeout(searchTimer);
+      detailsRequests.invalidate();
+      releaseRequests.invalidate();
+      details = null;
+      releases = [];
+      total = 0;
+      detailsError = '';
+      releasesError = '';
+      loadingReleases = false;
       if (isOpen && id) {
         filterStatus = 'all';
         search = '';
@@ -86,31 +101,43 @@
   });
 
   async function focusRelease(id: string, releaseId: string) {
-    const view = await getRelease(releaseId);
-    if (view) search = view.release.rawTitle;
+    const ticket = releaseRequests.begin();
+    loadingReleases = true;
+    const result = await releaseRequests.settle(ticket, getRelease(releaseId));
+    if (result.kind === 'stale') return;
+    if (result.kind === 'error') toast(sourceErrorText(result.error, msg('modals.sourceDetailsReleaseLoadFailed')), 'danger');
+    else if (result.value) search = result.value.release.rawTitle;
     loadReleases(id);
   }
 
   async function loadDetails(id: string) {
-    try {
-      details = await getSourceDetails(id);
-    } catch {
+    const ticket = detailsRequests.begin();
+    detailsError = '';
+    const result = await detailsRequests.settle(ticket, getSourceDetails(id));
+    if (result.kind === 'stale') return;
+    if (result.kind === 'error') {
       details = null;
+      detailsError = sourceErrorText(result.error, msg('modals.sourceDetailsLoadFailed'));
+    } else {
+      details = result.value;
     }
   }
 
   async function loadReleases(id: string) {
+    const ticket = releaseRequests.begin();
     loadingReleases = true;
-    try {
-      const result = await queryReleases({ sourceId: id, search, status: filterStatus, page, pageSize });
-      releases = result.items;
-      total = result.total;
-    } catch {
+    releasesError = '';
+    const result = await releaseRequests.settle(ticket, queryReleases({ sourceId: id, search, status: filterStatus, page, pageSize }));
+    if (result.kind === 'stale') return;
+    if (result.kind === 'error') {
       releases = [];
       total = 0;
-    } finally {
-      loadingReleases = false;
+      releasesError = sourceErrorText(result.error, msg('modals.sourceDetailsReleasesFailed'));
+    } else {
+      releases = result.value.items;
+      total = result.value.total;
     }
+    loadingReleases = false;
   }
 
   function reloadAll() {
@@ -207,7 +234,12 @@
         </div>
       </section>
 
-      {#if details}
+      {#if detailsError}
+        <section class="load-error" role="alert">
+          <span>{detailsError}</span>
+          <Button size="sm" onclick={() => sourceId && loadDetails(sourceId)}>{msg('common.retry')}</Button>
+        </section>
+      {:else if details}
         <section class="counters">
           <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterTotal')}</span><span class="counter-value">{details.total}</span></div>
           <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterAvailable')}</span><span class="counter-value">{details.available}</span></div>
@@ -233,6 +265,11 @@
         </div>
         {#if loadingReleases}
           <p class="empty">{msg('modals.sourceDetailsLoading')}</p>
+        {:else if releasesError}
+          <div class="empty load-error" role="alert">
+            <span>{releasesError}</span>
+            <Button size="sm" onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
+          </div>
         {:else if releases.length === 0}
           <p class="empty">{msg('modals.sourceDetailsNoReleases')}</p>
         {:else}
@@ -260,17 +297,21 @@
             </button>
           {/each}
         {/if}
-        <div class="tfoot">
-          <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
-          <div class="pager">
-            <Button size="sm" disabled={page <= 1} onclick={prevPage}>
-              <ChevronLeft size="1.5rem" strokeWidth={1.8} />
-            </Button>
-            <Button size="sm" disabled={page * pageSize >= total} onclick={nextPage}>
-              <ChevronRight size="1.5rem" strokeWidth={1.8} />
-            </Button>
+        {#if !releasesError || page > 1}
+          <div class="tfoot">
+            {#if !releasesError}
+              <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
+            {/if}
+            <div class="pager">
+              <Button size="sm" disabled={page <= 1} onclick={prevPage}>
+                <ChevronLeft size="1.5rem" strokeWidth={1.8} />
+              </Button>
+              <Button size="sm" disabled={page * pageSize >= total} onclick={nextPage}>
+                <ChevronRight size="1.5rem" strokeWidth={1.8} />
+              </Button>
+            </div>
           </div>
-        </div>
+        {/if}
       </section>
     </div>
   {/if}
@@ -323,6 +364,15 @@
 
   .error {
     font-size: var(--font-xs);
+    color: var(--danger);
+  }
+
+  .load-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    font-size: var(--font-sm);
     color: var(--danger);
   }
 
@@ -469,6 +519,7 @@
 
   .pager {
     display: flex;
+    margin-left: auto;
     gap: 0.6rem;
   }
 </style>

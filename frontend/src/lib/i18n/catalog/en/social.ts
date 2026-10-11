@@ -37,6 +37,7 @@ export const social: Record<SocialKey, Message> = {
   'social.reactionParty': 'Party',
   'social.reactionEyes': 'Eyes',
   'social.reactionJoy': 'Laugh',
+  'social.reactionAdd': 'Add a reaction',
 
   // lib/social/feed.ts — event kind labels
   'social.feedCompleted': 'Completed',
@@ -168,8 +169,6 @@ export const social: Record<SocialKey, Message> = {
   'social.flagActivitySub': 'Games played by day, without launch times',
   'social.flagStatsLabel': 'Stats',
   'social.flagStatsSub': 'Games, hours, completed, currently playing',
-  'social.showcaseHeading': 'Showcase',
-  'social.showcaseExplain': 'Up to three blocks, in the order you choose.',
   'social.moveUp': 'Move up: {title}',
   'social.moveDown': 'Move down: {title}',
   'social.removeButton': 'Remove',

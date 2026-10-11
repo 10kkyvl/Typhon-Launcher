@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"typhon/internal/hashdir"
+	"typhon/internal/settings"
 )
 
 // recoverAll resumes or undoes every job left in moves.json from a previous
@@ -163,9 +164,10 @@ func (s *Service) recoverRepoint(ctx context.Context, job Job) {
 	}
 	switch job.GameID {
 	case itemSettings:
-		next := s.settings.GetSettings()
-		next.LibraryPath = job.Target
-		if err := s.settings.SaveSettings(next); err != nil {
+		if _, err := s.settings.Update(func(next *settings.Settings) error {
+			next.LibraryPath = job.Target
+			return nil
+		}); err != nil {
 			slog.Warn("retry library settings save on recovery", "job", job.ID, "error", err)
 			return
 		}

@@ -1,5 +1,5 @@
 // Personal accents are local settings, never part of an exported theme.
-export const accentPresets = ['#6673F2', '#388BFF', '#16A6B6', '#36A66A', '#E4B836', '#ED873D', '#E45D87', '#AB70E5'];
+export const accentPresets = ['#4F6BFF', '#388BFF', '#16A6B6', '#36A66A', '#E4B836', '#ED873D', '#E45D87', '#AB70E5'];
 export const validAccent = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value);
 type RGB = [number, number, number];
 // Resolve translucent surfaces against the theme background before measuring contrast.

@@ -400,6 +400,13 @@ func (s *Service) Export(id, path string) error {
 	if err != nil {
 		return err
 	}
+	tokens := make(map[string]string, len(t.Tokens))
+	for name, value := range t.Tokens {
+		if !isSettingsOwned(name) {
+			tokens[name] = value
+		}
+	}
+	t.Tokens = tokens
 	payload := file{Version: 1, Theme: t}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {

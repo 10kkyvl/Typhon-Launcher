@@ -209,3 +209,17 @@ describe('failed downloads', () => {
     expect(get(store.active)).toHaveLength(0);
   });
 });
+
+describe('download events whose file list Go sent as null', () => {
+  it.each(['download:added', 'download:updated', 'download:completed', 'download:failed'])(
+    '%s stores an empty file list',
+    async (name) => {
+      seeded = [];
+      const { store } = await load();
+
+      handlers[name]({ data: { ...makeDownload({ id: 'n1' }), files: null } });
+
+      expect(get(store.downloads)[0].files).toEqual([]);
+    },
+  );
+});

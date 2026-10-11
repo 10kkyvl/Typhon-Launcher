@@ -3,6 +3,7 @@
   import { revealImage } from '../../lib/utils/revealImage';
   import { locale } from '../../lib/i18n/locale';
   import {
+    ArrowUp,
     BookmarkPlus,
     ChevronRight,
     Download,
@@ -11,6 +12,7 @@
     HardDriveDownload,
     Heart,
     Play,
+    Sparkles,
     Square,
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
@@ -31,6 +33,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
@@ -83,8 +86,10 @@
     dismissMetadataMatch,
     ensureMetadataFresh,
     getMetadataView,
+    openStoreLink,
     refreshMetadata,
     type MetadataView,
+    type StoreId,
   } from '../../lib/services/metadata';
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
@@ -140,6 +145,19 @@
   const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
   const updateAvailable = $derived(Boolean(update?.availability.available));
+  const updateIsRelease = $derived(update?.availability.kind !== 'update');
+
+  let updateBadgePopped = false;
+
+  $effect(() => {
+    if (!updateAvailable) updateBadgePopped = false;
+  });
+
+  function popOnce(node: HTMLElement) {
+    if (updateBadgePopped) return;
+    updateBadgePopped = true;
+    node.classList.add('fresh');
+  }
   const showUpdateCard = $derived(
     Boolean(
       update &&
@@ -174,16 +192,22 @@
 
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
+  let catalogFailed = $state(false);
   let catalogToken = 0;
 
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
+    catalogFailed = false;
     catalogGame = null;
     try {
       const found = await getCatalogGame(gameId);
       if (current !== catalogToken) return;
       catalogGame = found;
+    } catch (err) {
+      if (current !== catalogToken) return;
+      catalogFailed = true;
+      toast(metadataErrorText(err, msg('games.detailCatalogLoadError')), 'danger');
     } finally {
       if (current === catalogToken) catalogLoading = false;
     }
@@ -196,6 +220,7 @@
       if (known) {
         catalogToken++;
         catalogLoading = false;
+        catalogFailed = false;
         catalogGame = null;
         return;
       }
@@ -235,6 +260,8 @@
       const started = await ensureMetadataFresh(gameId);
       if (current !== metaToken || eventVersion !== metaEventVersion) return;
       metaSearching = started || view.match === 'searching';
+    } catch (err) {
+      if (current === metaToken) toast(metadataErrorText(err, msg('games.detailMetaLoadError')), 'danger');
     } finally {
       if (current === metaToken) metaReading = false;
     }
@@ -499,10 +526,16 @@
     }
   }
 
+  let favoritePulse = $state(false);
+
   function toggleFavorite() {
     const current = localGame;
     if (!current) return;
-    void mark(() => setFavorite(current.id, !current.favorite), msg('games.errorFavoriteFailed'));
+    const next = !current.favorite;
+    void mark(async () => {
+      await setFavorite(current.id, next);
+      favoritePulse = next;
+    }, msg('games.errorFavoriteFailed'));
   }
 
   async function toggleRequiresSteam(on: boolean) {
@@ -569,6 +602,15 @@
       toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
     } finally {
       metaSkipping = false;
+    }
+  }
+
+  async function openStore(store: StoreId) {
+    if (!canonicalId) return;
+    try {
+      await openStoreLink(canonicalId, store);
+    } catch (err) {
+      toast(metadataErrorText(err, msg('errMetadata.fallback')), 'danger');
     }
   }
 
@@ -737,6 +779,7 @@
   }
 
   const missing = $derived(
+    !catalogFailed &&
     isGameMissing({
       hasLocalGame: Boolean(localGame),
       hasCatalogGame: Boolean(catalogGame),
@@ -749,6 +792,13 @@
 {#if missing}
   <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
     {#snippet actions()}
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
+  <EmptyState title={msg('games.detailCatalogLoadError')}>
+    {#snippet actions()}
+      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
       <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
     {/snippet}
   </EmptyState>
@@ -794,7 +844,9 @@
             <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
           {/if}
           {#if updateAvailable && !busy}
-            <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
+            <span class="pop" use:popOnce>
+              <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
+            </span>
           {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
@@ -823,26 +875,36 @@
               <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} />
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
-          {:else}
-            <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
-              {#if primary.kind === 'play'}
-                <Play size="1.6rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'stop'}
-                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-              {:else if primary.kind === 'download'}
-                <Download size="1.6rem" strokeWidth={1.8} />
-              {:else if primary.kind === 'install-download'}
-                <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
+          {:else if primary.kind === 'update'}
+            <span class="lead">
+              <Button variant="primary" size="lg" onclick={play}>
+                <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
+                {msg('games.play')}
+              </Button>
+            </span>
+            <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
+              {#if updateIsRelease}
+                <Sparkles size="1.5rem" strokeWidth={1.8} />
+              {:else}
+                <ArrowUp size="1.5rem" strokeWidth={2} />
               {/if}
               {primary.label}
             </Button>
-          {/if}
-
-          {#if primary.kind === 'update'}
-            <Button size="lg" onclick={play}>
-              <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-              {msg('games.play')}
-            </Button>
+          {:else}
+            <span class="lead">
+              <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
+                {#if primary.kind === 'play'}
+                  <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
+                {:else if primary.kind === 'stop'}
+                  <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+                {:else if primary.kind === 'download'}
+                  <Download size="1.6rem" strokeWidth={1.8} />
+                {:else if primary.kind === 'install-download'}
+                  <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
+                {/if}
+                {primary.label}
+              </Button>
+            </span>
           {/if}
 
           {#if !localGame && canonicalId}
@@ -858,7 +920,9 @@
               active={Boolean(localGame.favorite)}
               onclick={toggleFavorite}
             >
-              <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+              <span class="heart" class:pulse={favoritePulse} onanimationend={() => (favoritePulse = false)}>
+                <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+              </span>
             </IconButton>
 
             <Button size="lg" onclick={() => (statusOpen = true)}>
@@ -971,6 +1035,10 @@
           </div>
         {/if}
 
+        <div class="stores">
+          <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+        </div>
+
         {#if showUpdateCard && update}
           <section class="section">
             <UpdateCard bind:this={updateCard} {update} {running} />
@@ -1037,8 +1105,8 @@
 
     <aside class="side">
       {#if gameFacts.length > 0}
-        <Card title={msg('games.detailAboutTitle')}>
-          <dl class="facts">
+        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="var(--space-5)">
+          <dl class="facts about">
             {#each gameFacts as fact (fact.label)}
               <div class="fact">
                 <dt>{fact.label}</dt>
@@ -1106,8 +1174,8 @@
   .hero {
     position: relative;
     margin-inline: calc(var(--page-x) * -1);
-    margin-bottom: var(--space-10);
-    padding: var(--space-4) var(--page-x) var(--space-6);
+    margin-bottom: var(--space-8);
+    padding: var(--space-4) var(--page-x) var(--space-5);
     min-height: clamp(31rem, 42vh, 48rem);
     display: flex;
     flex-direction: column;
@@ -1135,8 +1203,8 @@
 
   .hero.plain .art {
     background:
-      radial-gradient(100% 78% at 6% 0%, rgba(104, 117, 232, 0.2), transparent 64%),
-      radial-gradient(80% 70% at 88% 8%, rgba(255, 255, 255, 0.05), transparent 62%),
+      radial-gradient(100% 78% at 6% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 64%),
+      radial-gradient(80% 70% at 88% 8%, var(--hover), transparent 62%),
       linear-gradient(180deg, var(--surface-3), var(--bg) 86%);
   }
 
@@ -1147,23 +1215,29 @@
     background:
       linear-gradient(
         180deg,
-        rgba(11, 15, 20, 0.72) 0%,
-        rgba(11, 15, 20, 0.22) 22%,
-        rgba(11, 15, 20, 0.55) 52%,
-        rgba(11, 15, 20, 0.88) 76%,
-        var(--bg) 96%
+        color-mix(in srgb, var(--bg) 58%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 8%, transparent) 20%,
+        color-mix(in srgb, var(--bg) 8%, transparent) 38%,
+        color-mix(in srgb, var(--bg) 62%, transparent) 68%,
+        color-mix(in srgb, var(--bg) 92%, transparent) 88%,
+        var(--bg) 100%
       ),
       linear-gradient(
         90deg,
-        rgba(11, 15, 20, 0.92) 0%,
-        rgba(11, 15, 20, 0.68) 36%,
-        rgba(11, 15, 20, 0.22) 68%,
-        rgba(11, 15, 20, 0) 90%
+        color-mix(in srgb, var(--bg) 82%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 52%, transparent) 34%,
+        color-mix(in srgb, var(--bg) 10%, transparent) 62%,
+        transparent 80%
       );
   }
 
   .hero.plain .veil {
-    background: linear-gradient(180deg, transparent 60%, rgba(11, 15, 20, 0.6) 82%, var(--bg) 100%);
+    background: linear-gradient(
+      180deg,
+      transparent 60%,
+      color-mix(in srgb, var(--bg) 60%, transparent) 82%,
+      var(--bg) 100%
+    );
   }
 
   .breadcrumb {
@@ -1202,12 +1276,12 @@
   }
 
   .cover {
-    width: clamp(11rem, 10vw, 16rem);
+    width: clamp(13rem, 11vw, 18rem);
     flex-shrink: 0;
-    margin-bottom: -3.6rem;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
+    animation: rise-in var(--dur-slow) var(--ease) backwards;
   }
 
   .cover-skeleton {
@@ -1218,7 +1292,6 @@
   .ident {
     flex: 1;
     min-width: 0;
-    padding-bottom: 0.4rem;
   }
 
   .state {
@@ -1230,6 +1303,14 @@
     min-height: 2.4rem;
   }
 
+  .pop {
+    display: inline-flex;
+  }
+
+  .pop:global(.fresh) {
+    animation: badge-pop var(--dur-slow) var(--ease-spring) backwards;
+  }
+
   .title {
     font-size: clamp(2.8rem, 2.4vw + 1rem, 4.6rem);
     font-weight: 600;
@@ -1237,7 +1318,21 @@
     line-height: 1.04;
     text-wrap: balance;
     max-width: 26ch;
-    text-shadow: 0 0.2rem 2.4rem rgba(0, 0, 0, 0.5);
+    text-shadow: 0 0.2rem 2.4rem color-mix(in srgb, var(--bg) 70%, transparent);
+  }
+
+  .state,
+  .title,
+  .metaline {
+    animation: rise-in var(--dur-slow) var(--ease) backwards;
+    animation-delay: calc(var(--dur-fast) / 2);
+  }
+
+  @keyframes badge-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.7);
+    }
   }
 
   .title-skeleton {
@@ -1266,6 +1361,36 @@
     gap: var(--space-3);
     flex-wrap: wrap;
     margin-top: var(--space-5);
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
+  }
+
+  .lead {
+    display: inline-flex;
+  }
+
+  .lead :global(.btn) {
+    min-width: 18rem;
+    padding: 0 2.8rem;
+  }
+
+  .cta :global(.icon-btn) {
+    width: var(--control-lg);
+    height: var(--control-lg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-3);
+  }
+
+  .cta :global(.icon-btn:hover:not(:disabled)) {
+    background: var(--surface-4);
+  }
+
+  .heart {
+    display: inline-flex;
+  }
+
+  .heart.pulse {
+    animation: pop-in var(--dur-slow) var(--ease-spring);
   }
 
   .progress {
@@ -1418,6 +1543,10 @@
     white-space: nowrap;
   }
 
+  .stores {
+    margin-top: var(--space-5);
+  }
+
   .section {
     margin-top: var(--space-10);
   }
@@ -1496,6 +1625,10 @@
     gap: var(--space-4);
     padding: 0.9rem 0;
     border-top: 1px solid var(--border);
+  }
+
+  .about .fact:last-child {
+    padding-bottom: 0;
   }
 
   .steam-row {
@@ -1598,8 +1731,7 @@
     }
 
     .cover {
-      width: 9rem;
-      margin-bottom: -2.4rem;
+      width: 10rem;
     }
 
     .shots,

@@ -2,14 +2,13 @@ package download
 
 import (
 	"errors"
-	"fmt"
-	"net"
 	"net/url"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
+	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
 
 	"github.com/anacrolix/torrent"
@@ -52,26 +51,6 @@ func TestLimiterBurst(t *testing.T) {
 	}
 }
 
-func TestIsListenError(t *testing.T) {
-	bindErr := &net.OpError{
-		Op:  "listen",
-		Net: "udp4",
-		Err: errors.New("Only one usage of each socket address is normally permitted."),
-	}
-	if !isListenError(bindErr) {
-		t.Fatal("net.OpError not recognised as a listen failure")
-	}
-	if !isListenError(fmt.Errorf("wrapped: %w", bindErr)) {
-		t.Fatal("wrapped net.OpError not recognised")
-	}
-	if !isListenError(errors.New("listen udp4 :42815: bind: address already in use")) {
-		t.Fatal("plain bind error not recognised")
-	}
-	if isListenError(errors.New("не удалось прочитать torrent-файл")) {
-		t.Fatal("unrelated error treated as a listen failure")
-	}
-}
-
 func TestApplyLimit(t *testing.T) {
 	l := newLimiter(0)
 	if l.Limit() != rate.Inf {
@@ -87,21 +66,52 @@ func TestApplyLimit(t *testing.T) {
 	}
 }
 
+// openTestClient is what the stand-ins for newClient share. A random port is
+// free for TCP and can still be held in UDP by another process or sit in a
+// range Windows excludes (listen udp4: bind: forbidden by its access
+// permissions), so a client that fails to listen is tried again on a random
+// port of its own choosing, as newClient does (port 0 hands out the next number
+// in a row, which sits in the same excluded range), and only a client that
+// fails all of them is an error. mk builds a fresh config for every attempt.
+func openTestClient(mk func() (*torrent.ClientConfig, error)) (*torrent.Client, *torrent.ClientConfig, error) {
+	for attempt := 0; ; attempt++ {
+		tc, err := mk()
+		if err != nil {
+			return nil, nil, err
+		}
+		if attempt > 0 {
+			if tc.ListenPort, err = listenport.Random(); err != nil {
+				closeDefaultStorage(tc)
+				return nil, nil, err
+			}
+		}
+		cl, err := openTorrentClient(tc)
+		if err == nil {
+			return cl, tc, nil
+		}
+		closeDefaultStorage(tc)
+		if !listenport.IsListenError(err) || attempt == listenport.Attempts {
+			return nil, nil, err
+		}
+	}
+}
+
 func offlineClient(t *testing.T) *client {
 	t.Helper()
 	dir := t.TempDir()
 	// Match production ownership: per-torrent storage must not clear the
 	// shared completion map while another torrent is still hashing.
 	completion := nonClosingCompletion{storage.NewMapPieceCompletion()}
-	tc := clientConfig(settings.Defaults(), dir, 0, completion)
-	tc.NoDHT = true
-	tc.DisableTrackers = true
-	tc.DisablePEX = true
-	tc.NoDefaultPortForwarding = true
-	cl, err := torrent.NewClient(tc)
+	cl, tc, err := openTestClient(func() (*torrent.ClientConfig, error) {
+		tc := clientConfig(settings.Defaults(), dir, 0, completion)
+		tc.NoDHT = true
+		tc.DisableTrackers = true
+		tc.DisablePEX = true
+		tc.NoDefaultPortForwarding = true
+		return tc, nil
+	})
 	if err != nil {
-		closeDefaultStorage(tc)
-		t.Skipf("torrent client unavailable: %v", err)
+		t.Fatalf("torrent client unavailable: %v", err)
 	}
 	c := &client{cl: cl, down: tc.DownloadRateLimiter, up: tc.UploadRateLimiter, metaDir: dir, completion: completion}
 	t.Cleanup(c.close)

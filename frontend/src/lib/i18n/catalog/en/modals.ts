@@ -22,7 +22,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourcesNoticeReviewTitle': 'Sources notice',
   'modals.sourcesNoticeGateTitle': 'Before you add a source',
   'modals.sourcesNoticeBody':
-    'Typhon does not provide or verify the contents of third-party sources. Only add sources and materials you have the right to use. The source address and its contents are processed on this device — Typhon does not send them to its servers.',
+    'Typhon does not provide or verify the contents of third-party sources. Only add sources and materials you have the right to use. The source address, links and files stay on this device. To match covers and descriptions, only game titles from the feed are sent to the Typhon service — without the source address or links; the server does not store them.',
   'modals.sourcesNoticeSaving': 'Saving…',
   'modals.sourcesNoticeContinue': 'Got it, continue',
 
@@ -108,20 +108,23 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.socialConsentEnable': 'Enable sync',
 
   // TelemetryConsentScreen.svelte
-  'modals.telemetryConsentTitle': 'Send anonymous error reports?',
+  'modals.telemetryConsentTitle': 'Which anonymous data should be sent?',
   'modals.telemetryConsentIntro':
-    'This helps fix bugs faster. Only what broke goes into the report: paths, device name, and network addresses are removed before sending.',
-  'modals.telemetryConsentUsageTitle': 'Also send usage statistics',
+    'This helps fix bugs faster. The switches are independent: turn on only what you are comfortable sharing. Paths, device name, and network addresses are removed before sending. The anonymous launcher online-status ping is not part of this question: turn it off in Settings, under Privacy.',
+  'modals.telemetryConsentUsageTitle': 'Usage statistics',
   'modals.telemetryConsentUsageNote':
-    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. Screens, clicks, and UI behavior are not tracked.',
+    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. It also adds the installation ID and the catalog game ID to the launcher online-status ping. Screens, clicks, and UI behavior are not tracked.',
   'modals.telemetryConsentUsageToggleLabel': 'Anonymous usage statistics',
   'modals.telemetryConsentDisclosureSummary': 'What exactly is sent',
   'modals.telemetryConsentErrorReportLabel': 'Error report',
   'modals.telemetryConsentUsageEventLabel': 'Usage statistics event',
   'modals.telemetryConsentCompatReportLabel': 'Game compatibility report',
+  'modals.telemetryConsentHeartbeatLabel': 'Launcher online-status ping',
+  'modals.telemetryConsentHeartbeatNote':
+    'Without usage statistics only these fields are sent. With statistics, installation_id and game_id are added. The ping can be turned off in settings.',
   'modals.telemetryConsentSaving': 'Saving…',
-  'modals.telemetryConsentDecline': 'Do not send',
-  'modals.telemetryConsentAccept': 'Yes, send',
+  'modals.telemetryConsentDecline': 'Turn both off',
+  'modals.telemetryConsentAccept': 'Save choice',
 
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Diagnostics',
@@ -262,6 +265,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsStatusUnmatched': 'Unmatched',
   'modals.sourceDetailsStatusRemoved': 'Removed',
   'modals.sourceDetailsStatusNew': 'New',
+  'modals.sourceDetailsReleaseLoadFailed': 'Failed to load the release',
   'modals.sourceDetailsStatusActive': 'Active',
   'modals.sourceDetailsStatusDisabled': 'Disabled',
   'modals.sourceDetailsStatusUpdating': 'Updating',
@@ -284,6 +288,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.sourceDetailsColStatus': 'Status',
   'modals.sourceDetailsLoading': 'Loading…',
   'modals.sourceDetailsNoReleases': 'No releases found',
+  'modals.sourceDetailsLoadFailed': 'Failed to load the source details',
+  'modals.sourceDetailsReleasesFailed': 'Failed to load the releases',
   'modals.sourceDetailsUnavailable': 'Unavailable',
   'modals.sourceDetailsNewBadge': 'New',
   'modals.sourceDetailsRange': '{from}–{to} of {total}',
@@ -336,4 +342,23 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installConfirm': 'Confirm',
   'modals.installDismiss': 'Dismiss',
   'modals.installManually': 'Install manually',
+  'modals.legalAcceptTitle': 'Typhon Terms of Use',
+  'modals.legalAcceptUpdated': 'The terms were updated on {date}',
+  'modals.legalAcceptIntro': 'Before you continue, read the short summary. The full texts are linked below.',
+  'modals.legalAcceptPoint1':
+    'Typhon contains no games and no preinstalled sources. You add sources yourself and are responsible for your right to use their content.',
+  'modals.legalAcceptPoint2':
+    'Downloading over BitTorrent may send parts of files to other peers in the network. Seeding is off by default.',
+  'modals.legalAcceptPoint3':
+    'An account is optional. What is processed with and without one is described in the privacy policy.',
+  'modals.legalAcceptPoint4':
+    'The app is provided "as is". The operator is not responsible for the content of third-party sources.',
+  'modals.legalAcceptTermsLink': 'Terms of Use',
+  'modals.legalAcceptPrivacyLink': 'Privacy Policy',
+  'modals.legalAcceptButton': 'I Agree',
+  'modals.legalAcceptSaving': 'Saving…',
+  'modals.legalAcceptVersionFailed': 'Could not get the terms version. Check that the app works correctly and try again.',
+  'modals.legalAcceptRetry': 'Retry',
+  'modals.legalAcceptSaveFailed': 'Could not save your acceptance: the settings folder is not writable. Check the permissions and try again.',
+  'modals.legalAcceptSaveFallback': 'Could not save your acceptance. Try again.',
 };

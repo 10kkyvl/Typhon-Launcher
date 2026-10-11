@@ -8,6 +8,7 @@ export const bigpictureSocial = {
   'bp.profile.namePrompt': 'Display name',
   'bp.profile.nameSaved': 'Display name saved.',
   'bp.profile.nameSaveFailed': 'Could not save the display name.',
+  'bp.profile.loadFailed': 'Could not load your stats.',
   'bp.profile.stats': 'Your play stats',
   'bp.profile.gamesCount': 'Games',
   'bp.profile.hoursCount': 'Hours played',

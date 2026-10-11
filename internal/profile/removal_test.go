@@ -26,8 +26,14 @@ func TestRemovedGameHistorySurvivesReload(t *testing.T) {
 	}
 	now := time.Now()
 	log.Record("game", now.Add(-time.Hour), now)
-	service := NewService(lib, log, func() []string { return []string{"most_played"} })
-	before := service.Snapshot()
+	service, err := NewService(lib, log, stubCatalog{}, func() []string { return []string{"most_played"} }, noLayout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := service.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := lib.RemoveGame("game"); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +45,14 @@ func TestRemovedGameHistorySurvivesReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	after := NewService(lib, log, func() []string { return []string{"most_played"} }).Snapshot()
+	reloaded, err := NewService(lib, log, stubCatalog{}, func() []string { return []string{"most_played"} }, noLayout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := reloaded.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(lib.GetGames()) != 0 {
 		t.Fatal("removed game returned to library")
 	}

@@ -235,7 +235,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.moveErrNoInstallDir': 'The game has no install directory set',
   'transfers.moveErrJobNotFound': 'Move operation not found — it may have already finished',
   'transfers.moveErrGameNotFound': 'Game not found in the library',
-  'transfers.moveErrAmbiguousRecovery': 'The move was interrupted and needs manual review. Contact support',
+  'transfers.moveErrAmbiguousRecovery': 'The move was interrupted and needs manual review. Describe what happened in the Support section',
   'transfers.moveErrDialogUnavailable': 'Folder picker unavailable',
   'transfers.moveErrShuttingDown': 'The launcher is shutting down, try again later',
   'transfers.moveErrNotReady': 'The move service is not ready yet, try again in a moment',

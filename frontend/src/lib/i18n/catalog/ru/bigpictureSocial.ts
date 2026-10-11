@@ -8,6 +8,7 @@ export const bigpictureSocial = {
   'bp.profile.namePrompt': 'Отображаемое имя',
   'bp.profile.nameSaved': 'Имя сохранено.',
   'bp.profile.nameSaveFailed': 'Не удалось сохранить имя.',
+  'bp.profile.loadFailed': 'Не удалось загрузить статистику.',
   'bp.profile.stats': 'Статистика игр',
   'bp.profile.gamesCount': 'Игр',
   'bp.profile.hoursCount': 'Часов в игре',

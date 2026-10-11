@@ -68,14 +68,15 @@ const (
 )
 
 type View struct {
-	Game        catalog.Game `json:"game"`
-	Cover       string       `json:"cover"`
-	Hero        string       `json:"hero"`
-	Screenshots []MediaAsset `json:"screenshots"`
-	Resolved    bool         `json:"resolved"`
-	Stale       bool         `json:"stale"`
-	Provider    string       `json:"provider"`
-	Match       MatchState   `json:"match"`
+	Game        catalog.Game      `json:"game"`
+	Cover       string            `json:"cover"`
+	Hero        string            `json:"hero"`
+	Screenshots []MediaAsset      `json:"screenshots"`
+	Resolved    bool              `json:"resolved"`
+	Stale       bool              `json:"stale"`
+	Provider    string            `json:"provider"`
+	Match       MatchState        `json:"match"`
+	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
 }
 
 type Art struct {
@@ -96,6 +97,7 @@ type Service struct {
 
 	catalog       *catalog.Service
 	applyMetadata func(string, catalog.MetadataPatch) (catalog.Game, error)
+	openURL       func(string) error
 	provider      Provider
 	store         *assetStore
 	attempts      *attemptStore
@@ -131,6 +133,7 @@ func NewServiceAt(dir string, cat *catalog.Service, provider Provider) (*Service
 		refreshing:    map[string]bool{},
 		catalog:       cat,
 		applyMetadata: cat.ApplyMetadata,
+		openURL:       openSystemBrowser,
 		provider:      provider,
 		store:         store,
 		attempts:      attempts,
@@ -794,6 +797,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		Themes:       meta.Themes,
 		Platforms:    meta.Platforms,
 		GameType:     meta.GameType,
+		StoreLinks:   meta.StoreLinks,
 		CoverAssetID: batch.cover,
 		HeroAssetID:  batch.hero,
 		UpdatedAt:    time.Now(),
@@ -976,6 +980,7 @@ func (s *Service) view(game catalog.Game) View {
 	}
 	view.Hero = heroURL(game, view.Screenshots)
 	view.Match = s.matchState(game)
+	view.StoreLinks = validStoreLinks(game.StoreLinks)
 	return view
 }
 

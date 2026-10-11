@@ -94,6 +94,49 @@ describe('profile snapshot', () => {
   });
 });
 
+describe('profile snapshot failures', () => {
+  it('starts without a failure', async () => {
+    const { store } = await load();
+
+    expect(get(store.profileFailed)).toBe(false);
+  });
+
+  it('marks the failure and keeps the last good snapshot', async () => {
+    const { store } = await load();
+    fetchSnapshot.mockResolvedValueOnce(snapshot('kept'));
+    await store.refreshProfile();
+    fetchSnapshot.mockRejectedValueOnce(new Error('offline'));
+
+    await store.refreshProfile();
+
+    expect(get(store.profileFailed)).toBe(true);
+    expect((get(store.profileSnapshot) as unknown as { marker: string }).marker).toBe('kept');
+  });
+
+  it('clears the failure once a refresh succeeds', async () => {
+    const { store } = await load();
+    fetchSnapshot.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(snapshot('fresh'));
+    await store.refreshProfile();
+
+    await store.refreshProfile();
+
+    expect(get(store.profileFailed)).toBe(false);
+  });
+
+  it('does not mark a failure of a request that was already superseded', async () => {
+    const { store } = await load();
+    const slow = deferred<ProfileSnapshot>();
+    fetchSnapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snapshot('new'));
+
+    const first = store.refreshProfile();
+    await store.refreshProfile();
+    slow.reject(new Error('late failure'));
+    await first;
+
+    expect(get(store.profileFailed)).toBe(false);
+  });
+});
+
 describe('profile refresh triggers', () => {
   it('reloads on library, session and play log events', async () => {
     const { store } = await load();
@@ -118,6 +161,19 @@ describe('profile refresh triggers', () => {
     store.initProfile();
 
     expect(vi.mocked(runtime.Events.On)).toHaveBeenCalledTimes(4);
+  });
+
+  it('reloads when the layout changes', async () => {
+    const { store, currentUser } = await load();
+    fetchSnapshot.mockResolvedValue(snapshot('x'));
+    currentUser.set(user(['a']));
+    store.initProfile();
+    await Promise.resolve();
+    fetchSnapshot.mockClear();
+
+    currentUser.set({ id: 'u1', profile: { showcase: ['a'], layout: { version: 1, blocks: [] } } } as unknown as CurrentUser);
+
+    expect(fetchSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it('reloads when the showcase changes and not when something else about the user does', async () => {

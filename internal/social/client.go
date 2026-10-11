@@ -194,6 +194,9 @@ func normalizeProfile(profile PublicProfile) PublicProfile {
 	if profile.RecentActivity == nil {
 		profile.RecentActivity = []ActivityView{}
 	}
+	if profile.Layout != nil && profile.Layout.Blocks == nil {
+		profile.Layout.Blocks = []PublicBlock{}
+	}
 	return profile
 }
 

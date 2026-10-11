@@ -13,12 +13,12 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn(),
-  saveSettings: vi.fn(),
+  saveSettingsPatch: vi.fn(),
   setupLibrary: vi.fn(),
   proposeLibraryPath: vi.fn(),
 }));
 
-const { getSettings, saveSettings } = await import('../services/settings');
+const { getSettings, saveSettingsPatch } = await import('../services/settings');
 const { settings, initSettings } = await import('./settings');
 const { needsSourcesNotice, acceptSourcesNotice } = await import('./sourcesNotice');
 
@@ -53,19 +53,19 @@ describe('sourcesNotice', () => {
 
   it('сохраняет подтверждение и сообщает об успехе', async () => {
     await load(false);
-    vi.mocked(saveSettings).mockResolvedValue(undefined as never);
+    vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...makeSettings(false), ...patch }));
 
     await expect(acceptSourcesNotice()).resolves.toBe(true);
 
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(saveSettings).mock.calls[0][0].sourcesNoticeAccepted).toBe(true);
+    expect(saveSettingsPatch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveSettingsPatch).mock.calls[0][0]).toEqual({ sourcesNoticeAccepted: true });
     expect(get(settings)?.sourcesNoticeAccepted).toBe(true);
     expect(needsSourcesNotice()).toBe(false);
   });
 
   it('не засчитывает подтверждение, если сохранение упало', async () => {
     await load(false);
-    vi.mocked(saveSettings).mockRejectedValue(new Error('disk full'));
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('disk full'));
 
     await expect(acceptSourcesNotice()).resolves.toBe(false);
 
@@ -76,7 +76,7 @@ describe('sourcesNotice', () => {
   it('не засчитывает подтверждение, когда настройки ещё не загружены', async () => {
     await expect(acceptSourcesNotice()).resolves.toBe(false);
 
-    expect(saveSettings).not.toHaveBeenCalled();
+    expect(saveSettingsPatch).not.toHaveBeenCalled();
     expect(needsSourcesNotice()).toBe(true);
   });
 });

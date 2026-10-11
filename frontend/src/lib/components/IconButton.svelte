@@ -37,7 +37,7 @@
   }
 
   .icon-btn:active:not(:disabled) {
-    transform: scale(0.96);
+    transform: scale(0.9);
   }
 
   .md {

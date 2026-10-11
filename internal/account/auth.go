@@ -16,6 +16,9 @@ type RegisterInput struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Password    string `json:"password"`
+	Lang        string `json:"lang,omitempty"`
+
+	TermsVersion string `json:"termsVersion,omitempty"`
 }
 
 type LoginInput struct {
@@ -87,4 +90,28 @@ func closeBody(resp *http.Response) {
 	if err := resp.Body.Close(); err != nil {
 		slog.Debug("close response body", "error", err)
 	}
+}
+
+func (c *Client) DeleteAccount(ctx context.Context, password string) error {
+	if password == "" {
+		return &Error{Code: CodeBadRequest, Field: "password"}
+	}
+	tok, err := c.resolveToken()
+	if err != nil {
+		return err
+	}
+	body, err := json.Marshal(map[string]string{"password": password})
+	if err != nil {
+		return fmt.Errorf("encode delete account body: %w", err)
+	}
+	resp, err := c.do(ctx, http.MethodDelete, APIPrefix+"/me", bytes.NewReader(body), "application/json", c.httpClient, tok)
+	if err != nil {
+		return err
+	}
+	defer closeBody(resp)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return decodeError(resp.StatusCode, io.LimitReader(resp.Body, maxResponseBodySize))
+	}
+	return nil
 }

@@ -29,9 +29,33 @@ type heartbeatPayload struct {
 	Arch           string  `json:"arch"`
 }
 
+type anonymousHeartbeatPayload struct {
+	SessionID  string `json:"session_id"`
+	State      string `json:"state"`
+	AppVersion string `json:"app_version"`
+	OS         string `json:"os"`
+	Arch       string `json:"arch"`
+}
+
+// Пустой InstallationID означает анонимный режим: ни installation_id, ни game_id
+// в JSON не попадают, даже ключом с null.
+func (p heartbeatPayload) MarshalJSON() ([]byte, error) {
+	if p.InstallationID == "" {
+		return json.Marshal(anonymousHeartbeatPayload{
+			SessionID:  p.SessionID,
+			State:      p.State,
+			AppVersion: p.AppVersion,
+			OS:         p.OS,
+			Arch:       p.Arch,
+		})
+	}
+	type identified heartbeatPayload
+	return json.Marshal(identified(p))
+}
+
 type disconnectPayload struct {
 	SessionID      string `json:"session_id"`
-	InstallationID string `json:"installation_id"`
+	InstallationID string `json:"installation_id,omitempty"`
 }
 
 type client struct {

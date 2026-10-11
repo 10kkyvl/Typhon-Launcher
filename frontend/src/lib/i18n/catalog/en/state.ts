@@ -48,6 +48,7 @@ export const state: Record<StateKey, Message> = {
   'state.librarySessionEnded': 'Session ended: {minutes} min',
 
   'state.metadataLoadFailed': 'Failed to load cover art',
+  'state.metadataCheckFailed': 'Failed to check metadata availability',
 
   'state.notifLauncherUpdateTitle': 'Launcher update',
   'state.notifUpdateCheckFailed': 'Failed to check for updates',
@@ -113,6 +114,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorInvalidPassword': '8 to 128 characters',
   'state.accountErrorEmailImmutable': 'Email can’t be changed yet',
   'state.accountErrorLauncherOutdated': 'Launcher version is outdated — update Typhon to use your account',
+  'state.accountErrorTermsRequired': 'The server does not recognise this revision of the Terms. Update Typhon and accept the Terms again',
   'state.accountErrorNoChanges': 'Nothing to save',
   'state.accountErrorAvatarTooLarge': 'File is larger than 10 MB',
   'state.accountErrorUnsupportedAvatar': 'PNG, JPEG, and WebP are supported',
@@ -124,7 +126,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorNetwork': 'No connection to the server',
   'state.accountErrorRateLimited': 'Too many attempts — wait a bit and try again',
   'state.accountErrorBadRequest': 'Server rejected the request',
-  'state.accountErrorRequestBlocked': 'Request was blocked before reaching the server — contact support',
+  'state.accountErrorRequestBlocked': 'Request was blocked before reaching the server. If it keeps happening, describe the problem in the Support section',
   'state.accountErrorUserNotFound': 'User not found',
   'state.accountErrorAlreadyFriends': 'You are already friends',
   'state.accountErrorLimitReached': 'Limit reached',

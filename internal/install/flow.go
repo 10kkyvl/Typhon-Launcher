@@ -342,9 +342,11 @@ func (s *Service) runSilentChain(ctx context.Context, id string, item Installati
 			slog.Warn("read installer log", "id", id, "path", logPath, "error", logErr)
 		}
 		if !done {
+			failure := installerFailure(item.Engine, code, logPath)
+			tail := installerLogTail(logPath)
 			slog.Error("silent installer failed", "id", id, "engine", string(item.Engine),
-				"path", step.path, "code", code, "log", installerLogTail(logPath))
-			return installerFailure(item.Engine, code, logPath)
+				"path", step.path, "code", code, "log", tail, "error", withLogTail(failure, tail))
+			return failure
 		}
 		if exitErr := exitError(item.Engine, code); exitErr != nil {
 			// Установщики GOG падают при завершении уже после того, как файлы

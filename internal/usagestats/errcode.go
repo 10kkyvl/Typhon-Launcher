@@ -6,7 +6,10 @@ import (
 	"io/fs"
 	"net"
 	"net/url"
+	"strings"
 	"syscall"
+
+	"typhon/internal/uierr"
 )
 
 const (
@@ -20,7 +23,29 @@ const (
 	CodeUnknown          = "unknown"
 )
 
+// Classify returns an error_code that fits the usage event pattern. A generic
+// cause (cancel, timeout, disk, network) wins over a uierr code: the code only
+// names the failure when nothing more specific is known about it.
 func Classify(err error) string {
+	code := Class(err)
+	if code != CodeUnknown {
+		return code
+	}
+	return eventCode(uierr.Code(err))
+}
+
+// eventCode maps a uierr code, which may contain dots, onto the event
+// error_code alphabet. A code outside it is dropped rather than shipped: the
+// server rejects the whole event over one bad field.
+func eventCode(code string) string {
+	code = strings.ReplaceAll(code, ".", "_")
+	if !errorCodePattern.MatchString(code) {
+		return CodeUnknown
+	}
+	return code
+}
+
+func Class(err error) string {
 	if err == nil {
 		return CodeNone
 	}

@@ -80,13 +80,26 @@ func (f *fakeLibrary) LocateSaves(_ context.Context, _ string) (library.SavesRes
 	return library.SavesResult{Path: f.saves}, nil
 }
 
-type fakeReleases struct{ list []sources.Release }
+type fakeReleases struct {
+	mu   sync.Mutex
+	list []sources.Release
+}
+
+func (f *fakeReleases) edit(change func(list []sources.Release) []sources.Release) {
+	f.mu.Lock()
+	f.list = change(f.list)
+	f.mu.Unlock()
+}
 
 func (f *fakeReleases) ReleasesFor(string, string) []sources.Release {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return append([]sources.Release(nil), f.list...)
 }
 
 func (f *fakeReleases) FindRelease(id string) (sources.Release, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, r := range f.list {
 		if r.ID == id {
 			return r, true
@@ -423,7 +436,7 @@ func TestPreviousVersionDroppedAfterSuccessfulLaunch(t *testing.T) {
 
 func TestVerifyUnavailableWithoutIdentity(t *testing.T) {
 	h := newHarness(t)
-	h.releases.list = nil
+	h.releases.edit(func(list []sources.Release) []sources.Release { return nil })
 	if err := h.service.VerifyGame("local-1"); !errors.Is(err, errNoIdentity) {
 		t.Fatalf("err = %v, want %v", err, errNoIdentity)
 	}
@@ -471,19 +484,21 @@ func TestSwapAndRestoreDirectories(t *testing.T) {
 func TestPatchesFromReleasesFeedIntoPlan(t *testing.T) {
 	h := newHarness(t)
 	gameID := canonical
-	h.releases.list = append(h.releases.list, sources.Release{
-		ID:              "p1",
-		SourceID:        "src",
-		DistributionID:  "main",
-		Kind:            sources.KindPatch,
-		CanonicalGameID: &gameID,
-		FromVersion:     "1.0",
-		ToVersion:       "1.1",
-		Size:            1 << 20,
-		URIs:            []string{"magnet:?xt=urn:btih:p1"},
-		MatchStatus:     catalog.StatusMatched,
-		MatchConfidence: 1,
-		Availability:    sources.AvailabilityAvailable,
+	h.releases.edit(func(list []sources.Release) []sources.Release {
+		return append(list, sources.Release{
+			ID:              "p1",
+			SourceID:        "src",
+			DistributionID:  "main",
+			Kind:            sources.KindPatch,
+			CanonicalGameID: &gameID,
+			FromVersion:     "1.0",
+			ToVersion:       "1.1",
+			Size:            1 << 20,
+			URIs:            []string{"magnet:?xt=urn:btih:p1"},
+			MatchStatus:     catalog.StatusMatched,
+			MatchConfidence: 1,
+			Availability:    sources.AvailabilityAvailable,
+		})
 	})
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatalf("check: %v", err)

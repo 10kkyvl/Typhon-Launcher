@@ -1,6 +1,6 @@
 # Typhon Terms of Use
 
-Revision of 25 August 2026.
+Revision of 11 October 2026.
 
 This document sets out the terms of use of the Typhon launcher (the "app") and of the related server services: the account, metadata and update services (the "Typhon services").
 
@@ -14,13 +14,15 @@ The **user** is the person who downloads, installs or uses the app, or who acces
 
 The **Typhon project operator** is the independent developer who builds and maintains the app, the `typhon-launcher.com` website and the Typhon services. The project has no separate legal entity.
 
-By starting to use the app or the services, the user accepts these terms. A user who does not agree does not use them.
+The terms are accepted explicitly: during installation and on first launch the app shows a summary of them and an "I Agree" button, and does not run until it is pressed. If the revision changes, the app shows them again. When registering on the website, the Terms of Use are accepted with a checkbox, with which the user also confirms having read the Privacy Policy. The accepted revision and the time of acceptance — on the website and, for a signed-in user, in the app — are stored in the account on the server. Using the website and the Typhon services also means accepting these terms. A user who does not agree does not use them.
 
 ## 2. What Typhon is
 
 Typhon is a software tool that runs on the user's device and helps manage a personal game library: find games that are already installed, download files, install and remove them, and track updates.
 
 Typhon is not a store, a content catalog or a game distribution platform. The operator neither hosts nor supplies game files, and does not provide access to them.
+
+The app is free software. Its source code is published in the `github.com/10kkyvl/Typhon-Launcher` repository and is distributed under the GNU General Public License, version 3 (the `LICENSE` file in the repository). That license governs how the app may be copied, modified and distributed; these terms govern the use of the Typhon services and do not restrict any rights the license grants. The license grants no rights to the Typhon name or logo: a modified version must carry a different name.
 
 ## 3. Sources
 
@@ -43,6 +45,10 @@ While BitTorrent is running, the user's IP address is visible to trackers, DHT n
 The app works without an account. The library, source search, downloading, installing, launching games and retrieving game metadata require no account.
 
 An account is needed for the profile: username, display name, email address and avatar. This data is processed by the Typhon services; what it consists of is described in [PRIVACY.md](PRIVACY.md).
+
+The account's email address is used for emails the account cannot work without: confirming the address, resetting the password, and notifications about support replies. There are no mailing lists and no product emails. Emails are sent through a third-party mail service, including to servers outside the user's country; the details are in [PRIVACY.md](PRIVACY.md).
+
+You can write to support from the app and from the website, from an account or without one by confirming an email address. A request is voluntary and its content is the user's responsibility: do not send passwords, sign-in or password-reset links from emails, payment details, other people's personal data, or material that may not be shared under the law or because of third-party rights. The text of a request and any attached log are visible to the support staff and the project administrator. The operator does not guarantee a response time. A request is closed by the user or the operator; a request that support has answered and the user has not replied to for 14 days is closed automatically, and a closed request is deleted together with its conversation after 365 days. The operator may close a request that has nothing to do with Typhon or that breaks these terms. The number of requests open at the same time is limited. A reply from the user in a closed request reopens it.
 
 The user is responsible for keeping their password safe and for actions taken under their account. An account may be restricted or terminated in the event of a breach of these terms, or of actions aimed at disrupting the services.
 
@@ -93,3 +99,4 @@ For questions relating to these terms: [abuse@typhon-launcher.com](mailto:abuse@
 - [PRIVACY.md](PRIVACY.md) — what data stays on the device and what is sent to the Typhon services.
 - [COPYRIGHT.md](COPYRIGHT.md) — copyright infringement notices.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — third-party component licenses.
+- `LICENSE` in the `github.com/10kkyvl/Typhon-Launcher` repository — the GNU GPL version 3 license for the app's source code.

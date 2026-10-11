@@ -26,15 +26,19 @@ func (f *fakeSettings) Get() settings.Settings {
 	return f.value
 }
 
-func (f *fakeSettings) Save(s settings.Settings) error {
+func (f *fakeSettings) Update(mutate func(*settings.Settings) error) (settings.Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.saveErr != nil {
-		return f.saveErr
+	next := f.value
+	if err := mutate(&next); err != nil {
+		return settings.Settings{}, err
 	}
-	f.value = s
+	if f.saveErr != nil {
+		return settings.Settings{}, f.saveErr
+	}
+	f.value = next
 	f.saveCalls++
-	return nil
+	return next, nil
 }
 
 type fakeLibrary struct {

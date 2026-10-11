@@ -18,10 +18,10 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-// The launcher ships with the diagnostics switch selected. An installation
-// that already exists must not inherit that, whatever its settings file
-// happens to contain, because nobody there has been asked. Each case states
-// what the stored file means and what the user must see next.
+// An installation that already exists must not inherit any switch the launcher
+// now starts from, whatever its settings file happens to contain, because
+// nobody there has been asked. Each case states what the stored file means and
+// what the user must see next.
 func TestConsentMigrationNeverOptsInAnExistingInstall(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -92,12 +92,18 @@ func TestConsentMigrationNeverOptsInAnExistingInstall(t *testing.T) {
 	}
 }
 
-// A fresh install is the only case the new default applies to, and even there
-// it only preselects the prompt.
+// A fresh install starts the prompt with both switches off, so sending anything
+// takes an explicit choice. The session heartbeat is not a consent and starts on.
 func TestFreshInstallStartsThePromptWithoutSending(t *testing.T) {
 	got := mustServiceAt(t, filepath.Join(t.TempDir(), "settings.json")).GetSettings()
-	if !got.AnonymousDiagnostics {
-		t.Fatal("fresh install must start the prompt with diagnostics selected")
+	if got.AnonymousDiagnostics {
+		t.Fatal("fresh install must start the prompt with diagnostics off")
+	}
+	if got.AnonymousUsageStats {
+		t.Fatal("fresh install must start the prompt with usage statistics off")
+	}
+	if !got.SessionHeartbeat {
+		t.Fatal("fresh install must keep the session heartbeat on")
 	}
 	if got.TelemetryConsentRecorded() {
 		t.Fatal("fresh install must not count as answered")
@@ -133,20 +139,23 @@ func TestConsentSurvivesReloadAndAnUnrelatedSave(t *testing.T) {
 	}
 }
 
-// Persisting settings writes the whole struct, preselection included. If the
-// prompt is still pending, that stored preselection must not read back as an
-// answer on the next launch — otherwise anyone who opened settings before
-// answering would be opted in by a file they never agreed to.
+// Persisting settings writes the whole struct, and the prompt may hand back
+// switches it preselected. If the prompt is still pending, switches stored
+// with it must not read back as an answer on the next launch — otherwise
+// anyone who opened settings before answering would be opted in by a file they
+// never agreed to.
 func TestSavingSettingsBeforeAnsweringIsNotAnAnswer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	svc := mustServiceAt(t, path)
 
 	before := svc.GetSettings()
-	if !before.AnonymousDiagnostics || before.TelemetryConsentRecorded() {
-		t.Fatalf("precondition: want preselected and unanswered, got %+v", before)
+	if before.TelemetryConsentRecorded() {
+		t.Fatalf("precondition: want unanswered, got %+v", before)
 	}
 
 	next := before
+	next.AnonymousUsageStats = true
+	next.AnonymousDiagnostics = true
 	next.Theme = "light"
 	if err := svc.SaveSettings(next); err != nil {
 		t.Fatalf("save: %v", err)
@@ -158,6 +167,9 @@ func TestSavingSettingsBeforeAnsweringIsNotAnAnswer(t *testing.T) {
 	}
 	if after.DiagnosticsAllowed() {
 		t.Fatal("diagnostics allowed after a save that answered nothing")
+	}
+	if after.UsageStatsAllowed() || after.UsageStatsAllowedCurrent() {
+		t.Fatal("usage stats allowed after a save that answered nothing")
 	}
 }
 
@@ -269,9 +281,9 @@ func TestConsentIsNotCarriedBetweenDevices(t *testing.T) {
 	}
 }
 
-// Согласие второй версии — единственное, под которым можно слать отчёты о
-// совместимости: они везут чип и версию macOS, а первая версия обещала
-// обратное. Растянуть старый ответ на новые данные значит собрать их без спроса.
+// Отчёты о совместимости идут только под текущим согласием: они везут чип и
+// версию macOS, а первая версия обещала обратное. Растянуть старый ответ на
+// новые данные значит собрать их без спроса.
 func TestCompatReportsNeedCurrentConsent(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -281,6 +293,7 @@ func TestCompatReportsNeedCurrentConsent(t *testing.T) {
 	}{
 		{"не спрашивали", 0, true, false},
 		{"старое согласие", 1, true, false},
+		{"согласие второй версии", 2, true, false},
 		{"текущее согласие, статистика включена", CurrentTelemetryConsent, true, true},
 		{"текущее согласие, статистика выключена", CurrentTelemetryConsent, false, false},
 	}

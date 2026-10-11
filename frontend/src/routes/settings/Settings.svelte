@@ -1,7 +1,7 @@
 <script lang="ts">
   import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
-  import { Copy, Download, Eye, FolderOpen, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -50,6 +50,7 @@
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
+  import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
@@ -385,6 +386,8 @@
 </div>
 
 <div class="settings-page">
+{#key tab}
+<div class="tab-body">
 {#if tab === 'general'}
   <div class="settings-grid">
     <div class="settings-column">
@@ -602,6 +605,17 @@
           </div>
           <div class="row">
             <div class="row-text">
+              <span class="row-label">{msg('settings.generalPrivacyHeartbeatLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacyHeartbeatSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.sessionHeartbeat ?? true}
+              label={msg('settings.generalPrivacyHeartbeatLabel')}
+              onchange={(v) => set({ sessionHeartbeat: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
               <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
             </div>
@@ -665,7 +679,7 @@
               {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
             </Button>
           </div>
-          <div class="row">
+          <div class="row danger-zone">
             <div class="row-text">
               <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
               <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
@@ -1031,6 +1045,12 @@
               {msg('settings.aboutHistoryButtonLabel')}
             </Button>
           </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
+              <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
+            </div>
+          </div>
           <UpdateBanner />
         </div>
       </Card>
@@ -1070,7 +1090,7 @@
                 {:else if logsSendFailure}
                   {logsSendFailure}
                 {:else if logsSendResult}
-                  {msg('settings.aboutLogsSendResultLabel')}
+                  {msg('settings.aboutLogsSentStatus')}
                 {:else}
                   {msg('settings.aboutLogsSendConfirmNote')}
                 {/if}
@@ -1107,6 +1127,16 @@
           {#if logsSendFailure}
             <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
           {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('tickets.settingsLabel')}</span>
+              <span class="row-sub">{msg('tickets.settingsHint')}</span>
+            </div>
+            <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
+              <LifeBuoy size="1.5rem" strokeWidth={1.8} />
+              {msg('tickets.writeSupport')}
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -1136,6 +1166,8 @@
     </div>
   </div>
 {/if}
+</div>
+{/key}
 
 </div>
 
@@ -1159,7 +1191,16 @@
 
 <style>
   .tabs-wrap {
-    margin-bottom: var(--space-8);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-bottom: var(--space-6);
+    padding-top: var(--space-2);
+    background: var(--bg);
+  }
+
+  .tab-body {
+    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .rows {
@@ -1177,6 +1218,14 @@
 
   .row + .row {
     border-top: 1px solid var(--border);
+  }
+
+  .row.danger-zone {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--danger-subtle);
   }
 
   .row-text {

@@ -89,7 +89,7 @@ describe('downloads screen', () => {
   it('shows empty sections and no failed section when nothing was downloaded', () => {
     const html = page();
 
-    expect(html).toContain('Active');
+    expect(html).toContain('No active downloads');
     expect(html).not.toContain('Failed');
     expect(html).not.toMatch(/class="row failed[ "]/);
   });
@@ -113,7 +113,10 @@ describe('downloads screen', () => {
 
     const html = page();
 
-    expect(html.match(/Broken Game/g)).toHaveLength(2);
+    const rows = html.match(/class="row(?: [^"]*)?"/g) ?? [];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('failed');
+    expect(html).toContain('Broken Game');
     expect(html).not.toContain('Install</button>');
   });
 

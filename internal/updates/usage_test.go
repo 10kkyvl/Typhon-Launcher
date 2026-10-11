@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"typhon/internal/download"
+	"typhon/internal/sources"
 	"typhon/internal/usagestats"
 )
 
@@ -242,7 +243,7 @@ func TestVerifyGameRecordsUsageLifecycle(t *testing.T) {
 		// only the release's InfoHash is set so torrentIdentity resolves,
 		// hasManifest stays false, landing in the genuine-failure branch of
 		// verify() rather than the cancellation one.
-		h.releases.list[0].InfoHash = "hash-r1"
+		h.releases.edit(func(list []sources.Release) []sources.Release { list[0].InfoHash = "hash-r1"; return list })
 
 		if err := h.service.VerifyGame("local-1"); err != nil {
 			t.Fatalf("verify: %v", err)

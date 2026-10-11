@@ -1,66 +1,132 @@
 <script lang="ts">
+  import { ChevronRight } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import { coverOf } from '../../lib/profile/view';
-  import { gameArt } from '../../lib/stores/metadata';
-  import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import type { GameRef } from '../../lib/services/profile';
-  import { navigate } from '../../lib/stores/router';
   import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
 
-  let { running, hidden }: { running: GameRef[]; hidden: boolean } = $props();
-
-  const game = $derived(running[0] ?? null);
+  let {
+    title,
+    art,
+    hidden = false,
+    disabled = false,
+    onopen,
+  }: {
+    title: string;
+    art: string;
+    hidden?: boolean;
+    disabled?: boolean;
+    onopen: () => void;
+  } = $props();
 </script>
 
-{#if game}
-  <Card title={msg('social.nowPlayingTitle')}>
-    {#snippet action()}
-      {#if hidden}<HiddenBadge text={msg('social.hiddenGenericHint')} />{/if}
-    {/snippet}
-    <button class="playing" type="button" disabled={game.archived} onclick={() => navigate('game', { id: game.id })}>
-      <span class="cover">
-        <Artwork src={coverOf(game, $gameArt)} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
-      </span>
-      <span class="title">{game.title}</span>
+<section class="playing" aria-label={msg('social.nowPlayingTitle')}>
+  <button class="open" type="button" {disabled} onclick={onopen}>
+    <span class="cover">
+      <Artwork src={art} alt="" label={title} ratio="16 / 9" radius="var(--radius-md)" />
+    </span>
+    <span class="text">
+      <span class="eyebrow">{msg('social.nowPlayingTitle')}</span>
+      <span class="title">{title}</span>
       <StatusBadge kind="success" label={msg('social.playing')} plain />
-    </button>
-  </Card>
-{/if}
+    </span>
+    {#if !disabled}
+      <span class="go"><ChevronRight size="2rem" strokeWidth={1.8} /></span>
+    {/if}
+  </button>
+  {#if hidden}
+    <span class="flag"><HiddenBadge text={msg('social.hiddenGenericHint')} /></span>
+  {/if}
+</section>
 
 <style>
   .playing {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background:
+      linear-gradient(100deg, var(--accent-subtle), transparent 55%),
+      var(--surface-2);
+    transition: border-color var(--dur) var(--ease);
+  }
+
+  .playing:hover,
+  .playing:focus-within {
+    border-color: var(--border-strong);
+  }
+
+  .open {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
+    align-items: center;
+    gap: var(--space-5);
     width: 100%;
-    padding: 0;
-    background: none;
-    border: 0;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
     color: inherit;
-    font: inherit;
     text-align: left;
-    cursor: pointer;
+  }
+
+  .open:disabled {
+    cursor: default;
   }
 
   .cover {
     display: block;
-    width: 100%;
+    flex-shrink: 0;
+    width: 19rem;
     border-radius: var(--radius-md);
     overflow: hidden;
-    transition: transform var(--dur) var(--ease);
   }
 
-  .playing:hover .cover {
-    transform: scale(1.01);
+  .cover :global(img) {
+    transition: transform var(--dur-slow) var(--ease);
+  }
+
+  .open:hover:not(:disabled) .cover :global(img) {
+    transform: scale(1.04);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .eyebrow {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    color: var(--text-3);
   }
 
   .title {
-    font-size: var(--font-md);
+    max-width: 100%;
+    font-size: var(--font-xl);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
-    line-height: 1.3;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .go {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--text-3);
+    transition:
+      transform var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .open:hover .go {
+    transform: translateX(0.3rem);
+    color: var(--text);
+  }
+
+  .flag {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
   }
 </style>

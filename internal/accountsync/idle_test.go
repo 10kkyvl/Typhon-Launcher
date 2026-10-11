@@ -90,10 +90,11 @@ func TestSyncPushesWhenALocalGameIsMissingRemotely(t *testing.T) {
 
 func TestSyncPushesAfterSettingsChange(t *testing.T) {
 	h, _ := idleHarness(t)
-	current := h.settings.Get()
-	current.MinimizeToTray = !current.MinimizeToTray
-	if err := h.settings.Save(current); err != nil {
-		t.Fatalf("Save settings: %v", err)
+	if _, err := h.settings.Update(func(next *settings.Settings) error {
+		next.MinimizeToTray = !next.MinimizeToTray
+		return nil
+	}); err != nil {
+		t.Fatalf("Update settings: %v", err)
 	}
 
 	if got := putsAfterSync(t, h); got != 1 {

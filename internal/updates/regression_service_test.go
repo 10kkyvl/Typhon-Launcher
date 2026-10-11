@@ -55,7 +55,7 @@ func TestRollbackOnlyStateOffersNoNewRelease(t *testing.T) {
 		t.Fatalf("InstalledVersion = %q, want the version the update installed", got.Availability.InstalledVersion)
 	}
 
-	h.releases.list = append(h.releases.list, release("r3", "1.2", 13<<20))
+	h.releases.edit(func(list []sources.Release) []sources.Release { return append(list, release("r3", "1.2", 13<<20)) })
 	got, err = h.service.CheckGame("local-1")
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestCheckDoesNotDisturbARunningUpdate(t *testing.T) {
 	})
 	before, _ := h.service.snapshot("local-1")
 
-	h.releases.list = append(h.releases.list, release("r3", "1.2", 13<<20))
+	h.releases.edit(func(list []sources.Release) []sources.Release { return append(list, release("r3", "1.2", 13<<20)) })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestCheckKeepsAPreparedPlanUntilTheOfferChanges(t *testing.T) {
 		t.Fatalf("an unchanged offer lost its prepared plan or download: %+v", got)
 	}
 
-	h.releases.list = append(h.releases.list, release("r3", "1.2", 13<<20))
+	h.releases.edit(func(list []sources.Release) []sources.Release { return append(list, release("r3", "1.2", 13<<20)) })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestCheckClearsTheOfferWhenTheReleaseDisappears(t *testing.T) {
 	h := newHarness(t)
 	h.plan(t)
 
-	h.releases.list = []sources.Release{release("r1", "1.0", 10<<20)}
+	h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{release("r1", "1.0", 10<<20)} })
 	if err := h.service.check(h.library.games[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestPreparePlanFlow(t *testing.T) {
 	})
 	t.Run("nothing to update to", func(t *testing.T) {
 		h := newHarness(t)
-		h.releases.list = []sources.Release{release("r1", "1.0", 10<<20)}
+		h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{release("r1", "1.0", 10<<20)} })
 		if err := h.service.check(h.library.games[0]); err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +198,7 @@ func TestPreparePlanFlow(t *testing.T) {
 		if err := h.service.check(h.library.games[0]); err != nil {
 			t.Fatal(err)
 		}
-		h.releases.list = []sources.Release{release("r1", "1.0", 10<<20)}
+		h.releases.edit(func(list []sources.Release) []sources.Release { return []sources.Release{release("r1", "1.0", 10<<20)} })
 		if err := h.service.PreparePlan("local-1"); err != nil {
 			t.Fatal(err)
 		}
