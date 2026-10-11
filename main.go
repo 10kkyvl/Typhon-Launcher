@@ -524,10 +524,15 @@ func main() {
 		if err != nil {
 			fatal("start presence", err)
 		}
-		// Both services ask *Allowed, never the switch itself: on a fresh
-		// install the diagnostics switch already reads true so the consent
-		// prompt can start with it selected, and sending on the strength of
-		// that would be collecting from someone who has not been asked yet.
+		// The heartbeat identifies the installation and the game only under the
+		// current consent: an answer to an older prompt did not cover them.
+		settingsService.Subscribe(func(s settings.Settings) { heartbeatService.SetPolicy(heartbeatPolicy(s)) })
+		heartbeatService.SetPolicy(heartbeatPolicy(settingsService.GetSettings()))
+
+		// Both services ask *Allowed, never the switch itself: a switch read
+		// before the consent prompt is answered holds a preselection, and
+		// sending on the strength of that would be collecting from someone
+		// who has not been asked yet.
 		usageService, err := usagestats.NewService(identity,
 			func() bool { return settingsService.GetSettings().UsageStatsAllowed() }, resolveGameID)
 		if err != nil {
@@ -906,6 +911,10 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 		return release.Title
 	}
 	return ""
+}
+
+func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
+	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
 }
 
 func fatal(stage string, err error) {

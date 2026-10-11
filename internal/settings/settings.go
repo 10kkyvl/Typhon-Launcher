@@ -76,7 +76,11 @@ const (
 	// Version 2 added compatibility reports, which carry the chip family and
 	// the macOS version. Version 1 promised no hardware at all, so an answer
 	// given to it cannot cover them.
-	CurrentTelemetryConsent = 2
+	//
+	// Version 3 moves the installation ID and the catalog game ID of the
+	// session heartbeat under the usage statistics switch. An answer given to
+	// version 2 did not cover them.
+	CurrentTelemetryConsent = 3
 
 	// legacyTelemetryConsent is the version a switch turned on by hand before
 	// the prompt existed answers. That is the version whose text the user
@@ -177,6 +181,7 @@ type Settings struct {
 	SourcesNoticeAccepted bool `json:"sourcesNoticeAccepted"`
 	AnonymousUsageStats   bool `json:"anonymousUsageStats"`
 	AnonymousDiagnostics  bool `json:"anonymousDiagnostics"`
+	SessionHeartbeat      bool `json:"sessionHeartbeat"`
 
 	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
 
@@ -200,12 +205,18 @@ func (s Settings) DiagnosticsAllowed() bool {
 	return s.TelemetryConsentRecorded() && s.AnonymousDiagnostics
 }
 
-// CompatReportsAllowed gates the compatibility reports on the current consent
-// rather than on any recorded answer. An answer given to an older prompt stays
-// valid for what it covered, and covers nothing else: raising the version is
-// how the promise made in that older text keeps being kept.
-func (s Settings) CompatReportsAllowed() bool {
+// UsageStatsAllowedCurrent gates the data the usage statistics switch has
+// covered only since the current prompt. An answer given to an older prompt
+// stays valid for what it covered, and covers nothing else: raising the
+// version is how the promise made in that older text keeps being kept.
+func (s Settings) UsageStatsAllowedCurrent() bool {
 	return s.TelemetryConsentVersion >= CurrentTelemetryConsent && s.AnonymousUsageStats
+}
+
+// CompatReportsAllowed gates the compatibility reports on the current consent
+// rather than on any recorded answer.
+func (s Settings) CompatReportsAllowed() bool {
+	return s.UsageStatsAllowedCurrent()
 }
 
 func Defaults() Settings {
@@ -259,13 +270,17 @@ func Defaults() Settings {
 
 		// These are the values the consent prompt starts from on a fresh
 		// install, not values anything may act on: DiagnosticsAllowed stays
-		// false until the prompt is answered. Crash reports carry no game and
-		// no behaviour, only what broke, so the prompt starts with them
-		// selected; usage statistics describe what the user does and start
-		// unselected.
+		// false until the prompt is answered. Both switches start unselected,
+		// so sending anything takes an explicit choice.
 		AnonymousUsageStats:     false,
-		AnonymousDiagnostics:    true,
+		AnonymousDiagnostics:    false,
 		TelemetryConsentVersion: 0,
+
+		// Not a consent: the heartbeat was always on and could not be turned
+		// off, and its base payload carries nothing that identifies anyone.
+		// The installation ID and the game ID it may add are gated by
+		// UsageStatsAllowedCurrent, not by this switch.
+		SessionHeartbeat: true,
 	}
 }
 

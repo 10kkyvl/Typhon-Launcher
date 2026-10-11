@@ -605,6 +605,17 @@
           </div>
           <div class="row">
             <div class="row-text">
+              <span class="row-label">{msg('settings.generalPrivacyHeartbeatLabel')}</span>
+              <span class="row-sub">{msg('settings.generalPrivacyHeartbeatSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.sessionHeartbeat ?? true}
+              label={msg('settings.generalPrivacyHeartbeatLabel')}
+              onchange={(v) => set({ sessionHeartbeat: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
               <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
             </div>

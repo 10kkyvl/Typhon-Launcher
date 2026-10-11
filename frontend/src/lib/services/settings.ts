@@ -49,6 +49,7 @@ export interface Settings {
   sourcesNoticeAccepted: boolean;
   anonymousUsageStats: boolean;
   anonymousDiagnostics: boolean;
+  sessionHeartbeat: boolean;
   telemetryConsentVersion: number;
   legalAcceptedVersion: string;
   accountSync: boolean;
@@ -106,7 +107,8 @@ const fallbackDefaults: Settings = {
   proxyUsername: '',
   sourcesNoticeAccepted: false,
   anonymousUsageStats: false,
-  anonymousDiagnostics: true,
+  anonymousDiagnostics: false,
+  sessionHeartbeat: true,
   telemetryConsentVersion: 0,
   legalAcceptedVersion: '',
   accountSync: false,

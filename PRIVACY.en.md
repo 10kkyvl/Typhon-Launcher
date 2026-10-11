@@ -110,11 +110,11 @@ Catalog search strings — what the user types into the game search — are kept
 
 ### 2.6. Session state, anonymous usage statistics and anonymous diagnostics
 
-Beyond the above, the app sends the Typhon service the state of the current session — this always happens and cannot be turned off — and, if the user has enabled the corresponding toggles in the settings, anonymous events about operation outcomes and anonymized error reports. These are three different mechanisms with different data and different retention periods; they are described in section 8.
+Beyond the above, the app may send the Typhon service the state of the current session — while the "Launcher online status" toggle is on — as well as anonymous events about operation outcomes and anonymized error reports, if the user has enabled the corresponding toggles. These are three different mechanisms with different data and different retention periods; they are described in section 8.
 
-There are two toggles and they are independent: anonymous usage statistics and anonymous diagnostics are turned on and off separately. On first launch the app asks about this directly and sends nothing until the user has answered. In that prompt only error diagnostics is pre-checked; usage statistics is not. The answer — including a refusal — is saved, and the question is not asked again.
+There are three toggles and they are independent. "Launcher online status" is on by default: in its basic form it carries nothing that points to a device or a person (section 8.1), and it can be turned off in the settings, under "Privacy". Anonymous usage statistics and anonymous diagnostics are off by default: on first launch the app asks about them directly, neither option is pre-checked in that prompt, and until it is answered no events and no error reports are sent. The answer — including a refusal — is saved, and the question is not asked again.
 
-The prompt is versioned. When the set of collected data grows, the version is raised and the question is asked again, with the previous answer pre-checked. Until a new answer is given the new data is not collected, while the previous answer stays in force for what it was given for. That is what happened with game compatibility statistics (section 8.5): they fall under the anonymous usage statistics toggle, but for anyone who answered the previous version of the prompt they are not collected until that person answers the current one.
+The prompt is versioned. When the set of collected data grows, the version is raised and the question is asked again, with the previous answer pre-checked. Until a new answer is given the new data is not collected, while the previous answer stays in force for what it was given for. That is what happened with game compatibility statistics (section 8.5) and with the installation identifier and the game identifier in session state (section 8.1): they fall under the anonymous usage statistics toggle, but for anyone who answered the previous version of the prompt they are not collected until that person answers the current one.
 
 ### 2.7. What the Typhon services do not receive
 
@@ -308,17 +308,21 @@ The BitTorrent network operates independently of Typhon. The operator keeps no r
 
 ## 8. Session state, usage statistics and error diagnostics
 
-This section describes three mechanisms by which the app reports on its own operation to the Typhon service. They are built differently, and the difference between them matters: session state is always sent, while anonymous usage statistics and anonymous diagnostics are sent only if the user has enabled the corresponding toggle. There are two toggles and they are independent of each other. On first launch the app asks about them once and, until it is answered, sends neither events nor error reports.
+This section describes three mechanisms by which the app reports on its own operation to the Typhon service. Each has its own toggle in the settings, under "Privacy", and the toggles are independent of each other. Session state is sent while "Launcher online status" is on — it is on by default; anonymous usage statistics and anonymous diagnostics are sent only if the user has turned them on. On first launch the app asks about statistics and diagnostics once and, until it is answered, sends neither events nor error reports.
 
 ### 8.1. Session state
 
-**This sending cannot be turned off.** There is no toggle for it in the settings, and the toggles from sections 8.2 and 8.3 have no effect on it.
+**On by default, and can be turned off.** The "Launcher online status" toggle is in the settings, under "Privacy", and takes effect without restarting the app: the next signal already follows the new position of the toggles (a request that was already being sent at the moment of the switch is not recalled). What is sent depends on it and on the anonymous usage statistics toggle (section 8.2):
 
-At each launch the launcher creates a random session identifier (UUIDv4). It exists only in memory and will be different at the next launch. Alongside it, the installation identifier is used — a random UUIDv4 created at first launch and saved on the device in `%APPDATA%\Typhon\installation.json`.
+- **"Launcher online status" off** — nothing is sent: neither the signal every 30 seconds nor the end-of-session message when the app exits. The statistics toggle makes no difference here;
+- **on, usage statistics off** (or the current version of the prompt about it not answered yet, section 2.6) — every 30 seconds, and right when a game starts or stops, the basic signal is sent: the session identifier, the state (`idle` — the launcher is running, `playing` — a game is running), the app version, the operating system and the architecture. It carries neither the installation identifier nor the game identifier. When the app exits, only the session identifier is sent;
+- **on, usage statistics on** — the installation identifier and, if a game is running, the catalog identifier of the game are added to the basic signal. When the app exits, the installation identifier is sent along with the session identifier.
+
+There is nothing else in these requests.
+
+The session identifier is a random UUIDv4 that the launcher creates at each launch. It exists only in memory and will be different at the next launch. The installation identifier is a random UUIDv4 created at first launch and saved on the device in `%APPDATA%\Typhon\installation.json`. It is persistent, which is why it goes into session state only with consent to usage statistics.
 
 Both identifiers are simply random numbers. **Neither is derived from device characteristics**: not from the MAC address, not from the Windows security identifier (SID), not from a disk serial number, not from a processor identifier, and not from account data.
-
-Every 30 seconds the app sends the Typhon service: the session identifier, the installation identifier, the state (`idle` — the launcher is running, `playing` — a game is running), the catalog identifier of the game if one is running, the app version, the operating system and the architecture. There is nothing else in that request.
 
 The game identifier here is the numeric identifier of the game's card in the catalog, not a file name, a folder name or a path on disk.
 
@@ -326,17 +330,19 @@ The game identifier here is the numeric identifier of the game's card in the cat
 
 On the server such records are held in a short-lived in-memory store: roughly 90 seconds without a new signal and the record is gone. No historical "who was online and when" table is kept, and nothing is written to disk.
 
-This data is needed only for aggregated counting: how many launchers are running right now, how many of them are in a game, which games are being played and which app versions are in use.
+This data is needed only for aggregated counting: how many launchers are running right now, how many of them are in a game, which app versions are in use and — from the signals that carry a game identifier — which games are being played.
 
 If sending fails, the app carries on as usual and shows the user nothing.
 
-This is not opt-in telemetry and not a usage history: user events and actions are not accumulated here — only the current state is sent, which the server holds for tens of seconds and then loses. The mechanisms in sections 8.2 and 8.3 are built differently, and their toggles do not extend to session state.
+This is not a usage history: user events and actions are not accumulated here — only the current state is sent, which the server holds for tens of seconds and then loses. The anonymous diagnostics toggle (section 8.3) has no effect on session state, and the usage statistics toggle only decides whether the installation identifier and the game identifier are added.
 
-Session state is needed only for the service's aggregated real-time statistics and is kept to a minimum: how many launchers are running right now, how many of them are in a game, what is being played and which app versions are in use.
+Online status for friends (section 2.8) is a separate mechanism tied to the account: the "Launcher online status" toggle has no effect on it.
 
 ### 8.2. Anonymous usage statistics
 
 **Off by default.** It is not pre-checked in the first-launch prompt, and it can only be enabled by a separate action — there, or later in the app settings, under "Privacy".
+
+Besides the events described below, this toggle adds the installation identifier and the catalog game identifier to session state (section 8.1), if "Launcher online status" is on as well.
 
 While the toggle is off, nothing is sent: events are neither collected nor accumulated.
 
@@ -356,7 +362,7 @@ Calling it anything else would be wrong: this is product usage analytics. It is 
 
 ### 8.3. Anonymous error diagnostics
 
-**Enabled only by the user's answer.** On first launch the app asks whether to send anonymous error reports, and in that prompt diagnostics is pre-checked — but a pre-checked option is not consent: until the user answers, nothing goes out. A refusal is saved just as consent is, and the question is not repeated. The toggle stays in the app settings, under "Privacy", and the decision can be changed at any time. The anonymous usage statistics toggle (section 8.2) has no effect on diagnostics, and vice versa.
+**Enabled only by the user's answer.** On first launch the app asks whether to send anonymous error reports. Diagnostics is not pre-checked in that prompt, and until the user answers, nothing goes out. A refusal is saved just as consent is, and the question is not repeated. The toggle stays in the app settings, under "Privacy", and the decision can be changed at any time. The anonymous usage statistics toggle (section 8.2) has no effect on diagnostics, and vice versa.
 
 On devices where the app was installed before this prompt existed, nothing changes by itself: the user's saved choice stands, and updating the launcher does not enable diagnostics on their behalf.
 
@@ -380,7 +386,7 @@ Why this is needed: to see that a new version of the app is breaking for users, 
 
 ### 8.4. What the app does not collect
 
-Neither session state, nor usage statistics, nor error diagnostics contains — or will come to contain — the following:
+Neither session state, nor usage statistics, nor error diagnostics contains — or will come to contain — the following (the persistent installation identifier goes into session state only with consent to usage statistics, section 8.1):
 
 - **crash dumps** — process memory dumps are not collected and not sent; the diagnostics of section 8.3 is limited to a structured report with an anonymized call stack;
 - **logs** — `typhon.log` stays on the device and is never sent anywhere automatically, whole or in fragments (section 1). The user can export a scrubbed archive manually from the settings — download it or press "Send to us" — or attach it to a support request (sections 2.10 and 2.11); that is a separate action requiring an explicit decision;

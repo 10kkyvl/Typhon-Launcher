@@ -41,6 +41,13 @@ func newCapturingServer(t *testing.T, status int) (*httptest.Server, chan captur
 
 func newTestService(t *testing.T, srv *httptest.Server, resolve func(string) string) *Service {
 	t.Helper()
+	svc := newBareService(t, srv, resolve)
+	svc.SetPolicy(Policy{Enabled: true, Identified: true})
+	return svc
+}
+
+func newBareService(t *testing.T, srv *httptest.Server, resolve func(string) string) *Service {
+	t.Helper()
 	if resolve == nil {
 		resolve = func(string) string { return "" }
 	}
@@ -296,6 +303,7 @@ func TestHeartbeatUnreachableServerDoesNotStopService(t *testing.T) {
 		t.Fatalf("newClient: %v", err)
 	}
 	svc.client = cl
+	svc.SetPolicy(Policy{Enabled: true, Identified: true})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

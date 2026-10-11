@@ -35,6 +35,11 @@ type runningGame struct {
 	seq    int64
 }
 
+type Policy struct {
+	Enabled    bool
+	Identified bool
+}
+
 type Service struct {
 	identity      clientid.Identity
 	resolveGameID func(catalogGameID string) string
@@ -43,6 +48,7 @@ type Service struct {
 	interval time.Duration
 
 	mu      sync.Mutex
+	policy  Policy
 	running map[string]runningGame
 	seq     int64
 
@@ -95,14 +101,22 @@ func (s *Service) ServiceShutdown() error {
 	}
 	s.wg.Wait()
 
+	s.mu.Lock()
+	policy := s.policy
+	s.mu.Unlock()
+	if !policy.Enabled {
+		return nil
+	}
+
 	// ctx сервиса уже отменён; disconnect — best-effort с собственным
 	// коротким таймаутом, чтобы не блокировать остановку приложения.
 	dctx, dcancel := context.WithTimeout(context.Background(), defaultDisconnectWait) //nolint:forbidigo // инвариант 20: сервисный ctx уже отменён, disconnect — best-effort хвост завершения
 	defer dcancel()
-	if err := s.client.disconnect(dctx, disconnectPayload{
-		SessionID:      s.identity.SessionID,
-		InstallationID: s.identity.InstallationID,
-	}); err != nil {
+	payload := disconnectPayload{SessionID: s.identity.SessionID}
+	if policy.Identified {
+		payload.InstallationID = s.identity.InstallationID
+	}
+	if err := s.client.disconnect(dctx, payload); err != nil {
 		slog.Debug("presence disconnect", "error", err)
 	}
 	return nil
@@ -129,6 +143,19 @@ func (s *Service) SessionStopped(gameID string) {
 	s.poke()
 }
 
+//wails:ignore
+func (s *Service) SetPolicy(p Policy) {
+	s.mu.Lock()
+	changed := s.policy != p
+	s.policy = p
+	started := s.cancel != nil
+	s.mu.Unlock()
+	// До старта цикл сам отправит первый heartbeat; kick увёл бы за ним лишний дубль.
+	if changed && p.Enabled && started {
+		s.poke()
+	}
+}
+
 func (s *Service) poke() {
 	select {
 	case s.kick <- struct{}{}:
@@ -153,11 +180,11 @@ func (s *Service) loop(ctx context.Context) {
 	}
 }
 
-func (s *Service) snapshot() (state string, gameID string) {
+func (s *Service) snapshot() (policy Policy, state string, gameID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.running) == 0 {
-		return stateIdle, ""
+		return s.policy, stateIdle, ""
 	}
 	var latest runningGame
 	for _, g := range s.running {
@@ -165,21 +192,26 @@ func (s *Service) snapshot() (state string, gameID string) {
 			latest = g
 		}
 	}
-	return statePlaying, latest.gameID
+	return s.policy, statePlaying, latest.gameID
 }
 
 func (s *Service) send(ctx context.Context) {
-	state, gameID := s.snapshot()
-	payload := heartbeatPayload{
-		SessionID:      s.identity.SessionID,
-		InstallationID: s.identity.InstallationID,
-		State:          state,
-		AppVersion:     app.Version,
-		OS:             runtime.GOOS,
-		Arch:           runtime.GOARCH,
+	policy, state, gameID := s.snapshot()
+	if !policy.Enabled {
+		return
 	}
-	if gameID != "" {
-		payload.GameID = &gameID
+	payload := heartbeatPayload{
+		SessionID:  s.identity.SessionID,
+		State:      state,
+		AppVersion: app.Version,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+	}
+	if policy.Identified {
+		payload.InstallationID = s.identity.InstallationID
+		if gameID != "" {
+			payload.GameID = &gameID
+		}
 	}
 	err := s.client.heartbeat(ctx, payload)
 

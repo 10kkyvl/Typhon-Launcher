@@ -108,20 +108,23 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.socialConsentEnable': 'Enable sync',
 
   // TelemetryConsentScreen.svelte
-  'modals.telemetryConsentTitle': 'Send anonymous error reports?',
+  'modals.telemetryConsentTitle': 'Which anonymous data should be sent?',
   'modals.telemetryConsentIntro':
-    'This helps fix bugs faster. Only what broke goes into the report: paths, device name, and network addresses are removed before sending.',
-  'modals.telemetryConsentUsageTitle': 'Also send usage statistics',
+    'This helps fix bugs faster. The switches are independent: turn on only what you are comfortable sharing. Paths, device name, and network addresses are removed before sending. The anonymous launcher online-status ping is not part of this question: turn it off in Settings, under Privacy.',
+  'modals.telemetryConsentUsageTitle': 'Usage statistics',
   'modals.telemetryConsentUsageNote':
-    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. Screens, clicks, and UI behavior are not tracked.',
+    'Events about game launches, downloads, installs, and updates: game ID, duration, size, and error code. This also covers compatibility statistics: whether a game starts on this machine, with the macOS version, the CrossOver version and the processor family — never the exact model. It also adds the installation ID and the catalog game ID to the launcher online-status ping. Screens, clicks, and UI behavior are not tracked.',
   'modals.telemetryConsentUsageToggleLabel': 'Anonymous usage statistics',
   'modals.telemetryConsentDisclosureSummary': 'What exactly is sent',
   'modals.telemetryConsentErrorReportLabel': 'Error report',
   'modals.telemetryConsentUsageEventLabel': 'Usage statistics event',
   'modals.telemetryConsentCompatReportLabel': 'Game compatibility report',
+  'modals.telemetryConsentHeartbeatLabel': 'Launcher online-status ping',
+  'modals.telemetryConsentHeartbeatNote':
+    'Without usage statistics only these fields are sent. With statistics, installation_id and game_id are added. The ping can be turned off in settings.',
   'modals.telemetryConsentSaving': 'Saving…',
-  'modals.telemetryConsentDecline': 'Do not send',
-  'modals.telemetryConsentAccept': 'Yes, send',
+  'modals.telemetryConsentDecline': 'Turn both off',
+  'modals.telemetryConsentAccept': 'Save choice',
 
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Diagnostics',

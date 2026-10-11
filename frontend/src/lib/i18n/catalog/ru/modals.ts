@@ -105,20 +105,23 @@ export const modals = {
   'modals.socialConsentEnable': 'Включить синхронизацию',
 
   // TelemetryConsentScreen.svelte
-  'modals.telemetryConsentTitle': 'Отправлять анонимные отчёты об ошибках?',
+  'modals.telemetryConsentTitle': 'Какие анонимные данные отправлять?',
   'modals.telemetryConsentIntro':
-    'Это помогает быстрее чинить баги. В отчёт попадает только то, что сломалось: пути, имя устройства и сетевые адреса удаляются перед отправкой.',
-  'modals.telemetryConsentUsageTitle': 'Ещё и статистика использования',
+    'Это помогает быстрее чинить баги. Переключатели независимы: включите только то, чем готовы делиться. Пути, имя устройства и сетевые адреса удаляются перед отправкой. Анонимный сигнал «лаунчер онлайн» к этому вопросу не относится: он выключается в настройках, в разделе «Приватность».',
+  'modals.telemetryConsentUsageTitle': 'Статистика использования',
   'modals.telemetryConsentUsageNote':
-    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
+    'События о запусках игр, загрузках, установках и обновлениях: идентификатор игры, длительность, объём и код ошибки. Сюда же входит статистика совместимости: запускается ли игра на этой машине, с версией macOS, версией CrossOver и семейством процессора — без точной модели. Кроме того, в сигнал «лаунчер онлайн» добавляются идентификатор установки и идентификатор игры из каталога. Экраны, нажатия и поведение в интерфейсе не отслеживаются.',
   'modals.telemetryConsentUsageToggleLabel': 'Анонимная статистика использования',
   'modals.telemetryConsentDisclosureSummary': 'Что именно отправляется',
   'modals.telemetryConsentErrorReportLabel': 'Отчёт об ошибке',
   'modals.telemetryConsentUsageEventLabel': 'Событие статистики использования',
   'modals.telemetryConsentCompatReportLabel': 'Отчёт о совместимости игры',
+  'modals.telemetryConsentHeartbeatLabel': 'Сигнал «лаунчер онлайн»',
+  'modals.telemetryConsentHeartbeatNote':
+    'Без статистики использования уходят только эти поля. Со статистикой добавляются installation_id и game_id. Сигнал отключается в настройках.',
   'modals.telemetryConsentSaving': 'Сохранение…',
-  'modals.telemetryConsentDecline': 'Не отправлять',
-  'modals.telemetryConsentAccept': 'Да, отправлять',
+  'modals.telemetryConsentDecline': 'Выключить оба',
+  'modals.telemetryConsentAccept': 'Сохранить выбор',
 
   // SentDataModal.svelte
   'modals.sentDataKindDiagnostics': 'Диагностика',
