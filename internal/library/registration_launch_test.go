@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestAuditFix003(t *testing.T) {
+func TestRegisterInstalledClearsStaleReleaseMetadataAfterUninstall(t *testing.T) {
 	s, err := NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -30,11 +30,11 @@ func TestAuditFix003(t *testing.T) {
 		t.Fatal(err)
 	}
 	if g.ReleaseID != "" || g.DistributionID != "" || g.Repacker != "" {
-		t.Fatalf("003 reproduced: release=%s distribution=%s repacker=%s", g.ReleaseID, g.DistributionID, g.Repacker)
+		t.Fatalf("stale metadata kept: release=%s distribution=%s repacker=%s", g.ReleaseID, g.DistributionID, g.Repacker)
 	}
 }
 
-func TestAuditFix007(t *testing.T) {
+func TestPlayGameDoesNotHoldLibraryLockDuringPreparation(t *testing.T) {
 	s, err := NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -60,11 +60,11 @@ func TestAuditFix007(t *testing.T) {
 		t.Fatal("expected injected preparation failure")
 	}
 	if held {
-		t.Fatal("007 reproduced: global library mutex held during runtime preparation")
+		t.Fatal("library mutex held during runtime preparation")
 	}
 }
 
-func TestAuditFix008MeasuresOutsideLibraryLock(t *testing.T) {
+func TestMeasuresInstallOutsideLibraryLock(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "game.exe")
@@ -97,7 +97,7 @@ func TestAuditFix008MeasuresOutsideLibraryLock(t *testing.T) {
 	}
 }
 
-func TestAuditFix001OldCloudOwnershipIsNotRestored(t *testing.T) {
+func TestLegacyCloudOwnershipIsNotRestoredOnLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	dir := t.TempDir()
@@ -126,13 +126,13 @@ func TestAuditFix001OldCloudOwnershipIsNotRestored(t *testing.T) {
 	}
 }
 
-type auditProcess struct{ done chan struct{} }
+type stubProcess struct{ done chan struct{} }
 
-func (p *auditProcess) pid() int    { return 1234 }
-func (p *auditProcess) wait() error { <-p.done; return nil }
-func (p *auditProcess) kill() error { close(p.done); return nil }
+func (p *stubProcess) pid() int    { return 1234 }
+func (p *stubProcess) wait() error { <-p.done; return nil }
+func (p *stubProcess) kill() error { close(p.done); return nil }
 
-func TestAuditFix007LaunchContextOutlivesCall(t *testing.T) {
+func TestLaunchContextOutlivesCall(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := filepath.Join(t.TempDir(), "game.exe")
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
@@ -145,7 +145,7 @@ func TestAuditFix007LaunchContextOutlivesCall(t *testing.T) {
 	var launchCtx context.Context
 	s.start = func(ctx context.Context, _ launch) (gameProcess, error) {
 		launchCtx = ctx
-		return &auditProcess{done: make(chan struct{})}, nil
+		return &stubProcess{done: make(chan struct{})}, nil
 	}
 	if err := s.PlayGame(g.ID); err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestAuditFix007LaunchContextOutlivesCall(t *testing.T) {
 	}
 }
 
-func TestAuditFix007PreparingRemainsResponsiveAndReserved(t *testing.T) {
+func TestPreparingGameStaysResponsiveAndReserved(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := filepath.Join(t.TempDir(), "game.exe")
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {

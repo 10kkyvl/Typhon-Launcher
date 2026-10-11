@@ -6,7 +6,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestAuditFix002(t *testing.T) {
+func TestSyncLibraryRemoveDeletesRecord(t *testing.T) {
 	s, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -18,6 +18,6 @@ func TestAuditFix002(t *testing.T) {
 	err = (syncLibrary{svc: s}).Remove("catalog-c1")
 	_, findErr := s.Find(g.ID)
 	if err != nil || findErr == nil {
-		t.Fatalf("002 reproduced: adapter removal fails (%v), record remains", err)
+		t.Fatalf("Remove: err = %v, record still present = %v", err, findErr == nil)
 	}
 }

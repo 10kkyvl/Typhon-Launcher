@@ -9,7 +9,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestAuditFix005(t *testing.T) {
+func TestRollbackRefusesObsoleteLocation(t *testing.T) {
 	root := t.TempDir()
 	old := filepath.Join(root, "old")
 	next := filepath.Join(root, "new")
@@ -55,14 +55,14 @@ func TestAuditFix005(t *testing.T) {
 
 }
 
-type fableSnapshotLibrary struct {
+type snapshotLibrary struct {
 	fakeLibrary
 	calls    atomic.Int32
 	captured chan struct{}
 	release  chan struct{}
 }
 
-func (f *fableSnapshotLibrary) GetInstalledGames() []library.Game {
+func (f *snapshotLibrary) GetInstalledGames() []library.Game {
 	snap := f.fakeLibrary.GetInstalledGames()
 	if f.calls.Add(1) == 1 {
 		close(f.captured)
@@ -70,12 +70,12 @@ func (f *fableSnapshotLibrary) GetInstalledGames() []library.Game {
 	}
 	return snap
 }
-func TestAuditFix015(t *testing.T) {
+func TestConcurrentCheckKeepsNewUpdateRecord(t *testing.T) {
 	s, err := newServiceAt(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := &fableSnapshotLibrary{captured: make(chan struct{}), release: make(chan struct{})}
+	lib := &snapshotLibrary{captured: make(chan struct{}), release: make(chan struct{})}
 	s.library = lib
 	s.releases = &fakeReleases{}
 	done := make(chan struct{})
@@ -96,7 +96,7 @@ func TestAuditFix015(t *testing.T) {
 
 }
 
-func TestAuditFix011(t *testing.T) {
+func TestSwapDirectoriesFailureKeepsPreviousRollback(t *testing.T) {
 	root := t.TempDir()
 	current := filepath.Join(root, "current")
 	previous := current + ".previous"
@@ -111,6 +111,6 @@ func TestAuditFix011(t *testing.T) {
 	}
 	err = s.swapDirectories("g1", current, filepath.Join(root, "missing-stage"), previous, "3")
 	if err == nil || !exists(current) || !exists(previous) {
-		t.Fatal("011 reproduced: failed second update loses previous rollback copy")
+		t.Fatal("failed swap lost current or previous rollback copy")
 	}
 }

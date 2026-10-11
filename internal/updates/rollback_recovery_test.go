@@ -11,7 +11,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestAuditFix006RecoveryAtEachRollbackBoundary(t *testing.T) {
+func TestRecoveryAtEachRollbackBoundary(t *testing.T) {
 	for _, boundary := range []int{0, 1, 2} {
 		t.Run(strconv.Itoa(boundary), func(t *testing.T) {
 			root := t.TempDir()
@@ -84,7 +84,7 @@ func TestAuditFix006RecoveryAtEachRollbackBoundary(t *testing.T) {
 	}
 }
 
-func TestAuditFix011RecoveryRetainsOlderRollback(t *testing.T) {
+func TestRecoveryRetainsOlderRollback(t *testing.T) {
 	for _, boundary := range []int{0, 1, 2, 3} {
 		t.Run(strconv.Itoa(boundary), func(t *testing.T) {
 			root := t.TempDir()

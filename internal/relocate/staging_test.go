@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestAuditFix004Cleanup(t *testing.T) {
+func TestFailedCommitRenameLeavesNoStaging(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")
 	target := filepath.Join(root, "target")
@@ -34,7 +34,7 @@ func TestAuditFix004Cleanup(t *testing.T) {
 	err = s.copyAndVerify(context.Background(), "job", source, target)
 	s.recoverAll(context.Background())
 	if err == nil || exists(target+".staging") || !exists(source) {
-		t.Fatal("004 cleanup reproduced: failed commit rename leaves full staging even after recovery; Windows rename not executed")
+		t.Fatal("failed commit left staging or lost source after recovery")
 	}
 }
 
@@ -42,7 +42,7 @@ type rollbackKeeper struct{}
 
 func (rollbackKeeper) Busy(string) bool        { return false }
 func (rollbackKeeper) HasRollback(string) bool { return true }
-func TestAuditFix005MoveRefusesRetainedRollback(t *testing.T) {
+func TestMoveGameRefusesRetainedRollback(t *testing.T) {
 	lib := newTestLibrary(t)
 	game, dir := addTestGame(t, lib)
 	s := newTestService(t, nil, lib, nil, nil, rollbackKeeper{})
@@ -54,7 +54,7 @@ func TestAuditFix005MoveRefusesRetainedRollback(t *testing.T) {
 	}
 }
 
-func TestAuditFix004MoveIntoExistingEmptyDirectory(t *testing.T) {
+func TestMoveGameIntoExistingEmptyDirectory(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	g, old := addTestGame(t, lib)

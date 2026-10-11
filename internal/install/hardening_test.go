@@ -9,7 +9,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestAuditFix001(t *testing.T) {
+func TestRemoveGameRefusesOwnedDiscoveredFolder(t *testing.T) {
 	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestAuditFix001(t *testing.T) {
 	}
 }
 
-func TestAuditFix009(t *testing.T) {
+func TestDiscardSilentKeepsDestinationWhenInstallerNotConfirmedStopped(t *testing.T) {
 	s, err := newServiceAt(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestAuditFix009(t *testing.T) {
 	}
 }
 
-func TestAuditFix010(t *testing.T) {
+func TestReadBrokerSpecRejectsUnauthenticatedSpec(t *testing.T) {
 	dir, pin := brokerDirs(t)
 	spec := goodSpec(pin)
 	spec.InstallerPath = filepath.Join(pin.ContentRoot, "unrelated.exe")
@@ -62,11 +62,11 @@ func TestAuditFix010(t *testing.T) {
 	}
 	_, found, err := readBrokerSpec(dir, pin)
 	if err == nil || found {
-		t.Fatal("010 validation reproduced: arbitrary spec within writable roots accepted without parent authentication; no executable launched")
+		t.Fatal("unauthenticated spec accepted")
 	}
 }
 
-func TestAuditFix013(t *testing.T) {
+func TestStartRejectsDestinationOfActiveInstallation(t *testing.T) {
 	s, downloads, _ := newTestService(t)
 	root := t.TempDir()
 	portableSource(t, root, "Game")
@@ -82,7 +82,7 @@ func TestAuditFix013(t *testing.T) {
 	}
 }
 
-func TestAuditFix012CleanupFailureDoesNotFailInstallation(t *testing.T) {
+func TestSourceCleanupFailureDoesNotFailInstallation(t *testing.T) {
 	s, downloads, registrar := newTestService(t)
 	root := t.TempDir()
 	portableSource(t, root, "Game")
@@ -104,7 +104,7 @@ func TestAuditFix012CleanupFailureDoesNotFailInstallation(t *testing.T) {
 	}
 }
 
-func TestAuditFix010RejectsTamperedSignedSpec(t *testing.T) {
+func TestReadBrokerSpecRejectsTamperedSignedSpec(t *testing.T) {
 	dir, pin := brokerDirs(t)
 	spec := goodSpec(pin)
 	spec.Run = "fresh"
@@ -140,7 +140,7 @@ func TestAuditFix010RejectsTamperedSignedSpec(t *testing.T) {
 	}
 }
 
-func TestAuditFix001UntypedMarkerCannotAuthorizeDeletion(t *testing.T) {
+func TestRemoveGameRefusesUntypedMarker(t *testing.T) {
 	s, _, lib := newTestService(t)
 	dir := gameDir(t, "Foreign")
 	if err := library.WriteMarker(dir, library.Marker{GameID: "g1", Title: "Foreign", Owned: true}); err != nil {

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestAuditFix001CloudOwnershipIsNotAppliedOrEchoed(t *testing.T) {
+func TestCloudOwnershipIsNotAppliedOrEchoed(t *testing.T) {
 	h := newHarness(t)
 	h.catalog.link("game-1", "1")
 	h.library.setLocalGame(Game{CanonicalGameID: "game-1", Owned: false})
@@ -33,7 +33,7 @@ func TestAuditFix001CloudOwnershipIsNotAppliedOrEchoed(t *testing.T) {
 	}
 }
 
-func TestAuditFix002FailedRemovalRetriesWithoutRestoringCloudGame(t *testing.T) {
+func TestFailedRemovalRetriesWithoutRestoringCloudGame(t *testing.T) {
 	h := newHarness(t)
 	h.catalog.link("game-1", "1")
 	h.library.setLocal("game-1", 0)
