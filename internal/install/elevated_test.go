@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -702,42 +703,49 @@ func TestRunElevatedRetriesCancelDeliveryOnTransientFailure(t *testing.T) {
 	cancelPath := filepath.Join(dir, "cancel")
 	spec := runSpec{Path: `C:\fake\installer.exe`, InstallerPath: installerFixture(t, dir), ID: "t15", StatePath: statePath, CancelPath: cancelPath}
 
-	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
-		return longRunningProcess(t, 30), nil
-	})
-
-	// Блокирует запись маркера отмены каталогом на его месте — но только
-	// после того, как runElevated успел выполнить свой стартовый
-	// clearWorkerCancel (иначе он же и снёс бы эту директорию раньше, чем
-	// дошло бы до первой попытки отмены).
-	go func() {
-		<-time.After(10 * time.Millisecond)
-		if err := os.Mkdir(cancelPath, 0o755); err != nil {
-			t.Errorf("seed blocking directory: %v", err)
-		}
-	}()
-
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-time.After(30 * time.Millisecond)
-		cancel()
-	}()
+	defer cancel()
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
-	// Снимает блокировку заметно позже первой (неудачной) попытки, но
-	// заметно раньше workerCancelWait (300 мс в тестовом окружении) —
-	// доказывает, что случилась именно вторая попытка, а не разовая удача.
-	go func() {
-		<-time.After(80 * time.Millisecond)
-		if err := removeWithRetry(cancelPath); err != nil {
-			t.Errorf("remove blocking directory: %v", err)
+	// Каталог на месте маркера отмены ставится из запуска воркера: к этому
+	// моменту runElevated уже выполнил стартовый clearWorkerCancel и не снесёт
+	// его, а отмена приходит только после, так что первая попытка записи
+	// гарантированно упирается в каталог. Таймеры здесь не годились: на
+	// медленной машине отмена успевала раньше каталога, и горутины теста
+	// доживали до его конца.
+	withWorkerSeams(t, func(runSpec) (workerHandle, error) {
+		proc := longRunningProcess(t, 30)
+		if err := os.Mkdir(cancelPath, 0o755); err != nil {
+			return nil, err
 		}
-	}()
+		cancel()
+		// Снимает блокировку заметно позже первой (неудачной) попытки —
+		// доказывает, что случилась именно вторая попытка, а не разовая удача.
+		// Секунда, а не меньше: на Windows WriteAtomic сам повторяет rename
+		// около 635 мс, и более короткую блокировку первая попытка переживает.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-time.After(time.Second)
+			if err := removeWithRetry(cancelPath); err != nil {
+				t.Errorf("remove blocking directory: %v", err)
+			}
+		}()
+		return proc, nil
+	})
+	// Дедлайн с запасом: проверяется не скорость, а то, что повтор дошёл до
+	// воркера. Если повтора нет, runElevated уходит в ветку дедлайна и
+	// возвращает errInstallerNotConfirmedStopped, это и ловит проверка ниже.
+	workerCancelWait = 5 * time.Second
 
 	// Имитирует реального воркера: как только маркер отмены появился на
 	// диске КАК ФАЙЛ (блокирующий каталог с тем же именем — не он, воркер
 	// увидел бы его как ту же ошибку чтения, а не как отмену), помечает
 	// состояние отменённым — ровно то, что делает watchWorkerCancel + RunWorker.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		deadline := time.Now().Add(3 * time.Second)
 		for time.Now().Before(deadline) {
 			if info, statErr := os.Stat(cancelPath); statErr == nil && info.Mode().IsRegular() {
@@ -751,12 +759,11 @@ func TestRunElevatedRetriesCancelDeliveryOnTransientFailure(t *testing.T) {
 		t.Error("cancel marker never appeared despite the retry")
 	}()
 
-	start := time.Now()
 	_, err := runElevated(ctx, spec)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("runElevated error = %v, want errors.Is(err, context.Canceled)", err)
 	}
-	if elapsed := time.Since(start); elapsed > workerCancelWait {
-		t.Fatalf("runElevated took %v, past workerCancelWait %v: the retry never got through in time", elapsed, workerCancelWait)
+	if errors.Is(err, errInstallerNotConfirmedStopped) {
+		t.Fatalf("runElevated error = %v: the retry never reached the worker before the deadline", err)
 	}
 }
