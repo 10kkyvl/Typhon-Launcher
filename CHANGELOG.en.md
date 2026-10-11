@@ -21,7 +21,7 @@ Chat, friends and music right over your game, save backups, and torrents through
 - Top bar search: Enter or the "N more in the catalog" line opens the catalog with your query
 
 ### Changed
-- Checksum verification in FitGirl installers is now opt-in: Settings → Downloads → Install → Verify repack files during install. It is off by default, so an install finishes right away instead of waiting hours for the check
+- Checksum verification built into build installers is now opt-in: Settings → Downloads → Install → Verify build files during install. It is off by default, so an install finishes right away instead of waiting hours for the check
 - Installer sound is muted during an install; other programs and system sounds are left alone (Windows)
 - The launcher asks for confirmation before removing your avatar or cover, resetting your profile appearance and signing out
 
@@ -38,8 +38,8 @@ Chat, friends and music right over your game, save backups, and torrents through
 - Downloads that ended in an error disappeared from the Downloads screen; they now show under Failed with the reason, Retry and Remove from list
 - Games without an executable had a Play button that only led to an error
 - The update card said "New release available" when there was no newer version and only a rollback was left
-- Shortcuts to the repacker's website that installers drop on the desktop stayed after the install
-- A repack's install bar got stuck at 99% with a size larger than expected; when the final size is unknown, it shows how much has been written
+- Shortcuts to the packager's website that installers drop on the desktop stayed after the install
+- A build's install bar got stuck at 99% with a size larger than expected; when the final size is unknown, it shows how much has been written
 - If the launcher closed in the middle of several installers in a row (a game and its add-ons), after a restart the game counted as installed and the add-ons were never installed
 - After the launcher crashed, the installer kept running in the background
 - A damaged or incomplete RAR archive is reported as damaged or incomplete, not as "format not supported"
@@ -60,7 +60,7 @@ Steam-style game reviews and a fullscreen Big Picture mode for playing with a co
 - A game started from Typhon launches the same way a double-click in Explorer does — before, it inherited the launcher’s own environment and console, so some games behaved differently than on a normal start
 - A game shortcut on the desktop starts the game even when Typhon was closed — before, it only opened the launcher window
 - A game started from a shortcut while Typhon sits in the tray opens on top of other windows instead of somewhere behind them
-- More releases from sources find their game in the catalog: names with versions, build tags, repacker notes and DLC lists are read correctly. Before, some games had no downloads on their page
+- More releases from sources find their game in the catalog: names with versions, build tags, packager notes and DLC lists are read correctly. Before, some games had no downloads on their page
 - Refreshing a large source no longer fails as a whole because of one failed part — matches already found are kept and the source shows a warning
 
 ## 0.7.2 — 2026-09-15
@@ -89,7 +89,7 @@ Catalog loading is independent of recommendations, search uses the server catalo
 ### Fixed
 - Global search finds games in the server catalog even if their detail pages have never been opened. The local library and sources add installation and release information to those results
 - Updating a source matches release titles against official names and name variants in the server catalog. Previously saved unmatched releases are checked again even when the source has not changed; manual matches are preserved
-- Version numbers, repacker details, and bonus content notes are separated from game titles more accurately when matching releases
+- Version numbers, packager details, and bonus content notes are separated from game titles more accurately when matching releases
 
 ## 0.7.0 — 2026-09-14
 Chat with friends, personalized catalog recommendations, and profile customization with your own cover and colors.
@@ -143,8 +143,8 @@ A Steam and IGDB catalog, personal accent colors, screenshot zoom and more relia
 
 ### Changed
 - Releases are separate from the official catalog: unknown releases stay in source management, and manual matching applies only to the selected release. Game pages explain when no releases are available
-- Release lists retain original titles to distinguish editions and variants. Game details come from the catalog rather than repack titles
-- Updates and patches must belong to the same distribution and source as the installed game. The source must supply a stable distribution identifier; matching titles, repackers or versions are insufficient. New revisions with an unchanged version number are also considered
+- Release lists retain original titles to distinguish editions and variants. Game details come from the catalog rather than release titles
+- Updates and patches must belong to the same distribution and source as the installed game. The source must supply a stable distribution identifier; matching titles, packagers or versions are insufficient. New revisions with an unchanged version number are also considered
 - Settings use an adaptive layout, grouping theme selection, accents and the appearance editor. Controls and image transitions have been refreshed and respect reduced-motion preferences
 - The “What's new” window is wider to make longer changelogs easier to read
 
@@ -173,7 +173,7 @@ More reliable game installation through CrossOver, clearer log uploads, and acti
 - When error reporting is enabled, Typhon also sends scrubbed messages and stacks for ordinary internal errors. A full log archive is still sent only manually after confirmation
 
 ### Fixed
-- Fixed extraction stalls affecting some FitGirl repacks in CrossOver and waiting for successful QuickSFV completion. Recognized installers have music disabled and optional website-opening actions deselected
+- Fixed extraction stalls affecting some build installers in CrossOver and waiting for successful QuickSFV completion. Recognized installers have music disabled and optional website-opening actions deselected
 - Cancelling an installation in CrossOver waits for the installer and its child processes to stop before cleaning up files
 - Retrying an installation into an originally empty folder preserves the ability to uninstall the game from the computer
 - Removing a game from the library preserves its local activity history and total playtime; history no longer opens a missing game page
@@ -212,21 +212,21 @@ The launcher runs on macOS, downloading is told apart from installing, and games
 - On macOS a game can go to the desktop as a shortcut, and the launcher can start at login
 - A compatibility journal keeps itself: after a game fails to start twice in a row it is marked "does not start" in Installed, and a minute of play clears the mark
 - On macOS the catalogue shows how many people the game starts for, and a "Only ones that start" filter. The number appears once at least five different machines have reported on the game
-- A compatibility report is sent by consent only: the game, the build version and repacker, the macOS version, the CrossOver version and the chip family — no free-form text, no release names, no paths. Consent is asked again, because the previous prompt promised nothing about hardware would be collected
+- A compatibility report is sent by consent only: the game, the release version and packager, the macOS version, the CrossOver version and the chip family — no free-form text, no release names, no paths. Consent is asked again, because the previous prompt promised nothing about hardware would be collected
 - A "Download" button separate from "Install": with nothing on disk the game page offers to download, and install appears once there is nothing left to fetch
 - An "Install after download" checkbox in the download window: it starts from the setting but applies to that one download
 - Administrator rights can be confirmed up front, before the download starts, when the torrent carries an installer: the install then runs overnight on its own instead of waiting for a Windows prompt
 - The source preview says how many games a feed describes, how many of them the catalogue already has, and how many are new
 - A source served over plain http is flagged with a shield in the list and a warning in the preview: its contents can be swapped on the way
 - File verification shows up in the activity dock — its progress used to live on the game page only, so leaving the page hid a scan that keeps running
-- The release list carries the build form — "Portable", "Repack", "Archive" — and the repacker is written next to the source the release came from
+- The release list carries the build form — "Portable", "Repack", "Archive" — and the packager is written next to the source the release came from
 - A "Send to us" button in About: the log archive goes to support and is kept there for three days, and the launcher shows the ticket number. Before sending, the window says what is inside — your system user name, folder paths, and the names of games and torrents
 - Unfriending, blocking and discarding a downloaded file ask for confirmation: they used to fire straight from the context menu
 
 ### Changed
 - The interface is a tenth larger: what the 110% scale used to draw is now what 100% draws, and the other steps moved with it
 - Built-in theme names follow the interface language instead of staying Russian in English
-- The repacker and edition lists moved into a dictionary that refreshes from the server once a day: a new repacker is recognised without a new launcher version, and your own list can go into a file in the config folder
+- The packager and edition lists moved into a dictionary that refreshes from the server once a day: a new packager is recognised without a new launcher version, and your own list can go into a file in the config folder
 - Sources refresh faster: releases the feed did not touch are not matched again, and saving a source no longer downloads the feed a second time after the preview
 - A running game is noticed, and its session closed, within a second — it used to take up to ten
 - The avatar goes to the server as the file you picked, and the square is cut there: the picture is no longer resampled twice on the way
@@ -236,7 +236,7 @@ The launcher runs on macOS, downloading is told apart from installing, and games
 ### Fixed
 - A game removed from the library on one device came back from another on the next sync: the removal now travels to the server and reaches the other devices, even if there was no network at the moment it was removed
 - One release could split across the catalogue into eight different games: in "Game v.1.0.29315 [Game folder]" the version and the brackets stayed in the name, so every entry counted as its own game
-- A 1.8 GB repack was offered as an update to a 9.8 GB installation when both were published on the same day and neither version could be read
+- A 1.8 GB build was offered as an update to a 9.8 GB installation when both were published on the same day and neither version could be read
 - An install started from a release row lost its version, and updates for that game were never found afterwards
 - The release list labelled "Update" even a release the launcher does not treat as one: those read "New release"
 - A torrent is no longer matched automatically to a DLC instead of the game itself; picking a DLC by hand still works

@@ -59,7 +59,7 @@ Game data provided by IGDB. Typhon is not affiliated with or endorsed by IGDB or
 
 Found a bug or have an idea? [Open an issue](https://github.com/10kkyvl/Typhon-Launcher/issues) with what you were trying to do and what happened. Review logs before posting them publicly.
 
-The source is available to read. Terms and third-party notices: [TERMS.en.md](TERMS.en.md), [COPYRIGHT.en.md](COPYRIGHT.en.md), [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md).
+Typhon is free software under the [GNU GPL v3](LICENSE). Terms and third-party notices: [TERMS.en.md](TERMS.en.md), [COPYRIGHT.en.md](COPYRIGHT.en.md), [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md).
 
 <details>
 <summary>Build, development and contribution guide</summary>
@@ -217,8 +217,9 @@ reach `main` through a merge.
 - `CHANGELOG.md` is Russian on purpose: its text goes into the signed update manifest and
   is shown in the launcher under "What's new". The top entry must match `VERSION`.
 - The invariants the code is held to — atomic writes, errors that never become default
-  values, crash-safe data moves — are written out in `CLAUDE.md`. It is worth reading
-  before a first change.
+  values, crash-safe data moves — are written out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+  It is worth reading before a first change. Vulnerabilities go through
+  [`SECURITY.md`](SECURITY.md), not public issues.
 
 Bugs and questions: [GitHub issues](https://github.com/10kkyvl/Typhon-Launcher/issues).
 A launcher log from `%AppData%\Typhon\typhon.log` helps; it is redacted of paths and
@@ -226,9 +227,17 @@ account details by design.
 
 ## Licence
 
-There is no licence file in this repository yet, so default copyright applies: the source
-is here to be read and built, not licensed for reuse or redistribution. Ask before
-building on it.
+Typhon is free software, licensed under the
+[GNU General Public License, version 3](LICENSE) only (`GPL-3.0-only`). You may run,
+study, change and redistribute it; anything you distribute that is built on it must be
+released under the same licence, with its source. It comes with no warranty.
+
+As additional terms under sections 7(c) and 7(e) of the licence, it grants no rights to
+the Typhon name or logo. A modified version you distribute must carry a different name and
+must not present itself as Typhon or as coming from the Typhon project.
+
+The licence covers the launcher's code. Using the Typhon services — the account,
+metadata and update servers — is governed by the [Terms of Use](TERMS.en.md).
 
 The licences of the components Typhon bundles are in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), generated from `tools/notices`.

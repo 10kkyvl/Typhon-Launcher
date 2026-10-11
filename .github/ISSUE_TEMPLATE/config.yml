@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/10kkyvl/Typhon-Launcher/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.
+  - name: Copyright notice
+    url: https://github.com/10kkyvl/Typhon-Launcher/blob/main/COPYRIGHT.en.md
+    about: How to send a copyright infringement notice.
