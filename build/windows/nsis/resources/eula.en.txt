@@ -10,4 +10,6 @@ Typhon is a tool for managing a personal game library: it finds installed games,
 
 4. The application is provided "as is", without warranties. To the extent permitted by law, the operator is not liable for third-party source content or the consequences of using it.
 
+5. Typhon is free software under the GNU General Public License, version 3. Source code and the license text: github.com/10kkyvl/Typhon-Launcher. The terms of use govern the Typhon services and do not restrict any rights the license grants.
+
 The full terms and the privacy policy are available in the app (Settings → About) and at typhon-launcher.com. By clicking "I Agree" you accept them.

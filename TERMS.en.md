@@ -22,6 +22,8 @@ Typhon is a software tool that runs on the user's device and helps manage a pers
 
 Typhon is not a store, a content catalog or a game distribution platform. The operator neither hosts nor supplies game files, and does not provide access to them.
 
+The app is free software. Its source code is published in the `github.com/10kkyvl/Typhon-Launcher` repository and is distributed under the GNU General Public License, version 3 (the `LICENSE` file in the repository). That license governs how the app may be copied, modified and distributed; these terms govern the use of the Typhon services and do not restrict any rights the license grants. The license grants no rights to the Typhon name or logo: a modified version must carry a different name.
+
 ## 3. Sources
 
 Release sources are added by the user, at the user's own choice and on the user's own responsibility. The app ships with no preinstalled sources, and the operator neither maintains nor publishes a catalog of them.
@@ -97,3 +99,4 @@ For questions relating to these terms: [abuse@typhon-launcher.com](mailto:abuse@
 - [PRIVACY.md](PRIVACY.md) — what data stays on the device and what is sent to the Typhon services.
 - [COPYRIGHT.md](COPYRIGHT.md) — copyright infringement notices.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — third-party component licenses.
+- `LICENSE` in the `github.com/10kkyvl/Typhon-Launcher` repository — the GNU GPL version 3 license for the app's source code.

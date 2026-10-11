@@ -226,9 +226,17 @@ account details by design.
 
 ## Licence
 
-There is no licence file in this repository yet, so default copyright applies: the source
-is here to be read and built, not licensed for reuse or redistribution. Ask before
-building on it.
+Typhon is free software, licensed under the
+[GNU General Public License, version 3](LICENSE) only (`GPL-3.0-only`). You may run,
+study, change and redistribute it; anything you distribute that is built on it must be
+released under the same licence, with its source. It comes with no warranty.
+
+As additional terms under sections 7(c) and 7(e) of the licence, it grants no rights to
+the Typhon name or logo. A modified version you distribute must carry a different name and
+must not present itself as Typhon or as coming from the Typhon project.
+
+The licence covers the launcher's code. Using the Typhon services — the account,
+metadata and update servers — is governed by the [Terms of Use](TERMS.en.md).
 
 The licences of the components Typhon bundles are in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), generated from `tools/notices`.

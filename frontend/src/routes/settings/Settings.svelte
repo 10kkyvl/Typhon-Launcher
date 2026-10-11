@@ -1034,6 +1034,12 @@
               {msg('settings.aboutHistoryButtonLabel')}
             </Button>
           </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
+              <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
+            </div>
+          </div>
           <UpdateBanner />
         </div>
       </Card>

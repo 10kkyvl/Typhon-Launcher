@@ -234,6 +234,8 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.aboutHistoryHasNotes': 'What changed in the launcher from version to version',
   'settings.aboutHistoryEmpty': 'Appears after the first update check',
   'settings.aboutHistoryButtonLabel': 'What’s new',
+  'settings.aboutLicenseLabel': 'License',
+  'settings.aboutLicenseText': 'Free software under the GNU GPL version 3, with no warranty. Source code and license text: github.com/10kkyvl/Typhon-Launcher',
   'settings.aboutDiagnosticsCardTitle': 'Diagnostics',
   'settings.aboutLogsLabel': 'Launcher logs',
   'settings.aboutLogsAttachHint': '— attach the archive to your bug report',

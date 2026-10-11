@@ -231,6 +231,8 @@ export const settings = {
   'settings.aboutHistoryHasNotes': 'Что менялось в лаунчере от версии к версии',
   'settings.aboutHistoryEmpty': 'Появится после первой проверки обновлений',
   'settings.aboutHistoryButtonLabel': 'Что нового',
+  'settings.aboutLicenseLabel': 'Лицензия',
+  'settings.aboutLicenseText': 'Свободная программа под GNU GPL версии 3, без гарантий. Исходный код и текст лицензии — github.com/10kkyvl/Typhon-Launcher',
   'settings.aboutDiagnosticsCardTitle': 'Диагностика',
   'settings.aboutLogsLabel': 'Логи лаунчера',
   'settings.aboutLogsAttachHint': '— приложите архив к сообщению об ошибке',
