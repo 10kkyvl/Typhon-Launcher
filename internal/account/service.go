@@ -55,7 +55,8 @@ type Service struct {
 	wg               sync.WaitGroup
 	accepted         func() string
 	termsConfirmedID string
-	termsTriedID     string
+	termsRun         *termsRun
+	termsTimer       func(time.Duration) (<-chan time.Time, func())
 
 	language func() string
 	openURL  func(string) error
@@ -91,7 +92,7 @@ func newService(store CredentialStore, baseURL, path string) (*Service, error) {
 		return nil, fmt.Errorf("load cached profile: %w", err)
 	}
 
-	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile, openURL: openSystemBrowser}
+	s := &Service{store: store, statePath: path, profilePath: profPath, guest: loaded.Guest, profile: profile, openURL: openSystemBrowser, termsTimer: newTermsTimer}
 	client, err := NewClient(baseURL, s.token)
 	if err != nil {
 		return nil, err
