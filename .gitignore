@@ -8,7 +8,7 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/
 bin/
-# go build . в корне кладёт бинарь сюда; в репозиторий ему не надо
+# `go build .` at the repository root drops the binary here
 /typhon
 /typhon.exe
 tmp/
@@ -23,14 +23,13 @@ frontend/bindings/
 Thumbs.db
 *.log
 
-.claude/*
-!.claude/settings.json
-!.claude/heavy.sh
+.claude/
+CLAUDE.md
+LEGAL_TODO.md
 *.local.md
 
 typhon.exe
 docs/
 notices.exe
 
-# Скиллы проекта для Claude Code — в репозитории
-!.claude/skills/
+/devrelease
