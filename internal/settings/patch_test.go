@@ -81,6 +81,8 @@ func TestSaveSettingsPatchRefusesWhatItCannotApply(t *testing.T) {
 		{"games path derived from the library", map[string]string{"gamesPath": `"D:\\x"`}, ErrPatchDerivedField, "gamesPath"},
 		{"downloads path derived from the library", map[string]string{"downloadsPath": `"D:\\x"`}, ErrPatchDerivedField, "downloadsPath"},
 		{"screenshots path derived from the library", map[string]string{"screenshotsPath": `"D:\\x"`}, ErrPatchDerivedField, "screenshotsPath"},
+		{"consent version", map[string]string{"telemetryConsentVersion": "3"}, ErrPatchConsentField, "telemetryConsentVersion"},
+		{"consent version beside the switch it would cover", map[string]string{"anonymousUsageStats": "true", "telemetryConsentVersion": "3"}, ErrPatchConsentField, "telemetryConsentVersion"},
 		{"string for a number", map[string]string{"maxActiveDownloads": `"five"`}, ErrPatchInvalidValue, "maxActiveDownloads"},
 		{"number for a string", map[string]string{"theme": "3"}, ErrPatchInvalidValue, "theme"},
 		{"bool for a float", map[string]string{"uiScale": "true"}, ErrPatchInvalidValue, "uiScale"},

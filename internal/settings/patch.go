@@ -12,6 +12,7 @@ var (
 	ErrPatchNullValue    = errors.New("settings patch: null value")
 	ErrPatchInvalidValue = errors.New("settings patch: invalid value")
 	ErrPatchDerivedField = errors.New("settings patch: field is derived from libraryPath")
+	ErrPatchConsentField = errors.New("settings patch: consent version is recorded only by SaveConsent")
 )
 
 var derivedFields = map[string]bool{"gamesPath": true, "downloadsPath": true, "screenshotsPath": true}
@@ -20,7 +21,9 @@ var derivedFields = map[string]bool{"gamesPath": true, "downloadsPath": true, "s
 // as stored, so a screen that sends one switch cannot put back an older copy of
 // another one saved meanwhile. Keys are the JSON names of Settings. A key that
 // is not a field, a path derived from libraryPath (sanitize would overwrite
-// it), a null and a value of the wrong type are refused with an
+// it), the consent version (raising it without SaveConsent would hand the
+// stored switches an answer nobody gave), a null and a value of the wrong
+// type are refused with an
 // error that names the key: a field dropped quietly would look saved. An empty
 // patch changes nothing and returns the stored settings. The stored settings
 // come back so the caller shows what was written rather than what it sent.
@@ -53,6 +56,9 @@ func applyPatch(current Settings, patch map[string]json.RawMessage) (Settings, e
 		}
 		if derivedFields[key] {
 			return Settings{}, fmt.Errorf("%w: %q", ErrPatchDerivedField, key)
+		}
+		if key == "telemetryConsentVersion" {
+			return Settings{}, fmt.Errorf("%w: %q", ErrPatchConsentField, key)
 		}
 		if !json.Valid(value) {
 			return Settings{}, fmt.Errorf("%w for %q: not JSON", ErrPatchInvalidValue, key)
