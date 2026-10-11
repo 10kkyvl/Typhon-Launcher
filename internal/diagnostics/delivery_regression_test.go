@@ -51,7 +51,7 @@ func TestDeliveryRepairsPersistedFrontendAndContinuesPastRejection(t *testing.T)
 		if id == "legacy" {
 			code = ""
 		}
-		if err := savePending(s.pendingDir, time.Now().Add(time.Duration(i)*time.Second), []reportPayload{{ErrorID: id, Component: "frontend", ErrorCode: code}}); err != nil {
+		if err := savePending(s.pendingDir, time.Now().Add(time.Duration(i)*time.Second), []reportPayload{{ErrorID: id, Component: "frontend", ErrorCode: code, Timestamp: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -50,7 +50,10 @@ func contextKeyAllowed(key string) bool {
 	return false
 }
 
-const breadcrumbCapacity = 64
+const (
+	breadcrumbCapacity = 64
+	breadcrumbWindow   = 5 * time.Minute
+)
 
 var processStarted = time.Now()
 
@@ -120,7 +123,7 @@ func cleanContext(fields map[string]string) map[string]string {
 	return out
 }
 
-func sanitizeDetails(d *Details) *Details {
+func sanitizeDetails(d *Details, at time.Time) *Details {
 	if d == nil {
 		return nil
 	}
@@ -134,11 +137,12 @@ func sanitizeDetails(d *Details) *Details {
 		if err != nil {
 			continue
 		}
-		b.Component = capText(stripControl(component), maxComponentLen)
+		b.Component = singleLine(component, maxComponentLen, defaultComponent)
 		b.Message = capText(stripControl(message), MaxBreadcrumbMessageLen)
 		b.Context = cleanContext(b.Context)
 		out.Breadcrumbs = append(out.Breadcrumbs, b)
 	}
+	out.Breadcrumbs = wallWindow(out.Breadcrumbs, at)
 	if len(out.Breadcrumbs) > MaxBreadcrumbs {
 		out.Breadcrumbs = out.Breadcrumbs[len(out.Breadcrumbs)-MaxBreadcrumbs:]
 	}
@@ -158,6 +162,25 @@ func sanitizeDetails(d *Details) *Details {
 	}
 }
 
+// wallWindow keeps the breadcrumbs the server will accept: it compares the
+// timestamps the server will see, which are wall clock. time.Time comparison
+// uses the monotonic reading when both sides carry one, and after a sleep or
+// a clock step the two clocks disagree, so the reading is stripped first.
+func wallWindow(crumbs []Breadcrumb, at time.Time) []Breadcrumb {
+	at = at.Round(0)
+	from := at.Add(-breadcrumbWindow)
+	out := make([]Breadcrumb, 0, len(crumbs))
+	for _, b := range crumbs {
+		b.Timestamp = b.Timestamp.Round(0)
+		if b.Timestamp.IsZero() || b.Timestamp.Before(from) || b.Timestamp.After(at) {
+			continue
+		}
+		out = append(out, b)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Timestamp.Before(out[j].Timestamp) })
+	return out
+}
+
 func (s *Service) detailsLocked(component string, at time.Time, fields map[string]string) *Details {
 	d := &Details{Context: make(map[string]string)}
 	for key, value := range fields {
@@ -167,11 +190,11 @@ func (s *Service) detailsLocked(component string, at time.Time, fields map[strin
 	d.Context["go_version"] = runtime.Version()
 	d.Context["goroutines"] = strconv.Itoa(runtime.NumGoroutine())
 	for _, b := range s.breadcrumbs {
-		if (b.Component == component || b.Component == "launcher") && !b.Timestamp.Before(at.Add(-5*time.Minute)) && !b.Timestamp.After(at) {
+		if b.Component == component || b.Component == defaultComponent {
 			d.Breadcrumbs = append(d.Breadcrumbs, b)
 		}
 	}
-	sort.SliceStable(d.Breadcrumbs, func(i, j int) bool { return d.Breadcrumbs[i].Timestamp.Before(d.Breadcrumbs[j].Timestamp) })
+	d.Breadcrumbs = wallWindow(d.Breadcrumbs, at)
 	if len(d.Breadcrumbs) > MaxBreadcrumbs {
 		d.Breadcrumbs = d.Breadcrumbs[len(d.Breadcrumbs)-MaxBreadcrumbs:]
 	}

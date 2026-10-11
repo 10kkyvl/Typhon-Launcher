@@ -11,6 +11,9 @@ import (
 const (
 	maxComponentLen = 64
 	maxOperationLen = 64
+
+	defaultComponent = "launcher"
+	defaultOperation = "unknown"
 )
 
 // sanitizeText is redact.Sanitize by default. Tests override it to force
@@ -35,29 +38,45 @@ func sanitizeReport(r Report) (out Report, err error) {
 		}
 	}()
 
-	component, err := sanitizeText(r.Component)
+	component, err := sanitizeText(strings.ToValidUTF8(r.Component, ""))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize component: %w", err)
 	}
-	operation, err := sanitizeText(r.Operation)
+	operation, err := sanitizeText(strings.ToValidUTF8(r.Operation, ""))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize operation: %w", err)
 	}
-	message, err := sanitizeText(r.Message)
+	message, err := sanitizeText(strings.ToValidUTF8(r.Message, "�"))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize message: %w", err)
 	}
-	stack, err := sanitizeText(r.Stack)
+	stack, err := sanitizeText(strings.ToValidUTF8(r.Stack, "�"))
 	if err != nil {
 		return Report{}, fmt.Errorf("sanitize stack: %w", err)
 	}
 
-	r.Component = capText(stripControl(component), maxComponentLen)
-	r.Operation = capText(stripControl(operation), maxOperationLen)
+	r.Component = singleLine(component, maxComponentLen, defaultComponent)
+	r.Operation = singleLine(operation, maxOperationLen, defaultOperation)
 	r.Message = redact.Message(stripControl(message))
 	r.Stack = redact.Stack(stripControl(stack))
-	r.Details = sanitizeDetails(r.Details)
+	r.Details = sanitizeDetails(r.Details, r.Timestamp)
 	return r, nil
+}
+
+// singleLine is for fields the server checks with checkPrintable: every C0
+// character and DEL is refused there, newline and tab included, and an empty
+// value is refused too.
+func singleLine(s string, max int, fallback string) string {
+	s = capText(strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s), max)
+	if s == "" {
+		return fallback
+	}
+	return s
 }
 
 // stripControl drops C0 control characters and DEL, keeping the three that
