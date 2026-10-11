@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeFormat, progressPercent, truncateMiddle } from './format';
 import { translator } from '../i18n';
 import type { Locale } from '../i18n';
@@ -164,8 +164,18 @@ describe('progressPercent', () => {
 });
 
 describe('num caching inside makeFormat', () => {
+  const NumberFormat = Intl.NumberFormat;
+  const spyNumberFormat = () =>
+    vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (...args: ConstructorParameters<typeof NumberFormat>) {
+      return new NumberFormat(...args);
+    } as typeof NumberFormat);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('reuses one Intl.NumberFormat per min/max pair instead of building it on every call', () => {
-    const spy = vi.spyOn(Intl, 'NumberFormat');
+    const spy = spyNumberFormat();
     const format = f('ru');
     spy.mockClear();
 
@@ -177,7 +187,7 @@ describe('num caching inside makeFormat', () => {
   });
 
   it('keeps a separate cached formatter per distinct min/max pair', () => {
-    const spy = vi.spyOn(Intl, 'NumberFormat');
+    const spy = spyNumberFormat();
     const format = f('ru');
     spy.mockClear();
 
