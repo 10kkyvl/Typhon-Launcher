@@ -59,7 +59,7 @@ Typhon не поставляется с играми или готовым сп�
 
 Нашёл ошибку или придумал, как сделать удобнее? [Создай issue](https://github.com/10kkyvl/Typhon-Launcher/issues): опиши, что хотел сделать и что получилось. Перед публикацией логов проверь их содержимое.
 
-Исходный код открыт для просмотра. Условия использования и сведения о сторонних компонентах: [TERMS.md](TERMS.md), [COPYRIGHT.md](COPYRIGHT.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Typhon — свободная программа под [GNU GPL v3](LICENSE). Условия использования и сведения о сторонних компонентах: [TERMS.md](TERMS.md), [COPYRIGHT.md](COPYRIGHT.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 <details>
 <summary>Сборка, разработка и участие в проекте</summary>
@@ -219,7 +219,8 @@ cmd/signrelease    подписывает манифест обновления 
   `VERSION`.
 - Инварианты, которым обязан следовать код, — атомарная запись, ошибка, которая никогда не
   превращается в значение по умолчанию, безопасное к аварии перемещение данных — выписаны
-  в `CLAUDE.md`. Перед первой правкой их стоит прочитать.
+  в [`CONTRIBUTING.md`](CONTRIBUTING.md). Перед первой правкой их стоит прочитать.
+  Уязвимости — через [`SECURITY.md`](SECURITY.md), не в открытых issue.
 
 Баги и вопросы: [GitHub issues](https://github.com/10kkyvl/Typhon-Launcher/issues).
 Приложите лог из `%AppData%\Typhon\typhon.log` — он по замыслу вычищен от путей и данных

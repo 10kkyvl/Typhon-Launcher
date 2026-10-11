@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in the launcher does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please do not include source addresses, magnet links, release names or file paths — they are not needed to fix the launcher.
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: Settings → About
+      placeholder: "0.9.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Apple Silicon)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you were trying to do, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        If you sent logs from Settings → About → Diagnostics, paste the archive id. Otherwise attach `%AppData%\Typhon\typhon.log` (Windows) or `~/Library/Application Support/Typhon/typhon.log` (macOS) after reviewing it.

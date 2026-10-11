@@ -1,0 +1,19 @@
+name: Feature request
+description: An idea for the launcher
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do
+      description: The situation and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How it could work
+  - type: markdown
+    attributes:
+      value: |
+        Requests for built-in sources, feed lists or recommended sources are out of scope: Typhon ships no content and no sources.

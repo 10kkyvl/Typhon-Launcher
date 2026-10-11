@@ -59,7 +59,7 @@ Game data provided by IGDB. Typhon is not affiliated with or endorsed by IGDB or
 
 Found a bug or have an idea? [Open an issue](https://github.com/10kkyvl/Typhon-Launcher/issues) with what you were trying to do and what happened. Review logs before posting them publicly.
 
-The source is available to read. Terms and third-party notices: [TERMS.en.md](TERMS.en.md), [COPYRIGHT.en.md](COPYRIGHT.en.md), [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md).
+Typhon is free software under the [GNU GPL v3](LICENSE). Terms and third-party notices: [TERMS.en.md](TERMS.en.md), [COPYRIGHT.en.md](COPYRIGHT.en.md), [THIRD_PARTY_NOTICES.en.md](THIRD_PARTY_NOTICES.en.md).
 
 <details>
 <summary>Build, development and contribution guide</summary>
@@ -217,8 +217,9 @@ reach `main` through a merge.
 - `CHANGELOG.md` is Russian on purpose: its text goes into the signed update manifest and
   is shown in the launcher under "What's new". The top entry must match `VERSION`.
 - The invariants the code is held to — atomic writes, errors that never become default
-  values, crash-safe data moves — are written out in `CLAUDE.md`. It is worth reading
-  before a first change.
+  values, crash-safe data moves — are written out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+  It is worth reading before a first change. Vulnerabilities go through
+  [`SECURITY.md`](SECURITY.md), not public issues.
 
 Bugs and questions: [GitHub issues](https://github.com/10kkyvl/Typhon-Launcher/issues).
 A launcher log from `%AppData%\Typhon\typhon.log` helps; it is redacted of paths and
