@@ -23,7 +23,7 @@ import (
 
 func assertDetailsSanitized(t *testing.T) {
 	t.Helper()
-	in := Report{Details: &Details{Context: map[string]string{"stage": poison, "password": "top-secret"}, Breadcrumbs: []Breadcrumb{{Timestamp: time.Now(), Level: "INFO", Component: poison, Message: poison, Context: map[string]string{"stage": poison, "token": "top-secret"}}}}}
+	in := Report{Timestamp: time.Now().Add(time.Minute), Details: &Details{Context: map[string]string{"stage": poison, "password": "top-secret"}, Breadcrumbs: []Breadcrumb{{Timestamp: time.Now(), Level: "INFO", Component: poison, Message: poison, Context: map[string]string{"stage": poison, "token": "top-secret"}}}}}
 	out, err := sanitizeReport(in)
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestDetailsWireSizeAndOptOutDuringSanitize(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		d.Breadcrumbs = append(d.Breadcrumbs, Breadcrumb{Timestamp: time.Now(), Level: "INFO", Component: "download", Message: strings.Repeat("<", 2000)})
 	}
-	clean := sanitizeDetails(d)
+	clean := sanitizeDetails(d, time.Now())
 	data, err := json.Marshal(clean)
 	if err != nil {
 		t.Fatal(err)

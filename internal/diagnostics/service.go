@@ -17,6 +17,7 @@ import (
 	"typhon/internal/app"
 	"typhon/internal/clientid"
 	"typhon/internal/settings"
+	"typhon/internal/storage"
 	"typhon/internal/usagestats"
 
 	"github.com/google/uuid"
@@ -213,7 +214,7 @@ func (s *Service) capture(component, operation, message, stack, errorCode string
 }
 
 func (s *Service) captureWithFields(component, operation, message, stack, errorCode string, fatal bool, fields map[string]string) {
-	at := time.Now()
+	at := time.Now().Round(0)
 	s.mu.Lock()
 	epoch := s.consentEpoch
 	details := s.detailsLocked(component, at, fields)
@@ -248,7 +249,7 @@ func (s *Service) captureEvent(e capturedLog, fatal bool) {
 		ErrorCode:  e.code,
 		Message:    e.message,
 		Stack:      e.stack,
-		Timestamp:  e.at,
+		Timestamp:  e.at.Round(0),
 		Details:    e.details,
 		Fatal:      fatal,
 	}
@@ -419,6 +420,17 @@ func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint6
 			}
 			continue
 		}
+		batch, dropped := withinServerWindow(batch, s.clock())
+		if dropped > 0 {
+			slog.Warn("diagnostics: drop pending reports outside the server time window", "path", name, "count", dropped)
+			if len(batch) == 0 {
+				s.discardPending(path, name)
+				continue
+			}
+			if err := storage.Save(path, pendingVersion, batch); err != nil {
+				slog.Warn("diagnostics: rewrite pending file without stale reports", "path", name, "error", err)
+			}
+		}
 		if err := s.client.send(ctx, s.identity, batch); err != nil {
 			s.logDeliveryFailure(err, len(batch))
 			if !permanentDeliveryError(err) {
@@ -448,6 +460,13 @@ func (s *Service) drainPendingEpoch(ctx context.Context, dir string, epoch uint6
 			slog.Warn("diagnostics: remove sent pending file", "path", name, "error", rmErr)
 			s.markSent(name)
 		}
+	}
+}
+
+func (s *Service) discardPending(path, name string) {
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("diagnostics: remove dropped pending file", "path", name, "error", err)
+		s.markSent(name)
 	}
 }
 

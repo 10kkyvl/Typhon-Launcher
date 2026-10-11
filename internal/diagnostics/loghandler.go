@@ -48,7 +48,7 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 	if r.Level < slog.LevelInfo {
 		return err
 	}
-	e := capturedLog{at: r.Time, component: "launcher", operation: r.Message, message: r.Message, code: usagestats.CodeUnknown}
+	e := capturedLog{at: r.Time.Round(0), component: defaultComponent, operation: r.Message, message: r.Message, code: usagestats.CodeUnknown}
 	if r.PC != 0 {
 		// Resolve return PCs and inlined callers just like slog source attribution.
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
@@ -57,7 +57,7 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 		}
 	}
 	if e.at.IsZero() {
-		e.at = time.Now()
+		e.at = time.Now().Round(0)
 	}
 	attrs := append([]slog.Attr(nil), h.attrs...)
 	r.Attrs(func(a slog.Attr) bool { attrs = append(attrs, a); return true })
@@ -74,9 +74,13 @@ func (h *diagnosticLogHandler) Handle(ctx context.Context, r slog.Record) error 
 		}
 		switch a.Key {
 		case "component":
-			e.component = a.Value.String()
+			if v := a.Value.String(); v != "" {
+				e.component = v
+			}
 		case "operation":
-			e.operation = a.Value.String()
+			if v := a.Value.String(); v != "" {
+				e.operation = v
+			}
 		case "names":
 			// anacrolix names its DHT logger "dht"; its bootstrap failures are
 			// the user's DNS, not a launcher fault.
