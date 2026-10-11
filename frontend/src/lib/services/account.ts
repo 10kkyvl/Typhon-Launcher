@@ -106,6 +106,7 @@ export interface CurrentUser {
   bio: string;
   profile: ProfileSettings;
   createdAt: string;
+  termsAccepted?: { version: string; acceptedAt: string } | null;
 }
 
 export interface AvatarImage {
@@ -154,6 +155,7 @@ const KNOWN_CODES = new Set([
   'invalid_display_name',
   'email_immutable',
   'launcher_outdated',
+  'terms_required',
   'no_changes',
   'cover_too_large',
   'unsupported_cover',

@@ -281,6 +281,8 @@ func main() {
 		fatal("start account service", err)
 	}
 	accountService.SetLanguage(appService.UILanguage)
+	accountService.SetAcceptedTerms(func() string { return settingsService.GetSettings().LegalAcceptedVersion })
+	settingsService.Subscribe(func(settings.Settings) { accountService.SyncTerms() })
 	historyService, err := history.NewService()
 	if err != nil {
 		fatal("start history service", err)

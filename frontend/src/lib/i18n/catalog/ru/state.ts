@@ -111,6 +111,7 @@ export const state = {
   'state.accountErrorInvalidPassword': 'От 8 до 128 символов',
   'state.accountErrorEmailImmutable': 'Email пока нельзя изменить',
   'state.accountErrorLauncherOutdated': 'Версия лаунчера устарела, обновите Typhon, чтобы пользоваться аккаунтом',
+  'state.accountErrorTermsRequired': 'Сервер не знает эту редакцию Условий. Обновите Typhon и примите Условия заново',
   'state.accountErrorNoChanges': 'Нечего сохранять',
   'state.accountErrorAvatarTooLarge': 'Файл больше 10 МБ',
   'state.accountErrorUnsupportedAvatar': 'Поддерживаются PNG, JPEG и WebP',
