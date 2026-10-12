@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,7 +47,10 @@ type backendGame struct {
 	Reason   string `json:"reason"`
 }
 
-const backendMaxReportGames = 500
+const (
+	backendMaxReportGames  = 500
+	backendMaxRequestBytes = 64 << 10
+)
 
 var (
 	backendRepackers = map[string]bool{
@@ -156,6 +161,13 @@ func newContractServer(t *testing.T) (*httptest.Server, *contractServer) {
 			t.Errorf("read body: %v", err)
 			return
 		}
+		if len(body) > backendMaxRequestBytes {
+			cs.mu.Lock()
+			cs.rejected = append(cs.rejected, fmt.Sprintf("body of %d bytes exceeds %d", len(body), backendMaxRequestBytes))
+			cs.mu.Unlock()
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
 		report, err := backendDecode(body)
 		if err == nil {
 			err = report.validate()
@@ -163,7 +175,7 @@ func newContractServer(t *testing.T) (*httptest.Server, *contractServer) {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if err != nil {
-			cs.rejected = append(cs.rejected, fmt.Sprintf("%v\n%s", err, body))
+			cs.rejected = append(cs.rejected, fmt.Sprintf("%v\n%.200s", err, body))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -260,7 +272,7 @@ func TestSentReportsPassBackendValidation(t *testing.T) {
 			sharer, err := NewSharer(journal, NewStatsAt(filepath.Join(dir, "compat-stats.json")), srv.URL,
 				"3f1c2b8e-4d5a-4f6b-9c7d-8e9f0a1b2c3d", "0.7.2",
 				func() bool { return true },
-				func() Env { return tc.env },
+				func() (Env, error) { return tc.env, nil },
 				func(localID string) (Build, bool) {
 					b, ok := tc.builds[localID]
 					return b, ok
@@ -295,6 +307,111 @@ func TestSentReportsPassBackendValidation(t *testing.T) {
 				if !got[id] {
 					t.Fatalf("игры в отчёте %+v, want %v", accepted[0].Games, tc.wantGames)
 				}
+			}
+		})
+	}
+}
+
+func TestReportLimitsDoNotExceedTheBackend(t *testing.T) {
+	if maxReportGames > backendMaxReportGames {
+		t.Fatalf("maxReportGames = %d, сервер принимает не больше %d", maxReportGames, backendMaxReportGames)
+	}
+	if maxReportBytes > backendMaxRequestBytes {
+		t.Fatalf("maxReportBytes = %d, сервер принимает не больше %d", maxReportBytes, backendMaxRequestBytes)
+	}
+}
+
+var wideVersion = "1.0.0-" + strings.Repeat("a", 26)
+
+// fillJournal кладёт в журнал n игр напрямую: через RecordSession каждая запись
+// сбрасывала бы на диск весь журнал заново. wide выбирает самую длинную
+// строку отчёта, какую принимает сервер, — с ней лимит по байтам наступает
+// раньше лимита по числу игр.
+func fillJournal(j *Service, n int, wide bool) map[string]Build {
+	builds := make(map[string]Build, n)
+	for i := range n {
+		local := "g" + strconv.Itoa(i)
+		build := Build{GameID: strconv.Itoa(100000000000000000 + i)}
+		record := &Record{GameID: local, Attempts: 1, BestSeconds: 3600}
+		if wide {
+			record = &Record{GameID: local, Attempts: 2, Failures: 2, LastCode: "library.executable_missing"}
+			build.Repacker = "masquerade"
+			build.Version = wideVersion
+		}
+		j.records[local] = record
+		builds[local] = build
+	}
+	return builds
+}
+
+// Журнал побольше лимитов сервера раньше уходил одним запросом, сервер
+// отвечал на него 400 или 413, а лаунчер повторял тот же отказ каждые десять
+// минут. Теперь он уходит несколькими запросами, и каждый проходит ту же
+// проверку, что на сервере, а вместе они несут все игры.
+func TestLargeJournalIsSentInRequestsTheBackendAccepts(t *testing.T) {
+	cases := []struct {
+		name        string
+		games       int
+		wide        bool
+		minRequests int
+	}{
+		{"501 игра", 501, false, 2},
+		{"1000 игр", 1000, false, 2},
+		{"500 длинных игр не влезают в лимит по байтам", 500, true, 2},
+		{"1200 длинных игр", 1200, true, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, cs := newContractServer(t)
+			dir := t.TempDir()
+			journal, err := NewServiceAt(filepath.Join(dir, "compat.json"))
+			if err != nil {
+				t.Fatalf("NewServiceAt: %v", err)
+			}
+			builds := fillJournal(journal, tc.games, tc.wide)
+			sharer, err := NewSharer(journal, NewStatsAt(filepath.Join(dir, "compat-stats.json")), srv.URL,
+				"3f1c2b8e-4d5a-4f6b-9c7d-8e9f0a1b2c3d", "0.7.2",
+				func() bool { return true },
+				func() (Env, error) { return macEnv, nil },
+				func(localID string) (Build, bool) {
+					b, ok := builds[localID]
+					return b, ok
+				})
+			if err != nil {
+				t.Fatalf("NewSharer: %v", err)
+			}
+
+			sharer.sendOnce(context.Background())
+
+			accepted, rejected := cs.snapshot()
+			for _, r := range rejected {
+				t.Errorf("сервер отклонил запрос: %s", r)
+			}
+			if len(accepted) < tc.minRequests {
+				t.Fatalf("запросов %d, want не меньше %d", len(accepted), tc.minRequests)
+			}
+			if !tc.wide && len(accepted) != (tc.games+backendMaxReportGames-1)/backendMaxReportGames {
+				t.Fatalf("запросов %d на %d игр", len(accepted), tc.games)
+			}
+			seen := make(map[string]bool, tc.games)
+			for _, r := range accepted {
+				if r.ClientID != accepted[0].ClientID || r.Env != accepted[0].Env {
+					t.Fatalf("части отчёта разошлись в общей части: %+v и %+v", accepted[0].Env, r.Env)
+				}
+				for _, g := range r.Games {
+					if seen[g.GameID] {
+						t.Fatalf("игра %s ушла дважды", g.GameID)
+					}
+					seen[g.GameID] = true
+				}
+			}
+			if len(seen) != tc.games {
+				t.Fatalf("на сервер дошло %d игр из %d", len(seen), tc.games)
+			}
+
+			sharer.sendOnce(context.Background())
+			if again, _ := cs.snapshot(); len(again) != len(accepted) {
+				t.Fatalf("неизменившийся журнал ушёл снова: %d запросов вместо %d", len(again), len(accepted))
 			}
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"typhon/internal/account"
+	"typhon/internal/app"
 	"typhon/internal/telemetrylog"
 )
 
@@ -57,19 +59,52 @@ func closeBody(path string, body io.Closer) {
 	}
 }
 
-func statusError(path string, resp *http.Response) error {
+type statusError struct {
+	path   string
+	status int
+	body   string
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("%s: unexpected status %d: %s", e.path, e.status, e.body)
+}
+
+// rejectedForGood говорит, что сервер отказал самому содержимому отчёта:
+// 400 (не прошёл проверку) и 413 (не влез в тело запроса) повторять с теми же
+// данными бессмысленно, в отличие от 5xx, 429 и обрыва сети.
+func rejectedForGood(err error) bool {
+	var status *statusError
+	if errors.As(err, &status) {
+		return status.status == http.StatusBadRequest || status.status == http.StatusRequestEntityTooLarge
+	}
+	return errors.Is(err, errReportTooLarge)
+}
+
+func responseError(path string, resp *http.Response) error {
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodySize))
 	if err != nil {
 		return fmt.Errorf("%s: status %d, read error body: %w", path, resp.StatusCode, err)
 	}
-	return fmt.Errorf("%s: unexpected status %d: %s", path, resp.StatusCode, string(data))
+	return &statusError{path: path, status: resp.StatusCode, body: string(data)}
 }
 
+func setClientHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", account.UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
+}
+
+// send отправляет один запрос. Размер проверяется по тому самому телу, которое
+// уйдёт на сервер, а не по оценке: превысивший лимит запрос не должен
+// дойти до сети, где его оборвут и где он останется в журнале отправленного.
 func (c *client) send(ctx context.Context, report Report) error {
 	path := account.APIPrefix + reportPath
 	body, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("encode %s payload: %w", path, err)
+	}
+	if len(body) > maxReportBytes || len(report.Games) > maxReportGames {
+		return fmt.Errorf("%w: %d байт и %d игр при лимитах %d и %d",
+			errReportTooLarge, len(body), len(report.Games), maxReportBytes, maxReportGames)
 	}
 	// Отчёт попадает в журнал отправленного до самой отправки: кнопка «показать
 	// отправленные данные» обязана показывать и его, иначе обещание из
@@ -81,6 +116,7 @@ func (c *client) send(ctx context.Context, report Report) error {
 		return fmt.Errorf("build request %s: %w", path, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setClientHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -89,7 +125,7 @@ func (c *client) send(ctx context.Context, report Report) error {
 	defer closeBody(path, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return statusError(path, resp)
+		return responseError(path, resp)
 	}
 	return nil
 }
@@ -105,6 +141,7 @@ func (c *client) fetchStats(ctx context.Context, etag string) (snapshot Snapshot
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
+	setClientHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -116,7 +153,7 @@ func (c *client) fetchStats(ctx context.Context, etag string) (snapshot Snapshot
 		return Snapshot{}, false, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return Snapshot{}, false, statusError(path, resp)
+		return Snapshot{}, false, responseError(path, resp)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxStatsBodySize))

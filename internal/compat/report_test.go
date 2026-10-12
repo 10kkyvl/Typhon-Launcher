@@ -2,6 +2,8 @@ package compat
 
 import (
 	"encoding/json"
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -260,5 +262,105 @@ func TestDedupeGamesLeavesOneRowPerBuild(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func splitTestReport(n int, wide bool) Report {
+	games := make([]GameReport, n)
+	for i := range games {
+		games[i] = GameReport{GameID: strconv.Itoa(100000000000000000 + i), Repacker: RepackerUnknown, State: string(StateWorks)}
+		if wide {
+			games[i].Repacker = "masquerade"
+			games[i].Version = wideVersion
+			games[i].State = string(StateBroken)
+			games[i].Reason = "executable_missing"
+		}
+	}
+	return Report{
+		ClientID:   "3f1c2b8e-4d5a-4f6b-9c7d-8e9f0a1b2c3d",
+		AppVersion: "1.0.0",
+		Env:        Env{OSVersion: "26.6", CrossOver: "26.3", Chip: "apple_m4"},
+		Games:      games,
+	}
+}
+
+func TestSplitReportKeepsEveryGameWithinServerLimits(t *testing.T) {
+	cases := []struct {
+		name      string
+		games     int
+		wide      bool
+		wantParts func(int) bool
+	}{
+		{"одна игра", 1, false, func(n int) bool { return n == 1 }},
+		{"ровно по лимиту числа игр", maxReportGames, false, func(n int) bool { return n == 1 }},
+		{"на одну игру больше лимита", maxReportGames + 1, false, func(n int) bool { return n == 2 }},
+		{"тысяча игр", 1000, false, func(n int) bool { return n == 2 }},
+		{"полторы тысячи игр", 1500, false, func(n int) bool { return n == 3 }},
+		{"лимит по байтам раньше лимита по числу игр", maxReportGames, true, func(n int) bool { return n >= 2 }},
+		{"тысяча длинных игр", 1000, true, func(n int) bool { return n >= 3 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			report := splitTestReport(tc.games, tc.wide)
+			parts, err := splitReport(report, maxReportGames, maxReportBytes)
+			if err != nil {
+				t.Fatalf("splitReport: %v", err)
+			}
+			if !tc.wantParts(len(parts)) {
+				t.Fatalf("частей %d на %d игр", len(parts), tc.games)
+			}
+			var joined []GameReport
+			for i, part := range parts {
+				body, err := json.Marshal(part)
+				if err != nil {
+					t.Fatalf("marshal части %d: %v", i, err)
+				}
+				if len(body) > backendMaxRequestBytes {
+					t.Errorf("часть %d занимает %d байт, лимит сервера %d", i, len(body), backendMaxRequestBytes)
+				}
+				if len(part.Games) == 0 || len(part.Games) > backendMaxReportGames {
+					t.Errorf("в части %d %d игр, лимит сервера %d", i, len(part.Games), backendMaxReportGames)
+				}
+				if part.ClientID != report.ClientID || part.AppVersion != report.AppVersion || part.Env != report.Env {
+					t.Errorf("часть %d потеряла общую часть отчёта: %+v", i, part)
+				}
+				joined = append(joined, part.Games...)
+			}
+			if len(joined) != len(report.Games) {
+				t.Fatalf("в частях %d игр из %d", len(joined), len(report.Games))
+			}
+			for i := range joined {
+				if joined[i] != report.Games[i] {
+					t.Fatalf("игра %d изменилась или встала не на своё место: %+v", i, joined[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSplitReportWithoutGamesHasNothingToSend(t *testing.T) {
+	parts, err := splitReport(splitTestReport(0, false), maxReportGames, maxReportBytes)
+	if err != nil || len(parts) != 0 {
+		t.Fatalf("parts = %d, err = %v, want нет частей и нет ошибки", len(parts), err)
+	}
+}
+
+func TestSplitReportRefusesWhatCannotFit(t *testing.T) {
+	report := splitTestReport(3, true)
+	envelope, err := json.Marshal(Report{ClientID: report.ClientID, AppVersion: report.AppVersion, Env: report.Env, Games: []GameReport{}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	oneGame, err := json.Marshal(report.Games[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if _, err := splitReport(report, maxReportGames, len(envelope)+len(oneGame)-1); !errors.Is(err, errReportTooLarge) {
+		t.Fatalf("игра больше лимита: err = %v, want errReportTooLarge", err)
+	}
+	parts, err := splitReport(report, maxReportGames, len(envelope)+len(oneGame))
+	if err != nil || len(parts) != 3 {
+		t.Fatalf("по одной игре в запросе: parts = %d, err = %v", len(parts), err)
 	}
 }

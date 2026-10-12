@@ -1,9 +1,23 @@
 package compat
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 )
+
+// Лимиты запроса зеркалят сервер (typhon-backend, internal/compat/report.go:
+// MaxReportGames и MaxRequestBytes). Лишние игры сервер отклоняет 400, лишние
+// байты — 413, и оба отказа окончательные: тот же отчёт не пройдёт и со второй
+// попытки, поэтому крупный отчёт режется на запросы заранее.
+const (
+	maxReportGames = 500
+	maxReportBytes = 64 << 10
+)
+
+var errReportTooLarge = errors.New("compat: отчёт не помещается в лимит запроса")
 
 // Отчёт устроен так, чтобы в нём не было ни одного поля произвольной формы.
 // Всё, что уезжает, — либо слово из закрытого списка, либо строка, прошедшая
@@ -245,6 +259,66 @@ func (s *Service) buildReport(clientID, appVersion string, env Env, resolve func
 		},
 		Games: dedupeGames(games),
 	}, true
+}
+
+// splitReport режет отчёт на запросы, каждый из которых укладывается в лимиты
+// сервера. Сервер раскладывает наблюдения построчно по ключу (машина, игра,
+// сборка, окружение) и ничего не удаляет, поэтому несколько запросов с одним
+// client_id оставляют в базе то же, что один большой: ни одна игра не теряется,
+// и отбирать из журнала нечего. Порядок игр и общая часть отчёта сохраняются.
+//
+// Размер считается по сериализованным кускам, а итог каждого запроса ещё раз
+// проверяется по настоящему json.Marshal: расчёт, разошедшийся с сериализацией,
+// даёт отказ, а не запрос, который сервер оборвёт.
+func splitReport(r Report, maxGames, maxBytes int) ([]Report, error) {
+	head := r
+	head.Games = []GameReport{}
+	envelope, err := json.Marshal(head)
+	if err != nil {
+		return nil, fmt.Errorf("encode compat report envelope: %w", err)
+	}
+
+	var parts []Report
+	start, size := 0, len(envelope)
+	for i, g := range r.Games {
+		raw, err := json.Marshal(g)
+		if err != nil {
+			return nil, fmt.Errorf("encode compat report game %d: %w", i, err)
+		}
+		add := len(raw)
+		if i > start {
+			add++
+		}
+		if i > start && (i-start >= maxGames || size+add > maxBytes) {
+			parts = append(parts, reportPart(r, start, i))
+			start, size, add = i, len(envelope), len(raw)
+		}
+		if size+add > maxBytes {
+			return nil, fmt.Errorf("%w: игра %d занимает %d байт при лимите %d", errReportTooLarge, i, size+add, maxBytes)
+		}
+		size += add
+	}
+	if start < len(r.Games) {
+		parts = append(parts, reportPart(r, start, len(r.Games)))
+	}
+
+	for i, part := range parts {
+		body, err := json.Marshal(part)
+		if err != nil {
+			return nil, fmt.Errorf("encode compat report part %d: %w", i+1, err)
+		}
+		if len(body) > maxBytes || len(part.Games) > maxGames {
+			return nil, fmt.Errorf("%w: часть %d из %d занимает %d байт и %d игр при лимитах %d и %d",
+				errReportTooLarge, i+1, len(parts), len(body), len(part.Games), maxBytes, maxGames)
+		}
+	}
+	return parts, nil
+}
+
+func reportPart(r Report, from, to int) Report {
+	part := r
+	part.Games = r.Games[from:to:to]
+	return part
 }
 
 // dedupeGames сводит строки одной сборки в одну: сервер отклоняет отчёт
