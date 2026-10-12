@@ -26,6 +26,7 @@ function messages(): Record<string, string> {
     sync_disabled: msg('state.accountErrorSyncDisabled'),
     network_error: msg('state.accountErrorNetwork'),
     rate_limited: msg('state.accountErrorRateLimited'),
+    auth_busy: msg('state.accountErrorAuthBusy'),
     bad_request: msg('state.accountErrorBadRequest'),
     request_blocked: msg('state.accountErrorRequestBlocked'),
     user_not_found: msg('state.accountErrorUserNotFound'),
