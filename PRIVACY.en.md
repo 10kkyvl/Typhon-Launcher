@@ -104,6 +104,8 @@ As with any network request, the server can see the device's IP address and the 
 
 The server records in its log the method, request path, response code and processing time. Search queries, request bodies and IP addresses do not go into that log. Every request the app makes to the service carries the app version, the operating system and the processor architecture in its headers; they do not go into that log either.
 
+A reverse proxy sits in front of the service and the website and keeps its own access log: the time, the IP address, the method, the request address together with its query string (which can contain a search query), the response code, the processing time and the request headers. The account token and cookies do not go into that log: the proxy replaces them with a marker. The proxy log is used to investigate failures and to protect against abuse; it is kept for no longer than 7 days and then deleted.
+
 The IP address is used as a temporary rate-limiting key for requests made without an account: it is held in the service's memory, is not written to the database and is not linked to an account. For requests made with an account, the account identifier serves as that key instead of the address. The same kind of short-lived IP key is used for session state (section 8.1), so that one address cannot count as a thousand running launchers; it lives in the in-memory store and disappears together with the state.
 
 Catalog search strings — what the user types into the game search — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
@@ -226,6 +228,8 @@ The data is not used for advertising, marketing or profiling: no advertising or 
 Account and profile data, including the Terms acceptance records, is stored for as long as the account exists.
 
 Sessions have an expiry: once it passes, or once the user signs out, the session stops working. While a session is in use its expiry is extended: once less than half of it is left, it is moved forward by the length the session was issued for, but never past 180 days after sign-in, after which signing in again is required. Sessions issued for less than seven days are not extended. The session record itself — the token hash and the timestamps — remains in the database: there is currently no automatic deletion of such records.
+
+The reverse proxy access log (section 2.5) is kept for no longer than 7 days.
 
 An avatar is stored in object storage until it is replaced or deleted. On replacement and on deletion the previous file is deleted immediately.
 
