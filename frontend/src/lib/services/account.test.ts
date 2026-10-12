@@ -54,6 +54,7 @@ describe('account service errors', () => {
     ['invalid_email', 'email'],
     ['invalid_password', 'password'],
     ['rate_limited', ''],
+    ['auth_busy', ''],
     ['invalid_credentials', ''],
   ])('maps auth error %s to field %s', async (code, field) => {
     const { AccountError, login } = await import('./account');
@@ -225,6 +226,14 @@ describe('accountMessage', () => {
     const text = accountMessage('rate_limited', 'FALLBACK');
     expect(text).not.toBe('FALLBACK');
     expect(text).toContain('попыток');
+  });
+
+  it('tells a busy sign-in apart from a wrong password', async () => {
+    const { accountMessage } = await import('./accountMessages');
+    const text = accountMessage('auth_busy', 'FALLBACK');
+    expect(text).not.toBe('FALLBACK');
+    expect(text).not.toBe(accountMessage('invalid_credentials'));
+    expect(text).toContain('повторите');
   });
 });
 

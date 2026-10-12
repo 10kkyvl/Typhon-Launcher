@@ -52,6 +52,46 @@ func batchQueries(n int) []catalog.ReleaseQuery {
 	return queries
 }
 
+func TestSourceMatcherRetriesRateLimitedBatchWithoutOverlap(t *testing.T) {
+	var active, peak, requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := active.Add(1)
+		defer active.Add(-1)
+		for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+		}
+		titles := decodeBatch(t, r)
+		if requests.Add(1) == 1 {
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+			return
+		}
+		writeMatches(t, w, titles)
+	}))
+	defer server.Close()
+	client, err := New(server.URL, func() (string, error) { return "", nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	got, err := client.MatchReleases(ctx, batchQueries(250))
+	if err != nil || len(got) != 250 {
+		t.Fatalf("results=%d error=%v", len(got), err)
+	}
+	if n := requests.Load(); n != 4 {
+		t.Fatalf("server received %d requests, want 3 batches plus 1 retry", n)
+	}
+	if peak.Load() != 1 {
+		t.Fatalf("parallel requests=%d, want 1 even while a batch waits out Retry-After", peak.Load())
+	}
+	for i, match := range got {
+		if match.Game == nil || match.Game.ID != fmt.Sprint(i) {
+			t.Fatalf("query %d received %+v", i, match.Game)
+		}
+	}
+}
+
 func TestSourceMatcherReturnsPlainErrorWhenAllBatchesFail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
@@ -111,13 +151,9 @@ func TestSourceMatcherAbortsOutdatedEvenAfterPartialSuccess(t *testing.T) {
 }
 
 func TestSourceMatcherStopsDispatchingAfterThreeTransientFailures(t *testing.T) {
-	entered := make(chan struct{}, 3)
-	release := make(chan struct{})
 	var received atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received.Add(1)
-		entered <- struct{}{}
-		<-release
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
@@ -126,25 +162,13 @@ func TestSourceMatcherStopsDispatchingAfterThreeTransientFailures(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	done := make(chan struct{})
-	var got []catalog.ReleaseMatch
-	var matchErr error
-	go func() {
-		defer close(done)
-		got, matchErr = client.MatchReleases(context.Background(), batchQueries(1000))
-	}()
-
-	for range 3 {
-		<-entered
-	}
-	close(release)
-	<-done
+	got, matchErr := client.MatchReleases(context.Background(), batchQueries(1000))
 
 	if got != nil || matchErr == nil {
 		t.Fatalf("results=%v error=%v", got, matchErr)
 	}
-	if n := received.Load(); n < 3 || n > 5 {
-		t.Fatalf("server received %d of 10 batches, want dispatch cut short shortly after 3 failures", n)
+	if n := received.Load(); n != maxTransientBatchFailures {
+		t.Fatalf("server received %d of 10 batches, want dispatch cut after %d failures", n, maxTransientBatchFailures)
 	}
 }
 

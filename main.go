@@ -891,16 +891,32 @@ func compatStatsPath(configDir string) string {
 // compatEnv собирает окружение запуска. Сведение к тому, что можно отправлять,
 // делает сам compat: сюда попадают сырые значения, и это намеренно — так
 // вызывающему негде забыть их обезличить.
-func compatEnv() compat.Env {
-	env := compat.Env{}
-	if info, err := platform.GetSystemInfo(); err == nil {
-		env.OSVersion = info.OS
-		env.Chip = info.CPU
+func compatEnv() (compat.Env, error) {
+	return compatEnvFrom(platform.GetSystemInfo, wine.Detect)
+}
+
+// compatEnvFrom не подменяет ошибку пустым полем: окружение, которое не
+// определилось, отчёта не получает вовсе, а причину сообщает compat. Исключение
+// одно — wine.ErrNotInstalled: отсутствие CrossOver установленный факт, и
+// отчёт без него остаётся отчётом.
+func compatEnvFrom(
+	systemInfo func() (platform.SystemInfo, error),
+	detect func() (wine.Runtime, error),
+) (compat.Env, error) {
+	info, err := systemInfo()
+	if err != nil {
+		return compat.Env{}, fmt.Errorf("read system info: %w", err)
 	}
-	if rt, err := wine.Detect(); err == nil {
+	env := compat.Env{OSVersion: info.OS, Chip: info.CPU}
+	rt, err := detect()
+	switch {
+	case err == nil:
 		env.CrossOver = rt.Version
+	case errors.Is(err, wine.ErrNotInstalled):
+	default:
+		return compat.Env{}, fmt.Errorf("detect CrossOver: %w", err)
 	}
-	return env
+	return env, nil
 }
 
 func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, releaseID string) string {

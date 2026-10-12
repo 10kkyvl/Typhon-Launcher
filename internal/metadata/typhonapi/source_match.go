@@ -15,11 +15,16 @@ import (
 	"typhon/internal/metadata"
 )
 
-const maxTransientBatchFailures = 3
+const (
+	maxTransientBatchFailures = 3
+
+	// The server hands out three match-releases slots per process, shared by
+	// every user, so one launcher must not hold more than one of them.
+	matchBatchesInFlight = 1
+)
 
 func (c *Client) MatchReleases(ctx context.Context, queries []catalog.ReleaseQuery) ([]catalog.ReleaseMatch, error) {
-	// Large feeds need hundreds of batches. Keep a small bounded window in
-	// flight so network latency does not consume the source refresh deadline.
+	// Large feeds need hundreds of batches, sent one at a time.
 	// A transient batch failure costs only that batch; a fatal one aborts all.
 	out := make([]catalog.ReleaseMatch, len(queries))
 	ctx, cancel := context.WithCancel(ctx)
@@ -45,7 +50,7 @@ func (c *Client) MatchReleases(ctx context.Context, queries []catalog.ReleaseQue
 
 	jobs := make(chan int)
 	var workers sync.WaitGroup
-	for range min(3, batchCount) {
+	for range min(matchBatchesInFlight, batchCount) {
 		workers.Go(func() {
 			for start := range jobs {
 				if ctx.Err() != nil || stopDispatch.Load() {

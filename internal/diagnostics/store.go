@@ -17,7 +17,46 @@ import (
 const (
 	pendingVersion  = 1
 	maxPendingFiles = 20
+
+	serverMaxReportAge   = 30 * 24 * time.Hour
+	serverMaxReportAhead = 24 * time.Hour
+	reportWindowSlack    = time.Hour
 )
+
+// withinServerWindow drops what the server would refuse for its timestamp. The
+// server rejects the whole batch over one such report, so a file with a stale
+// report would otherwise be quarantined together with its valid neighbours.
+// The slack keeps a report that is on the edge from expiring in transit.
+func withinServerWindow(batch []reportPayload, now time.Time) (kept []reportPayload, dropped int) {
+	oldest := now.Add(-serverMaxReportAge + reportWindowSlack)
+	newest := now.Add(serverMaxReportAhead - reportWindowSlack)
+	kept = make([]reportPayload, 0, len(batch))
+	for _, r := range batch {
+		if r.Timestamp.IsZero() || r.Timestamp.Before(oldest) || r.Timestamp.After(newest) {
+			dropped++
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept, dropped
+}
+
+// sendablePending applies the rules of a fresh capture to reports read back
+// from disk: files written by an older launcher, or before an update to these
+// rules, would otherwise reach the server unchecked and be refused as a whole.
+func sendablePending(batch []reportPayload, now time.Time) (kept []reportPayload, dropped int) {
+	batch, dropped = withinServerWindow(batch, now)
+	kept = make([]reportPayload, 0, len(batch))
+	for _, r := range batch {
+		clean, err := sanitizeReport(Report(r))
+		if err != nil {
+			dropped++
+			continue
+		}
+		kept = append(kept, toPayload(clean))
+	}
+	return kept, dropped
+}
 
 func pendingDirFrom(configDir string) string {
 	if configDir == "" {
