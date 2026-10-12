@@ -63,8 +63,8 @@ func TestSourceMatcherBatchesAndRejectsPartialResponse(t *testing.T) {
 	}
 }
 
-func TestSourceMatcherBoundsParallelBatchesAndPreservesOrder(t *testing.T) {
-	entered := make(chan struct{}, 3)
+func TestSourceMatcherRunsOneBatchAtATimeAndPreservesOrder(t *testing.T) {
+	entered := make(chan struct{}, 8)
 	release := make(chan struct{})
 	var active, peak atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,20 +112,23 @@ func TestSourceMatcherBoundsParallelBatchesAndPreservesOrder(t *testing.T) {
 	done := make(chan struct{})
 	var got []catalog.ReleaseMatch
 	go func() { defer close(done); got, err = client.MatchReleases(ctx, queries) }()
-	for range 3 {
-		select {
-		case <-entered:
-		case <-ctx.Done():
-			t.Fatal("three batches did not run together")
-		}
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("the first batch did not start")
+	}
+	select {
+	case <-entered:
+		t.Fatal("a second batch started while the first was still in flight")
+	case <-time.After(200 * time.Millisecond):
 	}
 	close(release)
 	<-done
 	if err != nil || len(got) != len(queries) {
 		t.Fatalf("results=%d err=%v", len(got), err)
 	}
-	if peak.Load() != 3 {
-		t.Fatalf("parallel requests=%d", peak.Load())
+	if peak.Load() != 1 {
+		t.Fatalf("parallel requests=%d, want 1", peak.Load())
 	}
 	for i, match := range got {
 		if match.Game == nil || match.Game.ID != fmt.Sprint(i) {
@@ -135,7 +138,6 @@ func TestSourceMatcherBoundsParallelBatchesAndPreservesOrder(t *testing.T) {
 }
 
 func TestSourceMatcherKeepsOtherBatchesOnTransientFailure(t *testing.T) {
-	entered := make(chan struct{}, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Queries []catalog.ReleaseQuery `json:"queries"`
@@ -144,11 +146,7 @@ func TestSourceMatcherKeepsOtherBatchesOnTransientFailure(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		entered <- struct{}{}
 		if body.Queries[0].Titles[0] == "0" {
-			for range 2 {
-				<-entered
-			}
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
