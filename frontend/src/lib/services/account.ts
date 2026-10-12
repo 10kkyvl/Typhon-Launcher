@@ -166,6 +166,7 @@ const KNOWN_CODES = new Set([
   'invalid_profile',
   'invalid_bio',
   'rate_limited',
+  'auth_busy',
   'bad_request',
   'request_blocked',
   'user_not_found',

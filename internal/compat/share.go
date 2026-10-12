@@ -34,7 +34,7 @@ type Sharer struct {
 	// человек может выключить статистику в любой момент, и следующий круг
 	// цикла обязан это увидеть.
 	allowed func() bool
-	env     func() Env
+	env     func() (Env, error)
 	resolve func(localID string) (Build, bool)
 
 	firstReportDelay time.Duration
@@ -44,11 +44,19 @@ type Sharer struct {
 
 	mu       sync.Mutex
 	lastSent string
+	// rejected — отпечаток отчёта, который сервер отклонил окончательно. Тот же
+	// отчёт не пройдёт и со второй попытки, поэтому его не повторяют каждые
+	// десять минут: хватит нового запуска или изменения журнала.
+	rejected string
 
 	// noReport пишет в лог один раз за запуск: на Windows отчёта не бывает
 	// по замыслу, а на маке без версии системы это сбой, который иначе ничем
 	// не виден — отказ от отправки молчит.
 	noReport sync.Once
+
+	// noEnv — то же для окружения, которое не удалось определить: причина
+	// отказа в логе нужна, но повторять её каждые десять минут незачем.
+	noEnv sync.Once
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -59,7 +67,7 @@ func NewSharer(
 	stats *Stats,
 	baseURL, clientID, appVersion string,
 	allowed func() bool,
-	env func() Env,
+	env func() (Env, error),
 	resolve func(localID string) (Build, bool),
 ) (*Sharer, error) {
 	switch {
@@ -155,7 +163,13 @@ func (s *Sharer) sendOnce(ctx context.Context) {
 	if !s.allowed() {
 		return
 	}
-	env := s.env()
+	env, err := s.env()
+	if err != nil {
+		s.noEnv.Do(func() {
+			slog.Warn("compat report not sent: environment unknown", "error", err)
+		})
+		return
+	}
 	report, ok := s.journal.buildReport(s.clientID, s.appVersion, env, s.resolve)
 	if !ok {
 		s.noReport.Do(func() {
@@ -172,22 +186,46 @@ func (s *Sharer) sendOnce(ctx context.Context) {
 		return
 	}
 	s.mu.Lock()
-	same := fingerprint == s.lastSent
+	same := fingerprint == s.lastSent || fingerprint == s.rejected
 	s.mu.Unlock()
 	if same {
 		return
 	}
 
-	sendCtx, cancel := context.WithTimeout(ctx, s.sendTimeout)
-	defer cancel()
-	if err := s.client.send(sendCtx, report); err != nil {
-		slog.Warn("send compat report", "error", err)
+	parts, err := splitReport(report, maxReportGames, maxReportBytes)
+	if err != nil {
+		slog.Warn("compat report cannot be split into requests, not retrying until it changes", "error", err)
+		s.reject(fingerprint)
 		return
+	}
+	for i, part := range parts {
+		if err := s.sendPart(ctx, part); err != nil {
+			if rejectedForGood(err) {
+				slog.Warn("compat report rejected by the server, not retrying until it changes",
+					"part", i+1, "parts", len(parts), "error", err)
+				s.reject(fingerprint)
+				return
+			}
+			slog.Warn("send compat report", "part", i+1, "parts", len(parts), "error", err)
+			return
+		}
 	}
 	s.mu.Lock()
 	s.lastSent = fingerprint
 	s.mu.Unlock()
-	slog.Info("compat report sent", "games", len(report.Games))
+	slog.Info("compat report sent", "games", len(report.Games), "requests", len(parts))
+}
+
+func (s *Sharer) sendPart(ctx context.Context, part Report) error {
+	sendCtx, cancel := context.WithTimeout(ctx, s.sendTimeout)
+	defer cancel()
+	return s.client.send(sendCtx, part)
+}
+
+func (s *Sharer) reject(fingerprint string) {
+	s.mu.Lock()
+	s.rejected = fingerprint
+	s.mu.Unlock()
 }
 
 func (s *Sharer) refreshStats(ctx context.Context) {

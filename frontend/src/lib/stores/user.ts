@@ -197,6 +197,7 @@ const ACCOUNT_INTACT_CODES = new Set([
   'bad_request',
   'unauthenticated',
   'rate_limited',
+  'auth_busy',
   'network_error',
 ]);
 

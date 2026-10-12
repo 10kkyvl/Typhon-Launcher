@@ -122,6 +122,7 @@ export const state = {
   'state.accountErrorSyncDisabled': 'Включите синхронизацию аккаунта в настройках',
   'state.accountErrorNetwork': 'Нет связи с сервером',
   'state.accountErrorRateLimited': 'Слишком много попыток, подождите немного и повторите',
+  'state.accountErrorAuthBusy': 'Сервер сейчас занят входами, повторите через пару секунд',
   'state.accountErrorBadRequest': 'Сервер отклонил запрос',
   'state.accountErrorRequestBlocked': 'Запрос заблокирован на подступах к серверу. Если повторится, опишите проблему в разделе «Поддержка»',
   'state.accountErrorUserNotFound': 'Пользователь не найден',
