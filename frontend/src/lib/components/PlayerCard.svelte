@@ -90,6 +90,7 @@
   }
 
   .body {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
