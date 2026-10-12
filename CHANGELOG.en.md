@@ -6,7 +6,7 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
-## 1.0.1 — 2026-10-12
+## 1.0.1 — 2026-10-13
 Error reports and compatibility statistics no longer get lost on the way, and a busy sign-in tells you what to do.
 
 ### Changed
@@ -15,6 +15,7 @@ Error reports and compatibility statistics no longer get lost on the way, and a 
 ### Fixed
 - Error reports sent with "Anonymous diagnostics" turned on in the settings now arrive in full: the server used to refuse some of them — after the computer woke from sleep, for example — and they were lost
 - On macOS, game compatibility statistics (sent only with "Anonymous usage statistics" turned on) also get through for people who have launched more than 500 games: the server used to refuse such a report, and the launcher kept resending it every 10 minutes
+- The player card that opens when you hover over a friend in the friends list shows the whole name — before, the profile cover hid the top half of the letters
 
 ## 1.0.0 — 2026-10-11
 A new interface, a profile you build yourself and support right inside the launcher. The launcher's online status can now be turned off, and without consent to usage statistics it no longer tells the server which computer it is or what you are playing.
