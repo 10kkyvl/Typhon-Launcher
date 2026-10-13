@@ -41,6 +41,9 @@ function messages(): Record<string, string> {
     reaction_invalid: msg('state.accountErrorReactionInvalid'),
     internal: msg('state.accountErrorInternal'),
     server_error: msg('state.accountErrorServerError'),
+    credential_store_error: msg('state.accountErrorCredentialStore'),
+    account_suspended: msg('state.accountErrorSuspended'),
+    email_undeliverable: msg('state.accountErrorEmailUndeliverable'),
   };
 }
 

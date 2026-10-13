@@ -129,8 +129,8 @@ func TestGetCurrentUserSeparatesNoSessionFromABrokenVault(t *testing.T) {
 	t.Run("vault failure", func(t *testing.T) {
 		store := &fakeStore{loadErr: errors.New("vault locked")}
 		_, err := startedService(t, store, srv.URL).GetCurrentUser()
-		if got := codeOf(t, err); got != CodeServer {
-			t.Fatalf("code = %q, want %q", got, CodeServer)
+		if got := codeOf(t, err); got != CodeVaultError {
+			t.Fatalf("code = %q, want %q", got, CodeVaultError)
 		}
 	})
 }

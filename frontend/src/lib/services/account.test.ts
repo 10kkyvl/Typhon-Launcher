@@ -228,6 +228,18 @@ describe('accountMessage', () => {
     expect(text).toContain('попыток');
   });
 
+  it('names a suspended account and an undeliverable address instead of blaming the server', async () => {
+    const { accountMessage } = await import('./accountMessages');
+    const { toAccountError } = await import('./account');
+    for (const code of ['account_suspended', 'email_undeliverable', 'credential_store_error']) {
+      expect(toAccountError(new Error(code)).code).toBe(code);
+      const text = accountMessage(code, 'FALLBACK');
+      expect(text).not.toBe('FALLBACK');
+      expect(text).not.toBe(accountMessage('server_error'));
+    }
+    expect(toAccountError(new Error('email_undeliverable')).field).toBe('email');
+  });
+
   it('tells a busy sign-in apart from a wrong password', async () => {
     const { accountMessage } = await import('./accountMessages');
     const text = accountMessage('auth_busy', 'FALLBACK');

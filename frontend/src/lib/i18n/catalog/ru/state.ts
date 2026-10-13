@@ -135,6 +135,9 @@ export const state = {
   'state.accountErrorReactionInvalid': 'Неизвестная реакция',
   'state.accountErrorInternal': 'Ошибка на стороне сервера, попробуйте позже',
   'state.accountErrorServerError': 'Сервер ответил непонятным образом, попробуйте позже',
+  'state.accountErrorCredentialStore': 'Не удалось прочитать сохранённый вход из системного хранилища, войдите заново',
+  'state.accountErrorSuspended': 'Аккаунт заблокирован. Подробности — в разделе «Поддержка»',
+  'state.accountErrorEmailUndeliverable': 'Этот адрес не может получать почту, укажите другой',
   'state.accountErrorGeneric': 'Не удалось выполнить операцию',
 
   'state.accountSyncReasonUnauthenticated': 'Сессия аккаунта истекла — войдите заново, чтобы синхронизировать данные.',

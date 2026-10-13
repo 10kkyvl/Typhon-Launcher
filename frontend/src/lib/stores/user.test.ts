@@ -364,6 +364,18 @@ describe('deleteAccount', () => {
     expect(get(userStore.currentUser)).toBeNull();
   });
 
+  it('keeps the session when the request never reached the account', async () => {
+    for (const code of ['request_blocked', 'launcher_outdated', 'terms_required', 'credential_store_error']) {
+      const { accountMock, userStore } = await signedIn();
+      vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError(code));
+
+      await expect(userStore.deleteAccount('password')).rejects.toMatchObject({ code });
+
+      expect(get(userStore.authState), code).toBe('authenticated');
+      expect(accountMock.fetchCurrentUser).not.toHaveBeenCalled();
+    }
+  });
+
   it('signs out after a generic failure when the session no longer exists on the server', async () => {
     const { accountMock, userStore } = await signedIn();
     vi.mocked(accountMock.deleteAccount).mockRejectedValue(new accountMock.AccountError('server_error'));
