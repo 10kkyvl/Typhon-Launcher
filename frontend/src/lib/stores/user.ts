@@ -199,6 +199,11 @@ const ACCOUNT_INTACT_CODES = new Set([
   'rate_limited',
   'auth_busy',
   'network_error',
+  'request_blocked',
+  'launcher_outdated',
+  'terms_required',
+  'account_suspended',
+  'credential_store_error',
 ]);
 
 // A non-contract failure from the Go service arrives as server_error, whether the

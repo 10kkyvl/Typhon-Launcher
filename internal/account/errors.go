@@ -23,6 +23,7 @@ const (
 	CodeInternal          = "internal"
 	CodeNetwork           = "network_error"
 	CodeServer            = "server_error"
+	CodeVaultError        = "credential_store_error"
 	CodeOutdated          = "launcher_outdated"
 	CodeTermsRequired     = "terms_required"
 )

@@ -295,8 +295,8 @@ func TestClientTokenLookupFailureIsNotASignOut(t *testing.T) {
 	boom := errors.New("credential vault is locked")
 	c := newTestClient(t, srv.URL, func() (string, error) { return "", boom })
 	_, err := c.Me(t.Context())
-	if got := codeOf(t, err); got != CodeServer {
-		t.Fatalf("code = %q, want %q: a broken vault is not a missing session", got, CodeServer)
+	if got := codeOf(t, err); got != CodeVaultError {
+		t.Fatalf("code = %q, want %q: a broken vault is not a missing session", got, CodeVaultError)
 	}
 	if !errors.Is(err, boom) {
 		t.Fatalf("error = %v, want it to unwrap to the vault failure", err)

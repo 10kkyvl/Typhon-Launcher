@@ -446,8 +446,8 @@ func TestClientTokenFailureIsNotUnauthenticated(t *testing.T) {
 	c := newTestClient(t, api.server.URL, func() (string, error) { return "", broken })
 
 	_, err := c.Unread(context.Background())
-	if apiErr := apiCode(t, err); apiErr.Code != account.CodeServer || !errors.Is(err, broken) {
-		t.Fatalf("error = %+v, want a server error wrapping the keychain failure", err)
+	if apiErr := apiCode(t, err); apiErr.Code != account.CodeVaultError || !errors.Is(err, broken) {
+		t.Fatalf("error = %+v, want a vault error wrapping the keychain failure", err)
 	}
 	if n := len(api.requests()); n != 0 {
 		t.Fatalf("%d requests went out", n)

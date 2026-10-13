@@ -138,6 +138,9 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorReactionInvalid': 'Unknown reaction',
   'state.accountErrorInternal': 'Server-side error, try again later',
   'state.accountErrorServerError': 'The server returned an unexpected response, try again later',
+  'state.accountErrorCredentialStore': 'Could not read the saved sign-in from the system credential store — sign in again',
+  'state.accountErrorSuspended': 'This account is suspended. See the Support section for details',
+  'state.accountErrorEmailUndeliverable': 'This address cannot receive mail — use another one',
   'state.accountErrorGeneric': 'Failed to complete the action',
 
   'state.accountSyncReasonUnauthenticated': 'Your account session expired — sign in again to sync your data.',

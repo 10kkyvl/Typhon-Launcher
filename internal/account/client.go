@@ -267,6 +267,9 @@ func (c *Client) doUser(
 	if err := json.NewDecoder(limited).Decode(&user); err != nil {
 		return CurrentUser{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: fmt.Errorf("decode response body: %w", err)}
 	}
+	if user.ID == "" {
+		return CurrentUser{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: errors.New("user reply has no id")}
+	}
 	return withProfileDefaults(user), nil
 }
 
@@ -277,7 +280,7 @@ func (c *Client) resolveToken() (string, error) {
 			return "", &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized}
 		}
 		slog.Error("resolve api token", "error", err)
-		return "", &Error{Code: CodeServer, cause: err}
+		return "", &Error{Code: CodeVaultError, cause: err}
 	}
 	return tok, nil
 }

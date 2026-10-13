@@ -6,6 +6,20 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.0.2 — 2026-10-13
+The sign-in screen says what exactly went wrong, and deleting your account no longer throws you out of it when the request never reached the server.
+
+### Changed
+- On the sign-in and registration screens an empty field is no longer sent to the server: the launcher highlights what needs filling in and does not spend your attempt budget on it
+- While a sign-in or registration is in progress you cannot switch between the two — before, the reply could land on the other screen and an error about a taken address ended up under the wrong field
+
+### Fixed
+- If the account is suspended, the sign-in screen says so and points to the Support section — before, it showed a generic server error and people kept trying to sign in
+- When registering with an address that cannot receive mail, the hint sits next to the address field instead of the general error
+- Deleting the account in the profile settings no longer drops you to the sign-in screen when the request never reached the server — for example, when the edge protection rejected it or a newer launcher is required: the account and the sign-in stay in place
+- If the saved sign-in cannot be read from the system credential store, the launcher says so in its own words instead of reporting a server error
+- An empty server reply about the profile is no longer taken for a successful sign-in
+
 ## 1.0.1 — 2026-10-13
 Error reports and compatibility statistics no longer get lost on the way, and a busy sign-in tells you what to do.
 

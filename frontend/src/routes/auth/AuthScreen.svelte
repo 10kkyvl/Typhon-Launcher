@@ -23,6 +23,7 @@
   const offline = $derived($authState === 'unavailable');
 
   function switchView(view: 'login' | 'register') {
+    if (busy) return;
     errors = {};
     password = '';
     authView.set(view);
@@ -157,6 +158,7 @@
               class:invalid={!!errors.email}
               type="email"
               autocomplete="email"
+              required
               bind:value={email}
               disabled={busy}
             />
@@ -171,6 +173,7 @@
               type="text"
               maxlength="24"
               autocomplete="username"
+              required
               bind:value={username}
               disabled={busy}
             />
@@ -185,6 +188,7 @@
               type="text"
               maxlength="32"
               autocomplete="nickname"
+              required
               bind:value={displayName}
               disabled={busy}
             />
@@ -198,6 +202,7 @@
               class:invalid={!!errors.username}
               type="text"
               autocomplete="username"
+              required
               bind:value={identifier}
               disabled={busy}
             />
@@ -212,6 +217,7 @@
             class:invalid={!!errors.password}
             type="password"
             autocomplete={isRegister ? 'new-password' : 'current-password'}
+            required
             bind:value={password}
             disabled={busy}
           />
@@ -242,10 +248,10 @@
       <p class="switch">
         {#if isRegister}
           {msg('transfers.authHaveAccount')}
-          <button class="link" type="button" onclick={() => switchView('login')}>{msg('transfers.authSignInAction')}</button>
+          <button class="link" type="button" disabled={busy} onclick={() => switchView('login')}>{msg('transfers.authSignInAction')}</button>
         {:else}
           {msg('transfers.authNoAccount')}
-          <button class="link" type="button" onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</button>
+          <button class="link" type="button" disabled={busy} onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</button>
         {/if}
       </p>
       </div>

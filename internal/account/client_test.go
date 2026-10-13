@@ -307,6 +307,57 @@ func TestClientUndecodableSuccessBody(t *testing.T) {
 	}
 }
 
+func TestClientSuccessWithoutUserIsAnError(t *testing.T) {
+	for _, body := range []string{"{}", "null", `{"username":"egor"}`} {
+		t.Run(body, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				if _, err := io.WriteString(w, body); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer srv.Close()
+
+			c := newTestClient(t, srv.URL, tokenOK("t"))
+			user, err := c.Me(context.Background())
+			var accErr *Error
+			if !errors.As(err, &accErr) || accErr.Code != CodeServer {
+				t.Fatalf("Me() = %+v, %v; want a %s error for a reply without a user id", user, err, CodeServer)
+			}
+			if !reflect.DeepEqual(user, CurrentUser{}) {
+				t.Fatalf("expected zero user on error, got %+v", user)
+			}
+		})
+	}
+}
+
+func TestClientCredentialStoreFailureIsNotAServerError(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cause := errors.New("access denied")
+	c := newTestClient(t, srv.URL, func() (string, error) { return "", cause })
+	_, err := c.Me(context.Background())
+	var accErr *Error
+	if !errors.As(err, &accErr) {
+		t.Fatalf("expected *Error, got %v", err)
+	}
+	if accErr.Code != CodeVaultError {
+		t.Fatalf("code = %q, want %q", accErr.Code, CodeVaultError)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("the cause is lost: %v", err)
+	}
+	if requests != 0 {
+		t.Fatalf("expected zero requests, got %d", requests)
+	}
+}
+
 func TestClientMissingToken(t *testing.T) {
 	requests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
