@@ -12,7 +12,7 @@
 
 Для Windows и Mac на Apple Silicon. Библиотекой можно пользоваться без регистрации.
 
-![Библиотека Typhon: продолжить игру, недавние запуски и коллекция с обложками](.github/screenshots/library.webp)
+![Библиотека Typhon: продолжить игру, недавние запуски и коллекция с обложками](.github/screenshots/ru/library.webp)
 
 ## Почему стоит попробовать
 
@@ -27,7 +27,7 @@
 
 | Коллекция | Страница игры |
 |---|---|
-| ![Каталог с обложками и поиском](.github/screenshots/catalog.webp) | ![Описание игры и доступное обновление](.github/screenshots/game.webp) |
+| ![Каталог с обложками и поиском](.github/screenshots/ru/catalog.webp) | ![Страница игры с описанием и сведениями](.github/screenshots/ru/game.webp) |
 
 ## Начать просто
 

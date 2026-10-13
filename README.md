@@ -12,7 +12,7 @@ Think of a game, open your library, pick up where you left off. Typhon brings yo
 
 For Windows and Apple Silicon Macs. No account needed to use your library.
 
-![Your Typhon library: continue playing, recent sessions and a collection with covers](.github/screenshots/library.webp)
+![Your Typhon library: continue playing, recent sessions and a collection with covers](.github/screenshots/en/library.webp)
 
 ## Why try it?
 
@@ -27,7 +27,7 @@ The interface is available in English and Russian, with themes, playtime trackin
 
 | Your collection | A closer look |
 |---|---|
-| ![Browse games with covers and search](.github/screenshots/catalog.webp) | ![Game details and an available update](.github/screenshots/game.webp) |
+| ![Browse games with covers and search](.github/screenshots/en/catalog.webp) | ![Game page with a description and details](.github/screenshots/en/game.webp) |
 
 ## Get started
 
