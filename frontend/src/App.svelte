@@ -10,6 +10,7 @@
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
   import GameCrashModal from './lib/components/GameCrashModal.svelte';
   import RedistModal from './lib/components/RedistModal.svelte';
+  import CloudConflictModal from './lib/components/CloudConflictModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
@@ -30,6 +31,7 @@
   import { initMoves } from './lib/stores/relocate';
   import { initPresence } from './lib/stores/presence';
   import { initSaveBackups } from './lib/stores/savebackup';
+  import { initCloudSaves } from './lib/stores/cloudsaves';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
@@ -78,6 +80,7 @@
   initPresence();
   initSaveBackups();
   initCollections();
+  onDestroy(initCloudSaves());
   initLegalAcceptance();
 
   let lastGamesPath: string | undefined;
@@ -141,6 +144,7 @@
       <GamePropertiesModal />
       <GameCrashModal />
       <RedistModal />
+      <CloudConflictModal />
       {#if $leaveRequest}
         <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
       {/if}

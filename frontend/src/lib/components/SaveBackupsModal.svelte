@@ -5,10 +5,12 @@
   import Modal from './Modal.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
   import StatusBadge from './StatusBadge.svelte';
-  import { deleteSaveBackupPrompt, restoreSavesPrompt } from '../confirm/prompts';
+  import { deleteCloudSavesPrompt, pullCloudSavesPrompt, deleteSaveBackupPrompt, restoreSavesPrompt } from '../confirm/prompts';
   import { chooseSavesDir } from '../game/actions/saves';
+  import { cloudCodeText, cloudErrorText, cloudStateKind, cloudStateLabel } from '../cloudsaves/messages';
   import { errorCode, msg } from '../i18n';
   import { saveBackupErrorText, snapshotKindLabel, snapshotWhen } from '../savebackup/messages';
+  import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
   import { locateSaves, setSavesDir, type SavesResult } from '../services/library';
   import {
     createBackup,
@@ -19,11 +21,15 @@
     type Snapshot,
   } from '../services/savebackup';
   import { openFolder } from '../services/settings';
-  import { runningGames } from '../stores/library';
+  import { cloudStatus, openCloudConflict, refreshCloudStatus } from '../stores/cloudsaves';
+  import { libraryGames, runningGames } from '../stores/library';
+  import { navigate } from '../stores/router';
+  import { settings } from '../stores/settings';
   import { closeSaveBackups, saveBackupTarget } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
+  import { authState } from '../stores/user';
   import { errorMessage } from '../utils/errors';
-  import { bytesSize } from '../utils/format';
+  import { bytesSize, dateTime } from '../utils/format';
 
   interface Pending {
     kind: 'restore' | 'delete';
@@ -32,6 +38,17 @@
 
   const target = $derived($saveBackupTarget);
   const gameRunning = $derived(target ? $runningGames.has(target.gameId) : false);
+  const canonicalId = $derived(
+    target ? ($libraryGames.find((g) => g.id === target.gameId)?.canonicalGameId ?? '') : '',
+  );
+  const cloudEnabled = $derived($settings?.cloudSaves ?? false);
+  const cloudSignedIn = $derived($authState === 'authenticated');
+  const cloudGame = $derived(target ? $cloudStatus?.games.find((g) => g.gameId === target.gameId) : undefined);
+  const cloudReason = $derived(cloudGame?.code ? cloudCodeText(cloudGame.code, '') : '');
+  const cloudSyncedAt = $derived.by(() => {
+    const value = cloudGame?.syncedAt ? new Date(cloudGame.syncedAt) : null;
+    return value && !Number.isNaN(value.getTime()) && value.getFullYear() > 1 ? dateTime(value) : '';
+  });
 
   let snapshots = $state<Snapshot[]>([]);
   let listLoading = $state(false);
@@ -44,6 +61,10 @@
   let failure = $state('');
   let pending = $state<Pending | null>(null);
   let candidatesOpen = $state(false);
+  let cloudBusy = $state(false);
+  let cloudFailure = $state('');
+  let cloudDeleteAsked = $state(false);
+  let cloudPullAsked = $state(false);
 
   let loadedFor = '';
   let listSeq = 0;
@@ -67,6 +88,10 @@
       failure = '';
       pending = null;
       candidatesOpen = false;
+      cloudFailure = '';
+      cloudDeleteAsked = false;
+      cloudPullAsked = false;
+      void refreshCloudStatus();
       void loadList(current.gameId);
       void loadSaves(current.gameId);
     });
@@ -188,6 +213,60 @@
     else await remove(current.snapshot);
   }
 
+  async function cloudSync() {
+    if (!target || cloudBusy) return;
+    const { gameId } = target;
+    cloudBusy = true;
+    cloudFailure = '';
+    try {
+      await cloudSyncNow(gameId);
+      toast(msg('cloudsaves.syncDone'), 'success');
+    } catch (err) {
+      cloudFailure = cloudErrorText(err);
+    } finally {
+      cloudBusy = false;
+      await refreshCloudStatus();
+    }
+  }
+
+  async function cloudPull() {
+    if (!target || cloudBusy) return;
+    const { gameId } = target;
+    cloudBusy = true;
+    cloudFailure = '';
+    try {
+      await cloudPullRemote(gameId);
+      toast(msg('cloudsaves.pulled'), 'success');
+    } catch (err) {
+      cloudFailure = cloudErrorText(err);
+    } finally {
+      cloudBusy = false;
+      await refreshCloudStatus();
+      await loadList(gameId);
+    }
+  }
+
+  async function cloudDelete() {
+    if (!target || cloudBusy) return;
+    const { gameId } = target;
+    cloudBusy = true;
+    cloudFailure = '';
+    try {
+      await cloudDeleteRemote(gameId);
+      toast(msg('cloudsaves.deleted'), 'success');
+    } catch (err) {
+      cloudFailure = cloudErrorText(err);
+    } finally {
+      cloudBusy = false;
+      await refreshCloudStatus();
+    }
+  }
+
+  function openCloudSettings() {
+    closeSaveBackups();
+    navigate('settings', { tab: 'downloads' });
+  }
+
   function openSaves() {
     const path = saves?.path;
     if (!path) return;
@@ -253,6 +332,59 @@
           <p class="hint">{saves && saves.unreadable > 0 ? msg('ui.savesPartialUnreadable') : msg('ui.savesNotFound')}</p>
           <div class="actions">
             <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="field">
+        <span class="field-label">{msg('cloudsaves.sectionTitle')}</span>
+        {#if !cloudEnabled}
+          <p class="hint">{msg('cloudsaves.disabledHint')}</p>
+          <div class="actions">
+            <Button size="sm" onclick={openCloudSettings}>{msg('cloudsaves.openSettings')}</Button>
+          </div>
+        {:else if !cloudSignedIn}
+          <p class="hint">{msg('cloudsaves.needsAccount')}</p>
+        {:else if !canonicalId}
+          <p class="hint">{cloudCodeText('cloud.no_canonical_id', msg('cloudsaves.fallback'))}</p>
+        {:else}
+          <div class="cloud-state">
+            {#if cloudGame}
+              <StatusBadge kind={cloudStateKind(cloudGame.state)} label={cloudStateLabel(cloudGame.state)} />
+            {:else}
+              <span class="hint">{msg('cloudsaves.stateNone')}</span>
+            {/if}
+            {#if cloudSyncedAt}
+              <span class="snapshot-meta">{msg('cloudsaves.syncedAt', { date: cloudSyncedAt })}</span>
+            {/if}
+          </div>
+          {#if cloudReason}
+            <p class={cloudGame?.state === 'failed' ? 'failure' : 'hint'}>{cloudReason}</p>
+          {/if}
+          {#if cloudFailure}
+            <p class="failure">{cloudFailure}</p>
+          {/if}
+          <div class="actions">
+            <Button size="sm" disabled={cloudBusy} onclick={cloudSync}>
+              {cloudBusy
+                ? msg('cloudsaves.syncing')
+                : cloudGame?.code === 'cloud.excluded'
+                  ? msg('cloudsaves.enableAgain')
+                  : msg('cloudsaves.syncNow')}
+            </Button>
+            {#if cloudGame?.state === 'conflict'}
+              <Button size="sm" variant="primary" disabled={cloudBusy} onclick={() => target && openCloudConflict(target.gameId)}>
+                {msg('cloudsaves.resolve')}
+              </Button>
+            {/if}
+            {#if cloudGame && cloudGame.state !== 'conflict' && cloudGame.code !== 'cloud.excluded'}
+              <Button size="sm" disabled={cloudBusy || gameRunning} onclick={() => (cloudPullAsked = true)}>
+                {msg('cloudsaves.pull')}
+              </Button>
+            {/if}
+            <Button size="sm" variant="danger" disabled={cloudBusy} onclick={() => (cloudDeleteAsked = true)}>
+              {msg('cloudsaves.deleteRemote')}
+            </Button>
           </div>
         {/if}
       </div>
@@ -334,6 +466,14 @@
   />
 {/if}
 
+{#if cloudPullAsked}
+  <ConfirmModal prompt={pullCloudSavesPrompt()} onconfirm={cloudPull} onclose={() => (cloudPullAsked = false)} />
+{/if}
+
+{#if cloudDeleteAsked}
+  <ConfirmModal prompt={deleteCloudSavesPrompt()} onconfirm={cloudDelete} onclose={() => (cloudDeleteAsked = false)} />
+{/if}
+
 {#if pending}
   <ConfirmModal
     prompt={pending.kind === 'restore' ? restoreSavesPrompt() : deleteSaveBackupPrompt(snapshotWhen(pending.snapshot))}
@@ -384,6 +524,13 @@
     margin: 0;
     font-size: var(--font-xs);
     color: var(--warning);
+  }
+
+  .cloud-state {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
   }
 
   .actions {

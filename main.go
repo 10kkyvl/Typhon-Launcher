@@ -18,6 +18,7 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/cloudsaves"
 	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
@@ -141,6 +142,7 @@ func init() {
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
 	application.RegisterEvent[savebackup.Event](savebackup.EventName)
+	application.RegisterEvent[cloudsaves.Event](cloudsaves.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
@@ -388,6 +390,28 @@ func main() {
 	if err != nil {
 		fatal("start save backup service", err)
 	}
+	cloudClient, err := account.NewClient(account.BaseURL(), accountService.SessionToken)
+	if err != nil {
+		fatal("start cloud saves client", err)
+	}
+	cloudSavesService, err := cloudsaves.NewService(
+		configDir,
+		settingsService.GetSettings,
+		accountService.SessionToken,
+		func(token string) (string, error) {
+			id := accountService.SyncAccountID(token)
+			if id == "" {
+				return "", errors.New("account id is not bound to the session yet")
+			}
+			return id, nil
+		},
+		cloudClient,
+		libraryService,
+		saveBackupService,
+	)
+	if err != nil {
+		fatal("start cloud saves service", err)
+	}
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
@@ -501,6 +525,8 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
+	libraryService.AddSessionWatcher(cloudSavesService)
+	settingsService.Subscribe(cloudSavesService.SettingsChanged)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
@@ -620,6 +646,7 @@ func main() {
 		application.NewService(searchService),
 		application.NewService(updateService),
 		application.NewService(saveBackupService),
+		application.NewService(cloudSavesService),
 		application.NewService(metadataService),
 		application.NewService(discoveryService),
 		application.NewService(discordService),

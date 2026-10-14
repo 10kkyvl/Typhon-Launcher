@@ -45,7 +45,7 @@ const (
 // a pre-restore copy identical to the newest snapshot adds nothing, while a
 // manual or update copy is something the player or the update asked for.
 func dedupFor(kind Kind) dedupMode {
-	if kind == KindSession || kind == KindPreRestore {
+	if kind == KindSession || kind == KindPreRestore || kind == KindCloud {
 		return dedupLatest
 	}
 	return dedupNone
@@ -72,7 +72,7 @@ func validName(s string) bool {
 	return true
 }
 
-var snapshotIDPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-(manual|session|update|pre-restore)(-[0-9]+)?$`)
+var snapshotIDPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-(manual|session|update|pre-restore|cloud)(-[0-9]+)?$`)
 
 // validSnapshotID accepts exactly the shape reserveID generates, so that no
 // other file in a game directory (the restore journal, a stray file) can be
@@ -343,7 +343,7 @@ func brokenSnapshot(gameID, id, dir string, cause error) Snapshot {
 			snap.CreatedAt = at.UTC()
 		}
 		rest := strings.TrimPrefix(id[len(idTimeLayout):], "-")
-		for _, kind := range []Kind{KindPreRestore, KindManual, KindSession, KindUpdate} {
+		for _, kind := range []Kind{KindPreRestore, KindManual, KindSession, KindUpdate, KindCloud} {
 			if strings.HasPrefix(rest, string(kind)) {
 				snap.Kind = kind
 				break

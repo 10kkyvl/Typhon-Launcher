@@ -67,6 +67,10 @@ type Client struct {
 	token      func() (string, error)
 	httpClient *http.Client
 	uploadHTTP *http.Client
+	// transferHTTP carries save archives, whose duration depends on the size and
+	// the link: it has no overall timeout and the caller bounds each transfer
+	// with a context deadline.
+	transferHTTP *http.Client
 }
 
 func newTransport() *http.Transport {
@@ -109,6 +113,10 @@ func NewClient(baseURL string, token func() (string, error)) (*Client, error) {
 		},
 		uploadHTTP: &http.Client{
 			Timeout:       120 * time.Second,
+			Transport:     newTransport(),
+			CheckRedirect: CheckRedirect,
+		},
+		transferHTTP: &http.Client{
 			Transport:     newTransport(),
 			CheckRedirect: CheckRedirect,
 		},
@@ -293,6 +301,18 @@ func (c *Client) do(
 	hc *http.Client,
 	token string,
 ) (*http.Response, error) {
+	return c.doWith(ctx, method, path, body, contentType, hc, token, nil)
+}
+
+func (c *Client) doWith(
+	ctx context.Context,
+	method, path string,
+	body io.Reader,
+	contentType string,
+	hc *http.Client,
+	token string,
+	adjust func(*http.Request),
+) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return nil, fmt.Errorf("build request %s %s: %w", method, path, err)
@@ -305,6 +325,9 @@ func (c *Client) do(
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("X-Typhon-Version", app.Version)
+	if adjust != nil {
+		adjust(req)
+	}
 
 	resp, err := hc.Do(req)
 	if err != nil {

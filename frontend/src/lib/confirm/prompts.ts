@@ -154,3 +154,21 @@ export function deleteSaveBackupPrompt(date: string): ConfirmPrompt {
     busy: msg('saves.deleting'),
   };
 }
+
+export function pullCloudSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('cloudsaves.pullTitle'),
+    text: msg('cloudsaves.pullText'),
+    confirm: msg('cloudsaves.pull'),
+    busy: msg('cloudsaves.pulling'),
+  };
+}
+
+export function deleteCloudSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('cloudsaves.deleteTitle'),
+    text: msg('cloudsaves.deleteText'),
+    confirm: msg('cloudsaves.deleteRemote'),
+    busy: msg('cloudsaves.deleting'),
+  };
+}
