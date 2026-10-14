@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import source from './Library.svelte?raw';
+import { libraryErrorText } from '../../lib/library/errors';
 
 describe('Library error toasts', () => {
   it('never shows the raw backend error message to the user', () => {
@@ -17,8 +18,8 @@ describe('Library error toasts', () => {
   });
 
   it('resolves an unrecognised library error code through the direct catalog key with a translated fallback', () => {
-    expect(source).toMatch(
-      /function libraryErrorText\(err: unknown, fallback: string\): string \{\s*const code = errorCode\(err\);\s*return hasMessage\(code\) \? msg\(code\) : fallback;\s*\}/,
-    );
+    expect(source).toMatch(/import \{ libraryErrorText \} from '\.\.\/\.\.\/lib\/library\/errors';/);
+    expect(libraryErrorText(new Error('typhon:library.no_such_code'), 'fallback')).toBe('fallback');
+    expect(libraryErrorText(new Error('typhon:library.game_not_found'), 'fallback')).not.toBe('fallback');
   });
 });
