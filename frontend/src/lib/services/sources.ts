@@ -229,6 +229,8 @@ export interface CatalogPage {
   platforms?: GenreFacet[];
   revision?: number;
   offline?: boolean;
+  stale?: boolean;
+  key?: string;
   providers?: {
     provider: string;
     complete: boolean;
@@ -421,7 +423,7 @@ export async function queryCatalogGames(query: CatalogQuery, signal?: AbortSigna
   };
   const call = CatalogService.BrowseGames(payload as never);
   const result = (await (signal ? call.cancelOn(signal) : call)) as unknown as CatalogPage;
-  return { ...result, items: result.items ?? [], compat: result.compat ?? {} };
+  return { ...result, items: result.items ?? [], compat: result.compat ?? {}, stale: result.stale === true, key: result.key ?? '' };
 }
 
 export function isCancelledRequest(err: unknown): boolean {

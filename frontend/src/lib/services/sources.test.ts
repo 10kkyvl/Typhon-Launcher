@@ -37,6 +37,26 @@ describe('catalog query filtering defaults', () => {
   });
 });
 
+describe('catalog stale pages', () => {
+  it('passes stale and key through from the binding', async () => {
+    browseGames.mockResolvedValueOnce({ ...emptyPage, stale: true, key: 'cache-key' });
+
+    const page = await queryCatalogGames({ search: 'game' });
+
+    expect(page.stale).toBe(true);
+    expect(page.key).toBe('cache-key');
+  });
+
+  it('defaults to a fresh page when the binding omits the fields', async () => {
+    browseGames.mockResolvedValueOnce(emptyPage);
+
+    const page = await queryCatalogGames({ search: 'game' });
+
+    expect(page.stale).toBe(false);
+    expect(page.key).toBe('');
+  });
+});
+
 describe('catalog request cancellation', () => {
   it('cancels the underlying BrowseGames call when the signal aborts', async () => {
     const call = new CancellablePromise<typeof emptyPage>((resolve) => { setTimeout(() => resolve(emptyPage), 50); });
