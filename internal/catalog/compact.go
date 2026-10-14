@@ -27,6 +27,10 @@ func (s *Service) Compact(ctx context.Context, referenced []string) (CompactResu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.recommendationLoadErr != nil {
+		return CompactResult{}, fmt.Errorf("recommendation preferences unavailable, not compacting: %w", s.recommendationLoadErr)
+	}
+
 	keep := s.keptIDsLocked(referenced)
 	kept := make([]Game, 0, len(s.games))
 	for _, g := range s.games {
