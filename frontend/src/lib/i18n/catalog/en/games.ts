@@ -340,4 +340,5 @@ export const games: Record<GamesKey, Message> = {
   'games.collectionsLabel': 'Collections',
   'games.tagsEditLabel': 'Edit tags',
   'games.tagsAddLabel': 'Add tags',
+  'games.actionProperties': 'Properties',
 };

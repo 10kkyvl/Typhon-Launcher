@@ -338,6 +338,7 @@ export const games = {
   'games.collectionsLabel': 'Коллекции',
   'games.tagsEditLabel': 'Изменить теги',
   'games.tagsAddLabel': 'Добавить теги',
+  'games.actionProperties': 'Свойства',
 } as const;
 
 export type GamesKey = keyof typeof games;

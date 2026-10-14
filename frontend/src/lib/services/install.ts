@@ -212,3 +212,8 @@ export async function deleteDownloadData(downloadID: string): Promise<void> {
   if (!inWails) throw unavailable();
   await InstallService.DeleteDownloadData(downloadID);
 }
+
+export async function executableCandidates(gameID: string): Promise<Candidate[]> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return ((await InstallService.ExecutableCandidates(gameID)) ?? []) as unknown as Candidate[];
+}

@@ -62,6 +62,7 @@ func (s *Service) PlayGame(id string) error {
 		args:       game.LaunchArgs,
 		workDir:    workDir,
 		shared:     game.UsesSharedBottle(),
+		elevated:   game.RunAsAdmin,
 	}
 	ctx := s.ctx
 	// Constructors are also used without startup by synchronous callers.

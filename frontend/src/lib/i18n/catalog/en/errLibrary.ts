@@ -34,6 +34,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.no_saves_path': 'No save folder given',
   'library.saves_not_a_directory': 'This is not a folder',
   'library.saves_path_unavailable': 'The save folder is unavailable',
+  'library.launch_args_invalid': 'The launch options contain invalid characters',
+  'library.launch_args_too_long': 'The launch options are too long',
 
   'theme.file_too_large': 'The theme file exceeds the allowed size',
   'theme.unsupported_version': 'Unsupported theme file version',

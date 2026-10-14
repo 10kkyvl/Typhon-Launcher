@@ -26,6 +26,7 @@
   import { closeGameMenu, gameMenu } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
+  import { openGameProperties } from '../stores/gameProperties';
   import { openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
@@ -99,6 +100,9 @@
         return verify(current.id);
       case 'move':
         openMoveGame(current.id);
+        return;
+      case 'properties':
+        openGameProperties(current.id);
         return;
       case 'lan-share':
         shareLan(current.id);

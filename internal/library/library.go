@@ -38,6 +38,7 @@ type Game struct {
 	// работают только когда игра и Steam живут в одном wine-префиксе. Явный
 	// false — единственный способ потребовать изолированный бутыль.
 	RequiresSteam     *bool      `json:"requiresSteam,omitempty"`
+	RunAsAdmin        bool       `json:"runAsAdmin,omitempty"`
 	InstallDir        string     `json:"installDir"`
 	Cover             string     `json:"cover"`
 	Version           string     `json:"version"`
