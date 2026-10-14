@@ -244,11 +244,13 @@ func (s *Service) loadRecommendations() error {
 		// A missing preferences file is the expected first-run state.
 		if errors.Is(err, fs.ErrNotExist) {
 			s.preferences = defaultRecommendationPreferences()
+			s.preferencesGen++
 			return nil
 		}
 		return fmt.Errorf("load recommendation preferences: %w", err)
 	}
 	s.preferences = sanitizeRecommendationPreferences(state.Preferences)
+	s.preferencesGen++
 	return nil
 }
 
@@ -322,9 +324,11 @@ func (s *Service) SaveRecommendationPreferences(p RecommendationPreferences) err
 	p.NotInterested = append([]string(nil), previous.NotInterested...)
 	p = sanitizeRecommendationPreferences(p)
 	s.preferences = p
+	s.preferencesGen++
 	err := storage.Save(s.recommendationPath, recommendationVersion, recommendationState{Preferences: p})
 	if err != nil {
 		s.preferences = previous
+		s.preferencesGen++
 	}
 	s.mu.Unlock()
 	if err != nil {
@@ -390,9 +394,11 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 	}
 	next = sanitizeRecommendationPreferences(next)
 	s.preferences = next
+	s.preferencesGen++
 	err := storage.Save(s.recommendationPath, recommendationVersion, recommendationState{Preferences: next})
 	if err != nil {
 		s.preferences = previous
+		s.preferencesGen++
 	}
 	s.mu.Unlock()
 	if err != nil {
@@ -401,17 +407,43 @@ func (s *Service) SetNotInterested(gameID string, on bool) error {
 	return nil
 }
 
+// recommendationCatalog is the part of a recommendation snapshot that depends
+// only on the catalog and the not-interested list. It is read-only once
+// published: callers share games and aliases without copying.
+type recommendationCatalog struct {
+	epoch          uint64
+	preferencesGen uint64
+	games          []Game
+	aliases        map[string]string
+	notInterested  []string
+}
+
 func (s *Service) recommendationSnapshot() ([]Game, RecommendationPreferences, RecommendationLibrarySource) {
 	s.mu.RLock()
+	c := s.recommendationCatalog
+	if c == nil || c.epoch != s.epoch || c.preferencesGen != s.preferencesGen {
+		s.mu.RUnlock()
+		s.mu.Lock()
+		c = s.refreshRecommendationCatalogLocked()
+		p, original := s.preferences, s.recommendationLibrary
+		s.mu.Unlock()
+		return recommendationSnapshotOf(c, p, original)
+	}
+	p, original := s.preferences, s.recommendationLibrary
+	s.mu.RUnlock()
+	return recommendationSnapshotOf(c, p, original)
+}
+
+func (s *Service) refreshRecommendationCatalogLocked() *recommendationCatalog {
+	if c := s.recommendationCatalog; c != nil && c.epoch == s.epoch && c.preferencesGen == s.preferencesGen {
+		return c
+	}
 	games := make([]Game, 0, len(s.games))
 	for _, game := range s.games {
 		if s.resolveIDLocked(game.ID) == game.ID {
 			games = append(games, game)
 		}
 	}
-	p := s.preferences
-	p.NotInterested = append([]string(nil), p.NotInterested...)
-	original := s.recommendationLibrary
 	aliases := make(map[string]string, len(s.games)*2)
 	for _, g := range s.games {
 		aliases[g.ID] = s.resolveIDLocked(g.ID)
@@ -419,14 +451,30 @@ func (s *Service) recommendationSnapshot() ([]Game, RecommendationPreferences, R
 			aliases[g.ServerID] = s.resolveIDLocked(g.ID)
 		}
 	}
-	for i, id := range p.NotInterested {
+	notInterested := append([]string(nil), s.preferences.NotInterested...)
+	for i, id := range notInterested {
 		if canonical := aliases[id]; canonical != "" {
-			p.NotInterested[i] = canonical
+			notInterested[i] = canonical
 		}
 	}
-	s.mu.RUnlock()
+	s.recommendationCatalog = &recommendationCatalog{
+		epoch:          s.epoch,
+		preferencesGen: s.preferencesGen,
+		games:          games,
+		aliases:        aliases,
+		notInterested:  notInterested,
+	}
+	return s.recommendationCatalog
+}
+
+// The games slice is capped at its length so a caller appending to it copies
+// instead of writing into the shared backing array. The library source stays
+// live: only the alias map is shared, the library is read at call time.
+func recommendationSnapshotOf(c *recommendationCatalog, p RecommendationPreferences, original RecommendationLibrarySource) ([]Game, RecommendationPreferences, RecommendationLibrarySource) {
+	p.NotInterested = append([]string(nil), c.notInterested...)
 	var source RecommendationLibrarySource
 	if original != nil {
+		aliases := c.aliases
 		source = func() []RecommendationLibraryItem {
 			items := append([]RecommendationLibraryItem(nil), original()...)
 			for i := range items {
@@ -437,7 +485,7 @@ func (s *Service) recommendationSnapshot() ([]Game, RecommendationPreferences, R
 			return items
 		}
 	}
-	return games, p, source
+	return c.games[:len(c.games):len(c.games)], p, source
 }
 
 // recommendationSnapshotWithProfile takes one coherent snapshot of catalog
@@ -606,10 +654,12 @@ func (s *Service) GetDiscovery(ctx context.Context, q DiscoveryQuery) DiscoveryR
 		remoteQuery.Sort = "for-you"
 	}
 	remoteQuery = s.enrichRecommendationQueryWithSnapshot(remoteQuery, p, source, items, profile)
+	remoteStart := time.Now()
 	candidateGames, remoteOK := s.remoteDiscoveryGames(ctx, remoteQuery, func(candidateGames []Game) bool {
 		candidates := rankGames(candidateGames, profile, items, p, false, seen, q.GameQuery, games)
 		return len(diverseRecommendations(candidates, limit)) >= limit
 	})
+	slog.Debug("catalog discovery", "remote_ms", durationMS(time.Since(remoteStart)), "candidates", len(candidateGames), "ok", remoteOK)
 	if !remoteOK {
 		candidateGames = games
 		if q.Compat == CompatOnlyWorking {

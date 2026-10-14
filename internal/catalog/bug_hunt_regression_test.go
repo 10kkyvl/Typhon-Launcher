@@ -291,7 +291,9 @@ func TestCatalogPageCachePrunesByAgeAndCountWithoutTouchingOtherFiles(t *testing
 		t.Fatal(err)
 	}
 
-	pruneCatalogPageCache(dir, now)
+	if err := pruneCatalogPageCache(dir, now); err != nil {
+		t.Fatal(err)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)

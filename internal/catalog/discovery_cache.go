@@ -20,13 +20,12 @@ func (s *Service) previewRemotePage(page GamePage) GamePage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	page.Items = append([]Game(nil), page.Items...)
-	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	complete := remoteProviderCompleteness(page.Providers)
 	for i, g := range page.Items {
 		g.LocalExternalIDs = ExternalIDs{}
 		g.ServerID = g.ID
 		g.Genres = canonicalGenres(g.Genres)
-		if pos := remoteMatchPosition(g, byServer, byIGDB, bySteam); pos >= 0 {
+		if pos := s.idx.matchRemote(g); pos >= 0 {
 			old := s.games[pos]
 			g.ID = old.ID
 			g = mergeRemoteGame(old, g, complete)
@@ -82,8 +81,7 @@ func (s *Service) promoteDiscoveryGameLocked(id string) (string, error) {
 		return id, nil
 	}
 	game := cached.game
-	byServer, byIGDB, bySteam := remoteIndexes(s.games)
-	if pos := remoteMatchPosition(game, byServer, byIGDB, bySteam); pos >= 0 {
+	if pos := s.idx.matchRemote(game); pos >= 0 {
 		return s.games[pos].ID, nil
 	}
 	game.AliasIDs = nil

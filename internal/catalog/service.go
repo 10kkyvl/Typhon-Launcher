@@ -57,6 +57,11 @@ type Service struct {
 	browseSnapshots       map[string]browseSnapshot
 	discoveryPages        map[string]GamePage
 	discoveryGames        map[string]discoveryGame
+	recommendationCatalog *recommendationCatalog
+	preferencesGen        uint64
+	clock                 func() time.Time
+	pruneMu               sync.Mutex
+	lastPrune             time.Time
 }
 
 func NewService() (*Service, error) {
@@ -72,7 +77,7 @@ func NewServiceAt(dir string) (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("catalog dir unavailable")
 	}
-	s := &Service{overrideMap: map[string]string{}}
+	s := &Service{overrideMap: map[string]string{}, clock: time.Now}
 	s.gamesPath = filepath.Join(dir, "catalog.json")
 	s.overridesPath = filepath.Join(dir, "match_overrides.json")
 	s.recommendationPath = filepath.Join(dir, "recommendation.json")
@@ -95,6 +100,7 @@ func (s *Service) load() error {
 	if err := s.loadRecommendations(); err != nil {
 		s.recommendationLoadErr = err
 		s.preferences = defaultRecommendationPreferences()
+		s.preferencesGen++
 		slog.Warn("recommendation preferences unavailable; using general catalog", "error", err)
 	}
 	known := map[string]bool{}
@@ -141,6 +147,7 @@ func (s *Service) rebuildLocked() {
 		if pos, ok := s.idx.byID[target]; ok {
 			if oldPos, exists := s.idx.byID[old]; exists && oldPos != pos {
 				s.idx.entries[oldPos].matchable = false
+				addPosting(s.idx.redirectGroup, target, oldPos)
 			}
 			s.idx.byID[old] = pos
 		}
@@ -250,12 +257,55 @@ func (s *Service) GetGame(id string) (Game, error) {
 		return Game{}, errNotFound
 	}
 	game.AliasIDs = nil
-	for _, other := range s.games {
+	for _, pos := range s.sameGameCandidatesLocked(game) {
+		other := s.games[pos]
 		if other.ID != game.ID && s.sameGameLocked(other.ID, game.ID) {
 			game.AliasIDs = append(game.AliasIDs, other.ID)
 		}
 	}
 	return game, nil
+}
+
+// sameGameCandidatesLocked returns, in catalog order, the positions that can
+// be the same game as game: its redirect group, and the records sharing a
+// provider id with it, together with the redirect groups of those records
+// (sameGameLocked compares canonical records, so a redirected id inherits the
+// identity of its target). It is a superset of what sameGameLocked accepts.
+func (s *Service) sameGameCandidatesLocked(game Game) []int {
+	found := map[int]struct{}{}
+	canonicals := map[string]bool{}
+	addCanonical := func(id string) {
+		if id == "" || canonicals[id] {
+			return
+		}
+		canonicals[id] = true
+		if pos, ok := s.idx.byID[id]; ok {
+			found[pos] = struct{}{}
+		}
+		for _, pos := range s.idx.redirectGroup[id] {
+			found[pos] = struct{}{}
+		}
+	}
+	collect := func(g Game) {
+		forEachIdentityKey(g, func(key string) {
+			for _, pos := range s.idx.byIdentity[key] {
+				found[pos] = struct{}{}
+				addCanonical(s.resolveIDLocked(s.idx.games[pos].ID))
+			}
+		})
+	}
+	canonical := s.resolveIDLocked(game.ID)
+	addCanonical(canonical)
+	collect(game)
+	if canonicalGame, ok := s.idx.game(canonical); ok {
+		collect(canonicalGame)
+	}
+	positions := make([]int, 0, len(found))
+	for pos := range found {
+		positions = append(positions, pos)
+	}
+	slices.Sort(positions)
+	return positions
 }
 
 func (s *Service) SearchGames(query string, limit int) []Game {
