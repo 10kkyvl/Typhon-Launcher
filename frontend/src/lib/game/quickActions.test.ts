@@ -10,6 +10,7 @@ const state = (over: Partial<QuickActionState> = {}): QuickActionState => ({
   lanShared: false,
   favorite: false,
   status: '',
+  hidden: false,
   saveBackups: true,
   ...over,
 });
@@ -23,6 +24,8 @@ describe('quickActions', () => {
       'play',
       'favorite-add',
       'status',
+      'tags',
+      'hide',
       'folder',
       'saves',
       'saves-backups',
@@ -57,6 +60,12 @@ describe('quickActions', () => {
     expect(item?.label).toBe('Статус: Пройдена');
   });
 
+  it('offers show instead of hide for a hidden game', () => {
+    expect(ids({ hidden: true })).toContain('unhide');
+    expect(ids({ hidden: true })).not.toContain('hide');
+    expect(ids({ hidden: true, installed: false })).toContain('unhide');
+  });
+
   it('replaces play with stop while the game runs', () => {
     expect(ids({ running: true })).toContain('stop');
     expect(ids({ running: true })).not.toContain('play');
@@ -73,7 +82,7 @@ describe('quickActions', () => {
   });
 
   it('keeps marks and library removal for a game that is not installed', () => {
-    expect(ids({ installed: false })).toEqual(['favorite-add', 'status', 'remove']);
+    expect(ids({ installed: false })).toEqual(['favorite-add', 'status', 'tags', 'hide', 'remove']);
   });
 
   it('flips the favorite item once set', () => {
@@ -104,6 +113,6 @@ describe('quickActions', () => {
   });
 
   it('ignores lan sharing for a game that is not installed', () => {
-    expect(ids({ installed: false, lanEnabled: true })).toEqual(['favorite-add', 'status', 'remove']);
+    expect(ids({ installed: false, lanEnabled: true })).toEqual(['favorite-add', 'status', 'tags', 'hide', 'remove']);
   });
 });

@@ -14,6 +14,7 @@
     Play,
     Sparkles,
     Square,
+    Tag,
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
@@ -25,6 +26,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
+  import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -134,6 +136,7 @@
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
+  let tagsOpen = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
   let requiresSteam = $state(true);
   let requiresSteamSaving = $state(false);
@@ -851,6 +854,9 @@
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
           {/if}
+          {#each localGame?.tags ?? [] as tag (tag)}
+            <StatusBadge kind="neutral" label={tag} dot={false} />
+          {/each}
         </div>
 
         {#if title}
@@ -928,6 +934,13 @@
             <Button size="lg" onclick={() => (statusOpen = true)}>
               {msg('games.actionStatus', { status: statusLabel(localGame.status) })}
             </Button>
+
+            <IconButton
+              label={localGame.tags?.length ? msg('games.tagsEditLabel') : msg('games.tagsAddLabel')}
+              onclick={() => (tagsOpen = true)}
+            >
+              <Tag size="1.8rem" strokeWidth={1.8} />
+            </IconButton>
           {/if}
 
           {#if menuItems.length > 0}
@@ -1124,6 +1137,10 @@
 
   {#if localGame}
     <GameStatusModal bind:open={statusOpen} game={localGame} />
+
+    {#if tagsOpen}
+      <GameTagsModal bind:open={tagsOpen} game={localGame} />
+    {/if}
 
     <RemoveGameModal
       bind:open={removeOpen}

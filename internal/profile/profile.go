@@ -85,7 +85,7 @@ func (s *Service) playedGenres(games []library.Game) []PlayedGenres {
 	var ids []string
 	seen := map[string]bool{}
 	for _, g := range games {
-		if g.Archived || g.PlaytimeSeconds <= 0 {
+		if g.Archived || g.Hidden || g.PlaytimeSeconds <= 0 {
 			continue
 		}
 		counted = append(counted, g)

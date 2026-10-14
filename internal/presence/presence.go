@@ -58,6 +58,9 @@ func (w *Watcher) Apply(s settings.Settings) {
 }
 
 func (w *Watcher) SessionStarted(game library.Game) {
+	if game.Hidden {
+		return
+	}
 	w.target.Show(w.build(game))
 }
 

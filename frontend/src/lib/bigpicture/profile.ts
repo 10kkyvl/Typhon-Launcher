@@ -2,6 +2,7 @@ import type { LibraryGame } from '../services/library';
 
 export function recentLocalGames(games: readonly LibraryGame[]): LibraryGame[] {
   return games
+    .filter((game) => !game.hidden)
     .toSorted((a, b) => {
       const played = (value: string | null) => {
         const time = value ? Date.parse(value) : NaN;

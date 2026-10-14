@@ -77,7 +77,7 @@ func (s *Service) layoutGames(blocks []account.LayoutBlock, games []library.Game
 
 	owned := map[string]library.Game{}
 	for _, g := range games {
-		if g.CanonicalGameID == "" {
+		if g.CanonicalGameID == "" || g.Hidden {
 			continue
 		}
 		igdbID := s.catalog.IGDBIDOf(g.CanonicalGameID)

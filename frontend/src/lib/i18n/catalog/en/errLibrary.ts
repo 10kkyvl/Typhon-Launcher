@@ -71,4 +71,11 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
 
   'history.clear_failed': 'Could not clear the history',
   'errLibrary.historyErrFallback': 'Could not complete the history action',
+  'library.too_many_tags': 'Tags limit reached for this game',
+  'library.tag_too_long': 'Tag is too long',
+  'library.tag_invalid': 'Tag contains invalid characters',
+  'library.collection_name_invalid': 'Collection name is empty or too long',
+  'library.too_many_collections': 'Collections limit reached',
+  'library.collection_genres_invalid': 'Too many genres in the collection',
+  'library.collection_not_found': 'Collection not found',
 };

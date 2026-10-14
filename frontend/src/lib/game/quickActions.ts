@@ -7,6 +7,9 @@ export type QuickAction =
   | 'favorite-add'
   | 'favorite-remove'
   | 'status'
+  | 'tags'
+  | 'hide'
+  | 'unhide'
   | 'folder'
   | 'saves'
   | 'saves-backups'
@@ -35,6 +38,7 @@ export interface QuickActionState {
   lanShared: boolean;
   favorite: boolean;
   status: string;
+  hidden: boolean;
   saveBackups: boolean;
 }
 
@@ -44,6 +48,10 @@ function markItems(state: QuickActionState): QuickActionItem[] {
       ? { id: 'favorite-remove', label: msg('games.actionFavoriteRemove') }
       : { id: 'favorite-add', label: msg('games.actionFavoriteAdd') },
     { id: 'status', label: msg('games.actionStatus', { status: statusLabel(state.status) }) },
+    { id: 'tags', label: msg('games.actionTags') },
+    state.hidden
+      ? { id: 'unhide', label: msg('games.actionUnhide') }
+      : { id: 'hide', label: msg('games.actionHide') },
   ];
 }
 

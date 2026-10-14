@@ -4,6 +4,8 @@
   import { buildShelves, resolveSelection, type ShelfID } from '../library';
   import type { BigPictureCommand } from '../input';
   import { focusControl } from '../navigation';
+  import { collections } from '../../stores/collections';
+  import { libraryGenres, requestLibraryGenres } from '../../stores/genres';
   import { libraryGames, runningGames } from '../../stores/library';
   import { gameArt, requestArt } from '../../stores/metadata';
   import { playtime } from '../../utils/format';
@@ -15,11 +17,16 @@
   let lastCard = '';
   let busy = $state(false);
   let failure = $state('');
-  const shelves = $derived(buildShelves($libraryGames));
+  const shelves = $derived(buildShelves($libraryGames, { collections: $collections, genres: $libraryGenres }));
   const selected = $derived(resolveSelection(shelves, selectedId));
   const art = $derived(selected?.canonicalGameId ? $gameArt[selected.canonicalGameId] : undefined);
   const running = $derived(selected ? $runningGames.has(selected.id) : false);
-  const titles: Record<ShelfID, string> = $derived({ recent: $t('bp.recent'), favorites: $t('bp.favorites'), installed: $t('bp.installed') });
+  function shelfTitle(id: ShelfID): string {
+    if (id === 'recent') return $t('bp.recent');
+    if (id === 'favorites') return $t('bp.favorites');
+    if (id === 'installed') return $t('bp.installed');
+    return $collections.find((collection) => `collection:${collection.id}` === id)?.name ?? '';
+  }
 
   async function play() {
     if (!selected || busy) return;
@@ -31,11 +38,12 @@
   }
   export function handleCommand(command: BigPictureCommand): boolean {
     if (command !== 'next' && command !== 'previous') return false;
-    const index = shelves.findIndex((shelf) => shelf.id === lastCard.split(':')[0]);
+    const index = shelves.findIndex((shelf) => lastCard.startsWith(`${shelf.id}:`));
     const next = shelves[(Math.max(index, 0) + (command === 'next' ? 1 : -1) + shelves.length) % shelves.length];
     if (next) focusControl([...root.querySelectorAll<HTMLButtonElement>('[data-game-id]')].find((node) => node.dataset.bpFocus === `${next.id}:${next.games[0].id}`));
     return true;
   }
+  $effect(() => { const ids = $libraryGames.map((game) => game.canonicalGameId ?? ''); untrack(() => void requestLibraryGenres(ids)); });
   $effect(() => { const ids = shelves.flatMap((shelf) => shelf.games.map((game) => game.canonicalGameId ?? '')); untrack(() => requestArt(ids)); });
 </script>
 
@@ -60,8 +68,8 @@
     </section>
     <div class="shelves">
       {#each shelves as shelf (shelf.id)}
-        <section class="shelf" aria-label={titles[shelf.id]}>
-          <h2>{titles[shelf.id]}<span>{shelf.games.length}</span></h2>
+        <section class="shelf" aria-label={shelfTitle(shelf.id)}>
+          <h2>{shelfTitle(shelf.id)}<span>{shelf.games.length}</span></h2>
           <div class="rail">
             {#each shelf.games as game (game.id)}
               {@const key = `${shelf.id}:${game.id}`}

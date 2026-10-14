@@ -327,6 +327,17 @@ export const games = {
   'games.storeSteam': 'Steam',
   'games.storeGog': 'GOG',
   'games.storeEpic': 'Epic Games Store',
+  'games.filterHidden': 'Скрытые',
+  'games.collectionsLoadFailed': 'Не удалось загрузить коллекции',
+  'games.actionTags': 'Теги…',
+  'games.actionHide': 'Скрыть из библиотеки',
+  'games.actionUnhide': 'Показать в библиотеке',
+  'games.hideFailed': 'Не удалось изменить видимость игры',
+  'games.collectionAdd': 'Коллекция',
+  'games.collectionEditLabel': 'Изменить коллекцию',
+  'games.collectionsLabel': 'Коллекции',
+  'games.tagsEditLabel': 'Изменить теги',
+  'games.tagsAddLabel': 'Добавить теги',
 } as const;
 
 export type GamesKey = keyof typeof games;

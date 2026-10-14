@@ -68,6 +68,13 @@ export const errLibrary = {
 
   'history.clear_failed': 'не удалось очистить журнал',
   'errLibrary.historyErrFallback': 'Не удалось выполнить действие с журналом',
+  'library.too_many_tags': 'достигнут лимит тегов у игры',
+  'library.tag_too_long': 'тег слишком длинный',
+  'library.tag_invalid': 'тег содержит недопустимые символы',
+  'library.collection_name_invalid': 'имя коллекции пустое или слишком длинное',
+  'library.too_many_collections': 'достигнут лимит коллекций',
+  'library.collection_genres_invalid': 'в коллекции слишком много жанров',
+  'library.collection_not_found': 'коллекция не найдена',
 } as const;
 
 export type ErrLibraryKey = keyof typeof errLibrary;
