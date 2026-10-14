@@ -150,6 +150,7 @@ func (s *Service) rebuildLocked() {
 			if oldPos, exists := s.idx.byID[old]; exists && oldPos != pos {
 				s.idx.entries[oldPos].matchable = false
 				addPosting(s.idx.redirectGroup, target, oldPos)
+				s.idx.redirectTarget[oldPos] = pos
 			}
 			s.idx.byID[old] = pos
 		}

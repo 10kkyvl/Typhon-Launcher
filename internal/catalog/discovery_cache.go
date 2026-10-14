@@ -85,9 +85,10 @@ func (s *Service) promoteDiscoveryGameLocked(id string) (string, error) {
 		return s.games[pos].ID, nil
 	}
 	game.AliasIDs = nil
+	game.Genres = canonicalGenres(game.Genres)
 	previous := append([]Game(nil), s.games...)
 	s.games = append(s.games, game)
-	s.rebuildLocked()
+	s.addToIndexLocked(game)
 	if err := s.persistGamesLocked(); err != nil {
 		s.games = previous
 		s.rebuildLocked()

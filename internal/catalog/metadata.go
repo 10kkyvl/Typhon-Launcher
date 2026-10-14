@@ -55,12 +55,13 @@ func (s *Service) ApplyMetadata(gameID string, patch MetadataPatch) (Game, error
 		return Game{}, err
 	}
 	previous := s.games[pos]
-	s.games[pos] = applyPatch(previous, patch)
-	s.rebuildLocked()
+	patched := applyPatch(previous, patch)
+	s.games[pos] = patched
+	s.updateIndexAtLocked(pos, previous)
 
 	if err := s.persistGamesLocked(); err != nil {
 		s.games[pos] = previous
-		s.rebuildLocked()
+		s.updateIndexAtLocked(pos, patched)
 		return Game{}, fmt.Errorf("save catalog: %w", err)
 	}
 	return s.games[pos], nil

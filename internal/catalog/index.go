@@ -24,29 +24,31 @@ type index struct {
 	byToken    map[string][]int
 	byExternal map[string]int
 
-	byServer      map[string][]int
-	byIGDB        map[string][]int
-	bySteam       map[string][]int
-	byIdentity    map[string][]int
-	byLocal       map[string][]int
-	redirectGroup map[string][]int
+	byServer       map[string][]int
+	byIGDB         map[string][]int
+	bySteam        map[string][]int
+	byIdentity     map[string][]int
+	byLocal        map[string][]int
+	redirectGroup  map[string][]int
+	redirectTarget map[int]int
 }
 
 func buildIndex(games []Game) *index {
 	idx := &index{
-		games:         games,
-		entries:       make([]entry, 0, len(games)),
-		byID:          make(map[string]int, len(games)),
-		byTitle:       make(map[string][]int, len(games)),
-		byAlias:       map[string][]int{},
-		byToken:       map[string][]int{},
-		byExternal:    map[string]int{},
-		byServer:      make(map[string][]int, len(games)),
-		byIGDB:        make(map[string][]int, len(games)),
-		bySteam:       make(map[string][]int, len(games)),
-		byIdentity:    make(map[string][]int, len(games)),
-		byLocal:       map[string][]int{},
-		redirectGroup: map[string][]int{},
+		games:          games,
+		entries:        make([]entry, 0, len(games)),
+		byID:           make(map[string]int, len(games)),
+		byTitle:        make(map[string][]int, len(games)),
+		byAlias:        map[string][]int{},
+		byToken:        map[string][]int{},
+		byExternal:     map[string]int{},
+		byServer:       make(map[string][]int, len(games)),
+		byIGDB:         make(map[string][]int, len(games)),
+		bySteam:        make(map[string][]int, len(games)),
+		byIdentity:     make(map[string][]int, len(games)),
+		byLocal:        map[string][]int{},
+		redirectGroup:  map[string][]int{},
+		redirectTarget: map[int]int{},
 	}
 	for _, g := range games {
 		idx.add(g)
@@ -88,16 +90,18 @@ func (idx *index) registerAt(pos int, g Game) {
 	idx.entries[pos] = e
 	idx.byID[g.ID] = pos
 	if normalized != "" {
-		idx.byTitle[normalized] = append(idx.byTitle[normalized], pos)
+		addPosting(idx.byTitle, normalized, pos)
 	}
 	for _, alias := range e.aliases {
-		idx.byAlias[alias] = append(idx.byAlias[alias], pos)
+		addPosting(idx.byAlias, alias, pos)
 	}
 	for _, token := range e.tokens {
-		idx.byToken[token] = append(idx.byToken[token], pos)
+		addPosting(idx.byToken, token, pos)
 	}
 	for _, key := range externalKeys(g.ExternalIDs) {
-		idx.byExternal[key] = pos
+		if current, ok := idx.byExternal[key]; !ok || pos > current {
+			idx.byExternal[key] = pos
+		}
 	}
 	idx.registerRemote(pos, g)
 }
@@ -215,6 +219,27 @@ func forEachLocalIdentityKey(ids ExternalIDs, fn func(key string)) {
 func (idx *index) update(pos int, old Game) {
 	idx.removePostings(pos, old, idx.entries[pos])
 	idx.registerAt(pos, idx.games[pos])
+	if target, redirected := idx.redirectTarget[pos]; redirected {
+		idx.entries[pos].matchable = false
+		idx.byID[idx.games[pos].ID] = target
+	}
+}
+
+// settleExternal re-points a provider key at the highest position still
+// holding that id, which is what a full rebuild would leave there.
+func (idx *index) settleExternal(key string) {
+	var holders []int
+	switch {
+	case strings.HasPrefix(key, "igdb:"):
+		holders = idx.byIGDB[strings.TrimPrefix(key, "igdb:")]
+	case strings.HasPrefix(key, "steam:"):
+		holders = idx.bySteam[strings.TrimPrefix(key, "steam:")]
+	}
+	if len(holders) == 0 {
+		delete(idx.byExternal, key)
+		return
+	}
+	idx.byExternal[key] = holders[len(holders)-1]
 }
 
 func (idx *index) removePostings(pos int, g Game, e entry) {
@@ -236,12 +261,12 @@ func (idx *index) removePostings(pos int, g Game, e entry) {
 			delete(idx.byToken, token)
 		}
 	}
+	idx.unregisterRemote(pos, g)
 	for _, key := range externalKeys(g.ExternalIDs) {
 		if idx.byExternal[key] == pos {
-			delete(idx.byExternal, key)
+			idx.settleExternal(key)
 		}
 	}
-	idx.unregisterRemote(pos, g)
 }
 
 func removeIntFromSlice(list []int, value int) []int {

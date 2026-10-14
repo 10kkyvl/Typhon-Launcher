@@ -359,8 +359,19 @@ func (s *Service) EnsureFresh(gameID string) (bool, error) {
 	s.wg.Add(1)
 	s.mu.Unlock()
 
-	s.spawn(game, providerID, modeFull, classUser)
+	s.spawn(game, providerID, modeFull, refreshClass(game))
 	return true, nil
+}
+
+// A game that already shows complete metadata and is only due for the TTL or
+// language refresh must not compete with the user's own requests: the page is
+// usable as it is, so this refresh may yield and wait for a quieter moment.
+func refreshClass(game catalog.Game) callClass {
+	resolved := game.ExternalIDs.IGDB != "" || game.ExternalIDs.Steam != ""
+	if resolved && game.MetadataUpdatedAt != nil && !game.MetadataPartial {
+		return classBackground
+	}
+	return classUser
 }
 
 func (s *Service) EnsureArt(gameIDs []string) ([]string, error) {
@@ -559,6 +570,11 @@ func (s *Service) report(game catalog.Game, view View, err error) {
 		s.budget.reward()
 		s.attempts.succeed(game.ID)
 		emit("metadata:updated", view)
+	case errors.Is(err, errBudgetBusy) && game.MetadataUpdatedAt != nil:
+		// The page already shows this game's metadata, so a refresh that yielded is not a
+		// failure; the event only clears the "searching" state set by EnsureFresh.
+		slog.Debug("metadata refresh yielded", "game", game.ID)
+		emit("metadata:updated", s.view(game))
 	case isRateLimited(err), errors.Is(err, errBudgetBusy),
 		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		slog.Debug("metadata refresh postponed", "game", game.ID)
