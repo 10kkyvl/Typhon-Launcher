@@ -344,11 +344,9 @@ func main() {
 		fatal("start sources service", err)
 	}
 	refs := sourcesService.ReferencedGameIDs()
-	for _, game := range libraryService.GetGames() {
-		if game.CanonicalGameID != "" {
-			refs = append(refs, game.CanonicalGameID)
-		}
-	}
+	refs = append(refs, libraryService.ReferencedCatalogIDs()...)
+	refs = append(refs, downloadManager.ReferencedGameIDs()...)
+	refs = append(refs, installService.ReferencedGameIDs()...)
 	// Compaction only trims the catalog; on failure the file on disk is untouched and still valid.
 	if _, err := catalogService.Compact(context.Background(), refs); err != nil {
 		slog.Error("compact catalog", "err", err)

@@ -288,3 +288,39 @@ func TestCompactedCatalogReopensWithRedirectsAndOverrides(t *testing.T) {
 		t.Fatalf("redirects = %v, overrides = %v", reopened.redirects, reopened.overrideMap)
 	}
 }
+
+func TestCompactRefusesWhenRecommendationPreferencesFailedToLoad(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	seedExact(t, s, remoteGame("victim"), remoteGame("other"))
+	path := filepath.Join(dir, "catalog.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loadErr := errors.New("recommendation.json is unreadable")
+	s.mu.Lock()
+	s.recommendationLoadErr = loadErr
+	s.mu.Unlock()
+
+	res, err := s.Compact(context.Background(), nil)
+	if !errors.Is(err, loadErr) {
+		t.Fatalf("compact err = %v, want it to wrap the load error", err)
+	}
+	if res != (CompactResult{}) {
+		t.Fatalf("result = %+v, want zero", res)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("catalog rewritten although preferences did not load")
+	}
+	if _, err := os.Stat(path + compactBackupSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("backup created on refusal, err=%v", err)
+	}
+	if got := keptIDs(s); !slices.Equal(got, []string{"other", "victim"}) {
+		t.Fatalf("games after refusal = %v, want both", got)
+	}
+}
