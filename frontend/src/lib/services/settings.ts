@@ -36,6 +36,7 @@ export interface Settings {
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
   saveBackupAfterSession: boolean;
+  cloudSaves: boolean;
   saveBackupLimit: number;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
@@ -95,6 +96,7 @@ const fallbackDefaults: Settings = {
   updateAutoInstall: false,
   updateSaveBackup: true,
   saveBackupAfterSession: true,
+  cloudSaves: false,
   saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,

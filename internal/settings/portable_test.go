@@ -39,6 +39,7 @@ var portableNames = []string{
 var localNames = []string{
 	"accentColor", "tintLogo",
 	"lanSharing",
+	"cloudSaves",
 	"networkMode",
 	"networkInterface",
 	"proxyType",

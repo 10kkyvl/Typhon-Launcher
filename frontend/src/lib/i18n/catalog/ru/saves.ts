@@ -14,6 +14,7 @@ export const saves = {
   'saves.kindSession': 'После игры',
   'saves.kindUpdate': 'Перед обновлением',
   'saves.kindPreRestore': 'Перед восстановлением',
+  'saves.kindCloud': 'Копия из облака',
   'saves.filesCount': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'saves.broken': 'Повреждена',
   'saves.restore': 'Восстановить',

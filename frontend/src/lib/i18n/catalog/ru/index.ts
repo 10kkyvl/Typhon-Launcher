@@ -30,6 +30,7 @@ import { errLogs } from './errLogs';
 import { errSaves } from './errSaves';
 import { errSupport } from './errSupport';
 import { saves } from './saves';
+import { cloudsaves } from './cloudsaves';
 import { tickets } from './tickets';
 import { overlay } from './overlay';
 
@@ -65,10 +66,11 @@ export const ru = {
   ...errSaves,
   ...errSupport,
   ...saves,
+  ...cloudsaves,
   ...tickets,
   ...overlay,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, tickets, overlay };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay };

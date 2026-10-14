@@ -16,6 +16,7 @@ export const saves: Record<SavesKey, Message> = {
   'saves.kindManual': 'Manual',
   'saves.kindSession': 'After game',
   'saves.kindUpdate': 'Before update',
+  'saves.kindCloud': 'Cloud copy',
   'saves.kindPreRestore': 'Before restore',
   'saves.filesCount': { one: '{count} file', other: '{count} files' },
   'saves.broken': 'Damaged',

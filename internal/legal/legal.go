@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const Version = "2026-10-11"
+const Version = "2026-10-14"
 
 type Meta struct {
 	ID    string

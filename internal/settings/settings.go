@@ -162,6 +162,8 @@ type Settings struct {
 	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
 	SaveBackupLimit        int  `json:"saveBackupLimit"`
 
+	CloudSaves bool `json:"cloudSaves"`
+
 	LANSharing bool `json:"lanSharing"`
 
 	NetworkMode      string `json:"networkMode"`
@@ -253,6 +255,8 @@ func Defaults() Settings {
 
 		SaveBackupAfterSession: true,
 		SaveBackupLimit:        DefaultSaveBackupLimit,
+
+		CloudSaves: false,
 
 		LANSharing: false,
 

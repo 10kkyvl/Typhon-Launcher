@@ -7,6 +7,7 @@ const KIND_KEYS: Record<SnapshotKind, MessageKey> = {
   session: 'saves.kindSession',
   update: 'saves.kindUpdate',
   'pre-restore': 'saves.kindPreRestore',
+  cloud: 'saves.kindCloud',
 };
 
 export function saveBackupCodeText(code: string, fallback: string): string {

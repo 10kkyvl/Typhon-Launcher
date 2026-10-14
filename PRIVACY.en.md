@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 11 October 2026.
+Revision of 14 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -120,7 +120,7 @@ The prompt is versioned. When the set of collected data grows, the version is ra
 
 ### 2.7. What the Typhon services do not receive
 
-The addresses of sources added by the user, the contents of source feeds, magnet links, torrent infohashes, tracker and peer addresses, release download addresses, the contents of downloaded files, file names, local installation paths and the local download history are **not** sent to the Typhon services. This holds with cross-device sync enabled as well (section 2.3).
+The addresses of sources added by the user, the contents of source feeds, magnet links, torrent infohashes, tracker and peer addresses, release download addresses, the contents of downloaded files, file names, local installation paths and the local download history are **not** sent to the Typhon services. This holds with cross-device sync enabled as well (section 2.3). The one exception is cloud saves (section 2.13), if the user has turned them on: a game's saves archive contains the relative names and the contents of the files in its saves folder; disk paths and the files of downloads and installations do not go into it.
 
 It also holds with anonymous usage statistics enabled. Its events carry only the outcome of an operation, the game identifier from the catalog and anonymized numeric characteristics — duration, size, average speed — with a normalized error code. In other words, the service may learn that a download failed after so many seconds with such-and-such an error, but not where it was downloading from, what exactly was being downloaded, or where on disk it was being written (section 8.2).
 
@@ -205,6 +205,23 @@ An email is first written to a sending queue in the service's database: the reci
 
 Emails are sent through the Spaceship mail service (Spacemail), from the address `no-reply@typhon-launcher.com`, over an encrypted connection. The provider sees the recipient's address and the text of the email, including the link; the provider's servers are in the United States. Details are in section 7.1.
 
+### 2.13. Cloud saves
+
+Cloud saves are off by default, are turned on manually in the app settings and work only after signing in to an account. While the toggle is off or nobody is signed in, the app does not contact this part of the service at all.
+
+When they are on, for each game that has an identifier in the Typhon catalog and a saves folder that was found, the following is sent to the service and stored on the server:
+
+- **an archive of the game's save files** — a ZIP archive of the contents of the saves folder, which the app found itself or the user pointed to. The archive contains the relative file names inside that folder and their contents; absolute disk paths are not sent. What exactly is written in those files is up to the game: it may be, for example, a character name or a game profile;
+- **the game's identifier in the Typhon catalog**;
+- **a device identifier** — a random UUIDv4 created the first time cloud saves are turned on on each device. It is not the same as the installation identifier from `installation.json` (section 1) and is not linked to it;
+- **the archive size, the checksum of its contents and the time of the last upload**.
+
+The app contacts the service after a play session ends, at startup and then roughly every five minutes while it is running: it asks for the list of stored archives, and sends or downloads an archive only if the saves changed on one of the two sides. If both sides changed, the app overwrites nothing and asks the user which copy to keep. Before the saves on the device are replaced with a downloaded copy, the current files are copied into a backup that stays on this device only.
+
+A game for which the app has not determined a catalog identifier is not synced. A saves folder that contains symbolic links or special-type files is not sent.
+
+The operator does not open the contents of the archives: to the service an archive is an opaque file that it stores and hands back to the owner of the account. The size of a single archive and the total size of a user's archives are limited by service settings. A new upload replaces the game's previous archive; earlier versions are not kept on the server.
+
 ## 3. Why data is processed
 
 The Typhon server services process data only for the following:
@@ -217,6 +234,7 @@ The Typhon server services process data only for the following:
 - serving the update manifest and app update files;
 - answering support requests (section 2.11);
 - sending the emails without which the account and support do not work: address confirmation, password reset, guest request confirmation, reply notification (section 2.12);
+- where the user has explicitly turned the toggle on — storing copies of game saves so that they can be restored on another device (section 2.13);
 - rate limiting, so that the services stay available;
 - aggregated real-time counting: how many launchers are running right now, how many of them are in a game, which games are being played and which app versions are in use (section 8.1);
 - where the user has explicitly enabled the toggle — product usage analytics: how often downloads, installations and updates complete successfully, and which operations the app fails on most often (section 8.2).
@@ -236,6 +254,8 @@ An avatar is stored in object storage until it is replaced or deleted. On replac
 Session state (section 8.1) is held in a short-lived in-memory store: roughly 90 seconds without a new signal and the record is gone. No historical "who was online and when" table is kept, and these records are not written to disk.
 
 Synced settings and the game list (section 2.3) are stored for as long as the account exists, or until the user deletes them.
+
+Cloud saves archives (section 2.13) are stored until the user deletes them — one game or all at once — or turns cloud saves off with deletion of the data, or until the account is deleted, whichever comes first. A new upload replaces the game's previous archive.
 
 Records of friends, friend requests and blocks (section 2.8) are stored for as long as the account exists, or until the user removes them: declines or cancels a request, removes a friend, or unblocks someone.
 
@@ -265,7 +285,9 @@ Local data is deleted by deleting the `%APPDATA%\Typhon` directory (section 1). 
 
 Cross-device synced data (section 2.3) is deleted from the server in the app, in the sync settings. Turning sync off does not by itself delete it; it is deleted automatically together with the account.
 
-The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the Terms acceptance records, the profile and bio, the avatar and cover files, synced settings and the game list, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports, support requests with their whole conversations, address-confirmation and password-reset tokens, and every mail-queue record addressed to the account's email address. Website sessions are the same records as app sessions and are deleted with them. Log archives attached to deleted requests are detached from them and are deleted by the next hourly cleanup, but not earlier than 72 hours after they were received. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
+Cloud saves archives (section 2.13) are deleted from the server in the app, in the cloud saves settings: the archive of one game or all of them at once; in addition, when cloud saves are turned off the app offers to delete the data from the cloud. Turning the toggle off without that mark does not delete the archives; they are deleted automatically together with the account.
+
+The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the Terms acceptance records, the profile and bio, the avatar and cover files, synced settings and the game list, cloud saves archives, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports, support requests with their whole conversations, address-confirmation and password-reset tokens, and every mail-queue record addressed to the account's email address. Website sessions are the same records as app sessions and are deleted with them. Log archives attached to deleted requests are detached from them and are deleted by the next hourly cleanup, but not earlier than 72 hours after they were received. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
 
 Deleting the account does not delete guest requests left from the same email address before registering or without signing in: they are not linked to the account and are stored for the general periods of section 4. A request to delete them sooner can be sent to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from that address; the operator handles it as described in section 6. A user with an account can close their own request, in the app or on the website; an individual request cannot be deleted from the interface. A specific request, or a single message in it, can be deleted before its period ends on request to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from the account's address or the guest request's address: in the admin panel an administrator deletes either the whole request — with the entire conversation and the attached log archives — or one message together with its archive; the archives are deleted at once. The deletion itself is noted in the operator's internal action journal: who deleted it and when, the reason if one was given, the username if the request came from an account, and service marks — the request number, its section and status, whether it was a guest request, the number of messages, the identifiers of the deleted messages and archives, who wrote the deleted message (the user or support), and the basis if the deletion followed an infringement notice. The subject, the text of the request and its messages, and the guest's address do not go into the journal.
 
@@ -285,7 +307,7 @@ Three different cases need to be told apart here: what the Typhon services pass 
 
 ### 7.1. Who the Typhon services pass data to
 
-- **Hosting and infrastructure.** The services run on a rented server, account data lives in a database and avatar files in object storage. The providers of that infrastructure technically have access to the data hosted with them.
+- **Hosting and infrastructure.** The services run on a rented server, account data lives in a database and avatar files and cloud saves archives in object storage. The providers of that infrastructure technically have access to the data hosted with them.
 - **IGDB (Twitch).** The metadata service keeps no game database of its own: on receiving a request it queries IGDB and returns the answer to the app. What goes there is the search string — that is, the game title or folder name. Account data is not sent to IGDB.
 - **Spaceship mail service (Spacemail).** All of the service's emails (section 2.12) are sent through it from the address `no-reply@typhon-launcher.com`. The provider is given the recipient's address and the full text of the email, including the link with a token or key that it contains; it keeps copies of sent emails under its own rules, and the operator has no influence over that. The provider's servers are in the United States, so the email address and the content of the emails are transferred outside the user's country, including outside Ukraine and the European Union. The transfer is part of an action the user requested themselves (registering, recovering a password, writing to support): without it the email cannot be delivered.
 
