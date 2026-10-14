@@ -20,6 +20,7 @@
   import { locale } from './lib/i18n';
   import { confirmLeave, leaveRequest, route, stayHere } from './lib/stores/router';
   import ConfirmModal from './lib/components/ConfirmModal.svelte';
+  import { initCollections } from './lib/stores/collections';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
   import { initMessaging } from './lib/stores/messaging';
@@ -73,6 +74,7 @@
   onDestroy(initSupport());
   initPresence();
   initSaveBackups();
+  initCollections();
   initLegalAcceptance();
 
   let lastGamesPath: string | undefined;

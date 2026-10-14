@@ -35,6 +35,18 @@ export interface LibraryGame {
   favoriteAt?: string | null;
   status?: string;
   statusAt?: string | null;
+  tags?: string[];
+  hidden?: boolean;
+}
+
+export interface LibraryCollection {
+  id: string;
+  name: string;
+  tags?: string[];
+  genres?: string[];
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SavesResult {
@@ -113,6 +125,36 @@ export async function setRequiresSteam(id: string, on: boolean): Promise<Library
 export async function setStatus(id: string, status: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetStatus(id, status)) as unknown as LibraryGame;
+}
+
+export async function setTags(id: string, tags: string[]): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetTags(id, tags)) as unknown as LibraryGame;
+}
+
+export async function setHidden(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetHidden(id, on)) as unknown as LibraryGame;
+}
+
+export async function allTags(): Promise<string[]> {
+  if (!inWails) return [];
+  return (await LibraryService.AllTags()) ?? [];
+}
+
+export async function getCollections(): Promise<LibraryCollection[]> {
+  if (!inWails) return [];
+  return ((await LibraryService.GetCollections()) ?? []) as unknown as LibraryCollection[];
+}
+
+export async function saveCollection(collection: LibraryCollection): Promise<LibraryCollection> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SaveCollection(collection as never)) as unknown as LibraryCollection;
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.DeleteCollection(id);
 }
 
 export async function locateSaves(id: string): Promise<SavesResult> {

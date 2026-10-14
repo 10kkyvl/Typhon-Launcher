@@ -1,6 +1,7 @@
 <script lang="ts">
   import ContextMenu from './ContextMenu.svelte';
   import GameStatusModal from './GameStatusModal.svelte';
+  import GameTagsModal from './GameTagsModal.svelte';
   import RemoveGameModal from './RemoveGameModal.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
   import { quickActions, type QuickAction } from '../game/quickActions';
@@ -11,6 +12,7 @@
     playGame,
     removeShortcut,
     setFavorite,
+    setHidden,
     setSavesDir,
     stopGame,
     type LibraryGame,
@@ -27,6 +29,7 @@
   import { openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
+  import { libraryErrorText } from '../library/errors';
   import { errorMessage } from '../utils/errors';
   import { msg } from '../i18n';
 
@@ -43,6 +46,7 @@
           lanShared: $shares.some((s) => s.gameId === game.id),
           favorite: Boolean(game.favorite),
           status: game.status ?? '',
+          hidden: Boolean(game.hidden),
           saveBackups: $saveBackupsEnabled,
         })
       : [],
@@ -59,6 +63,10 @@
   let statusID = $state<string | null>(null);
   const statusGame = $derived(statusID ? ($libraryGames.find((g) => g.id === statusID) ?? null) : null);
 
+  let tagsOpen = $state(false);
+  let tagsID = $state<string | null>(null);
+  const tagsGame = $derived(tagsID ? ($libraryGames.find((g) => g.id === tagsID) ?? null) : null);
+
   function run(current: LibraryGame, action: QuickAction) {
     switch (action) {
       case 'play':
@@ -72,6 +80,13 @@
         statusID = current.id;
         statusOpen = true;
         return;
+      case 'tags':
+        tagsID = current.id;
+        tagsOpen = true;
+        return;
+      case 'hide':
+      case 'unhide':
+        return toggleHidden(current.id, action === 'hide');
       case 'folder':
         return guard(() => openGameFolder(current.installDir, current.executable));
       case 'saves':
@@ -116,6 +131,14 @@
       await fn();
     } catch (err) {
       toast(markError(err, fallback), 'danger');
+    }
+  }
+
+  async function toggleHidden(id: string, on: boolean) {
+    try {
+      await setHidden(id, on);
+    } catch (err) {
+      toast(libraryErrorText(err, msg('games.hideFailed')), 'danger');
     }
   }
 
@@ -181,6 +204,10 @@
 
 {#if statusGame && statusOpen}
   <GameStatusModal bind:open={statusOpen} game={statusGame} />
+{/if}
+
+{#if tagsGame && tagsOpen}
+  <GameTagsModal bind:open={tagsOpen} game={tagsGame} />
 {/if}
 
 {#if target}

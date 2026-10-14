@@ -82,6 +82,7 @@ var errNoPlayTarget = errors.New("--play требует идентификато
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
 	application.RegisterEvent[[]library.Game]("library:updated")
+	application.RegisterEvent[[]library.Collection](library.EventCollections)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[download.Download]("download:added")
@@ -333,7 +334,7 @@ func main() {
 				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID, Title: game.Title, Cover: game.Cover,
 				Favorite: game.Favorite, PlaytimeSeconds: game.PlaytimeSeconds,
 				Sessions: counts[game.ID], LastPlayed: game.LastPlayed,
-				Installed: !game.Uninstalled, Hidden: game.Archived,
+				Installed: !game.Uninstalled, Hidden: game.Archived || game.Hidden,
 				ContinuePlaying: game.Status == library.StatusPlaying,
 			})
 		}

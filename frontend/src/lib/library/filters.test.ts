@@ -15,4 +15,9 @@ describe('library filter', () => {
     expect(nextLibraryFilter('installed', 'all')).toBe('all');
     expect(nextLibraryFilter('all', 'all')).toBe('all');
   });
+
+  it('toggles the hidden filter back to All', () => {
+    expect(nextLibraryFilter('all', 'hidden')).toBe('hidden');
+    expect(nextLibraryFilter('hidden', 'hidden')).toBe('all');
+  });
 });

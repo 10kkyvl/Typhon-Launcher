@@ -26,4 +26,9 @@ describe('local Big Picture profile', () => {
 
     expect(recentLocalGames(games).map(({ id }) => id)).toEqual(['recent', 'older', 'uninstalled']);
   });
+
+  it('leaves hidden games out', () => {
+    const games = [game('shown', { lastPlayed: '2026-09-20T12:00:00Z' }), game('secret', { hidden: true, lastPlayed: '2026-09-21T12:00:00Z' })];
+    expect(recentLocalGames(games).map(({ id }) => id)).toEqual(['shown']);
+  });
 });

@@ -48,6 +48,35 @@ describe('Big Picture library', () => {
     expect(buildShelves(games).map((shelf) => shelf.games.length)).toEqual([12, 20]);
   });
 
+  it('keeps hidden games out of the shelves and every filter except hidden', () => {
+    const shown = game('shown', { lastPlayed: '2026-09-22', favorite: true });
+    const secret = game('secret', { hidden: true, lastPlayed: '2026-09-23', favorite: true });
+    const secretRemoved = game('gone', { hidden: true, uninstalled: true });
+    const games = [shown, secret, secretRemoved];
+    expect(buildShelves(games).flatMap((shelf) => shelf.games.map((g) => g.id))).toEqual(['shown', 'shown', 'shown']);
+    for (const filter of ['all', 'installed', 'favorites', 'uninstalled'] as const) {
+      expect(filterLibrary(games, '', filter, 'title').map((g) => g.id)).not.toContain('secret');
+      expect(filterLibrary(games, '', filter, 'title').map((g) => g.id)).not.toContain('gone');
+    }
+    expect(filterLibrary(games, '', 'hidden', 'title').map((g) => g.id)).toEqual(['gone', 'secret']);
+    expect(filterLibrary(games, 'sec', 'hidden', 'title')).toEqual([secret]);
+  });
+
+  it('builds a shelf per collection from tags and catalog genres, without hidden games', () => {
+    const a = game('a', { tags: ['cozy'], canonicalGameId: 'ca' });
+    const b = game('b', { tags: ['cozy'], canonicalGameId: 'cb' });
+    const c = game('c', { tags: ['cozy'], hidden: true, canonicalGameId: 'ca' });
+    const context = {
+      collections: [{ id: 'k1', name: 'Cozy RPG', tags: ['Cozy'], genres: ['rpg'], createdAt: '', updatedAt: '' }],
+      genres: { ca: ['RPG'], cb: ['Indie'] },
+    };
+    const shelves = buildShelves([a, b, c], context);
+    expect(shelves.map((shelf) => [shelf.id, shelf.games.map((g) => g.id)]))
+      .toEqual([['collection:k1', ['a']], ['installed', ['a', 'b']]]);
+    expect(filterLibrary([a, b, c], '', 'collection:k1', 'title', context)).toEqual([a]);
+    expect(filterLibrary([a, b, c], '', 'collection:missing', 'title', context)).toEqual([]);
+  });
+
   it('keeps selection across reordering and recovers if the selected game disappears', () => {
     const first = game('first', { lastPlayed: '2026-09-22' });
     const second = game('second');

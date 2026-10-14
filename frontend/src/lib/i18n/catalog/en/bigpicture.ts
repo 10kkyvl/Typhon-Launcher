@@ -51,4 +51,5 @@ export const bigpicture = {
   "bp.space": "Space",
   "bp.clear": "Clear",
   "bp.done": "Done",
+  'bp.hidden': 'Hidden',
 } as const;

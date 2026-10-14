@@ -68,6 +68,8 @@ type Game struct {
 	FavoriteAt        *time.Time `json:"favoriteAt,omitempty"`
 	Status            string     `json:"status,omitempty"`
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
+	Tags              []string   `json:"tags,omitempty"`
+	Hidden            bool       `json:"hidden,omitempty"`
 }
 
 type Uninstall struct {
@@ -155,16 +157,18 @@ var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites lim
 var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
-	starting      map[string]context.CancelFunc
-	sameCanonical func(string, string) bool
-	mu            sync.Mutex
-	path          string
-	excludedPath  string
-	games         []Game
-	archived      []Game
-	excluded      []string
-	running       map[string]*session
-	onSession     func(gameID string, seconds int64)
+	starting        map[string]context.CancelFunc
+	sameCanonical   func(string, string) bool
+	mu              sync.Mutex
+	path            string
+	excludedPath    string
+	collectionsPath string
+	collections     []Collection
+	games           []Game
+	archived        []Game
+	excluded        []string
+	running         map[string]*session
+	onSession       func(gameID string, seconds int64)
 	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.
@@ -233,23 +237,28 @@ func NewServiceAt(path string) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		path:          path,
-		excludedPath:  excludedPath,
-		running:       map[string]*session{},
-		scan:          procs.List,
-		watchInterval: defaultWatchInterval,
-		now:           time.Now,
-		shortcuts:     systemShortcuts{},
-		launcherPath:  os.Executable,
-		saveRoots:     platform.SaveRoots,
-		start:         newGameStarter(),
-		prepare:       prepareRuntime,
+		path:            path,
+		excludedPath:    excludedPath,
+		collectionsPath: collectionsPathFor(path),
+		running:         map[string]*session{},
+		scan:            procs.List,
+		watchInterval:   defaultWatchInterval,
+		now:             time.Now,
+		shortcuts:       systemShortcuts{},
+		launcherPath:    os.Executable,
+		saveRoots:       platform.SaveRoots,
+		start:           newGameStarter(),
+		prepare:         prepareRuntime,
 	}
 	games, err := s.load()
 	if err != nil {
 		return nil, err
 	}
 	excluded, err := loadExcluded(excludedPath)
+	if err != nil {
+		return nil, err
+	}
+	collections, err := loadCollections(collectionsPathFor(path))
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +270,7 @@ func NewServiceAt(path string) (*Service, error) {
 		}
 	}
 	s.excluded = excluded
+	s.collections = collections
 	return s, nil
 }
 
@@ -808,7 +818,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, Tags: game.Tags, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds
