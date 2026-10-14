@@ -103,6 +103,7 @@ func init() {
 	application.RegisterEvent[sources.ReleaseBatch]("release:matched")
 	application.RegisterEvent[sources.ReleaseBatch]("release:needs-review")
 	application.RegisterEvent[metadata.View]("metadata:updated")
+	application.RegisterEvent[catalog.PageEvent]("catalog:page")
 	application.RegisterEvent[discovery.Progress]("discovery:started")
 	application.RegisterEvent[discovery.Progress]("discovery:progress")
 	application.RegisterEvent[discovery.Result]("discovery:completed")

@@ -62,6 +62,8 @@ type Service struct {
 	clock                 func() time.Time
 	pruneMu               sync.Mutex
 	lastPrune             time.Time
+	life                  pageLife
+	emit                  func(name string, data any)
 }
 
 func NewService() (*Service, error) {
@@ -77,7 +79,7 @@ func NewServiceAt(dir string) (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("catalog dir unavailable")
 	}
-	s := &Service{overrideMap: map[string]string{}, clock: time.Now}
+	s := &Service{overrideMap: map[string]string{}, clock: time.Now, emit: emitEvent}
 	s.gamesPath = filepath.Join(dir, "catalog.json")
 	s.overridesPath = filepath.Join(dir, "match_overrides.json")
 	s.recommendationPath = filepath.Join(dir, "recommendation.json")

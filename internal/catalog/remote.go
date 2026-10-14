@@ -98,7 +98,8 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 		return GamePage{}, marshalErr
 	}
 	sum := sha256.Sum256(raw)
-	path := filepath.Join(dir, "catalog-pages", hex.EncodeToString(sum[:])+".json")
+	key := hex.EncodeToString(sum[:])
+	path := filepath.Join(dir, "catalog-pages", key+".json")
 	if !durable {
 		s.mu.RLock()
 		cached, ok := s.discoveryPages[path]
@@ -116,40 +117,16 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 			return s.previewRemotePage(cached), nil
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-	defer cancel()
+	timing.prepare += time.Since(entered)
+	if stale, ok := s.staleFirstPage(q, durable, remote, path, key, snapshot); ok { //nolint:contextcheck // invariant 19: the refresh outlives the request, so it runs under the service lifetime ctx and is tracked by wg
+		return stale, nil
+	}
 	var page GamePage
 	var err error
-	timing.prepare += time.Since(entered)
 	if remote == nil {
 		err = errors.New("catalog backend unavailable")
 	} else {
-		networkStart := time.Now()
-		page, err = remote.Browse(ctx, q)
-		timing.network += time.Since(networkStart)
-	}
-	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
-		fallback := q
-		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
-		// A failed personalized source must still allow a general first page.
-		// Preserve exclusions and filters, and pin the fallback for continuations.
-		// The original request owns the total 25-second budget. A fallback gets
-		// at most ten seconds, but cannot outlive the first request's deadline.
-		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
-		fallbackStart := time.Now()
-		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
-		timing.network += time.Since(fallbackStart)
-		fallbackCancel()
-		if fallbackErr == nil {
-			page, err = fallbackPage, nil
-			page.PersonalizationFallback = true
-			s.mu.Lock()
-			if snap, ok := s.browseSnapshots[snapshot]; ok {
-				snap.query.Sort, snap.query.Profile = "popular", ""
-				s.browseSnapshots[snapshot] = snap
-			}
-			s.mu.Unlock()
-		}
+		page, err = s.fetchRemotePage(ctx, q, remote, snapshot, &timing)
 	}
 	if err != nil {
 		if errors.Is(err, ErrBackendOutdated) {
@@ -173,6 +150,7 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 			return GamePage{}, err
 		}
 		page.Offline = true
+		page.Key = key
 		s.normalizeCachedPage(&page)
 		page.Snapshot = snapshot
 		page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
@@ -198,6 +176,15 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 		page.Snapshot = snapshot
 		return s.previewRemotePage(page), nil
 	}
+	return s.commitPage(page, path, key, snapshot, &timing)
+}
+
+// commitPage merges a freshly fetched first or later page into catalog.json,
+// writes the offline page cache and returns the page as the frontend sees it.
+// The synchronous browse and the background refresh share it, so both leave
+// identical state behind.
+func (s *Service) commitPage(page GamePage, path, key, snapshot string, timing *browseTiming) (GamePage, error) {
+	var err error
 	mergeStart := time.Now()
 	s.mu.Lock()
 	complete := remoteProviderCompleteness(page.Providers)
@@ -274,7 +261,7 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 		}
 	}
 	s.mu.Unlock()
-	page.CachedAt = time.Now().UTC()
+	page.CachedAt = s.clock().UTC()
 	if err = storage.Save(path, 1, page); err != nil {
 		return GamePage{}, err
 	}
@@ -282,9 +269,44 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 		slog.Warn("prune catalog page cache", "error", pruneErr)
 	}
 	timing.persist = time.Since(persistStart)
+	page.Key = key
 	page.Snapshot = snapshot
 	page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 	return page, nil
+}
+
+// fetchRemotePage asks the backend for one page under the 25 second budget
+// and, for a failed personalized first page, retries once as the general feed.
+func (s *Service) fetchRemotePage(ctx context.Context, q GameQuery, remote RemoteCatalog, snapshot string, timing *browseTiming) (GamePage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	networkStart := time.Now()
+	page, err := remote.Browse(ctx, q)
+	timing.network += time.Since(networkStart)
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		fallback := q
+		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
+		// A failed personalized source must still allow a general first page.
+		// Preserve exclusions and filters, and pin the fallback for continuations.
+		// The original request owns the total 25-second budget. A fallback gets
+		// at most ten seconds, but cannot outlive the first request's deadline.
+		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
+		fallbackStart := time.Now()
+		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
+		timing.network += time.Since(fallbackStart)
+		fallbackCancel()
+		if fallbackErr == nil {
+			page, err = fallbackPage, nil
+			page.PersonalizationFallback = true
+			s.mu.Lock()
+			if snap, ok := s.browseSnapshots[snapshot]; ok {
+				snap.query.Sort, snap.query.Profile = "popular", ""
+				s.browseSnapshots[snapshot] = snap
+			}
+			s.mu.Unlock()
+		}
+	}
+	return page, err
 }
 
 //wails:ignore

@@ -70,6 +70,8 @@ type GamePage struct {
 	Facets                  []GenreFacet  `json:"facets"`
 	Platforms               []GenreFacet  `json:"platforms"`
 	Offline                 bool          `json:"offline"`
+	Stale                   bool          `json:"stale"`
+	Key                     string        `json:"key"`
 	CachedAt                time.Time     `json:"cachedAt"`
 	Revision                int64         `json:"revision"`
 	Providers               []IndexStatus `json:"providers"`
