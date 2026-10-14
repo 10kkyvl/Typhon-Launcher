@@ -63,6 +63,22 @@ func TestCompactKeepRules(t *testing.T) {
 			want:  []string{"cand"},
 		},
 		{
+			name:  "provisional placeholder with an external id stays",
+			games: []Game{{ID: "cand", Title: "Placeholder", Provisional: true, ExternalIDs: ExternalIDs{IGDB: "7"}}, remoteGame("victim")},
+			want:  []string{"cand"},
+		},
+		{
+			name:       "referenced provisional placeholder stays",
+			games:      []Game{{ID: "cand", Title: "Placeholder", Provisional: true}, remoteGame("victim")},
+			referenced: []string{"cand"},
+			want:       []string{"cand"},
+		},
+		{
+			name:  "unreferenced provisional placeholder without ids is removed",
+			games: []Game{{ID: "cand", Title: "Placeholder", Provisional: true}, remoteGame("victim")},
+			want:  []string{},
+		},
+		{
 			name: "game with downloaded metadata stays",
 			games: []Game{
 				{ID: "cand", ServerID: "srv-cand", Title: "Cached", MetadataUpdatedAt: &now},

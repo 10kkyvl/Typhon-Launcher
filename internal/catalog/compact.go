@@ -84,10 +84,13 @@ func (s *Service) keptIDsLocked(referenced []string) map[string]bool {
 }
 
 func keepGame(g Game, keep map[string]bool) bool {
-	if g.ServerID == "" || g.MetadataUpdatedAt != nil {
+	if g.MetadataUpdatedAt != nil || keep[g.ID] || keep[g.ServerID] {
 		return true
 	}
-	return keep[g.ID] || keep[g.ServerID]
+	if g.ServerID == "" {
+		return !g.Provisional || !g.ExternalIDs.empty()
+	}
+	return false
 }
 
 func (s *Service) backupGamesLocked() (string, error) {
