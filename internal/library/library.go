@@ -210,6 +210,8 @@ type session struct {
 	// журнала совместимости это разные события, а по одной длительности их
 	// не различить.
 	stoppedByUser bool
+	exit          *exitInfo
+	closeDeferred bool
 }
 
 func NewService() (*Service, error) {

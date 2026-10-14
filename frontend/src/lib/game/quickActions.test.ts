@@ -27,6 +27,7 @@ describe('quickActions', () => {
       'saves',
       'saves-backups',
       'verify',
+      'redist',
       'move',
       'shortcut-create',
       'uninstall',
@@ -86,6 +87,13 @@ describe('quickActions', () => {
       .filter((item) => item.danger)
       .map((item) => item.id);
     expect(danger).toEqual(['uninstall', 'remove']);
+  });
+
+  it('offers runtime libraries only for an installed game', () => {
+    expect(ids()).toContain('redist');
+    expect(ids({ running: true })).toContain('redist');
+    expect(ids({ installed: false })).not.toContain('redist');
+    expect(quickActions(state()).find((i) => i.id === 'redist')?.label).toBe('Библиотеки среды');
   });
 
   it('hides the move action while the game is running', () => {

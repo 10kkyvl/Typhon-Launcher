@@ -42,6 +42,7 @@ import (
 	"typhon/internal/presence"
 	"typhon/internal/profile"
 	"typhon/internal/redact"
+	"typhon/internal/redist"
 	"typhon/internal/relocate"
 	"typhon/internal/reviews"
 	"typhon/internal/savebackup"
@@ -394,6 +395,10 @@ func main() {
 	if err != nil {
 		fatal("start relocate service", err)
 	}
+	redistService, err := redist.NewService(libraryService.Find)
+	if err != nil {
+		fatal("start redist service", err)
+	}
 	lanService, err := lan.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start lan service", err)
@@ -623,6 +628,7 @@ func main() {
 		application.NewService(themeService),
 		application.NewService(lanService),
 		application.NewService(relocateService),
+		application.NewService(redistService),
 		// Registered whether or not telemetry ever started: the window that
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),

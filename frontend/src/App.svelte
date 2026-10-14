@@ -7,6 +7,8 @@
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
+  import GameCrashModal from './lib/components/GameCrashModal.svelte';
+  import RedistModal from './lib/components/RedistModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
@@ -133,6 +135,8 @@
       <ReleaseNotesModal />
       <MoveGameModal />
       <SaveBackupsModal />
+      <GameCrashModal />
+      <RedistModal />
       {#if $leaveRequest}
         <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
       {/if}

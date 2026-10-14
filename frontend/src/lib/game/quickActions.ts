@@ -11,6 +11,7 @@ export type QuickAction =
   | 'saves'
   | 'saves-backups'
   | 'verify'
+  | 'redist'
   | 'move'
   | 'lan-share'
   | 'lan-unshare'
@@ -67,6 +68,7 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
     items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
   }
   items.push({ id: 'verify', label: msg('games.actionVerify') });
+  items.push({ id: 'redist', label: msg('redist.action') });
   if (!state.running) {
     items.push({ id: 'move', label: msg('games.actionMove') });
   }

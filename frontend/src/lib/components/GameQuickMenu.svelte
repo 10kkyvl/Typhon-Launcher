@@ -24,6 +24,7 @@
   import { closeGameMenu, gameMenu } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
+  import { openRedist } from '../stores/redist';
   import { openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
@@ -82,6 +83,9 @@
       case 'verify':
         navigate('game', { id: current.id });
         return verify(current.id);
+      case 'redist':
+        openRedist(current.id);
+        return;
       case 'move':
         openMoveGame(current.id);
         return;
