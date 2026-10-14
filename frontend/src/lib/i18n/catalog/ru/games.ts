@@ -327,6 +327,7 @@ export const games = {
   'games.storeSteam': 'Steam',
   'games.storeGog': 'GOG',
   'games.storeEpic': 'Epic Games Store',
+  'games.actionProperties': 'Свойства',
 } as const;
 
 export type GamesKey = keyof typeof games;

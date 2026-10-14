@@ -6,6 +6,7 @@
   import { bigPictureActive } from './lib/bigpicture/mode';
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
+  import GamePropertiesModal from './lib/components/GamePropertiesModal.svelte';
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
@@ -133,6 +134,7 @@
       <ReleaseNotesModal />
       <MoveGameModal />
       <SaveBackupsModal />
+      <GamePropertiesModal />
       {#if $leaveRequest}
         <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
       {/if}

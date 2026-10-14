@@ -12,6 +12,7 @@ export type QuickAction =
   | 'saves-backups'
   | 'verify'
   | 'move'
+  | 'properties'
   | 'lan-share'
   | 'lan-unshare'
   | 'shortcut-create'
@@ -70,6 +71,7 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   if (!state.running) {
     items.push({ id: 'move', label: msg('games.actionMove') });
   }
+  items.push({ id: 'properties', label: msg('games.actionProperties') });
   if (state.lanEnabled) {
     items.push(
       state.lanShared

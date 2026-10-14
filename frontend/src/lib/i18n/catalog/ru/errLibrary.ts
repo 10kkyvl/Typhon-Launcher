@@ -31,6 +31,8 @@ export const errLibrary = {
   'library.no_saves_path': 'не указана папка сохранений',
   'library.saves_not_a_directory': 'это не папка',
   'library.saves_path_unavailable': 'папка сохранений недоступна',
+  'library.launch_args_invalid': 'в параметрах запуска недопустимые символы',
+  'library.launch_args_too_long': 'слишком длинные параметры запуска',
 
   'theme.file_too_large': 'файл темы превышает допустимый размер',
   'theme.unsupported_version': 'неподдерживаемая версия файла темы',

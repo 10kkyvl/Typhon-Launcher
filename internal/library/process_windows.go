@@ -81,6 +81,10 @@ func gameCommandLine(executable string, args []string) string {
 // запрос прав. Повторить это можно только через ShellExecuteEx с runas.
 func elevatingStarter(start gameStarter, elevate func(req launch) (gameProcess, error)) gameStarter {
 	return func(ctx context.Context, req launch) (gameProcess, error) {
+		if req.elevated {
+			slog.Info("game launch elevated by user setting", "executable", req.executable)
+			return elevate(req)
+		}
 		proc, err := start(ctx, req)
 		if !errors.Is(err, windows.ERROR_ELEVATION_REQUIRED) {
 			return proc, err

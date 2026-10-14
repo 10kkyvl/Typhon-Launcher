@@ -329,4 +329,5 @@ export const games: Record<GamesKey, Message> = {
   'games.storeSteam': 'Steam',
   'games.storeGog': 'GOG',
   'games.storeEpic': 'Epic Games Store',
+  'games.actionProperties': 'Properties',
 };

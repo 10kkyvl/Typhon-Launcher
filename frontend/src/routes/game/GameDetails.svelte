@@ -12,6 +12,7 @@
     HardDriveDownload,
     Heart,
     Play,
+    SlidersHorizontal,
     Sparkles,
     Square,
   } from '@lucide/svelte';
@@ -105,6 +106,7 @@
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
+  import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -924,6 +926,12 @@
                 <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
               </span>
             </IconButton>
+
+            {#if installed}
+              <IconButton label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
+                <SlidersHorizontal size="1.8rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
 
             <Button size="lg" onclick={() => (statusOpen = true)}>
               {msg('games.actionStatus', { status: statusLabel(localGame.status) })}

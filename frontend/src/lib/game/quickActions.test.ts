@@ -28,6 +28,7 @@ describe('quickActions', () => {
       'saves-backups',
       'verify',
       'move',
+      'properties',
       'shortcut-create',
       'uninstall',
       'remove',
@@ -86,6 +87,11 @@ describe('quickActions', () => {
       .filter((item) => item.danger)
       .map((item) => item.id);
     expect(danger).toEqual(['uninstall', 'remove']);
+  });
+
+  it('offers properties only for an installed game', () => {
+    expect(ids()).toContain('properties');
+    expect(ids({ installed: false })).not.toContain('properties');
   });
 
   it('hides the move action while the game is running', () => {
