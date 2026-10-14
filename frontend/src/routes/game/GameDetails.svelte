@@ -112,6 +112,7 @@
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
+  import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
@@ -1087,6 +1088,9 @@
                 </div>
               {/each}
             </dl>
+            <div class="redist-row">
+              <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
+            </div>
             {#if wineStatus?.required}
               <div class="steam-row">
                 <div class="steam-row-text">
@@ -1654,6 +1658,12 @@
 
   .about .fact:last-child {
     padding-bottom: 0;
+  }
+
+  .redist-row {
+    display: flex;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
   }
 
   .steam-row {

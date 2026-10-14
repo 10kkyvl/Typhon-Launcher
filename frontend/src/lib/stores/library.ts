@@ -1,19 +1,14 @@
 import { derived, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getGames, getRunningGames, type LibraryGame } from '../services/library';
+import { getGames, getRunningGames, type LibraryGame, type SessionEvent } from '../services/library';
 import { msg } from '../i18n';
+import { clearCrashes, recordCrash } from './crash';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
 export const installedGames = derived(libraryGames, (games) => games.filter((game) => !game.uninstalled));
 export const runningGames = writable<Set<string>>(new Set());
-
-interface SessionEvent {
-  gameId: string;
-  sessionSeconds: number;
-  playtimeSeconds: number;
-}
 
 export async function initLibrary() {
   libraryGames.set(await getGames());
@@ -28,12 +23,18 @@ export async function initLibrary() {
     runningGames.update((set) => new Set(set).add(gameId));
   });
   Events.On('game:stopped', (event) => {
-    const { gameId, sessionSeconds } = event.data as SessionEvent;
+    const session = event.data as SessionEvent;
+    const { gameId, sessionSeconds } = session;
     runningGames.update((set) => {
       const next = new Set(set);
       next.delete(gameId);
       return next;
     });
+    if (session.crashed) {
+      recordCrash(session);
+      return;
+    }
+    clearCrashes(gameId);
     if (sessionSeconds >= 60) {
       toast(msg('state.librarySessionEnded', { minutes: Math.round(sessionSeconds / 60) }));
     }

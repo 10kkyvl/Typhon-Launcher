@@ -56,6 +56,16 @@ export interface SavesResult {
   unreadable: number;
 }
 
+export interface SessionEvent {
+  gameId: string;
+  sessionSeconds: number;
+  playtimeSeconds: number;
+  exitCode: number;
+  exitKnown: boolean;
+  crashed: boolean;
+  reasonCode: string;
+}
+
 const unavailable = () => new Error('unavailable in browser');
 
 export async function getGames(): Promise<LibraryGame[]> {

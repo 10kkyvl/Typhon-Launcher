@@ -18,6 +18,45 @@ type SessionEvent struct {
 	GameID          string `json:"gameId"`
 	SessionSeconds  int64  `json:"sessionSeconds"`
 	PlaytimeSeconds int64  `json:"playtimeSeconds"`
+	ExitCode        int    `json:"exitCode"`
+	ExitKnown       bool   `json:"exitKnown"`
+	Crashed         bool   `json:"crashed"`
+	ReasonCode      string `json:"reasonCode"`
+}
+
+const crashSessionSeconds = 20
+
+var emitStopped = func(ev SessionEvent) { emit("game:stopped", ev) }
+
+type exitInfo struct {
+	code  int
+	known bool
+}
+
+var crashReasonCodes = map[uint32]string{
+	0xC0000135: "dll_not_found",
+	0xC0000142: "dll_init_failed",
+	0xC000007B: "bad_image",
+	0xC0000005: "access_violation",
+	0xC00000FD: "stack_overflow",
+	0xE0434352: "dotnet_exception",
+}
+
+func crashReasonCode(code int) string {
+	return crashReasonCodes[uint32(int64(code)&0xFFFFFFFF)]
+}
+
+func exitFields(ev SessionEvent, exit *exitInfo, stoppedByUser bool, seconds int64) SessionEvent {
+	if exit == nil || !exit.known {
+		return ev
+	}
+	ev.ExitCode = exit.code
+	ev.ExitKnown = true
+	if exit.code != 0 && !stoppedByUser && seconds < crashSessionSeconds {
+		ev.Crashed = true
+		ev.ReasonCode = crashReasonCode(exit.code)
+	}
+	return ev
 }
 
 var (
@@ -158,10 +197,15 @@ func (s *Service) PlayGame(id string) error {
 		defer cancel()
 		waitErr := proc.wait()
 		logExit(id, executable, s.now().Sub(startedAt), waitErr)
+		code, known := exitCode(waitErr)
+		info := &exitInfo{code: code, known: known}
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
 		// закончилась (см. detectTick); закрывать её здесь при активном
 		// детекте — значит закрывать по смерти лаунчер-обёртки, а не игры.
 		s.mu.Lock()
+		if cur, ok := s.running[id]; ok && cur.process == proc {
+			cur.exit = info
+		}
 		closed := s.closed
 		watching := s.watching
 		s.mu.Unlock()
@@ -312,8 +356,10 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 	}
 
 	stoppedByUser := false
+	var exit *exitInfo
 	if current, ok := s.running[id]; ok {
 		stoppedByUser = current.stoppedByUser
+		exit = current.exit
 	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
@@ -368,7 +414,7 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		}
 	}
 	if game == nil {
-		emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds})
+		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds}, exit, stoppedByUser, seconds))
 		return
 	}
 	previousLastPlayed := game.LastPlayed
@@ -386,7 +432,7 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		return
 	}
 	slog.Info("game stopped", "id", id, "title", game.Title, "sessionSeconds", seconds)
-	emit("game:stopped", SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds})
+	emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
 	s.emitUpdated()
 }
 

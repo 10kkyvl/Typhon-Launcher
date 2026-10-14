@@ -188,6 +188,17 @@ func (s *Service) detectTick(ctx context.Context) {
 	if len(startedGames) > 0 {
 		watchersSnap = s.watchers
 	}
+	deferred := toClose[:0]
+	for _, id := range toClose {
+		// Лаунчер сам запускал процесс: код выхода придёт из wait() через
+		// миллисекунды после его смерти, и закрытие без него потеряло бы вылет.
+		if sess := s.running[id]; sess.process != nil && sess.exit == nil && !sess.closeDeferred {
+			sess.closeDeferred = true
+			continue
+		}
+		deferred = append(deferred, id)
+	}
+	toClose = deferred
 	closeStarts := make(map[string]time.Time, len(toClose))
 	for _, id := range toClose {
 		closeStarts[id] = s.running[id].startedAt
