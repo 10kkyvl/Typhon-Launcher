@@ -9,7 +9,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestRegressionRepairDestroysRollback(t *testing.T) {
+func TestRepairKeepsExistingRollback(t *testing.T) {
 	h := newHarness(t)
 	h.withTorrent(damagedTorrentReport())
 	old := h.installDir + previousSuffix
@@ -28,16 +28,15 @@ func TestRegressionRepairDestroysRollback(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(old, "game.exe")); err != nil || string(b) != "PREVIOUS VERSION" {
 		t.Fatal("rollback lost")
 	}
-	t.Log("Regression: repair removed pre-existing rollback files")
 }
 
-type auditDownloads struct {
+type cancellingDownloads struct {
 	*fakeDownloads
 	cancelled     int
 	cancelContext context.CancelFunc
 }
 
-func (d *auditDownloads) AddTask(ctx context.Context, r download.AddRequest) (download.Download, error) {
+func (d *cancellingDownloads) AddTask(ctx context.Context, r download.AddRequest) (download.Download, error) {
 	v, e := d.fakeDownloads.AddTask(ctx, r)
 	if e == nil {
 		d.mu.Lock()
@@ -47,24 +46,23 @@ func (d *auditDownloads) AddTask(ctx context.Context, r download.AddRequest) (do
 	}
 	return v, e
 }
-func (d *auditDownloads) Cancel(id string) error { d.cancelled++; return nil }
-func TestRegressionRepairCancellationLeavesDownload(t *testing.T) {
+func (d *cancellingDownloads) Cancel(id string) error { d.cancelled++; return nil }
+func TestRepairCancelStopsDownload(t *testing.T) {
 	h := newHarness(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	d := &auditDownloads{fakeDownloads: h.downloads, cancelContext: cancel}
+	d := &cancellingDownloads{fakeDownloads: h.downloads, cancelContext: cancel}
 	h.service.downloads = d
 	h.service.repair(ctx, h.library.games[0], h.releases.list[0], true)
 	if d.cancelled != 1 || len(d.tasks) != 1 {
-		t.Fatal("not reproduced")
+		t.Fatalf("download not cancelled: cancelled=%d tasks=%d", d.cancelled, len(d.tasks))
 	}
 	for _, task := range d.tasks {
 		if task.Status != download.StatusDownloading {
 			t.Fatal("not running")
 		}
 	}
-	t.Log("Regression: repair rolled back without canceling live download")
 }
-func TestRegressionRecoveryKeepsNewVersionLabelAfterRollback(t *testing.T) {
+func TestRecoveryRestoresVersionWithRollback(t *testing.T) {
 	h := newHarness(t)
 	old := h.installDir + previousSuffix
 	writeFile(t, old, "game.exe", "OLD VERSION")
@@ -76,7 +74,6 @@ func TestRegressionRecoveryKeepsNewVersionLabelAfterRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(b) != "OLD VERSION" || h.library.games[0].Version != "1.0" {
-		t.Fatal("not reproduced")
+		t.Fatalf("recovery left files %q and version %q", b, h.library.games[0].Version)
 	}
-	t.Log("Regression: recovery restores old files but retains version 2.0")
 }

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestRegressionReaddedGameDisappears(t *testing.T) {
+func TestSyncRestoresReaddedGame(t *testing.T) {
 	h := newHarness(t)
 	h.catalog.link("game-1", "1")
 	at := time.Now().Add(-time.Hour)
@@ -28,7 +28,7 @@ func TestRegressionReaddedGameDisappears(t *testing.T) {
 	}
 
 }
-func TestRegressionTokenChangesBetweenGetAndPut(t *testing.T) {
+func TestSyncRefusesPutAfterAccountChange(t *testing.T) {
 	h := newHarness(t)
 	token := "account-A"
 	h.service.client.token = func() (string, error) { return token, nil }
@@ -49,10 +49,10 @@ func TestRegressionTokenChangesBetweenGetAndPut(t *testing.T) {
 		t.Fatalf("expected changed account error: %v", err)
 	}
 	if getAuth != "Bearer account-A" || putAuth != "" {
-		t.Fatalf("not reproduced %s %s", getAuth, putAuth)
+		t.Fatalf("put sent after account change: get=%q put=%q", getAuth, putAuth)
 	}
 }
-func TestRegressionLargeLibraryCannotSync(t *testing.T) {
+func TestSyncHandlesLargeLibrary(t *testing.T) {
 	h := newHarness(t)
 	h.server.put = echoPut(200)
 	gs := make([]wireGame, 10000)
@@ -65,7 +65,7 @@ func TestRegressionLargeLibraryCannotSync(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestRegressionPendingRemovalCrossesAccounts(t *testing.T) {
+func TestSyncKeepsRemovalWithinAccount(t *testing.T) {
 	h := newHarness(t)
 	h.service.state.Games["1"] = gameState{DeviceSeconds: 10, Baseline: 10}
 	h.service.state.DeviceID = "00000000-0000-4000-8000-000000000001"

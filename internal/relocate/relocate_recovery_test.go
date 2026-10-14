@@ -8,7 +8,7 @@ import (
 	"typhon/internal/hashdir"
 )
 
-func TestRegressionRecoveryDeletesGoodSourceForBadTarget(t *testing.T) {
+func TestRecoveryKeepsSourceWhenTargetCorrupt(t *testing.T) {
 	lib := newTestLibrary(t)
 	game, src := addTestGame(t, lib)
 	dst := filepath.Join(t.TempDir(), "target")
@@ -26,7 +26,7 @@ func TestRegressionRecoveryDeletesGoodSourceForBadTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	j := Job{ID: "audit", Scope: ScopeGame, Stage: StageRepoint, GameID: game.ID, Source: src, Target: dst}
+	j := Job{ID: "repoint-1", Scope: ScopeGame, Stage: StageRepoint, GameID: game.ID, Source: src, Target: dst}
 	s.jobs = []Job{j}
 	if err := s.st.saveManifest(j.ID, m); err != nil {
 		t.Fatal(err)
@@ -35,9 +35,8 @@ func TestRegressionRecoveryDeletesGoodSourceForBadTarget(t *testing.T) {
 	if _, err := os.Stat(src); err != nil {
 		t.Fatal("source lost", err)
 	}
-	t.Log("Regression: recovery deleted good source without verifying corrupt target")
 }
-func TestRegressionLibraryRetryMovesAlreadyMovedGameAgain(t *testing.T) {
+func TestLibraryRetrySkipsAlreadyMovedGame(t *testing.T) {
 	lib := newTestLibrary(t)
 	set := newTestSettings(t)
 	s := newTestService(t, set, lib, nil, nil, nil)
@@ -56,7 +55,6 @@ func TestRegressionLibraryRetryMovesAlreadyMovedGameAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	if g.InstallDir != filepath.Join(root, "Games", "Game") {
-		t.Fatalf("not reproduced: %s", g.InstallDir)
+		t.Fatalf("game moved again: %s", g.InstallDir)
 	}
-	t.Log("Regression: retry relocates previously moved Games/Game to root/Game instead of skipping it")
 }

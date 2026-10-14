@@ -7,7 +7,7 @@ import (
 	"typhon/internal/sources/feed"
 )
 
-func TestRegressionRenamedReleaseKeepsWrongGame(t *testing.T) {
+func TestRenamedReleaseDropsStaleMatch(t *testing.T) {
 	list := sampleList(t, "Wrong Game v1.0")
 	id := "wrong-game"
 	list[0].CanonicalGameID = &id
@@ -24,7 +24,6 @@ func TestRegressionRenamedReleaseKeepsWrongGame(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.resolved != 1 || merged[0].CanonicalGameID != nil {
-		t.Fatal("not reproduced")
+		t.Fatalf("stale match kept: resolved=%d canonical=%v", m.resolved, merged[0].CanonicalGameID)
 	}
-	t.Log("Regression: corrected release title retains old game's exact match without resolving")
 }

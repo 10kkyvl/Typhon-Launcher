@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestRegressionRepointOccupiedTargetDeletesSource(t *testing.T) {
+func TestMoveTreeRefusesOccupiedTarget(t *testing.T) {
 	root := t.TempDir()
 	src := filepath.Join(root, "source")
 	dst := filepath.Join(root, "target")
@@ -32,7 +32,7 @@ func TestRegressionRepointOccupiedTargetDeletesSource(t *testing.T) {
 	}
 }
 
-func TestRegressionDeleteFlatDataLeavesPayload(t *testing.T) {
+func TestDeleteDataKeepsInPlacePayload(t *testing.T) {
 	dest := t.TempDir()
 	payload := filepath.Join(dest, "game.exe")
 	if err := os.WriteFile(payload, []byte("payload"), 0644); err != nil {
@@ -56,7 +56,6 @@ func TestRegressionDeleteFlatDataLeavesPayload(t *testing.T) {
 	if _, err := m.Get("a"); err != nil {
 		t.Fatal("record lost")
 	}
-	t.Log("Regression: delete-data removes record but flat payload remains on disk")
 }
 
 func TestDeleteFlatDownloadOnlyRemovesItsFiles(t *testing.T) {

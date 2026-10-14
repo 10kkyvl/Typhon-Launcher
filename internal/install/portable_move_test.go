@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestRegressionPortableMoveCommitFailureLosesSource(t *testing.T) {
+func TestPortableMoveKeepsSourceWhenCommitFails(t *testing.T) {
 	s, _, _ := newTestService(t)
 	src := filepath.Join(t.TempDir(), "source")
 	if err := os.MkdirAll(src, 0755); err != nil {
@@ -23,7 +23,7 @@ func TestRegressionPortableMoveCommitFailureLosesSource(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dst, "concurrent-file"), []byte("occupied"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	item := Installation{ID: "audit-move", Type: TypePortable, Mode: ModeMove, ContentRoot: src, Destination: dst}
+	item := Installation{ID: "move-1", Type: TypePortable, Mode: ModeMove, ContentRoot: src, Destination: dst}
 	s.mu.Lock()
 	s.items = append(s.items, &item)
 	s.mu.Unlock()

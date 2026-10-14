@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRegressionRelocateLeavesOldUninstaller(t *testing.T) {
+func TestRelocateRewritesUninstallerPath(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	g, old := addRelocateGame(t, s)
 	s.mu.Lock()
@@ -17,7 +17,6 @@ func TestRegressionRelocateLeavesOldUninstaller(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(next.Uninstall.Command, old) || strings.Contains(next.Uninstall.QuietCommand, old) {
-		t.Fatal("not reproduced")
+		t.Fatalf("uninstaller still points at %s", old)
 	}
-	t.Log("Regression: uninstaller points at old directory after move")
 }
