@@ -20,6 +20,7 @@ func indexMaps(idx *index) map[string]any {
 		"byServer":       idx.byServer,
 		"byIGDB":         idx.byIGDB,
 		"bySteam":        idx.bySteam,
+		"byGOG":          idx.byGOG,
 		"byIdentity":     idx.byIdentity,
 		"byLocal":        idx.byLocal,
 		"redirectGroup":  idx.redirectGroup,
@@ -423,5 +424,30 @@ func TestBrowseMergeKeepsRedirectSourceRedirected(t *testing.T) {
 		t.Fatal("redirect source became matchable again after a merge")
 	}
 	s.mu.Unlock()
+	assertIndexEqualsRebuild(t, s)
+}
+
+func TestUpdateSettlesDuplicatedGOGHolder(t *testing.T) {
+	s := newTestService(t)
+	seed(t, s,
+		Game{ID: "a", Title: "Alpha Quest", ServerID: "s-a"},
+		Game{ID: "b", Title: "Bravo Quest", ServerID: "s-b"},
+	)
+	s.mu.Lock()
+	s.games[0].ExternalIDs.GOG = "X1"
+	s.games[1].ExternalIDs.GOG = "X1"
+	s.rebuildLocked()
+	if got := s.idx.byExternal["gog:x1"]; got != 1 {
+		s.mu.Unlock()
+		t.Fatalf("byExternal[gog:x1] = %d, want the higher holder 1", got)
+	}
+	old := s.games[1]
+	s.games[1].ExternalIDs.GOG = ""
+	s.updateIndexAtLocked(1, old)
+	got := s.idx.byExternal["gog:x1"]
+	s.mu.Unlock()
+	if got != 0 {
+		t.Fatalf("byExternal[gog:x1] = %d after the higher holder dropped the id, want 0", got)
+	}
 	assertIndexEqualsRebuild(t, s)
 }

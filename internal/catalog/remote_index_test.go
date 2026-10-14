@@ -289,6 +289,7 @@ func assertRemoteMapsMatch(t *testing.T, idx *index) {
 		"byServer":   {idx.byServer, fresh.byServer},
 		"byIGDB":     {idx.byIGDB, fresh.byIGDB},
 		"bySteam":    {idx.bySteam, fresh.bySteam},
+		"byGOG":      {idx.byGOG, fresh.byGOG},
 		"byIdentity": {idx.byIdentity, fresh.byIdentity},
 		"byLocal":    {idx.byLocal, fresh.byLocal},
 	} {

@@ -7,10 +7,10 @@ function page(patch: Partial<CatalogPage> = {}): CatalogPage {
   return { items: [], total: 0, page: 1, pageSize: 60, revision: 7, snapshot: 's1', ...patch };
 }
 
-const shown = { revision: 7, snapshot: 's1', page: 1 };
+const shown = { revision: 7, page: 1, fallback: false };
 
 describe('applyFreshPage', () => {
-  it('replaces in place when revision and snapshot match', () => {
+  it('replaces in place when revision and fallback match', () => {
     const fresh = page();
     expect(applyFreshPage('k', shown, { key: 'k', page: fresh })).toEqual({ action: 'replace', page: fresh });
   });
@@ -19,12 +19,31 @@ describe('applyFreshPage', () => {
     expect(applyFreshPage('k', shown, { key: 'k', page: page({ revision: 8 }) })).toEqual({ action: 'reload' });
   });
 
-  it('reloads when the snapshot differs', () => {
-    expect(applyFreshPage('k', shown, { key: 'k', page: page({ snapshot: 's2' }) })).toEqual({ action: 'reload' });
+  it('replaces when only the frozen snapshot differs', () => {
+    const fresh = page({ snapshot: 's2' });
+    expect(applyFreshPage('k', shown, { key: 'k', page: fresh })).toEqual({ action: 'replace', page: fresh });
   });
 
-  it('reloads when the user already paged beyond the first page', () => {
-    expect(applyFreshPage('k', { ...shown, page: 2 }, { key: 'k', page: page() })).toEqual({ action: 'reload' });
+  it('reloads when the personalization fallback differs', () => {
+    expect(applyFreshPage('k', shown, { key: 'k', page: page({ personalizationFallback: true }) })).toEqual({ action: 'reload' });
+    expect(applyFreshPage('k', { ...shown, fallback: true }, { key: 'k', page: page() })).toEqual({ action: 'reload' });
+  });
+
+  it('ignores a same-revision page once the user paged beyond the first page', () => {
+    expect(applyFreshPage('k', { ...shown, page: 2 }, { key: 'k', page: page() })).toEqual({ action: 'ignore' });
+  });
+
+  it('reloads a different revision once the user paged beyond the first page', () => {
+    expect(applyFreshPage('k', { ...shown, page: 2 }, { key: 'k', page: page({ revision: 8 }) })).toEqual({ action: 'reload' });
+  });
+
+  it('reports a failed background refresh with its error', () => {
+    expect(applyFreshPage('k', shown, { key: 'k', page: page(), failed: true, error: 'catalog.changed' })).toEqual({ action: 'failed', error: 'catalog.changed' });
+    expect(applyFreshPage('k', { ...shown, page: 3 }, { key: 'k', page: page(), failed: true })).toEqual({ action: 'failed', error: '' });
+  });
+
+  it('ignores a failure for another key', () => {
+    expect(applyFreshPage('k', shown, { key: 'other', page: page(), failed: true })).toEqual({ action: 'ignore' });
   });
 
   it('ignores an event for another key', () => {
@@ -98,6 +117,13 @@ describe('createFreshPageBuffer', () => {
     expect(buffer.take('a')).toBeUndefined();
     expect(buffer.take('b')).toBeDefined();
     expect(buffer.take('c')).toBeDefined();
+  });
+
+  it('keeps a failure that arrived before the stale response', () => {
+    const buffer = createFreshPageBuffer();
+    const event = { key: 'k', page: page(), failed: true, error: 'catalog.backend_outdated' };
+    buffer.remember(event);
+    expect(buffer.take('k')).toBe(event);
   });
 
   it('forgets everything on clear', () => {

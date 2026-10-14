@@ -574,7 +574,12 @@ func (s *Service) report(game catalog.Game, view View, err error) {
 		// The page already shows this game's metadata, so a refresh that yielded is not a
 		// failure; the event only clears the "searching" state set by EnsureFresh.
 		slog.Debug("metadata refresh yielded", "game", game.ID)
-		emit("metadata:updated", s.view(game))
+		current, getErr := s.catalog.GetGame(game.ID)
+		if getErr != nil {
+			slog.Debug("metadata refresh yielded: game is gone", "game", game.ID, "error", getErr)
+			return
+		}
+		emit("metadata:updated", s.view(current))
 	case isRateLimited(err), errors.Is(err, errBudgetBusy),
 		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		slog.Debug("metadata refresh postponed", "game", game.ID)

@@ -58,6 +58,11 @@ function appendCatalogContinuation(
     : appendCatalogPage(previous, page, revision);
 }
 
+export function withoutStale(query: CatalogQuery): CatalogQuery {
+  const { allowStale, ...rest } = query;
+  return allowStale === undefined ? query : rest;
+}
+
 export async function reloadCatalogPrefix(
   query: CatalogQuery,
   pageCount: number,
@@ -71,13 +76,13 @@ export async function reloadCatalogPrefix(
   // prefix once, then leave the current view intact for a later user action.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      let result = await load({ ...query, page: 1, revision: 0 });
+      let result = await load({ ...withoutStale(query), page: 1, revision: 0 });
       let items = [...result.items];
       let compat = { ...(result.compat ?? {}) };
       let offline = result.offline === true;
       for (let page = 2; page <= targetPage && items.length < result.total; page++) {
         if (!active()) throw new Error('catalog.refresh_cancelled');
-        const next = await load({ ...query, page, revision: result.revision ?? 0, snapshot: result.snapshot });
+        const next = await load({ ...withoutStale(query), page, revision: result.revision ?? 0, snapshot: result.snapshot });
         items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
         compat = { ...compat, ...(next.compat ?? {}) };
         offline ||= next.offline === true;
@@ -147,13 +152,13 @@ export async function loadCatalogContinuation(
     return { result: { ...result, offline: result.offline || (query.page !== 1 && offline) }, items, refreshed: false };
   } catch (err) {
     if (query.stable || errorCode(err) !== 'catalog.changed' || (query.page ?? 1) <= 1 || !active()) throw err;
-    let result = await load({ ...query, page: 1, revision: 0 });
+    let result = await load({ ...withoutStale(query), page: 1, revision: 0 });
     let items = result.items;
     const compat = { ...result.compat };
     let offline = result.offline === true;
     for (let page = 2; page <= (query.page ?? 1) && items.length < result.total; page++) {
       if (!active()) throw err;
-      const next = await load({ ...query, page, revision: result.revision, snapshot: result.snapshot });
+      const next = await load({ ...withoutStale(query), page, revision: result.revision, snapshot: result.snapshot });
       items = appendCatalogContinuation(items, next, result.revision ?? 0, offline);
       Object.assign(compat, next.compat);
       offline ||= next.offline === true;

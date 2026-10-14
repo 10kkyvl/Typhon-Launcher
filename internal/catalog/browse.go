@@ -42,6 +42,7 @@ type GameQuery struct {
 	ExcludeNotInterested string   `json:"excludeNotInterested,omitempty"`
 	Page                 int      `json:"page"`
 	PageSize             int      `json:"pageSize"`
+	AllowStale           bool     `json:"allowStale,omitempty"`
 }
 
 // CompatOnlyWorking — значение GameQuery.Compat, оставляющее только игры,

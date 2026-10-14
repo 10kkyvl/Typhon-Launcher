@@ -5,7 +5,7 @@
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
   import { latestRunner, serialQueue } from '../../lib/catalog/serial';
-  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
+  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix, withoutStale } from '../../lib/catalog/pages';
   import { applyFreshPage, canWarmNextPage, createFreshPageBuffer, staleKeyOf, type FreshPageEvent } from '../../lib/catalog/stale';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
@@ -234,6 +234,7 @@
         compat: compatOnly ? compatOnlyWorking : '',
         page: next,
         pageSize,
+        ...(next === 1 ? { allowStale: true } : {}),
       };
       const continuation = await loadCatalogContinuation(
         request, items, load,
@@ -260,7 +261,7 @@
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
       if (next === 1 || refreshed) staleKey = staleKeyOf(result);
       if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
-        const upcoming = { ...request, page: page + 1, revision, snapshot };
+        const upcoming = { ...withoutStale(request), page: page + 1, revision, snapshot };
         prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
       applyEarlyFreshPage();
@@ -500,15 +501,28 @@
       earlyFresh.remember(event);
       return;
     }
-    const verdict = applyFreshPage(staleKey, { revision, snapshot, page: appending ? page + 1 : page }, event);
-    if (verdict.action === 'ignore') return;
+    const verdict = applyFreshPage(staleKey, { revision, page: appending ? page + 1 : page, fallback: catalogFallback }, event);
+    if (verdict.action === 'ignore') {
+      if (event?.key && event.key === staleKey) {
+        staleKey = '';
+        earlyFresh.take(event.key);
+      }
+      return;
+    }
+    earlyFresh.take(staleKey);
     staleKey = '';
     if (verdict.action === 'reload') {
       void reload(false);
       return;
     }
+    if (verdict.action === 'failed') {
+      if (verdict.error === 'catalog.changed') void reload(false);
+      else if (verdict.error === 'catalog.backend_outdated') backendOutdated = true;
+      else offline = true;
+      return;
+    }
     const fresh = verdict.page;
-    items = fresh.items;
+    items = fresh.items ?? [];
     compatByGame = fresh.compat ?? {};
     total = fresh.total;
     facets = fresh.facets ?? [];

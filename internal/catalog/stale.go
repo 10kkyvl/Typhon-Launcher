@@ -21,8 +21,10 @@ const (
 // PageEvent carries the result of a background refresh of a first page that
 // BrowseGames answered from the local page cache with Stale set.
 type PageEvent struct {
-	Key  string   `json:"key"`
-	Page GamePage `json:"page"`
+	Key    string   `json:"key"`
+	Page   GamePage `json:"page"`
+	Failed bool     `json:"failed"`
+	Error  string   `json:"error"`
 }
 
 type pageLife struct {
@@ -50,11 +52,10 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 func (s *Service) ServiceShutdown() error {
 	s.life.mu.Lock()
-	cancel := s.life.cancel
-	s.life.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if s.life.cancel != nil {
+		s.life.cancel()
 	}
+	s.life.mu.Unlock()
 	s.life.wg.Wait()
 	return nil
 }
@@ -68,8 +69,8 @@ func (s *Service) lifetimeAlive() bool {
 // startRefresh runs fn in the service's lifetime unless a refresh for the key
 // is already in flight. It reports false when the service is not running, so
 // the caller falls back to the synchronous path. wg.Add happens under the same
-// lock that ServiceShutdown's cancel races against: once the context is done no
-// new goroutine can be registered after Wait began.
+// lock that ServiceShutdown cancels under: once the context is done no new
+// goroutine can be registered, so Wait never races an Add.
 func (s *Service) startRefresh(key string, fn func(ctx context.Context)) bool {
 	s.life.mu.Lock()
 	defer s.life.mu.Unlock()
@@ -97,9 +98,10 @@ func (s *Service) startRefresh(key string, fn func(ctx context.Context)) bool {
 // staleFirstPage answers an initial first-page request from the page cache and
 // refreshes it in the background. Only the page the frontend asks for with no
 // revision can be stale: continuations and prefix reloads pin a revision and
-// must come from the backend.
-func (s *Service) staleFirstPage(q GameQuery, durable bool, remote RemoteCatalog, path, key, snapshot string) (GamePage, bool) {
-	if !durable || remote == nil || q.Page > 1 || q.Revision != 0 || !s.lifetimeAlive() {
+// must come from the backend. Callers that cannot swap a page in place when the
+// refresh event arrives do not set AllowStale and always get a fresh page.
+func (s *Service) staleFirstPage(q GameQuery, allowStale, durable bool, remote RemoteCatalog, path, key, snapshot string) (GamePage, bool) {
+	if !allowStale || !durable || remote == nil || q.Page > 1 || q.Revision != 0 || !s.lifetimeAlive() {
 		return GamePage{}, false
 	}
 	var page GamePage
@@ -140,15 +142,31 @@ func (s *Service) refreshPage(ctx context.Context, q GameQuery, remote RemoteCat
 	page, err := s.fetchRemotePage(ctx, q, remote, snapshot, &timing)
 	if err != nil {
 		slog.Debug("catalog page refresh", "key", key, "error", err)
+		s.emitRefreshFailure(ctx, key, err)
 		return
 	}
 	page, err = s.commitPage(page, path, key, snapshot, &timing)
 	if err != nil {
 		slog.Warn("catalog page refresh", "key", key, "error", err)
+		s.emitRefreshFailure(ctx, key, err)
 		return
 	}
 	if ctx.Err() != nil {
 		return
 	}
 	s.emit(pageEventName, PageEvent{Key: key, Page: page})
+}
+
+func (s *Service) emitRefreshFailure(ctx context.Context, key string, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+	code := ""
+	switch {
+	case errors.Is(err, ErrBackendOutdated):
+		code = "catalog.backend_outdated"
+	case errors.Is(err, ErrCatalogChanged):
+		code = "catalog.changed"
+	}
+	s.emit(pageEventName, PageEvent{Key: key, Failed: true, Error: code})
 }

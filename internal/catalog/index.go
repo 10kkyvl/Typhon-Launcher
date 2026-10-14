@@ -27,6 +27,7 @@ type index struct {
 	byServer       map[string][]int
 	byIGDB         map[string][]int
 	bySteam        map[string][]int
+	byGOG          map[string][]int
 	byIdentity     map[string][]int
 	byLocal        map[string][]int
 	redirectGroup  map[string][]int
@@ -45,6 +46,7 @@ func buildIndex(games []Game) *index {
 		byServer:       make(map[string][]int, len(games)),
 		byIGDB:         make(map[string][]int, len(games)),
 		bySteam:        make(map[string][]int, len(games)),
+		byGOG:          map[string][]int{},
 		byIdentity:     make(map[string][]int, len(games)),
 		byLocal:        map[string][]int{},
 		redirectGroup:  map[string][]int{},
@@ -120,6 +122,9 @@ func (idx *index) registerRemote(pos int, g Game) {
 	if g.ExternalIDs.Steam != "" {
 		addPosting(idx.bySteam, strings.ToLower(g.ExternalIDs.Steam), pos)
 	}
+	if g.ExternalIDs.GOG != "" {
+		addPosting(idx.byGOG, strings.ToLower(g.ExternalIDs.GOG), pos)
+	}
 	forEachIdentityKey(g, func(key string) { addPosting(idx.byIdentity, key, pos) })
 	forEachLocalIdentityKey(g.LocalExternalIDs, func(key string) { addPosting(idx.byLocal, key, pos) })
 }
@@ -133,6 +138,9 @@ func (idx *index) unregisterRemote(pos int, g Game) {
 	}
 	if g.ExternalIDs.Steam != "" {
 		removePosting(idx.bySteam, strings.ToLower(g.ExternalIDs.Steam), pos)
+	}
+	if g.ExternalIDs.GOG != "" {
+		removePosting(idx.byGOG, strings.ToLower(g.ExternalIDs.GOG), pos)
 	}
 	forEachIdentityKey(g, func(key string) { removePosting(idx.byIdentity, key, pos) })
 	forEachLocalIdentityKey(g.LocalExternalIDs, func(key string) { removePosting(idx.byLocal, key, pos) })
@@ -234,6 +242,8 @@ func (idx *index) settleExternal(key string) {
 		holders = idx.byIGDB[strings.TrimPrefix(key, "igdb:")]
 	case strings.HasPrefix(key, "steam:"):
 		holders = idx.bySteam[strings.TrimPrefix(key, "steam:")]
+	case strings.HasPrefix(key, "gog:"):
+		holders = idx.byGOG[strings.TrimPrefix(key, "gog:")]
 	}
 	if len(holders) == 0 {
 		delete(idx.byExternal, key)

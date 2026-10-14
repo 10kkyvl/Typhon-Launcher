@@ -57,6 +57,22 @@ describe('catalog stale pages', () => {
   });
 });
 
+describe('catalog stale opt-in', () => {
+  it('sends allowStale only when the caller sets it', async () => {
+    browseGames.mockClear();
+    browseGames.mockResolvedValue(emptyPage);
+
+    await queryCatalogGames({ search: 'game', allowStale: true });
+    await queryCatalogGames({ search: 'game' });
+    await queryCatalogGames({ search: 'game', allowStale: false });
+
+    expect(browseGames.mock.calls[0][0]).toHaveProperty('allowStale', true);
+    expect(browseGames.mock.calls[1][0]).not.toHaveProperty('allowStale');
+    expect(browseGames.mock.calls[2][0]).not.toHaveProperty('allowStale');
+    browseGames.mockReset();
+  });
+});
+
 describe('catalog request cancellation', () => {
   it('cancels the underlying BrowseGames call when the signal aborts', async () => {
     const call = new CancellablePromise<typeof emptyPage>((resolve) => { setTimeout(() => resolve(emptyPage), 50); });

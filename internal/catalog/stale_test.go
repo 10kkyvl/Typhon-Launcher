@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"typhon/internal/uierr"
 )
 
 type gateRemote struct {
@@ -175,7 +177,7 @@ func (f *staleFixture) cacheFile(key string) string {
 
 func TestBrowseFirstPageIsFreshWithoutCache(t *testing.T) {
 	f := newStaleFixture(t, true)
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,13 +197,13 @@ func TestBrowseFirstPageIsFreshWithoutCache(t *testing.T) {
 
 func TestStalePageRefreshesInBackground(t *testing.T) {
 	f := newStaleFixture(t, true)
-	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
 
-	second, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	second, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,6 +224,9 @@ func TestStalePageRefreshesInBackground(t *testing.T) {
 	if event.Key != first.Key {
 		t.Fatalf("event key = %q, want %q", event.Key, first.Key)
 	}
+	if event.Failed || event.Error != "" {
+		t.Fatalf("success event failed=%v error=%q", event.Failed, event.Error)
+	}
 	if event.Page.Stale || event.Page.Key != first.Key {
 		t.Fatalf("event page stale=%v key=%q", event.Page.Stale, event.Page.Key)
 	}
@@ -239,7 +244,7 @@ func TestStalePageRefreshesInBackground(t *testing.T) {
 
 func TestConcurrentStaleHitsStartOneRefresh(t *testing.T) {
 	f := newStaleFixture(t, true)
-	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +260,7 @@ func TestConcurrentStaleHitsStartOneRefresh(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pages[i], errs[i] = f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+			pages[i], errs[i] = f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 		}()
 	}
 	wg.Wait()
@@ -280,11 +285,11 @@ func TestConcurrentStaleHitsStartOneRefresh(t *testing.T) {
 
 func TestPageOlderThanWindowIsFetchedSynchronously(t *testing.T) {
 	f := newStaleFixture(t, true)
-	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(catalogPageStaleWindow)
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,9 +313,9 @@ func TestPageIsNeverStaleOutsideInitialFirstPage(t *testing.T) {
 		query   GameQuery
 		durable bool
 	}{
-		{name: "second page", query: GameQuery{Page: 2}, durable: true},
-		{name: "pinned revision", query: GameQuery{Page: 1, Revision: 7}, durable: true},
-		{name: "not durable", query: GameQuery{Page: 1}, durable: false},
+		{name: "second page", query: GameQuery{Page: 2, AllowStale: true}, durable: true},
+		{name: "pinned revision", query: GameQuery{Page: 1, Revision: 7, AllowStale: true}, durable: true},
+		{name: "not durable", query: GameQuery{Page: 1, AllowStale: true}, durable: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -339,7 +344,7 @@ func TestPageIsNeverStaleOutsideInitialFirstPage(t *testing.T) {
 
 func TestCorruptPageCacheFallsBackToFetch(t *testing.T) {
 	f := newStaleFixture(t, true)
-	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +352,7 @@ func TestCorruptPageCacheFallsBackToFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +363,7 @@ func TestCorruptPageCacheFallsBackToFetch(t *testing.T) {
 		t.Fatalf("remote calls = %d, want 2", f.remote.count())
 	}
 	f.clock.Advance(time.Minute)
-	again, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	again, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,31 +373,32 @@ func TestCorruptPageCacheFallsBackToFetch(t *testing.T) {
 	f.event(t)
 }
 
-func TestFailedBackgroundRefreshEmitsNothingAndCanRetry(t *testing.T) {
+func TestFailedBackgroundRefreshEmitsFailureAndCanRetry(t *testing.T) {
 	f := newStaleFixture(t, true)
-	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
 	f.remote.setErr(errors.New("backend down"))
 
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !page.Stale || page.Offline {
 		t.Fatalf("stale=%v offline=%v, want stale only", page.Stale, page.Offline)
 	}
-	f.waitIdle(t)
-	if len(f.emitted) != 0 {
-		t.Fatal("failed refresh emitted an event")
+	failed := f.event(t)
+	if !failed.Failed || failed.Error != "" || failed.Key != page.Key {
+		t.Fatalf("failure event = %+v, want Failed with key %q and no code", failed, page.Key)
 	}
+	f.waitIdle(t)
 	if f.remote.count() != 2 {
 		t.Fatalf("remote calls = %d, want 2", f.remote.count())
 	}
 
 	f.remote.setErr(nil)
-	if _, err = f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err = f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	event := f.event(t)
@@ -403,11 +409,11 @@ func TestFailedBackgroundRefreshEmitsNothingAndCanRetry(t *testing.T) {
 
 func TestStaleNeedsStartedService(t *testing.T) {
 	f := newStaleFixture(t, false)
-	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,13 +430,13 @@ func TestStaleNeedsStartedService(t *testing.T) {
 
 func TestShutdownWaitsForRefreshAndSuppressesEvent(t *testing.T) {
 	f := newStaleFixture(t, true)
-	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
 	hold := make(chan struct{})
 	f.remote.setHold(hold)
-	if page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil || !page.Stale {
+	if page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil || !page.Stale {
 		t.Fatalf("stale hit: page.Stale=%v err=%v", page.Stale, err)
 	}
 	for n := range f.remote.started {
@@ -463,16 +469,105 @@ func TestShutdownWaitsForRefreshAndSuppressesEvent(t *testing.T) {
 
 func TestOfflineCacheStillServedWhenBackendFailsSynchronously(t *testing.T) {
 	f := newStaleFixture(t, true)
-	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(catalogPageStaleWindow + time.Minute)
 	f.remote.setErr(errors.New("backend down"))
-	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !page.Offline || page.Stale || page.Key == "" {
 		t.Fatalf("offline=%v stale=%v key=%q, want offline fallback with key", page.Offline, page.Stale, page.Key)
+	}
+}
+
+func TestFailedBackgroundRefreshReportsErrorCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{name: "backend outdated", err: ErrBackendOutdated, code: "catalog.backend_outdated"},
+		{name: "catalog changed", err: uierr.Wrap("catalog.changed", ErrCatalogChanged), code: "catalog.changed"},
+		{name: "network", err: errors.New("backend down"), code: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newStaleFixture(t, true)
+			first, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.clock.Advance(time.Minute)
+			f.remote.setErr(tt.err)
+			if page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true}); err != nil || !page.Stale {
+				t.Fatalf("stale hit: page.Stale=%v err=%v", page.Stale, err)
+			}
+			event := f.event(t)
+			if !event.Failed || event.Error != tt.code || event.Key != first.Key {
+				t.Fatalf("event = %+v, want Failed key=%q error=%q", event, first.Key, tt.code)
+			}
+			f.waitIdle(t)
+		})
+	}
+}
+
+func TestStaleIsOptIn(t *testing.T) {
+	f := newStaleFixture(t, true)
+	if _, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1}); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Advance(time.Minute)
+	page, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Stale {
+		t.Fatal("page was served stale without AllowStale")
+	}
+	if page.Items[0].Title != "Game v2" {
+		t.Fatalf("title = %q, want the freshly fetched page", page.Items[0].Title)
+	}
+	if f.remote.count() != 2 {
+		t.Fatalf("remote calls = %d, want 2", f.remote.count())
+	}
+	if len(f.emitted) != 0 {
+		t.Fatal("synchronous fetch emitted a page event")
+	}
+	f.clock.Advance(time.Minute)
+	stale, err := f.svc.BrowseGames(context.Background(), GameQuery{Page: 1, AllowStale: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stale.Stale || stale.Key != page.Key {
+		t.Fatalf("AllowStale key %q stale=%v, want the same cache entry served stale (key %q)", stale.Key, stale.Stale, page.Key)
+	}
+	f.event(t)
+	f.waitIdle(t)
+}
+
+func TestStartRefreshRacingShutdown(t *testing.T) {
+	for range 200 {
+		f := newStaleFixture(t, false)
+		if err := f.svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		var ran sync.WaitGroup
+		for i := range 4 {
+			ran.Add(1)
+			go func() {
+				defer ran.Done()
+				f.svc.startRefresh(fmt.Sprintf("k%d", i), func(context.Context) {})
+			}()
+		}
+		if err := f.svc.ServiceShutdown(); err != nil {
+			t.Fatal(err)
+		}
+		ran.Wait()
+		if f.svc.startRefresh("late", func(context.Context) {}) {
+			t.Fatal("refresh started after shutdown")
+		}
 	}
 }

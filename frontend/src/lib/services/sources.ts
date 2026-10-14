@@ -220,6 +220,7 @@ export interface CatalogQuery {
   compat?: string;
   page?: number;
   pageSize?: number;
+  allowStale?: boolean;
 }
 
 export interface CatalogPage {
@@ -420,6 +421,7 @@ export async function queryCatalogGames(query: CatalogQuery, signal?: AbortSigna
     compat: query.compat ?? '',
     page,
     pageSize,
+    ...(query.allowStale === true ? { allowStale: true } : {}),
   };
   const call = CatalogService.BrowseGames(payload as never);
   const result = (await (signal ? call.cancelOn(signal) : call)) as unknown as CatalogPage;

@@ -89,6 +89,8 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 	}()
 	snapshot := q.Snapshot
 	q.Snapshot = ""
+	allowStale := q.AllowStale
+	q.AllowStale = false
 	s.mu.RLock()
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)
@@ -118,7 +120,7 @@ func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool,
 		}
 	}
 	timing.prepare += time.Since(entered)
-	if stale, ok := s.staleFirstPage(q, durable, remote, path, key, snapshot); ok { //nolint:contextcheck // invariant 19: the refresh outlives the request, so it runs under the service lifetime ctx and is tracked by wg
+	if stale, ok := s.staleFirstPage(q, allowStale, durable, remote, path, key, snapshot); ok { //nolint:contextcheck // invariant 19: the refresh outlives the request, so it runs under the service lifetime ctx and is tracked by wg
 		return stale, nil
 	}
 	var page GamePage
