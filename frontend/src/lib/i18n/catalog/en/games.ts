@@ -350,4 +350,7 @@ export const games: Record<GamesKey, Message> = {
   'games.tagsEditLabel': 'Edit tags',
   'games.tagsAddLabel': 'Add tags',
   'games.actionProperties': 'Properties',
+  'games.externalBadgeTitle': 'Installed through {provider}',
+  'games.externalNote': 'Installed through {provider}: updates, verification and moving are handled there',
+  'games.externalRemoveNote': 'Only the library entry is removed, the game files stay on disk',
 };

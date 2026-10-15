@@ -33,6 +33,8 @@
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
+  import { importExternalGames } from '../../lib/services/extlib';
+  import { importErrorText, summarizeImport } from '../../lib/library/extlibSummary';
   import { cloudForget } from '../../lib/services/cloudsaves';
   import { sendLogsPrompt } from '../../lib/confirm/prompts';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
@@ -111,6 +113,8 @@
 
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
+  let importing = $state(false);
+  let importDetails = $state<string[]>([]);
   let forgettingRemote = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => void | Promise<void> } | null>(null);
 
@@ -211,6 +215,21 @@
       toast(accountSyncReason(err, msg('settings.generalSyncFailedToast')), 'danger');
     } finally {
       syncingNow = false;
+    }
+  }
+
+  async function runImportExternal() {
+    if (importing) return;
+    importing = true;
+    importDetails = [];
+    try {
+      const report = summarizeImport(await importExternalGames());
+      importDetails = report.details;
+      toast(report.text, report.kind);
+    } catch (err) {
+      toast(importErrorText(err), 'danger');
+    } finally {
+      importing = false;
     }
   }
 
@@ -581,6 +600,26 @@
             <span class="row-sub">
               {msg('settings.generalLibraryEmptyHint')}
             </span>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.extlibLabel')}</span>
+              <span class="row-sub">{msg('settings.extlibSub')}</span>
+            </div>
+            <Button size="sm" disabled={importing} onclick={runImportExternal}>
+              <RefreshCw size="1.5rem" strokeWidth={1.8} />
+              {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+            </Button>
+          </div>
+          {#if importDetails.length > 0}
+            <details class="import-details" open>
+              <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
+              <ul>
+                {#each importDetails as line, index (index)}
+                  <li class="row-sub">{line}</li>
+                {/each}
+              </ul>
+            </details>
           {/if}
           <LibraryLocationRow />
         </div>
@@ -1357,6 +1396,22 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .import-details {
+    padding: var(--space-3) 0;
+  }
+
+  .import-details summary {
+    cursor: pointer;
+  }
+
+  .import-details ul {
+    margin: var(--space-2) 0 0;
+    padding-left: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 
   .row-error {

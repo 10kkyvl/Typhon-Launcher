@@ -71,6 +71,13 @@ type Game struct {
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
 	Tags              []string   `json:"tags,omitempty"`
 	Hidden            bool       `json:"hidden,omitempty"`
+	External          *External  `json:"external,omitempty"`
+}
+
+type External struct {
+	Provider  string `json:"provider"`
+	AppID     string `json:"appId"`
+	LaunchURI string `json:"launchUri,omitempty"`
 }
 
 type Uninstall struct {
@@ -92,6 +99,13 @@ func (g Game) UsesSharedBottle() bool { return g.RequiresSteam == nil || *g.Requ
 const (
 	SourceManaged    = "managed"
 	SourceDiscovered = "discovered"
+	SourceExternal   = "external"
+)
+
+const (
+	ProviderSteam = "steam"
+	ProviderGOG   = "gog"
+	ProviderEpic  = "epic"
 )
 
 type InstalledGame struct {
@@ -192,6 +206,7 @@ type Service struct {
 	launcherPath  func() (string, error)
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
+	openURI       func(uri string) error
 	// prepare готовит окружение запуска. Поле, а не прямой вызов: на macOS
 	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
 	// возможность её подменить, иначе прогон оставляет после себя
@@ -251,6 +266,7 @@ func NewServiceAt(path string) (*Service, error) {
 		launcherPath:    os.Executable,
 		saveRoots:       platform.SaveRoots,
 		start:           newGameStarter(),
+		openURI:         platform.OpenURI,
 		prepare:         prepareRuntime,
 	}
 	games, err := s.load()
@@ -806,7 +822,7 @@ func (s *Service) removeGameLocked(id string) error {
 			continue
 		}
 		previousExcluded := s.excluded
-		if game.InstallDir != "" {
+		if game.InstallDir != "" && game.External == nil {
 			_, err := os.Stat(game.InstallDir)
 			switch {
 			case err == nil:

@@ -1,5 +1,6 @@
 import type { LibraryGame } from '../services/library';
+import { isLaunchable } from './external';
 
-export function canPlay(game: Pick<LibraryGame, 'executable' | 'uninstalled'>): boolean {
-  return !game.uninstalled && Boolean(game.executable);
+export function canPlay(game: Pick<LibraryGame, 'executable' | 'uninstalled' | 'external'>): boolean {
+  return !game.uninstalled && isLaunchable(game);
 }

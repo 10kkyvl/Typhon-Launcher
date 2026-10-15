@@ -86,6 +86,7 @@ var (
 	ErrJobNotFound        = uierr.New("relocate.job_not_found", "операция переноса не найдена")
 	ErrGameNotFound       = uierr.New("relocate.game_not_found", "игра не найдена")
 	ErrAmbiguousRecovery  = uierr.New("relocate.ambiguous_recovery", "восстановление переноса неоднозначно, требуется вмешательство пользователя")
+	ErrExternalGame       = uierr.New("relocate.external_game", "игра установлена другим лаунчером: перенесите её средствами этого лаунчера")
 	ErrMoveInProgress     = uierr.New("relocate.already_running", "перенос уже выполняется")
 )
 

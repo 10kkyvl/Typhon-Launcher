@@ -232,6 +232,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.moveErrFreeSpaceUnknown': "Couldn't determine free disk space",
   'transfers.moveErrNotEnoughSpace': 'Not enough disk space',
   'transfers.moveErrVerifyFailed': 'Verification of moved files failed. Files remain in their original location',
+  'transfers.moveErrExternalGame': 'This game was installed by another launcher, which manages its folder. Moving is unavailable',
   'transfers.moveErrNoInstallDir': 'The game has no install directory set',
   'transfers.moveErrJobNotFound': 'Move operation not found — it may have already finished',
   'transfers.moveErrGameNotFound': 'Game not found in the library',

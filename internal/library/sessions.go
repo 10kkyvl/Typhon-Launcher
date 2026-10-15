@@ -85,6 +85,9 @@ func (s *Service) PlayGame(id string) error {
 	if game.Uninstalled {
 		return uierr.New("library.not_installed", "игра не установлена")
 	}
+	if game.External != nil && game.External.LaunchURI != "" {
+		return s.playExternalLocked(game)
+	}
 	if _, err := os.Stat(game.Executable); err != nil {
 		return uierr.New("library.executable_missing", "исполняемый файл больше не существует")
 	}

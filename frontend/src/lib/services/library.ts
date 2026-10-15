@@ -8,6 +8,12 @@ import { markError } from '../game/markMessages';
 
 export { markError };
 
+export interface LibraryExternal {
+  provider: 'steam' | 'gog' | 'epic' | string;
+  appId: string;
+  launchUri?: string;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -27,7 +33,8 @@ export interface LibraryGame {
   distributionId?: string;
   releaseUploadedAt?: string;
   canonicalGameId?: string;
-  source?: string;
+  source?: 'external' | string;
+  external?: LibraryExternal | null;
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;

@@ -83,6 +83,9 @@ export const errLibrary = {
   'library.too_many_collections': 'достигнут лимит коллекций',
   'library.collection_genres_invalid': 'в коллекции слишком много жанров',
   'library.collection_not_found': 'коллекция не найдена',
+  'extlib.busy': 'поиск игр уже идёт',
+  'extlib.not_started': 'сервис поиска игр не запущен',
+  'extlib.unsupported': 'импорт игр из других лаунчеров поддерживается только в Windows',
 } as const;
 
 export type ErrLibraryKey = keyof typeof errLibrary;

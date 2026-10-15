@@ -28,6 +28,7 @@
     running = false,
     meta,
     compat,
+    source = '',
     variant = 'poster',
     footer,
     actions,
@@ -40,6 +41,7 @@
     running?: boolean;
     meta?: string;
     compat?: CompatInfo;
+    source?: string;
     variant?: 'poster' | 'capsule';
     footer?: Snippet;
     actions?: GameCardAction[];
@@ -70,6 +72,9 @@
       <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
+    {#if source}
+      <span class="source" title={msg('games.externalBadgeTitle', { provider: source })}>{source}</span>
+    {/if}
     {#if compatLabel}
       <span class="compat" class:works={compatWorks} title={compatLabel}>{compatLabel}</span>
     {/if}
@@ -133,6 +138,23 @@
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--danger) 88%, black);
     color: white;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .source {
+    position: absolute;
+    left: 0.6rem;
+    top: 0.6rem;
+    max-width: calc(100% - 1.2rem);
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    background: rgba(5, 8, 12, 0.72);
+    color: #fff;
     font-size: 1.1rem;
     line-height: 1.2;
     white-space: nowrap;

@@ -129,4 +129,34 @@ describe('quickActions', () => {
   it('ignores lan sharing for a game that is not installed', () => {
     expect(ids({ installed: false, lanEnabled: true })).toEqual(['favorite-add', 'status', 'tags', 'hide', 'remove']);
   });
+
+  describe('external game', () => {
+    const external = { external: true, hasExecutable: false, launchable: true };
+
+    it('plays through the launch uri without an executable', () => {
+      expect(ids(external)).toContain('play');
+      expect(ids({ hasExecutable: false })).not.toContain('play');
+    });
+
+    it('drops the actions the other launcher owns', () => {
+      const list = ids(external);
+      expect(list).not.toContain('verify');
+      expect(list).not.toContain('move');
+      expect(list).not.toContain('uninstall');
+      expect(list).not.toContain('shortcut-create');
+    });
+
+    it('keeps folder, marks and removal from the library', () => {
+      const list = ids(external);
+      expect(list).toEqual(expect.arrayContaining(['folder', 'favorite-add', 'status', 'tags', 'hide', 'remove']));
+    });
+
+    it('offers a shortcut when the executable is known', () => {
+      expect(ids({ ...external, hasExecutable: true })).toContain('shortcut-create');
+    });
+
+    it('keeps stop while running', () => {
+      expect(ids({ ...external, running: true })).toContain('stop');
+    });
+  });
 });
