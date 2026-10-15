@@ -5,6 +5,8 @@
   import {
     ArrowUp,
     BookmarkPlus,
+    Bell,
+    BellRing,
     ChevronRight,
     Download,
     EllipsisVertical,
@@ -114,6 +116,7 @@
   import { navigate } from '../../lib/stores/router';
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
+  import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
@@ -920,6 +923,19 @@
             <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
               <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
               {msg('games.detailAddToLibraryButton')}
+            </Button>
+          {/if}
+
+          {#if !installed && canonicalId}
+            {@const watching = $watchedIds.has(canonicalId)}
+            <Button size="lg" pressed={watching} onclick={() => toggleWatch(canonicalId)}>
+              {#if watching}
+                <BellRing size="1.5rem" strokeWidth={1.8} />
+                {msg('games.watchingButton')}
+              {:else}
+                <Bell size="1.5rem" strokeWidth={1.8} />
+                {msg('games.watchButton')}
+              {/if}
             </Button>
           {/if}
 

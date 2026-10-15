@@ -71,6 +71,12 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'settings.proxy_port_invalid': 'The proxy port must be between 1 and 65535',
   'settings.proxy_username_invalid': 'Invalid proxy username',
 
+  'watchlist.empty_id': 'No game specified',
+  'watchlist.game_not_found': 'Game not found in the catalog',
+  'watchlist.not_watched': 'The game is not being watched',
+  'watchlist.alert_not_found': 'Notification not found',
+  'watchlist.save_failed': 'Could not save the watch list',
+  'errLibrary.watchlistErrFallback': 'Could not complete the watch list action',
   'history.clear_failed': 'Could not clear the history',
   'errLibrary.historyErrFallback': 'Could not complete the history action',
   'library.too_many_tags': 'Tags limit reached for this game',
