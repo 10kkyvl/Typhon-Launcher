@@ -606,6 +606,9 @@ func (s *Service) MoveGame(gameID, target string) (Job, error) {
 	if err != nil {
 		return Job{}, fmt.Errorf("%s: %w", gameID, ErrGameNotFound)
 	}
+	if game.External != nil {
+		return Job{}, fmt.Errorf("%s: %w", gameID, ErrExternalGame)
+	}
 	source := strings.TrimSpace(game.InstallDir)
 	if source == "" {
 		return Job{}, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir)
@@ -928,7 +931,7 @@ func (s *Service) MoveLibrary(parent string) (Job, error) {
 
 	games := s.lib.GetInstalledGames()
 	for _, g := range games {
-		if strings.TrimSpace(g.InstallDir) == "" {
+		if strings.TrimSpace(g.InstallDir) == "" || g.External != nil {
 			continue
 		}
 		if err := s.checkBusy(g.ID); err != nil {
@@ -945,7 +948,7 @@ func (s *Service) MoveLibrary(parent string) (Job, error) {
 
 	queue := make([]string, 0, len(games)+3)
 	for _, g := range games {
-		if strings.TrimSpace(g.InstallDir) == "" {
+		if strings.TrimSpace(g.InstallDir) == "" || g.External != nil {
 			continue
 		}
 		queue = append(queue, g.ID)
@@ -1033,6 +1036,10 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 	game, err := s.lib.Find(gameID)
 	if err != nil {
 		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", gameID, ErrGameNotFound))
+	}
+	if game.External != nil {
+		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
+		return err
 	}
 	source := strings.TrimSpace(game.InstallDir)
 	if source == "" {

@@ -15,12 +15,14 @@
     gameId,
     title,
     mode = $bindable<Mode>('disk'),
+    external = '',
     onremoved,
   }: {
     open?: boolean;
     gameId: string;
     title: string;
     mode?: Mode;
+    external?: string;
     onremoved?: (mode: Mode) => void;
   } = $props();
 
@@ -33,8 +35,8 @@
   let loadedFor = $state('');
 
   const blocked = $derived(!!info && (info.running || info.busy));
-  const canDeleteFiles = $derived(!!info && info.owned && !info.dirMissing);
-  const canUninstall = $derived(!!info && (info.method === 'installer' || canDeleteFiles));
+  const canDeleteFiles = $derived(!external && !!info && info.owned && !info.dirMissing);
+  const canUninstall = $derived(!external && !!info && (info.method === 'installer' || canDeleteFiles));
 
   $effect(() => {
     if (!open) {
@@ -151,7 +153,11 @@
       </button>
     </div>
 
-    <p class="text">{methodText}</p>
+    {#if external}
+      <p class="text">{msg('games.externalRemoveNote')}</p>
+    {:else}
+      <p class="text">{methodText}</p>
+    {/if}
     {#if info.installDir && !info.dirMissing}
       <p class="path">{info.installDir}</p>
     {/if}

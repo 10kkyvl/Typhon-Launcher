@@ -26,6 +26,7 @@ import (
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/download"
+	"typhon/internal/extlib"
 	"typhon/internal/heartbeat"
 	"typhon/internal/history"
 	"typhon/internal/install"
@@ -110,6 +111,7 @@ func init() {
 	application.RegisterEvent[discovery.Progress]("discovery:started")
 	application.RegisterEvent[discovery.Progress]("discovery:progress")
 	application.RegisterEvent[discovery.Result]("discovery:completed")
+	application.RegisterEvent[extlib.Summary](extlib.EventImported)
 	application.RegisterEvent[updates.Update]("update:available")
 	application.RegisterEvent[updates.Update]("update:started")
 	application.RegisterEvent[updates.Update]("update:updated")
@@ -385,6 +387,10 @@ func main() {
 	if err != nil {
 		fatal("start discovery service", err)
 	}
+	extlibService, err := extlib.NewService(libraryService, catalogService, metadataService)
+	if err != nil {
+		fatal("start external libraries service", err)
+	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
 	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
 	if err != nil {
@@ -649,6 +655,7 @@ func main() {
 		application.NewService(cloudSavesService),
 		application.NewService(metadataService),
 		application.NewService(discoveryService),
+		application.NewService(extlibService),
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),

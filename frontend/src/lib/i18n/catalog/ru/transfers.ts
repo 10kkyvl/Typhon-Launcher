@@ -234,6 +234,7 @@ export const transfers = {
   'transfers.moveErrFreeSpaceUnknown': 'Не удалось определить свободное место на диске',
   'transfers.moveErrNotEnoughSpace': 'Недостаточно места на диске',
   'transfers.moveErrVerifyFailed': 'Проверка перенесённых файлов не прошла. Файлы остались на прежнем месте',
+  'transfers.moveErrExternalGame': 'Игра установлена другим лаунчером, её папкой управляет он. Перенос недоступен',
   'transfers.moveErrNoInstallDir': 'У игры не задан каталог установки',
   'transfers.moveErrJobNotFound': 'Операция переноса не найдена — возможно, она уже завершилась',
   'transfers.moveErrGameNotFound': 'Игра не найдена в библиотеке',

@@ -57,7 +57,8 @@ const (
 var pollInterval = time.Second
 
 var (
-	errNotTracked = uierr.New("updates.not_tracked", "для этой игры нет данных об обновлении")
+	errExternalGame = uierr.Wrap("updates.not_tracked", errors.New("игра установлена другим лаунчером: обновляйте её там"))
+	errNotTracked   = uierr.New("updates.not_tracked", "для этой игры нет данных об обновлении")
 
 	errEmptyInstallDir = uierr.New("updates.no_install_dir", "каталог установки не задан")
 	errNoPlan          = uierr.New("updates.no_plan", "сначала подготовьте план обновления")
@@ -603,11 +604,23 @@ func (s *Service) installedGame(gameID string) (library.Game, bool) {
 		return library.Game{}, false
 	}
 	for _, g := range s.library.GetInstalledGames() {
-		if g.ID == gameID {
+		if g.ID == gameID && g.External == nil {
 			return g, true
 		}
 	}
 	return library.Game{}, false
+}
+
+func (s *Service) isExternal(gameID string) bool {
+	if s.library == nil {
+		return false
+	}
+	for _, g := range s.library.GetInstalledGames() {
+		if g.ID == gameID {
+			return g.External != nil
+		}
+	}
+	return false
 }
 
 func (s *Service) running(gameID string) bool {
@@ -670,6 +683,9 @@ func (s *Service) CheckUpdates() []Update {
 }
 
 func (s *Service) CheckGame(gameID string) (Update, error) {
+	if s.isExternal(gameID) {
+		return Update{}, errExternalGame
+	}
 	game, ok := s.installedGame(gameID)
 	if !ok {
 		return Update{}, errNotTracked
@@ -698,6 +714,9 @@ func (s *Service) checkAll(ctx context.Context) {
 	for _, game := range games {
 		if ctx.Err() != nil {
 			return
+		}
+		if game.External != nil {
+			continue
 		}
 		known[game.ID] = true
 		if err := s.check(game); err != nil {

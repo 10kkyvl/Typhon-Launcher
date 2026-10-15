@@ -110,6 +110,7 @@
   import { installIndeterminate } from '../../lib/install/progress';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { externalLabel, isExternal } from '../../lib/library/external';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { openRedist } from '../../lib/stores/redist';
@@ -148,7 +149,9 @@
     if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
   });
 
-  const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
+  const external = $derived(isExternal(localGame));
+  const externalName = $derived(externalLabel(localGame));
+  const update = $derived(localGame && !external ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
   const updateAvailable = $derived(Boolean(update?.availability.available));
   const updateIsRelease = $derived(update?.availability.kind !== 'update');
@@ -472,16 +475,18 @@
           ]
         : [{ id: 'meta-find', label: msg('games.detailMetaFindLabel') }]
       : []),
-    ...(installed
+    ...(installed && (localGame?.shortcutPath || !external || localGame?.executable)
       ? [
           localGame?.shortcutPath
             ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
             : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }] : []),
+    ...(installed && !external
+      ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }]
+      : []),
     ...(localGame
-      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || external }]
       : []),
     ...(terminalDownload
       ? [
@@ -854,6 +859,9 @@
               <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
             </span>
           {/if}
+          {#if externalName}
+            <StatusBadge kind="neutral" label={externalName} dot={false} />
+          {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
           {/if}
@@ -1068,12 +1076,17 @@
         {/if}
 
         {#if installed && localGame}
-          <section class="section">
-            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-          </section>
+          {#if !external}
+            <section class="section">
+              <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+            </section>
+          {/if}
 
           <section class="section">
             <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
+            {#if external}
+              <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
+            {/if}
             <div class="path">
               <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
               <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
@@ -1159,6 +1172,7 @@
       bind:mode={removeMode}
       gameId={localGame.id}
       title={localGame.title}
+      external={externalLabel(localGame)}
       onremoved={(removed) => {
         if (removed === 'library') navigate('installed');
       }}

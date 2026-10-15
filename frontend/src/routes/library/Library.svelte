@@ -46,6 +46,7 @@
   import { libraryErrorText } from '../../lib/library/errors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
+  import { externalLabel } from '../../lib/library/external';
   import { canPlay } from '../../lib/library/launch';
   import { matchesCollection } from '../../lib/library/collections';
 
@@ -67,6 +68,7 @@
     tags?: string[];
     status?: string;
     canonicalGameId?: string;
+    source?: string;
   }
 
   let filter = $state<LibraryFilter>('all');
@@ -185,6 +187,7 @@
       tags: game.tags,
       status: game.status,
       canonicalGameId: game.canonicalGameId,
+      source: externalLabel(game),
     };
   }
 
@@ -379,6 +382,7 @@
               variant="capsule"
               installed={entry.installed}
               running={$runningGames.has(entry.id)}
+              source={entry.source}
               onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
             >
               {#snippet footer()}
@@ -485,6 +489,7 @@
             cover={entry.cover}
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
+            source={entry.source}
             meta={entryMeta(entry)}
             onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
           />
@@ -502,7 +507,7 @@
               <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
-            <span class="list-meta">{entry.subtitle}</span>
+            <span class="list-meta">{[entry.source, entry.subtitle].filter(Boolean).join(' · ')}</span>
             <span class="list-meta right">{entryMeta(entry)}</span>
           </button>
         {/each}

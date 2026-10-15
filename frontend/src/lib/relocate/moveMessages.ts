@@ -25,6 +25,7 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.dialog_unavailable': 'transfers.moveErrDialogUnavailable',
   'relocate.shutting_down': 'transfers.moveErrShuttingDown',
   'relocate.not_ready': 'transfers.moveErrNotReady',
+  'relocate.external_game': 'transfers.moveErrExternalGame',
 };
 
 export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {

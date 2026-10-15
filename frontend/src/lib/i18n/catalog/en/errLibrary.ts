@@ -80,4 +80,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.too_many_collections': 'Collections limit reached',
   'library.collection_genres_invalid': 'Too many genres in the collection',
   'library.collection_not_found': 'Collection not found',
+  'extlib.busy': 'The game search is already running',
+  'extlib.not_started': 'The game search service is not running',
+  'extlib.unsupported': 'Importing games from other launchers is supported on Windows only',
 };

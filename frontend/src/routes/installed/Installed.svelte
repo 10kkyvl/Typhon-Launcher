@@ -42,6 +42,7 @@
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
+  import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
@@ -245,6 +246,11 @@
     { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
   ];
 
+  const externalMenuItems = [
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
+  ];
+
   const scanLabel = $derived(
     $scanProgress.total > 0
       ? msg('games.installedScanProgress', { processed: $scanProgress.processed, total: $scanProgress.total })
@@ -286,7 +292,7 @@
 
   function statusKind(game: LibraryGame, running: boolean, updateKind?: string): 'success' | 'warning' | 'accent' | 'neutral' {
     if (running) return 'accent';
-    if (!game.executable) return 'warning';
+    if (!isLaunchable(game)) return 'warning';
     if (updateKind === 'update') return 'warning';
     if (updateKind === 'new_release') return 'neutral';
     return 'success';
@@ -294,7 +300,7 @@
 
   function statusLabel(game: LibraryGame, running: boolean) {
     if (running) return msg('games.runningLabel');
-    if (!game.executable) return msg('games.installedNeedsExeLabel');
+    if (!isLaunchable(game)) return msg('games.installedNeedsExeLabel');
     return relativeDate(game.lastPlayed);
   }
 
@@ -514,7 +520,7 @@
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
               {msg('games.installedStopButton')}
             </Button>
-          {:else if !game.executable}
+          {:else if !isLaunchable(game)}
             <Button size="sm" onclick={() => chooseExecutable(game)}>
               <FolderOpen size="1.3rem" strokeWidth={1.8} />
               {msg('games.installedSetExeButton')}
@@ -529,7 +535,7 @@
             <FolderOpen size="1.3rem" strokeWidth={1.8} />
             {msg('games.openFolder')}
           </Button>
-          <DropdownMenu items={menuItems} onselect={(id) => onMenu(game, id)}>
+          <DropdownMenu items={isExternal(game) ? externalMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
                 <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
@@ -569,7 +575,7 @@
             <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
             </button>
-          {:else if game.executable}
+          {:else if isLaunchable(game)}
             <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
               <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
             </button>
@@ -598,6 +604,7 @@
     bind:mode={removeMode}
     gameId={removeTarget.id}
     title={removeTarget.title}
+    external={externalLabel(removeTarget)}
   />
 {/if}
 

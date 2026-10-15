@@ -35,6 +35,8 @@ export interface QuickActionState {
   installed: boolean;
   running: boolean;
   hasExecutable: boolean;
+  launchable?: boolean;
+  external?: boolean;
   hasShortcut: boolean;
   lanEnabled: boolean;
   lanShared: boolean;
@@ -67,7 +69,7 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   }
   if (state.running) {
     items.push({ id: 'stop', label: msg('games.stop') });
-  } else if (state.hasExecutable) {
+  } else if (state.launchable ?? state.hasExecutable) {
     items.push({ id: 'play', label: msg('games.play') });
   }
   items.push(...markItems(state));
@@ -76,9 +78,11 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   if (state.saveBackups) {
     items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
   }
-  items.push({ id: 'verify', label: msg('games.actionVerify') });
+  if (!state.external) {
+    items.push({ id: 'verify', label: msg('games.actionVerify') });
+  }
   items.push({ id: 'redist', label: msg('redist.action') });
-  if (!state.running) {
+  if (!state.running && !state.external) {
     items.push({ id: 'move', label: msg('games.actionMove') });
   }
   items.push({ id: 'properties', label: msg('games.actionProperties') });
@@ -89,11 +93,15 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
         : { id: 'lan-share', label: msg('games.actionLanShare') },
     );
   }
-  items.push(
-    state.hasShortcut
-      ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
-      : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
-  );
+  if (state.hasShortcut) {
+    items.push({ id: 'shortcut-remove', label: msg('games.actionShortcutRemove') });
+  } else if (state.hasExecutable || !state.external) {
+    items.push({ id: 'shortcut-create', label: msg('games.actionShortcutCreate') });
+  }
+  if (state.external) {
+    items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true });
+    return items;
+  }
   items.push({ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true });
   items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true });
   return items;
