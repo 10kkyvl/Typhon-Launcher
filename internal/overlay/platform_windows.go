@@ -20,7 +20,6 @@ const (
 	wmHotkey = 0x0312
 
 	modNoRepeat = 0x4000
-	hotkeyID    = 1
 
 	pmNoRemove = 0x0000
 
@@ -93,7 +92,7 @@ func lastError(err error, what string) error {
 }
 
 //nolint:gosec // G103: PeekMessageW and GetMessageW are handed the address of this goroutine's own MSG, which outlives each call on its locked OS thread.
-func (windowsPlatform) register(ctx context.Context, wg *sync.WaitGroup, key hotkey, onPress func()) (func(), error) {
+func (windowsPlatform) register(ctx context.Context, wg *sync.WaitGroup, id int, key hotkey, onPress func()) (func(), error) {
 	rctx, cancel := context.WithCancel(ctx)
 	type started struct {
 		tid uint32
@@ -116,12 +115,12 @@ func (windowsPlatform) register(ctx context.Context, wg *sync.WaitGroup, key hot
 			ready <- started{err: lastError(err, "PeekMessageW")}
 			return
 		}
-		if r1, _, err := procRegisterHotKey.Call(0, hotkeyID, uintptr(key.mods|modNoRepeat), uintptr(key.vk)); r1 == 0 {
+		if r1, _, err := procRegisterHotKey.Call(0, uintptr(id), uintptr(key.mods|modNoRepeat), uintptr(key.vk)); r1 == 0 {
 			ready <- started{err: lastError(err, "RegisterHotKey")}
 			return
 		}
 		defer func() {
-			if r1, _, err := procUnregisterHotKey.Call(0, hotkeyID); r1 == 0 {
+			if r1, _, err := procUnregisterHotKey.Call(0, uintptr(id)); r1 == 0 {
 				slog.Warn("unregister overlay hotkey", "error", lastError(err, "UnregisterHotKey"))
 			}
 		}()
@@ -136,7 +135,7 @@ func (windowsPlatform) register(ctx context.Context, wg *sync.WaitGroup, key hot
 				slog.Warn("overlay hotkey message loop stopped", "error", lastError(err, "GetMessageW"))
 				return
 			}
-			if m.message == wmHotkey && m.wParam == hotkeyID {
+			if m.message == wmHotkey && m.wParam == uintptr(id) {
 				onPress()
 			}
 		}

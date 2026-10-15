@@ -1024,6 +1024,21 @@ func (s *Service) IsRunning(id string) bool {
 	return ok || s.starting[id] != nil
 }
 
+//wails:ignore
+func (s *Service) RunningGameForPID(pid uint32) (string, bool) {
+	if pid == 0 {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, sess := range s.running {
+		if sess.pid == pid {
+			return id, true
+		}
+	}
+	return "", false
+}
+
 func TitleFromExecutable(executable string) string {
 	name := strings.TrimSuffix(filepath.Base(executable), filepath.Ext(executable))
 	name = strings.NewReplacer("_", " ", "-", " ", ".", " ").Replace(name)

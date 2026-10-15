@@ -172,3 +172,11 @@ export function deleteCloudSavesPrompt(): ConfirmPrompt {
     busy: msg('cloudsaves.deleting'),
   };
 }
+
+export function deleteScreenshotPrompt(name: string): ConfirmPrompt {
+  return {
+    title: msg('screenshots.delete'),
+    text: msg('screenshots.deleteConfirm', { name }),
+    confirm: msg('screenshots.delete'),
+  };
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -25,6 +26,9 @@ const (
 	WindowURL  = "/?overlay=1"
 
 	ErrCodeHotkeyUnavailable = "overlay.hotkey_unavailable"
+
+	overlayHotkeyID    = 1
+	screenshotHotkeyID = 2
 )
 
 var errClosed = errors.New("overlay service is shut down")
@@ -46,7 +50,7 @@ type rect struct {
 
 type platform interface {
 	supported() bool
-	register(ctx context.Context, wg *sync.WaitGroup, key hotkey, onPress func()) (stop func(), err error)
+	register(ctx context.Context, wg *sync.WaitGroup, id int, key hotkey, onPress func()) (stop func(), err error)
 	foreground() uintptr
 	monitorRect(hwnd uintptr) (rect, error)
 	setForeground(hwnd uintptr) error
@@ -72,6 +76,9 @@ type registration struct {
 type config struct {
 	enabled bool
 	hotkey  string
+
+	shots   bool
+	shotKey string
 }
 
 type Service struct {
@@ -80,14 +87,18 @@ type Service struct {
 	call     func(func() error) error
 	emit     func(name string, payload any)
 
-	regMu sync.Mutex
-	reg   *registration
+	regMu   sync.Mutex
+	reg     *registration
+	shotReg *registration
 
 	mu      sync.Mutex
 	ctx     context.Context
 	wg      sync.WaitGroup
 	cfg     config
 	errText string
+	shotErr string
+	onShot  func(hwnd uintptr)
+	armed   bool
 	win     window
 	makeWin func() window
 	visible bool
@@ -135,7 +146,39 @@ func (s *Service) Status() Status {
 }
 
 func (s *Service) statusLocked() Status {
-	return Status{Supported: s.plat.supported(), Enabled: s.cfg.enabled, Hotkey: s.cfg.hotkey, Error: s.errText}
+	return Status{Supported: s.plat.supported(), Enabled: s.cfg.enabled, Hotkey: s.cfg.hotkey, Error: joinErrors(s.errText, s.shotErr)}
+}
+
+func joinErrors(parts ...string) string {
+	var kept []string
+	for _, part := range parts {
+		if part != "" {
+			kept = append(kept, part)
+		}
+	}
+	return strings.Join(kept, "; ")
+}
+
+//wails:ignore
+func (s *Service) SetScreenshotHandler(onShot func(hwnd uintptr)) {
+	s.mu.Lock()
+	s.onShot = onShot
+	s.mu.Unlock()
+}
+
+//wails:ignore
+func (s *Service) ConfigureScreenshots(enabled bool, hotkeyName string) error {
+	if _, err := parseScreenshotHotkey(hotkeyName); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctx != nil {
+		return errors.New("screenshots are configured after the service has started")
+	}
+	s.cfg.shots = enabled
+	s.cfg.shotKey = hotkeyName
+	return nil
 }
 
 func (s *Service) emitStatus() {
@@ -158,20 +201,36 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Lock()
 	s.ctx = ctx
 	cfg := s.cfg
+	armed := s.armed
 	s.mu.Unlock()
-	if !s.plat.supported() || !cfg.enabled {
+	if !s.plat.supported() {
 		s.regMu.Unlock()
 		return nil
 	}
-	reg, err := s.registerLocked(cfg.hotkey)
-	if err == nil {
-		s.reg = reg
+	var overlayErr, shotErr string
+	if cfg.enabled {
+		reg, err := s.registerLocked(cfg.hotkey)
+		if err == nil {
+			s.reg = reg
+		} else {
+			slog.Warn("register overlay hotkey", "hotkey", cfg.hotkey, "error", err)
+			overlayErr = err.Error()
+		}
+	}
+	if cfg.shots && armed {
+		reg, err := s.registerShotLocked(cfg.shotKey)
+		if err == nil {
+			s.shotReg = reg
+		} else {
+			slog.Warn("register screenshot hotkey", "hotkey", cfg.shotKey, "error", err)
+			shotErr = err.Error()
+		}
 	}
 	s.regMu.Unlock()
-	if err != nil {
-		slog.Warn("register overlay hotkey", "hotkey", cfg.hotkey, "error", err)
+	if overlayErr != "" || shotErr != "" {
 		s.mu.Lock()
-		s.errText = err.Error()
+		s.errText = overlayErr
+		s.shotErr = shotErr
 		s.mu.Unlock()
 		s.emitStatus()
 	}
@@ -183,11 +242,14 @@ func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	s.closed = true
 	s.mu.Unlock()
-	reg := s.reg
-	s.reg = nil
+	reg, shotReg := s.reg, s.shotReg
+	s.reg, s.shotReg = nil, nil
 	s.regMu.Unlock()
 	if reg != nil {
 		reg.stop()
+	}
+	if shotReg != nil {
+		shotReg.stop()
 	}
 	s.wg.Wait()
 	return nil
@@ -195,10 +257,121 @@ func (s *Service) ServiceShutdown() error {
 
 //wails:ignore
 func (s *Service) Apply(prev, next settings.Settings) error {
-	if prev.OverlayEnabled == next.OverlayEnabled && prev.OverlayHotkey == next.OverlayHotkey {
+	var errs []error
+	if prev.OverlayEnabled != next.OverlayEnabled || prev.OverlayHotkey != next.OverlayHotkey {
+		if err := s.reconfigure(config{enabled: next.OverlayEnabled, hotkey: next.OverlayHotkey}); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if prev.ScreenshotsEnabled != next.ScreenshotsEnabled || prev.ScreenshotHotkey != next.ScreenshotHotkey {
+		if err := s.reconfigureShots(next.ScreenshotsEnabled, next.ScreenshotHotkey); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	return errors.Join(errs...)
+}
+
+// SetScreenshotsArmed keeps the screenshot key registered only while a game
+// session is running: a key held all the time would take F12 away from every
+// other program.
+//
+//wails:ignore
+func (s *Service) SetScreenshotsArmed(armed bool) {
+	s.regMu.Lock()
+	defer s.regMu.Unlock()
+
+	s.mu.Lock()
+	s.armed = armed
+	skip := s.closed || s.ctx == nil
+	cfg := s.cfg
+	s.mu.Unlock()
+	if skip || !s.plat.supported() {
+		return
+	}
+
+	if !armed || !cfg.shots {
+		old := s.shotReg
+		s.shotReg = nil
+		if old != nil {
+			old.stop()
+		}
+		return
+	}
+	if s.shotReg != nil {
+		return
+	}
+	reg, err := s.registerShotLocked(cfg.shotKey)
+	if err != nil {
+		slog.Warn("register screenshot hotkey", "hotkey", cfg.shotKey, "error", err)
+		s.mu.Lock()
+		s.shotErr = err.Error()
+		s.mu.Unlock()
+		s.emitStatus()
+		return
+	}
+	s.shotReg = reg
+	s.mu.Lock()
+	hadError := s.shotErr != ""
+	s.shotErr = ""
+	s.mu.Unlock()
+	if hadError {
+		s.emitStatus()
+	}
+}
+
+func (s *Service) reconfigureShots(enabled bool, name string) error {
+	if _, err := parseScreenshotHotkey(name); err != nil {
+		return err
+	}
+	s.regMu.Lock()
+	defer s.regMu.Unlock()
+
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return errClosed
+	}
+	started := s.ctx != nil
+	armed := s.armed
+	s.mu.Unlock()
+
+	if !s.plat.supported() || !started {
+		s.setShotConfig(enabled, name)
 		return nil
 	}
-	return s.reconfigure(config{enabled: next.OverlayEnabled, hotkey: next.OverlayHotkey})
+
+	if !enabled || !armed {
+		old := s.shotReg
+		s.shotReg = nil
+		if old != nil {
+			old.stop()
+		}
+		s.setShotConfig(enabled, name)
+		s.emitStatus()
+		return nil
+	}
+
+	if s.shotReg != nil && s.shotReg.name == name {
+		s.setShotConfig(enabled, name)
+		s.emitStatus()
+		return nil
+	}
+
+	fresh, err := s.registerShotLocked(name)
+	if err != nil {
+		return err
+	}
+	old := s.shotReg
+	s.shotReg = fresh
+	if old != nil {
+		old.stop()
+	}
+	s.setShotConfig(enabled, name)
+	s.emitStatus()
+	return nil
 }
 
 func (s *Service) reconfigure(next config) error {
@@ -217,7 +390,7 @@ func (s *Service) reconfigure(next config) error {
 	s.mu.Unlock()
 
 	if !s.plat.supported() || !started {
-		s.setConfig(next, "")
+		s.setOverlayConfig(next)
 		return nil
 	}
 
@@ -227,7 +400,7 @@ func (s *Service) reconfigure(next config) error {
 		if old != nil {
 			old.stop()
 		}
-		s.setConfig(next, "")
+		s.setOverlayConfig(next)
 		s.dispatch(func() {
 			s.hideOnUI(true)
 			s.closeBrowserOnUI()
@@ -237,7 +410,7 @@ func (s *Service) reconfigure(next config) error {
 	}
 
 	if s.reg != nil && s.reg.name == next.hotkey {
-		s.setConfig(next, "")
+		s.setOverlayConfig(next)
 		s.emitStatus()
 		return nil
 	}
@@ -251,15 +424,24 @@ func (s *Service) reconfigure(next config) error {
 	if old != nil {
 		old.stop()
 	}
-	s.setConfig(next, "")
+	s.setOverlayConfig(next)
 	s.emitStatus()
 	return nil
 }
 
-func (s *Service) setConfig(cfg config, errText string) {
+func (s *Service) setOverlayConfig(next config) {
 	s.mu.Lock()
-	s.cfg = cfg
-	s.errText = errText
+	s.cfg.enabled = next.enabled
+	s.cfg.hotkey = next.hotkey
+	s.errText = ""
+	s.mu.Unlock()
+}
+
+func (s *Service) setShotConfig(enabled bool, name string) {
+	s.mu.Lock()
+	s.cfg.shots = enabled
+	s.cfg.shotKey = name
+	s.shotErr = ""
 	s.mu.Unlock()
 }
 
@@ -268,6 +450,18 @@ func (s *Service) registerLocked(name string) (*registration, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.registerKeyLocked(overlayHotkeyID, name, key, s.toggle)
+}
+
+func (s *Service) registerShotLocked(name string) (*registration, error) {
+	key, err := parseScreenshotHotkey(name)
+	if err != nil {
+		return nil, err
+	}
+	return s.registerKeyLocked(screenshotHotkeyID, name, key, s.shotPressed)
+}
+
+func (s *Service) registerKeyLocked(id int, name string, key hotkey, onPress func()) (*registration, error) {
 	s.mu.Lock()
 	ctx := s.ctx
 	closed := s.closed
@@ -275,11 +469,22 @@ func (s *Service) registerLocked(name string) (*registration, error) {
 	if closed {
 		return nil, errClosed
 	}
-	stop, err := s.plat.register(ctx, &s.wg, key, s.toggle)
+	stop, err := s.plat.register(ctx, &s.wg, id, key, onPress)
 	if err != nil {
 		return nil, uierr.Wrap(ErrCodeHotkeyUnavailable, fmt.Errorf("register %s: %w", name, err))
 	}
 	return &registration{name: name, stop: stop}, nil
+}
+
+func (s *Service) shotPressed() {
+	s.mu.Lock()
+	handler := s.onShot
+	usable := s.cfg.shots && s.armed && !s.closed
+	s.mu.Unlock()
+	if handler == nil || !usable {
+		return
+	}
+	handler(s.plat.foreground())
 }
 
 func (s *Service) toggle() {

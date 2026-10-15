@@ -16,6 +16,8 @@ const (
 	vkF1   = 0x70
 	vkF2   = 0x71
 	vkO    = 0x4F
+	vkF11  = 0x7A
+	vkF12  = 0x7B
 )
 
 var ErrUnknownHotkey = errors.New("unknown overlay hotkey")
@@ -30,6 +32,21 @@ var hotkeys = map[string]hotkey{
 	settings.OverlayHotkeyShiftF1:     {mods: modShift, vk: vkF1},
 	settings.OverlayHotkeyShiftF2:     {mods: modShift, vk: vkF2},
 	settings.OverlayHotkeyCtrlShiftO:  {mods: modCtrl | modShift, vk: vkO},
+}
+
+var screenshotHotkeys = map[string]hotkey{
+	settings.ScreenshotHotkeyF12:      {vk: vkF12},
+	settings.ScreenshotHotkeyF11:      {vk: vkF11},
+	settings.ScreenshotHotkeyShiftF12: {mods: modShift, vk: vkF12},
+	settings.ScreenshotHotkeyCtrlF12:  {mods: modCtrl, vk: vkF12},
+}
+
+func parseScreenshotHotkey(name string) (hotkey, error) {
+	key, ok := screenshotHotkeys[name]
+	if !ok {
+		return hotkey{}, fmt.Errorf("%w: %q", ErrUnknownHotkey, name)
+	}
+	return key, nil
 }
 
 func parseHotkey(name string) (hotkey, error) {

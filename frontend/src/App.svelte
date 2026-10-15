@@ -19,6 +19,7 @@
   import { initDownloads } from './lib/stores/downloads';
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
+  import { initScreenshots } from './lib/stores/screenshots';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -50,6 +51,7 @@
   import GameDetails from './routes/game/GameDetails.svelte';
   import Friends from './routes/friends/Friends.svelte';
   import History from './routes/history/History.svelte';
+  import Stats from './routes/stats/Stats.svelte';
   import Installed from './routes/installed/Installed.svelte';
   import Lan from './routes/lan/Lan.svelte';
   import Library from './routes/library/Library.svelte';
@@ -76,6 +78,7 @@
   initMessaging();
   initHistory();
   initWatchlist();
+  onDestroy(initScreenshots());
   initLan();
   initSocial();
   onDestroy(initSupport());
@@ -130,6 +133,8 @@
           <Friends tab={$route.params.tab} />
         {:else if $route.name === 'activity'}
           <Activity />
+        {:else if $route.name === 'stats'}
+          <Stats />
         {:else if $route.name === 'user'}
           <UserProfile username={$route.params.username} />
         {:else if $route.name === 'profile'}

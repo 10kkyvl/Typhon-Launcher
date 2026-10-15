@@ -30,11 +30,11 @@ func TestRecordPersistsAndPrunes(t *testing.T) {
 		t.Fatalf("sessions = %+v, want only fresh", got)
 	}
 
-	var onDisk []Session
+	var onDisk document
 	if err := storage.Load(path, playlogVersion, nil, &onDisk); err != nil {
 		t.Fatal(err)
 	}
-	if len(onDisk) != 1 || onDisk[0].GameID != "fresh" {
+	if len(onDisk.Sessions) != 1 || onDisk.Sessions[0].GameID != "fresh" {
 		t.Fatalf("on disk = %+v, want only fresh", onDisk)
 	}
 
@@ -118,9 +118,9 @@ func TestNewServiceAtPrunesStaleSessionsOnLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "playlog.json")
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
 	stale := now.Add(-100 * 24 * time.Hour)
-	if err := storage.Save(path, playlogVersion, []Session{
+	if err := storage.Save(path, playlogVersion, document{Sessions: []Session{
 		{GameID: "old", StartedAt: stale.Add(-time.Hour), EndedAt: stale},
-	}); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 

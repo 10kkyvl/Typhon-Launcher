@@ -41,6 +41,7 @@
   import { logsReason } from '../../lib/services/logsMessages';
   import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
+  import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
@@ -390,6 +391,22 @@
     await loadOverlayStatus();
   }
 
+  const screenshotHotkeyOptions = SCREENSHOT_HOTKEYS.map((key) => ({ id: key, label: key }));
+  const screenshotHotkey = $derived.by(() => {
+    const id = current?.screenshotHotkey ?? SCREENSHOT_HOTKEYS[0];
+    return screenshotHotkeyOptions.some((o) => o.id === id) ? id : SCREENSHOT_HOTKEYS[0];
+  });
+
+  async function setScreenshots(patch: Partial<Settings>) {
+    await updateSettingsReporting(patch, (err) => {
+      const reason = overlayReason(err);
+      toast(
+        reason ? msg('settings.screenshotsSaveError', { reason }) : msg('settings.screenshotsSaveErrorPlain'),
+        'danger',
+      );
+    });
+  }
+
   onMount(() => {
     const off = onOverlayStatus((status) => {
       overlayInfo = status;
@@ -547,6 +564,29 @@
               width="22rem"
               options={overlayHotkeyOptions}
               onchange={(id) => setOverlay({ overlayHotkey: id })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.screenshotsEnabledLabel')}</span>
+              <span class="row-sub">{msg('settings.screenshotsEnabledSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.screenshotsEnabled ?? true}
+              label={msg('settings.screenshotsEnabledLabel')}
+              onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.screenshotHotkeyLabel')}</span>
+              <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
+            </div>
+            <Select
+              value={screenshotHotkey}
+              width="22rem"
+              options={screenshotHotkeyOptions}
+              onchange={(id) => setScreenshots({ screenshotHotkey: id })}
             />
           </div>
           <div class="row">

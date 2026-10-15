@@ -16,16 +16,16 @@ func TestRegisterRefusesAKeyThatIsAlreadyTaken(t *testing.T) {
 	defer cancel()
 	p := windowsPlatform{}
 
-	stopFirst, err := p.register(ctx, &wg, testKey, func() {})
+	stopFirst, err := p.register(ctx, &wg, 1, testKey, func() {})
 	if err != nil {
 		t.Fatalf("first registration: %v", err)
 	}
-	if _, err := p.register(ctx, &wg, testKey, func() {}); err == nil {
+	if _, err := p.register(ctx, &wg, 1, testKey, func() {}); err == nil {
 		t.Fatal("the same key was registered twice")
 	}
 	stopFirst()
 
-	stopAgain, err := p.register(ctx, &wg, testKey, func() {})
+	stopAgain, err := p.register(ctx, &wg, 1, testKey, func() {})
 	if err != nil {
 		t.Fatalf("registration after the key was released: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestRegisterStopsWhenTheContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := windowsPlatform{}
 
-	if _, err := p.register(ctx, &wg, testKey, func() {}); err != nil {
+	if _, err := p.register(ctx, &wg, 1, testKey, func() {}); err != nil {
 		t.Fatalf("registration: %v", err)
 	}
 	cancel()
@@ -48,7 +48,7 @@ func TestRegisterStopsWhenTheContextIsCancelled(t *testing.T) {
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	stop, err := p.register(ctx2, &wg, testKey, func() {})
+	stop, err := p.register(ctx2, &wg, 1, testKey, func() {})
 	if err != nil {
 		t.Fatalf("the key stayed registered after the context was cancelled: %v", err)
 	}
