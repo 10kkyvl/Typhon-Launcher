@@ -25,6 +25,7 @@
   let loadFailed = $state(false);
   let noLibrary = $state(false);
   let enabled = $state(true);
+  let statusKnown = $state(false);
   let hotkey = $state<string>(DEFAULT_SCREENSHOT_HOTKEY);
   let lightboxOpen = $state(false);
   let lightboxIndex = $state(0);
@@ -35,11 +36,18 @@
     const id = ++requestId;
     const target = gameId;
     try {
-      const [list, status] = await Promise.all([listShots(target), screenshotsStatus()]);
+      const [list, status] = await Promise.allSettled([listShots(target), screenshotsStatus()]);
       if (id !== requestId) return;
-      shots = list;
-      enabled = status.enabled;
-      hotkey = status.hotkey || DEFAULT_SCREENSHOT_HOTKEY;
+      if (status.status === 'fulfilled') {
+        enabled = status.value.enabled;
+        hotkey = status.value.hotkey || DEFAULT_SCREENSHOT_HOTKEY;
+        statusKnown = true;
+      } else {
+        statusKnown = false;
+        toast(screenshotErrorText(status.reason, msg('screenshots.loadError')), 'danger');
+      }
+      if (list.status === 'rejected') throw list.reason;
+      shots = list.value;
       noLibrary = false;
       loadFailed = false;
     } catch (err) {
@@ -107,7 +115,7 @@
   <div class="head">
     <div class="titles">
       <h2>{msg('screenshots.sectionTitle')}</h2>
-      {#if !noLibrary && enabled}
+      {#if !noLibrary && enabled && statusKnown}
         <p class="hint">{msg('screenshots.hotkeyHint', { hotkey })}</p>
       {/if}
     </div>
@@ -126,7 +134,7 @@
   {:else if loadFailed}
     <p class="note danger" role="alert">{msg('screenshots.loadError')}</p>
   {:else if shots.length === 0}
-    <p class="note">{enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}</p>
+    <p class="note">{!statusKnown ? msg('screenshots.emptyNoHotkey') : enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}</p>
   {:else}
     <div class="grid">
       {#each shots as shot, index (shot.name)}

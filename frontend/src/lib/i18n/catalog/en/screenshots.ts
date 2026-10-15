@@ -18,6 +18,7 @@ export const screenshots: Record<ScreenshotsKey, Message> = {
   'screenshots.deleted': 'Screenshot deleted',
   'screenshots.open': 'Open screenshot {name}',
   'screenshots.hotkeyHint': 'Take a screenshot with {hotkey}',
+  'screenshots.emptyNoHotkey': 'No screenshots yet',
   'screenshots.empty': 'No screenshots yet. Press {hotkey} in the game.',
   'screenshots.disabledNote': 'Screenshots are turned off in settings.',
   'screenshots.noLibrary': 'The screenshots folder is unavailable: set up the library in settings first.',

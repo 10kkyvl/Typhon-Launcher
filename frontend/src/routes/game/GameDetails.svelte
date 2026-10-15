@@ -1144,7 +1144,7 @@
           </section>
         {/if}
 
-        {#if catalogGame || localGame}
+        {#if (catalogGame || localGame) && !external}
           <section class="section">
             <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
             {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}

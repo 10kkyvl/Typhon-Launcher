@@ -646,10 +646,14 @@
               <span class="row-label">{msg('settings.extlibLabel')}</span>
               <span class="row-sub">{msg('settings.extlibSub')}</span>
             </div>
-            <Button size="sm" disabled={importing} onclick={runImportExternal}>
-              <RefreshCw size="1.5rem" strokeWidth={1.8} />
-              {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
-            </Button>
+            {#if appInfo?.platform === 'windows'}
+              <Button size="sm" disabled={importing} onclick={runImportExternal}>
+                <RefreshCw size="1.5rem" strokeWidth={1.8} />
+                {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+              </Button>
+            {:else}
+              <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
+            {/if}
           </div>
           {#if importDetails.length > 0}
             <details class="import-details" open>

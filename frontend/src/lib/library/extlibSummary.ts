@@ -36,7 +36,7 @@ export function summarizeImport(summary: ExtlibSummary): ImportReport {
     details.push(msg('settings.extlibDetailMetadata', { error: item }));
   }
 
-  const failed = providers.some((result) => result.error);
+  const failed = providers.some((result) => result.error) || (summary.metadataErrors ?? []).length > 0;
   if (providers.length > 0 && providers.every((result) => result.notInstalled)) {
     return { text: msg('settings.extlibNoneFound'), kind: 'info', details };
   }
@@ -48,5 +48,6 @@ export function summarizeImport(summary: ExtlibSummary): ImportReport {
 export function importErrorText(err: unknown): string {
   const code = errorCode(err);
   if (hasMessage(code)) return msg(code);
-  return msg('settings.extlibFailed');
+  const message = err instanceof Error ? err.message : '';
+  return message || msg('settings.extlibFailed');
 }

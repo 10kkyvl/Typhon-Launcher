@@ -313,6 +313,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.networkStatusDown': 'Not working',
   'settings.networkFallbackError': 'Could not complete the network settings action',
   'settings.extlibLabel': 'Find Steam, GOG and Epic games',
+  'settings.extlibWindowsOnly': 'Available on Windows only',
   'settings.extlibSub': 'Add games installed through other launchers to the library. Files are not copied or changed',
   'settings.extlibRunning': 'Searching…',
   'settings.extlibDone': 'Added {added}, updated {updated}',

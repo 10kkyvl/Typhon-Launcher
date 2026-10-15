@@ -65,6 +65,8 @@
   function pick(next: StatsPeriod) {
     if (next === period) return;
     period = next;
+    data = null;
+    failed = false;
     void load(next);
   }
 

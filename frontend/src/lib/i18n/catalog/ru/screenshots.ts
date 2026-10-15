@@ -15,6 +15,7 @@ export const screenshots = {
   'screenshots.deleted': 'Снимок удалён',
   'screenshots.open': 'Открыть снимок {name}',
   'screenshots.hotkeyHint': 'Снимок делается клавишей {hotkey}',
+  'screenshots.emptyNoHotkey': 'Снимков пока нет',
   'screenshots.empty': 'Снимков пока нет. Нажмите {hotkey} в игре.',
   'screenshots.disabledNote': 'Снимки выключены в настройках.',
   'screenshots.noLibrary': 'Папка снимков недоступна: сначала настройте библиотеку в настройках.',

@@ -310,6 +310,7 @@ export const settings = {
   'settings.networkStatusDown': 'Не работает',
   'settings.networkFallbackError': 'Не удалось выполнить действие с сетевыми настройками',
   'settings.extlibLabel': 'Найти игры Steam, GOG и Epic',
+  'settings.extlibWindowsOnly': 'Доступно только в Windows',
   'settings.extlibSub': 'Добавить в библиотеку игры, установленные через другие лаунчеры. Файлы не копируются и не изменяются',
   'settings.extlibRunning': 'Ищем…',
   'settings.extlibDone': 'Добавлено {added}, обновлено {updated}',

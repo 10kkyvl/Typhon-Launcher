@@ -81,6 +81,14 @@ describe('summarizeImport', () => {
     expect(report.details).toHaveLength(1);
   });
 
+  it('turns the toast into an error when only metadata failed', () => {
+    const report = summarizeImport(
+      summary({ providers: [provider({ found: 1, added: 1 })], added: 1, metadataErrors: ['x'] }),
+    );
+    expect(report.kind).toBe('danger');
+    expect(report.details).toHaveLength(1);
+  });
+
   it('names providers', () => {
     expect(providerName('gog')).toBe('GOG Galaxy');
     expect(providerName('other')).toBe('other');
@@ -98,7 +106,12 @@ describe('importErrorText', () => {
     );
   });
 
-  it('falls back for unknown errors', () => {
-    expect(importErrorText(new Error('boom'))).toBe('Не удалось найти игры других лаунчеров');
+  it('shows the message of an unknown error', () => {
+    expect(importErrorText(new Error('boom'))).toBe('boom');
+  });
+
+  it('falls back when there is no message', () => {
+    expect(importErrorText(new Error(''))).toBe('Не удалось найти игры других лаунчеров');
+    expect(importErrorText(undefined)).toBe('Не удалось найти игры других лаунчеров');
   });
 });
