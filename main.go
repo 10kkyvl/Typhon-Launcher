@@ -60,6 +60,7 @@ import (
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/watchlist"
 	"typhon/internal/wine"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -135,6 +136,9 @@ func init() {
 	application.RegisterEvent[history.Record]("history:recorded")
 	application.RegisterEvent[[]history.Record]("history:updated")
 	application.RegisterEvent[history.Status]("history:degraded")
+	application.RegisterEvent[[]watchlist.Alert]("watchlist:alert")
+	application.RegisterEvent[[]watchlist.Entry]("watchlist:updated")
+	application.RegisterEvent[watchlist.Status]("watchlist:degraded")
 	application.RegisterEvent[theme.Theme]("theme:updated")
 	application.RegisterEvent[[]theme.Theme]("theme:list")
 	application.RegisterEvent[theme.Theme]("theme:reverted")
@@ -348,6 +352,10 @@ func main() {
 	if err != nil {
 		fatal("start sources service", err)
 	}
+	watchlistService, err := watchlist.NewService(sourcesService, catalogService)
+	if err != nil {
+		fatal("start watchlist service", err)
+	}
 	refs := sourcesService.ReferencedGameIDs()
 	refs = append(refs, libraryService.ReferencedCatalogIDs()...)
 	refs = append(refs, downloadManager.ReferencedGameIDs()...)
@@ -468,6 +476,7 @@ func main() {
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
+	sourcesService.AddRefreshListener(watchlistService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
 
@@ -652,6 +661,7 @@ func main() {
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),
+		application.NewService(watchlistService),
 		application.NewService(compatService),
 		application.NewService(themeService),
 		application.NewService(lanService),

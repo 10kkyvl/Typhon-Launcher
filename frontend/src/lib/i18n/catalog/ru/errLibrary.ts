@@ -68,6 +68,12 @@ export const errLibrary = {
   'settings.proxy_port_invalid': 'порт прокси должен быть от 1 до 65535',
   'settings.proxy_username_invalid': 'недопустимое имя пользователя прокси',
 
+  'watchlist.empty_id': 'не указана игра',
+  'watchlist.game_not_found': 'игра не найдена в каталоге',
+  'watchlist.not_watched': 'игра не отслеживается',
+  'watchlist.alert_not_found': 'уведомление не найдено',
+  'watchlist.save_failed': 'не удалось сохранить список отслеживаемых игр',
+  'errLibrary.watchlistErrFallback': 'Не удалось выполнить действие со списком отслеживаемых игр',
   'history.clear_failed': 'не удалось очистить журнал',
   'errLibrary.historyErrFallback': 'Не удалось выполнить действие с журналом',
   'library.too_many_tags': 'достигнут лимит тегов у игры',

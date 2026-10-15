@@ -18,6 +18,7 @@
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initHistory } from './lib/stores/history';
+  import { initWatchlist } from './lib/stores/watchlist';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -74,6 +75,7 @@
   initAuth();
   initMessaging();
   initHistory();
+  initWatchlist();
   initLan();
   initSocial();
   onDestroy(initSupport());

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,6 +85,8 @@ type Service struct {
 	onChanged  func()
 	status     degradedStatus
 	cached     *cachedFeed
+
+	refreshListeners []func(ctx context.Context)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -949,6 +952,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	if summary.Added > 0 || summary.Updated > 0 || summary.Restored > 0 {
 		s.notifyChanged()
 	}
+	s.notifyRefreshed()
 	return summary, nil
 }
 
@@ -957,6 +961,40 @@ func (s *Service) SetOnChanged(fn func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onChanged = fn
+}
+
+// AddRefreshListener registers fn to run after every successful settle,
+// whether or not the refresh added or changed any release.
+//
+//wails:ignore
+func (s *Service) AddRefreshListener(fn func(ctx context.Context)) {
+	if fn == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refreshListeners = append(s.refreshListeners, fn)
+}
+
+// notifyRefreshed runs the refresh listeners in one goroutine counted in s.wg
+// with the service context, so ServiceShutdown cancels and waits for them
+// (invariant 19). Before ServiceStartup there is no context and nothing runs.
+func (s *Service) notifyRefreshed() {
+	s.mu.Lock()
+	if len(s.refreshListeners) == 0 || s.closing || s.ctx == nil {
+		s.mu.Unlock()
+		return
+	}
+	listeners := slices.Clone(s.refreshListeners)
+	ctx := s.ctx
+	s.wg.Add(1)
+	s.mu.Unlock()
+	go func() {
+		defer s.wg.Done()
+		for _, fn := range listeners {
+			fn(ctx)
+		}
+	}()
 }
 
 // notifyChanged runs the onChanged callback in its own goroutine so a slow

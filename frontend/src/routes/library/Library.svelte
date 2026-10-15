@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
     ArrowDownUp,
+    BellOff,
+    Bell,
     ChevronDown,
     ChevronRight,
     Clock,
@@ -23,7 +25,7 @@
   import CollectionModal from '../../lib/components/CollectionModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameCard from '../../lib/components/GameCard.svelte';
+  import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -39,6 +41,7 @@
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
   import { revealImage } from '../../lib/utils/revealImage';
@@ -67,6 +70,7 @@
     tags?: string[];
     status?: string;
     canonicalGameId?: string;
+    watched?: boolean;
   }
 
   let filter = $state<LibraryFilter>('all');
@@ -117,6 +121,7 @@
   $effect(() => {
     requestArt([
       ...downloaded.keys(),
+      ...$watchlist.map((item) => item.gameId),
       ...$libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)),
     ]);
   });
@@ -139,12 +144,13 @@
     collectionOpen = true;
   }
 
-  const filters: { id: LibraryFilter; label: string; icon?: typeof Clock }[] = [
+  const filters = $derived<{ id: LibraryFilter; label: string; icon?: typeof Clock }[]>([
     { id: 'all', label: msg('games.filterAll') },
     { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
     { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
     { id: 'hidden', label: msg('games.filterHidden'), icon: EyeOff },
-  ];
+    ...($watchlist.length > 0 ? [{ id: 'watched' as const, label: msg('games.filterWatched'), icon: Bell }] : []),
+  ]);
 
   const sortLabels: Record<Sort, string> = {
     alpha: msg('games.sortAlpha'),
@@ -158,6 +164,7 @@
     installed: msg('games.filterInstalled'),
     recent: msg('games.recentLabel'),
     hidden: msg('games.filterHidden'),
+    watched: msg('games.filterWatched'),
   };
 
   function installedEntry(game: LibraryGame): Entry {
@@ -210,6 +217,43 @@
     };
   }
 
+  const watchedEntries = $derived(
+    $watchlist.map((item): Entry => ({
+      id: item.gameId,
+      title: item.title,
+      cover: $gameArt[item.gameId]?.cover ?? '',
+      hero: $gameArt[item.gameId]?.hero ?? '',
+      installed: false,
+      playable: false,
+      playtimeSeconds: 0,
+      sizeBytes: 0,
+      lastPlayed: null,
+      subtitle: msg('games.watchedMeta'),
+      hidden: false,
+      inLibrary: false,
+      watched: true,
+    })),
+  );
+
+  $effect(() => {
+    if (filter === 'watched' && $watchlist.length === 0) filter = 'all';
+  });
+
+  function watchedActions(entry: Entry): GameCardAction[] | undefined {
+    if (!entry.watched) return undefined;
+    return [
+      {
+        id: 'unwatch',
+        label: msg('games.unwatchAction'),
+        icon: BellOff,
+        onclick: (event) => {
+          event.stopPropagation();
+          void toggleWatch(entry.id);
+        },
+      },
+    ];
+  }
+
   const entries = $derived.by(() => {
     const installed = $libraryGames.map(installedEntry);
     const rest = [...downloaded].map(([gameId, item]) => downloadedEntry(gameId, item));
@@ -218,7 +262,7 @@
 
   const visibleGames = $derived.by(() => {
     const query = search.trim().toLowerCase();
-    const filtered = entries.filter((entry) => {
+    const filtered = (filter === 'watched' ? watchedEntries : entries).filter((entry) => {
       if (query && !entry.title.toLowerCase().includes(query)) return false;
       if (entry.hidden !== (filter === 'hidden')) return false;
       if (activeCollection) {
@@ -485,7 +529,8 @@
             cover={entry.cover}
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
-            meta={entryMeta(entry)}
+            meta={entry.watched ? entry.subtitle : entryMeta(entry)}
+            actions={watchedActions(entry)}
             onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
           />
         {/each}
@@ -503,7 +548,7 @@
             </div>
             <span class="list-title">{entry.title}</span>
             <span class="list-meta">{entry.subtitle}</span>
-            <span class="list-meta right">{entryMeta(entry)}</span>
+            <span class="list-meta right">{entry.watched ? '' : entryMeta(entry)}</span>
           </button>
         {/each}
       </div>
