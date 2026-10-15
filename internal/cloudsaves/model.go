@@ -58,6 +58,7 @@ type GameStatus struct {
 type Status struct {
 	Enabled    bool         `json:"enabled"`
 	SignedIn   bool         `json:"signedIn"`
+	Pending    bool         `json:"pending"`
 	UsedBytes  int64        `json:"usedBytes"`
 	QuotaBytes int64        `json:"quotaBytes"`
 	MaxBytes   int64        `json:"maxBytes"`

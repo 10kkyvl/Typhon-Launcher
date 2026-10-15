@@ -1473,8 +1473,8 @@ func TestUnknownAccountIsPendingAndRetriedWithoutAGlobalError(t *testing.T) {
 	if first.GameID != "" || first.Status != StatePending || first.Code != codeAccountUnk {
 		t.Fatalf("first event = %+v, want pending %s", first, codeAccountUnk)
 	}
-	if st := h.svc.Status(); st.Error != "" {
-		t.Fatalf("status error = %q: an unbound account is not a failure", st.Error)
+	if st := h.svc.Status(); st.Error != "" || !st.Pending {
+		t.Fatalf("status = %+v: an unbound account is pending, not a failure", st)
 	}
 	if h.client.calls() != 0 {
 		t.Fatal("the cloud was contacted before the account was known")
@@ -1484,6 +1484,9 @@ func TestUnknownAccountIsPendingAndRetriedWithoutAGlobalError(t *testing.T) {
 	next := waitEvent(t, h.events)
 	if next.Status != StateSynced || next.GameID != gameLocal {
 		t.Fatalf("next event = %+v, want the retry to sync the game (a repeated pending event means no dedupe)", next)
+	}
+	if st := h.svc.Status(); st.Pending {
+		t.Fatalf("status = %+v: the account is bound, nothing is pending", st)
 	}
 }
 

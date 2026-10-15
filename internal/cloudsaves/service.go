@@ -295,6 +295,7 @@ func (s *Service) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st.UsedBytes, st.QuotaBytes, st.MaxBytes = s.usage.UsedBytes, s.usage.QuotaBytes, s.usage.MaxBytes
+	st.Pending = s.pending != ""
 	switch {
 	case s.loadErr != nil:
 		st.Error = codeStateBroken
