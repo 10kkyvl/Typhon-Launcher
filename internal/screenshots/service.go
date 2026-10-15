@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"io/fs"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -426,7 +427,7 @@ func (s *Service) List(gameID string) ([]Shot, error) {
 		shots = append(shots, Shot{
 			Name: entry.Name(),
 			Path: filepath.Join(dir, entry.Name()),
-			URL:  URLPrefix + gameID + "/" + entry.Name(),
+			URL:  URLPrefix + url.PathEscape(gameID) + "/" + url.PathEscape(entry.Name()),
 			Size: info.Size(),
 			At:   info.ModTime(),
 		})

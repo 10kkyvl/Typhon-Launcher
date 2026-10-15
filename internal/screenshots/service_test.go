@@ -239,6 +239,25 @@ func TestListFiltersAndOrders(t *testing.T) {
 	}
 }
 
+func TestListEscapesURL(t *testing.T) {
+	r := newRig(t, fakeGames{})
+	writeFile(t, filepath.Join(r.root, "g1", "shot #1 100%.png"), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+
+	got, err := r.svc.List("g1")
+	if err != nil || len(got) != 1 {
+		t.Fatalf("list: %v, %v", got, err)
+	}
+	if got[0].URL != "/screenshots/g1/shot%20%231%20100%25.png" {
+		t.Fatalf("url = %q", got[0].URL)
+	}
+	req := httptest.NewRequest(http.MethodGet, got[0].URL, nil)
+	rec := httptest.NewRecorder()
+	r.svc.Middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("serve escaped url: status %d", rec.Code)
+	}
+}
+
 func TestListRejectsBadGameID(t *testing.T) {
 	r := newRig(t, fakeGames{})
 	for _, id := range []string{"", "..", "../x", "a/b", `a\b`} {
