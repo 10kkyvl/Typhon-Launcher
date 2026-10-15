@@ -698,7 +698,7 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
 		return Summary{}, matchErr
 	}
-	return s.settle(id, incoming, result, started, initial, result.NotModified, matches, partial)
+	return s.settle(id, incoming, result, started, initial, result.NotModified, matches, partial) //nolint:contextcheck // инвариант 19: слушатели обновления живут дольше refresh (его ctx с таймаутом отменяется при возврате), поэтому notifyRefreshed идёт под ctx сервиса и учтён в wg
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
