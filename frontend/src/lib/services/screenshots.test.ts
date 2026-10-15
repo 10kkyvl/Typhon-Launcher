@@ -33,7 +33,7 @@ describe('screenshot hotkeys', () => {
 describe('outside the desktop shell', () => {
   it('lists no shots and reports the default status', async () => {
     expect(await listShots('g1')).toEqual([]);
-    expect(await screenshotsStatus()).toMatchObject({ enabled: true, hotkey: 'Shift+F12' });
+    expect(await screenshotsStatus()).toMatchObject({ enabled: true, hotkey: 'Ctrl+F12' });
   });
 
   it('refuses actions that need the backend instead of pretending they worked', async () => {

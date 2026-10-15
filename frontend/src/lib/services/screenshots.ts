@@ -6,7 +6,7 @@ import { inWails } from './backend';
 export type { Failed, Saved, Shot, Status };
 
 export const SCREENSHOT_HOTKEYS = ['F12', 'F11', 'Shift+F12', 'Ctrl+F12'] as const;
-export const DEFAULT_SCREENSHOT_HOTKEY = 'Shift+F12' satisfies (typeof SCREENSHOT_HOTKEYS)[number];
+export const DEFAULT_SCREENSHOT_HOTKEY = 'Ctrl+F12' satisfies (typeof SCREENSHOT_HOTKEYS)[number];
 
 const unavailable = () => new Error('unavailable in browser');
 

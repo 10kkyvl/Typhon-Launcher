@@ -12,7 +12,7 @@ import (
 
 func TestScreenshotDefaults(t *testing.T) {
 	d := Defaults()
-	if !d.ScreenshotsEnabled || d.ScreenshotHotkey != ScreenshotHotkeyShiftF12 {
+	if !d.ScreenshotsEnabled || d.ScreenshotHotkey != ScreenshotHotkeyCtrlF12 {
 		t.Fatalf("screenshot defaults = %v %q", d.ScreenshotsEnabled, d.ScreenshotHotkey)
 	}
 	if _, err := sanitize(d); err != nil {
@@ -26,7 +26,7 @@ func TestOldConfigWithoutScreenshotFieldsLoadsDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := mustServiceAt(t, path).GetSettings()
-	if !got.ScreenshotsEnabled || got.ScreenshotHotkey != ScreenshotHotkeyShiftF12 {
+	if !got.ScreenshotsEnabled || got.ScreenshotHotkey != ScreenshotHotkeyCtrlF12 {
 		t.Fatalf("screenshot fields of an old config = %v %q", got.ScreenshotsEnabled, got.ScreenshotHotkey)
 	}
 }
@@ -80,7 +80,7 @@ func TestScreenshotHotkeyValidation(t *testing.T) {
 			if uierr.Code(err) != "settings.screenshot_hotkey_invalid" {
 				t.Fatalf("code = %q", uierr.Code(err))
 			}
-			if got := svc.GetSettings().ScreenshotHotkey; got != ScreenshotHotkeyShiftF12 {
+			if got := svc.GetSettings().ScreenshotHotkey; got != ScreenshotHotkeyCtrlF12 {
 				t.Fatalf("a rejected hotkey changed the stored one to %q", got)
 			}
 		})

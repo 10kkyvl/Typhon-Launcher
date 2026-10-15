@@ -373,7 +373,7 @@ func TestOpenFolder(t *testing.T) {
 func TestStatus(t *testing.T) {
 	r := newRig(t, fakeGames{})
 	st := r.svc.Status()
-	if !st.Enabled || st.Hotkey != settings.ScreenshotHotkeyShiftF12 || st.Dir != r.root {
+	if !st.Enabled || st.Hotkey != settings.ScreenshotHotkeyCtrlF12 || st.Dir != r.root {
 		t.Fatalf("status = %+v", st)
 	}
 }
