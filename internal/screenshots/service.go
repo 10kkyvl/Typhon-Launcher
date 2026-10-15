@@ -93,6 +93,7 @@ type Service struct {
 	config  func() settings.Settings
 	games   runningPort
 	grab    func(hwnd uintptr) (grabbed, error)
+	pidOf   func(hwnd uintptr) (uint32, error)
 	now     func() time.Time
 	emit    func(name string, payload any)
 	openDir func(path string) error
@@ -124,6 +125,7 @@ func NewService(config func() settings.Settings, games runningPort) (*Service, e
 		config:  config,
 		games:   games,
 		grab:    grabWindow,
+		pidOf:   windowOwner,
 		now:     time.Now,
 		emit:    emitToApp,
 		openDir: platform.OpenFolder,
@@ -206,17 +208,23 @@ func (s *Service) capture(ctx context.Context, hwnd uintptr) (Saved, error) {
 	if root == "" {
 		return Saved{}, ErrNoLibrary
 	}
+	if err := ctx.Err(); err != nil {
+		return Saved{}, err
+	}
+	pid, err := s.pidOf(hwnd)
+	if err != nil {
+		return Saved{}, err
+	}
+	gameID, err := s.pickGame(ctx, pid)
+	if err != nil {
+		return Saved{}, fmt.Errorf("pid %d: %w", pid, err)
+	}
 	shot, err := s.grab(hwnd)
 	if err != nil {
 		return Saved{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Saved{}, err
-	}
-
-	gameID, err := s.pickGame(ctx, shot.pid)
-	if err != nil {
-		return Saved{}, fmt.Errorf("pid %d: %w", shot.pid, err)
 	}
 	at := s.now()
 

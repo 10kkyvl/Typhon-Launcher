@@ -92,6 +92,18 @@ func windowArea(hwnd uintptr) (winRect, error) {
 	return r, nil
 }
 
+// windowOwner runs before the grab so a foreign window is refused without
+// ever being captured.
+func windowOwner(hwnd uintptr) (uint32, error) {
+	if hwnd == 0 {
+		return 0, ErrNoWindow
+	}
+	if live, _, _ := procIsW.Call(hwnd); live == 0 { //nolint:errcheck // errcheck: IsWindow answers through its BOOL result and sets no last error.
+		return 0, ErrNoWindow
+	}
+	return windowPID(hwnd)
+}
+
 func grabWindow(hwnd uintptr) (grabbed, error) {
 	if hwnd == 0 {
 		return grabbed{}, ErrNoWindow

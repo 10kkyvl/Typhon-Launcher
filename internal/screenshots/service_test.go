@@ -85,6 +85,10 @@ func newRig(t *testing.T, games fakeGames) *rig {
 		return nil
 	}
 	svc.exeOf = func(context.Context, uint32) (string, error) { return r.exe, r.exeErr }
+	svc.pidOf = func(hwnd uintptr) (uint32, error) {
+		g, err := svc.grab(hwnd)
+		return g.pid, err
+	}
 	svc.parents = func(context.Context) (map[uint32]uint32, error) { return r.tree, r.treeErr }
 	svc.now = func() time.Time { return time.Date(2026, 10, 15, 12, 30, 45, 0, time.Local) }
 	r.svc = svc
@@ -547,7 +551,12 @@ func TestCaptureStoresUnderTheGame(t *testing.T) {
 func TestCaptureOfAForeignWindowStoresNothing(t *testing.T) {
 	install := filepath.Join(t.TempDir(), "game")
 	r := newRig(t, fakeGames{running: []string{"a"}, dirs: map[string]string{"a": install}})
-	r.svc.grab = grabber(99, nil)
+	r.svc.pidOf = func(uintptr) (uint32, error) { return 99, nil }
+	grabs := 0
+	r.svc.grab = func(uintptr) (grabbed, error) {
+		grabs++
+		return grabbed{img: testImage(), pid: 99}, nil
+	}
 	r.exe = filepath.Join(t.TempDir(), "browser.exe")
 	if err := r.svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
@@ -557,6 +566,9 @@ func TestCaptureOfAForeignWindowStoresNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if grabs != 0 {
+		t.Fatalf("a foreign window was grabbed %d times before attribution refused it", grabs)
+	}
 	entries, err := os.ReadDir(r.root)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("files left in the screenshots folder: %v %v", entries, err)
