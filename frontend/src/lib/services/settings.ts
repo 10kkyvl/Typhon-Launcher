@@ -121,7 +121,7 @@ const fallbackDefaults: Settings = {
   overlayEnabled: true,
   overlayHotkey: 'Alt+`',
   screenshotsEnabled: true,
-  screenshotHotkey: 'F12',
+  screenshotHotkey: 'Shift+F12',
 };
 
 export const maxActiveDownloadOptions = [

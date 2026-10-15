@@ -121,7 +121,7 @@
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesSize, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -408,7 +408,7 @@
     const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
     return facts([
       { label: msg('games.detailFactVersion'), value: localGame.version },
-      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
+      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesSize(localGame.sizeBytes) : '' },
       { label: msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
       { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
       { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },

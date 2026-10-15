@@ -315,7 +315,7 @@ export const settings = {
   'settings.extlibRunning': 'Ищем…',
   'settings.extlibDone': 'Добавлено {added}, обновлено {updated}',
   'settings.extlibNoneFound': 'Лаунчеры Steam, GOG Galaxy и Epic не найдены',
-  'settings.extlibHasDetails': 'есть замечания, они ниже',
+  'settings.extlibHasDetails': 'Есть замечания, они ниже',
   'settings.extlibFailed': 'Не удалось найти игры других лаунчеров',
   'settings.extlibDetailsTitle': 'Что не удалось добавить',
   'settings.extlibDetailError': '{provider}: {error}',

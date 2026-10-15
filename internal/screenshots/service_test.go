@@ -3,6 +3,7 @@ package screenshots
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,13 +49,15 @@ type emitted struct {
 }
 
 type rig struct {
-	svc    *Service
-	root   string
-	mu     sync.Mutex
-	events []emitted
-	opened []string
-	exe    string
-	exeErr error
+	svc     *Service
+	root    string
+	mu      sync.Mutex
+	events  []emitted
+	opened  []string
+	exe     string
+	exeErr  error
+	tree    map[uint32]uint32
+	treeErr error
 }
 
 func newRig(t *testing.T, games fakeGames) *rig {
@@ -81,6 +85,7 @@ func newRig(t *testing.T, games fakeGames) *rig {
 		return nil
 	}
 	svc.exeOf = func(context.Context, uint32) (string, error) { return r.exe, r.exeErr }
+	svc.parents = func(context.Context) (map[uint32]uint32, error) { return r.tree, r.treeErr }
 	svc.now = func() time.Time { return time.Date(2026, 10, 15, 12, 30, 45, 0, time.Local) }
 	r.svc = svc
 	return r
@@ -368,7 +373,7 @@ func TestOpenFolder(t *testing.T) {
 func TestStatus(t *testing.T) {
 	r := newRig(t, fakeGames{})
 	st := r.svc.Status()
-	if !st.Enabled || st.Hotkey != settings.ScreenshotHotkeyF12 || st.Dir != r.root {
+	if !st.Enabled || st.Hotkey != settings.ScreenshotHotkeyShiftF12 || st.Dir != r.root {
 		t.Fatalf("status = %+v", st)
 	}
 }
@@ -468,6 +473,46 @@ func TestPickGame(t *testing.T) {
 			got, err := r.svc.pickGame(context.Background(), c.pid)
 			if got != c.want || !errors.Is(err, c.wantErr) {
 				t.Fatalf("pickGame = %q, %v; want %q, %v", got, err, c.want, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestPickGameClimbsParents(t *testing.T) {
+	install := filepath.Join(t.TempDir(), "games", "cg")
+	temp := filepath.Join(t.TempDir(), "Temp", "codenamegordon.exe")
+	games := fakeGames{byPID: map[uint32]string{100: "cg"}, running: []string{"cg"}, dirs: map[string]string{"cg": install}}
+	cases := []struct {
+		name    string
+		tree    map[uint32]uint32
+		treeErr error
+		pid     uint32
+		want    string
+		wantErr error
+	}{
+		{"child of the session pid", map[uint32]uint32{200: 100, 100: 4}, nil, 200, "cg", nil},
+		{"grandchild of the session pid", map[uint32]uint32{300: 200, 200: 100}, nil, 300, "cg", nil},
+		{"unrelated process tree", map[uint32]uint32{200: 150, 150: 4}, nil, 200, "", ErrNoGame},
+		{"parent loop does not hang", map[uint32]uint32{200: 201, 201: 200}, nil, 200, "", ErrNoGame},
+		{"snapshot failure refuses and keeps the cause", nil, errors.New("snapshot denied"), 200, "", ErrNoGame},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t, games)
+			r.exe = temp
+			r.tree, r.treeErr = c.tree, c.treeErr
+			got, err := r.svc.pickGame(context.Background(), c.pid)
+			if got != c.want || !errors.Is(err, c.wantErr) {
+				t.Fatalf("pickGame = %q, %v; want %q, %v", got, err, c.want, c.wantErr)
+			}
+			if c.wantErr == nil {
+				return
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("%q", temp)) {
+				t.Fatalf("refusal %q does not name the window executable %q", err, temp)
+			}
+			if c.treeErr != nil && !errors.Is(err, c.treeErr) {
+				t.Fatalf("refusal %v lost the snapshot error", err)
 			}
 		})
 	}

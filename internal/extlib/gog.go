@@ -45,6 +45,9 @@ func scanGOG(ctx context.Context, reg registryReader) ProviderScan {
 			res.Err = fmt.Errorf("read %s\\%s: %w", gogGamesKey, id, err)
 			return res
 		}
+		if strings.TrimSpace(values["dependson"]) != "" {
+			continue
+		}
 		title := cleanTitle(values["gamename"])
 		if title == "" {
 			title = id

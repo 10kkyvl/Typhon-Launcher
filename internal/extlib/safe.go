@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,6 +69,17 @@ func hasDotDot(path string) bool {
 	return false
 }
 
+// dirError carries a short Russian reason for the import list while the
+// system error stays reachable through errors.Is/As and the log.
+type dirError struct {
+	msg string
+	err error
+}
+
+func (e *dirError) Error() string { return e.msg }
+
+func (e *dirError) Unwrap() error { return e.err }
+
 func checkDir(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -83,8 +96,12 @@ func checkDir(path string) (string, error) {
 	}
 	clean := filepath.Clean(path)
 	info, err := os.Stat(clean)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", &dirError{msg: "папка не найдена, игра удалена или перенесена: " + clean, err: err}
+	}
 	if err != nil {
-		return "", fmt.Errorf("каталог недоступен: %w", err)
+		slog.Warn("extlib: stat install dir", "path", clean, "error", err)
+		return "", &dirError{msg: "нет доступа к папке: " + clean, err: err}
 	}
 	if !info.IsDir() {
 		return "", fmt.Errorf("не каталог: %s", clean)

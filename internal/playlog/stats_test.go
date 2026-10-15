@@ -117,11 +117,14 @@ func TestRecordRollsBackDays(t *testing.T) {
 
 func TestStatsPeriods(t *testing.T) {
 	s := newTestService(t)
-	s.SetTitleResolver(func(id string) (string, bool) {
-		if id == "gone" {
-			return "", false
+	s.SetTitleResolver(func(ids []string) map[string]string {
+		titles := map[string]string{}
+		for _, id := range ids {
+			if id != "gone" {
+				titles[id] = "Game " + id
+			}
 		}
-		return "Game " + id, true
+		return titles
 	})
 	now := fixedNow()
 	record := func(id string, daysAgo int, hours int) {
@@ -193,6 +196,35 @@ func TestStatsPeriods(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("deleted game missing from top: %+v", month.Top)
+	}
+}
+
+func TestStatsResolvesTitlesInOneCall(t *testing.T) {
+	s := newTestService(t)
+	calls := 0
+	var asked []string
+	s.SetTitleResolver(func(ids []string) map[string]string {
+		calls++
+		asked = append(asked, ids...)
+		return map[string]string{"a": "Archived A", "b": "Live B"}
+	})
+	now := fixedNow()
+	for _, id := range []string{"a", "b", "b"} {
+		end := now.Add(-time.Hour)
+		s.Record(id, end.Add(-time.Hour), end)
+	}
+	got, err := s.Stats("week")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("resolver called %d times, want 1 (asked %v)", calls, asked)
+	}
+	if got.Top[0].Title != "Live B" || got.Top[1].Title != "Archived A" {
+		t.Fatalf("top = %+v", got.Top)
+	}
+	if got.Longest == nil || got.Longest.Title == "" {
+		t.Fatalf("longest = %+v, want a resolved title", got.Longest)
 	}
 }
 

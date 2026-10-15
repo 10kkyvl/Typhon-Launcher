@@ -21,6 +21,7 @@ import (
 
 	"typhon/internal/library"
 	"typhon/internal/platform"
+	"typhon/internal/procs"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -96,6 +97,7 @@ type Service struct {
 	emit    func(name string, payload any)
 	openDir func(path string) error
 	exeOf   func(ctx context.Context, pid uint32) (string, error)
+	parents func(ctx context.Context) (map[uint32]uint32, error)
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -126,6 +128,7 @@ func NewService(config func() settings.Settings, games runningPort) (*Service, e
 		emit:    emitToApp,
 		openDir: platform.OpenFolder,
 		exeOf:   processImage,
+		parents: procs.Parents,
 		active:  map[string]struct{}{},
 	}, nil
 }
@@ -183,7 +186,8 @@ func (s *Service) Capture(hwnd uintptr) {
 func (s *Service) run(ctx context.Context, hwnd uintptr) {
 	saved, err := s.capture(ctx, hwnd)
 	if errors.Is(err, ErrNoGame) {
-		slog.Debug("screenshot ignored: window does not belong to a running game", "error", err)
+		slog.Info("screenshot ignored: window does not belong to a running game")
+		slog.Debug("screenshot attribution", "error", err)
 		return
 	}
 	if err != nil {
@@ -225,24 +229,62 @@ func (s *Service) capture(ctx context.Context, hwnd uintptr) (Saved, error) {
 	return Saved{GameID: gameID, Title: s.title(gameID), Path: path, Name: filepath.Base(path), At: at}, nil
 }
 
+// pickGame tries the window's own process first, then its parents (a game
+// that unpacks and starts its real executable from a temp folder owns the
+// window in a child of the process the session was bound to), then the one
+// running game whose install dir holds the window's executable. Every refusal
+// carries the reason and the executable, because the log is the only place a
+// user can see why a key press left no picture.
 func (s *Service) pickGame(ctx context.Context, pid uint32) (string, error) {
 	if id, ok := s.games.RunningGameForPID(pid); ok {
 		return id, nil
 	}
+	var (
+		exe     string
+		exeErr  error
+		exeRead bool
+	)
+	imageOf := func() (string, error) {
+		if !exeRead {
+			exe, exeErr = s.exeOf(ctx, pid)
+			exeRead = true
+		}
+		return exe, exeErr
+	}
+	refuse := func(reason string, cause error) error {
+		err := fmt.Errorf("%w: %s", ErrNoGame, reason)
+		if cause != nil {
+			err = fmt.Errorf("%w: %w", err, cause)
+		}
+		path, pathErr := imageOf()
+		if pathErr != nil {
+			return fmt.Errorf("%w: image of the window process: %w", err, pathErr)
+		}
+		return fmt.Errorf("%w (exe %q)", err, path)
+	}
+
+	parents, parentsErr := s.parents(ctx)
+	if parentsErr == nil {
+		for _, ancestor := range procs.Ancestors(parents, pid) {
+			if id, ok := s.games.RunningGameForPID(ancestor); ok {
+				return id, nil
+			}
+		}
+	}
 	running := s.games.RunningGames()
 	if len(running) != 1 {
-		return "", ErrNoGame
+		return "", refuse(fmt.Sprintf("%d games running, none owns the window process or its parents", len(running)), parentsErr)
 	}
 	dir, ok := s.games.InstallDir(running[0])
 	if !ok || dir == "" {
-		return "", ErrNoGame
+		return "", refuse("install dir of the running game is unknown", parentsErr)
 	}
-	exe, err := s.exeOf(ctx, pid)
+	path, err := imageOf()
 	if err != nil {
-		return "", fmt.Errorf("%w: image of the window process: %w", ErrNoGame, err)
+		return "", refuse("image of the window process is unreadable", parentsErr)
 	}
-	if !insideDir(dir, exe) {
-		return "", ErrNoGame
+	if !insideDir(dir, path) {
+		return "", refuse("window process is outside the install dir of the running game", parentsErr)
 	}
 	return running[0], nil
 }

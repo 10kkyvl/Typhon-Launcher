@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -92,6 +93,49 @@ func TestScanGOG(t *testing.T) {
 		if reasons[title] == "" {
 			t.Errorf("%q is not in Skipped: %v", title, reasons)
 		}
+	}
+}
+
+func TestScanGOGDropsDLCAndNamesMissingFolders(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "Game")
+	if err := os.MkdirAll(game, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(game, "game.exe"), `x`)
+	gone := filepath.Join(root, "gone")
+	reg := &fakeRegistry{keys: map[string]map[string]string{
+		"100": {"gamename": "Base", "path": game, "exefile": "game.exe"},
+		"101": {"gamename": "Base DLC", "path": game, "exefile": "game.exe", "dependson": "100"},
+		"102": {"gamename": "Stale DLC", "path": gone, "exefile": "a.exe", "dependson": "100"},
+		"200": {"gamename": "Deleted", "path": gone, "exefile": "a.exe"},
+	}}
+
+	got := scanGOG(context.Background(), reg)
+	if got.Err != nil {
+		t.Fatalf("scan error: %v", got.Err)
+	}
+	if len(got.Games) != 1 || got.Games[0].AppID != "100" {
+		t.Fatalf("games = %+v, want only 100", got.Games)
+	}
+	if len(got.Skipped) != 1 || got.Skipped[0].Title != "Deleted" {
+		t.Fatalf("skipped = %+v, want only Deleted (DLC must be dropped silently)", got.Skipped)
+	}
+	reason := got.Skipped[0].Reason
+	if !strings.Contains(reason, "папка не найдена") || strings.Contains(strings.ToLower(reason), "getfileattributes") || strings.Contains(reason, "system cannot find") {
+		t.Fatalf("reason = %q, want a short Russian reason without the system text", reason)
+	}
+}
+
+func TestCheckDirKeepsCauseBehindShortReason(t *testing.T) {
+	_, err := checkDir(filepath.Join(t.TempDir(), "missing"))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("checkDir error %v lost fs.ErrNotExist", err)
+	}
+	file := filepath.Join(t.TempDir(), "f")
+	writeFile(t, file, `x`)
+	if _, err := checkDir(file); err == nil || strings.Contains(err.Error(), "system") {
+		t.Fatalf("checkDir(file) = %v, want a not-a-directory error", err)
 	}
 }
 

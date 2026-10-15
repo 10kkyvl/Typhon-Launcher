@@ -133,7 +133,7 @@ func (p *handleProcess) kill() error {
 	if p.handle == 0 {
 		return errSessionProcessGone
 	}
-	return windows.TerminateProcess(p.handle, 1)
+	return killProcessTree(p.id, func() error { return windows.TerminateProcess(p.handle, 1) })
 }
 
 type windowsExitError struct{ code uint32 }

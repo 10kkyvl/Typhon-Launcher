@@ -298,7 +298,7 @@ func (s *Service) StopGame(id string) error {
 	if err != nil {
 		return fmt.Errorf("найти процесс: %w", err)
 	}
-	if err := proc.Kill(); err != nil {
+	if err := killProcessTree(int(current.pid), proc.Kill); err != nil {
 		return fmt.Errorf("остановить игру: %w", err)
 	}
 	return nil

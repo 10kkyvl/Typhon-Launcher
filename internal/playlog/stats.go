@@ -1,6 +1,7 @@
 package playlog
 
 import (
+	"slices"
 	"sort"
 	"time"
 
@@ -94,7 +95,6 @@ func (s *Service) Stats(period string) (Stats, error) {
 	s.mu.Unlock()
 
 	for _, total := range totals {
-		total.Title = resolveTitle(titleOf, total.GameID)
 		result.Top = append(result.Top, *total)
 	}
 	sort.Slice(result.Top, func(i, j int) bool {
@@ -106,19 +106,22 @@ func (s *Service) Stats(period string) (Stats, error) {
 	if len(result.Top) > topLimit {
 		result.Top = result.Top[:topLimit]
 	}
+	ids := make([]string, 0, len(result.Top)+1)
+	for _, total := range result.Top {
+		ids = append(ids, total.GameID)
+	}
+	if result.Longest != nil && !slices.Contains(ids, result.Longest.GameID) {
+		ids = append(ids, result.Longest.GameID)
+	}
+	var titles map[string]string
+	if titleOf != nil && len(ids) > 0 {
+		titles = titleOf(ids)
+	}
+	for i := range result.Top {
+		result.Top[i].Title = titles[result.Top[i].GameID]
+	}
 	if result.Longest != nil {
-		result.Longest.Title = resolveTitle(titleOf, result.Longest.GameID)
+		result.Longest.Title = titles[result.Longest.GameID]
 	}
 	return result, nil
-}
-
-func resolveTitle(titleOf func(string) (string, bool), gameID string) string {
-	if titleOf == nil {
-		return ""
-	}
-	title, ok := titleOf(gameID)
-	if !ok {
-		return ""
-	}
-	return title
 }

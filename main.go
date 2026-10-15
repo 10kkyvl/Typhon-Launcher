@@ -489,12 +489,18 @@ func main() {
 	sourcesService.AddRefreshListener(watchlistService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
-	playlogService.SetTitleResolver(func(gameID string) (string, bool) {
-		game, err := libraryService.Find(gameID)
-		if err != nil {
-			return "", false
+	playlogService.SetTitleResolver(func(gameIDs []string) map[string]string {
+		wanted := make(map[string]struct{}, len(gameIDs))
+		for _, id := range gameIDs {
+			wanted[id] = struct{}{}
 		}
-		return game.Title, true
+		titles := make(map[string]string, len(gameIDs))
+		for _, game := range libraryService.GetHistoryGames() {
+			if _, ok := wanted[game.ID]; ok {
+				titles[game.ID] = game.Title
+			}
+		}
+		return titles
 	})
 
 	var extraCompatServices []application.Service

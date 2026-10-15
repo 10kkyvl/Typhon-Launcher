@@ -57,7 +57,7 @@ type Service struct {
 	days     []DayEntry
 	now      func() time.Time
 	status   DegradedStatus
-	titleOf  func(gameID string) (string, bool)
+	titleOf  func(gameIDs []string) map[string]string
 }
 
 func NewService() (*Service, error) {
@@ -91,7 +91,7 @@ func newServiceAt(path string, now func() time.Time) (*Service, error) {
 }
 
 //wails:ignore
-func (s *Service) SetTitleResolver(titleOf func(gameID string) (string, bool)) {
+func (s *Service) SetTitleResolver(titleOf func(gameIDs []string) map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.titleOf = titleOf

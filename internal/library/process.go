@@ -44,7 +44,9 @@ func (p *execProcess) pid() int { return p.cmd.Process.Pid }
 
 func (p *execProcess) wait() error { return p.cmd.Wait() }
 
-func (p *execProcess) kill() error { return p.cmd.Process.Kill() }
+func (p *execProcess) kill() error {
+	return killProcessTree(p.cmd.Process.Pid, p.cmd.Process.Kill)
+}
 
 // execStarter не пользуется контекстом намеренно: игра переживает лаунчер,
 // и завершение лаунчера убивать её не должно.

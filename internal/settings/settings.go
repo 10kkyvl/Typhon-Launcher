@@ -281,7 +281,7 @@ func Defaults() Settings {
 		OverlayHotkey:  OverlayHotkeyAltBacktick,
 
 		ScreenshotsEnabled: true,
-		ScreenshotHotkey:   ScreenshotHotkeyF12,
+		ScreenshotHotkey:   ScreenshotHotkeyShiftF12,
 
 		PresenceStatus:   PresenceOnline,
 		PresenceAutoAway: true,

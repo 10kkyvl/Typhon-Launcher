@@ -70,7 +70,7 @@ describe('summarizeImport', () => {
       'Steam, «Portal»: папка не найдена',
       'Описание и обложки: сеть недоступна',
     ]);
-    expect(report.text).toContain('Добавлено 0, обновлено 0');
+    expect(report.text).toBe('Добавлено 0, обновлено 0. Есть замечания, они ниже');
   });
 
   it('shows skipped games without turning the toast into an error', () => {

@@ -318,7 +318,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.extlibRunning': 'Searching…',
   'settings.extlibDone': 'Added {added}, updated {updated}',
   'settings.extlibNoneFound': 'Steam, GOG Galaxy and Epic launchers not found',
-  'settings.extlibHasDetails': 'there are notes below',
+  'settings.extlibHasDetails': 'There are notes below',
   'settings.extlibFailed': 'Could not find games from other launchers',
   'settings.extlibDetailsTitle': 'What could not be added',
   'settings.extlibDetailError': '{provider}: {error}',
