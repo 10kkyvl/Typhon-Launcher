@@ -44,6 +44,7 @@
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
   import GameReviews from './GameReviews.svelte';
+  import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { releaseOrigin } from '../../lib/game/releases';
@@ -384,13 +385,16 @@
 
   let activeTab = $state('overview');
 
+  const ownShots = $derived(Boolean(localGame) && installed);
+  const hasShotsTab = $derived(shots.length > 0 || ownShots);
+
   const tabs = $derived([
     { id: 'overview', label: msg('games.detailTabOverview') },
-    ...(shots.length > 0 ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
+    ...(hasShotsTab ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
   ]);
 
   $effect(() => {
-    if (activeTab === 'screenshots' && shots.length === 0) activeTab = 'overview';
+    if (activeTab === 'screenshots' && !hasShotsTab) activeTab = 'overview';
   });
 
   const installFacts = $derived.by(() => {
@@ -985,6 +989,9 @@
   <div class="body">
     <div class="main">
       {#if activeTab === 'screenshots'}
+        {#if localGame && ownShots}
+          <GameScreenshots gameId={localGame.id} {title} />
+        {/if}
         <div
           class="shots"
           class:featured={shots.length >= 5}

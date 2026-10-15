@@ -12,6 +12,7 @@ export type RouteName =
   | 'lan'
   | 'friends'
   | 'activity'
+  | 'stats'
   | 'user'
   | 'profile'
   | 'support'

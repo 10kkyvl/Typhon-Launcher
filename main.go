@@ -47,6 +47,7 @@ import (
 	"typhon/internal/relocate"
 	"typhon/internal/reviews"
 	"typhon/internal/savebackup"
+	"typhon/internal/screenshots"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
@@ -141,6 +142,9 @@ func init() {
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[playlog.DegradedStatus]("playlog:degraded")
+	application.RegisterEvent[screenshots.Saved](screenshots.EventSaved)
+	application.RegisterEvent[screenshots.Failed](screenshots.EventFailed)
 	application.RegisterEvent[savebackup.Event](savebackup.EventName)
 	application.RegisterEvent[cloudsaves.Event](cloudsaves.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
@@ -470,6 +474,13 @@ func main() {
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
+	playlogService.SetTitleResolver(func(gameID string) (string, bool) {
+		game, err := libraryService.Find(gameID)
+		if err != nil {
+			return "", false
+		}
+		return game.Title, true
+	})
 
 	var extraCompatServices []application.Service
 
@@ -621,6 +632,23 @@ func main() {
 	if err != nil {
 		fatal("start overlay service", err)
 	}
+	if err := overlayService.ConfigureScreenshots(current.ScreenshotsEnabled, current.ScreenshotHotkey); err != nil {
+		fatal("configure screenshot hotkey", err)
+	}
+	screenshotService, err := screenshots.NewService(settingsService.GetSettings, runningGames{libraryService})
+	if err != nil {
+		fatal("start screenshots service", err)
+	}
+	screenshotService.SetTitleResolver(func(gameID string) (string, bool) {
+		game, err := libraryService.Find(gameID)
+		if err != nil {
+			return "", false
+		}
+		return game.Title, true
+	})
+	overlayService.SetScreenshotHandler(screenshotService.Capture)
+	screenshotService.SetArmer(overlayService.SetScreenshotsArmed)
+	libraryService.AddSessionWatcher(screenshotService)
 
 	mediaService := media.NewService()
 
@@ -638,6 +666,7 @@ func main() {
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
+		application.NewService(playlogService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
 		application.NewService(titlesDictService),
@@ -662,6 +691,7 @@ func main() {
 		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
 		application.NewService(overlayService),
+		application.NewService(screenshotService),
 		application.NewService(mediaService),
 	}
 	services = append(services, extraServices...)
@@ -693,7 +723,7 @@ func main() {
 		Services: services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware),
+			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware, screenshotService.Middleware),
 		},
 		Mac: application.MacOptions{
 			// С включённым сворачиванием в трей приложение обязано пережить
@@ -974,6 +1004,18 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 
 func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
 	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
+}
+
+type runningGames struct{ *library.Service }
+
+func (g runningGames) RunningGames() []string { return g.GetRunningGames() }
+
+func (g runningGames) InstallDir(gameID string) (string, bool) {
+	game, err := g.Find(gameID)
+	if err != nil || game.InstallDir == "" {
+		return "", false
+	}
+	return game.InstallDir, true
 }
 
 func fatal(stage string, err error) {

@@ -58,6 +58,8 @@ export interface Settings {
   presenceAutoAway: boolean;
   overlayEnabled: boolean;
   overlayHotkey: string;
+  screenshotsEnabled: boolean;
+  screenshotHotkey: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -118,6 +120,8 @@ const fallbackDefaults: Settings = {
   presenceAutoAway: true,
   overlayEnabled: true,
   overlayHotkey: 'Alt+`',
+  screenshotsEnabled: true,
+  screenshotHotkey: 'F12',
 };
 
 export const maxActiveDownloadOptions = [

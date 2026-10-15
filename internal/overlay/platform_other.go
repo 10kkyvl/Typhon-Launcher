@@ -18,7 +18,7 @@ func newPlatform() platform { return unsupported{} }
 
 func (unsupported) supported() bool { return false }
 
-func (unsupported) register(context.Context, *sync.WaitGroup, hotkey, func()) (func(), error) {
+func (unsupported) register(context.Context, *sync.WaitGroup, int, hotkey, func()) (func(), error) {
 	return nil, errUnsupported
 }
 

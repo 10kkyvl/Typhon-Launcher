@@ -48,6 +48,8 @@ var localNames = []string{
 	"proxyUsername",
 	"overlayEnabled",
 	"overlayHotkey",
+	"screenshotsEnabled",
+	"screenshotHotkey",
 	"libraryPath",
 	"downloadsPath",
 	"gamesPath",

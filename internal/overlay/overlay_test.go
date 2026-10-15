@@ -44,14 +44,20 @@ type fakePlatform struct {
 	monitorFor    []uintptr
 	foregroundSet []uintptr
 	press         func()
+	shotPress     func()
 }
 
 func (p *fakePlatform) supported() bool { return !p.unsupported }
 
-func (p *fakePlatform) register(_ context.Context, _ *sync.WaitGroup, key hotkey, onPress func()) (func(), error) {
+func (p *fakePlatform) register(_ context.Context, _ *sync.WaitGroup, id int, key hotkey, onPress func()) (func(), error) {
 	name := ""
 	for n, k := range hotkeys {
-		if k == key {
+		if id == overlayHotkeyID && k == key {
+			name = n
+		}
+	}
+	for n, k := range screenshotHotkeys {
+		if id == screenshotHotkeyID && k == key {
 			name = n
 		}
 	}
@@ -62,7 +68,11 @@ func (p *fakePlatform) register(_ context.Context, _ *sync.WaitGroup, key hotkey
 	}
 	r := &fakeRegistration{name: name}
 	p.regs = append(p.regs, r)
-	p.press = onPress
+	if id == screenshotHotkeyID {
+		p.shotPress = onPress
+	} else {
+		p.press = onPress
+	}
 	return func() {
 		p.mu.Lock()
 		r.stopped = true
