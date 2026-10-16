@@ -17,6 +17,8 @@ import (
 	"typhon/internal/steamlink"
 )
 
+const scanSupported = true
+
 func Scan(ctx context.Context) ([]ProviderScan, error) {
 	return []ProviderScan{
 		scanSteamInstalled(ctx),

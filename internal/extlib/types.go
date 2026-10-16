@@ -22,6 +22,7 @@ type Candidate struct {
 type Skipped struct {
 	Title  string `json:"title"`
 	Reason string `json:"reason"`
+	AppID  string `json:"-"`
 }
 
 type ProviderScan struct {

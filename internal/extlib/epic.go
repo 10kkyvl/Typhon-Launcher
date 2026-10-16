@@ -80,7 +80,7 @@ func scanEpic(ctx context.Context, manifests string) ProviderScan {
 		}
 		cand, err := epicCandidate(item, title)
 		if err != nil {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error()})
+			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error(), AppID: item.AppName})
 			continue
 		}
 		if seen[cand.AppID] {

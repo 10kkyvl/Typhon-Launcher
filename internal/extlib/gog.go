@@ -54,7 +54,7 @@ func scanGOG(ctx context.Context, reg registryReader) ProviderScan {
 		}
 		cand, err := gogCandidate(id, title, values)
 		if err != nil {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error()})
+			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error(), AppID: id})
 			continue
 		}
 		if seen[cand.AppID] {

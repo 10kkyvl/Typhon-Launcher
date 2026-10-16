@@ -18,6 +18,35 @@ type fakeLibrary struct {
 	mu      sync.Mutex
 	applied []library.ExternalGame
 	err     error
+
+	refs        []library.ExternalRef
+	syncCalls   int
+	syncItems   []library.ExternalGame
+	syncPresent map[string]map[string]bool
+	syncErr     error
+}
+
+func (f *fakeLibrary) ExternalRefs() []library.ExternalRef {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]library.ExternalRef(nil), f.refs...)
+}
+
+func (f *fakeLibrary) SyncExternal(_ context.Context, items []library.ExternalGame, present map[string]map[string]bool) (library.ExternalSummary, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.syncCalls++
+	f.syncItems = items
+	f.syncPresent = present
+	if f.syncErr != nil {
+		return library.ExternalSummary{}, f.syncErr
+	}
+	sum := library.ExternalSummary{}
+	for _, it := range items {
+		sum.Added++
+		sum.Outcomes = append(sum.Outcomes, library.ExternalOutcome{Provider: it.Provider, AppID: it.AppID, Added: true})
+	}
+	return sum, nil
 }
 
 func (f *fakeLibrary) ApplyExternal(_ context.Context, items []library.ExternalGame) (library.ExternalSummary, error) {
