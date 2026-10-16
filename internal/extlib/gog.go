@@ -54,7 +54,11 @@ func scanGOG(ctx context.Context, reg registryReader) ProviderScan {
 		}
 		cand, err := gogCandidate(id, title, values)
 		if err != nil {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error(), AppID: id})
+			skipped := Skipped{Title: title, Reason: err.Error()}
+			if appID, ok := gogAppID(id, values); ok {
+				skipped.AppID = appID
+			}
+			res.Skipped = append(res.Skipped, skipped)
 			continue
 		}
 		if seen[cand.AppID] {
@@ -66,12 +70,17 @@ func scanGOG(ctx context.Context, reg registryReader) ProviderScan {
 	return res
 }
 
-func gogCandidate(id, title string, values map[string]string) (Candidate, error) {
+func gogAppID(id string, values map[string]string) (string, bool) {
 	appID := strings.TrimSpace(values["gameid"])
 	if appID == "" {
 		appID = id
 	}
-	if !isDigits(appID, 20) {
+	return appID, isDigits(appID, 20)
+}
+
+func gogCandidate(id, title string, values map[string]string) (Candidate, error) {
+	appID, ok := gogAppID(id, values)
+	if !ok {
 		return Candidate{}, fmt.Errorf("недопустимый идентификатор GOG %q", appID)
 	}
 	dir, err := checkDir(values["path"])

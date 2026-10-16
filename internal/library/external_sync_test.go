@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"typhon/internal/history"
 	"typhon/internal/shortcut"
 )
 
@@ -196,5 +197,100 @@ func TestSyncExternalShortcutOfVanishedGame(t *testing.T) {
 				t.Fatalf("persisted = %+v", persisted)
 			}
 		})
+	}
+}
+
+type blockingShortcuts struct {
+	*fakeShortcuts
+	onRemove func()
+}
+
+func (b blockingShortcuts) Remove(path string) error {
+	b.onRemove()
+	return b.fakeShortcuts.Remove(path)
+}
+
+func TestSyncExternalSecondPersistFailureStillFinishesFirstSave(t *testing.T) {
+	s, fake, _ := shortcutSyncFixture(t)
+	s.shortcuts = blockingShortcuts{fakeShortcuts: fake, onRemove: func() { blockPersist(t, s) }}
+	steam := &fakeSteam{}
+	s.steam = steam
+	var recorded []history.Record
+	s.historyRecord = func(r history.Record) error {
+		recorded = append(recorded, r)
+		return nil
+	}
+	sum, err := s.SyncExternal(context.Background(), nil, presentOf(ProviderSteam))
+	if err == nil {
+		t.Fatal("second persist failure must be returned")
+	}
+	if sum.Marked != 1 {
+		t.Fatalf("summary = %+v, want the mark reported", sum)
+	}
+	if len(recorded) != 1 || recorded[0].Kind != history.KindUninstalled {
+		t.Fatalf("history = %+v", recorded)
+	}
+	if len(steam.reconciled) != 1 || len(steam.reconciled[0].drop) != 1 {
+		t.Fatalf("steam reconcile = %+v, want the shortcut dropped", steam.reconciled)
+	}
+}
+
+func TestSyncExternalDoesNotMeasureGamesItWillNotAdd(t *testing.T) {
+	s, item := syncFixture(t)
+	measured := 0
+	old := measureExternal
+	measureExternal = func(context.Context, string) (int64, bool) {
+		measured++
+		return 0, false
+	}
+	t.Cleanup(func() { measureExternal = old })
+
+	dup := item
+	dup.AppID = "43"
+	excludedItem, excludedDir := externalFixture(t)
+	excludedItem.AppID = "44"
+	s.mu.Lock()
+	err := s.excludeLocked(excludedDir)
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		sum, err := s.SyncExternal(context.Background(), []ExternalGame{item, dup, excludedItem}, presentOf(ProviderSteam, "42", "43", "44"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sum.Added != 0 || len(sum.Skipped) != 2 {
+			t.Fatalf("summary = %+v, want both new candidates skipped", sum)
+		}
+	}
+	if measured != 0 {
+		t.Fatalf("measured %d times, want none for excluded and duplicate games", measured)
+	}
+}
+
+func TestSyncExternalStopsMeasuringOnCancel(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	item, _ := externalFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	old := measureExternal
+	measureExternal = func(context.Context, string) (int64, bool) {
+		cancel()
+		return 0, true
+	}
+	t.Cleanup(func() { measureExternal = old })
+	if _, err := s.SyncExternal(ctx, []ExternalGame{item}, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if len(s.GetGames()) != 0 {
+		t.Fatal("game added after cancellation")
+	}
+}
+
+func TestDirSizeCtxHonoursCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := dirSizeCtx(ctx, t.TempDir()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }

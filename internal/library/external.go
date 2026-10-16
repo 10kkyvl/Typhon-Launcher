@@ -154,13 +154,10 @@ type measured struct {
 //wails:ignore
 func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (ExternalSummary, error) {
 	summary, dropped, libCtx, err := s.applyExternal(ctx, items, nil)
-	if err != nil {
-		return ExternalSummary{}, err
-	}
 	for _, id := range dropped {
 		s.dropSteam(libCtx, id)
 	}
-	return summary, nil
+	return summary, err
 }
 
 func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, present map[string]map[string]bool) (ExternalSummary, []string, context.Context, error) {
@@ -177,7 +174,16 @@ func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, prese
 	needsSize := make(map[int]bool, len(checked))
 	for i, g := range checked {
 		pos := s.externalIndexLocked(g.Provider, g.AppID)
-		needsSize[i] = pos < 0 || s.games[pos].Uninstalled
+		if pos >= 0 {
+			needsSize[i] = s.games[pos].Uninstalled
+			continue
+		}
+		ignored, err := s.excludedLocked(g.InstallDir)
+		if err != nil {
+			s.mu.Unlock()
+			return ExternalSummary{}, nil, nil, err
+		}
+		needsSize[i] = !ignored && s.sameDirLocked(g.InstallDir) == ""
 	}
 	s.mu.Unlock()
 
@@ -189,7 +195,10 @@ func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, prese
 		if err := ctx.Err(); err != nil {
 			return ExternalSummary{}, nil, nil, err
 		}
-		size, unknown := measureInstall("", g.InstallDir)
+		size, unknown := measureExternal(ctx, g.InstallDir)
+		if err := ctx.Err(); err != nil {
+			return ExternalSummary{}, nil, nil, err
+		}
 		sizes[i] = measured{size: size, unknown: unknown}
 	}
 
@@ -256,9 +265,10 @@ func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, prese
 		s.games = previous
 		return ExternalSummary{}, nil, nil, fmt.Errorf("save library: %w", err)
 	}
+	var saveErr error
 	if s.dropGoneShortcutsLocked(gone) {
 		if err := s.persist(); err != nil {
-			return ExternalSummary{}, nil, nil, fmt.Errorf("save library after removing shortcuts: %w", err)
+			saveErr = fmt.Errorf("save library after removing shortcuts: %w", err)
 		}
 	}
 	slog.Info("external games applied", "added", summary.Added, "updated", summary.Updated, "marked", summary.Marked)
@@ -268,7 +278,7 @@ func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, prese
 		dropped = append(dropped, g.ID)
 		s.recordUninstalledLocked(g)
 	}
-	return summary, dropped, s.ctx, nil
+	return summary, dropped, s.ctx, saveErr
 }
 
 func (s *Service) updateExternalLocked(pos int, g ExternalGame, m measured) bool {

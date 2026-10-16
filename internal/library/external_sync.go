@@ -36,13 +36,10 @@ func (s *Service) ExternalRefs() []ExternalRef {
 //wails:ignore
 func (s *Service) SyncExternal(ctx context.Context, items []ExternalGame, present map[string]map[string]bool) (ExternalSummary, error) {
 	summary, dropped, libCtx, err := s.applyExternal(ctx, items, present)
-	if err != nil {
-		return ExternalSummary{}, err
-	}
 	for _, id := range dropped {
 		s.dropSteam(libCtx, id)
 	}
-	return summary, nil
+	return summary, err
 }
 
 func (s *Service) markGoneLocked(present map[string]map[string]bool) []Game {
