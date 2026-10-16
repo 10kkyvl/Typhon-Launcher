@@ -1079,12 +1079,23 @@ func newID() string {
 }
 
 func dirSize(dir string) (int64, error) {
+	return walkSize(dir, func() error { return nil })
+}
+
+func dirSizeCtx(ctx context.Context, dir string) (int64, error) {
+	return walkSize(dir, ctx.Err)
+}
+
+func walkSize(dir string, alive func() error) (int64, error) {
 	if dir == "" {
 		return 0, errEmptyInstallDir
 	}
 	var total int64
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := alive(); err != nil {
 			return err
 		}
 		if d.IsDir() {
@@ -1101,6 +1112,15 @@ func dirSize(dir string) (int64, error) {
 		return 0, fmt.Errorf("measure %s: %w", dir, err)
 	}
 	return total, nil
+}
+
+var measureExternal = func(ctx context.Context, dir string) (int64, bool) {
+	size, err := dirSizeCtx(ctx, dir)
+	if err != nil {
+		slog.Warn("measure install dir", "dir", dir, "error", err)
+		return 0, true
+	}
+	return size, false
 }
 
 // measureInstall не роняет регистрацию игры: недоступный подкаталог не повод

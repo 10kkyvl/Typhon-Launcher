@@ -98,14 +98,16 @@ func (s *Service) syncOnce(ctx context.Context) error {
 		seen := make(map[string]bool, len(sc.Games)+len(sc.Skipped))
 		for _, c := range sc.Games {
 			seen[c.AppID] = true
-			switch {
-			case inLibrary[refKey(c.Provider, c.AppID)]:
-				items = append(items, externalOf(c, ""))
-			case s.bound[refKey(c.Provider, c.AppID)] != "":
-				items = append(items, externalOf(c, s.bound[refKey(c.Provider, c.AppID)]))
-			default:
-				fresh = append(fresh, c)
+			key := refKey(c.Provider, c.AppID)
+			if canonical, ok := s.bound[key]; ok && !inLibrary[key] {
+				items = append(items, externalOf(c, canonical))
+				continue
 			}
+			if inLibrary[key] {
+				items = append(items, externalOf(c, ""))
+				continue
+			}
+			fresh = append(fresh, c)
 		}
 		complete := true
 		for _, sk := range sc.Skipped {

@@ -287,3 +287,19 @@ func TestSyncDisabledStartsNoGoroutine(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSyncOnceDoesNotRetryUnmatchedCandidates(t *testing.T) {
+	lib := &fakeLibrary{refs: []library.ExternalRef{steamRef("1")}}
+	cat := &fakeCatalog{none: true}
+	s := syncService(t, lib, cat, func(context.Context) ([]ProviderScan, error) {
+		return []ProviderScan{{Provider: library.ProviderSteam, Games: []Candidate{steamCandidate("2", "Unmatched")}}}, nil
+	})
+	for range 3 {
+		if err := s.syncOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(cat.provision) != 1 || len(cat.resolved) != 1 {
+		t.Fatalf("provisioned %d, resolved %d times, want once each", len(cat.provision), len(cat.resolved))
+	}
+}

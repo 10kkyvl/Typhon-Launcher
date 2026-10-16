@@ -68,6 +68,7 @@ type fakeCatalog struct {
 	resolved  []catalog.Query
 	provision []catalog.Query
 	matchSet  map[string]string
+	none      bool
 	err       error
 }
 
@@ -85,6 +86,9 @@ func (f *fakeCatalog) Provision(qs []catalog.Query) (map[string]catalog.Game, er
 		return nil, f.err
 	}
 	out := map[string]catalog.Game{}
+	if f.none {
+		return out, nil
+	}
 	for _, q := range qs {
 		out[q.Normalized] = catalog.Game{ID: "new-" + q.Normalized}
 	}

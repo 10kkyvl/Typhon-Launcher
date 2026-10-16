@@ -157,7 +157,11 @@ func scanSteamLibrary(ctx context.Context, libDir string, seen map[string]bool, 
 			return err
 		}
 		name := entry.Name()
-		if !entry.Type().IsRegular() || !strings.HasPrefix(name, "appmanifest_") || !strings.HasSuffix(name, ".acf") {
+		if !strings.HasPrefix(name, "appmanifest_") || !strings.HasSuffix(name, ".acf") {
+			continue
+		}
+		if !entry.Type().IsRegular() {
+			res.Skipped = append(res.Skipped, Skipped{Title: name, Reason: "манифест не является обычным файлом"})
 			continue
 		}
 		data, err := readLimited(filepath.Join(apps, name))

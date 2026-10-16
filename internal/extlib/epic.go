@@ -58,7 +58,11 @@ func scanEpic(ctx context.Context, manifests string) ProviderScan {
 			return res
 		}
 		name := entry.Name()
-		if !entry.Type().IsRegular() || !strings.EqualFold(filepath.Ext(name), ".item") {
+		if !strings.EqualFold(filepath.Ext(name), ".item") {
+			continue
+		}
+		if !entry.Type().IsRegular() {
+			res.Skipped = append(res.Skipped, Skipped{Title: name, Reason: "манифест не является обычным файлом"})
 			continue
 		}
 		data, err := readLimited(filepath.Join(manifests, name))
@@ -80,7 +84,11 @@ func scanEpic(ctx context.Context, manifests string) ProviderScan {
 		}
 		cand, err := epicCandidate(item, title)
 		if err != nil {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error(), AppID: item.AppName})
+			skipped := Skipped{Title: title, Reason: err.Error()}
+			if isToken(item.AppName) {
+				skipped.AppID = item.AppName
+			}
+			res.Skipped = append(res.Skipped, skipped)
 			continue
 		}
 		if seen[cand.AppID] {
