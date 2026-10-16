@@ -364,4 +364,12 @@ export const games: Record<GamesKey, Message> = {
   'games.externalBadgeTitle': 'Installed through {provider}',
   'games.externalNote': 'Installed through {provider}: updates, verification and moving are handled there',
   'games.externalRemoveNote': 'Only the library entry is removed, the game files stay on disk',
+  'games.sourceTyphon': 'Typhon',
+  'games.sourceSteam': 'Steam',
+  'games.sourceEpic': 'Epic',
+  'games.sourceGog': 'GOG',
+  'games.sourceDisk': 'Local',
+  'games.sourceTyphonTitle': 'Installed with Typhon',
+  'games.sourceDiskTitle': 'Found on disk',
+  'games.filterSourceAll': 'All sources',
 };

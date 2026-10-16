@@ -49,7 +49,8 @@
   import { libraryErrorText } from '../../lib/library/errors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
-  import { externalLabel } from '../../lib/library/external';
+  import { gameSource, sourceLabel, sourceOrder, type GameSource } from '../../lib/library/source';
+  import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import { canPlay } from '../../lib/library/launch';
   import { matchesCollection } from '../../lib/library/collections';
 
@@ -72,11 +73,12 @@
     status?: string;
     canonicalGameId?: string;
     watched?: boolean;
-    source?: string;
+    source?: GameSource | null;
   }
 
   let filter = $state<LibraryFilter>('all');
   let sort = $state<Sort>('alpha');
+  let sourceFilter = $state<GameSource | 'all'>('all');
   let search = $state('');
   let heroHidden = $state(false);
   let activeCollectionId = $state('');
@@ -194,7 +196,7 @@
       tags: game.tags,
       status: game.status,
       canonicalGameId: game.canonicalGameId,
-      source: externalLabel(game),
+      source: gameSource(game),
     };
   }
 
@@ -217,6 +219,7 @@
       subtitle: bits.join(' · '),
       hidden: false,
       inLibrary: false,
+      source: 'typhon',
     };
   }
 
@@ -263,11 +266,20 @@
     return [...installed, ...rest];
   });
 
+  const librarySources = $derived(
+    sourceOrder.filter((source) => entries.some((entry) => entry.source === source)),
+  );
+
+  $effect(() => {
+    if (sourceFilter !== 'all' && !librarySources.includes(sourceFilter)) sourceFilter = 'all';
+  });
+
   const visibleGames = $derived.by(() => {
     const query = search.trim().toLowerCase();
     const filtered = (filter === 'watched' ? watchedEntries : entries).filter((entry) => {
       if (query && !entry.title.toLowerCase().includes(query)) return false;
       if (entry.hidden !== (filter === 'hidden')) return false;
+      if (filter !== 'watched' && sourceFilter !== 'all' && entry.source !== sourceFilter) return false;
       if (activeCollection) {
         const genres = entry.canonicalGameId ? $libraryGenres[entry.canonicalGameId] : undefined;
         if (!entry.inLibrary || !matchesCollection(entry, genres, activeCollection)) return false;
@@ -460,6 +472,26 @@
             {f.label}
           </Chip>
         {/each}
+        {#if librarySources.length >= 2 && filter !== 'watched'}
+          <DropdownMenu
+            items={[
+              { id: 'all', label: msg('games.filterSourceAll'), checked: sourceFilter === 'all' },
+              ...librarySources.map((source) => ({
+                id: source,
+                label: sourceLabel(source),
+                checked: sourceFilter === source,
+              })),
+            ]}
+            onselect={(id) => (sourceFilter = id as GameSource | 'all')}
+          >
+            {#snippet trigger({ open, toggle })}
+              <Chip selected={open || sourceFilter !== 'all'} onclick={toggle}>
+                {sourceFilter === 'all' ? msg('games.filterSourceAll') : sourceLabel(sourceFilter)}
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
+              </Chip>
+            {/snippet}
+          </DropdownMenu>
+        {/if}
         <DropdownMenu
           items={[
             { id: 'alpha', label: sortLabels.alpha },
@@ -552,7 +584,10 @@
               <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
-            <span class="list-meta">{[entry.source, entry.subtitle].filter(Boolean).join(' · ')}</span>
+            {#if entry.source}
+              <SourceBadge source={entry.source} />
+            {/if}
+            <span class="list-meta">{entry.subtitle}</span>
             <span class="list-meta right">{entry.watched ? '' : entryMeta(entry)}</span>
           </button>
         {/each}

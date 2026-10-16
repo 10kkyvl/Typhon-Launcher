@@ -7,6 +7,8 @@
   import Artwork from './Artwork.svelte';
   import type { CompatInfo } from '../services/sources';
   import { compatBadge } from '../game/compat';
+  import type { GameSource } from '../library/source';
+  import SourceBadge from './SourceBadge.svelte';
 
   export interface GameCardAction {
     id: string;
@@ -28,7 +30,7 @@
     running = false,
     meta,
     compat,
-    source = '',
+    source = null,
     variant = 'poster',
     footer,
     actions,
@@ -41,7 +43,7 @@
     running?: boolean;
     meta?: string;
     compat?: CompatInfo;
-    source?: string;
+    source?: GameSource | null;
     variant?: 'poster' | 'capsule';
     footer?: Snippet;
     actions?: GameCardAction[];
@@ -73,7 +75,7 @@
       <span class="fade"></span>
     </button>
     {#if source}
-      <span class="source" title={msg('games.externalBadgeTitle', { provider: source })}>{source}</span>
+      <span class="source"><SourceBadge {source} /></span>
     {/if}
     {#if compatLabel}
       <span class="compat" class:works={compatWorks} title={compatLabel}>{compatLabel}</span>
@@ -150,16 +152,9 @@
     position: absolute;
     left: 0.6rem;
     top: 0.6rem;
+    display: flex;
     max-width: calc(100% - 1.2rem);
-    padding: 0.25rem 0.55rem;
-    border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.72);
-    color: #fff;
-    font-size: 1.1rem;
-    line-height: 1.2;
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     pointer-events: none;
   }
 

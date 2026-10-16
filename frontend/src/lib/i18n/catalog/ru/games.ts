@@ -362,6 +362,14 @@ export const games = {
   'games.externalBadgeTitle': 'Игра установлена через {provider}',
   'games.externalNote': 'Игра установлена через {provider}: обновления, проверка и перенос выполняются там',
   'games.externalRemoveNote': 'Из библиотеки удалится только карточка, файлы игры останутся на диске',
+  'games.sourceTyphon': 'Typhon',
+  'games.sourceSteam': 'Steam',
+  'games.sourceEpic': 'Epic',
+  'games.sourceGog': 'GOG',
+  'games.sourceDisk': 'С диска',
+  'games.sourceTyphonTitle': 'Установлена через Typhon',
+  'games.sourceDiskTitle': 'Найдена на диске',
+  'games.filterSourceAll': 'Все источники',
 } as const;
 
 export type GamesKey = keyof typeof games;
