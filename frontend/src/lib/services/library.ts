@@ -130,6 +130,27 @@ export async function removeShortcut(id: string): Promise<void> {
   await LibraryService.RemoveShortcut(id);
 }
 
+export interface SteamStatus {
+  supported: boolean;
+  installed: boolean;
+  added: boolean;
+}
+
+export async function steamStatus(id: string): Promise<SteamStatus> {
+  if (!inWails) return { supported: false, installed: false, added: false };
+  return await LibraryService.SteamStatus(id);
+}
+
+export async function addToSteam(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.AddToSteam(id);
+}
+
+export async function removeFromSteam(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveFromSteam(id);
+}
+
 export async function setFavorite(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetFavorite(id, on)) as unknown as LibraryGame;

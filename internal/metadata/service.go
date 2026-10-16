@@ -239,6 +239,56 @@ func (s *Service) GetArt(gameIDs []string) (map[string]Art, error) {
 	return out, nil
 }
 
+// LocalArt holds absolute paths of the cover and hero image files of a game; an
+// image that is not stored locally is an empty string.
+type LocalArt struct {
+	Cover string
+	Hero  string
+}
+
+// ArtFiles picks the same cover and hero as GetArt but returns the files on
+// disk, for consumers that need to copy the images rather than show them.
+//
+//wails:ignore
+func (s *Service) ArtFiles(gameID string) (LocalArt, error) {
+	gameID = strings.TrimSpace(gameID)
+	if gameID == "" {
+		return LocalArt{}, errNoGameID
+	}
+	game, err := s.catalog.GetGame(gameID)
+	if errors.Is(err, catalog.ErrNoGame) {
+		return LocalArt{}, nil
+	}
+	if err != nil {
+		return LocalArt{}, fmt.Errorf("art files %s: %w", gameID, err)
+	}
+	var art LocalArt
+	if asset, ok := s.coverAsset(game); ok {
+		if art.Cover, err = s.assetFile(asset); err != nil {
+			return LocalArt{}, err
+		}
+	}
+	if asset, ok := heroAsset(game, s.screenshots(game.ID)); ok {
+		if art.Hero, err = s.assetFile(asset); err != nil {
+			return LocalArt{}, err
+		}
+	}
+	return art, nil
+}
+
+func (s *Service) assetFile(asset MediaAsset) (string, error) {
+	full, err := assetPath(s.store.mediaRoot(), asset.Path)
+	if err != nil {
+		return "", fmt.Errorf("asset %s: %w", asset.ID, err)
+	}
+	if _, err := os.Stat(full); errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", fmt.Errorf("stat asset %s: %w", asset.ID, err)
+	}
+	return full, nil
+}
+
 //wails:ignore
 func (s *Service) CoverSourceURL(gameID string) (string, error) {
 	gameID = strings.TrimSpace(gameID)
@@ -1032,16 +1082,24 @@ func (s *Service) screenshots(gameID string) []MediaAsset {
 	return shots
 }
 
-func (s *Service) coverURL(game catalog.Game) string {
+func (s *Service) coverAsset(game catalog.Game) (MediaAsset, bool) {
 	if asset, ok := s.store.find(game.CoverAssetID); ok && asset.GameID == game.ID {
-		return asset.URL
+		return asset, true
 	}
 	for _, a := range s.store.list(game.ID) {
 		if a.Type == AssetCover {
-			return a.URL
+			return a, true
 		}
 	}
-	return ""
+	return MediaAsset{}, false
+}
+
+func (s *Service) coverURL(game catalog.Game) string {
+	asset, ok := s.coverAsset(game)
+	if !ok {
+		return ""
+	}
+	return asset.URL
 }
 
 func (s *Service) stale(game catalog.Game) bool {
@@ -1106,18 +1164,26 @@ func landscape(a MediaAsset) bool {
 	return a.Height > 0 && float64(a.Width)/float64(a.Height) >= minHeroRatio
 }
 
-func heroURL(game catalog.Game, shots []MediaAsset) string {
+func heroAsset(game catalog.Game, shots []MediaAsset) (MediaAsset, bool) {
 	for _, a := range shots {
 		if a.ID == game.HeroAssetID {
-			return a.URL
+			return a, true
 		}
 	}
 	for _, a := range shots {
 		if landscape(a) {
-			return a.URL
+			return a, true
 		}
 	}
-	return ""
+	return MediaAsset{}, false
+}
+
+func heroURL(game catalog.Game, shots []MediaAsset) string {
+	asset, ok := heroAsset(game, shots)
+	if !ok {
+		return ""
+	}
+	return asset.URL
 }
 
 func heroOf(shots []MediaAsset) string {

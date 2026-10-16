@@ -34,6 +34,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		s.mu.Lock()
 		s.ctx = ctx
 		s.mu.Unlock()
+		s.startSteamSync(ctx)
 		return nil
 	}
 
@@ -46,6 +47,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 	s.wg.Add(1)
 	go s.loop(runCtx)
+	s.startSteamSync(runCtx)
 	return nil
 }
 

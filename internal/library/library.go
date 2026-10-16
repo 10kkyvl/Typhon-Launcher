@@ -19,6 +19,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/procs"
 	"typhon/internal/settings"
+	"typhon/internal/steamlink"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
@@ -203,6 +204,9 @@ type Service struct {
 	closed        bool
 	watching      bool
 	shortcuts     shortcutBackend
+	steam         steamBackend
+	steamArt      func(canonicalID string) (steamlink.Art, error)
+	steamSync     bool
 	launcherPath  func() (string, error)
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
@@ -263,6 +267,7 @@ func NewServiceAt(path string) (*Service, error) {
 		watchInterval:   defaultWatchInterval,
 		now:             time.Now,
 		shortcuts:       systemShortcuts{},
+		steam:           disabledSteam{},
 		launcherPath:    os.Executable,
 		saveRoots:       platform.SaveRoots,
 		start:           newGameStarter(),
@@ -790,8 +795,14 @@ func (s *Service) BindDistribution(id, sourceID, releaseID, distributionID strin
 
 func (s *Service) RemoveGame(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.removeGameLocked(id)
+	err := s.removeGameLocked(id)
+	ctx := s.ctx
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.dropSteam(ctx, id)
+	return nil
 }
 
 // RemoveSyncedGame archives cloud-only cards. A remote tombstone cannot remove
@@ -883,7 +894,17 @@ func (s *Service) removeGameLocked(id string) error {
 //wails:ignore
 func (s *Service) MarkUninstalled(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	err := s.markUninstalledLocked(id)
+	ctx := s.ctx
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.dropSteam(ctx, id)
+	return nil
+}
+
+func (s *Service) markUninstalledLocked(id string) error {
 	for i := range s.games {
 		if s.games[i].ID != id {
 			continue

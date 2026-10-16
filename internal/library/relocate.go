@@ -82,11 +82,15 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 	slog.Info("game relocated", "id", id, "title", next.Title, "installDir", newInstallDir)
 	s.emitUpdated()
 	hasShortcut := next.ShortcutPath != ""
+	ctx := s.ctx
 	s.mu.Unlock()
 
 	if err := WriteMarker(newInstallDir, markerFor(next)); err != nil {
 		slog.Error("write install marker after relocate", "id", id, "error", err)
 	}
+	// Игра уже переехала и сохранена: сбой Steam не повод отменять перенос, запись
+	// в Steam подтянется при следующей сверке.
+	s.reconcileSteam(ctx, "relocate")
 	if hasShortcut {
 		if err := s.CreateShortcut(id); err != nil {
 			return next, err

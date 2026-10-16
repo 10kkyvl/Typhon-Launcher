@@ -165,6 +165,17 @@ export const games: Record<GamesKey, Message> = {
   'games.actionLanShare': 'Share on the local network',
   'games.actionShortcutRemove': 'Remove desktop shortcut',
   'games.actionShortcutCreate': 'Create desktop shortcut',
+  'games.actionSteamAdd': 'Add to Steam',
+  'games.actionSteamRemove': 'Remove from Steam',
+  'games.steamAddTitle': 'Add to Steam',
+  'games.steamAddText':
+    'Steam must be closed: while it is running, it overwrites the shortcut list. After adding, the game will appear in Steam the next time it starts.',
+  'games.steamAddNote': 'Playtime in Steam is counted separately from Typhon.',
+  'games.steamAddConfirm': 'Add',
+  'games.steamAddBusy': 'Adding…',
+  'games.steamAdded': 'The game was added to Steam. Start Steam to see it',
+  'games.steamRemoved': 'The game was removed from Steam',
+  'games.steamFailed': 'Could not change the game list in Steam',
   'games.actionUninstall': 'Uninstall',
 
   'games.markFavoritesLimit': 'Up to 6 favorite games',

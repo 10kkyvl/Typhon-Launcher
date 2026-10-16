@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	"typhon/internal/library"
+	"typhon/internal/steamlink"
 )
 
 func Scan(ctx context.Context) ([]ProviderScan, error) {
@@ -25,7 +26,10 @@ func Scan(ctx context.Context) ([]ProviderScan, error) {
 }
 
 func scanSteamInstalled(ctx context.Context) ProviderScan {
-	root, err := steamRoot()
+	root, err := steamlink.Root()
+	if errors.Is(err, steamlink.ErrNotInstalled) {
+		return ProviderScan{Provider: library.ProviderSteam, Err: ErrNotInstalled}
+	}
 	if err != nil {
 		return ProviderScan{Provider: library.ProviderSteam, Err: err}
 	}
@@ -38,55 +42,6 @@ func scanEpicInstalled(ctx context.Context) ProviderScan {
 		return ProviderScan{Provider: library.ProviderEpic, Err: errors.New("переменная окружения ProgramData не задана")}
 	}
 	return scanEpic(ctx, filepath.Join(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests"))
-}
-
-func steamRoot() (string, error) {
-	candidates := []struct {
-		hive   registry.Key
-		path   string
-		name   string
-		access uint32
-	}{
-		{registry.CURRENT_USER, `Software\Valve\Steam`, "SteamPath", registry.QUERY_VALUE},
-		{registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Valve\Steam`, "InstallPath", registry.QUERY_VALUE | registry.WOW64_64KEY},
-	}
-	for _, c := range candidates {
-		value, err := readString(c.hive, c.path, c.name, c.access)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return "", err
-		}
-		root := filepath.Clean(filepath.FromSlash(strings.TrimSpace(value)))
-		info, err := os.Stat(root)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return "", fmt.Errorf("stat %s: %w", root, err)
-		}
-		if info.IsDir() {
-			return root, nil
-		}
-	}
-	return "", ErrNotInstalled
-}
-
-func readString(hive registry.Key, path, name string, access uint32) (string, error) {
-	k, err := registry.OpenKey(hive, path, access)
-	if err != nil {
-		return "", registryErr(path, err)
-	}
-	value, _, err := k.GetStringValue(name)
-	closeErr := k.Close()
-	if err != nil {
-		return "", registryErr(path+`\`+name, err)
-	}
-	if closeErr != nil {
-		return "", fmt.Errorf("close %s: %w", path, closeErr)
-	}
-	return value, nil
 }
 
 func registryErr(path string, err error) error {

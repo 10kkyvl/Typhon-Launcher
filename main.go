@@ -54,6 +54,7 @@ import (
 	"typhon/internal/settings"
 	"typhon/internal/social"
 	"typhon/internal/sources"
+	"typhon/internal/steamlink"
 	"typhon/internal/support"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
@@ -378,6 +379,14 @@ func main() {
 	if err != nil {
 		fatal("start metadata service", err)
 	}
+	libraryService.EnableSteam()
+	libraryService.SetSteamArt(func(canonicalID string) (steamlink.Art, error) {
+		files, err := metadataService.ArtFiles(canonicalID)
+		if err != nil {
+			return steamlink.Art{}, err
+		}
+		return steamlink.Art{Cover: files.Cover, Hero: files.Hero}, nil
+	})
 	configDir, err := settings.ConfigDir()
 	if err != nil {
 		fatal("resolve config dir", err)

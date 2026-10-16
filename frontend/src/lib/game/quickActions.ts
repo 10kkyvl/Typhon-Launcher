@@ -21,6 +21,8 @@ export type QuickAction =
   | 'lan-unshare'
   | 'shortcut-create'
   | 'shortcut-remove'
+  | 'steam-add'
+  | 'steam-remove'
   | 'uninstall'
   | 'remove';
 
@@ -44,6 +46,12 @@ export interface QuickActionState {
   status: string;
   hidden: boolean;
   saveBackups: boolean;
+  fromSteam?: boolean;
+  steam?: { added: boolean } | null;
+}
+
+export function steamEligible(state: Pick<QuickActionState, 'installed' | 'hasExecutable' | 'fromSteam'>): boolean {
+  return state.installed && state.hasExecutable && !state.fromSteam;
 }
 
 function markItems(state: QuickActionState): QuickActionItem[] {
@@ -97,6 +105,13 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
     items.push({ id: 'shortcut-remove', label: msg('games.actionShortcutRemove') });
   } else if (state.hasExecutable || !state.external) {
     items.push({ id: 'shortcut-create', label: msg('games.actionShortcutCreate') });
+  }
+  if (state.steam && steamEligible(state)) {
+    items.push(
+      state.steam.added
+        ? { id: 'steam-remove', label: msg('games.actionSteamRemove') }
+        : { id: 'steam-add', label: msg('games.actionSteamAdd') },
+    );
   }
   if (state.external) {
     items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true });

@@ -7,6 +7,7 @@ export interface ConfirmPrompt {
   confirm: string;
   busy?: string;
   cancel?: string;
+  tone?: 'danger' | 'primary';
 }
 
 export function unfriendPrompt(name: string): ConfirmPrompt {
@@ -170,6 +171,17 @@ export function deleteCloudSavesPrompt(): ConfirmPrompt {
     text: msg('cloudsaves.deleteText'),
     confirm: msg('cloudsaves.deleteRemote'),
     busy: msg('cloudsaves.deleting'),
+  };
+}
+
+export function addToSteamPrompt(): ConfirmPrompt {
+  return {
+    title: msg('games.steamAddTitle'),
+    text: msg('games.steamAddText'),
+    note: msg('games.steamAddNote'),
+    confirm: msg('games.steamAddConfirm'),
+    busy: msg('games.steamAddBusy'),
+    tone: 'primary',
   };
 }
 

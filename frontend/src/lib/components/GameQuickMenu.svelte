@@ -4,16 +4,21 @@
   import GameTagsModal from './GameTagsModal.svelte';
   import RemoveGameModal from './RemoveGameModal.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
-  import { quickActions, type QuickAction } from '../game/quickActions';
+  import ConfirmModal from './ConfirmModal.svelte';
+  import { quickActions, steamEligible, type QuickAction } from '../game/quickActions';
+  import { addToSteamPrompt } from '../confirm/prompts';
   import {
+    addToSteam,
     createShortcut,
     locateSaves,
     markError,
     playGame,
+    removeFromSteam,
     removeShortcut,
     setFavorite,
     setHidden,
     setSavesDir,
+    steamStatus,
     stopGame,
     type LibraryGame,
     type SavesResult,
@@ -29,6 +34,7 @@
   import { openGameProperties } from '../stores/gameProperties';
   import { openRedist } from '../stores/redist';
   import { openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
+  import { get } from 'svelte/store';
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
   import { libraryErrorText } from '../library/errors';
@@ -37,6 +43,39 @@
   import { msg } from '../i18n';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
+
+  let steam = $state<{ id: string; added: boolean } | null>(null);
+  let steamConfirmID = $state<string | null>(null);
+
+  $effect(() => {
+    const menu = $gameMenu;
+    steam = null;
+    if (!menu) return;
+    const id = menu.gameId;
+    const current = get(libraryGames).find((g) => g.id === id);
+    if (
+      !current ||
+      !steamEligible({
+        installed: !current.uninstalled,
+        hasExecutable: Boolean(current.executable),
+        fromSteam: current.external?.provider === 'steam',
+      })
+    ) {
+      return;
+    }
+    let stale = false;
+    steamStatus(id).then(
+      (status) => {
+        if (!stale && status.supported && status.installed) steam = { id, added: status.added };
+      },
+      () => {
+        // The menu opens often; a failed probe only hides the item instead of nagging on every open.
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  });
 
   const items = $derived(
     game
@@ -53,6 +92,8 @@
           status: game.status ?? '',
           hidden: Boolean(game.hidden),
           saveBackups: $saveBackupsEnabled,
+          fromSteam: game.external?.provider === 'steam',
+          steam: steam && steam.id === game.id ? { added: steam.added } : null,
         })
       : [],
   );
@@ -120,6 +161,11 @@
         return guard(() => createShortcut(current.id));
       case 'shortcut-remove':
         return guard(() => removeShortcut(current.id));
+      case 'steam-add':
+        steamConfirmID = current.id;
+        return;
+      case 'steam-remove':
+        return steamAction(() => removeFromSteam(current.id), msg('games.steamRemoved'));
       case 'uninstall':
       case 'remove':
         target = current;
@@ -135,6 +181,21 @@
     } catch (err) {
       toast(errorMessage(err), 'danger');
     }
+  }
+
+  async function steamAction(fn: () => Promise<unknown>, done: string) {
+    try {
+      await fn();
+      toast(done, 'success');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('games.steamFailed')), 'danger');
+    }
+  }
+
+  async function confirmSteamAdd() {
+    const id = steamConfirmID;
+    if (!id) return;
+    await steamAction(() => addToSteam(id), msg('games.steamAdded'));
   }
 
   async function mark(fn: () => Promise<unknown>, fallback: string) {
@@ -211,6 +272,10 @@
     onselect={onSelect}
     onclose={closeGameMenu}
   />
+{/if}
+
+{#if steamConfirmID}
+  <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)} />
 {/if}
 
 {#if statusGame && statusOpen}

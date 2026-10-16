@@ -163,6 +163,17 @@ export const games = {
   'games.actionLanShare': 'Раздать в локальной сети',
   'games.actionShortcutRemove': 'Удалить ярлык с рабочего стола',
   'games.actionShortcutCreate': 'Создать ярлык на рабочем столе',
+  'games.actionSteamAdd': 'Добавить в Steam',
+  'games.actionSteamRemove': 'Убрать из Steam',
+  'games.steamAddTitle': 'Добавить в Steam',
+  'games.steamAddText':
+    'Steam должен быть закрыт: пока он запущен, он перезапишет список ярлыков. После добавления игра появится в Steam при следующем запуске.',
+  'games.steamAddNote': 'Время игры в Steam считается отдельно от Typhon.',
+  'games.steamAddConfirm': 'Добавить',
+  'games.steamAddBusy': 'Добавляем…',
+  'games.steamAdded': 'Игра добавлена в Steam. Запустите Steam, чтобы увидеть её',
+  'games.steamRemoved': 'Игра убрана из Steam',
+  'games.steamFailed': 'Не удалось изменить список игр в Steam',
   'games.actionUninstall': 'Удалить с компьютера',
 
   'games.markFavoritesLimit': 'Не больше 6 любимых игр',

@@ -130,6 +130,45 @@ describe('quickActions', () => {
     expect(ids({ installed: false, lanEnabled: true })).toEqual(['favorite-add', 'status', 'tags', 'hide', 'remove']);
   });
 
+  describe('steam item', () => {
+    it('stays hidden until the status arrives', () => {
+      expect(ids()).not.toContain('steam-add');
+      expect(ids()).not.toContain('steam-remove');
+      expect(ids({ steam: null })).not.toContain('steam-add');
+    });
+
+    it('offers to add a game that is not in steam yet', () => {
+      const list = ids({ steam: { added: false } });
+      expect(list).toContain('steam-add');
+      expect(list).not.toContain('steam-remove');
+      expect(quickActions(state({ steam: { added: false } })).find((i) => i.id === 'steam-add')?.label).toBe(
+        'Добавить в Steam',
+      );
+    });
+
+    it('offers to remove a game that is already in steam', () => {
+      const list = ids({ steam: { added: true } });
+      expect(list).toContain('steam-remove');
+      expect(list).not.toContain('steam-add');
+      expect(quickActions(state({ steam: { added: true } })).find((i) => i.id === 'steam-remove')?.label).toBe(
+        'Убрать из Steam',
+      );
+    });
+
+    it('hides for a game that comes from steam', () => {
+      expect(ids({ steam: { added: false }, external: true, fromSteam: true })).not.toContain('steam-add');
+    });
+
+    it('hides for a game that is not installed or has no executable', () => {
+      expect(ids({ steam: { added: false }, installed: false })).not.toContain('steam-add');
+      expect(ids({ steam: { added: false }, hasExecutable: false })).not.toContain('steam-add');
+    });
+
+    it('shows for a game imported from another launcher', () => {
+      expect(ids({ steam: { added: false }, external: true })).toContain('steam-add');
+    });
+  });
+
   describe('external game', () => {
     const external = { external: true, hasExecutable: false, launchable: true };
 
