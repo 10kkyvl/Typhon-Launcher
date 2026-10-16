@@ -179,7 +179,7 @@
     try {
       await action();
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(libraryErrorText(err, errorMessage(err)), 'danger');
     }
   }
 
