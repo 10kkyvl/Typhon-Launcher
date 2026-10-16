@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 14 October 2026.
+Revision of 16 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -22,12 +22,14 @@ The following data is stored locally only and is not sent to the Typhon services
 - **Library** — the list of games, paths to executables, and the times and durations of play sessions. If cross-device sync is enabled (section 2.3), some of this — the game's identifier in the external IGDB catalog, the last launch date, playtime, the "favorite" mark and the completion status — is sent to the service; paths, file names and release names are not.
 - **App settings**, including BitTorrent parameters. With sync enabled, some settings are sent to the service (section 2.3); directory paths, speed limits and data-collection consents are not.
 - **The activity log** `typhon.log` and its previous copies `typhon.log.1` … `typhon.log.5` — these stay on the device and are never sent anywhere automatically in full: the user can export a scrubbed log archive themselves, with a button (sections 2.10 and 2.11). The log is size-limited: 10 MB per file and no more than six files, with the oldest overwritten.
-- **The play session log** — which game was launched and finished and when, for the last 90 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
+- **The play session log** — which game was launched and finished and when, for the last 90 days, and a per-day summary for statistics: how long each game was played that day, the longest session and the number of launches, for the last 400 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
 - **The compatibility log** — which games start on this computer and which do not: the number of attempts, the number of failures, the longest session, and the code and text of the last error. It is kept always and is never sent anywhere on its own; with usage statistics enabled, an anonymized record derived from it is sent, as described in section 8.5. The error text is never sent.
+- **The watchlist** — the catalog games the user follows, with the releases already known for each, and up to 200 most recent alerts about new releases: the game title, the release name and version, the source and the time. New releases are looked up in the feeds already downloaded to the device; no separate requests go out for this.
+- **Screenshots** — pressing the screenshot key during play saves an image of that game's window as a PNG in the `Screenshots` folder inside the library directory, one subfolder per game. A screenshot is taken only on that key press and only if the window belongs to a running game from the library; the app registers a single key combination with the system and receives no other key presses. Screenshots are not sent anywhere, and capturing can be turned off in the settings.
 
 These lists, paths and contents do not leave the device. If the user has enabled anonymous usage statistics (section 8.2), only anonymized information about the outcome of an operation is sent — for example, that an installation succeeded and how many seconds it took — but nothing of the above. If the user has enabled anonymous diagnostics (section 8.3), an anonymized error report is sent — but not the log itself and not fragments of it.
 
-Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
+Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
 
 `installation.json` holds only the installation identifier — a random UUIDv4 created the first time the app is started. It is not derived from any device characteristics and is not personal data in itself; where it is sent is described in section 8.
 
@@ -35,7 +37,7 @@ Local state is stored in the `%APPDATA%\Typhon` directory, in the files `setting
 
 `compat-stats.json` holds the downloaded shared statistics — the same numbers everyone else sees. It is incoming data and says nothing about the owner of the device.
 
-Deleting that directory deletes all of the local data listed above.
+Deleting that directory deletes all of the local data listed above except screenshots: they live in the `Screenshots` folder of the library directory and are deleted separately.
 
 ## 2. Data sent to the Typhon services
 
@@ -320,6 +322,7 @@ These transfers are made by the device itself. The Typhon services take no part 
 - **Source hosts.** When a source is refreshed, the app makes an HTTP request directly to the host specified by the user. The source host sees the user's IP address and the fact of the request. No proxy is used.
 - **Metadata images.** Cover art and screenshots are loaded by the app directly from the IGDB content delivery network (`images.igdb.com`), at addresses taken from the metadata service's response. The owner of that network sees the user's IP address and which images were requested.
 - **Discord.** Discord status display is **off** by default. If it is on, the app passes data to the local Discord client through an operating system named pipe — nothing is sent over the network by Typhon here. What is passed is the title of the running game, the rounded session duration and, where available, the cover art address. From there the data is handled by the Discord client under Discord's rules.
+- **Steam.** Only on the user's "Add to Steam" command, the app writes to the Steam client's files on this computer — the `shortcuts.vdf` shortcut list and the `grid` artwork folder of each Steam user on the device — the game title, the path to its executable, its launch options and its cover art; a copy of the previous shortcut list is kept next to it. Nothing is sent over the network by Typhon here. A game started from Steam is handled by the Steam client under Steam's rules: for example, it may show the game title to friends. The "Remove from Steam" command and removing the game from the library remove the entry and the artwork. While Steam is running its files are not changed: the "Remove from Steam" command asks to close it, and the entry of a removed game is removed later — when Typhon starts or on the next "Add to Steam" or "Remove from Steam" command while Steam is closed.
 
 ### 7.3. The BitTorrent network
 
