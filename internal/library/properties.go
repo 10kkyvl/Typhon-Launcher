@@ -80,6 +80,33 @@ func (s *Service) SetRunAsAdmin(id string, on bool) (Game, error) {
 	return *game, nil
 }
 
+func (s *Service) SetHidePresence(id string, on bool) (Game, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	game := s.findLocked(id)
+	if game == nil {
+		return Game{}, errNotFound
+	}
+	if game.HidePresence == on {
+		return *game, nil
+	}
+	previous := *game
+	game.HidePresence = on
+	if err := s.persist(); err != nil {
+		*game = previous
+		return Game{}, fmt.Errorf("save library: %w", err)
+	}
+	s.emitUpdated()
+	if sess, ok := s.running[id]; ok {
+		for _, w := range s.watchers {
+			if cw, ok := w.(SessionChangeWatcher); ok {
+				cw.SessionChanged(*game, sess.startedAt)
+			}
+		}
+	}
+	return *game, nil
+}
+
 func (s *Service) ClearSavesDir(id string) (Game, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

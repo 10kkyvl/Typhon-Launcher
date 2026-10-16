@@ -72,6 +72,7 @@ type Game struct {
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
 	Tags              []string   `json:"tags,omitempty"`
 	Hidden            bool       `json:"hidden,omitempty"`
+	HidePresence      bool       `json:"hidePresence,omitempty"`
 	External          *External  `json:"external,omitempty"`
 }
 
@@ -221,6 +222,10 @@ type Service struct {
 type SessionWatcher interface {
 	SessionStarted(game Game)
 	SessionStopped(gameID string)
+}
+
+type SessionChangeWatcher interface {
+	SessionChanged(game Game, startedAt time.Time)
 }
 
 type session struct {

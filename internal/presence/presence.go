@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"typhon/internal/discord"
@@ -41,6 +42,9 @@ type Watcher struct {
 	target Target
 	cover  CoverFunc
 	now    func() time.Time
+
+	mu    sync.Mutex
+	shown string
 }
 
 func New(target Target, cover CoverFunc) (*Watcher, error) {
@@ -58,22 +62,51 @@ func (w *Watcher) Apply(s settings.Settings) {
 }
 
 func (w *Watcher) SessionStarted(game library.Game) {
-	if game.Hidden {
+	if !visible(game) {
 		return
 	}
-	w.target.Show(w.build(game))
+	p := w.build(game, w.now())
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.shown = game.ID
+	w.target.Show(p)
 }
 
-func (w *Watcher) SessionStopped(string) {
+func (w *Watcher) SessionChanged(game library.Game, startedAt time.Time) {
+	if !visible(game) {
+		w.SessionStopped(game.ID)
+		return
+	}
+	p := w.build(game, startedAt)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.shown != "" && w.shown != game.ID {
+		return
+	}
+	w.shown = game.ID
+	w.target.Show(p)
+}
+
+func (w *Watcher) SessionStopped(gameID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.shown != gameID {
+		return
+	}
+	w.shown = ""
 	w.target.Clear()
 }
 
-func (w *Watcher) build(game library.Game) discord.Presence {
+func visible(game library.Game) bool {
+	return !game.Hidden && !game.HidePresence
+}
+
+func (w *Watcher) build(game library.Game, startedAt time.Time) discord.Presence {
 	name := title(game)
 	p := discord.Presence{
 		Details:    name,
 		State:      playtime(game.PlaytimeSeconds),
-		StartedAt:  w.now(),
+		StartedAt:  startedAt,
 		LargeImage: assetKey,
 		LargeText:  appName,
 	}

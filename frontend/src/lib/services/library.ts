@@ -39,6 +39,7 @@ export interface LibraryGame {
   shortcutPath?: string;
   savesDir?: string;
   runAsAdmin?: boolean;
+  hidePresence?: boolean;
   favorite?: boolean;
   favoriteAt?: string | null;
   status?: string;
@@ -224,6 +225,11 @@ export async function setLaunchArgsLine(id: string, line: string): Promise<Libra
 export async function setRunAsAdmin(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetRunAsAdmin(id, on)) as unknown as LibraryGame;
+}
+
+export async function setHidePresence(id: string, on: boolean): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetHidePresence(id, on)) as unknown as LibraryGame;
 }
 
 export async function selectExecutable(title: string): Promise<string> {

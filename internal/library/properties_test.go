@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"typhon/internal/uierr"
 )
@@ -400,4 +401,92 @@ func TestUserPropertiesSurviveReinstallAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("revive")
+}
+
+type changeWatcher struct {
+	changed []Game
+	at      []time.Time
+}
+
+func (w *changeWatcher) SessionStarted(Game)   {}
+func (w *changeWatcher) SessionStopped(string) {}
+func (w *changeWatcher) SessionChanged(game Game, startedAt time.Time) {
+	w.changed = append(w.changed, game)
+	w.at = append(w.at, startedAt)
+}
+
+func TestSetHidePresence(t *testing.T) {
+	s, game := propertiesService(t)
+	on, err := s.SetHidePresence(game.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !on.HidePresence {
+		t.Fatal("flag not set")
+	}
+	reloaded, err := NewServiceAt(s.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := reloaded.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored.HidePresence {
+		t.Fatal("flag not persisted")
+	}
+
+	blockPersist(t, s)
+	if _, err := s.SetHidePresence(game.ID, false); err == nil {
+		t.Fatal("expected persist failure")
+	}
+	after, err := s.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.HidePresence {
+		t.Fatal("failed persist left the flag cleared in memory")
+	}
+	if _, err := s.SetHidePresence("missing", true); !errors.Is(err, errNotFound) {
+		t.Fatalf("missing game: %v", err)
+	}
+}
+
+func TestSetHidePresenceNotifiesOnlyRunningSession(t *testing.T) {
+	s, game := propertiesService(t)
+	w := &changeWatcher{}
+	s.AddSessionWatcher(w)
+
+	if _, err := s.SetHidePresence(game.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.changed) != 0 {
+		t.Fatalf("idle game notified watchers: %d", len(w.changed))
+	}
+
+	startedAt := time.Unix(1700000000, 0)
+	s.mu.Lock()
+	s.running[game.ID] = &session{startedAt: startedAt, lastSeen: startedAt}
+	s.mu.Unlock()
+	if _, err := s.SetHidePresence(game.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.changed) != 1 || w.changed[0].HidePresence || !w.at[0].Equal(startedAt) {
+		t.Fatalf("running game change: %+v at %v", w.changed, w.at)
+	}
+
+	if _, err := s.SetHidePresence(game.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.changed) != 1 {
+		t.Fatalf("unchanged flag notified watchers: %d", len(w.changed))
+	}
+
+	blockPersist(t, s)
+	if _, err := s.SetHidePresence(game.ID, true); err == nil {
+		t.Fatal("expected persist failure")
+	}
+	if len(w.changed) != 1 {
+		t.Fatalf("failed save notified watchers: %d", len(w.changed))
+	}
 }

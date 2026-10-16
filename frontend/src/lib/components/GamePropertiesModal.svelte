@@ -13,6 +13,7 @@
     selectGameExecutable,
     setExecutable,
     setLaunchArgsLine,
+    setHidePresence,
     setRunAsAdmin,
   } from '../services/library';
   import { executableCandidates, type Candidate } from '../services/install';
@@ -41,6 +42,10 @@
   let adminBusy = $state(false);
   let adminShown = $state(false);
   let adminError = $state('');
+
+  let presence = $state(true);
+  let presenceBusy = $state(false);
+  let presenceError = $state('');
 
   let savesBusy = $state(false);
   let savesError = $state('');
@@ -73,6 +78,7 @@
       argsSaved = '';
       argsError = '';
       adminError = '';
+      presenceError = '';
       savesError = '';
       void load(current.gameId);
     });
@@ -80,6 +86,10 @@
 
   $effect(() => {
     admin = Boolean(game?.runAsAdmin);
+  });
+
+  $effect(() => {
+    presence = !game?.hidePresence;
   });
 
   $effect(() => {
@@ -173,6 +183,21 @@
       toast(adminError, 'danger');
     } finally {
       adminBusy = false;
+    }
+  }
+
+  async function changePresence(on: boolean) {
+    if (!game || presenceBusy) return;
+    presenceBusy = true;
+    presenceError = '';
+    try {
+      await setHidePresence(game.id, !on);
+    } catch (err) {
+      presence = !on;
+      presenceError = errorText(err, msg('modals.propertiesPresenceFailed'));
+      toast(presenceError, 'danger');
+    } finally {
+      presenceBusy = false;
     }
   }
 
@@ -291,6 +316,22 @@
           {/if}
         </section>
       {/if}
+
+      <section class="section">
+        <div class="row spread">
+          <h4>{msg('modals.propertiesPresenceTitle')}</h4>
+          <Toggle
+            bind:checked={presence}
+            label={msg('modals.propertiesPresenceTitle')}
+            disabled={presenceBusy}
+            onchange={changePresence}
+          />
+        </div>
+        <p class="hint">{msg('modals.propertiesPresenceHint')}</p>
+        {#if presenceError}
+          <p class="failure">{presenceError}</p>
+        {/if}
+      </section>
 
       {#if game.installDir || game.savesDir}
         <section class="section">
