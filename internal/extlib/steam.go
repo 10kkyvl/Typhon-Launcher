@@ -178,12 +178,12 @@ func scanSteamLibrary(ctx context.Context, libDir string, seen map[string]bool, 
 			title = name
 		}
 		if app.Flags&steamFullyInstalled == 0 {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: "установка в Steam не завершена"})
+			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: "установка в Steam не завершена", AppID: app.AppID})
 			continue
 		}
 		dir, err := steamInstallDir(common, app.InstallDir)
 		if err != nil {
-			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error()})
+			res.Skipped = append(res.Skipped, Skipped{Title: title, Reason: err.Error(), AppID: app.AppID})
 			continue
 		}
 		seen[app.AppID] = true

@@ -904,6 +904,20 @@ func (s *Service) MarkUninstalled(id string) error {
 	return nil
 }
 
+func (s *Service) resetInstallLocked(g *Game) {
+	clearInstalledProvenance(g)
+	g.Uninstalled = true
+	g.SizeBytes = 0
+	g.SizeUnknown = false
+	g.Version = ""
+	g.VersionSource = ""
+	g.VersionConfidence = 0
+	g.InstallType = ""
+	g.Owned = false
+	g.Uninstall = Uninstall{}
+	g.UninstallUnknown = false
+}
+
 func (s *Service) markUninstalledLocked(id string) error {
 	for i := range s.games {
 		if s.games[i].ID != id {
@@ -911,17 +925,7 @@ func (s *Service) markUninstalledLocked(id string) error {
 		}
 		s.dropShortcutLocked(&s.games[i])
 		previous := s.games[i]
-		clearInstalledProvenance(&s.games[i])
-		s.games[i].Uninstalled = true
-		s.games[i].SizeBytes = 0
-		s.games[i].SizeUnknown = false
-		s.games[i].Version = ""
-		s.games[i].VersionSource = ""
-		s.games[i].VersionConfidence = 0
-		s.games[i].InstallType = ""
-		s.games[i].Owned = false
-		s.games[i].Uninstall = Uninstall{}
-		s.games[i].UninstallUnknown = false
+		s.resetInstallLocked(&s.games[i])
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return fmt.Errorf("save library: %w", err)

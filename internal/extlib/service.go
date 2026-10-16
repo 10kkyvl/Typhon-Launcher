@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -16,7 +17,12 @@ import (
 	"typhon/internal/uierr"
 )
 
-const EventImported = "extlib:imported"
+const (
+	EventImported = "extlib:imported"
+
+	firstSyncDelay = 30 * time.Second
+	syncInterval   = 5 * time.Minute
+)
 
 var (
 	ErrBusy       = uierr.New("extlib.busy", "импорт игр уже выполняется")
@@ -25,6 +31,8 @@ var (
 
 type libraryPort interface {
 	ApplyExternal(ctx context.Context, items []library.ExternalGame) (library.ExternalSummary, error)
+	SyncExternal(ctx context.Context, items []library.ExternalGame, present map[string]map[string]bool) (library.ExternalSummary, error)
+	ExternalRefs() []library.ExternalRef
 }
 
 type catalogPort interface {
@@ -59,6 +67,11 @@ type Service struct {
 	catalog  catalogPort
 	metadata metadataPort
 	scan     func(context.Context) ([]ProviderScan, error)
+	timer    func(time.Duration) (<-chan time.Time, func() bool)
+
+	syncEnabled bool
+	bound       map[string]string
+	lastSyncErr string
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -77,7 +90,7 @@ func NewService(lib libraryPort, cat catalogPort, meta metadataPort) (*Service, 
 	if meta == nil {
 		return nil, errors.New("сервис метаданных недоступен")
 	}
-	return &Service{library: lib, catalog: cat, metadata: meta, scan: Scan}, nil
+	return &Service{library: lib, catalog: cat, metadata: meta, scan: Scan, timer: newTimer, syncEnabled: scanSupported, bound: map[string]string{}}, nil
 }
 
 func emit(name string, data any) {
@@ -89,8 +102,18 @@ func emit(name string, data any) {
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	runCtx, cancel := context.WithCancel(ctx)
+	s.ctx, s.cancel = runCtx, cancel
+	if s.syncEnabled {
+		s.wg.Add(1)
+		go s.syncLoop(runCtx)
+	}
 	return nil
+}
+
+func newTimer(d time.Duration) (<-chan time.Time, func() bool) {
+	t := time.NewTimer(d)
+	return t.C, t.Stop
 }
 
 func (s *Service) ServiceShutdown() error {
@@ -266,15 +289,19 @@ func (s *Service) bind(ctx context.Context, candidates []Candidate) ([]library.E
 				id = g.ID
 			}
 		}
-		items[i] = library.ExternalGame{
-			Provider:        c.Provider,
-			AppID:           c.AppID,
-			Title:           c.Title,
-			InstallDir:      c.InstallDir,
-			Executable:      c.Executable,
-			LaunchURI:       c.LaunchURI,
-			CanonicalGameID: id,
-		}
+		items[i] = externalOf(c, id)
 	}
 	return items, nil
+}
+
+func externalOf(c Candidate, canonicalID string) library.ExternalGame {
+	return library.ExternalGame{
+		Provider:        c.Provider,
+		AppID:           c.AppID,
+		Title:           c.Title,
+		InstallDir:      c.InstallDir,
+		Executable:      c.Executable,
+		LaunchURI:       c.LaunchURI,
+		CanonicalGameID: canonicalID,
+	}
 }

@@ -57,6 +57,7 @@ type ExternalOutcome struct {
 type ExternalSummary struct {
 	Added    int
 	Updated  int
+	Marked   int
 	Outcomes []ExternalOutcome
 	Skipped  []ExternalSkip
 }
@@ -148,33 +149,45 @@ type measured struct {
 }
 
 // ApplyExternal выполняет upsert по (Provider, AppID). Записи, которых сканер
-// больше не видит, не трогает: удалить их может только пользователь.
+// больше не видит, не трогает: пометить их пропавшими умеет только SyncExternal.
 //
 //wails:ignore
 func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (ExternalSummary, error) {
+	summary, dropped, libCtx, err := s.applyExternal(ctx, items, nil)
+	if err != nil {
+		return ExternalSummary{}, err
+	}
+	for _, id := range dropped {
+		s.dropSteam(libCtx, id)
+	}
+	return summary, nil
+}
+
+func (s *Service) applyExternal(ctx context.Context, items []ExternalGame, present map[string]map[string]bool) (ExternalSummary, []string, context.Context, error) {
 	checked := make([]ExternalGame, 0, len(items))
 	for _, item := range items {
 		g, err := validateExternal(item)
 		if err != nil {
-			return ExternalSummary{}, fmt.Errorf("%s: %w", item.Title, err)
+			return ExternalSummary{}, nil, nil, fmt.Errorf("%s: %w", item.Title, err)
 		}
 		checked = append(checked, g)
 	}
 
 	s.mu.Lock()
-	known := make(map[int]bool, len(checked))
+	needsSize := make(map[int]bool, len(checked))
 	for i, g := range checked {
-		known[i] = s.externalIndexLocked(g.Provider, g.AppID) >= 0
+		pos := s.externalIndexLocked(g.Provider, g.AppID)
+		needsSize[i] = pos < 0 || s.games[pos].Uninstalled
 	}
 	s.mu.Unlock()
 
 	sizes := make(map[int]measured, len(checked))
 	for i, g := range checked {
-		if known[i] {
+		if !needsSize[i] {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			return ExternalSummary{}, err
+			return ExternalSummary{}, nil, nil, err
 		}
 		size, unknown := measureInstall("", g.InstallDir)
 		sizes[i] = measured{size: size, unknown: unknown}
@@ -183,7 +196,7 @@ func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (Exte
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return ExternalSummary{}, errSessionNotRunning
+		return ExternalSummary{}, nil, nil, errSessionNotRunning
 	}
 	previous := append([]Game(nil), s.games...)
 	var summary ExternalSummary
@@ -191,7 +204,11 @@ func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (Exte
 	for i, g := range checked {
 		pos := s.externalIndexLocked(g.Provider, g.AppID)
 		if pos >= 0 {
-			changed := s.updateExternalLocked(pos, g)
+			m, ok := sizes[i]
+			if !ok {
+				m = measured{unknown: true}
+			}
+			changed := s.updateExternalLocked(pos, g, m)
 			if changed {
 				summary.Updated++
 			}
@@ -201,7 +218,7 @@ func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (Exte
 		ignored, err := s.excludedLocked(g.InstallDir)
 		if err != nil {
 			s.games = previous
-			return ExternalSummary{}, err
+			return ExternalSummary{}, nil, nil, err
 		}
 		if ignored {
 			summary.Skipped = append(summary.Skipped, ExternalSkip{Provider: g.Provider, AppID: g.AppID, Title: g.Title, Reason: "каталог исключён из библиотеки"})
@@ -230,19 +247,31 @@ func (s *Service) ApplyExternal(ctx context.Context, items []ExternalGame) (Exte
 		summary.Added++
 		summary.Outcomes = append(summary.Outcomes, ExternalOutcome{Provider: g.Provider, AppID: g.AppID, Added: true})
 	}
-	if summary.Added == 0 && summary.Updated == 0 {
-		return summary, nil
+	gone := s.markGoneLocked(present)
+	summary.Marked = len(gone)
+	if summary.Added == 0 && summary.Updated == 0 && summary.Marked == 0 {
+		return summary, nil, nil, nil
 	}
 	if err := s.persist(); err != nil {
 		s.games = previous
-		return ExternalSummary{}, fmt.Errorf("save library: %w", err)
+		return ExternalSummary{}, nil, nil, fmt.Errorf("save library: %w", err)
 	}
-	slog.Info("external games applied", "added", summary.Added, "updated", summary.Updated)
+	if s.dropGoneShortcutsLocked(gone) {
+		if err := s.persist(); err != nil {
+			return ExternalSummary{}, nil, nil, fmt.Errorf("save library after removing shortcuts: %w", err)
+		}
+	}
+	slog.Info("external games applied", "added", summary.Added, "updated", summary.Updated, "marked", summary.Marked)
 	s.emitUpdated()
-	return summary, nil
+	dropped := make([]string, 0, len(gone))
+	for _, g := range gone {
+		dropped = append(dropped, g.ID)
+		s.recordUninstalledLocked(g)
+	}
+	return summary, dropped, s.ctx, nil
 }
 
-func (s *Service) updateExternalLocked(pos int, g ExternalGame) bool {
+func (s *Service) updateExternalLocked(pos int, g ExternalGame, m measured) bool {
 	cur := &s.games[pos]
 	next := *cur
 	ext := *cur.External
@@ -253,6 +282,10 @@ func (s *Service) updateExternalLocked(pos int, g ExternalGame) bool {
 	next.Executable = g.Executable
 	if next.CanonicalGameID == "" {
 		next.CanonicalGameID = g.CanonicalGameID
+	}
+	if cur.Uninstalled {
+		next.SizeBytes = m.size
+		next.SizeUnknown = m.unknown
 	}
 	next.Uninstalled = false
 	if next.Title == cur.Title && next.InstallDir == cur.InstallDir && next.Executable == cur.Executable &&
