@@ -209,6 +209,7 @@ type Service struct {
 	steamArt      func(canonicalID string) (steamlink.Art, error)
 	steamSync     bool
 	launcherPath  func() (string, error)
+	launcherLinks func(ctx context.Context) error
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
 	openURI       func(uri string) error
@@ -251,7 +252,12 @@ func NewService() (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("config dir unavailable")
 	}
-	return NewServiceAt(filepath.Join(dir, "library.json"))
+	s, err := NewServiceAt(filepath.Join(dir, "library.json"))
+	if err != nil {
+		return nil, err
+	}
+	s.launcherLinks = refreshLauncherLinks
+	return s, nil
 }
 
 //wails:ignore
