@@ -15,6 +15,74 @@ type Link struct {
 	WorkDir     string
 	Icon        string
 	Description string
+	// AppUserModelID привязывает ярлык и запущенный им процесс к одной
+	// группе на панели задач. Пусто — идентификатор не пишется. Только Windows.
+	AppUserModelID string
+}
+
+const (
+	LauncherAppID   = "Typhon.Launcher"
+	gameAppIDPrefix = "Typhon.Game."
+	maxAppIDLen     = 128
+)
+
+var (
+	ErrAppIDEmpty   = errors.New("shortcut: пустой AppUserModelID")
+	ErrAppIDTooLong = errors.New("shortcut: AppUserModelID длиннее 128 символов")
+	ErrAppIDInvalid = errors.New("shortcut: недопустимый символ в AppUserModelID")
+)
+
+// IsPlayArgs сообщает, что аргументы ярлыка запускают игру через --play.
+func IsPlayArgs(args string) bool { return strings.Contains(args, "--play") }
+
+func appIDRune(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	case r == '.', r == '-', r == '_':
+		return true
+	}
+	return false
+}
+
+// ValidateAppID проверяет идентификатор по правилам оболочки: до 128 символов,
+// без пробелов; здесь допускаются только ASCII-буквы, цифры, точка, дефис и
+// подчёркивание.
+func ValidateAppID(id string) error {
+	if id == "" {
+		return ErrAppIDEmpty
+	}
+	if len(id) > maxAppIDLen {
+		return fmt.Errorf("%w: %d", ErrAppIDTooLong, len(id))
+	}
+	for _, r := range id {
+		if !appIDRune(r) {
+			return fmt.Errorf("%w: %q", ErrAppIDInvalid, r)
+		}
+	}
+	return nil
+}
+
+// GameAppID строит идентификатор игры: недопустимые символы заменяются на
+// подчёркивание, длина обрезается до 128.
+func GameAppID(gameID string) (string, error) {
+	if gameID == "" {
+		return "", ErrAppIDEmpty
+	}
+	var b strings.Builder
+	b.WriteString(gameAppIDPrefix)
+	for _, r := range gameID {
+		if appIDRune(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	id := b.String()
+	if len(id) > maxAppIDLen {
+		id = id[:maxAppIDLen]
+	}
+	return id, nil
 }
 
 const maxNameRunes = 100

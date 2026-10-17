@@ -52,6 +52,7 @@ import (
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
+	"typhon/internal/shortcut"
 	"typhon/internal/social"
 	"typhon/internal/sources"
 	"typhon/internal/steamlink"
@@ -191,6 +192,12 @@ func main() {
 	// already live here, so the failure is recorded rather than discarded.
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
+	}
+
+	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that
+	// shortcut's ID and the taskbar groups the window as the game.
+	if err := shortcut.SetProcessAppID(shortcut.LauncherAppID); err != nil {
+		slog.Error("set process app id", "component", "app", "operation", "set_app_id", "error", err)
 	}
 
 	registerLocalIdentity()

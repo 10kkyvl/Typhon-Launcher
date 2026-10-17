@@ -159,6 +159,12 @@ func Create(path string, link Link) error {
 		}
 	}
 
+	if link.AppUserModelID != "" {
+		if err := sl.setAppUserModelID(link.AppUserModelID); err != nil {
+			return err
+		}
+	}
+
 	pf, err := sl.queryPersistFile()
 	if err != nil {
 		return err
@@ -304,4 +310,111 @@ func (p *persistFile) save(path string) error {
 		return hresultErr("Save", hr)
 	}
 	return nil
+}
+
+var (
+	iidPropertyStore = windows.GUID{
+		Data1: 0x886D8EEB, Data2: 0x8CF2, Data3: 0x4446,
+		Data4: [8]byte{0x8D, 0x02, 0xCD, 0xBA, 0x1D, 0xBD, 0xCF, 0x99},
+	}
+	pkeyAppUserModelID = propertyKey{
+		fmtid: windows.GUID{
+			Data1: 0x9F4C2855, Data2: 0x9F79, Data3: 0x4B39,
+			Data4: [8]byte{0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3},
+		},
+		pid: 5,
+	}
+)
+
+const vtLPWSTR = 31
+
+type propertyKey struct {
+	fmtid windows.GUID
+	pid   uint32
+}
+
+// propVariant повторяет раскладку PROPVARIANT: 8 байт заголовка и union,
+// который на 64-битных платформах занимает 16 байт.
+type propVariant struct {
+	vt   uint16
+	_    [3]uint16
+	data [2]unsafe.Pointer
+}
+
+type propertyStoreVtbl struct {
+	QueryInterface uintptr
+	AddRef         uintptr
+	Release        uintptr
+	GetCount       uintptr
+	GetAt          uintptr
+	GetValue       uintptr
+	SetValue       uintptr
+	Commit         uintptr
+}
+
+type propertyStore struct {
+	vtbl *propertyStoreVtbl
+}
+
+//nolint:gosec // G103: addresses of the receiver, the target IID, and the output pointer, all live for the call. G115: HRESULT is the 32-bit value in r0.
+func (s *shellLink) queryPropertyStore() (*propertyStore, error) {
+	var obj unsafe.Pointer
+	r0 := callMethod(
+		s.vtbl.QueryInterface,
+		uintptr(unsafe.Pointer(s)),
+		uintptr(unsafe.Pointer(&iidPropertyStore)),
+		uintptr(unsafe.Pointer(&obj)),
+	)
+	if hr := int32(r0); hr < 0 {
+		return nil, hresultErr("QueryInterface(IPropertyStore)", hr)
+	}
+	if obj == nil {
+		return nil, errors.New("shortcut: QueryInterface(IPropertyStore) вернул нулевой указатель при успешном HRESULT")
+	}
+	return (*propertyStore)(obj), nil
+}
+
+//nolint:gosec // G103: address of the receiver, which is the COM object itself and outlives this call.
+func (p *propertyStore) release() {
+	callMethod(p.vtbl.Release, uintptr(unsafe.Pointer(p)))
+}
+
+//nolint:gosec // G103: addresses of the receiver, the key and the variant, all live for the call. G115: HRESULT is the 32-bit value in r0.
+func (p *propertyStore) setString(key *propertyKey, value string) error {
+	ptr, err := windows.UTF16PtrFromString(value)
+	if err != nil {
+		return fmt.Errorf("shortcut: SetValue: кодирование %q: %w", value, err)
+	}
+	pv := propVariant{vt: vtLPWSTR}
+	pv.data[0] = unsafe.Pointer(ptr)
+	r0 := callMethod(p.vtbl.SetValue, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(key)), uintptr(unsafe.Pointer(&pv)))
+	runtime.KeepAlive(ptr)
+	if hr := int32(r0); hr < 0 {
+		return hresultErr("IPropertyStore.SetValue", hr)
+	}
+	return nil
+}
+
+//nolint:gosec // G103: address of the receiver. G115: HRESULT is the 32-bit value in r0.
+func (p *propertyStore) commit() error {
+	r0 := callMethod(p.vtbl.Commit, uintptr(unsafe.Pointer(p)))
+	if hr := int32(r0); hr < 0 {
+		return hresultErr("IPropertyStore.Commit", hr)
+	}
+	return nil
+}
+
+func (s *shellLink) setAppUserModelID(id string) error {
+	if err := ValidateAppID(id); err != nil {
+		return err
+	}
+	ps, err := s.queryPropertyStore()
+	if err != nil {
+		return err
+	}
+	defer ps.release()
+	if err := ps.setString(&pkeyAppUserModelID, id); err != nil {
+		return err
+	}
+	return ps.commit()
 }
