@@ -119,8 +119,8 @@ func TestRecoverRepointDoesNotContinueWhenTheSettingsWriteFails(t *testing.T) {
 
 	s.recoverJob(context.Background(), job)
 
-	if got := s.soleJob(t); got.Stage != StageRepoint {
-		t.Fatalf("stage = %s, want %s: the job moved on after a failed settings write", got.Stage, StageRepoint)
+	if got := s.soleJob(t); got.Stage != StageFailed || got.FailedAt != StageRepoint {
+		t.Fatalf("job = %s/%q, want %s/%s: the job moved on after a failed settings write", got.Stage, got.FailedAt, StageFailed, StageRepoint)
 	}
 	if got := set.GetSettings().LibraryPath; got != oldRoot {
 		t.Fatalf("libraryPath = %q, want it unchanged at %q", got, oldRoot)

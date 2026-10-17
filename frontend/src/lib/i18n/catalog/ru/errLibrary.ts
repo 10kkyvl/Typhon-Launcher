@@ -19,6 +19,8 @@ export const errLibrary = {
   'library.process_identity_mismatch': 'процесс с этим pid принадлежит другой программе',
   'library.process_identity_unknown': 'время запуска процесса неизвестно, подтверждение невозможно',
   'library.already_running': 'игра уже запущена',
+  'library.relocating': 'игра переносится на другой диск, запуск недоступен',
+  'library.executable_outside': 'исполняемый файл лежит вне папки игры, перенос невозможен',
   'library.not_installed': 'игра не установлена',
   'library.executable_missing': 'исполняемый файл больше не существует',
   'library.runtime_failed': 'не удалось подготовить окружение запуска',

@@ -16,6 +16,13 @@ describe('moveErrorText', () => {
     ['typhon:relocate.not_enough_space: нужно 500 байт, доступно 100', 'Недостаточно места'],
     ['typhon:relocate.verify_failed: checksum mismatch', 'Проверка перенесённых файлов не прошла'],
     ['game-id-123: typhon:relocate.no_install_dir: у игры не задан каталог установки', 'не задан каталог установки'],
+    ['typhon:relocate.source_changed: исходная папка изменилась', 'изменилась после сбоя'],
+    ['typhon:relocate.source_unverifiable: нет манифеста', 'не изменилась'],
+    ['typhon:relocate.source_damaged: missing', 'Обе папки сохранены'],
+    ['typhon:relocate.game_removed: игра удалена', 'удалена из библиотеки'],
+    ['typhon:relocate.retries_exhausted: boom', 'нескольких попыток'],
+    ['D:\\Games\\Foo\\game.exe: typhon:library.executable_outside: вне каталога', 'вне папки игры'],
+    ['typhon:library.relocating: игра переносится', 'уже переносится'],
   ])('translates %s', (raw, expected) => {
     expect(moveErrorText(new Error(raw))).toContain(expected);
   });
