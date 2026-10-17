@@ -175,6 +175,7 @@ var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status"
 
 type Service struct {
 	starting        map[string]context.CancelFunc
+	relocating      map[string]struct{}
 	sameCanonical   func(string, string) bool
 	mu              sync.Mutex
 	path            string

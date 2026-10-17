@@ -240,10 +240,8 @@ func TestMoveGameVerifyFailureKeepsSource(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, oldDir := addTestGame(t, lib)
-	// A target whose parent does not exist yet makes os.Rename fail for a
-	// mundane reason (ENOENT), forcing the copy/verify path without needing
-	// an actual second volume.
-	target := filepath.Join(t.TempDir(), "missing-parent", "game")
+	forceCopyPath(t)
+	target := filepath.Join(t.TempDir(), "target", "game")
 
 	prev := afterCopyBeforeVerify
 	afterCopyBeforeVerify = func(staging string) {
@@ -340,9 +338,8 @@ func TestConcurrentProgressAndList(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		mustMkdirFile(t, oldDir, "file"+string(rune('a'+i%26))+string(rune('0'+i/26))+".bin", string(make([]byte, 8192)))
 	}
-	// A missing parent forces the copy/verify path, which reports progress
-	// repeatedly instead of jumping straight to done via the rename path.
-	target := filepath.Join(t.TempDir(), "missing-parent", "game")
+	forceCopyPath(t)
+	target := filepath.Join(t.TempDir(), "target", "game")
 
 	var reader sync.WaitGroup
 	stop := make(chan struct{})
@@ -379,9 +376,8 @@ func TestMoveGameRefusesConcurrentSameGame(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, _ := addTestGame(t, lib)
-	// A missing parent forces the slower copy/verify path so the first job
-	// is still active in s.jobs when the second call arrives.
-	targetA := filepath.Join(t.TempDir(), "missing-parent-a", "game")
+	forceCopyPath(t)
+	targetA := filepath.Join(t.TempDir(), "target-a", "game")
 	targetB := filepath.Join(t.TempDir(), "target-b")
 
 	jobA, err := s.MoveGame(game.ID, targetA)
@@ -414,7 +410,8 @@ func TestMoveGameRefusesOverlappingTarget(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game1, _ := addTestGame(t, lib)
 	game2, _ := addTestGame(t, lib)
-	target := filepath.Join(t.TempDir(), "missing-parent", "shared-target")
+	forceCopyPath(t)
+	target := filepath.Join(t.TempDir(), "target", "shared-target")
 
 	job1, err := s.MoveGame(game1.ID, target)
 	if err != nil {

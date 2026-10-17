@@ -26,6 +26,13 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.shutting_down': 'transfers.moveErrShuttingDown',
   'relocate.not_ready': 'transfers.moveErrNotReady',
   'relocate.external_game': 'transfers.moveErrExternalGame',
+  'relocate.source_changed': 'transfers.moveErrSourceChanged',
+  'relocate.source_unverifiable': 'transfers.moveErrSourceUnverifiable',
+  'relocate.source_damaged': 'transfers.moveErrSourceDamaged',
+  'relocate.game_removed': 'transfers.moveErrGameRemoved',
+  'relocate.retries_exhausted': 'transfers.moveErrRetriesExhausted',
+  'library.executable_outside': 'transfers.moveErrExecutableOutside',
+  'library.relocating': 'transfers.moveErrRelocating',
 };
 
 export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {

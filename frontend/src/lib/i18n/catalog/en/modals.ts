@@ -213,7 +213,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.moveGameDiskName': 'Drive {volume}',
   'modals.moveGameDiskFree': '{free} free of {total}',
   'modals.moveGameSafetyText':
-    'The move is safe: files are copied to the new location and verified by hash, only then is the source folder deleted. Until verification passes, the old files stay untouched.',
+    'When moving to another drive, files are copied to the new location and verified by hash, and only then is the source folder deleted. Within the same drive the folder is moved without copying, so there is no hash check.',
   'modals.moveGameHint': 'Moving large games can take a while — you can minimize the launcher.',
   'modals.moveGameCancelling': 'Cancelling…',
   'modals.moveGameCancelMove': 'Cancel move',

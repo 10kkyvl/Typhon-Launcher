@@ -514,6 +514,23 @@ func (s *Service) checkBusy(gameID string) error {
 	return nil
 }
 
+// reserveGame takes the library's launch lock for a game. The running check
+// and the lock are one step inside the library, so a launch cannot start
+// between checkBusy and the move.
+func (s *Service) reserveGame(gameID string) (func(), error) {
+	release, err := s.lib.BeginRelocate(gameID)
+	switch {
+	case err == nil:
+		return release, nil
+	case errors.Is(err, library.ErrRelocateGameRunning):
+		return nil, fmt.Errorf("%s: %w", gameID, ErrGameRunning)
+	case errors.Is(err, library.ErrGameRelocating):
+		return nil, fmt.Errorf("%s: %w", gameID, ErrMoveInProgress)
+	default:
+		return nil, fmt.Errorf("%s: %w", gameID, err)
+	}
+}
+
 func validateTarget(source, target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
@@ -615,6 +632,9 @@ func (s *Service) MoveGame(gameID, target string) (Job, error) {
 	}
 	source = filepath.Clean(source)
 
+	if err := s.lib.CheckRelocatable(gameID); err != nil {
+		return Job{}, err
+	}
 	if err := s.checkBusy(gameID); err != nil {
 		return Job{}, err
 	}
@@ -653,7 +673,12 @@ func (s *Service) MoveGame(gameID, target string) (Job, error) {
 		StartedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
+	release, err := s.reserveGame(gameID)
+	if err != nil {
+		return Job{}, err
+	}
 	if err := s.registerJob(job); err != nil {
+		release()
 		return Job{}, err
 	}
 
@@ -661,6 +686,7 @@ func (s *Service) MoveGame(gameID, target string) (Job, error) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer release()
 		s.runGameJob(jobCtx, job.ID, source, cleanTarget)
 	}()
 	return job.clone(), nil
@@ -745,17 +771,27 @@ func (s *Service) runPipeline(ctx context.Context, jobID, source, target string,
 	if err := removeEmptyTarget(target); err != nil {
 		return s.failOrCancel(jobID, err)
 	}
-	if renameErr := os.Rename(source, target); renameErr == nil {
+	created, err := mkdirParents(filepath.Dir(target))
+	if err != nil {
+		return s.failOrCancel(jobID, fmt.Errorf("create %s: %w", filepath.Dir(target), err))
+	}
+	renameErr := renameDir(source, target)
+	switch {
+	case renameErr == nil:
 		if _, err := s.transition(jobID, StageRepoint, func(j *Job) {
 			j.Renamed = true
 			j.CopiedBytes = j.TotalBytes
 		}); err != nil {
 			return err
 		}
-	} else {
+	case isCrossDevice(renameErr):
 		if err := s.copyAndVerify(ctx, jobID, source, target); err != nil {
+			removeDirs(created)
 			return err
 		}
+	default:
+		removeDirs(created)
+		return s.failOrCancel(jobID, fmt.Errorf("rename %s -> %s: %w", source, target, renameErr))
 	}
 
 	current, err := s.jobSnapshot(jobID)
@@ -763,13 +799,18 @@ func (s *Service) runPipeline(ctx context.Context, jobID, source, target string,
 		return err
 	}
 	if err := repoint(ctx, current); err != nil {
-		// The bytes already live at Target. Leaving the job at StageRepoint
-		// (not Failed) means the next startup's recovery retries this call
-		// instead of abandoning already-moved data.
-		return err
+		// The bytes already live at Target. The job is failed with FailedAt =
+		// StageRepoint, which tells the next startup's recovery to retry this
+		// call instead of abandoning already-moved data.
+		return s.failOrCancel(jobID, err)
 	}
 	return s.cleanupItem(jobID, source)
 }
+
+var (
+	renameDir  = os.Rename
+	removeTree = os.RemoveAll
+)
 
 // afterCopyBeforeVerify is a test-only seam: tests use it to corrupt a file
 // in staging between the copy and verify steps — the same window a real
@@ -855,7 +896,7 @@ func (s *Service) cleanupItem(jobID, source string) error {
 	if _, err := s.transition(jobID, StageCleanup, nil); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(source); err != nil {
+	if err := removeTree(source); err != nil {
 		return s.failOrCancel(jobID, fmt.Errorf("remove old %s: %w", source, err))
 	}
 	if err := s.st.removeManifest(jobID); err != nil {
@@ -883,10 +924,24 @@ func (s *Service) failOrCancel(jobID string, err error) error {
 	}
 	if _, tErr := s.transition(jobID, stage, func(j *Job) {
 		j.Error = err.Error()
+		j.FailedAt = ""
+		if stage == StageFailed {
+			j.FailedAt = retryableStage(j.Stage)
+		}
 	}); tErr != nil {
 		return tErr
 	}
 	return err
+}
+
+// retryableStage names the stage a failed job can be resumed from: once the
+// bytes are at Target, a repoint or cleanup failure is retried on startup
+// rather than abandoned.
+func retryableStage(stage Stage) Stage {
+	if stage == StageRepoint || stage == StageCleanup {
+		return stage
+	}
+	return ""
 }
 
 func (s *Service) cancelJob(jobID string) error {
@@ -933,6 +988,9 @@ func (s *Service) MoveLibrary(parent string) (Job, error) {
 	for _, g := range games {
 		if strings.TrimSpace(g.InstallDir) == "" || g.External != nil {
 			continue
+		}
+		if err := s.lib.CheckRelocatable(g.ID); err != nil {
+			return Job{}, err
 		}
 		if err := s.checkBusy(g.ID); err != nil {
 			return Job{}, err
@@ -1050,9 +1108,17 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
 		return err
 	}
+	if err := s.lib.CheckRelocatable(gameID); err != nil {
+		return s.failOrCancel(jobID, err)
+	}
 	if err := s.checkBusy(gameID); err != nil {
 		return s.failOrCancel(jobID, err)
 	}
+	release, err := s.reserveGame(gameID)
+	if err != nil {
+		return s.failOrCancel(jobID, err)
+	}
+	defer release()
 	target := rebase(oldRoot, root, source)
 	if !targetAvailable(target) {
 		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", target, ErrTargetNotEmpty))
@@ -1240,6 +1306,40 @@ func (s *Service) applyLibrarySettings(jobID, root string) error {
 		return err
 	}
 	return nil
+}
+
+// mkdirParents creates dir and reports the levels it created itself, deepest
+// first, so a failed move can take back exactly those.
+func mkdirParents(dir string) ([]string, error) {
+	var missing []string
+	for p := dir; ; {
+		_, err := os.Stat(p)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		missing = append(missing, p)
+		parent := filepath.Dir(p)
+		if parent == p {
+			break
+		}
+		p = parent
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		removeDirs(missing)
+		return nil, err
+	}
+	return missing, nil
+}
+
+func removeDirs(dirs []string) {
+	for _, dir := range dirs {
+		if err := os.Remove(dir); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			slog.Debug("keep move parent directory", "path", dir, "error", err)
+		}
+	}
 }
 
 func removeEmptyTarget(path string) error {

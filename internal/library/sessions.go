@@ -75,6 +75,9 @@ func (s *Service) PlayGame(id string) error {
 	if s.closed {
 		return errSessionNotRunning
 	}
+	if _, ok := s.relocating[id]; ok {
+		return ErrGameRelocating
+	}
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return uierr.New("library.already_running", "игра уже запущена")
 	}

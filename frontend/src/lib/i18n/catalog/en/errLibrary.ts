@@ -22,6 +22,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.process_identity_mismatch': 'The process with this pid belongs to another program',
   'library.process_identity_unknown': 'The process start time is unknown, confirmation is not possible',
   'library.already_running': 'The game is already running',
+  'library.relocating': 'The game is being moved to another drive and cannot be launched',
+  'library.executable_outside': 'The game executable is outside the game folder, so it cannot be moved',
   'library.not_installed': 'The game is not installed',
   'library.executable_missing': 'The executable file no longer exists',
   'library.runtime_failed': 'Could not prepare the launch environment',
