@@ -5,7 +5,8 @@
   import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
   import { nextGenre } from '../../lib/catalog/filters';
   import { latestRunner, serialQueue } from '../../lib/catalog/serial';
-  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix } from '../../lib/catalog/pages';
+  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix, withoutStale } from '../../lib/catalog/pages';
+  import { applyFreshPage, canWarmNextPage, createFreshPageBuffer, staleKeyOf, type FreshPageEvent } from '../../lib/catalog/stale';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -152,6 +153,8 @@
     return JSON.stringify({ search, genre, platform, kind, sort, compatOnly });
   }
 
+  let staleKey = '';
+  const earlyFresh = createFreshPageBuffer();
   let token = 0;
   let catalogAbort = new AbortController();
   let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -231,6 +234,7 @@
         compat: compatOnly ? compatOnlyWorking : '',
         page: next,
         pageSize,
+        ...(next === 1 ? { allowStale: true } : {}),
       };
       const continuation = await loadCatalogContinuation(
         request, items, load,
@@ -255,15 +259,18 @@
       else catalogFallback ||= result.personalizationFallback ?? false;
       offline = result.offline ?? false;
       incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
-      if (!offline && items.length < total) {
-        const upcoming = { ...request, page: page + 1, revision, snapshot };
+      if (next === 1 || refreshed) staleKey = staleKeyOf(result);
+      if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
+        const upcoming = { ...withoutStale(request), page: page + 1, revision, snapshot };
         prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
+      applyEarlyFreshPage();
     } catch (err) {
       if (current !== token || isCancelledRequest(err)) return;
       backendOutdated = errorCode(err) === "catalog.backend_outdated";
       prefetch.clear();
       if (next === 1) {
+        staleKey = '';
         items = [];
         total = 0;
         page = 0;
@@ -292,6 +299,8 @@
     identityRefreshRunning = false;
     identityRefreshToken = 0;
     prefetch.clear();
+    staleKey = '';
+    earlyFresh.clear();
     loading = true;
     items = [];
     total = 0;
@@ -442,7 +451,8 @@
       catalogFallback ||= prefix.result.personalizationFallback ?? false;
       offline = prefix.result.offline ?? false;
       incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
-      if (!offline && items.length < total) {
+      staleKey = staleKeyOf(prefix.result);
+      if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
         const upcoming = {
           ...personalQuery(), revision,
           search,
@@ -456,6 +466,7 @@
         };
         prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
       }
+      applyEarlyFreshPage();
     } catch {
       if (current === token) prefetch.clear();
     } finally {
@@ -477,6 +488,56 @@
     if (key === identityRefreshKey) return;
     identityRefreshKey = key;
     void refreshLoadedPrefix();
+  }
+
+  function applyEarlyFreshPage() {
+    if (!staleKey) return;
+    const early = earlyFresh.take(staleKey);
+    if (early) onFreshPage(early);
+  }
+
+  function onFreshPage(event: FreshPageEvent | undefined) {
+    if (event?.key && event.key !== staleKey) {
+      earlyFresh.remember(event);
+      return;
+    }
+    const verdict = applyFreshPage(staleKey, { revision, page: appending ? page + 1 : page, fallback: catalogFallback }, event);
+    if (verdict.action === 'ignore') {
+      if (event?.key && event.key === staleKey) {
+        staleKey = '';
+        earlyFresh.take(event.key);
+      }
+      return;
+    }
+    earlyFresh.take(staleKey);
+    staleKey = '';
+    if (verdict.action === 'reload') {
+      void reload(false);
+      return;
+    }
+    if (verdict.action === 'failed') {
+      if (verdict.error === 'catalog.changed') void reload(false);
+      else if (verdict.error === 'catalog.backend_outdated') backendOutdated = true;
+      else offline = true;
+      return;
+    }
+    const fresh = verdict.page;
+    items = fresh.items ?? [];
+    compatByGame = fresh.compat ?? {};
+    total = fresh.total;
+    facets = fresh.facets ?? [];
+    platforms = fresh.platforms ?? [];
+    catalogFallback = fresh.personalizationFallback ?? false;
+    offline = fresh.offline ?? false;
+    incomplete = !fresh.providers?.length || fresh.providers.some((p) => !p.complete);
+    if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
+      const upcoming = {
+        ...personalQuery(), revision, search, genre, platform, kind, sort,
+        compat: compatOnly ? compatOnlyWorking : '',
+        page: page + 1, pageSize,
+      };
+      prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming, catalogAbort.signal));
+    }
   }
 
   function onSearch() {
@@ -528,6 +589,13 @@
     if (!inWails) return;
     return Events.On('metadata:updated', (event) => {
       refreshForMetadata((event.data as MetadataView)?.game);
+    });
+  });
+
+  onMount(() => {
+    if (!inWails) return;
+    return Events.On('catalog:page', (event) => {
+      onFreshPage(event.data as FreshPageEvent | undefined);
     });
   });
 

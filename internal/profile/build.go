@@ -77,7 +77,9 @@ type ShowcaseBlock struct {
 func Build(games []library.Game, sessions []playlog.Session, running []string, showcase []string, now time.Time) Snapshot {
 	byID := make(map[string]library.Game, len(games))
 	for _, g := range games {
-		byID[g.ID] = g
+		if !g.Hidden {
+			byID[g.ID] = g
+		}
 	}
 
 	snap := Snapshot{
@@ -209,7 +211,7 @@ func MonthStart(now time.Time) time.Time {
 func showcaseGames(kind string, games []library.Game) []GameRef {
 	active := make([]library.Game, 0, len(games))
 	for _, g := range games {
-		if !g.Archived {
+		if !g.Archived && !g.Hidden {
 			active = append(active, g)
 		}
 	}

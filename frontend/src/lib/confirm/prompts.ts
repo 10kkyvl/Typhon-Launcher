@@ -7,6 +7,7 @@ export interface ConfirmPrompt {
   confirm: string;
   busy?: string;
   cancel?: string;
+  tone?: 'danger' | 'primary';
 }
 
 export function unfriendPrompt(name: string): ConfirmPrompt {
@@ -152,5 +153,42 @@ export function deleteSaveBackupPrompt(date: string): ConfirmPrompt {
     text: msg('saves.deleteText', { date }),
     confirm: msg('saves.delete'),
     busy: msg('saves.deleting'),
+  };
+}
+
+export function pullCloudSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('cloudsaves.pullTitle'),
+    text: msg('cloudsaves.pullText'),
+    confirm: msg('cloudsaves.pull'),
+    busy: msg('cloudsaves.pulling'),
+  };
+}
+
+export function deleteCloudSavesPrompt(): ConfirmPrompt {
+  return {
+    title: msg('cloudsaves.deleteTitle'),
+    text: msg('cloudsaves.deleteText'),
+    confirm: msg('cloudsaves.deleteRemote'),
+    busy: msg('cloudsaves.deleting'),
+  };
+}
+
+export function addToSteamPrompt(): ConfirmPrompt {
+  return {
+    title: msg('games.steamAddTitle'),
+    text: msg('games.steamAddText'),
+    note: msg('games.steamAddNote'),
+    confirm: msg('games.steamAddConfirm'),
+    busy: msg('games.steamAddBusy'),
+    tone: 'primary',
+  };
+}
+
+export function deleteScreenshotPrompt(name: string): ConfirmPrompt {
+  return {
+    title: msg('screenshots.delete'),
+    text: msg('screenshots.deleteConfirm', { name }),
+    confirm: msg('screenshots.delete'),
   };
 }

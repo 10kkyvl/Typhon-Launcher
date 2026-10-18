@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ type fakeShortcuts struct {
 	nameErr     error
 	desktopErr  error
 	unsupported bool
+	appIDs      map[string]string
+	appIDErr    error
 }
 
 func newFakeShortcuts(desktop string) *fakeShortcuts {
@@ -58,6 +61,23 @@ func (f *fakeShortcuts) Create(path string, link shortcut.Link) error {
 		return f.createErr
 	}
 	f.created[path] = link
+	return nil
+}
+
+func (f *fakeShortcuts) SetAppID(path, launcher, appID string) error {
+	if f.appIDErr != nil {
+		return f.appIDErr
+	}
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if f.appIDs == nil {
+		f.appIDs = map[string]string{}
+	}
+	f.appIDs[path] = appID
 	return nil
 }
 
@@ -356,5 +376,143 @@ func TestSafeCommandLineID(t *testing.T) {
 		if got := safeCommandLineID(tc.id); got != tc.want {
 			t.Errorf("safeCommandLineID(%q) = %v, want %v", tc.id, got, tc.want)
 		}
+	}
+}
+
+func TestCreateShortcutCarriesGameAppID(t *testing.T) {
+	s, fake, _ := shortcutService(t)
+	game := addShortcutGame(t, s)
+	if err := s.CreateShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	link := fake.created[filepath.Join(fake.desktop, shortcutName(t, "Half-Life 2"))]
+	want, err := shortcut.GameAppID(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.AppUserModelID != want || !strings.HasPrefix(want, "Typhon.Game.") {
+		t.Fatalf("AppUserModelID = %q, want %q", link.AppUserModelID, want)
+	}
+}
+
+func TestRefreshShortcutsSetsAppIDInPlace(t *testing.T) {
+	s, fake, _ := shortcutService(t)
+	game := addShortcutGame(t, s)
+	if err := s.CreateShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stored.ShortcutPath, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake.created = map[string]shortcut.Link{}
+
+	if err := s.refreshShortcuts(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	want, err := shortcut.GameAppID(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.appIDs[stored.ShortcutPath] != want {
+		t.Fatalf("appIDs = %v, want %q", fake.appIDs, want)
+	}
+	if len(fake.created) != 0 {
+		t.Fatalf("refresh recreated the shortcut: %v", fake.created)
+	}
+}
+
+func TestRefreshShortcutsDoesNotRecreateDeletedFile(t *testing.T) {
+	s, fake, _ := shortcutService(t)
+	game := addShortcutGame(t, s)
+	if err := s.CreateShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	fake.created = map[string]shortcut.Link{}
+	if err := s.refreshShortcuts(context.Background()); err != nil {
+		t.Fatalf("refresh with missing file: %v", err)
+	}
+	if len(fake.created) != 0 || len(fake.appIDs) != 0 {
+		t.Fatalf("touched a missing shortcut: %v %v", fake.created, fake.appIDs)
+	}
+}
+
+func TestRefreshShortcutsSkipsRemovedShortcutAndUnsupported(t *testing.T) {
+	s, fake, _ := shortcutService(t)
+	game := addShortcutGame(t, s)
+	if err := s.CreateShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.refreshShortcuts(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.appIDs) != 0 {
+		t.Fatalf("refreshed a removed shortcut: %v", fake.appIDs)
+	}
+	fake.unsupported = true
+	if err := s.refreshShortcuts(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefreshShortcutsReportsErrorAndCancel(t *testing.T) {
+	s, fake, _ := shortcutService(t)
+	game := addShortcutGame(t, s)
+	if err := s.CreateShortcut(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.Find(game.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stored.ShortcutPath, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("boom")
+	fake.appIDErr = boom
+	if err := s.refreshShortcuts(context.Background()); !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want boom", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.refreshShortcuts(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want canceled", err)
+	}
+}
+
+func TestStartShortcutRefreshSkippedAfterClose(t *testing.T) {
+	s, _, _ := shortcutService(t)
+	calls := 0
+	s.launcherLinks = func(context.Context) error {
+		calls++
+		return nil
+	}
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+	s.startShortcutRefresh(context.Background())
+	s.wg.Wait()
+	if calls != 0 {
+		t.Fatalf("launcherLinks ran after close: %d", calls)
+	}
+}
+
+func TestStartShortcutRefreshRunsLauncherLinksAndSurvivesItsError(t *testing.T) {
+	s, _, _ := shortcutService(t)
+	calls := 0
+	s.launcherLinks = func(context.Context) error {
+		calls++
+		return errors.New("boom")
+	}
+	s.startShortcutRefresh(context.Background())
+	s.wg.Wait()
+	if calls != 1 {
+		t.Fatalf("launcherLinks calls = %d", calls)
 	}
 }

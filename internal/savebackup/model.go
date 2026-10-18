@@ -13,11 +13,12 @@ const (
 	KindSession    Kind = "session"
 	KindUpdate     Kind = "update"
 	KindPreRestore Kind = "pre-restore"
+	KindCloud      Kind = "cloud"
 )
 
 func (k Kind) valid() bool {
 	switch k {
-	case KindManual, KindSession, KindUpdate, KindPreRestore:
+	case KindManual, KindSession, KindUpdate, KindPreRestore, KindCloud:
 		return true
 	}
 	return false

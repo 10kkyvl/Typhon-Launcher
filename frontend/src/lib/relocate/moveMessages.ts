@@ -8,6 +8,7 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.installing': 'transfers.moveErrInstalling',
   'relocate.downloading': 'transfers.moveErrDownloading',
   'relocate.already_running': 'transfers.moveErrAlreadyRunning',
+  'relocate.same_location': 'transfers.moveErrSameLocation',
   'relocate.target_not_empty': 'transfers.moveErrTargetNotEmpty',
   'relocate.target_inside_source': 'transfers.moveErrTargetInsideSource',
   'relocate.source_inside_target': 'transfers.moveErrSourceInsideTarget',
@@ -25,6 +26,14 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.dialog_unavailable': 'transfers.moveErrDialogUnavailable',
   'relocate.shutting_down': 'transfers.moveErrShuttingDown',
   'relocate.not_ready': 'transfers.moveErrNotReady',
+  'relocate.external_game': 'transfers.moveErrExternalGame',
+  'relocate.source_changed': 'transfers.moveErrSourceChanged',
+  'relocate.source_unverifiable': 'transfers.moveErrSourceUnverifiable',
+  'relocate.source_damaged': 'transfers.moveErrSourceDamaged',
+  'relocate.game_removed': 'transfers.moveErrGameRemoved',
+  'relocate.retries_exhausted': 'transfers.moveErrRetriesExhausted',
+  'library.executable_outside': 'transfers.moveErrExecutableOutside',
+  'library.relocating': 'transfers.moveErrRelocating',
 };
 
 export function moveErrorText(err: unknown, fallback: string = msg('transfers.moveErrFallback')): string {

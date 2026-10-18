@@ -5,6 +5,8 @@
   import {
     ArrowUp,
     BookmarkPlus,
+    Bell,
+    BellRing,
     ChevronRight,
     Download,
     EllipsisVertical,
@@ -12,8 +14,10 @@
     HardDriveDownload,
     Heart,
     Play,
+    SlidersHorizontal,
     Sparkles,
     Square,
+    Tag,
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
@@ -25,6 +29,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
+  import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -41,6 +46,7 @@
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
   import GameReviews from './GameReviews.svelte';
+  import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { releaseOrigin } from '../../lib/game/releases';
@@ -105,13 +111,17 @@
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
+  import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { externalLabel, isExternal } from '../../lib/library/external';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
+  import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
+  import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesLabel, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesSize, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -134,6 +144,7 @@
   let removeOpen = $state(false);
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
+  let tagsOpen = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
   let requiresSteam = $state(true);
   let requiresSteamSaving = $state(false);
@@ -142,7 +153,9 @@
     if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
   });
 
-  const update = $derived(localGame ? $updatesByGame.get(localGame.id) : undefined);
+  const external = $derived(isExternal(localGame));
+  const externalName = $derived(externalLabel(localGame));
+  const update = $derived(localGame && !external ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
   const updateAvailable = $derived(Boolean(update?.availability.available));
   const updateIsRelease = $derived(update?.availability.kind !== 'update');
@@ -378,13 +391,16 @@
 
   let activeTab = $state('overview');
 
+  const ownShots = $derived(Boolean(localGame) && installed);
+  const hasShotsTab = $derived(shots.length > 0 || ownShots);
+
   const tabs = $derived([
     { id: 'overview', label: msg('games.detailTabOverview') },
-    ...(shots.length > 0 ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
+    ...(hasShotsTab ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
   ]);
 
   $effect(() => {
-    if (activeTab === 'screenshots' && shots.length === 0) activeTab = 'overview';
+    if (activeTab === 'screenshots' && !hasShotsTab) activeTab = 'overview';
   });
 
   const installFacts = $derived.by(() => {
@@ -392,7 +408,7 @@
     const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
     return facts([
       { label: msg('games.detailFactVersion'), value: localGame.version },
-      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesLabel(localGame.sizeBytes) : '' },
+      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesSize(localGame.sizeBytes) : '' },
       { label: msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
       { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
       { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },
@@ -466,16 +482,18 @@
           ]
         : [{ id: 'meta-find', label: msg('games.detailMetaFindLabel') }]
       : []),
-    ...(installed
+    ...(installed && (localGame?.shortcutPath || !external || localGame?.executable)
       ? [
           localGame?.shortcutPath
             ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
             : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }] : []),
+    ...(installed && !external
+      ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }]
+      : []),
     ...(localGame
-      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || external }]
       : []),
     ...(terminalDownload
       ? [
@@ -848,9 +866,15 @@
               <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
             </span>
           {/if}
+          {#if externalName}
+            <StatusBadge kind="neutral" label={externalName} dot={false} />
+          {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
           {/if}
+          {#each localGame?.tags ?? [] as tag (tag)}
+            <StatusBadge kind="neutral" label={tag} dot={false} />
+          {/each}
         </div>
 
         {#if title}
@@ -914,6 +938,19 @@
             </Button>
           {/if}
 
+          {#if !installed && canonicalId}
+            {@const watching = $watchedIds.has(canonicalId)}
+            <Button size="lg" pressed={watching} onclick={() => toggleWatch(canonicalId)}>
+              {#if watching}
+                <BellRing size="1.5rem" strokeWidth={1.8} />
+                {msg('games.watchingButton')}
+              {:else}
+                <Bell size="1.5rem" strokeWidth={1.8} />
+                {msg('games.watchButton')}
+              {/if}
+            </Button>
+          {/if}
+
           {#if localGame}
             <IconButton
               label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
@@ -925,9 +962,22 @@
               </span>
             </IconButton>
 
+            {#if installed}
+              <IconButton label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
+                <SlidersHorizontal size="1.8rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
+
             <Button size="lg" onclick={() => (statusOpen = true)}>
               {msg('games.actionStatus', { status: statusLabel(localGame.status) })}
             </Button>
+
+            <IconButton
+              label={localGame.tags?.length ? msg('games.tagsEditLabel') : msg('games.tagsAddLabel')}
+              onclick={() => (tagsOpen = true)}
+            >
+              <Tag size="1.8rem" strokeWidth={1.8} />
+            </IconButton>
           {/if}
 
           {#if menuItems.length > 0}
@@ -963,6 +1013,9 @@
   <div class="body">
     <div class="main">
       {#if activeTab === 'screenshots'}
+        {#if localGame && ownShots}
+          <GameScreenshots gameId={localGame.id} {title} />
+        {/if}
         <div
           class="shots"
           class:featured={shots.length >= 5}
@@ -1046,12 +1099,17 @@
         {/if}
 
         {#if installed && localGame}
-          <section class="section">
-            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-          </section>
+          {#if !external}
+            <section class="section">
+              <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+            </section>
+          {/if}
 
           <section class="section">
             <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
+            {#if external}
+              <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
+            {/if}
             <div class="path">
               <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
               <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
@@ -1066,6 +1124,9 @@
                 </div>
               {/each}
             </dl>
+            <div class="redist-row">
+              <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
+            </div>
             {#if wineStatus?.required}
               <div class="steam-row">
                 <div class="steam-row-text">
@@ -1083,7 +1144,7 @@
           </section>
         {/if}
 
-        {#if catalogGame || localGame}
+        {#if (catalogGame || localGame) && !external}
           <section class="section">
             <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
             {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
@@ -1125,11 +1186,16 @@
   {#if localGame}
     <GameStatusModal bind:open={statusOpen} game={localGame} />
 
+    {#if tagsOpen}
+      <GameTagsModal bind:open={tagsOpen} game={localGame} />
+    {/if}
+
     <RemoveGameModal
       bind:open={removeOpen}
       bind:mode={removeMode}
       gameId={localGame.id}
       title={localGame.title}
+      external={externalLabel(localGame)}
       onremoved={(removed) => {
         if (removed === 'library') navigate('installed');
       }}
@@ -1629,6 +1695,12 @@
 
   .about .fact:last-child {
     padding-bottom: 0;
+  }
+
+  .redist-row {
+    display: flex;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
   }
 
   .steam-row {

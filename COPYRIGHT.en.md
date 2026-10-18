@@ -1,6 +1,6 @@
 # Copyright Infringement Notices
 
-Revision of 11 October 2026.
+Revision of 16 October 2026.
 
 This document explains how to send the Typhon project operator a copyright infringement notice, and what can and cannot be done in response to one.
 
@@ -24,7 +24,7 @@ That leads to the following distinction, which determines what can be done about
 
 ### 2.1. Typhon infrastructure and services
 
-This covers what the operator controls: the project website, the repository, the account service, the metadata service and the update service — the texts, images and other materials they serve. It also covers what users upload and write themselves: profile avatars and covers, the bio and other profile fields, captions on feed events, game reviews, messages between friends and support requests.
+This covers what the operator controls: the project website, the repository, the account service, the metadata service and the update service — the texts, images and other materials they serve. It also covers what users upload and write themselves: profile avatars and covers, the bio and other profile fields, captions on feed events, game reviews, messages between friends, support requests and the game save archives a user chooses to keep in the cloud.
 
 For a notice concerning such material, review and removal — or restriction of access to the material — are possible.
 

@@ -64,7 +64,6 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	previous := append([]Game(nil), s.games...)
-	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	out := make([]Match, len(queries))
 	changed := false
 	for i, r := range resolved {
@@ -75,16 +74,19 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 		g := *r.Game
 		if g.ID == "" || g.Title == "" || g.ExternalIDs.empty() {
 			s.games = previous
+			if changed {
+				s.rebuildLocked()
+			}
 			return nil, errors.New("invalid catalog release identity")
 		}
 		g.ServerID = g.ID
 		g.LocalExternalIDs = ExternalIDs{}
 		g.Provisional = false
-		if pos := remoteMatchPosition(g, byServer, byIGDB, bySteam); pos >= 0 {
+		if pos := s.idx.matchRemote(g); pos >= 0 {
 			g = s.games[pos]
 		} else {
 			s.games = append(s.games, g)
-			indexRemoteGame(g, len(s.games)-1, byServer, byIGDB, bySteam)
+			s.addToIndexLocked(g)
 			changed = true
 		}
 		out[i] = single(g, scoreExactTitle, MethodServerTitle)
@@ -92,6 +94,7 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 	if changed {
 		if persistErr := s.persistGamesLocked(); persistErr != nil {
 			s.games = previous
+			s.rebuildLocked()
 			return nil, persistErr
 		}
 		s.rebuildLocked()

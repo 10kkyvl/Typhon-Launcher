@@ -17,6 +17,7 @@ import { installTotalUnknown } from '../install/progress';
 import { sources } from './sources';
 import { unreadReplies } from './support';
 import { updates } from './updates';
+import { dismissAlert, watchAlerts, watchAlertsLoaded } from './watchlist';
 
 function pct(value: number) {
   return `${progressPercent(value)}%`;
@@ -27,6 +28,8 @@ export interface Notification {
   title: string;
   text: string;
   route: RouteName;
+  params?: Record<string, string>;
+  onOpen?: () => void;
   refId?: string;
   terminal: boolean;
 }
@@ -103,6 +106,7 @@ const allNotifications = derived(
     sources,
     selfUpdateStatus,
     historyRecent,
+    watchAlerts,
     incomingCount,
     incomingPeak,
     unreadReplies,
@@ -115,6 +119,7 @@ const allNotifications = derived(
     $sources,
     $selfUpdateStatus,
     $historyRecent,
+    $watchAlerts,
     $incomingCount,
     $incomingPeak,
     $unreadReplies,
@@ -127,6 +132,18 @@ const allNotifications = derived(
         title: msg('tickets.notifTitle'),
         text: msg('tickets.notifText', { count: $unreadReplies }),
         route: 'support',
+        terminal: false,
+      });
+    }
+
+    for (const alert of $watchAlerts) {
+      items.push({
+        id: `watch:${alert.id}`,
+        title: msg('games.watchAlertTitle'),
+        text: `${alert.title} — ${alert.releaseTitle}`,
+        route: 'game',
+        params: { id: alert.gameId },
+        onOpen: () => void dismissAlert(alert.id),
         terminal: false,
       });
     }
@@ -211,7 +228,8 @@ const allNotifications = derived(
 allNotifications.subscribe((items) => {
   const liveIds = new Set(items.map((item) => item.id));
   const current = get(readIds);
-  const stale = [...current].filter((id) => !liveIds.has(id));
+  const alertsPending = !get(watchAlertsLoaded);
+  const stale = [...current].filter((id) => !liveIds.has(id) && !(alertsPending && id.startsWith('watch:')));
   if (stale.length === 0) return;
   const next = new Set(current);
   for (const id of stale) next.delete(id);

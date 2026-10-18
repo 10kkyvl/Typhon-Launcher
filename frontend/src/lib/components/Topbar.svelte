@@ -2,6 +2,7 @@
   import {
     ArrowRight,
     Bell,
+    BellRing,
     ChevronLeft,
     ChevronRight,
     Gamepad2,
@@ -19,6 +20,7 @@
   import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
   import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
+  import { toggleWatch, watchedIds } from '../stores/watchlist';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
@@ -129,7 +131,8 @@
 
   function openNotification(item: Notification) {
     notificationsOpen = false;
-    navigate(item.route);
+    navigate(item.route, item.params);
+    item.onOpen?.();
   }
 
   // Окно без рамки, поэтому поведение нативного заголовка приходится повторять вручную.
@@ -179,6 +182,7 @@
         {#if results.games.length > 0}
           <div class="results-head">{msg('search.games')}</div>
           {#each results.games as hit, i (hit.id)}
+            <div class="result-row">
             <button class="result" class:active={results.active === i} onclick={() => openGame(hit)}>
               <span class="result-art">
                 <Artwork src={hit.cover ?? ''} alt={hit.title} ratio="3 / 4" radius="var(--radius-xs)" />
@@ -195,6 +199,22 @@
                 {/if}
               </span>
             </button>
+            {#if !hit.installed}
+              {@const watching = $watchedIds.has(hit.id)}
+              <IconButton
+                size="sm"
+                label={watching ? msg('games.unwatchAction') : msg('games.watchAction')}
+                active={watching}
+                onclick={() => toggleWatch(hit.id)}
+              >
+                {#if watching}
+                  <BellRing size="1.4rem" strokeWidth={1.8} />
+                {:else}
+                  <Bell size="1.4rem" strokeWidth={1.8} />
+                {/if}
+              </IconButton>
+            {/if}
+            </div>
           {/each}
           {#if results.moreGames > 0}
             <button class="results-more results-link" onclick={openCatalog}>
@@ -368,6 +388,17 @@
   .notifications-mark-read:hover {
     background: var(--hover-strong);
     color: var(--text-2);
+  }
+
+  .result-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .result-row > .result {
+    flex: 1;
+    min-width: 0;
   }
 
   .result {

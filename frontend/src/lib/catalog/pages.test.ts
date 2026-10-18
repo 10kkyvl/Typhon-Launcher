@@ -226,4 +226,15 @@ describe('stable personalized browsing', () => {
     await reloadCatalogPrefix({ pageSize: 1, snapshot: 'old' }, 2, load);
     expect(load.mock.calls[1][0].snapshot).toBe('personal-snapshot');
   });
+  it('never sends allowStale from a recovery rebuild', async () => {
+    const load = vi.fn().mockResolvedValueOnce(fresh(1)).mockResolvedValueOnce(fresh(2));
+    await reloadCatalogPrefix({ pageSize: 1, allowStale: true }, 2, load);
+    expect(load.mock.calls.map(([query]) => query.allowStale)).toEqual([undefined, undefined]);
+  });
+  it('never sends allowStale when a continuation rebuilds the prefix', async () => {
+    const load = vi.fn().mockResolvedValueOnce({ ...fresh(1), total: 2 }).mockResolvedValueOnce(fresh(2));
+    await loadCatalogContinuation({ page: 2, revision: 3, allowStale: true }, [game('a')], load,
+      () => Promise.reject(changed()), () => true);
+    expect(load.mock.calls.map(([query]) => query.allowStale)).toEqual([undefined, undefined]);
+  });
 });

@@ -18,6 +18,7 @@ import (
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
 	"typhon/internal/clientid"
+	"typhon/internal/cloudsaves"
 	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
@@ -25,6 +26,7 @@ import (
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/download"
+	"typhon/internal/extlib"
 	"typhon/internal/heartbeat"
 	"typhon/internal/history"
 	"typhon/internal/install"
@@ -42,14 +44,18 @@ import (
 	"typhon/internal/presence"
 	"typhon/internal/profile"
 	"typhon/internal/redact"
+	"typhon/internal/redist"
 	"typhon/internal/relocate"
 	"typhon/internal/reviews"
 	"typhon/internal/savebackup"
+	"typhon/internal/screenshots"
 	"typhon/internal/search"
 	"typhon/internal/selfupdate"
 	"typhon/internal/settings"
+	"typhon/internal/shortcut"
 	"typhon/internal/social"
 	"typhon/internal/sources"
+	"typhon/internal/steamlink"
 	"typhon/internal/support"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
@@ -58,6 +64,7 @@ import (
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/watchlist"
 	"typhon/internal/wine"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -82,6 +89,7 @@ var errNoPlayTarget = errors.New("--play требует идентификато
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
 	application.RegisterEvent[[]library.Game]("library:updated")
+	application.RegisterEvent[[]library.Collection](library.EventCollections)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[download.Download]("download:added")
@@ -103,9 +111,11 @@ func init() {
 	application.RegisterEvent[sources.ReleaseBatch]("release:matched")
 	application.RegisterEvent[sources.ReleaseBatch]("release:needs-review")
 	application.RegisterEvent[metadata.View]("metadata:updated")
+	application.RegisterEvent[catalog.PageEvent]("catalog:page")
 	application.RegisterEvent[discovery.Progress]("discovery:started")
 	application.RegisterEvent[discovery.Progress]("discovery:progress")
 	application.RegisterEvent[discovery.Result]("discovery:completed")
+	application.RegisterEvent[extlib.Summary](extlib.EventImported)
 	application.RegisterEvent[updates.Update]("update:available")
 	application.RegisterEvent[updates.Update]("update:started")
 	application.RegisterEvent[updates.Update]("update:updated")
@@ -131,13 +141,20 @@ func init() {
 	application.RegisterEvent[history.Record]("history:recorded")
 	application.RegisterEvent[[]history.Record]("history:updated")
 	application.RegisterEvent[history.Status]("history:degraded")
+	application.RegisterEvent[[]watchlist.Alert]("watchlist:alert")
+	application.RegisterEvent[[]watchlist.Entry]("watchlist:updated")
+	application.RegisterEvent[watchlist.Status]("watchlist:degraded")
 	application.RegisterEvent[theme.Theme]("theme:updated")
 	application.RegisterEvent[[]theme.Theme]("theme:list")
 	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
+	application.RegisterEvent[playlog.DegradedStatus]("playlog:degraded")
+	application.RegisterEvent[screenshots.Saved](screenshots.EventSaved)
+	application.RegisterEvent[screenshots.Failed](screenshots.EventFailed)
 	application.RegisterEvent[savebackup.Event](savebackup.EventName)
+	application.RegisterEvent[cloudsaves.Event](cloudsaves.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
@@ -175,6 +192,12 @@ func main() {
 	// already live here, so the failure is recorded rather than discarded.
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
+	}
+
+	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that
+	// shortcut's ID and the taskbar groups the window as the game.
+	if err := shortcut.SetProcessAppID(shortcut.LauncherAppID); err != nil {
+		slog.Error("set process app id", "component", "app", "operation", "set_app_id", "error", err)
 	}
 
 	registerLocalIdentity()
@@ -332,7 +355,7 @@ func main() {
 				LibraryID: game.ID, CanonicalGameID: game.CanonicalGameID, Title: game.Title, Cover: game.Cover,
 				Favorite: game.Favorite, PlaytimeSeconds: game.PlaytimeSeconds,
 				Sessions: counts[game.ID], LastPlayed: game.LastPlayed,
-				Installed: !game.Uninstalled, Hidden: game.Archived,
+				Installed: !game.Uninstalled, Hidden: game.Archived || game.Hidden,
 				ContinuePlaying: game.Status == library.StatusPlaying,
 			})
 		}
@@ -343,6 +366,18 @@ func main() {
 	if err != nil {
 		fatal("start sources service", err)
 	}
+	watchlistService, err := watchlist.NewService(sourcesService, catalogService)
+	if err != nil {
+		fatal("start watchlist service", err)
+	}
+	refs := sourcesService.ReferencedGameIDs()
+	refs = append(refs, libraryService.ReferencedCatalogIDs()...)
+	refs = append(refs, downloadManager.ReferencedGameIDs()...)
+	refs = append(refs, installService.ReferencedGameIDs()...)
+	// Compaction only trims the catalog; on failure the file on disk is untouched and still valid.
+	if _, err := catalogService.Compact(context.Background(), refs); err != nil {
+		slog.Error("compact catalog", "err", err)
+	}
 	provider := metadataProvider(accountService)
 	if remote, ok := provider.(catalog.RemoteCatalog); ok {
 		catalogService.SetRemoteCatalog(remote)
@@ -351,6 +386,14 @@ func main() {
 	if err != nil {
 		fatal("start metadata service", err)
 	}
+	libraryService.EnableSteam()
+	libraryService.SetSteamArt(func(canonicalID string) (steamlink.Art, error) {
+		files, err := metadataService.ArtFiles(canonicalID)
+		if err != nil {
+			return steamlink.Art{}, err
+		}
+		return steamlink.Art{Cover: files.Cover, Hero: files.Hero}, nil
+	})
 	configDir, err := settings.ConfigDir()
 	if err != nil {
 		fatal("resolve config dir", err)
@@ -372,10 +415,36 @@ func main() {
 	if err != nil {
 		fatal("start discovery service", err)
 	}
+	extlibService, err := extlib.NewService(libraryService, catalogService, metadataService)
+	if err != nil {
+		fatal("start external libraries service", err)
+	}
 	searchService := search.NewService(libraryService, catalogService, sourcesService)
 	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start save backup service", err)
+	}
+	cloudClient, err := account.NewClient(account.BaseURL(), accountService.SessionToken)
+	if err != nil {
+		fatal("start cloud saves client", err)
+	}
+	cloudSavesService, err := cloudsaves.NewService(
+		configDir,
+		settingsService.GetSettings,
+		accountService.SessionToken,
+		func(token string) (string, error) {
+			id := accountService.SyncAccountID(token)
+			if id == "" {
+				return "", errors.New("account id is not bound to the session yet")
+			}
+			return id, nil
+		},
+		cloudClient,
+		libraryService,
+		saveBackupService,
+	)
+	if err != nil {
+		fatal("start cloud saves service", err)
 	}
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
@@ -384,6 +453,10 @@ func main() {
 	relocateService, err := relocate.NewService(settingsService, libraryService, downloadManager, installService, updateService)
 	if err != nil {
 		fatal("start relocate service", err)
+	}
+	redistService, err := redist.NewService(libraryService.Find)
+	if err != nil {
+		fatal("start redist service", err)
 	}
 	lanService, err := lan.NewService(settingsService, libraryService)
 	if err != nil {
@@ -429,8 +502,22 @@ func main() {
 	installService.SetOnFinished(updateService.HandleInstallFinished)
 	installService.SetBusyCheck(updateService.Busy)
 	sourcesService.SetOnChanged(updateService.HandleSourcesRefreshed)
+	sourcesService.AddRefreshListener(watchlistService.HandleSourcesRefreshed)
 	libraryService.SetOnSessionEnded(updateService.HandleSessionEnded)
 	libraryService.SetPlayRecorder(playlogService.Record)
+	playlogService.SetTitleResolver(func(gameIDs []string) map[string]string {
+		wanted := make(map[string]struct{}, len(gameIDs))
+		for _, id := range gameIDs {
+			wanted[id] = struct{}{}
+		}
+		titles := make(map[string]string, len(gameIDs))
+		for _, game := range libraryService.GetHistoryGames() {
+			if _, ok := wanted[game.ID]; ok {
+				titles[game.ID] = game.Title
+			}
+		}
+		return titles
+	})
 
 	var extraCompatServices []application.Service
 
@@ -486,6 +573,8 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
+	libraryService.AddSessionWatcher(cloudSavesService)
+	settingsService.Subscribe(cloudSavesService.SettingsChanged)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
 
@@ -580,6 +669,23 @@ func main() {
 	if err != nil {
 		fatal("start overlay service", err)
 	}
+	if err := overlayService.ConfigureScreenshots(current.ScreenshotsEnabled, current.ScreenshotHotkey); err != nil {
+		fatal("configure screenshot hotkey", err)
+	}
+	screenshotService, err := screenshots.NewService(settingsService.GetSettings, runningGames{libraryService})
+	if err != nil {
+		fatal("start screenshots service", err)
+	}
+	screenshotService.SetTitleResolver(func(gameID string) (string, bool) {
+		game, err := libraryService.Find(gameID)
+		if err != nil {
+			return "", false
+		}
+		return game.Title, true
+	})
+	overlayService.SetScreenshotHandler(screenshotService.Capture)
+	screenshotService.SetArmer(overlayService.SetScreenshotsArmed)
+	libraryService.AddSessionWatcher(screenshotService)
 
 	mediaService := media.NewService()
 
@@ -597,6 +703,7 @@ func main() {
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(profileService),
+		application.NewService(playlogService),
 		application.NewService(downloadManager),
 		application.NewService(installService),
 		application.NewService(titlesDictService),
@@ -605,20 +712,25 @@ func main() {
 		application.NewService(searchService),
 		application.NewService(updateService),
 		application.NewService(saveBackupService),
+		application.NewService(cloudSavesService),
 		application.NewService(metadataService),
 		application.NewService(discoveryService),
+		application.NewService(extlibService),
 		application.NewService(discordService),
 		application.NewService(legalService),
 		application.NewService(historyService),
+		application.NewService(watchlistService),
 		application.NewService(compatService),
 		application.NewService(themeService),
 		application.NewService(lanService),
 		application.NewService(relocateService),
+		application.NewService(redistService),
 		// Registered whether or not telemetry ever started: the window that
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),
 		application.NewService(selfupdateService),
 		application.NewService(overlayService),
+		application.NewService(screenshotService),
 		application.NewService(mediaService),
 	}
 	services = append(services, extraServices...)
@@ -650,7 +762,7 @@ func main() {
 		Services: services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware),
+			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware, screenshotService.Middleware),
 		},
 		Mac: application.MacOptions{
 			// С включённым сворачиванием в трей приложение обязано пережить
@@ -931,6 +1043,18 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 
 func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
 	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
+}
+
+type runningGames struct{ *library.Service }
+
+func (g runningGames) RunningGames() []string { return g.GetRunningGames() }
+
+func (g runningGames) InstallDir(gameID string) (string, bool) {
+	game, err := g.Find(gameID)
+	if err != nil || game.InstallDir == "" {
+		return "", false
+	}
+	return game.InstallDir, true
 }
 
 func fatal(stage string, err error) {

@@ -5,3 +5,5 @@ package storage
 import "os"
 
 func replaceFile(from, to string) error { return os.Rename(from, to) }
+
+func openRead(path string) (*os.File, error) { return os.Open(path) }

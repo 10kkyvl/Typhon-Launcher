@@ -2,6 +2,8 @@
   import { tick, untrack } from 'svelte';
   import { ArrowLeft, Search, Star, SlidersHorizontal } from '@lucide/svelte';
   import { t } from '../../i18n';
+  import { collections } from '../../stores/collections';
+  import { libraryGenres, requestLibraryGenres } from '../../stores/genres';
   import { libraryGames, runningGames } from '../../stores/library';
   import { gameArt, requestArt } from '../../stores/metadata';
   import { filterLibrary, type LibraryFilter, type LibrarySort } from '../library';
@@ -13,10 +15,10 @@
   let filter = $state<LibraryFilter>('all');
   let sort = $state<LibrarySort>('title');
   let root: HTMLElement;
-  const filters: LibraryFilter[] = ['all', 'installed', 'favorites', 'uninstalled'];
+  const filters = $derived<LibraryFilter[]>(['all', 'installed', 'favorites', 'uninstalled', 'hidden', ...$collections.map((collection): LibraryFilter => `collection:${collection.id}`)]);
   const sorts: LibrarySort[] = ['title', 'recent', 'playtime', 'added'];
-  const games = $derived(filterLibrary($libraryGames, query, filter, sort));
-  const filterLabels = $derived({ all: $t('bp.allGames'), installed: $t('bp.installed'), favorites: $t('bp.favorites'), uninstalled: $t('bp.notInstalled') });
+  const games = $derived(filterLibrary($libraryGames, query, filter, sort, { collections: $collections, genres: $libraryGenres }));
+  const filterLabels = $derived<Record<string, string>>({ all: $t('bp.allGames'), installed: $t('bp.installed'), favorites: $t('bp.favorites'), uninstalled: $t('bp.notInstalled'), hidden: $t('bp.hidden'), ...Object.fromEntries($collections.map((collection) => [`collection:${collection.id}`, collection.name])) });
   const sortLabels = $derived({ title: $t('bp.sortTitle'), recent: $t('bp.lastPlayed'), playtime: $t('bp.playtime'), added: $t('bp.sortAdded') });
   async function search() {
     const next = await requestText({ title: $t('bp.librarySearch'), initialValue: query, maxLength: 150 });
@@ -24,6 +26,7 @@
     await tick();
     focusControl(root.querySelector<HTMLButtonElement>('[data-bp-focus="library-search"]') ?? undefined);
   }
+  $effect(() => { const ids = $libraryGames.map((game) => game.canonicalGameId ?? ''); untrack(() => void requestLibraryGenres(ids)); });
   $effect(() => { const ids = games.map((game) => game.canonicalGameId ?? ''); untrack(() => requestArt(ids)); });
 </script>
 
@@ -31,7 +34,7 @@
   <div class="bp-page-header"><button class="bp-button" data-bp-focus="library-back" onclick={onback} aria-label={$t('bp.back')}><ArrowLeft /></button><h1>{$t('bp.library')} <span>{games.length}</span></h1></div>
   <div class="bp-actions filters">
     <button class="bp-button" data-bp-focus="library-search" data-bp-default onclick={search}><Search />{query || $t('bp.librarySearch')}</button>
-    <button class="bp-button" data-bp-focus="library-filter" onclick={() => filter = filters[(filters.indexOf(filter) + 1) % filters.length]}><SlidersHorizontal />{filterLabels[filter]}</button>
+    <button class="bp-button" data-bp-focus="library-filter" onclick={() => filter = filters[(filters.indexOf(filter) + 1) % filters.length]}><SlidersHorizontal />{filterLabels[filter] ?? $t('bp.allGames')}</button>
     <button class="bp-button" data-bp-focus="library-sort" onclick={() => sort = sorts[(sorts.indexOf(sort) + 1) % sorts.length]}>{$t('bp.sort')}: {sortLabels[sort]}</button>
     {#if query || filter !== 'all'}<button class="bp-button" data-bp-focus="library-reset" onclick={() => { query = ''; filter = 'all'; }}>{$t('bp.reset')}</button>{/if}
   </div>

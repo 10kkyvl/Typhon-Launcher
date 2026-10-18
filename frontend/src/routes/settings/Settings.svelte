@@ -5,6 +5,8 @@
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import CloudConsentModal from '../../lib/components/CloudConsentModal.svelte';
+  import CloudDisableModal from '../../lib/components/CloudDisableModal.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
@@ -14,6 +16,7 @@
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import { cloudErrorText } from '../../lib/cloudsaves/messages';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -30,11 +33,15 @@
   import { forgetRemote, syncNow } from '../../lib/services/accountSync';
   import { accountSyncReason } from '../../lib/services/accountSyncMessages';
   import { inWails } from '../../lib/services/backend';
+  import { importExternalGames } from '../../lib/services/extlib';
+  import { importErrorText, summarizeImport } from '../../lib/library/extlibSummary';
+  import { cloudForget } from '../../lib/services/cloudsaves';
   import { sendLogsPrompt } from '../../lib/confirm/prompts';
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
   import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
+  import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
   import {
@@ -49,12 +56,13 @@
     type WineStatus,
   } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { cloudStatus, refreshCloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { navigate } from '../../lib/stores/router';
-  import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
+  import { settings, updateSettings, updateSettingsReporting, updateSettingsResult } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
-  import { bytesLabel, relativeDate } from '../../lib/utils/format';
+  import { bytesLabel, bytesSize, relativeDate } from '../../lib/utils/format';
 
   let { tab: initialTab }: { tab?: string } = $props();
 
@@ -106,10 +114,13 @@
 
   const accountReady = $derived($authState === 'authenticated');
   let syncingNow = $state(false);
+  let importing = $state(false);
+  let importDetails = $state<string[]>([]);
   let forgettingRemote = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => void | Promise<void> } | null>(null);
 
   onMount(() => {
+    void refreshCloudStatus();
     const offLogs = onLogUploadStatus((status) => {
       logsStage = status.state;
       if (status.state === 'sending' && (status.totalBytes ?? 0) > 0) {
@@ -208,6 +219,21 @@
     }
   }
 
+  async function runImportExternal() {
+    if (importing) return;
+    importing = true;
+    importDetails = [];
+    try {
+      const report = summarizeImport(await importExternalGames());
+      importDetails = report.details;
+      toast(report.text, report.kind);
+    } catch (err) {
+      toast(importErrorText(err), 'danger');
+    } finally {
+      importing = false;
+    }
+  }
+
   function askForgetRemote() {
     if (forgettingRemote) return;
     pending = { prompt: forgetSyncPrompt(), run: runForgetRemote };
@@ -224,6 +250,75 @@
       toast(accountSyncReason(err, msg('settings.generalSyncForgetFailedToast')), 'danger');
     } finally {
       forgettingRemote = false;
+    }
+  }
+
+  let cloudConsentOpen = $state(false);
+  let cloudDisableOpen = $state(false);
+  let cloudBusy = $state(false);
+  let cloudToggleKey = $state(0);
+  let cloudForgetFailed = $state(false);
+
+  const cloudUsage = $derived.by(() => {
+    const status = $cloudStatus;
+    if (!current?.cloudSaves || !status) return '';
+    if (status.quotaBytes > 0) {
+      return msg('cloudsaves.usage', { used: bytesSize(status.usedBytes), quota: bytesSize(status.quotaBytes) });
+    }
+    return msg('cloudsaves.usageUnknown', { used: bytesSize(status.usedBytes) });
+  });
+
+  function changeCloudSaves(on: boolean) {
+    cloudToggleKey++;
+    if (on) cloudConsentOpen = true;
+    else cloudDisableOpen = true;
+  }
+
+  async function enableCloudSaves() {
+    if (cloudBusy) return;
+    cloudBusy = true;
+    try {
+      if (await updateSettingsResult({ cloudSaves: true })) {
+        cloudConsentOpen = false;
+        cloudForgetFailed = false;
+        await refreshCloudStatus();
+      }
+    } finally {
+      cloudBusy = false;
+    }
+  }
+
+  async function runCloudForget() {
+    cloudForgetFailed = false;
+    try {
+      await cloudForget();
+    } catch (err) {
+      cloudForgetFailed = true;
+      toast(cloudErrorText(err, msg('cloudsaves.forgetFailed')), 'danger');
+    }
+    await refreshCloudStatus();
+  }
+
+  async function disableCloudSaves(forget: boolean) {
+    if (cloudBusy) return;
+    cloudBusy = true;
+    try {
+      if (!(await updateSettingsResult({ cloudSaves: false }))) return;
+      cloudDisableOpen = false;
+      if (forget) await runCloudForget();
+      else await refreshCloudStatus();
+    } finally {
+      cloudBusy = false;
+    }
+  }
+
+  async function retryCloudForget() {
+    if (cloudBusy) return;
+    cloudBusy = true;
+    try {
+      await runCloudForget();
+    } finally {
+      cloudBusy = false;
     }
   }
 
@@ -294,6 +389,22 @@
       overlayError = reason ? msg('settings.overlaySaveError', { reason }) : msg('settings.overlaySaveErrorPlain');
     });
     await loadOverlayStatus();
+  }
+
+  const screenshotHotkeyOptions = SCREENSHOT_HOTKEYS.map((key) => ({ id: key, label: key }));
+  const screenshotHotkey = $derived.by(() => {
+    const id = current?.screenshotHotkey ?? SCREENSHOT_HOTKEYS[0];
+    return screenshotHotkeyOptions.some((o) => o.id === id) ? id : SCREENSHOT_HOTKEYS[0];
+  });
+
+  async function setScreenshots(patch: Partial<Settings>) {
+    await updateSettingsReporting(patch, (err) => {
+      const reason = overlayReason(err);
+      toast(
+        reason ? msg('settings.screenshotsSaveError', { reason }) : msg('settings.screenshotsSaveErrorPlain'),
+        'danger',
+      );
+    });
   }
 
   onMount(() => {
@@ -457,6 +568,29 @@
           </div>
           <div class="row">
             <div class="row-text">
+              <span class="row-label">{msg('settings.screenshotsEnabledLabel')}</span>
+              <span class="row-sub">{msg('settings.screenshotsEnabledSub')}</span>
+            </div>
+            <Toggle
+              checked={current?.screenshotsEnabled ?? true}
+              label={msg('settings.screenshotsEnabledLabel')}
+              onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.screenshotHotkeyLabel')}</span>
+              <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
+            </div>
+            <Select
+              value={screenshotHotkey}
+              width="22rem"
+              options={screenshotHotkeyOptions}
+              onchange={(id) => setScreenshots({ screenshotHotkey: id })}
+            />
+          </div>
+          <div class="row">
+            <div class="row-text">
               <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
               <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
               {#if overlayError}<span class="row-sub row-error" role="alert">{overlayError}</span>{/if}
@@ -506,6 +640,30 @@
             <span class="row-sub">
               {msg('settings.generalLibraryEmptyHint')}
             </span>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.extlibLabel')}</span>
+              <span class="row-sub">{msg('settings.extlibSub')}</span>
+            </div>
+            {#if appInfo?.platform === 'windows'}
+              <Button size="sm" disabled={importing} onclick={runImportExternal}>
+                <RefreshCw size="1.5rem" strokeWidth={1.8} />
+                {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+              </Button>
+            {:else}
+              <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
+            {/if}
+          </div>
+          {#if importDetails.length > 0}
+            <details class="import-details" open>
+              <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
+              <ul>
+                {#each importDetails as line, index (index)}
+                  <li class="row-sub">{line}</li>
+                {/each}
+              </ul>
+            </details>
           {/if}
           <LibraryLocationRow />
         </div>
@@ -837,6 +995,33 @@
               />
             </div>
           {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('cloudsaves.settingsLabel')}</span>
+              <span class="row-sub">{msg('cloudsaves.settingsSub')}</span>
+              {#if !accountReady}
+                <span class="row-sub">{msg('cloudsaves.settingsNeedsAccount')}</span>
+              {:else if cloudUsage}
+                <span class="row-sub">{cloudUsage}{$cloudStatus?.pending ? ` · ${msg('cloudsaves.pending')}` : ''}</span>
+              {/if}
+              {#if cloudForgetFailed && !current?.cloudSaves}
+                <span class="row-sub">{msg('cloudsaves.retryForgetHint')}</span>
+              {/if}
+            </div>
+            {#if cloudForgetFailed && !current?.cloudSaves}
+              <Button size="sm" variant="danger" disabled={cloudBusy || !accountReady} onclick={retryCloudForget}>
+                {msg('cloudsaves.retryForget')}
+              </Button>
+            {/if}
+            {#key cloudToggleKey}
+              <Toggle
+                checked={current?.cloudSaves ?? false}
+                label={msg('cloudsaves.settingsToggle')}
+                disabled={!accountReady && !current?.cloudSaves}
+                onchange={changeCloudSaves}
+              />
+            {/key}
+          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
@@ -1179,6 +1364,18 @@
     : ''}
 />
 
+<CloudConsentModal
+  bind:open={cloudConsentOpen}
+  busy={cloudBusy}
+  onenable={enableCloudSaves}
+  onpolicy={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
+/>
+<CloudDisableModal
+  bind:open={cloudDisableOpen}
+  busy={cloudBusy}
+  ondelete={() => disableCloudSaves(true)}
+  onkeep={() => disableCloudSaves(false)}
+/>
 <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
 <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
 <SentDataModal bind:open={sentDataOpen} />
@@ -1243,6 +1440,22 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
+  }
+
+  .import-details {
+    padding: var(--space-3) 0;
+  }
+
+  .import-details summary {
+    cursor: pointer;
+  }
+
+  .import-details ul {
+    margin: var(--space-2) 0 0;
+    padding-left: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 
   .row-error {

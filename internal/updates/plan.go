@@ -54,6 +54,9 @@ func (s *Service) strategyFor(kind StrategyType) strategy {
 // PreparePlan resolves the concrete update path, including a torrent recheck of
 // the existing files when that can cut the download down.
 func (s *Service) PreparePlan(gameID string) error {
+	if s.isExternal(gameID) {
+		return errExternalGame
+	}
 	current, ok := s.snapshot(gameID)
 	if !ok {
 		return errNotTracked
@@ -102,6 +105,9 @@ func (s *Service) PreparePlan(gameID string) error {
 }
 
 func (s *Service) planInputFor(ctx context.Context, gameID string) (planInput, error) {
+	if s.isExternal(gameID) {
+		return planInput{}, errExternalGame
+	}
 	current, ok := s.snapshot(gameID)
 	if !ok {
 		return planInput{}, errNotTracked

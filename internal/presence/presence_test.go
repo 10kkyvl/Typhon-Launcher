@@ -163,12 +163,27 @@ func TestTitleFallbackAndClamp(t *testing.T) {
 
 func TestSessionStoppedClears(t *testing.T) {
 	w, target := newWatcher(t, noCover)
+	w.SessionStarted(library.Game{ID: "1", Title: "Game"})
 	w.SessionStopped("1")
 	if target.cleared != 1 {
 		t.Fatalf("Clear вызван %d раз", target.cleared)
 	}
-	if len(target.shown) != 0 {
+	if len(target.shown) != 1 {
 		t.Fatalf("лишние показы: %d", len(target.shown))
+	}
+}
+
+func TestSessionStoppedKeepsOtherGame(t *testing.T) {
+	w, target := newWatcher(t, noCover)
+	w.SessionStarted(library.Game{ID: "a", Title: "First"})
+	w.SessionStarted(library.Game{ID: "b", Title: "Second"})
+	w.SessionStopped("a")
+	if target.cleared != 0 {
+		t.Fatalf("остановка не показанной игры стёрла карточку: cleared=%d", target.cleared)
+	}
+	w.SessionStopped("b")
+	if target.cleared != 1 {
+		t.Fatalf("остановка показанной игры: cleared=%d", target.cleared)
 	}
 }
 
@@ -184,4 +199,49 @@ func TestApplyPassesToggle(t *testing.T) {
 func TestWatcherSatisfiesLibraryHook(t *testing.T) {
 	w, _ := newWatcher(t, noCover)
 	var _ library.SessionWatcher = w
+}
+
+func TestHidePresenceSkipsSession(t *testing.T) {
+	w, target := newWatcher(t, noCover)
+	w.SessionStarted(library.Game{ID: "1", Title: "Secret", HidePresence: true})
+	if len(target.shown) != 0 {
+		t.Fatalf("скрытая игра показана: %+v", target.shown)
+	}
+}
+
+func TestSessionChangedFollowsFlag(t *testing.T) {
+	w, target := newWatcher(t, noCover)
+	startedAt := time.Unix(1600000000, 0)
+	w.SessionStarted(library.Game{ID: "1", Title: "Secret"})
+	w.SessionChanged(library.Game{ID: "1", Title: "Secret", HidePresence: true}, startedAt)
+	if target.cleared != 1 || len(target.shown) != 1 {
+		t.Fatalf("выключение: cleared=%d shown=%d", target.cleared, len(target.shown))
+	}
+	w.SessionChanged(library.Game{ID: "1", Title: "Secret"}, startedAt)
+	if len(target.shown) != 2 || !target.shown[1].StartedAt.Equal(startedAt) || target.shown[1].Details != "Secret" {
+		t.Fatalf("включение: %+v", target.shown)
+	}
+}
+
+func TestSessionChangedLeavesOtherGameCard(t *testing.T) {
+	startedAt := time.Unix(1600000000, 0)
+	w, target := newWatcher(t, noCover)
+	w.SessionStarted(library.Game{ID: "b", Title: "Shown"})
+	w.SessionChanged(library.Game{ID: "a", Title: "Other", HidePresence: true}, startedAt)
+	if target.cleared != 0 {
+		t.Fatalf("скрытие другой игры стёрло карточку: cleared=%d", target.cleared)
+	}
+	w.SessionChanged(library.Game{ID: "a", Title: "Other"}, startedAt)
+	if len(target.shown) != 1 {
+		t.Fatalf("включение другой игры вытеснило карточку: %+v", target.shown)
+	}
+	w.SessionChanged(library.Game{ID: "b", Title: "Shown", HidePresence: true}, startedAt)
+	if target.cleared != 1 {
+		t.Fatalf("скрытие показанной игры: cleared=%d", target.cleared)
+	}
+}
+
+func TestWatcherSatisfiesChangeHook(t *testing.T) {
+	w, _ := newWatcher(t, noCover)
+	var _ library.SessionChangeWatcher = w
 }

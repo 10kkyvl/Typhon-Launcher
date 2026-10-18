@@ -58,11 +58,12 @@ func TestMoveGameIntoExistingEmptyDirectory(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	g, old := addTestGame(t, lib)
-	target := filepath.Join(filepath.Dir(old), "existing")
-	if err := os.Mkdir(target, 0700); err != nil {
+	parent := filepath.Join(filepath.Dir(old), "existing")
+	target := filepath.Join(parent, filepath.Base(old))
+	if err := os.MkdirAll(target, 0700); err != nil {
 		t.Fatal(err)
 	}
-	job, err := s.MoveGame(g.ID, target)
+	job, err := s.MoveGame(g.ID, parent)
 	if err != nil {
 		t.Fatal(err)
 	}

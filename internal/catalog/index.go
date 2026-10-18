@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -22,17 +23,34 @@ type index struct {
 	byAlias    map[string][]int
 	byToken    map[string][]int
 	byExternal map[string]int
+
+	byServer       map[string][]int
+	byIGDB         map[string][]int
+	bySteam        map[string][]int
+	byGOG          map[string][]int
+	byIdentity     map[string][]int
+	byLocal        map[string][]int
+	redirectGroup  map[string][]int
+	redirectTarget map[int]int
 }
 
 func buildIndex(games []Game) *index {
 	idx := &index{
-		games:      games,
-		entries:    make([]entry, 0, len(games)),
-		byID:       make(map[string]int, len(games)),
-		byTitle:    make(map[string][]int, len(games)),
-		byAlias:    map[string][]int{},
-		byToken:    map[string][]int{},
-		byExternal: map[string]int{},
+		games:          games,
+		entries:        make([]entry, 0, len(games)),
+		byID:           make(map[string]int, len(games)),
+		byTitle:        make(map[string][]int, len(games)),
+		byAlias:        map[string][]int{},
+		byToken:        map[string][]int{},
+		byExternal:     map[string]int{},
+		byServer:       make(map[string][]int, len(games)),
+		byIGDB:         make(map[string][]int, len(games)),
+		bySteam:        make(map[string][]int, len(games)),
+		byGOG:          map[string][]int{},
+		byIdentity:     make(map[string][]int, len(games)),
+		byLocal:        map[string][]int{},
+		redirectGroup:  map[string][]int{},
+		redirectTarget: map[int]int{},
 	}
 	for _, g := range games {
 		idx.add(g)
@@ -74,16 +92,130 @@ func (idx *index) registerAt(pos int, g Game) {
 	idx.entries[pos] = e
 	idx.byID[g.ID] = pos
 	if normalized != "" {
-		idx.byTitle[normalized] = append(idx.byTitle[normalized], pos)
+		addPosting(idx.byTitle, normalized, pos)
 	}
 	for _, alias := range e.aliases {
-		idx.byAlias[alias] = append(idx.byAlias[alias], pos)
+		addPosting(idx.byAlias, alias, pos)
 	}
 	for _, token := range e.tokens {
-		idx.byToken[token] = append(idx.byToken[token], pos)
+		addPosting(idx.byToken, token, pos)
 	}
 	for _, key := range externalKeys(g.ExternalIDs) {
-		idx.byExternal[key] = pos
+		if current, ok := idx.byExternal[key]; !ok || pos > current {
+			idx.byExternal[key] = pos
+		}
+	}
+	idx.registerRemote(pos, g)
+}
+
+// The remote identity maps hold every position sharing a key in ascending
+// order, so the winner of a duplicate key does not depend on the order the
+// records were registered in: the first position for IGDB and Steam ids, the
+// last one for ServerID.
+func (idx *index) registerRemote(pos int, g Game) {
+	if g.ServerID != "" {
+		addPosting(idx.byServer, g.ServerID, pos)
+	}
+	if g.ExternalIDs.IGDB != "" {
+		addPosting(idx.byIGDB, strings.ToLower(g.ExternalIDs.IGDB), pos)
+	}
+	if g.ExternalIDs.Steam != "" {
+		addPosting(idx.bySteam, strings.ToLower(g.ExternalIDs.Steam), pos)
+	}
+	if g.ExternalIDs.GOG != "" {
+		addPosting(idx.byGOG, strings.ToLower(g.ExternalIDs.GOG), pos)
+	}
+	forEachIdentityKey(g, func(key string) { addPosting(idx.byIdentity, key, pos) })
+	forEachLocalIdentityKey(g.LocalExternalIDs, func(key string) { addPosting(idx.byLocal, key, pos) })
+}
+
+func (idx *index) unregisterRemote(pos int, g Game) {
+	if g.ServerID != "" {
+		removePosting(idx.byServer, g.ServerID, pos)
+	}
+	if g.ExternalIDs.IGDB != "" {
+		removePosting(idx.byIGDB, strings.ToLower(g.ExternalIDs.IGDB), pos)
+	}
+	if g.ExternalIDs.Steam != "" {
+		removePosting(idx.bySteam, strings.ToLower(g.ExternalIDs.Steam), pos)
+	}
+	if g.ExternalIDs.GOG != "" {
+		removePosting(idx.byGOG, strings.ToLower(g.ExternalIDs.GOG), pos)
+	}
+	forEachIdentityKey(g, func(key string) { removePosting(idx.byIdentity, key, pos) })
+	forEachLocalIdentityKey(g.LocalExternalIDs, func(key string) { removePosting(idx.byLocal, key, pos) })
+}
+
+// matchRemote finds the saved record a remote page item refers to.
+func (idx *index) matchRemote(game Game) int {
+	if game.ServerID != "" {
+		if list := idx.byServer[game.ServerID]; len(list) > 0 {
+			return list[len(list)-1]
+		}
+	}
+	if game.ExternalIDs.IGDB != "" {
+		if list := idx.byIGDB[strings.ToLower(game.ExternalIDs.IGDB)]; len(list) > 0 {
+			return list[0]
+		}
+	}
+	// A Steam-only server row may reuse an existing local Steam record. Once
+	// the row has a confirmed IGDB id, a matching Steam id can belong to a
+	// different local record and must be reconciled as a provider claim.
+	if game.ExternalIDs.IGDB == "" && game.ExternalIDs.Steam != "" {
+		if list := idx.bySteam[strings.ToLower(game.ExternalIDs.Steam)]; len(list) > 0 {
+			return list[0]
+		}
+	}
+	return -1
+}
+
+func addPosting(m map[string][]int, key string, pos int) {
+	list := m[key]
+	at, found := slices.BinarySearch(list, pos)
+	if found {
+		return
+	}
+	m[key] = slices.Insert(list, at, pos)
+}
+
+func removePosting(m map[string][]int, key string, pos int) {
+	list := m[key]
+	at, found := slices.BinarySearch(list, pos)
+	if !found {
+		return
+	}
+	if len(list) == 1 {
+		delete(m, key)
+		return
+	}
+	m[key] = slices.Delete(slices.Clone(list), at, at+1)
+}
+
+func forEachIdentityKey(game Game, fn func(key string)) {
+	if id := game.ExternalIDs.IGDB; id != "" {
+		fn("igdb:" + strings.ToLower(id))
+	}
+	if id := game.ExternalIDs.Steam; id != "" {
+		fn("steam:" + strings.ToLower(id))
+	}
+	for _, linked := range game.ProviderLinks["igdb"] {
+		if linked != "" {
+			fn("igdb:" + strings.ToLower(linked))
+		}
+	}
+	for _, linked := range game.ProviderLinks["steam"] {
+		if linked != "" {
+			fn("steam:" + strings.ToLower(linked))
+		}
+	}
+}
+
+func forEachLocalIdentityKey(ids ExternalIDs, fn func(key string)) {
+	if ids.IGDB != "" {
+		fn("igdb:" + strings.ToLower(ids.IGDB))
+	}
+	if ids.Steam != "" {
+		fn("steam:" + strings.ToLower(ids.Steam))
 	}
 }
 
@@ -95,6 +227,29 @@ func (idx *index) registerAt(pos int, g Game) {
 func (idx *index) update(pos int, old Game) {
 	idx.removePostings(pos, old, idx.entries[pos])
 	idx.registerAt(pos, idx.games[pos])
+	if target, redirected := idx.redirectTarget[pos]; redirected {
+		idx.entries[pos].matchable = false
+		idx.byID[idx.games[pos].ID] = target
+	}
+}
+
+// settleExternal re-points a provider key at the highest position still
+// holding that id, which is what a full rebuild would leave there.
+func (idx *index) settleExternal(key string) {
+	var holders []int
+	switch {
+	case strings.HasPrefix(key, "igdb:"):
+		holders = idx.byIGDB[strings.TrimPrefix(key, "igdb:")]
+	case strings.HasPrefix(key, "steam:"):
+		holders = idx.bySteam[strings.TrimPrefix(key, "steam:")]
+	case strings.HasPrefix(key, "gog:"):
+		holders = idx.byGOG[strings.TrimPrefix(key, "gog:")]
+	}
+	if len(holders) == 0 {
+		delete(idx.byExternal, key)
+		return
+	}
+	idx.byExternal[key] = holders[len(holders)-1]
 }
 
 func (idx *index) removePostings(pos int, g Game, e entry) {
@@ -116,9 +271,10 @@ func (idx *index) removePostings(pos int, g Game, e entry) {
 			delete(idx.byToken, token)
 		}
 	}
+	idx.unregisterRemote(pos, g)
 	for _, key := range externalKeys(g.ExternalIDs) {
 		if idx.byExternal[key] == pos {
-			delete(idx.byExternal, key)
+			idx.settleExternal(key)
 		}
 	}
 }

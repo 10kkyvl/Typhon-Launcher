@@ -61,6 +61,11 @@ const (
 	OverlayHotkeyShiftF2     = "Shift+F2"
 	OverlayHotkeyCtrlShiftO  = "Ctrl+Shift+O"
 
+	ScreenshotHotkeyF12      = "F12"
+	ScreenshotHotkeyF11      = "F11"
+	ScreenshotHotkeyShiftF12 = "Shift+F12"
+	ScreenshotHotkeyCtrlF12  = "Ctrl+F12"
+
 	maxNetworkInterfaceLen = 256
 	maxProxyHostLen        = 253
 	maxProxyLabelLen       = 63
@@ -109,10 +114,16 @@ var (
 	ErrProxyUsernameInvalid     = uierr.New("settings.proxy_username_invalid", "недопустимое имя пользователя прокси")
 
 	ErrOverlayHotkeyInvalid = uierr.New("settings.overlay_hotkey_invalid", "недопустимая клавиша оверлея")
+
+	ErrScreenshotHotkeyInvalid = uierr.New("settings.screenshot_hotkey_invalid", "недопустимая клавиша снимка экрана")
 )
 
 func OverlayHotkeys() []string {
 	return []string{OverlayHotkeyAltBacktick, OverlayHotkeyShiftF1, OverlayHotkeyShiftF2, OverlayHotkeyCtrlShiftO}
+}
+
+func ScreenshotHotkeys() []string {
+	return []string{ScreenshotHotkeyF12, ScreenshotHotkeyF11, ScreenshotHotkeyShiftF12, ScreenshotHotkeyCtrlF12}
 }
 
 // ErrCodeConsentSaveFailed marks a consent answer that could not be written.
@@ -162,6 +173,8 @@ type Settings struct {
 	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
 	SaveBackupLimit        int  `json:"saveBackupLimit"`
 
+	CloudSaves bool `json:"cloudSaves"`
+
 	LANSharing bool `json:"lanSharing"`
 
 	NetworkMode      string `json:"networkMode"`
@@ -173,6 +186,9 @@ type Settings struct {
 
 	OverlayEnabled bool   `json:"overlayEnabled"`
 	OverlayHotkey  string `json:"overlayHotkey"`
+
+	ScreenshotsEnabled bool   `json:"screenshotsEnabled"`
+	ScreenshotHotkey   string `json:"screenshotHotkey"`
 
 	PresenceStatus   string `json:"presenceStatus"`
 	PresenceAutoAway bool   `json:"presenceAutoAway"`
@@ -254,6 +270,8 @@ func Defaults() Settings {
 		SaveBackupAfterSession: true,
 		SaveBackupLimit:        DefaultSaveBackupLimit,
 
+		CloudSaves: false,
+
 		LANSharing: false,
 
 		NetworkMode: NetworkDirect,
@@ -261,6 +279,9 @@ func Defaults() Settings {
 
 		OverlayEnabled: true,
 		OverlayHotkey:  OverlayHotkeyAltBacktick,
+
+		ScreenshotsEnabled: true,
+		ScreenshotHotkey:   ScreenshotHotkeyCtrlF12,
 
 		PresenceStatus:   PresenceOnline,
 		PresenceAutoAway: true,
@@ -480,6 +501,9 @@ func NormalizeProxyUsername(name string) (string, error) {
 func sanitizeOverlay(s Settings) error {
 	if !slices.Contains(OverlayHotkeys(), s.OverlayHotkey) {
 		return fmt.Errorf("%w: %q", ErrOverlayHotkeyInvalid, s.OverlayHotkey)
+	}
+	if !slices.Contains(ScreenshotHotkeys(), s.ScreenshotHotkey) {
+		return fmt.Errorf("%w: %q", ErrScreenshotHotkeyInvalid, s.ScreenshotHotkey)
 	}
 	return nil
 }

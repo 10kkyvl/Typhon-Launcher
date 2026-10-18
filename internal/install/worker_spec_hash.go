@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
+	"typhon/internal/storage"
 	"typhon/internal/uierr"
 )
 
@@ -70,7 +70,7 @@ func decodeWorkerSpecDigest(digest string) ([]byte, error) {
 }
 
 func readWorkerSpecBytes(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := storage.OpenRead(path)
 	if err != nil {
 		return nil, fmt.Errorf("read worker spec %s: %w", path, err)
 	}

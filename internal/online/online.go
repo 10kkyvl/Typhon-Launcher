@@ -212,6 +212,9 @@ func (s *Service) Status() string {
 
 //wails:ignore
 func (s *Service) SessionStarted(game library.Game) {
+	if game.Hidden {
+		return
+	}
 	resolved := s.resolveIGDBID(game.CanonicalGameID)
 	if !igdbIDPattern.MatchString(resolved) {
 		resolved = ""

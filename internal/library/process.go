@@ -24,6 +24,11 @@ type launch struct {
 	// windows Steam. Разрешено не значит «поедет»: если общего бутыля на
 	// машине нет, игра останется в собственном.
 	shared bool
+
+	// elevated — пользователь потребовал запуск от имени администратора.
+	// Учитывает только Windows-стартер; на остальных платформах флаг
+	// игнорируется.
+	elevated bool
 }
 
 // gameStarter получает контекст жизни сервиса: запуск игры на некоторых
@@ -39,7 +44,9 @@ func (p *execProcess) pid() int { return p.cmd.Process.Pid }
 
 func (p *execProcess) wait() error { return p.cmd.Wait() }
 
-func (p *execProcess) kill() error { return p.cmd.Process.Kill() }
+func (p *execProcess) kill() error {
+	return killProcessTree(p.cmd.Process.Pid, p.cmd.Process.Kill)
+}
 
 // execStarter не пользуется контекстом намеренно: игра переживает лаунчер,
 // и завершение лаунчера убивать её не должно.

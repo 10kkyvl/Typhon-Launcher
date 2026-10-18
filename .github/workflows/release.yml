@@ -561,11 +561,17 @@ jobs:
             printf 'Windows 10+ x64. Download `typhon-amd64-installer.exe` below.\n'
             printf 'An installed launcher updates itself.\n\n'
             printf 'macOS 13+ Apple Silicon: `typhon-darwin-arm64.zip`. Для Windows-игр нужен CrossOver.\n'
-            printf 'macOS 13+ Apple Silicon: download `typhon-darwin-arm64.zip`. Windows games require CrossOver.\n'
+            printf 'macOS 13+ Apple Silicon: download `typhon-darwin-arm64.zip`. Windows games require CrossOver.\n\n'
+            printf 'Контрольные суммы обоих файлов — в `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
+            printf 'Checksums for both files are in `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
           } > release-body.md
+
+          (cd bin && sha256sum typhon-amd64-installer.exe typhon-darwin-arm64.zip > SHA256SUMS)
+          (cd bin && sha256sum -c SHA256SUMS)
 
           gh release create "$RELEASE_TAG" \
             bin/typhon-amd64-installer.exe \
             bin/typhon-darwin-arm64.zip \
+            bin/SHA256SUMS \
             --title "Typhon $RELEASE_VERSION" \
             --notes-file release-body.md

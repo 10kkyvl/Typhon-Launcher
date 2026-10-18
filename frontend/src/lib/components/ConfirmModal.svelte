@@ -35,7 +35,7 @@
   {/if}
   {#snippet footer()}
     <Button disabled={running} onclick={onclose}>{prompt.cancel ?? msg('common.cancel')}</Button>
-    <Button variant="danger" disabled={running} onclick={confirm}>
+    <Button variant={prompt.tone ?? 'danger'} disabled={running} onclick={confirm}>
       {running ? (prompt.busy ?? prompt.confirm) : prompt.confirm}
     </Button>
   {/snippet}

@@ -309,6 +309,18 @@ export const settings = {
   'settings.networkStatusChecking': 'Проверка…',
   'settings.networkStatusDown': 'Не работает',
   'settings.networkFallbackError': 'Не удалось выполнить действие с сетевыми настройками',
+  'settings.extlibLabel': 'Найти игры Steam, GOG и Epic',
+  'settings.extlibWindowsOnly': 'Доступно только в Windows',
+  'settings.extlibSub': 'Добавить в библиотеку игры, установленные через другие лаунчеры. Файлы не копируются и не изменяются',
+  'settings.extlibRunning': 'Ищем…',
+  'settings.extlibDone': 'Добавлено {added}, обновлено {updated}',
+  'settings.extlibNoneFound': 'Лаунчеры Steam, GOG Galaxy и Epic не найдены',
+  'settings.extlibHasDetails': 'Есть замечания, они ниже',
+  'settings.extlibFailed': 'Не удалось найти игры других лаунчеров',
+  'settings.extlibDetailsTitle': 'Что не удалось добавить',
+  'settings.extlibDetailError': '{provider}: {error}',
+  'settings.extlibDetailSkipped': '{provider}, «{title}»: {reason}',
+  'settings.extlibDetailMetadata': 'Описание и обложки: {error}',
 } as const;
 
 export type SettingsKey = keyof typeof settings;

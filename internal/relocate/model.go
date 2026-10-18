@@ -58,6 +58,9 @@ type Job struct {
 	StartedAt   time.Time `json:"startedAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 	Error       string    `json:"error,omitempty"`
+	FailedAt    Stage     `json:"failedAt,omitempty"`
+
+	RecoveryAttempts int `json:"recoveryAttempts,omitempty"`
 }
 
 func (j Job) clone() Job {
@@ -79,6 +82,7 @@ var (
 	ErrTargetIsRoot       = uierr.New("relocate.target_is_drive_root", "целевой каталог не может быть корнем диска")
 	ErrTargetInsideSource = uierr.New("relocate.target_inside_source", "целевой каталог не может быть внутри исходного")
 	ErrSourceInsideTarget = uierr.New("relocate.source_inside_target", "исходный каталог не может быть внутри целевого")
+	ErrSameLocation       = uierr.New("relocate.same_location", "игра уже лежит в этой папке")
 	ErrTargetNotEmpty     = uierr.New("relocate.target_not_empty", "целевой каталог не пуст или недоступен")
 	ErrFreeSpaceUnknown   = uierr.New("relocate.free_space_unknown", "не удалось определить свободное место на диске")
 	ErrNotEnoughSpace     = uierr.New("relocate.not_enough_space", "недостаточно свободного места на диске")
@@ -86,8 +90,18 @@ var (
 	ErrJobNotFound        = uierr.New("relocate.job_not_found", "операция переноса не найдена")
 	ErrGameNotFound       = uierr.New("relocate.game_not_found", "игра не найдена")
 	ErrAmbiguousRecovery  = uierr.New("relocate.ambiguous_recovery", "восстановление переноса неоднозначно, требуется вмешательство пользователя")
+	ErrExternalGame       = uierr.New("relocate.external_game", "игра установлена другим лаунчером: перенесите её средствами этого лаунчера")
+	ErrSourceChanged      = uierr.New("relocate.source_changed", "исходная папка изменилась после сбоя переноса; она сохранена, перенос не завершён")
+	ErrSourceUnverifiable = uierr.New("relocate.source_unverifiable", "не удалось убедиться, что исходная папка не изменилась; она сохранена, перенос не завершён")
+	ErrSourceDamaged      = uierr.New("relocate.source_damaged", "исходная папка повреждена или недоступна; обе папки сохранены, перенос не завершён")
+	ErrGameRemoved        = uierr.New("relocate.game_removed", "игра удалена из библиотеки, перенос не завершён; файлы не тронуты")
+	ErrRetriesExhausted   = uierr.New("relocate.retries_exhausted", "перенос не удалось завершить после нескольких попыток")
 	ErrMoveInProgress     = uierr.New("relocate.already_running", "перенос уже выполняется")
 )
+
+// maxRecoveryAttempts bounds how many startups retry a failed repoint or
+// cleanup before the job is surfaced as failed for good.
+const maxRecoveryAttempts = 3
 
 // spaceMarginPercent is the headroom required on top of the measured
 // transfer size before a move is allowed to start.

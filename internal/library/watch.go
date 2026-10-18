@@ -34,6 +34,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		s.mu.Lock()
 		s.ctx = ctx
 		s.mu.Unlock()
+		s.startSteamSync(ctx)
+		s.startShortcutRefresh(ctx)
 		return nil
 	}
 
@@ -46,6 +48,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 
 	s.wg.Add(1)
 	go s.loop(runCtx)
+	s.startSteamSync(runCtx)
+	s.startShortcutRefresh(runCtx)
 	return nil
 }
 
@@ -188,6 +192,17 @@ func (s *Service) detectTick(ctx context.Context) {
 	if len(startedGames) > 0 {
 		watchersSnap = s.watchers
 	}
+	deferred := toClose[:0]
+	for _, id := range toClose {
+		// Лаунчер сам запускал процесс: код выхода придёт из wait() через
+		// миллисекунды после его смерти, и закрытие без него потеряло бы вылет.
+		if sess := s.running[id]; sess.process != nil && sess.exit == nil && !sess.closeDeferred {
+			sess.closeDeferred = true
+			continue
+		}
+		deferred = append(deferred, id)
+	}
+	toClose = deferred
 	closeStarts := make(map[string]time.Time, len(toClose))
 	for _, id := range toClose {
 		closeStarts[id] = s.running[id].startedAt

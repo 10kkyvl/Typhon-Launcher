@@ -19,6 +19,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/procs"
 	"typhon/internal/settings"
+	"typhon/internal/steamlink"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
@@ -38,6 +39,7 @@ type Game struct {
 	// работают только когда игра и Steam живут в одном wine-префиксе. Явный
 	// false — единственный способ потребовать изолированный бутыль.
 	RequiresSteam     *bool      `json:"requiresSteam,omitempty"`
+	RunAsAdmin        bool       `json:"runAsAdmin,omitempty"`
 	InstallDir        string     `json:"installDir"`
 	Cover             string     `json:"cover"`
 	Version           string     `json:"version"`
@@ -68,6 +70,16 @@ type Game struct {
 	FavoriteAt        *time.Time `json:"favoriteAt,omitempty"`
 	Status            string     `json:"status,omitempty"`
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
+	Tags              []string   `json:"tags,omitempty"`
+	Hidden            bool       `json:"hidden,omitempty"`
+	HidePresence      bool       `json:"hidePresence,omitempty"`
+	External          *External  `json:"external,omitempty"`
+}
+
+type External struct {
+	Provider  string `json:"provider"`
+	AppID     string `json:"appId"`
+	LaunchURI string `json:"launchUri,omitempty"`
 }
 
 type Uninstall struct {
@@ -89,6 +101,13 @@ func (g Game) UsesSharedBottle() bool { return g.RequiresSteam == nil || *g.Requ
 const (
 	SourceManaged    = "managed"
 	SourceDiscovered = "discovered"
+	SourceExternal   = "external"
+)
+
+const (
+	ProviderSteam = "steam"
+	ProviderGOG   = "gog"
+	ProviderEpic  = "epic"
 )
 
 type InstalledGame struct {
@@ -155,16 +174,19 @@ var ErrTooManyFavorites = uierr.New("library.too_many_favorites", "favorites lim
 var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status")
 
 type Service struct {
-	starting      map[string]context.CancelFunc
-	sameCanonical func(string, string) bool
-	mu            sync.Mutex
-	path          string
-	excludedPath  string
-	games         []Game
-	archived      []Game
-	excluded      []string
-	running       map[string]*session
-	onSession     func(gameID string, seconds int64)
+	starting        map[string]context.CancelFunc
+	relocating      map[string]struct{}
+	sameCanonical   func(string, string) bool
+	mu              sync.Mutex
+	path            string
+	excludedPath    string
+	collectionsPath string
+	collections     []Collection
+	games           []Game
+	archived        []Game
+	excluded        []string
+	running         map[string]*session
+	onSession       func(gameID string, seconds int64)
 	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.
@@ -184,9 +206,14 @@ type Service struct {
 	closed        bool
 	watching      bool
 	shortcuts     shortcutBackend
+	steam         steamBackend
+	steamArt      func(canonicalID string) (steamlink.Art, error)
+	steamSync     bool
 	launcherPath  func() (string, error)
+	launcherLinks func(ctx context.Context) error
 	saveRoots     func() ([]platform.SaveRoot, error)
 	start         gameStarter
+	openURI       func(uri string) error
 	// prepare готовит окружение запуска. Поле, а не прямой вызов: на macOS
 	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
 	// возможность её подменить, иначе прогон оставляет после себя
@@ -197,6 +224,10 @@ type Service struct {
 type SessionWatcher interface {
 	SessionStarted(game Game)
 	SessionStopped(gameID string)
+}
+
+type SessionChangeWatcher interface {
+	SessionChanged(game Game, startedAt time.Time)
 }
 
 type session struct {
@@ -210,6 +241,8 @@ type session struct {
 	// журнала совместимости это разные события, а по одной длительности их
 	// не различить.
 	stoppedByUser bool
+	exit          *exitInfo
+	closeDeferred bool
 }
 
 func NewService() (*Service, error) {
@@ -220,7 +253,12 @@ func NewService() (*Service, error) {
 	if dir == "" {
 		return nil, errors.New("config dir unavailable")
 	}
-	return NewServiceAt(filepath.Join(dir, "library.json"))
+	s, err := NewServiceAt(filepath.Join(dir, "library.json"))
+	if err != nil {
+		return nil, err
+	}
+	s.launcherLinks = refreshLauncherLinks
+	return s, nil
 }
 
 //wails:ignore
@@ -233,23 +271,30 @@ func NewServiceAt(path string) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		path:          path,
-		excludedPath:  excludedPath,
-		running:       map[string]*session{},
-		scan:          procs.List,
-		watchInterval: defaultWatchInterval,
-		now:           time.Now,
-		shortcuts:     systemShortcuts{},
-		launcherPath:  os.Executable,
-		saveRoots:     platform.SaveRoots,
-		start:         newGameStarter(),
-		prepare:       prepareRuntime,
+		path:            path,
+		excludedPath:    excludedPath,
+		collectionsPath: collectionsPathFor(path),
+		running:         map[string]*session{},
+		scan:            procs.List,
+		watchInterval:   defaultWatchInterval,
+		now:             time.Now,
+		shortcuts:       systemShortcuts{},
+		steam:           disabledSteam{},
+		launcherPath:    os.Executable,
+		saveRoots:       platform.SaveRoots,
+		start:           newGameStarter(),
+		openURI:         platform.OpenURI,
+		prepare:         prepareRuntime,
 	}
 	games, err := s.load()
 	if err != nil {
 		return nil, err
 	}
 	excluded, err := loadExcluded(excludedPath)
+	if err != nil {
+		return nil, err
+	}
+	collections, err := loadCollections(collectionsPathFor(path))
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +306,7 @@ func NewServiceAt(path string) (*Service, error) {
 		}
 	}
 	s.excluded = excluded
+	s.collections = collections
 	return s, nil
 }
 
@@ -761,8 +807,14 @@ func (s *Service) BindDistribution(id, sourceID, releaseID, distributionID strin
 
 func (s *Service) RemoveGame(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.removeGameLocked(id)
+	err := s.removeGameLocked(id)
+	ctx := s.ctx
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.dropSteam(ctx, id)
+	return nil
 }
 
 // RemoveSyncedGame archives cloud-only cards. A remote tombstone cannot remove
@@ -793,7 +845,7 @@ func (s *Service) removeGameLocked(id string) error {
 			continue
 		}
 		previousExcluded := s.excluded
-		if game.InstallDir != "" {
+		if game.InstallDir != "" && game.External == nil {
 			_, err := os.Stat(game.InstallDir)
 			switch {
 			case err == nil:
@@ -808,7 +860,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, Tags: game.Tags, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds
@@ -854,24 +906,38 @@ func (s *Service) removeGameLocked(id string) error {
 //wails:ignore
 func (s *Service) MarkUninstalled(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	err := s.markUninstalledLocked(id)
+	ctx := s.ctx
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.dropSteam(ctx, id)
+	return nil
+}
+
+func (s *Service) resetInstallLocked(g *Game) {
+	clearInstalledProvenance(g)
+	g.Uninstalled = true
+	g.SizeBytes = 0
+	g.SizeUnknown = false
+	g.Version = ""
+	g.VersionSource = ""
+	g.VersionConfidence = 0
+	g.InstallType = ""
+	g.Owned = false
+	g.Uninstall = Uninstall{}
+	g.UninstallUnknown = false
+}
+
+func (s *Service) markUninstalledLocked(id string) error {
 	for i := range s.games {
 		if s.games[i].ID != id {
 			continue
 		}
 		s.dropShortcutLocked(&s.games[i])
 		previous := s.games[i]
-		clearInstalledProvenance(&s.games[i])
-		s.games[i].Uninstalled = true
-		s.games[i].SizeBytes = 0
-		s.games[i].SizeUnknown = false
-		s.games[i].Version = ""
-		s.games[i].VersionSource = ""
-		s.games[i].VersionConfidence = 0
-		s.games[i].InstallType = ""
-		s.games[i].Owned = false
-		s.games[i].Uninstall = Uninstall{}
-		s.games[i].UninstallUnknown = false
+		s.resetInstallLocked(&s.games[i])
 		if err := s.persist(); err != nil {
 			s.games[i] = previous
 			return fmt.Errorf("save library: %w", err)
@@ -995,6 +1061,21 @@ func (s *Service) IsRunning(id string) bool {
 	return ok || s.starting[id] != nil
 }
 
+//wails:ignore
+func (s *Service) RunningGameForPID(pid uint32) (string, bool) {
+	if pid == 0 {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, sess := range s.running {
+		if sess.pid == pid {
+			return id, true
+		}
+	}
+	return "", false
+}
+
 func TitleFromExecutable(executable string) string {
 	name := strings.TrimSuffix(filepath.Base(executable), filepath.Ext(executable))
 	name = strings.NewReplacer("_", " ", "-", " ", ".", " ").Replace(name)
@@ -1010,12 +1091,23 @@ func newID() string {
 }
 
 func dirSize(dir string) (int64, error) {
+	return walkSize(dir, func() error { return nil })
+}
+
+func dirSizeCtx(ctx context.Context, dir string) (int64, error) {
+	return walkSize(dir, ctx.Err)
+}
+
+func walkSize(dir string, alive func() error) (int64, error) {
 	if dir == "" {
 		return 0, errEmptyInstallDir
 	}
 	var total int64
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := alive(); err != nil {
 			return err
 		}
 		if d.IsDir() {
@@ -1032,6 +1124,15 @@ func dirSize(dir string) (int64, error) {
 		return 0, fmt.Errorf("measure %s: %w", dir, err)
 	}
 	return total, nil
+}
+
+var measureExternal = func(ctx context.Context, dir string) (int64, bool) {
+	size, err := dirSizeCtx(ctx, dir)
+	if err != nil {
+		slog.Warn("measure install dir", "dir", dir, "error", err)
+		return 0, true
+	}
+	return size, false
 }
 
 // measureInstall не роняет регистрацию игры: недоступный подкаталог не повод

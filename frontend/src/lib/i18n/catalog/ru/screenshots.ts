@@ -1,0 +1,27 @@
+export const screenshots = {
+  'settings.screenshotsEnabledLabel': 'Снимки экрана',
+  'settings.screenshotsEnabledSub': 'Сохранять кадр игры в папку «Скриншоты» по горячей клавише',
+  'settings.screenshotHotkeyLabel': 'Клавиша снимка',
+  'settings.screenshotHotkeySub': 'Нажмите её в игре, чтобы сделать снимок',
+  'settings.screenshotsSaveError': 'Не удалось применить настройку снимков: {reason}',
+  'settings.screenshotsSaveErrorPlain': 'Не удалось применить настройку снимков',
+  'screenshots.saved': 'Снимок сохранён: {name}',
+  'screenshots.failed': 'Не удалось сохранить снимок: {reason}',
+  'screenshots.failedPlain': 'Не удалось сохранить снимок',
+  'screenshots.sectionTitle': 'Мои снимки',
+  'screenshots.openFolder': 'Открыть папку',
+  'screenshots.delete': 'Удалить снимок',
+  'screenshots.deleteConfirm': 'Снимок «{name}» будет удалён с диска без возможности восстановления.',
+  'screenshots.deleted': 'Снимок удалён',
+  'screenshots.open': 'Открыть снимок {name}',
+  'screenshots.hotkeyHint': 'Снимок делается клавишей {hotkey}',
+  'screenshots.emptyNoHotkey': 'Снимков пока нет',
+  'screenshots.empty': 'Снимков пока нет. Нажмите {hotkey} в игре.',
+  'screenshots.disabledNote': 'Снимки выключены в настройках.',
+  'screenshots.noLibrary': 'Папка снимков недоступна: сначала настройте библиотеку в настройках.',
+  'screenshots.loadError': 'Не удалось загрузить снимки',
+  'screenshots.actionError': 'Не удалось выполнить действие со снимком',
+  'screenshots.loading': 'Загружаем снимки',
+} as const;
+
+export type ScreenshotsKey = keyof typeof screenshots;

@@ -42,6 +42,7 @@ type GameQuery struct {
 	ExcludeNotInterested string   `json:"excludeNotInterested,omitempty"`
 	Page                 int      `json:"page"`
 	PageSize             int      `json:"pageSize"`
+	AllowStale           bool     `json:"allowStale,omitempty"`
 }
 
 // CompatOnlyWorking — значение GameQuery.Compat, оставляющее только игры,
@@ -70,6 +71,8 @@ type GamePage struct {
 	Facets                  []GenreFacet  `json:"facets"`
 	Platforms               []GenreFacet  `json:"platforms"`
 	Offline                 bool          `json:"offline"`
+	Stale                   bool          `json:"stale"`
+	Key                     string        `json:"key"`
 	CachedAt                time.Time     `json:"cachedAt"`
 	Revision                int64         `json:"revision"`
 	Providers               []IndexStatus `json:"providers"`

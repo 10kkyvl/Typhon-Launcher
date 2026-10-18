@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +27,7 @@ var ErrCatalogChanged = errors.New("catalog changed; reload from the first page"
 const (
 	maxCatalogPageCacheEntries = 128
 	catalogPageCacheMaxAge     = 30 * 24 * time.Hour
+	catalogPagePruneInterval   = 10 * time.Minute
 )
 
 type RemoteCatalog interface {
@@ -49,17 +52,45 @@ func (s *Service) BrowseGames(ctx context.Context, q GameQuery) (GamePage, error
 }
 
 func (s *Service) browseGames(ctx context.Context, q GameQuery, durable bool) (GamePage, error) {
+	started := time.Now()
 	var prepareErr error
 	q, prepareErr = s.prepareBrowseSnapshot(q)
 	if prepareErr != nil {
 		return GamePage{}, prepareErr
 	}
-	return s.browsePreparedGames(ctx, q, durable)
+	return s.browsePrepared(ctx, q, durable, time.Since(started))
 }
 
 func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable bool) (GamePage, error) {
+	return s.browsePrepared(ctx, q, durable, 0)
+}
+
+type browseTiming struct {
+	prepare time.Duration
+	network time.Duration
+	merge   time.Duration
+	persist time.Duration
+	changed bool
+}
+
+func durationMS(d time.Duration) float64 {
+	return float64(d) / float64(time.Millisecond)
+}
+
+func (s *Service) browsePrepared(ctx context.Context, q GameQuery, durable bool, prepared time.Duration) (result GamePage, resultErr error) {
+	entered := time.Now()
+	timing := browseTiming{prepare: prepared}
+	defer func() {
+		if resultErr != nil {
+			return
+		}
+		slog.Debug("catalog browse", "page", q.Page, "prepare_ms", durationMS(timing.prepare), "network_ms", durationMS(timing.network),
+			"merge_ms", durationMS(timing.merge), "persist_ms", durationMS(timing.persist), "items", len(result.Items), "changed", timing.changed)
+	}()
 	snapshot := q.Snapshot
 	q.Snapshot = ""
+	allowStale := q.AllowStale
+	q.AllowStale = false
 	s.mu.RLock()
 	remote := s.remote
 	dir := filepath.Dir(s.gamesPath)
@@ -69,7 +100,8 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 		return GamePage{}, marshalErr
 	}
 	sum := sha256.Sum256(raw)
-	path := filepath.Join(dir, "catalog-pages", hex.EncodeToString(sum[:])+".json")
+	key := hex.EncodeToString(sum[:])
+	path := filepath.Join(dir, "catalog-pages", key+".json")
 	if !durable {
 		s.mu.RLock()
 		cached, ok := s.discoveryPages[path]
@@ -87,35 +119,16 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 			return s.previewRemotePage(cached), nil
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-	defer cancel()
+	timing.prepare += time.Since(entered)
+	if stale, ok := s.staleFirstPage(q, allowStale, durable, remote, path, key, snapshot); ok { //nolint:contextcheck // invariant 19: the refresh outlives the request, so it runs under the service lifetime ctx and is tracked by wg
+		return stale, nil
+	}
 	var page GamePage
 	var err error
 	if remote == nil {
 		err = errors.New("catalog backend unavailable")
 	} else {
-		page, err = remote.Browse(ctx, q)
-	}
-	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
-		fallback := q
-		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
-		// A failed personalized source must still allow a general first page.
-		// Preserve exclusions and filters, and pin the fallback for continuations.
-		// The original request owns the total 25-second budget. A fallback gets
-		// at most ten seconds, but cannot outlive the first request's deadline.
-		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
-		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
-		fallbackCancel()
-		if fallbackErr == nil {
-			page, err = fallbackPage, nil
-			page.PersonalizationFallback = true
-			s.mu.Lock()
-			if snap, ok := s.browseSnapshots[snapshot]; ok {
-				snap.query.Sort, snap.query.Profile = "popular", ""
-				s.browseSnapshots[snapshot] = snap
-			}
-			s.mu.Unlock()
-		}
+		page, err = s.fetchRemotePage(ctx, q, remote, snapshot, &timing)
 	}
 	if err != nil {
 		if errors.Is(err, ErrBackendOutdated) {
@@ -139,6 +152,7 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 			return GamePage{}, err
 		}
 		page.Offline = true
+		page.Key = key
 		s.normalizeCachedPage(&page)
 		page.Snapshot = snapshot
 		page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
@@ -164,9 +178,18 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 		page.Snapshot = snapshot
 		return s.previewRemotePage(page), nil
 	}
+	return s.commitPage(page, path, key, snapshot, &timing)
+}
+
+// commitPage merges a freshly fetched first or later page into catalog.json,
+// writes the offline page cache and returns the page as the frontend sees it.
+// The synchronous browse and the background refresh share it, so both leave
+// identical state behind.
+func (s *Service) commitPage(page GamePage, path, key, snapshot string, timing *browseTiming) (GamePage, error) {
+	var err error
+	mergeStart := time.Now()
 	s.mu.Lock()
 	complete := remoteProviderCompleteness(page.Providers)
-	byServer, byIGDB, bySteam := remoteIndexes(s.games)
 	claims := make([]Game, len(page.Items))
 	// touched remembers, per position in s.games, the value it had before this
 	// call mutated it — the first time it is mutated, never a later one. It is
@@ -186,13 +209,12 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 		// provider-independent identity without rewriting installation provenance.
 		g.ServerID = g.ID
 		claims[i] = g
-		pos := remoteMatchPosition(g, byServer, byIGDB, bySteam)
+		pos := s.idx.matchRemote(g)
 		if pos >= 0 {
 			old := s.games[pos]
 			g.ID = old.ID
 			merged := mergeRemoteGame(old, g, complete)
 			merged.Genres = canonicalGenres(merged.Genres)
-			unindexRemoteGame(old, pos, byServer, byIGDB, bySteam)
 			if !reflect.DeepEqual(old, merged) {
 				if _, ok := touched[pos]; !ok {
 					touched[pos] = old
@@ -202,7 +224,6 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 				changed = true
 			}
 			g = merged
-			indexRemoteGame(g, pos, byServer, byIGDB, bySteam)
 		} else {
 			// A page item that matches nothing already saved is a preview, exactly
 			// like a discovery candidate: shown to the user, but committed to
@@ -227,6 +248,9 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 	for i := range page.Items {
 		page.Items[i].AliasIDs = pageAliases[i]
 	}
+	timing.merge = time.Since(mergeStart)
+	timing.changed = changed
+	persistStart := time.Now()
 	if changed {
 		if err = s.persistGamesLocked(); err != nil {
 			for pos, old := range touched {
@@ -239,14 +263,52 @@ func (s *Service) browsePreparedGames(ctx context.Context, q GameQuery, durable 
 		}
 	}
 	s.mu.Unlock()
-	page.CachedAt = time.Now().UTC()
+	page.CachedAt = s.clock().UTC()
 	if err = storage.Save(path, 1, page); err != nil {
 		return GamePage{}, err
 	}
-	pruneCatalogPageCache(filepath.Dir(path), page.CachedAt)
+	if pruneErr := s.pruneCatalogPagesIfDue(filepath.Dir(path), page.CachedAt); pruneErr != nil {
+		slog.Warn("prune catalog page cache", "error", pruneErr)
+	}
+	timing.persist = time.Since(persistStart)
+	page.Key = key
 	page.Snapshot = snapshot
 	page.PersonalizationFallback = page.PersonalizationFallback || s.recommendationLoadErr != nil
 	return page, nil
+}
+
+// fetchRemotePage asks the backend for one page under the 25 second budget
+// and, for a failed personalized first page, retries once as the general feed.
+func (s *Service) fetchRemotePage(ctx context.Context, q GameQuery, remote RemoteCatalog, snapshot string, timing *browseTiming) (GamePage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	networkStart := time.Now()
+	page, err := remote.Browse(ctx, q)
+	timing.network += time.Since(networkStart)
+	if err != nil && remote != nil && q.Sort == "for-you" && q.Page <= 1 && !errors.Is(err, ErrCatalogChanged) && !errors.Is(err, ErrBackendOutdated) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		fallback := q
+		fallback.Sort, fallback.Profile, fallback.Revision = "popular", "", 0
+		// A failed personalized source must still allow a general first page.
+		// Preserve exclusions and filters, and pin the fallback for continuations.
+		// The original request owns the total 25-second budget. A fallback gets
+		// at most ten seconds, but cannot outlive the first request's deadline.
+		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 10*time.Second)
+		fallbackStart := time.Now()
+		fallbackPage, fallbackErr := remote.Browse(fallbackCtx, fallback)
+		timing.network += time.Since(fallbackStart)
+		fallbackCancel()
+		if fallbackErr == nil {
+			page, err = fallbackPage, nil
+			page.PersonalizationFallback = true
+			s.mu.Lock()
+			if snap, ok := s.browseSnapshots[snapshot]; ok {
+				snap.query.Sort, snap.query.Profile = "popular", ""
+				s.browseSnapshots[snapshot] = snap
+			}
+			s.mu.Unlock()
+		}
+	}
+	return page, err
 }
 
 //wails:ignore
@@ -277,7 +339,9 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, touched ma
 		}
 		if len(current.ProviderLinks["igdb"]) > 0 || current.ExternalIDs.IGDB != "" {
 			for _, id := range current.ProviderLinks["igdb"] {
-				igdbClaims[id] = true
+				if id != "" {
+					igdbClaims[id] = true
+				}
 			}
 			if current.ExternalIDs.IGDB != "" {
 				igdbClaims[current.ExternalIDs.IGDB] = true
@@ -285,7 +349,9 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, touched ma
 		}
 		if len(current.ProviderLinks["steam"]) > 0 || current.ExternalIDs.Steam != "" {
 			for _, id := range current.ProviderLinks["steam"] {
-				claimed[id] = true
+				if id != "" {
+					claimed[id] = true
+				}
 			}
 			if current.ExternalIDs.Steam != "" {
 				claimed[current.ExternalIDs.Steam] = true
@@ -293,7 +359,8 @@ func (s *Service) reconcileRemotePageLinksLocked(currentGames []Game, touched ma
 		}
 	}
 	changedAny := false
-	for i, old := range s.games {
+	for _, i := range s.reconcileCandidatesLocked(claimed, igdbClaims) {
+		old := s.games[i]
 		before := old
 		if (old.ServerID != "" && currentServers[old.ServerID]) || old.ExternalIDs.IGDB == "" || currentIGDB[old.ExternalIDs.IGDB] {
 			continue
@@ -369,72 +436,30 @@ func remoteProviderComplete(complete map[string]bool, provider string) bool {
 	return !known || value
 }
 
-func remoteIndexes(games []Game) (byServer, byIGDB, bySteam map[string]int) {
-	byServer = make(map[string]int, len(games))
-	byIGDB = make(map[string]int, len(games))
-	bySteam = make(map[string]int, len(games))
-	for pos, game := range games {
-		indexRemoteGame(game, pos, byServer, byIGDB, bySteam)
-	}
-	return byServer, byIGDB, bySteam
-}
-
-func remoteMatchPosition(game Game, byServer, byIGDB, bySteam map[string]int) int {
-	if game.ServerID != "" {
-		if pos, ok := byServer[game.ServerID]; ok {
-			return pos
+// reconcileCandidatesLocked lists, in catalog order, the positions that hold
+// any of the claimed provider ids as a confirmed id, a provider link or a
+// local id. Every other record has nothing to lose to the claims.
+func (s *Service) reconcileCandidatesLocked(steamClaims, igdbClaims map[string]bool) []int {
+	found := map[int]struct{}{}
+	collect := func(provider string, claims map[string]bool) {
+		for id := range claims {
+			key := provider + ":" + strings.ToLower(id)
+			for _, pos := range s.idx.byIdentity[key] {
+				found[pos] = struct{}{}
+			}
+			for _, pos := range s.idx.byLocal[key] {
+				found[pos] = struct{}{}
+			}
 		}
 	}
-	if game.ExternalIDs.IGDB != "" {
-		if pos, ok := byIGDB[strings.ToLower(game.ExternalIDs.IGDB)]; ok {
-			return pos
-		}
+	collect("steam", steamClaims)
+	collect("igdb", igdbClaims)
+	positions := make([]int, 0, len(found))
+	for pos := range found {
+		positions = append(positions, pos)
 	}
-	// A Steam-only server row may reuse an existing local Steam record. Once
-	// the row has a confirmed IGDB id, a matching Steam id can belong to a
-	// different local record and must be reconciled as a provider claim.
-	if game.ExternalIDs.IGDB == "" && game.ExternalIDs.Steam != "" {
-		if pos, ok := bySteam[strings.ToLower(game.ExternalIDs.Steam)]; ok {
-			return pos
-		}
-	}
-	return -1
-}
-
-func indexRemoteGame(game Game, pos int, byServer, byIGDB, bySteam map[string]int) {
-	if game.ServerID != "" {
-		byServer[game.ServerID] = pos
-	}
-	if game.ExternalIDs.IGDB != "" {
-		key := strings.ToLower(game.ExternalIDs.IGDB)
-		if _, exists := byIGDB[key]; !exists {
-			byIGDB[key] = pos
-		}
-	}
-	if game.ExternalIDs.Steam != "" {
-		key := strings.ToLower(game.ExternalIDs.Steam)
-		if _, exists := bySteam[key]; !exists {
-			bySteam[key] = pos
-		}
-	}
-}
-
-func unindexRemoteGame(game Game, pos int, byServer, byIGDB, bySteam map[string]int) {
-	if game.ServerID != "" && byServer[game.ServerID] == pos {
-		delete(byServer, game.ServerID)
-	}
-	if game.ExternalIDs.IGDB != "" {
-		key := strings.ToLower(game.ExternalIDs.IGDB)
-		if byIGDB[key] == pos {
-			delete(byIGDB, key)
-		}
-	}
-	if game.ExternalIDs.Steam != "" {
-		key := strings.ToLower(game.ExternalIDs.Steam)
-		if bySteam[key] == pos {
-			delete(bySteam, key)
-		}
-	}
+	slices.Sort(positions)
+	return positions
 }
 
 func mergeRemoteGame(old, remote Game, complete map[string]bool) Game {
@@ -534,23 +559,14 @@ func cloneTimePointer(value *time.Time) *time.Time {
 // Include both providers when finding personal references to a canonical row.
 // The SameGame check rejects conflicting IGDB identities sharing a stale Steam ID.
 func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
-	byKey := map[string][]string{}
-	for _, game := range s.games {
-		id := s.resolveIDLocked(game.ID)
-		if id == "" {
-			continue
-		}
-		for _, key := range remoteIdentityKeys(game) {
-			byKey[key] = append(byKey[key], id)
-		}
-	}
 	aliases := make([][]string, len(items))
 	for i, game := range items {
 		seen := map[string]bool{}
 		canonical := s.resolveIDLocked(game.ID)
 		for _, key := range remoteIdentityKeys(game) {
-			for _, id := range byKey[key] {
-				if id != canonical && !seen[id] && s.sameGameLocked(canonical, id) {
+			for _, pos := range s.idx.byIdentity[key] {
+				id := s.resolveIDLocked(s.idx.games[pos].ID)
+				if id != "" && id != canonical && !seen[id] && s.sameGameLocked(canonical, id) {
 					seen[id] = true
 					aliases[i] = append(aliases[i], id)
 				}
@@ -561,19 +577,10 @@ func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
 }
 
 func remoteIdentityKeys(game Game) []string {
-	keys := []string{}
-	for provider, id := range map[string]string{"igdb": game.ExternalIDs.IGDB, "steam": game.ExternalIDs.Steam} {
-		if id != "" {
-			keys = append(keys, provider+":"+strings.ToLower(id))
-		}
-		for _, linked := range game.ProviderLinks[provider] {
-			if linked != "" {
-				keys = append(keys, provider+":"+strings.ToLower(linked))
-			}
-		}
-	}
-	sort.Strings(keys)
-	return keys
+	keys := make([]string, 0, 4)
+	forEachIdentityKey(game, func(key string) { keys = append(keys, key) })
+	slices.Sort(keys)
+	return slices.Compact(keys)
 }
 
 // A cached page retains membership, but old provider duplicates can be folded
@@ -612,10 +619,24 @@ func (s *Service) normalizeCachedPage(page *GamePage) {
 	}
 }
 
-func pruneCatalogPageCache(dir string, now time.Time) {
+// The directory scan costs a ReadDir and a stat per cached page, so it runs at
+// most once per catalogPagePruneInterval instead of after every page.
+func (s *Service) pruneCatalogPagesIfDue(dir string, now time.Time) error {
+	s.pruneMu.Lock()
+	clock := s.clock()
+	if !s.lastPrune.IsZero() && clock.Sub(s.lastPrune) < catalogPagePruneInterval {
+		s.pruneMu.Unlock()
+		return nil
+	}
+	s.lastPrune = clock
+	s.pruneMu.Unlock()
+	return pruneCatalogPageCache(dir, now)
+}
+
+func pruneCatalogPageCache(dir string, now time.Time) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return
+		return fmt.Errorf("read catalog page cache: %w", err)
 	}
 	type cachedPage struct {
 		path    string
@@ -646,4 +667,5 @@ func pruneCatalogPageCache(dir string, now time.Time) {
 		}
 		pages = pages[1:]
 	}
+	return nil
 }

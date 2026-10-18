@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 11 October 2026.
+Revision of 16 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -22,12 +22,14 @@ The following data is stored locally only and is not sent to the Typhon services
 - **Library** — the list of games, paths to executables, and the times and durations of play sessions. If cross-device sync is enabled (section 2.3), some of this — the game's identifier in the external IGDB catalog, the last launch date, playtime, the "favorite" mark and the completion status — is sent to the service; paths, file names and release names are not.
 - **App settings**, including BitTorrent parameters. With sync enabled, some settings are sent to the service (section 2.3); directory paths, speed limits and data-collection consents are not.
 - **The activity log** `typhon.log` and its previous copies `typhon.log.1` … `typhon.log.5` — these stay on the device and are never sent anywhere automatically in full: the user can export a scrubbed log archive themselves, with a button (sections 2.10 and 2.11). The log is size-limited: 10 MB per file and no more than six files, with the oldest overwritten.
-- **The play session log** — which game was launched and finished and when, for the last 90 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
+- **The play session log** — which game was launched and finished and when, for the last 90 days, and a per-day summary for statistics: how long each game was played that day, the longest session and the number of launches, for the last 400 days — is kept on this computer only and is not sent to the server. The "favorite" mark and the completion status are kept on this computer and are sent to the service only when sync is enabled (section 2.3).
 - **The compatibility log** — which games start on this computer and which do not: the number of attempts, the number of failures, the longest session, and the code and text of the last error. It is kept always and is never sent anywhere on its own; with usage statistics enabled, an anonymized record derived from it is sent, as described in section 8.5. The error text is never sent.
+- **The watchlist** — the catalog games the user follows, with the releases already known for each, and up to 200 most recent alerts about new releases: the game title, the release name and version, the source and the time. New releases are looked up in the feeds already downloaded to the device; no separate requests go out for this.
+- **Screenshots** — pressing the screenshot key during play saves an image of that game's window as a PNG in the `Screenshots` folder inside the library directory, one subfolder per game. A screenshot is taken only on that key press and only if the window belongs to a running game from the library; the app registers a single key combination with the system and receives no other key presses. Screenshots are not sent anywhere, and capturing can be turned off in the settings.
 
 These lists, paths and contents do not leave the device. If the user has enabled anonymous usage statistics (section 8.2), only anonymized information about the outcome of an operation is sent — for example, that an installation succeeded and how many seconds it took — but nothing of the above. If the user has enabled anonymous diagnostics (section 8.3), an anonymized error report is sent — but not the log itself and not fragments of it.
 
-Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
+Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
 
 `installation.json` holds only the installation identifier — a random UUIDv4 created the first time the app is started. It is not derived from any device characteristics and is not personal data in itself; where it is sent is described in section 8.
 
@@ -35,7 +37,7 @@ Local state is stored in the `%APPDATA%\Typhon` directory, in the files `setting
 
 `compat-stats.json` holds the downloaded shared statistics — the same numbers everyone else sees. It is incoming data and says nothing about the owner of the device.
 
-Deleting that directory deletes all of the local data listed above.
+Deleting that directory deletes all of the local data listed above except screenshots: they live in the `Screenshots` folder of the library directory and are deleted separately.
 
 ## 2. Data sent to the Typhon services
 
@@ -120,7 +122,7 @@ The prompt is versioned. When the set of collected data grows, the version is ra
 
 ### 2.7. What the Typhon services do not receive
 
-The addresses of sources added by the user, the contents of source feeds, magnet links, torrent infohashes, tracker and peer addresses, release download addresses, the contents of downloaded files, file names, local installation paths and the local download history are **not** sent to the Typhon services. This holds with cross-device sync enabled as well (section 2.3).
+The addresses of sources added by the user, the contents of source feeds, magnet links, torrent infohashes, tracker and peer addresses, release download addresses, the contents of downloaded files, file names, local installation paths and the local download history are **not** sent to the Typhon services. This holds with cross-device sync enabled as well (section 2.3). The one exception is cloud saves (section 2.13), if the user has turned them on: a game's saves archive contains the relative names and the contents of the files in its saves folder; disk paths and the files of downloads and installations do not go into it.
 
 It also holds with anonymous usage statistics enabled. Its events carry only the outcome of an operation, the game identifier from the catalog and anonymized numeric characteristics — duration, size, average speed — with a normalized error code. In other words, the service may learn that a download failed after so many seconds with such-and-such an error, but not where it was downloading from, what exactly was being downloaded, or where on disk it was being written (section 8.2).
 
@@ -205,6 +207,23 @@ An email is first written to a sending queue in the service's database: the reci
 
 Emails are sent through the Spaceship mail service (Spacemail), from the address `no-reply@typhon-launcher.com`, over an encrypted connection. The provider sees the recipient's address and the text of the email, including the link; the provider's servers are in the United States. Details are in section 7.1.
 
+### 2.13. Cloud saves
+
+Cloud saves are off by default, are turned on manually in the app settings and work only after signing in to an account. While the toggle is off or nobody is signed in, the app does not contact this part of the service at all.
+
+When they are on, for each game that has an identifier in the Typhon catalog and a saves folder that was found, the following is sent to the service and stored on the server:
+
+- **an archive of the game's save files** — a ZIP archive of the contents of the saves folder, which the app found itself or the user pointed to. The archive contains the relative file names inside that folder and their contents; absolute disk paths are not sent. What exactly is written in those files is up to the game: it may be, for example, a character name or a game profile;
+- **the game's identifier in the Typhon catalog**;
+- **a device identifier** — a random UUIDv4 created the first time cloud saves are turned on on each device. It is not the same as the installation identifier from `installation.json` (section 1) and is not linked to it;
+- **the archive size, the checksum of its contents and the time of the last upload**.
+
+The app contacts the service after a play session ends, at startup and then roughly every five minutes while it is running: it asks for the list of stored archives, and sends or downloads an archive only if the saves changed on one of the two sides. If both sides changed, the app overwrites nothing and asks the user which copy to keep. Before the saves on the device are replaced with a downloaded copy, the current files are copied into a backup that stays on this device only.
+
+A game for which the app has not determined a catalog identifier is not synced. A saves folder that contains symbolic links or special-type files is not sent.
+
+The operator does not open the contents of the archives: to the service an archive is an opaque file that it stores and hands back to the owner of the account. The size of a single archive and the total size of a user's archives are limited by service settings. A new upload replaces the game's previous archive; earlier versions are not kept on the server.
+
 ## 3. Why data is processed
 
 The Typhon server services process data only for the following:
@@ -217,6 +236,7 @@ The Typhon server services process data only for the following:
 - serving the update manifest and app update files;
 - answering support requests (section 2.11);
 - sending the emails without which the account and support do not work: address confirmation, password reset, guest request confirmation, reply notification (section 2.12);
+- where the user has explicitly turned the toggle on — storing copies of game saves so that they can be restored on another device (section 2.13);
 - rate limiting, so that the services stay available;
 - aggregated real-time counting: how many launchers are running right now, how many of them are in a game, which games are being played and which app versions are in use (section 8.1);
 - where the user has explicitly enabled the toggle — product usage analytics: how often downloads, installations and updates complete successfully, and which operations the app fails on most often (section 8.2).
@@ -236,6 +256,8 @@ An avatar is stored in object storage until it is replaced or deleted. On replac
 Session state (section 8.1) is held in a short-lived in-memory store: roughly 90 seconds without a new signal and the record is gone. No historical "who was online and when" table is kept, and these records are not written to disk.
 
 Synced settings and the game list (section 2.3) are stored for as long as the account exists, or until the user deletes them.
+
+Cloud saves archives (section 2.13) are stored until the user deletes them — one game or all at once — or turns cloud saves off with deletion of the data, or until the account is deleted, whichever comes first. A new upload replaces the game's previous archive.
 
 Records of friends, friend requests and blocks (section 2.8) are stored for as long as the account exists, or until the user removes them: declines or cancels a request, removes a friend, or unblocks someone.
 
@@ -265,7 +287,9 @@ Local data is deleted by deleting the `%APPDATA%\Typhon` directory (section 1). 
 
 Cross-device synced data (section 2.3) is deleted from the server in the app, in the sync settings. Turning sync off does not by itself delete it; it is deleted automatically together with the account.
 
-The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the Terms acceptance records, the profile and bio, the avatar and cover files, synced settings and the game list, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports, support requests with their whole conversations, address-confirmation and password-reset tokens, and every mail-queue record addressed to the account's email address. Website sessions are the same records as app sessions and are deleted with them. Log archives attached to deleted requests are detached from them and are deleted by the next hourly cleanup, but not earlier than 72 hours after they were received. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
+Cloud saves archives (section 2.13) are deleted from the server in the app, in the cloud saves settings: the archive of one game or all of them at once; in addition, when cloud saves are turned off the app offers to delete the data from the cloud. Turning the toggle off without that mark does not delete the archives; they are deleted automatically together with the account.
+
+The account is deleted by the user themselves in the app, in the profile settings, with the "Delete account" button and password confirmation. Deletion is immediate and irreversible: the server removes the account record, the password hash, all sessions, the Terms acceptance records, the profile and bio, the avatar and cover files, synced settings and the game list, cloud saves archives, friends, requests and blocks, feed events with their captions and reactions, chat messages, reviews, votes and review reports, support requests with their whole conversations, address-confirmation and password-reset tokens, and every mail-queue record addressed to the account's email address. Website sessions are the same records as app sessions and are deleted with them. Log archives attached to deleted requests are detached from them and are deleted by the next hourly cleanup, but not earlier than 72 hours after they were received. Entries in the operator's internal action journal, if any exist, keep only the username as of the time of the action (section 2.9). The anonymized data in section 8 is not linked to the account and is not affected by deletion.
 
 Deleting the account does not delete guest requests left from the same email address before registering or without signing in: they are not linked to the account and are stored for the general periods of section 4. A request to delete them sooner can be sent to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from that address; the operator handles it as described in section 6. A user with an account can close their own request, in the app or on the website; an individual request cannot be deleted from the interface. A specific request, or a single message in it, can be deleted before its period ends on request to [abuse@typhon-launcher.com](mailto:abuse@typhon-launcher.com) from the account's address or the guest request's address: in the admin panel an administrator deletes either the whole request — with the entire conversation and the attached log archives — or one message together with its archive; the archives are deleted at once. The deletion itself is noted in the operator's internal action journal: who deleted it and when, the reason if one was given, the username if the request came from an account, and service marks — the request number, its section and status, whether it was a guest request, the number of messages, the identifiers of the deleted messages and archives, who wrote the deleted message (the user or support), and the basis if the deletion followed an infringement notice. The subject, the text of the request and its messages, and the guest's address do not go into the journal.
 
@@ -285,7 +309,7 @@ Three different cases need to be told apart here: what the Typhon services pass 
 
 ### 7.1. Who the Typhon services pass data to
 
-- **Hosting and infrastructure.** The services run on a rented server, account data lives in a database and avatar files in object storage. The providers of that infrastructure technically have access to the data hosted with them.
+- **Hosting and infrastructure.** The services run on a rented server, account data lives in a database and avatar files and cloud saves archives in object storage. The providers of that infrastructure technically have access to the data hosted with them.
 - **IGDB (Twitch).** The metadata service keeps no game database of its own: on receiving a request it queries IGDB and returns the answer to the app. What goes there is the search string — that is, the game title or folder name. Account data is not sent to IGDB.
 - **Spaceship mail service (Spacemail).** All of the service's emails (section 2.12) are sent through it from the address `no-reply@typhon-launcher.com`. The provider is given the recipient's address and the full text of the email, including the link with a token or key that it contains; it keeps copies of sent emails under its own rules, and the operator has no influence over that. The provider's servers are in the United States, so the email address and the content of the emails are transferred outside the user's country, including outside Ukraine and the European Union. The transfer is part of an action the user requested themselves (registering, recovering a password, writing to support): without it the email cannot be delivered.
 
@@ -298,6 +322,7 @@ These transfers are made by the device itself. The Typhon services take no part 
 - **Source hosts.** When a source is refreshed, the app makes an HTTP request directly to the host specified by the user. The source host sees the user's IP address and the fact of the request. No proxy is used.
 - **Metadata images.** Cover art and screenshots are loaded by the app directly from the IGDB content delivery network (`images.igdb.com`), at addresses taken from the metadata service's response. The owner of that network sees the user's IP address and which images were requested.
 - **Discord.** Discord status display is **off** by default. If it is on, the app passes data to the local Discord client through an operating system named pipe — nothing is sent over the network by Typhon here. What is passed is the title of the running game, the rounded session duration and, where available, the cover art address. From there the data is handled by the Discord client under Discord's rules.
+- **Steam.** Only on the user's "Add to Steam" command, the app writes to the Steam client's files on this computer — the `shortcuts.vdf` shortcut list and the `grid` artwork folder of each Steam user on the device — the game title, the path to its executable, its launch options and its cover art; a copy of the previous shortcut list is kept next to it. Nothing is sent over the network by Typhon here. A game started from Steam is handled by the Steam client under Steam's rules: for example, it may show the game title to friends. The "Remove from Steam" command and removing the game from the library remove the entry and the artwork. While Steam is running its files are not changed: the "Remove from Steam" command asks to close it, and the entry of a removed game is removed later — when Typhon starts or on the next "Add to Steam" or "Remove from Steam" command while Steam is closed.
 
 ### 7.3. The BitTorrent network
 

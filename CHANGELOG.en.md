@@ -6,6 +6,35 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.1.0 — 2026-10-19
+Games from Steam, GOG and Epic now sit in one library with the rest, saves sync through your account, and every game gets its own properties, tags, screenshots and statistics.
+
+### Added
+- Cloud saves: turn on "Cloud saves" in the settings; it needs a signed-in account and your consent to upload. Your account keeps one copy of each catalog game's saves, so on a second PC or a Mac the game picks up where you left off
+- The cloud copy is checked at startup, every five minutes and after you play. If the saves changed both on the computer and in the cloud, the launcher overwrites nothing on its own and asks which copy to keep, and puts the previous files aside as a local snapshot before replacing them
+- The "Find Steam, GOG and Epic games" button in the settings adds games installed through other launchers to the library: no files are copied or changed, Steam and Epic games start through their own launcher, and playtime is counted as usual (Windows only)
+- Games found this way stay in step with the other launchers: new installs are added on their own, and a game removed there becomes not installed — it keeps its playtime and catalog link
+- Each game card in the library shows where the game comes from: Typhon, Steam, Epic or GOG, and once games come from more than one place, a filter by source appears
+- The game's quick menu has "Add to Steam": the game shows up in Steam as a non-Steam game and starts from there with the Steam overlay and Steam Input. While Steam is running, the launcher leaves its files alone and asks you to close Steam (Windows only)
+- "Properties" on the game page and in the quick menu: launch options, a different executable, run as administrator, your own saves folder and a "Show in Discord" switch for that game
+- Games can carry tags, up to 20 each, and can be hidden. A hidden game leaves the library, "Continue playing", your profile, Discord and the online status, but stays under the "Hidden" filter
+- Collections are saved selections by tags, genres and status: each one shows up as its own section in the library and as a shelf in Big Picture
+- Take an in-game screenshot with Ctrl+F12; the key can be changed in the settings next to the overlay key. Screenshots go to the library folder, under Screenshots, per game, and the game page has a gallery of them
+- The "Statistics" section shows how much you played over the last week, month or year: by day, by game, and your longest session
+- A catalog game's page has a "Watch" button: once a release of that game appears in your sources, you get a notification in the bell
+- If a game closes right after launch with an error, the launcher names the likely cause and offers to verify the files or install "Runtime libraries" — Visual C++, DirectX and .NET from the game folder. For libraries that are missing it opens the official Microsoft page
+
+### Changed
+- When moving a game, you pick the folder it goes into rather than the game folder itself: the game moves to "chosen folder\game folder name", and the final path is shown before the move starts. Before, only an empty folder could be picked
+- The catalog opens at once: the first page is drawn from what the launcher received in the last half hour and is quietly refreshed. Paging through it and opening game cards is faster when the catalog had grown to tens of thousands of games — the launcher drops stale entries at startup
+- The documents move to the 16 October 2026 edition: the privacy policy covers watched games, per-day statistics, screenshots, Steam shortcuts and cloud saves. The launcher will ask you to accept them again
+
+### Fixed
+- Moving a game can no longer hang or leave the game without a working copy: if a crash or a shutdown interrupted the move, the launcher finishes it or puts everything back on the next start
+- The launcher deletes the game's old folder only after checking the copy, and if you kept playing from the old folder, it stays where it is. A game cannot be started while it is being moved
+- When the launcher is started from a game shortcut, its taskbar window no longer takes that game's icon, and the pinned Typhon icon groups the window under it
+- Errors in the game's quick menu show readable text instead of a code like "typhon:library.not_installed"
+
 ## 1.0.2 — 2026-10-13
 The sign-in screen says what exactly went wrong, and deleting your account no longer throws you out of it when the request never reached the server.
 

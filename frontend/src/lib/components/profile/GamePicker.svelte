@@ -27,7 +27,7 @@
   let attempt = $state(0);
   let run = 0;
 
-  const candidates = $derived($libraryGames.filter((game) => Boolean(game.canonicalGameId)));
+  const candidates = $derived($libraryGames.filter((game) => Boolean(game.canonicalGameId) && !game.hidden));
   const needle = $derived(query.trim().toLowerCase());
   const rows = $derived(
     candidates.filter((game) => !needle || game.title.toLowerCase().includes(needle)).slice(0, LIMIT),

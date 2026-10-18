@@ -342,3 +342,44 @@ describe('ответы поддержки в списке уведомлений
     expect(get(notifications.notifications).filter((item) => item.route === 'support')).toHaveLength(1);
   });
 });
+
+describe('раздачи отслеживаемых игр в списке уведомлений', () => {
+  const alert = {
+    id: 'a1',
+    gameId: 'g1',
+    title: 'Игра',
+    releaseId: 'r1',
+    releaseTitle: 'Игра v1.2',
+    version: '1.2',
+    sourceId: 's1',
+    at: '2026-01-01T00:00:00Z',
+  };
+
+  it('алерт даёт уведомление, ведущее на страницу игры', async () => {
+    const { notifications } = await load(makeStorage());
+    const { watchAlerts } = await import('./watchlist');
+    watchAlerts.set([alert as never]);
+
+    const item = get(notifications.notifications).find((n) => n.id === 'watch:a1');
+    expect(item?.title).toBe('Появилась раздача');
+    expect(item?.text).toBe('Игра — Игра v1.2');
+    expect(item?.route).toBe('game');
+    expect(item?.params).toEqual({ id: 'g1' });
+  });
+
+  it('прочитанный алерт не вычищается из localStorage, пока список алертов не загружен', async () => {
+    const storage = makeStorage({ [READ_KEY]: JSON.stringify(['watch:a1', 'source:gone']) });
+    const { sources, notifications } = await load(storage);
+    const { watchAlerts, watchAlertsLoaded } = await import('./watchlist');
+    sources.set([]);
+
+    expect(JSON.parse(storage.getItem(READ_KEY) as string)).toEqual(['watch:a1']);
+
+    watchAlertsLoaded.set(true);
+    watchAlerts.set([alert as never]);
+    expect(get(notifications.notifications).find((n) => n.id === 'watch:a1')).toBeUndefined();
+
+    watchAlerts.set([]);
+    expect(JSON.parse(storage.getItem(READ_KEY) as string)).toEqual([]);
+  });
+});

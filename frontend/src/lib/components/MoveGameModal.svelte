@@ -4,7 +4,7 @@
   import { moveErrorText } from '../relocate/moveMessages';
   import { movePercent, moveSummary } from '../relocate/moveText';
   import { inWails } from '../services/backend';
-  import { cancelMove, moveGame, selectMoveTargetFolder, type MoveJob } from '../services/relocate';
+  import { cancelMove, moveGame, moveGameTarget, selectMoveTargetFolder, type MoveJob } from '../services/relocate';
   import { getStorageInfoFor, type StorageInfo } from '../services/system';
   import { libraryGames } from '../stores/library';
   import { closeMoveGame, moves, moveTarget } from '../stores/relocate';
@@ -28,6 +28,8 @@
 
   let picked = $state('');
   let diskInfo = $state<StorageInfo | null>(null);
+  let finalPath = $state('');
+  let resolving = $state(false);
   let picking = $state(false);
   let starting = $state(false);
   let cancelling = $state(false);
@@ -44,6 +46,7 @@
       if (loadedFor === target.gameId) return;
       loadedFor = target.gameId;
       picked = '';
+      finalPath = '';
       diskInfo = null;
       failure = '';
       jobId = null;
@@ -78,12 +81,26 @@
       const folder = await selectMoveTargetFolder();
       if (!folder) return;
       picked = folder;
+      finalPath = '';
       failure = '';
+      if (game) {
+        resolving = true;
+        try {
+          const path = await moveGameTarget(game.id, folder);
+          if (picked === folder) finalPath = path;
+        } catch (err) {
+          if (picked === folder) failure = message(err, msg('modals.moveGameStartFailed'));
+        } finally {
+          resolving = false;
+        }
+      }
       try {
-        diskInfo = await getStorageInfoFor(folder);
+        const info = await getStorageInfoFor(folder);
+        if (picked === folder) diskInfo = info;
       } catch (err) {
+        if (picked !== folder) return;
         diskInfo = null;
-        failure = message(err, msg('modals.moveGameFreeSpaceUnknown'));
+        if (!failure) failure = message(err, msg('modals.moveGameFreeSpaceUnknown'));
       }
     } catch (err) {
       toast(message(err, msg('modals.moveGameFolderDialogFailed')), 'danger');
@@ -93,7 +110,7 @@
   }
 
   async function start() {
-    if (!game || !picked || starting) return;
+    if (!game || !picked || !finalPath || starting) return;
     starting = true;
     failure = '';
     try {
@@ -178,6 +195,10 @@
           </div>
         </div>
 
+        {#if finalPath}
+          <p class="final" title={finalPath}>{msg('modals.moveGameWillMoveTo', { path: truncateMiddle(finalPath, 64) })}</p>
+        {/if}
+
         {#if diskInfo}
           <div class="disk">
             <HardDrive size="1.7rem" strokeWidth={1.8} />
@@ -214,7 +235,7 @@
       {#if jobFailed}
         <Button variant="primary" onclick={retry}>{msg('modals.moveGameRetry')}</Button>
       {:else}
-        <Button variant="primary" disabled={!picked || starting} onclick={start}>
+        <Button variant="primary" disabled={!picked || !finalPath || resolving || starting} onclick={start}>
           {starting ? msg('modals.moveGameStarting') : msg('modals.moveGameStart')}
         </Button>
       {/if}
@@ -307,6 +328,13 @@
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-2);
+  }
+
+  .final {
+    margin: 0;
+    font-size: var(--font-sm);
+    color: var(--text-2);
+    word-break: break-all;
   }
 
   .hint {

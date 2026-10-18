@@ -9,6 +9,7 @@ describe('moveErrorText', () => {
     ['game-id-123: typhon:relocate.downloading: для игры идёт загрузка', 'идёт загрузка'],
     ['game-id-123: typhon:relocate.already_running: перенос уже выполняется', 'уже выполняется'],
     ['D:\\Games\\Foo: typhon:relocate.target_not_empty: целевой каталог не пуст', 'не пуста'],
+    ['typhon:relocate.same_location: игра уже лежит в этой папке', 'уже лежит в этой папке'],
     ['typhon:relocate.target_inside_source: целевой каталог внутри исходного', 'внутри исходной'],
     ['typhon:relocate.source_inside_target: исходный каталог внутри целевого', 'внутри целевой'],
     ['typhon:relocate.target_is_drive_root: корень диска D:\\', 'корень диска'],
@@ -16,6 +17,13 @@ describe('moveErrorText', () => {
     ['typhon:relocate.not_enough_space: нужно 500 байт, доступно 100', 'Недостаточно места'],
     ['typhon:relocate.verify_failed: checksum mismatch', 'Проверка перенесённых файлов не прошла'],
     ['game-id-123: typhon:relocate.no_install_dir: у игры не задан каталог установки', 'не задан каталог установки'],
+    ['typhon:relocate.source_changed: исходная папка изменилась', 'изменилась после сбоя'],
+    ['typhon:relocate.source_unverifiable: нет манифеста', 'не изменилась'],
+    ['typhon:relocate.source_damaged: missing', 'Обе папки сохранены'],
+    ['typhon:relocate.game_removed: игра удалена', 'удалена из библиотеки'],
+    ['typhon:relocate.retries_exhausted: boom', 'нескольких попыток'],
+    ['D:\\Games\\Foo\\game.exe: typhon:library.executable_outside: вне каталога', 'вне папки игры'],
+    ['typhon:library.relocating: игра переносится', 'уже переносится'],
   ])('translates %s', (raw, expected) => {
     expect(moveErrorText(new Error(raw))).toContain(expected);
   });

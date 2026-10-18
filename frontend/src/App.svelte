@@ -6,7 +6,11 @@
   import { bigPictureActive } from './lib/bigpicture/mode';
   import MoveGameModal from './lib/components/MoveGameModal.svelte';
   import ReleaseNotesModal from './lib/components/ReleaseNotesModal.svelte';
+  import GamePropertiesModal from './lib/components/GamePropertiesModal.svelte';
   import SaveBackupsModal from './lib/components/SaveBackupsModal.svelte';
+  import GameCrashModal from './lib/components/GameCrashModal.svelte';
+  import RedistModal from './lib/components/RedistModal.svelte';
+  import CloudConflictModal from './lib/components/CloudConflictModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
@@ -14,18 +18,22 @@
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initHistory } from './lib/stores/history';
+  import { initWatchlist } from './lib/stores/watchlist';
+  import { initScreenshots } from './lib/stores/screenshots';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
   import { locale } from './lib/i18n';
   import { confirmLeave, leaveRequest, route, stayHere } from './lib/stores/router';
   import ConfirmModal from './lib/components/ConfirmModal.svelte';
+  import { initCollections } from './lib/stores/collections';
   import { initLibrary } from './lib/stores/library';
   import { initMetadata } from './lib/stores/metadata';
   import { initMessaging } from './lib/stores/messaging';
   import { initMoves } from './lib/stores/relocate';
   import { initPresence } from './lib/stores/presence';
   import { initSaveBackups } from './lib/stores/savebackup';
+  import { initCloudSaves } from './lib/stores/cloudsaves';
   import { initSelfUpdate } from './lib/stores/selfupdate';
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
@@ -43,6 +51,7 @@
   import GameDetails from './routes/game/GameDetails.svelte';
   import Friends from './routes/friends/Friends.svelte';
   import History from './routes/history/History.svelte';
+  import Stats from './routes/stats/Stats.svelte';
   import Installed from './routes/installed/Installed.svelte';
   import Lan from './routes/lan/Lan.svelte';
   import Library from './routes/library/Library.svelte';
@@ -68,11 +77,15 @@
   initAuth();
   initMessaging();
   initHistory();
+  initWatchlist();
+  onDestroy(initScreenshots());
   initLan();
   initSocial();
   onDestroy(initSupport());
   initPresence();
   initSaveBackups();
+  initCollections();
+  onDestroy(initCloudSaves());
   initLegalAcceptance();
 
   let lastGamesPath: string | undefined;
@@ -120,6 +133,8 @@
           <Friends tab={$route.params.tab} />
         {:else if $route.name === 'activity'}
           <Activity />
+        {:else if $route.name === 'stats'}
+          <Stats />
         {:else if $route.name === 'user'}
           <UserProfile username={$route.params.username} />
         {:else if $route.name === 'profile'}
@@ -133,6 +148,10 @@
       <ReleaseNotesModal />
       <MoveGameModal />
       <SaveBackupsModal />
+      <GamePropertiesModal />
+      <GameCrashModal />
+      <RedistModal />
+      <CloudConflictModal />
       {#if $leaveRequest}
         <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
       {/if}

@@ -1,13 +1,18 @@
 <script lang="ts">
   import {
     ArrowDownUp,
+    BellOff,
+    Bell,
     ChevronDown,
     ChevronRight,
     Clock,
+    EyeOff,
     LayoutGrid,
     List,
     MonitorDown,
+    Pencil,
     Play,
+    Plus,
     Square,
     X,
   } from '@lucide/svelte';
@@ -17,33 +22,37 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
+  import CollectionModal from '../../lib/components/CollectionModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameCard from '../../lib/components/GameCard.svelte';
+  import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
-  import { playGame, stopGame, type LibraryGame } from '../../lib/services/library';
+  import { playGame, stopGame, type LibraryCollection, type LibraryGame } from '../../lib/services/library';
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import type { Download } from '../../lib/services/downloads';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
+  import { collections } from '../../lib/stores/collections';
+  import { libraryGenres, requestLibraryGenres } from '../../lib/stores/genres';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
+  import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
   import { revealImage } from '../../lib/utils/revealImage';
-  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { msg } from '../../lib/i18n';
+  import { libraryErrorText } from '../../lib/library/errors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
+  import { gameSource, sourceLabel, sourceOrder, type GameSource } from '../../lib/library/source';
+  import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import { canPlay } from '../../lib/library/launch';
-
-  function libraryErrorText(err: unknown, fallback: string): string {
-    const code = errorCode(err);
-    return hasMessage(code) ? msg(code) : fallback;
-  }
+  import { matchesCollection } from '../../lib/library/collections';
 
   type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
 
@@ -58,12 +67,23 @@
     sizeBytes: number;
     lastPlayed: string | null;
     subtitle: string;
+    hidden: boolean;
+    inLibrary: boolean;
+    tags?: string[];
+    status?: string;
+    canonicalGameId?: string;
+    watched?: boolean;
+    source?: GameSource | null;
   }
 
   let filter = $state<LibraryFilter>('all');
   let sort = $state<Sort>('alpha');
+  let sourceFilter = $state<GameSource | 'all'>('all');
   let search = $state('');
   let heroHidden = $state(false);
+  let activeCollectionId = $state('');
+  let collectionOpen = $state(false);
+  let collectionTarget = $state<LibraryCollection | null>(null);
   let catalogGames = $state<Record<string, CatalogGame>>({});
   const installedByGame = $derived.by(() => {
     const ids = new Set<string>();
@@ -105,15 +125,36 @@
   $effect(() => {
     requestArt([
       ...downloaded.keys(),
+      ...$watchlist.map((item) => item.gameId),
       ...$libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)),
     ]);
   });
 
-  const filters: { id: LibraryFilter; label: string; icon?: typeof Clock }[] = [
+  $effect(() => {
+    const ids = $libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid));
+    untrack(() => void requestLibraryGenres(ids));
+  });
+
+  const activeCollection = $derived($collections.find((c) => c.id === activeCollectionId));
+
+  const knownGenres = $derived([
+    ...new Set(
+      $libraryGames.flatMap((game) => (game.canonicalGameId ? ($libraryGenres[game.canonicalGameId] ?? []) : [])),
+    ),
+  ]);
+
+  function openCollection(target: LibraryCollection | null) {
+    collectionTarget = target;
+    collectionOpen = true;
+  }
+
+  const filters = $derived<{ id: LibraryFilter; label: string; icon?: typeof Clock }[]>([
     { id: 'all', label: msg('games.filterAll') },
     { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
     { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
-  ];
+    { id: 'hidden', label: msg('games.filterHidden'), icon: EyeOff },
+    ...($watchlist.length > 0 ? [{ id: 'watched' as const, label: msg('games.filterWatched'), icon: Bell }] : []),
+  ]);
 
   const sortLabels: Record<Sort, string> = {
     alpha: msg('games.sortAlpha'),
@@ -126,6 +167,8 @@
     all: msg('games.allGamesTitle'),
     installed: msg('games.filterInstalled'),
     recent: msg('games.recentLabel'),
+    hidden: msg('games.filterHidden'),
+    watched: msg('games.filterWatched'),
   };
 
   function installedEntry(game: LibraryGame): Entry {
@@ -148,6 +191,12 @@
       sizeBytes: game.sizeBytes,
       lastPlayed: game.lastPlayed,
       subtitle: bits.join(' · '),
+      hidden: Boolean(game.hidden),
+      inLibrary: true,
+      tags: game.tags,
+      status: game.status,
+      canonicalGameId: game.canonicalGameId,
+      source: gameSource(game),
     };
   }
 
@@ -168,7 +217,47 @@
       sizeBytes: item.total,
       lastPlayed: null,
       subtitle: bits.join(' · '),
+      hidden: false,
+      inLibrary: false,
+      source: 'typhon',
     };
+  }
+
+  const watchedEntries = $derived(
+    $watchlist.map((item): Entry => ({
+      id: item.gameId,
+      title: item.title,
+      cover: $gameArt[item.gameId]?.cover ?? '',
+      hero: $gameArt[item.gameId]?.hero ?? '',
+      installed: false,
+      playable: false,
+      playtimeSeconds: 0,
+      sizeBytes: 0,
+      lastPlayed: null,
+      subtitle: msg('games.watchedMeta'),
+      hidden: false,
+      inLibrary: false,
+      watched: true,
+    })),
+  );
+
+  $effect(() => {
+    if (filter === 'watched' && $watchlist.length === 0) filter = 'all';
+  });
+
+  function watchedActions(entry: Entry): GameCardAction[] | undefined {
+    if (!entry.watched) return undefined;
+    return [
+      {
+        id: 'unwatch',
+        label: msg('games.unwatchAction'),
+        icon: BellOff,
+        onclick: (event) => {
+          event.stopPropagation();
+          void toggleWatch(entry.id);
+        },
+      },
+    ];
   }
 
   const entries = $derived.by(() => {
@@ -177,10 +266,24 @@
     return [...installed, ...rest];
   });
 
+  const librarySources = $derived(
+    sourceOrder.filter((source) => entries.some((entry) => entry.source === source)),
+  );
+
+  $effect(() => {
+    if (sourceFilter !== 'all' && !librarySources.includes(sourceFilter)) sourceFilter = 'all';
+  });
+
   const visibleGames = $derived.by(() => {
     const query = search.trim().toLowerCase();
-    const filtered = entries.filter((entry) => {
+    const filtered = (filter === 'watched' ? watchedEntries : entries).filter((entry) => {
       if (query && !entry.title.toLowerCase().includes(query)) return false;
+      if (entry.hidden !== (filter === 'hidden')) return false;
+      if (filter !== 'watched' && sourceFilter !== 'all' && entry.source !== sourceFilter) return false;
+      if (activeCollection) {
+        const genres = entry.canonicalGameId ? $libraryGenres[entry.canonicalGameId] : undefined;
+        if (!entry.inLibrary || !matchesCollection(entry, genres, activeCollection)) return false;
+      }
       switch (filter) {
         case 'installed':
           return entry.installed;
@@ -212,7 +315,7 @@
   }
 
   const playedGames = $derived(
-    $installedGames.map(installedEntry).toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed)),
+    $installedGames.filter((game) => !game.hidden).map(installedEntry).toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed)),
   );
 
   const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null && entry.playable));
@@ -335,6 +438,7 @@
               variant="capsule"
               installed={entry.installed}
               running={$runningGames.has(entry.id)}
+              source={entry.source}
               onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
             >
               {#snippet footer()}
@@ -352,7 +456,7 @@
 
   <section class="section">
     <div class="section-head">
-      <h2>{sectionTitles[filter]}</h2>
+      <h2>{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
     </div>
 
     <div class="toolbar">
@@ -368,6 +472,26 @@
             {f.label}
           </Chip>
         {/each}
+        {#if librarySources.length >= 2 && filter !== 'watched'}
+          <DropdownMenu
+            items={[
+              { id: 'all', label: msg('games.filterSourceAll'), checked: sourceFilter === 'all' },
+              ...librarySources.map((source) => ({
+                id: source,
+                label: sourceLabel(source),
+                checked: sourceFilter === source,
+              })),
+            ]}
+            onselect={(id) => (sourceFilter = id as GameSource | 'all')}
+          >
+            {#snippet trigger({ open, toggle })}
+              <Chip selected={open || sourceFilter !== 'all'} onclick={toggle}>
+                {sourceFilter === 'all' ? msg('games.filterSourceAll') : sourceLabel(sourceFilter)}
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
+              </Chip>
+            {/snippet}
+          </DropdownMenu>
+        {/if}
         <DropdownMenu
           items={[
             { id: 'alpha', label: sortLabels.alpha },
@@ -403,6 +527,26 @@
       </div>
     </div>
 
+    <div class="collections" role="group" aria-label={msg('games.collectionsLabel')}>
+      {#each $collections as collection (collection.id)}
+        <Chip
+          selected={activeCollectionId === collection.id}
+          onclick={() => (activeCollectionId = activeCollectionId === collection.id ? '' : collection.id)}
+        >
+          {collection.name}
+        </Chip>
+      {/each}
+      {#if activeCollection}
+        <IconButton size="sm" label={msg('games.collectionEditLabel')} onclick={() => openCollection(activeCollection)}>
+          <Pencil size="1.4rem" strokeWidth={1.8} />
+        </IconButton>
+      {/if}
+      <Chip variant="quiet" onclick={() => openCollection(null)}>
+        <Plus size="1.4rem" strokeWidth={1.8} />
+        {msg('games.collectionAdd')}
+      </Chip>
+    </div>
+
     {#if visibleGames.length === 0}
       {#if search.trim()}
         <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
@@ -421,7 +565,9 @@
             cover={entry.cover}
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
-            meta={entryMeta(entry)}
+            source={entry.source}
+            meta={entry.watched ? entry.subtitle : entryMeta(entry)}
+            actions={watchedActions(entry)}
             onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
           />
         {/each}
@@ -438,14 +584,21 @@
               <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
+            {#if entry.source}
+              <SourceBadge source={entry.source} />
+            {/if}
             <span class="list-meta">{entry.subtitle}</span>
-            <span class="list-meta right">{entryMeta(entry)}</span>
+            <span class="list-meta right">{entry.watched ? '' : entryMeta(entry)}</span>
           </button>
         {/each}
       </div>
     {/if}
   </section>
 </Card>
+
+{#if collectionOpen}
+  <CollectionModal bind:open={collectionOpen} collection={collectionTarget} genres={knownGenres} />
+{/if}
 
 <style>
   .hero {
@@ -671,6 +824,14 @@
     align-items: center;
     gap: 0.6rem;
     flex-wrap: wrap;
+  }
+
+  .collections {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: var(--space-5);
   }
 
   .grid {

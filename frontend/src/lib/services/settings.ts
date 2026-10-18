@@ -36,6 +36,7 @@ export interface Settings {
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
   saveBackupAfterSession: boolean;
+  cloudSaves: boolean;
   saveBackupLimit: number;
   keepPreviousVersion: string;
   allowTorrentReuse: boolean;
@@ -57,6 +58,8 @@ export interface Settings {
   presenceAutoAway: boolean;
   overlayEnabled: boolean;
   overlayHotkey: string;
+  screenshotsEnabled: boolean;
+  screenshotHotkey: string;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -95,6 +98,7 @@ const fallbackDefaults: Settings = {
   updateAutoInstall: false,
   updateSaveBackup: true,
   saveBackupAfterSession: true,
+  cloudSaves: false,
   saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',
   allowTorrentReuse: true,
@@ -116,6 +120,8 @@ const fallbackDefaults: Settings = {
   presenceAutoAway: true,
   overlayEnabled: true,
   overlayHotkey: 'Alt+`',
+  screenshotsEnabled: true,
+  screenshotHotkey: 'Ctrl+F12',
 };
 
 export const maxActiveDownloadOptions = [

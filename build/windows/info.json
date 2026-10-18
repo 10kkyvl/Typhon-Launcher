@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "1.0.2"
+		"file_version": "1.1.0"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "1.0.2",
+			"ProductVersion": "1.1.0",
 			"CompanyName": "Typhon",
 			"FileDescription": "Typhon game launcher",
 			"LegalCopyright": "(c) 2026 Typhon",
