@@ -82,6 +82,7 @@ var (
 	ErrTargetIsRoot       = uierr.New("relocate.target_is_drive_root", "целевой каталог не может быть корнем диска")
 	ErrTargetInsideSource = uierr.New("relocate.target_inside_source", "целевой каталог не может быть внутри исходного")
 	ErrSourceInsideTarget = uierr.New("relocate.source_inside_target", "исходный каталог не может быть внутри целевого")
+	ErrSameLocation       = uierr.New("relocate.same_location", "игра уже лежит в этой папке")
 	ErrTargetNotEmpty     = uierr.New("relocate.target_not_empty", "целевой каталог не пуст или недоступен")
 	ErrFreeSpaceUnknown   = uierr.New("relocate.free_space_unknown", "не удалось определить свободное место на диске")
 	ErrNotEnoughSpace     = uierr.New("relocate.not_enough_space", "недостаточно свободного места на диске")

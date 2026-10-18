@@ -531,17 +531,21 @@ func (s *Service) reserveGame(gameID string) (func(), error) {
 	}
 }
 
-func validateTarget(source, target string) (string, error) {
-	target = strings.TrimSpace(target)
-	if target == "" {
+func gameTarget(source, parent string) (string, error) {
+	parent = strings.TrimSpace(parent)
+	if parent == "" {
 		return "", ErrEmptyTarget
 	}
-	if !filepath.IsAbs(target) {
-		return "", fmt.Errorf("%w: %s", ErrRelativeTarget, target)
+	if !filepath.IsAbs(parent) {
+		return "", fmt.Errorf("%w: %s", ErrRelativeTarget, parent)
 	}
-	target = filepath.Clean(target)
+	parent = filepath.Clean(parent)
+	target := filepath.Join(parent, filepath.Base(source))
 	if isVolumeRoot(target) {
 		return "", fmt.Errorf("%w: %s", ErrTargetIsRoot, target)
+	}
+	if platform.SamePath(source, target) {
+		return "", ErrSameLocation
 	}
 	if platform.Inside(source, target) {
 		return "", ErrTargetInsideSource
@@ -614,23 +618,42 @@ func describeVerify(r hashdir.Result) string {
 
 // --- MoveGame -------------------------------------------------------------
 
-func (s *Service) MoveGame(gameID, target string) (Job, error) {
+func (s *Service) gameSource(gameID string) (library.Game, string, error) {
+	game, err := s.lib.Find(gameID)
+	if err != nil {
+		return library.Game{}, "", fmt.Errorf("%s: %w", gameID, ErrGameNotFound)
+	}
+	if game.External != nil {
+		return library.Game{}, "", fmt.Errorf("%s: %w", gameID, ErrExternalGame)
+	}
+	source := strings.TrimSpace(game.InstallDir)
+	if source == "" {
+		return library.Game{}, "", fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir)
+	}
+	return game, filepath.Clean(source), nil
+}
+
+// MoveGameTarget returns the folder MoveGame would move the game into for
+// the chosen parent, after the same validation MoveGame runs.
+func (s *Service) MoveGameTarget(gameID, parent string) (string, error) {
+	_, source, err := s.gameSource(gameID)
+	if err != nil {
+		return "", err
+	}
+	return gameTarget(source, parent)
+}
+
+// MoveGame moves the game into a folder named like its current one inside
+// parent. parent may hold other things; the resulting folder must not.
+func (s *Service) MoveGame(gameID, parent string) (Job, error) {
 	ctx, err := s.context()
 	if err != nil {
 		return Job{}, err
 	}
-	game, err := s.lib.Find(gameID)
+	game, source, err := s.gameSource(gameID)
 	if err != nil {
-		return Job{}, fmt.Errorf("%s: %w", gameID, ErrGameNotFound)
+		return Job{}, err
 	}
-	if game.External != nil {
-		return Job{}, fmt.Errorf("%s: %w", gameID, ErrExternalGame)
-	}
-	source := strings.TrimSpace(game.InstallDir)
-	if source == "" {
-		return Job{}, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir)
-	}
-	source = filepath.Clean(source)
 
 	if err := s.lib.CheckRelocatable(gameID); err != nil {
 		return Job{}, err
@@ -648,7 +671,7 @@ func (s *Service) MoveGame(gameID, target string) (Job, error) {
 	if err := s.gameConflict(gameID); err != nil {
 		return Job{}, err
 	}
-	cleanTarget, err := validateTarget(source, target)
+	cleanTarget, err := gameTarget(source, parent)
 	if err != nil {
 		return Job{}, err
 	}

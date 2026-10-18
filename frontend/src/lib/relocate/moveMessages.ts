@@ -8,6 +8,7 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.installing': 'transfers.moveErrInstalling',
   'relocate.downloading': 'transfers.moveErrDownloading',
   'relocate.already_running': 'transfers.moveErrAlreadyRunning',
+  'relocate.same_location': 'transfers.moveErrSameLocation',
   'relocate.target_not_empty': 'transfers.moveErrTargetNotEmpty',
   'relocate.target_inside_source': 'transfers.moveErrTargetInsideSource',
   'relocate.source_inside_target': 'transfers.moveErrSourceInsideTarget',
