@@ -63,3 +63,56 @@ func TestWriteAtomicGivesUpWhileDestinationStaysHeld(t *testing.T) {
 		}
 	}
 }
+
+func holdExclusive(t *testing.T, path string) windows.Handle {
+	t.Helper()
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(name, windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func TestOpenReadWaitsOutBriefExclusiveLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spec.json")
+	if err := WriteAtomic(path, []byte("spec")); err != nil {
+		t.Fatal(err)
+	}
+	h := holdExclusive(t, path)
+	if _, err := os.Open(path); !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+		t.Fatalf("setup: plain open err = %v, want a sharing violation", err)
+	}
+	released := make(chan error, 1)
+	time.AfterFunc(40*time.Millisecond, func() { released <- windows.CloseHandle(h) })
+
+	f, err := OpenRead(path)
+	if err != nil {
+		t.Fatalf("OpenRead: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-released; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenReadGivesUpWhileLockStays(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spec.json")
+	if err := WriteAtomic(path, []byte("spec")); err != nil {
+		t.Fatal(err)
+	}
+	h := holdExclusive(t, path)
+	t.Cleanup(func() {
+		if err := windows.CloseHandle(h); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := OpenRead(path); !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+		t.Fatalf("err = %v, want a sharing violation after the retries", err)
+	}
+}

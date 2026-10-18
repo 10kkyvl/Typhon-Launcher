@@ -288,6 +288,13 @@ func Save(path string, version int, data any) error {
 	return WriteAtomic(path, encoded)
 }
 
+// OpenRead opens a file for reading. On Windows it waits out the brief lock a
+// virus scanner takes on a file that was just written, as WriteAtomic does
+// for the rename.
+func OpenRead(path string) (*os.File, error) {
+	return openRead(path)
+}
+
 func WriteAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	mode := fs.FileMode(0o600)
