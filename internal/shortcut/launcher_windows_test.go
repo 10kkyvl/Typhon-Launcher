@@ -370,3 +370,58 @@ func TestSetLinkAppIDRespectsTargetAndMatch(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func shortPath(t *testing.T, path string) string {
+	t.Helper()
+	from, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]uint16, maxLinkPath)
+	n, err := windows.GetShortPathName(from, &buf[0], maxLinkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return windows.UTF16ToString(buf[:n])
+}
+
+func TestSetLinkAppIDMatchesLauncherPathAliases(t *testing.T) {
+	exe := selfExe(t)
+	aliases := map[string]string{
+		"extended": `\\?\` + exe,
+		"short":    shortPath(t, exe),
+	}
+	for name, alias := range aliases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := makeLink(t, dir, "Game.lnk", exe, "--play abc")
+			if err := SetLinkAppID(path, alias, "Typhon.Game.abc", isPlay); err != nil {
+				t.Fatal(err)
+			}
+			if got := inspectLink(t, path); got.id != "Typhon.Game.abc" {
+				t.Fatalf("alias %q: link = %+v", alias, got)
+			}
+		})
+	}
+}
+
+func TestSetLinkAppIDSkipsMissingTarget(t *testing.T) {
+	exe := selfExe(t)
+	dir := t.TempDir()
+	gone := filepath.Join(dir, "gone.exe")
+	if err := os.WriteFile(gone, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := makeLink(t, dir, "Gone.lnk", gone, "--play abc")
+	if err := os.Remove(gone); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := snapshot(t, path)
+	if err := SetLinkAppID(path, exe, "Typhon.Game.abc", isPlay); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := snapshot(t, path)
+	if !bytes.Equal(before, after) {
+		t.Fatal("link to a missing target was rewritten")
+	}
+}

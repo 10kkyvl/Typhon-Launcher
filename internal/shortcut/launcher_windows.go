@@ -158,7 +158,11 @@ func setLinkAppID(path, exe, id string, match func(args string) bool) error {
 	if err != nil {
 		return err
 	}
-	if !strings.EqualFold(filepath.Clean(target), filepath.Clean(exe)) {
+	same, err := sameFile(target, exe)
+	if err != nil {
+		return err
+	}
+	if !same {
 		slog.Debug("link target is not the launcher, skipped", "link", path, "target", target, "launcher", exe)
 		return nil
 	}
@@ -189,6 +193,29 @@ func setLinkAppID(path, exe, id string, match func(args string) bool) error {
 		return err
 	}
 	return pf.save(path)
+}
+
+// sameFile compares by file identity: the link stores the long path while the
+// launcher may run from an 8.3 or \\?\ form of the same path.
+func sameFile(target, exe string) (bool, error) {
+	if strings.EqualFold(filepath.Clean(target), filepath.Clean(exe)) {
+		return true, nil
+	}
+	if target == "" {
+		return false, nil
+	}
+	ti, err := os.Stat(target)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("shortcut: цель ярлыка %s: %w", target, err)
+	}
+	ei, err := os.Stat(exe)
+	if err != nil {
+		return false, fmt.Errorf("shortcut: лаунчер %s: %w", exe, err)
+	}
+	return os.SameFile(ti, ei), nil
 }
 
 //nolint:gosec // G103: addresses of the receiver and of a local UTF-16 buffer, live for the call. G115: HRESULT is the 32-bit value in r0; the buffer length is a constant.
