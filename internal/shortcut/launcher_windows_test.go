@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -106,7 +105,11 @@ func TestRefreshLauncherLinksSetsIDKeepsRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := inspectLink(t, path)
-	if got.id != LauncherAppID || got.args != "--minimized" || got.desc != "desc Typhon.lnk" || !strings.EqualFold(filepath.Clean(got.target), filepath.Clean(exe)) {
+	same, err := sameFile(got.target, exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.id != LauncherAppID || got.args != "--minimized" || got.desc != "desc Typhon.lnk" || !same {
 		t.Fatalf("link = %+v", got)
 	}
 }
