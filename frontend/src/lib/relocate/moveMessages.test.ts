@@ -9,6 +9,7 @@ describe('moveErrorText', () => {
     ['game-id-123: typhon:relocate.downloading: для игры идёт загрузка', 'идёт загрузка'],
     ['game-id-123: typhon:relocate.already_running: перенос уже выполняется', 'уже выполняется'],
     ['D:\\Games\\Foo: typhon:relocate.target_not_empty: целевой каталог не пуст', 'не пуста'],
+    ['typhon:relocate.same_location: игра уже лежит в этой папке', 'уже лежит в этой папке'],
     ['typhon:relocate.target_inside_source: целевой каталог внутри исходного', 'внутри исходной'],
     ['typhon:relocate.source_inside_target: исходный каталог внутри целевого', 'внутри целевой'],
     ['typhon:relocate.target_is_drive_root: корень диска D:\\', 'корень диска'],

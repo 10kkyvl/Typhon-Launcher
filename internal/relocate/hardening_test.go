@@ -84,7 +84,7 @@ func TestCleanupFailureIsRetriedOnStartup(t *testing.T) {
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
 		t.Fatalf("old copy survived startup recovery: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(target, "game.exe")); err != nil {
+	if _, err := os.Stat(filepath.Join(target, filepath.Base(src), "game.exe")); err != nil {
 		t.Fatalf("new copy lost: %v", err)
 	}
 	if got := s.List(); len(got) != 0 {
@@ -238,7 +238,7 @@ func TestRenameErrorOtherThanCrossDeviceFailsTheJob(t *testing.T) {
 			}
 			final := s.wait(job.ID)
 			if tc.wantCopy {
-				if _, err := os.Stat(filepath.Join(target, "game.exe")); err != nil {
+				if _, err := os.Stat(filepath.Join(target, filepath.Base(src), "game.exe")); err != nil {
 					t.Fatalf("copy fallback did not run: %v", err)
 				}
 				return

@@ -43,9 +43,14 @@ export async function listMoves(): Promise<MoveJob[]> {
   return ((await RelocateService.List()) ?? []) as unknown as MoveJob[];
 }
 
-export async function moveGame(gameId: string, target: string): Promise<MoveJob> {
+export async function moveGame(gameId: string, parent: string): Promise<MoveJob> {
   if (!inWails) throw unavailable();
-  return (await RelocateService.MoveGame(gameId, target)) as unknown as MoveJob;
+  return (await RelocateService.MoveGame(gameId, parent)) as unknown as MoveJob;
+}
+
+export async function moveGameTarget(gameId: string, parent: string): Promise<string> {
+  if (!inWails) throw unavailable();
+  return await RelocateService.MoveGameTarget(gameId, parent);
 }
 
 export async function moveLibrary(parent: string): Promise<MoveJob> {

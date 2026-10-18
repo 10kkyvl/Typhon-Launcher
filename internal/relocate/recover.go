@@ -28,6 +28,31 @@ func (s *Service) recoverAll(ctx context.Context) {
 			return
 		}
 		s.recoverJob(ctx, job)
+		s.logRecovery(job)
+	}
+}
+
+// logRecovery writes one line per journal entry: the stage recovery found it
+// in and what became of it. A job that ended failed is a warning with the
+// reason; a job left as it was (game busy, shutdown) says so.
+func (s *Service) logRecovery(found Job) {
+	now, err := s.jobSnapshot(found.ID)
+	switch {
+	case err != nil && (found.Stage == StageDone || found.Stage == StageCancelled || found.Stage == StageFailed):
+		slog.Info("move recovery finished", "component", "relocate", "operation", "recover",
+			"job", found.ID, "game", found.GameID, "found_stage", found.Stage, "outcome", "surfaced")
+	case err != nil:
+		slog.Info("move recovery finished", "component", "relocate", "operation", "recover",
+			"job", found.ID, "game", found.GameID, "found_stage", found.Stage, "outcome", "completed")
+	case now.Stage == StageFailed:
+		slog.Warn("move recovery finished", "component", "relocate", "operation", "recover",
+			"job", found.ID, "game", found.GameID, "found_stage", found.Stage, "outcome", "failed", "reason", now.Error)
+	case now.Stage == found.Stage:
+		slog.Info("move recovery finished", "component", "relocate", "operation", "recover",
+			"job", found.ID, "game", found.GameID, "found_stage", found.Stage, "outcome", "left_for_next_start")
+	default:
+		slog.Info("move recovery finished", "component", "relocate", "operation", "recover",
+			"job", found.ID, "game", found.GameID, "found_stage", found.Stage, "outcome", "advanced", "stage", now.Stage)
 	}
 }
 

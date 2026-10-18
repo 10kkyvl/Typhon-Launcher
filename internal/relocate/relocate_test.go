@@ -168,7 +168,6 @@ func TestMoveGameRejectsBadTargets(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, oldDir := addTestGame(t, lib)
 
-	root := filepath.VolumeName(oldDir) + string(filepath.Separator)
 	cases := []struct {
 		name   string
 		target string
@@ -176,9 +175,8 @@ func TestMoveGameRejectsBadTargets(t *testing.T) {
 	}{
 		{"empty", "", ErrEmptyTarget},
 		{"relative", "relative/path", ErrRelativeTarget},
-		{"volume root", root, ErrTargetIsRoot},
 		{"inside source", filepath.Join(oldDir, "sub"), ErrTargetInsideSource},
-		{"source inside target", filepath.Dir(oldDir), ErrSourceInsideTarget},
+		{"already there", filepath.Dir(oldDir), ErrSameLocation},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -194,11 +192,15 @@ func TestMoveGameRefusesNonEmptyTarget(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, _ := addTestGame(t, lib)
 
-	target := t.TempDir()
-	if err := os.WriteFile(filepath.Join(target, "occupied.txt"), []byte("x"), 0o600); err != nil {
+	parent := t.TempDir()
+	occupied := filepath.Join(parent, "Game")
+	if err := os.Mkdir(occupied, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.MoveGame(game.ID, target); !errors.Is(err, ErrTargetNotEmpty) {
+	if err := os.WriteFile(filepath.Join(occupied, "occupied.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.MoveGame(game.ID, parent); !errors.Is(err, ErrTargetNotEmpty) {
 		t.Fatalf("err = %v, want ErrTargetNotEmpty", err)
 	}
 }
@@ -207,9 +209,10 @@ func TestMoveGameRenameFastPath(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, oldDir := addTestGame(t, lib)
-	target := filepath.Join(filepath.Dir(oldDir), "renamed-target")
+	parent := filepath.Join(filepath.Dir(oldDir), "renamed-parent")
+	target := filepath.Join(parent, filepath.Base(oldDir))
 
-	job, err := s.MoveGame(game.ID, target)
+	job, err := s.MoveGame(game.ID, parent)
 	if err != nil {
 		t.Fatalf("move game: %v", err)
 	}
@@ -396,8 +399,8 @@ func TestMoveGameRefusesConcurrentSameGame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.InstallDir != targetA {
-		t.Fatalf("installDir = %q, want %q (first move should have won cleanly)", updated.InstallDir, targetA)
+	if want := filepath.Join(targetA, "Game"); updated.InstallDir != want {
+		t.Fatalf("installDir = %q, want %q (first move should have won cleanly)", updated.InstallDir, want)
 	}
 }
 
