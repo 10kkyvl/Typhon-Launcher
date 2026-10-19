@@ -30,6 +30,8 @@ const (
 	providerName    = "igdb"
 	maxRetryAfter   = 24 * time.Hour
 	maxBrowseGETURL = 6 << 10
+
+	codeSavePathsNotFound = "save_paths_not_found"
 )
 
 var (
@@ -40,6 +42,7 @@ var (
 
 type httpStatusError struct {
 	status int
+	code   string
 	err    error
 }
 
@@ -205,6 +208,7 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 	if strings.HasPrefix(payload.ProviderID, "steam:") {
 		meta.SteamAppID = strings.TrimPrefix(payload.ProviderID, "steam:")
 	}
+	meta.Steam = steamInfo(payload.Steam)
 	if payload.Cover != nil && payload.Cover.URL != "" {
 		meta.Cover = &metadata.ImageRef{URL: payload.Cover.URL, Width: payload.Cover.Width, Height: payload.Cover.Height}
 	}
@@ -215,6 +219,63 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 		meta.Screenshots = append(meta.Screenshots, metadata.ImageRef{URL: shot.URL, Width: shot.Width, Height: shot.Height})
 	}
 	return meta, nil
+}
+
+func steamInfo(p *steamPayload) *metadata.SteamInfo {
+	if p == nil {
+		return nil
+	}
+	in := &metadata.SteamInfo{
+		AppID:           p.AppID,
+		URL:             p.URL,
+		Controller:      p.Controller,
+		Metacritic:      p.Metacritic,
+		Recommendations: p.Recommendations,
+	}
+	for _, r := range p.Requirements.Minimum {
+		in.Requirements.Minimum = append(in.Requirements.Minimum, metadata.Requirement{Label: r.Label, Value: r.Value})
+	}
+	for _, r := range p.Requirements.Recommended {
+		in.Requirements.Recommended = append(in.Requirements.Recommended, metadata.Requirement{Label: r.Label, Value: r.Value})
+	}
+	for _, d := range p.DLC {
+		in.DLC = append(in.DLC, metadata.SteamDLC{AppID: d.AppID, Name: d.Name})
+	}
+	out, ok := metadata.SanitizeSteamInfo(in)
+	if !ok {
+		return nil
+	}
+	return out
+}
+
+// SavePaths returns the PCGamingWiki save locations of a game. A game without a
+// page is metadata.ErrNoSaveData, which a caller can tell apart from a failure.
+func (c *Client) SavePaths(ctx context.Context, providerID string) (metadata.SavePaths, error) {
+	providerID = strings.TrimSpace(providerID)
+	if !numeric(strings.TrimPrefix(providerID, "steam:")) {
+		return metadata.SavePaths{}, fmt.Errorf("%w: некорректный идентификатор %q", ErrBadRequest, providerID)
+	}
+	var payload savesResponse
+	err := c.get(ctx, account.APIPrefix+"/metadata/games/"+providerID+"/saves", &payload)
+	var statusErr *httpStatusError
+	if errors.As(err, &statusErr) && statusErr.status == http.StatusNotFound {
+		// Only the explicit code means "this game has no page". A bare 404 is
+		// an old backend without the route and must not be cached as absence.
+		if statusErr.code == codeSavePathsNotFound {
+			return metadata.SavePaths{}, metadata.ErrNoSaveData
+		}
+		return metadata.SavePaths{}, fmt.Errorf("%w: маршрут сохранений не найден: %w", ErrUpstream, err)
+	}
+	if err != nil {
+		return metadata.SavePaths{}, err
+	}
+	return metadata.ValidateSavePaths(metadata.SavePaths{
+		PageURL: payload.PageURL,
+		Windows: payload.Windows,
+		Source:  payload.Source,
+		License: payload.License,
+		Via:     payload.Via,
+	})
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -292,7 +353,7 @@ func statusError(resp *http.Response, body io.Reader) error {
 	default:
 		err = fmt.Errorf("%w: %d %s", ErrUpstream, status, code)
 	}
-	return &httpStatusError{status: status, err: err}
+	return &httpStatusError{status: status, code: code, err: err}
 }
 
 func parseRetryAfter(value string, now time.Time) time.Duration {

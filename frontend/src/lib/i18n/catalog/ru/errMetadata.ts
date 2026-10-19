@@ -20,6 +20,12 @@ export const errMetadata = {
   'errMetadata.metadataSaveFailed': 'не удалось сохранить данные метаданных',
   'errMetadata.metadataStoreLinkMissing': 'ссылка на магазин недоступна',
   'errMetadata.metadataStoreLinkInvalid': 'ссылка на магазин не прошла проверку',
+  'errMetadata.metadataNoSaveData': 'для этой игры нет данных о папках сохранений',
+  'errMetadata.metadataSaveDataInvalid': 'данные о папках сохранений не прошли проверку',
+  'errMetadata.metadataGameNotResolved': 'игра ещё не сопоставлена с каталогом',
+  'errMetadata.metadataLinkKindUnknown': 'неизвестный вид ссылки',
+  'errMetadata.metadataLinkNoData': 'для этой ссылки нет данных об игре',
+  'errMetadata.metadataLinkRejected': 'ссылка не прошла проверку',
 } as const;
 
 export type ErrMetadataKey = keyof typeof errMetadata;

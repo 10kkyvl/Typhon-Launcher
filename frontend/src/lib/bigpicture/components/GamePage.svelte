@@ -6,6 +6,7 @@
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero } from '../../game/view';
+  import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
   import { installActive, installStatusLabels, installations } from '../../stores/install';
@@ -83,6 +84,7 @@
   let cancelingDownload = $state(false);
   let addingToLibrary = $state(false);
   let screenshotIndex = $state(0);
+  let dlcExpanded = $state(false);
   let descriptionReader: HTMLDivElement | undefined = $state();
   let detailLoadId = '';
   let releaseLoadKey = '';
@@ -101,6 +103,8 @@
   const shots = $derived(metadata?.screenshots ?? []);
   const hero = $derived(pickHero(metadata?.hero || '', shots) || cover);
   const displayShots = $derived(galleryShots(shots, hero));
+  const requirements = $derived(requirementColumns(metadata?.steam));
+  const dlc = $derived(dlcView(metadata?.steam?.dlc, dlcExpanded));
   const summary = $derived(metadata?.game.summary || catalogGame?.summary || '');
   const year = $derived(metadata?.game.releaseYear || catalogGame?.releaseYear || (metadata?.game.releaseDate ? new Date(metadata.game.releaseDate).getFullYear() : 0));
   const gameMeta = $derived([year || '', metadata?.game.developer || catalogGame?.developer, metadata?.game.publisher || catalogGame?.publisher].filter(Boolean).join(' · '));
@@ -655,6 +659,38 @@
             {:else}<p class="muted">{bp('bp.game.noScreenshots')}</p>{/if}
           </article>
         </section>
+        {#if hasRequirements(requirements) || dlc.total > 0}
+          <section class="detail-extras">
+            {#if hasRequirements(requirements)}
+              <article class="description-card">
+                <h2>{bp('bp.game.requirements')}</h2>
+                <div class="requirement-columns">
+                  {#each [{ title: bp('bp.game.requirementsMinimum'), list: requirements.minimum }, { title: bp('bp.game.requirementsRecommended'), list: requirements.recommended }] as column (column.title)}
+                    {#if column.list.length}
+                      <div>
+                        <h3>{column.title}</h3>
+                        <dl class="requirement-list">
+                          {#each column.list as row (row.label)}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}
+                        </dl>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </article>
+            {/if}
+            {#if dlc.total > 0}
+              <article class="description-card">
+                <h2>{bp('bp.game.dlc', { count: dlc.total })}</h2>
+                <ul class="dlc-list">
+                  {#each dlc.items as item (item.appId)}<li>{item.name}</li>{/each}
+                </ul>
+                {#if dlc.collapsible}
+                  <button class="large-button secondary description-open" data-bp-focus="game:dlc:toggle" onclick={() => dlcExpanded = !dlcExpanded}>{dlcExpanded ? bp('bp.game.dlcCollapse') : bp('bp.game.dlcShowAll')}</button>
+                {/if}
+              </article>
+            {/if}
+          </section>
+        {/if}
       {:else}
         <section class="release-section" aria-label={bp('bp.game.releases')}>
           <div class="section-title"><div><span class="section-kicker">{bp('bp.game.eyebrow')}</span><h2>{bp('bp.game.releases')}</h2></div>
@@ -817,6 +853,14 @@
   .summary { margin: 1.4rem 0 0; color: var(--text-2); font-size: 1.55rem; line-height: 1.65; white-space: pre-line; }
   .summary-preview { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; }
   .description-open { margin-top: 1.5rem; }
+  .detail-extras { display: grid; gap: 2rem; margin-top: 2rem; }
+  .requirement-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 2rem; margin-top: 1.4rem; }
+  .requirement-columns h3 { margin: 0 0 .8rem; color: var(--text-3); font-size: 1.4rem; font-weight: 600; }
+  .requirement-list { display: flex; flex-direction: column; margin: 0; }
+  .requirement-list div { display: flex; gap: 1.4rem; padding: .8rem 0; border-top: 1px solid var(--border); font-size: 1.4rem; line-height: 1.5; }
+  .requirement-list dt { flex: 0 0 14rem; color: var(--text-3); }
+  .requirement-list dd { flex: 1; min-width: 0; margin: 0; color: var(--text-2); overflow-wrap: anywhere; }
+  .dlc-list { display: flex; flex-direction: column; gap: .6rem; margin: 1.4rem 0 0; padding: 0; list-style: none; color: var(--text-2); font-size: 1.45rem; }
   .muted { color: var(--text-3); font-size: 1.45rem; line-height: 1.5; }
   .screenshots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.4rem; }
   .shot { display: block; overflow: hidden; width: 100%; padding: 0; aspect-ratio: 16 / 9; border: 0; border-radius: 1rem; background: var(--surface-3); cursor: pointer; }

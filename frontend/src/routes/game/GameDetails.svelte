@@ -38,6 +38,8 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import ReferenceLinks from '../../lib/components/ReferenceLinks.svelte';
+  import SteamExtras from '../../lib/components/SteamExtras.svelte';
   import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
@@ -92,11 +94,16 @@
     dismissMetadataMatch,
     ensureMetadataFresh,
     getMetadataView,
+    getSavePaths,
+    openReferenceLink,
     openStoreLink,
     refreshMetadata,
     type MetadataView,
+    type ReferenceKind,
+    type SavePaths,
     type StoreId,
   } from '../../lib/services/metadata';
+  import { referenceKinds, steamFacts } from '../../lib/game/extras';
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
@@ -121,7 +128,7 @@
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesSize, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -382,8 +389,32 @@
       { label: msg('games.detailFactDeveloper'), value: info?.developer },
       { label: msg('games.detailFactPublisher'), value: info?.publisher },
       { label: msg('games.detailFactPlatforms'), value: joinLimited(platforms, 4), full: platforms.join(', ') },
+      ...steamFacts(metaView?.steam, msg, formatCount),
     ]),
   );
+
+  let savePaths = $state<SavePaths | null>(null);
+  let savePathsToken = 0;
+
+  $effect(() => {
+    const gameId = canonicalId;
+    untrack(() => {
+      const current = ++savePathsToken;
+      savePaths = null;
+      if (!gameId) return;
+      getSavePaths(gameId).then(
+        (paths) => {
+          if (current === savePathsToken) savePaths = paths;
+        },
+        () => {
+          // a failed lookup only hides the optional PCGamingWiki link; the user sees no toast for it by design
+          if (current === savePathsToken) savePaths = null;
+        },
+      );
+    });
+  });
+
+  const references = $derived(referenceKinds(savePaths, Boolean(canonicalId && title)));
 
   const shotCols = $derived(
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
@@ -629,6 +660,15 @@
       await openStoreLink(canonicalId, store);
     } catch (err) {
       toast(metadataErrorText(err, msg('errMetadata.fallback')), 'danger');
+    }
+  }
+
+  async function openReference(kind: ReferenceKind, appId = 0) {
+    if (!canonicalId) return;
+    try {
+      await openReferenceLink(canonicalId, kind, appId);
+    } catch (err) {
+      toast(metadataErrorText(err, msg('games.detailDlcOpenError')), 'danger');
     }
   }
 
@@ -1090,6 +1130,7 @@
 
         <div class="stores">
           <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+          <ReferenceLinks kinds={references} onopen={(kind) => openReference(kind)} />
         </div>
 
         {#if showUpdateCard && update}
@@ -1159,6 +1200,8 @@
             />
           </section>
         {/if}
+
+        <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />
 
         <GameReviews canonicalGameId={canonicalId ?? ''} />
       {/if}
