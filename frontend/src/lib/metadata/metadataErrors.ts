@@ -25,6 +25,12 @@ export const REASONS: Record<string, MessageKey> = {
   'metadata.save_failed': 'errMetadata.metadataSaveFailed',
   'metadata.store_link_missing': 'errMetadata.metadataStoreLinkMissing',
   'metadata.store_link_invalid': 'errMetadata.metadataStoreLinkInvalid',
+  'metadata.no_save_data': 'errMetadata.metadataNoSaveData',
+  'metadata.save_data_invalid': 'errMetadata.metadataSaveDataInvalid',
+  'metadata.game_not_resolved': 'errMetadata.metadataGameNotResolved',
+  'metadata.link_kind_unknown': 'errMetadata.metadataLinkKindUnknown',
+  'metadata.link_no_data': 'errMetadata.metadataLinkNoData',
+  'metadata.link_rejected': 'errMetadata.metadataLinkRejected',
 };
 
 export function metadataErrorText(err: unknown, fallback: string = msg('errMetadata.fallback')): string {

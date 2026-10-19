@@ -62,6 +62,8 @@ export interface SavesResult {
   path: string;
   candidates: string[] | null;
   unreadable: number;
+  hintsError?: string;
+  hint?: { source: string; license: string; via: string; pageUrl: string } | null;
 }
 
 export interface SessionEvent {

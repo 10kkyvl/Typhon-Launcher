@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"typhon/internal/platform"
+	"typhon/internal/steamlink"
 	"typhon/internal/uierr"
 )
 
@@ -28,6 +29,27 @@ type SavesResult struct {
 	Path       string   `json:"path"`
 	Candidates []string `json:"candidates"`
 	Unreadable int      `json:"unreadable"`
+	// HintsError — почему подсказки путей не сработали (сеть, сервер). Пустая
+	// строка значит, что подсказки либо отработали, либо их не запрашивали.
+	HintsError string `json:"hintsError,omitempty"`
+	// Hint заполнен, только когда Path или Candidates получены из подсказок
+	// сервера, а не из SavesDir и не эвристиками: по нему окно показывает
+	// атрибуцию источника.
+	Hint *SaveHintSource `json:"hint,omitempty"`
+}
+
+// SaveHintSource — откуда взяты подсказки путей и на каких условиях.
+type SaveHintSource struct {
+	Source  string `json:"source"`
+	License string `json:"license"`
+	Via     string `json:"via"`
+	PageURL string `json:"pageUrl"`
+}
+
+// SaveHintSet — шаблоны путей игры вместе с атрибуцией источника.
+type SaveHintSet struct {
+	Templates []string
+	Source    SaveHintSource
 }
 
 var installSaveDirs = []string{
@@ -52,7 +74,9 @@ func (s *Service) LocateSaves(ctx context.Context, id string) (SavesResult, erro
 		return SavesResult{}, errNotFound
 	}
 	stored, title, installDir := game.SavesDir, game.Title, game.InstallDir
+	canonicalID := game.CanonicalGameID
 	roots := s.saveRoots
+	hints := s.saveHintSource()
 	s.mu.Unlock()
 
 	if stored != "" {
@@ -67,7 +91,158 @@ func (s *Service) LocateSaves(ctx context.Context, id string) (SavesResult, erro
 		}
 	}
 
-	return detectSaves(ctx, title, installDir, roots)
+	var hinted hintOutcome
+	if hints.lookup != nil && canonicalID != "" {
+		var err error
+		hinted, err = resolveHints(ctx, hints, canonicalID, installDir)
+		if err != nil {
+			return SavesResult{}, err
+		}
+		if len(hinted.paths) == 1 {
+			return SavesResult{Path: hinted.paths[0], Unreadable: hinted.unreadable, HintsError: hinted.failure, Hint: &hinted.source}, nil
+		}
+		if len(hinted.paths) > 1 {
+			return SavesResult{Candidates: hinted.paths, Unreadable: hinted.unreadable, HintsError: hinted.failure, Hint: &hinted.source}, nil
+		}
+	}
+
+	result, err := detectSaves(ctx, title, installDir, roots)
+	if err != nil {
+		return SavesResult{}, err
+	}
+	result.Unreadable += hinted.unreadable
+	result.HintsError = hinted.failure
+	return result, nil
+}
+
+type hintSource struct {
+	lookup    func(ctx context.Context, canonicalID string) (SaveHintSet, error)
+	envs      func() ([]platform.SaveEnv, error)
+	steamRoot func() (string, error)
+}
+
+func (s *Service) saveHintSource() hintSource {
+	return hintSource{lookup: s.saveHints, envs: s.saveEnvs, steamRoot: s.steamRoot}
+}
+
+type hintOutcome struct {
+	paths      []string
+	source     SaveHintSource
+	unreadable int
+	failure    string
+}
+
+// resolveHints раскрывает шаблоны PCGamingWiki в существующие каталоги. Сбой
+// получения шаблонов (сеть, сервер) не отменяет поиск: он уходит в failure, и
+// пользователь видит причину рядом с результатом эвристик. Отмена ctx и
+// ошибка чтения диска, наоборот, поднимаются наверх.
+func resolveHints(ctx context.Context, src hintSource, canonicalID, installDir string) (hintOutcome, error) {
+	var out hintOutcome
+	set, lookupErr := src.lookup(ctx, canonicalID)
+	templates := set.Templates
+	out.source = set.Source
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return hintOutcome{}, ctxErr
+	}
+	// The failure is not dropped: it travels to the caller in the result.
+	if out.failure = failureText(lookupErr); out.failure != "" {
+		return out, nil
+	}
+	if len(templates) == 0 {
+		return out, nil
+	}
+	envs, err := src.envs()
+	if err != nil {
+		return hintOutcome{}, fmt.Errorf("save hint folders: %w", err)
+	}
+	steam, err := steamRootFor(src.steamRoot)
+	if err != nil {
+		return hintOutcome{}, err
+	}
+
+	seen := map[string]bool{}
+	for _, env := range envs {
+		scoped := make(platform.SaveEnv, len(env)+2)
+		for k, v := range env {
+			scoped[k] = v
+		}
+		if installDir != "" {
+			scoped[platform.TokenGame] = installDir
+		}
+		if _, ok := scoped[platform.TokenSteam]; !ok && steam != "" {
+			scoped[platform.TokenSteam] = steam
+		}
+		for _, tmpl := range templates {
+			found, unreadable, err := platform.ResolveSaveHint(ctx, tmpl, scoped)
+			if errors.Is(err, platform.ErrSaveTokenUnavail) || errors.Is(err, platform.ErrBadSaveHint) {
+				continue
+			}
+			if errors.Is(err, platform.ErrSaveHintTooBroad) {
+				out.failure = err.Error()
+				continue
+			}
+			if err != nil {
+				return hintOutcome{}, fmt.Errorf("save hint %q: %w", tmpl, err)
+			}
+			out.unreadable += unreadable
+			for _, p := range found {
+				key, err := dedupKey(p)
+				if err != nil {
+					return hintOutcome{}, err
+				}
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				out.paths = append(out.paths, p)
+			}
+		}
+	}
+	return out, nil
+}
+
+// dedupKey сводит разные пути к одной папке, в том числе через симлинк
+// (Documents бутыля CrossOver указывает на ~/Documents). Ошибка EvalSymlinks
+// оставляет исходный путь: обход всё равно проверит его сам.
+func dedupKey(p string) (string, error) {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		p = resolved
+	}
+	return platform.PathKey(p)
+}
+
+func failureText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// steamRootFor отличает «Steam не установлен» от поломки: первое означает
+// только, что шаблоны с {steam} пропускаются.
+func steamRootFor(root func() (string, error)) (string, error) {
+	if root == nil {
+		return "", nil
+	}
+	path, err := root()
+	switch {
+	case err == nil:
+		return path, nil
+	case errors.Is(err, steamlink.ErrNotInstalled), errors.Is(err, steamlink.ErrUnsupported):
+		return "", nil
+	default:
+		return "", fmt.Errorf("steam root: %w", err)
+	}
+}
+
+// SetSaveHints wires the lookup of save path templates for a catalog game; a
+// game the lookup knows nothing about answers with no templates and no error.
+//
+//wails:ignore
+func (s *Service) SetSaveHints(fn func(ctx context.Context, canonicalID string) (SaveHintSet, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.saveHints = fn
 }
 
 func (s *Service) SetSavesDir(id, dir string) (Game, error) {

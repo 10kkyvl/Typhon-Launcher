@@ -221,6 +221,11 @@ type Service struct {
 	// возможность её подменить, иначе прогон оставляет после себя
 	// настоящие бутыли на машине разработчика.
 	prepare func(ctx context.Context, req launch) error
+	// saveHints отдаёт шаблоны путей сохранений каталожной игры. Поле, а не
+	// импорт metadata: библиотека не знает про сервис метаданных.
+	saveHints func(ctx context.Context, canonicalID string) (SaveHintSet, error)
+	saveEnvs  func() ([]platform.SaveEnv, error)
+	steamRoot func() (string, error)
 }
 
 type SessionWatcher interface {
@@ -284,6 +289,8 @@ func NewServiceAt(path string) (*Service, error) {
 		steam:           disabledSteam{},
 		launcherPath:    os.Executable,
 		saveRoots:       platform.SaveRoots,
+		saveEnvs:        platform.SaveEnvs,
+		steamRoot:       steamlink.Root,
 		start:           newGameStarter(),
 		openURI:         platform.OpenURI,
 		prepare:         prepareRuntime,

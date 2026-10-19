@@ -23,4 +23,10 @@ export const errMetadata: Record<ErrMetadataKey, Message> = {
   'errMetadata.metadataSaveFailed': 'Failed to save metadata',
   'errMetadata.metadataStoreLinkMissing': 'The store link is unavailable',
   'errMetadata.metadataStoreLinkInvalid': 'The store link failed validation',
+  'errMetadata.metadataNoSaveData': 'There is no save folder data for this game',
+  'errMetadata.metadataSaveDataInvalid': 'The save folder data failed validation',
+  'errMetadata.metadataGameNotResolved': 'The game is not matched to the catalog yet',
+  'errMetadata.metadataLinkKindUnknown': 'Unknown link type',
+  'errMetadata.metadataLinkNoData': 'There is no data for this link',
+  'errMetadata.metadataLinkRejected': 'The link failed validation',
 };

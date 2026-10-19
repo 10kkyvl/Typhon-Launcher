@@ -33,6 +33,37 @@ export interface GameArt {
 
 export type MetadataMatch = 'idle' | 'searching' | 'unmatched' | 'failed' | 'skipped';
 
+export interface SteamRequirement {
+  label: string;
+  value: string;
+}
+
+export interface SteamDlc {
+  appId: number;
+  name: string;
+}
+
+export interface SteamInfo {
+  appId: number;
+  url: string;
+  requirements?: {
+    minimum?: SteamRequirement[] | null;
+    recommended?: SteamRequirement[] | null;
+  } | null;
+  dlc?: SteamDlc[] | null;
+  controller?: string | null;
+  metacritic?: number | null;
+  recommendations?: number | null;
+}
+
+export interface SavePaths {
+  pageUrl: string;
+  windows: string[] | null;
+  source: string;
+  license: string;
+  via?: string;
+}
+
 export interface MetadataView {
   game: CatalogGame;
   cover: string;
@@ -43,6 +74,7 @@ export interface MetadataView {
   provider: string;
   match: MetadataMatch;
   storeLinks?: Record<string, string> | null;
+  steam?: SteamInfo | null;
 }
 
 export type StoreId = 'steam' | 'gog' | 'epic';
@@ -151,4 +183,21 @@ export async function ensureMetadataFresh(gameId: string): Promise<boolean> {
 export async function openStoreLink(gameId: string, store: StoreId): Promise<void> {
   if (!inWails) throw unavailable();
   await MetadataService.OpenStoreLink(gameId, store);
+}
+
+export type ReferenceKind = 'pcgamingwiki' | 'howlongtobeat' | 'steamdlc';
+
+export async function openReferenceLink(gameId: string, kind: ReferenceKind, appId = 0): Promise<void> {
+  if (!inWails) throw unavailable();
+  await MetadataService.OpenReferenceLink(gameId, kind, appId);
+}
+
+export async function getSavePaths(gameId: string): Promise<SavePaths | null> {
+  if (!inWails) return null;
+  try {
+    return (await MetadataService.SavePaths(gameId)) as unknown as SavePaths;
+  } catch (err) {
+    if (errorCode(err) === 'metadata.no_save_data') return null;
+    throw err;
+  }
 }

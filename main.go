@@ -81,6 +81,8 @@ const discordClientID = "1541194395964014623"
 
 const singleInstanceID = "com.typhon.launcher"
 
+const saveHintsTimeout = 10 * time.Second
+
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
 var errNoBrokerDir = errors.New("--install-broker требует путь к каталогу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
@@ -387,6 +389,22 @@ func main() {
 		fatal("start metadata service", err)
 	}
 	libraryService.EnableSteam()
+	libraryService.SetSaveHints(func(ctx context.Context, canonicalID string) (library.SaveHintSet, error) {
+		// A save search must not hang on the network: a slower answer falls back to heuristics with the reason shown.
+		ctx, cancel := context.WithTimeout(ctx, saveHintsTimeout)
+		defer cancel()
+		found, err := metadataService.SavePaths(ctx, canonicalID)
+		if errors.Is(err, metadata.ErrNoSaveData) || errors.Is(err, metadata.ErrGameNotResolved) {
+			return library.SaveHintSet{}, nil // the game has no PCGamingWiki page: heuristics take over, nothing failed
+		}
+		if err != nil {
+			return library.SaveHintSet{}, err
+		}
+		return library.SaveHintSet{
+			Templates: found.Windows,
+			Source:    library.SaveHintSource{Source: found.Source, License: found.License, Via: found.Via, PageURL: found.PageURL},
+		}, nil
+	})
 	libraryService.SetSteamArt(func(canonicalID string) (steamlink.Art, error) {
 		files, err := metadataService.ArtFiles(canonicalID)
 		if err != nil {
