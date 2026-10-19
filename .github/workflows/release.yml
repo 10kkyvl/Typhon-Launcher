@@ -166,18 +166,40 @@ jobs:
         with:
           version: v3.0.0-beta.17
 
+      # The pinned official archive comes first: during the 1.1.0 release the
+      # Chocolatey feed kept answering 503, and a tag run cannot pick up a
+      # workflow fix, so Chocolatey is only the fallback.
       - name: Install NSIS
         shell: pwsh
+        env:
+          NSIS_VERSION: "3.13"
+          NSIS_SHA256: ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8
         run: |
-          choco install nsis -y --no-progress
-          # "$env:ProgramFiles(x86)" parses as $env:ProgramFiles plus a literal "(x86)".
-          $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) | Where-Object { $_ }
-          $nsisDir = $roots |
-            ForEach-Object { Join-Path $_ 'NSIS' } |
-            Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } |
-            Select-Object -First 1
-          if (-not $nsisDir) {
-            throw "makensis.exe not found after installing NSIS; looked in: $($roots -join ', ')"
+          $zip = Join-Path $env:RUNNER_TEMP "nsis-$env:NSIS_VERSION.zip"
+          $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/$env:NSIS_VERSION/nsis-$env:NSIS_VERSION.zip"
+          curl.exe -fsSL --retry 4 --retry-all-errors --retry-delay 15 --max-time 300 -o $zip $url
+          if ($LASTEXITCODE -eq 0) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+            if ($hash -ne $env:NSIS_SHA256) {
+              throw "nsis-$env:NSIS_VERSION.zip has sha256 $hash, expected $env:NSIS_SHA256"
+            }
+            Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+            $nsisDir = Join-Path $env:RUNNER_TEMP "nsis-$env:NSIS_VERSION"
+          } else {
+            Write-Warning "NSIS archive download failed with curl exit code $LASTEXITCODE; falling back to Chocolatey"
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "choco install nsis failed with exit code $LASTEXITCODE"
+            }
+            # "$env:ProgramFiles(x86)" parses as $env:ProgramFiles plus a literal "(x86)".
+            $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) | Where-Object { $_ }
+            $nsisDir = $roots |
+              ForEach-Object { Join-Path $_ 'NSIS' } |
+              Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } |
+              Select-Object -First 1
+          }
+          if (-not $nsisDir -or -not (Test-Path (Join-Path $nsisDir 'makensis.exe'))) {
+            throw "makensis.exe not found in '$nsisDir' after installing NSIS"
           }
           Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
 
