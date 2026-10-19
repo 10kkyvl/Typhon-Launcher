@@ -65,8 +65,12 @@ type StatsView struct {
 
 type CommonGame struct {
 	GameCard
-	ViewerOwned bool `json:"viewerOwned"`
-	TargetOwned bool `json:"targetOwned"`
+	ViewerOwned           bool       `json:"viewerOwned"`
+	TargetOwned           bool       `json:"targetOwned"`
+	ViewerPlaytimeSeconds *int64     `json:"viewerPlaytimeSeconds,omitempty"`
+	TargetPlaytimeSeconds *int64     `json:"targetPlaytimeSeconds,omitempty"`
+	ViewerLastPlayedAt    *time.Time `json:"viewerLastPlayedAt,omitempty"`
+	TargetLastPlayedAt    *time.Time `json:"targetLastPlayedAt,omitempty"`
 }
 
 type CommonGames struct {
@@ -169,6 +173,11 @@ type GameFriends struct {
 
 type GamesPage struct {
 	Games []PlayedGame `json:"games"`
+	Next  string       `json:"next"`
+}
+
+type CommonPage struct {
+	Games []CommonGame `json:"games"`
 	Next  string       `json:"next"`
 }
 

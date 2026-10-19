@@ -211,9 +211,36 @@ describe('lists around a profile', () => {
     expect(calls.at(-1)).toEqual({ key: 'social.UserGames', args: ['alice', 'c1'] });
   });
 
+  it('pages through common games with the cursor, and an empty page has no next cursor', async () => {
+    answer('social.UserCommon', { games: null, next: undefined });
+    const { social } = await load(true);
+
+    await expect(social.userCommon('alice', 'c1')).resolves.toEqual({ games: [], next: '' });
+    expect(calls.at(-1)).toEqual({ key: 'social.UserCommon', args: ['alice', 'c1'] });
+  });
+
+  it('keeps the common games and the next cursor of a full page', async () => {
+    const games = [{ igdbId: 1, title: 'A', viewerOwned: true, targetOwned: true, viewerPlaytimeSeconds: 3600 }];
+    answer('social.UserCommon', { games, next: 'c2' });
+    const { social } = await load(true);
+
+    await expect(social.userCommon('alice')).resolves.toEqual({ games, next: 'c2' });
+    expect(calls.at(-1)).toEqual({ key: 'social.UserCommon', args: ['alice', ''] });
+  });
+
+  it('turns a failed common games call into an error instead of an empty list', async () => {
+    answer('social.UserCommon', () => {
+      throw new Error('boom');
+    });
+    const { social } = await load(true);
+
+    await expect(social.userCommon('alice')).rejects.toBeInstanceOf(Error);
+  });
+
   it('is empty without a backend', async () => {
     const { social } = await load(false);
 
+    await expect(social.userCommon('alice')).resolves.toEqual({ games: [], next: '' });
     await expect(social.userGames('alice')).resolves.toEqual({ games: [], next: '' });
     await expect(social.gameFriends('g1')).resolves.toEqual({ played: [], playingNow: [] });
     await expect(social.blocks()).resolves.toEqual([]);

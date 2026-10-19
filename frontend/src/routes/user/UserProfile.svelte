@@ -34,6 +34,7 @@
   import HiddenBadge from '../profile/HiddenBadge.svelte';
   import ProfilePlaying from '../profile/ProfilePlaying.svelte';
   import UserActivity from './UserActivity.svelte';
+  import { inviteToPlay } from '../../lib/social/invite';
   import UserCommon from './UserCommon.svelte';
   import UserHeader from './UserHeader.svelte';
   import UserMutual from './UserMutual.svelte';
@@ -279,7 +280,12 @@
         <div class="main">
           <BlockGrid blocks={gridBlocks} {external} {masked} accent={appearanceOf(data.appearance).accent} />
           {#if common}
-            <UserCommon {common} {name} />
+            <UserCommon
+              {common}
+              {name}
+              username={data.username}
+              oninvite={data.relation === 'friend' ? (game) => inviteToPlay(data!, game.title) : undefined}
+            />
           {/if}
           {#if mutual.length > 0}
             <UserMutual friends={mutual} count={data.mutualCount} />

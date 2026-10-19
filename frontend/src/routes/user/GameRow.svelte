@@ -3,14 +3,18 @@
   import type { GameCard } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
 
-  let { game, meta }: { game: GameCard; meta: string } = $props();
+  let { game, meta, detail = '', tag = '' }: { game: GameCard; meta: string; detail?: string; tag?: string } = $props();
 </script>
 
 <button class="row" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
   <span class="thumb">
     <Artwork src={game.coverUrl} alt={game.title} ratio="3 / 4" />
   </span>
-  <span class="title">{game.title}</span>
+  <span class="text">
+    <span class="title">{game.title}</span>
+    {#if detail}<span class="detail">{detail}</span>{/if}
+    {#if tag}<span class="tag">{tag}</span>{/if}
+  </span>
   <span class="meta">{meta}</span>
 </button>
 
@@ -44,9 +48,25 @@
     overflow: hidden;
   }
 
-  .title {
+  .text {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .detail {
+    font-size: var(--font-xs);
+    color: var(--text-2);
+  }
+
+  .tag {
+    font-size: var(--font-xs);
+    color: var(--accent);
+  }
+
+  .title {
     font-size: var(--font-md);
     font-weight: 500;
     white-space: nowrap;

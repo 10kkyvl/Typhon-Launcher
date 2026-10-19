@@ -1,23 +1,43 @@
 <script lang="ts">
+  import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import type { CommonGames } from '../../lib/services/social';
-  import { commonGameLabel, commonGamesTitle } from '../../lib/social/view';
+  import type { CommonGame, CommonGames } from '../../lib/services/social';
+  import { commonGamesTitle } from '../../lib/social/view';
   import { msg } from '../../lib/i18n';
-  import GameRow from './GameRow.svelte';
+  import UserCommonModal from './UserCommonModal.svelte';
+  import UserCommonRow from './UserCommonRow.svelte';
 
-  let { common, name }: { common: CommonGames; name: string } = $props();
+  let {
+    common,
+    name,
+    username,
+    oninvite,
+  }: {
+    common: CommonGames;
+    name: string;
+    username: string;
+    oninvite?: (game: CommonGame) => void;
+  } = $props();
 
   const rows = $derived(common.games.slice(0, 6));
+  let all = $state(false);
 </script>
 
 <Card title={msg('social.userCommonTitle')}>
   <p class="count">{commonGamesTitle(common.count)}</p>
   <div class="list">
     {#each rows as game (game.igdbId)}
-      <GameRow {game} meta={commonGameLabel(game.viewerOwned, game.targetOwned, name)} />
+      <UserCommonRow {game} {name} {oninvite} />
     {/each}
   </div>
+  {#if common.count > rows.length}
+    <div class="more">
+      <Button onclick={() => (all = true)}>{msg('social.userCommonAll', { count: common.count })}</Button>
+    </div>
+  {/if}
 </Card>
+
+<UserCommonModal bind:open={all} {username} {name} {oninvite} />
 
 <style>
   .count {
@@ -31,7 +51,11 @@
     flex-direction: column;
   }
 
-  .list :global(.row + .row) {
+  .list :global(.item + .item) {
     border-top: 1px solid var(--border);
+  }
+
+  .more {
+    margin-top: var(--space-3);
   }
 </style>
