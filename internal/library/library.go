@@ -72,6 +72,7 @@ type Game struct {
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
 	Tags              []string   `json:"tags,omitempty"`
 	Hidden            bool       `json:"hidden,omitempty"`
+	HiddenAt          *time.Time `json:"hiddenAt,omitempty"`
 	HidePresence      bool       `json:"hidePresence,omitempty"`
 	External          *External  `json:"external,omitempty"`
 }
@@ -177,6 +178,7 @@ type Service struct {
 	starting        map[string]context.CancelFunc
 	relocating      map[string]struct{}
 	sameCanonical   func(string, string) bool
+	onUpdated       func([]Game)
 	mu              sync.Mutex
 	path            string
 	excludedPath    string
@@ -364,6 +366,10 @@ func (s *Service) load() ([]Game, error) {
 			stamp := legacyStamp()
 			g.FavoriteAt = &stamp
 		}
+		if g.Hidden && g.HiddenAt == nil {
+			stamp := legacyStamp()
+			g.HiddenAt = &stamp
+		}
 		games = append(games, g)
 	}
 	return games, nil
@@ -395,7 +401,15 @@ func emit(name string, data any) {
 }
 
 func (s *Service) emitUpdated() {
-	emit(EventUpdated, s.games)
+	payload := s.updatedPayload()
+	emit(EventUpdated, payload)
+	if s.onUpdated != nil {
+		s.onUpdated(payload)
+	}
+}
+
+func (s *Service) updatedPayload() []Game {
+	return append([]Game(nil), s.games...)
 }
 
 func (s *Service) GetGames() []Game {
@@ -860,7 +874,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, Tags: game.Tags, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds

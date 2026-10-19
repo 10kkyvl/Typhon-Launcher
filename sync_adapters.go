@@ -42,6 +42,8 @@ func (a syncLibrary) Snapshot() ([]accountsync.Game, error) {
 			FavoriteAt:      item.FavoriteAt,
 			Status:          item.Status,
 			StatusAt:        item.StatusAt,
+			Hidden:          item.Hidden,
+			HiddenAt:        item.HiddenAt,
 		})
 	}
 	return out, nil
@@ -59,6 +61,8 @@ func (a syncLibrary) Apply(items []accountsync.Game) error {
 			FavoriteAt:      item.FavoriteAt,
 			Status:          item.Status,
 			StatusAt:        item.StatusAt,
+			Hidden:          item.Hidden,
+			HiddenAt:        item.HiddenAt,
 		})
 	}
 	return a.svc.ApplySync(merged)

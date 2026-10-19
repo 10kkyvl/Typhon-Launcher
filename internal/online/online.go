@@ -143,6 +143,14 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	s.mu.Unlock()
 
 	unsubscribe := s.settings.Subscribe(s.applySettings)
+	if app := application.Get(); app != nil {
+		unwatch := app.Event.On(library.EventUpdated, s.onLibraryEvent)
+		stopSettings := unsubscribe
+		unsubscribe = func() {
+			unwatch()
+			stopSettings()
+		}
+	}
 	s.mu.Lock()
 	s.unsubscribe = unsubscribe
 	s.mu.Unlock()
@@ -212,7 +220,7 @@ func (s *Service) Status() string {
 
 //wails:ignore
 func (s *Service) SessionStarted(game library.Game) {
-	if game.Hidden {
+	if !reportable(game) {
 		return
 	}
 	resolved := s.resolveIGDBID(game.CanonicalGameID)
@@ -226,12 +234,41 @@ func (s *Service) SessionStarted(game library.Game) {
 	s.poke()
 }
 
+func reportable(game library.Game) bool {
+	return !game.Hidden && !game.HidePresence
+}
+
+//wails:ignore
+func (s *Service) LibraryUpdated(games []library.Game) {
+	s.mu.Lock()
+	dropped := false
+	for _, game := range games {
+		if _, running := s.running[game.ID]; running && !reportable(game) {
+			delete(s.running, game.ID)
+			dropped = true
+		}
+	}
+	s.mu.Unlock()
+	if dropped {
+		s.poke()
+	}
+}
+
 //wails:ignore
 func (s *Service) SessionStopped(gameID string) {
 	s.mu.Lock()
 	delete(s.running, gameID)
 	s.mu.Unlock()
 	s.poke()
+}
+
+func (s *Service) onLibraryEvent(event *application.CustomEvent) {
+	games, ok := event.Data.([]library.Game)
+	if !ok {
+		slog.Warn("online: unexpected library update payload", "type", fmt.Sprintf("%T", event.Data))
+		return
+	}
+	s.LibraryUpdated(games)
 }
 
 func (s *Service) applySettings(next settings.Settings) {

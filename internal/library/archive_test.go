@@ -46,3 +46,15 @@ func TestSessionEndingAfterRemovalUpdatesArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRemoveArchivesHiddenStamp(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	s.games = []Game{{ID: "game", Title: "Game", Hidden: true, HiddenAt: &at}}
+	if err := s.RemoveGame("game"); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.archived) != 1 || !s.archived[0].Hidden || s.archived[0].HiddenAt == nil || !s.archived[0].HiddenAt.Equal(at) {
+		t.Fatalf("archived = %+v, want hidden with the stamp kept", s.archived)
+	}
+}
