@@ -119,9 +119,77 @@ func steamLibraryPaths(root string) ([]string, error) {
 	return out, nil
 }
 
+func isSteamGameType(typ string) bool {
+	switch strings.ToLower(strings.TrimSpace(typ)) {
+	case "game", "demo", "beta", "mod":
+		return true
+	}
+	return false
+}
+
+func steamManifestIDs(libs []string) (map[uint32]bool, error) {
+	ids := map[uint32]bool{}
+	for _, lib := range libs {
+		libDir, err := checkDir(lib)
+		if err != nil {
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(libDir, "steamapps"))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", lib, err)
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if !strings.HasPrefix(name, "appmanifest_") || !strings.HasSuffix(name, ".acf") {
+				continue
+			}
+			raw := strings.TrimSuffix(strings.TrimPrefix(name, "appmanifest_"), ".acf")
+			if !isDigits(raw, 10) {
+				continue
+			}
+			id, err := strconv.ParseUint(raw, 10, 32)
+			if err != nil {
+				continue
+			}
+			ids[uint32(id)] = true
+		}
+	}
+	return ids, nil
+}
+
+func steamAppTypes(ctx context.Context, cache *appTypeCache, root string, libs []string) (map[string]string, error) {
+	ids, err := steamManifestIDs(libs)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	types, err := cache.get(ctx, filepath.Join(root, "appcache", "appinfo.vdf"), ids)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("appinfo.vdf: %w", err)
+	}
+	return types, nil
+}
+
 func scanSteam(ctx context.Context, root string) ProviderScan {
+	return scanSteamWith(ctx, steamTypeCache, root)
+}
+
+func scanSteamWith(ctx context.Context, cache *appTypeCache, root string) ProviderScan {
 	res := ProviderScan{Provider: library.ProviderSteam}
 	libs, err := steamLibraryPaths(root)
+	if err != nil {
+		res.Err = err
+		return res
+	}
+	types, err := steamAppTypes(ctx, cache, root, libs)
 	if err != nil {
 		res.Err = err
 		return res
@@ -133,7 +201,7 @@ func scanSteam(ctx context.Context, root string) ProviderScan {
 			res.Skipped = append(res.Skipped, Skipped{Title: lib, Reason: "библиотека Steam недоступна: " + err.Error()})
 			continue
 		}
-		if err := scanSteamLibrary(ctx, libDir, seen, &res); err != nil {
+		if err := scanSteamLibrary(ctx, libDir, types, seen, &res); err != nil {
 			res.Err = err
 			return res
 		}
@@ -141,7 +209,7 @@ func scanSteam(ctx context.Context, root string) ProviderScan {
 	return res
 }
 
-func scanSteamLibrary(ctx context.Context, libDir string, seen map[string]bool, res *ProviderScan) error {
+func scanSteamLibrary(ctx context.Context, libDir string, types map[string]string, seen map[string]bool, res *ProviderScan) error {
 	apps := filepath.Join(libDir, "steamapps")
 	entries, err := os.ReadDir(apps)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -175,6 +243,11 @@ func scanSteamLibrary(ctx context.Context, libDir string, seen map[string]bool, 
 			continue
 		}
 		if isSteamTool(app) || seen[app.AppID] {
+			continue
+		}
+		if typ, known := types[app.AppID]; known && !isSteamGameType(typ) {
+			seen[app.AppID] = true
+			res.NotGames = append(res.NotGames, app.AppID)
 			continue
 		}
 		title := cleanTitle(app.Name)
