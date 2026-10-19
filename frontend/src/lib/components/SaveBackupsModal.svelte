@@ -12,6 +12,7 @@
   import { saveBackupErrorText, snapshotKindLabel, snapshotWhen } from '../savebackup/messages';
   import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
   import { saveAttribution } from '../game/extras';
+  import { metadataErrorText } from '../metadata/metadataErrors';
   import { openReferenceLink } from '../services/metadata';
   import { locateSaves, setSavesDir, type SavesResult } from '../services/library';
   import {
@@ -271,10 +272,15 @@
 
   const attribution = $derived(saveAttribution(saves?.hint));
 
-  function openSource() {
-    if (!target) return;
-    const { gameId } = target;
-    return perform(() => openReferenceLink(gameId, 'pcgamingwiki'), errorMessage);
+  async function openSource() {
+    const id = canonicalId;
+    if (!id) return;
+    failure = '';
+    try {
+      await openReferenceLink(id, 'pcgamingwiki');
+    } catch (err) {
+      failure = metadataErrorText(err);
+    }
   }
 
   function openSaves() {
