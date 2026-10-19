@@ -85,6 +85,7 @@ func (s *Service) syncOnce(ctx context.Context) error {
 	present := map[string]map[string]bool{}
 	var items []library.ExternalGame
 	var fresh []Candidate
+	var notGames []library.ExternalRef
 	for _, sc := range scans {
 		if !enabled[sc.Provider] {
 			continue
@@ -108,6 +109,12 @@ func (s *Service) syncOnce(ctx context.Context) error {
 				continue
 			}
 			fresh = append(fresh, c)
+		}
+		for _, id := range sc.NotGames {
+			seen[id] = true
+			if inLibrary[refKey(sc.Provider, id)] {
+				notGames = append(notGames, library.ExternalRef{Provider: sc.Provider, AppID: id})
+			}
 		}
 		complete := true
 		for _, sk := range sc.Skipped {
@@ -136,6 +143,11 @@ func (s *Service) syncOnce(ctx context.Context) error {
 		return err
 	}
 
+	if len(notGames) > 0 {
+		if _, err := s.library.RemoveExternal(notGames); err != nil {
+			failures = append(failures, fmt.Errorf("remove non-game apps: %w", err))
+		}
+	}
 	applied, err := s.library.SyncExternal(ctx, items, present)
 	if err != nil {
 		return errors.Join(append(failures, fmt.Errorf("sync external games: %w", err))...)

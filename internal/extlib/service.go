@@ -33,6 +33,7 @@ type libraryPort interface {
 	ApplyExternal(ctx context.Context, items []library.ExternalGame) (library.ExternalSummary, error)
 	SyncExternal(ctx context.Context, items []library.ExternalGame, present map[string]map[string]bool) (library.ExternalSummary, error)
 	ExternalRefs() []library.ExternalRef
+	RemoveExternal(refs []library.ExternalRef) (int, error)
 }
 
 type catalogPort interface {
@@ -157,7 +158,7 @@ func (s *Service) Import() (Summary, error) {
 	defer s.finish()
 	summary, err := s.run(ctx)
 	if err != nil {
-		return Summary{}, err
+		return summary, err
 	}
 	emit(EventImported, summary)
 	return summary, nil
@@ -173,6 +174,7 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 	}
 	summary := Summary{Providers: make([]ProviderResult, 0, len(scans)), MetadataErrors: []string{}}
 	var candidates []Candidate
+	var notGames []library.ExternalRef
 	var failures []error
 	for _, sc := range scans {
 		res := ProviderResult{Provider: sc.Provider, Found: len(sc.Games), Skipped: append([]Skipped{}, sc.Skipped...)}
@@ -184,6 +186,9 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 			failures = append(failures, fmt.Errorf("%s: %w", sc.Provider, sc.Err))
 		default:
 			candidates = append(candidates, sc.Games...)
+			for _, id := range sc.NotGames {
+				notGames = append(notGames, library.ExternalRef{Provider: sc.Provider, AppID: id})
+			}
 		}
 		summary.Providers = append(summary.Providers, res)
 	}
@@ -194,6 +199,10 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 	items, err := s.bind(ctx, candidates)
 	if err != nil {
 		return Summary{}, err
+	}
+	_, removeErr := s.library.RemoveExternal(notGames)
+	if removeErr != nil {
+		removeErr = fmt.Errorf("remove non-game apps: %w", removeErr)
 	}
 	applied, err := s.library.ApplyExternal(ctx, items)
 	if err != nil {
@@ -242,7 +251,7 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 			summary.MetadataErrors = append(summary.MetadataErrors, titlesByKey[key]+": "+err.Error())
 		}
 	}
-	return summary, nil
+	return summary, removeErr
 }
 
 func (s *Service) bind(ctx context.Context, candidates []Candidate) ([]library.ExternalGame, error) {

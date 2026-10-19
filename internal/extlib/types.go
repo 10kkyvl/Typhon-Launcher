@@ -29,5 +29,6 @@ type ProviderScan struct {
 	Provider string
 	Games    []Candidate
 	Skipped  []Skipped
+	NotGames []string
 	Err      error
 }

@@ -124,6 +124,9 @@ func (s *Service) ServiceShutdown() error {
 
 //wails:ignore
 func (s *Service) SessionStarted(game library.Game) {
+	if game.Hidden || game.HidePresence {
+		return
+	}
 	resolved := s.resolveGameID(game.CanonicalGameID)
 	if !validGameID(resolved) {
 		resolved = ""
