@@ -212,6 +212,21 @@ func (c *client) userGames(ctx context.Context, username, cursor string) (GamesP
 	return page, nil
 }
 
+func (c *client) userCommon(ctx context.Context, username, cursor string) (CommonPage, error) {
+	path := account.APIPrefix + "/users/" + url.PathEscape(username) + "/common"
+	if cursor != "" {
+		path += "?" + url.Values{"cursor": {cursor}}.Encode()
+	}
+	var page CommonPage
+	if err := c.do(ctx, http.MethodGet, path, nil, &page); err != nil {
+		return CommonPage{}, err
+	}
+	if page.Games == nil {
+		page.Games = []CommonGame{}
+	}
+	return page, nil
+}
+
 func (c *client) gameFriends(ctx context.Context, igdbID string) (GameFriends, error) {
 	var friends GameFriends
 	path := account.APIPrefix + "/games/" + url.PathEscape(igdbID) + "/friends"

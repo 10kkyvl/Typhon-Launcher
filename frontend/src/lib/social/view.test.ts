@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { CommonGame } from '../services/social';
 import {
+  bothPlayedRecently,
   commonGameLabel,
+  commonPlaytimeLine,
   commonGamesTitle,
   commonLine,
   friendRequestNotification,
@@ -230,5 +233,55 @@ describe('sentAt', () => {
     expect(sentAt(null)).toBe('—');
     expect(sentAt('')).toBe('—');
     expect(sentAt('не дата')).toBe('—');
+  });
+});
+
+describe('bothPlayedRecently', () => {
+  const now = Date.parse('2026-10-19T12:00:00Z');
+  const day = 86_400_000;
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const game = (extra: Partial<CommonGame>): CommonGame => ({
+    igdbId: 1,
+    title: 'A',
+    coverUrl: '',
+    viewerOwned: true,
+    targetOwned: true,
+    ...extra,
+  } as CommonGame);
+
+  it('ровно 14 дней назад у обоих — ещё недавно', () => {
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(14 * day), targetLastPlayedAt: ago(day) }), now)).toBe(true);
+  });
+
+  it('больше 14 дней у одного из двоих — не недавно', () => {
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(14 * day + 1), targetLastPlayedAt: ago(day) }), now)).toBe(false);
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(day), targetLastPlayedAt: ago(15 * day) }), now)).toBe(false);
+  });
+
+  it('нет поля или битая дата — не недавно', () => {
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(day) }), now)).toBe(false);
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(day), targetLastPlayedAt: null }), now)).toBe(false);
+    expect(bothPlayedRecently(game({ viewerLastPlayedAt: ago(day), targetLastPlayedAt: 'не дата' }), now)).toBe(false);
+  });
+});
+
+describe('commonPlaytimeLine', () => {
+  const base = { igdbId: 1, title: 'A', coverUrl: '', viewerOwned: true, targetOwned: true } as CommonGame;
+
+  it('время друга скрыто, пока поля нет', () => {
+    expect(commonPlaytimeLine({ ...base, viewerPlaytimeSeconds: 7200 })).toBe('вы: 2 ч');
+  });
+
+  it('оба времени — через разделитель', () => {
+    expect(commonPlaytimeLine({ ...base, viewerPlaytimeSeconds: 7200, targetPlaytimeSeconds: 36000 })).toBe('вы: 2 ч · друг: 10 ч');
+  });
+
+  it('ноль наиграно у друга показывается, а не пропадает', () => {
+    expect(commonPlaytimeLine({ ...base, viewerPlaytimeSeconds: 7200, targetPlaytimeSeconds: 0 })).toBe('вы: 2 ч · друг: —');
+  });
+
+  it('без обоих полей строка пустая', () => {
+    expect(commonPlaytimeLine(base)).toBe('');
+    expect(commonPlaytimeLine({ ...base, viewerPlaytimeSeconds: null, targetPlaytimeSeconds: null })).toBe('');
   });
 });
