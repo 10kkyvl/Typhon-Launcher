@@ -87,6 +87,8 @@ func (f *fakeLibrary) Apply(items []Game) error {
 			FavoriteAt:      it.FavoriteAt,
 			Status:          it.Status,
 			StatusAt:        it.StatusAt,
+			Hidden:          it.Hidden,
+			HiddenAt:        it.HiddenAt,
 		}
 	}
 	return nil

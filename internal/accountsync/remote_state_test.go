@@ -28,7 +28,7 @@ func TestCloudOwnershipIsNotAppliedOrEchoed(t *testing.T) {
 		t.Fatalf("echoed remote ownership: %+v", g)
 	}
 	results := map[string]gameCompute{"1": {combined: Game{Owned: false}}}
-	if !upToDate(syncState{Games: map[string]gameState{"1": {}}}, results, map[string]wireGame{"1": {Owned: true}}) {
+	if !upToDate(syncState{Games: map[string]gameState{"1": {}}}, results, map[string]wireGame{"1": {Owned: true}}, false) {
 		t.Fatal("remote ownership alone causes endless uploads")
 	}
 }

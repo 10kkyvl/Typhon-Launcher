@@ -288,6 +288,56 @@ func TestSyncStatusAndFavoriteMerge(t *testing.T) {
 	})
 }
 
+func TestSyncHiddenMerge(t *testing.T) {
+	old := time.Now().Add(-3 * time.Hour)
+	local := time.Now().Add(-2 * time.Hour)
+	fresh := time.Now().Add(-time.Hour)
+	cases := []struct {
+		name       string
+		localGame  Game
+		remote     wireGame
+		wantHidden bool
+		wantAt     *time.Time
+	}{
+		{"remote newer hides locally", Game{CanonicalGameID: "game-1", HiddenAt: &old}, wireGame{IGDBID: 1, Hidden: true, HiddenAt: &fresh}, true, &fresh},
+		{"local newer keeps hidden against remote shown", Game{CanonicalGameID: "game-1", Hidden: true, HiddenAt: &fresh}, wireGame{IGDBID: 1, HiddenAt: &local}, true, &fresh},
+		{"remote newer shows locally", Game{CanonicalGameID: "game-1", Hidden: true, HiddenAt: &old}, wireGame{IGDBID: 1, HiddenAt: &fresh}, false, &fresh},
+		{"remote without stamp leaves local hidden", Game{CanonicalGameID: "game-1", Hidden: true, HiddenAt: &local}, wireGame{IGDBID: 1}, true, &local},
+		{"local without stamp takes remote", Game{CanonicalGameID: "game-1"}, wireGame{IGDBID: 1, Hidden: true, HiddenAt: &local}, true, &local},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.catalog.link("game-1", "1")
+			h.library.setLocalGame(tc.localGame)
+			h.server.get = func(w http.ResponseWriter) {
+				w.Header().Set(featuresHeader, featureHidden)
+				writeJSON(w, http.StatusOK, snapshotBody{Games: []wireGame{tc.remote}})
+			}
+			var lastPut putRequest
+			h.server.put = func(w http.ResponseWriter, req putRequest) {
+				w.Header().Set(featuresHeader, featureHidden)
+				lastPut = req
+				echoPut(http.StatusOK)(w, req)
+			}
+			if err := h.service.Sync(context.Background()); err != nil {
+				t.Fatalf("Sync: %v", err)
+			}
+			got := h.library.gameOf("game-1")
+			if got.Hidden != tc.wantHidden || !sameStamp(got.HiddenAt, tc.wantAt) {
+				t.Fatalf("local hidden=%v at=%v, want hidden=%v at=%v", got.Hidden, got.HiddenAt, tc.wantHidden, tc.wantAt)
+			}
+			pushed, ok := pushedFor(lastPut, 1)
+			if tc.remote.Hidden == tc.wantHidden && sameStamp(tc.remote.HiddenAt, tc.wantAt) {
+				return
+			}
+			if !ok || pushed.Hidden != tc.wantHidden || !sameStamp(pushed.HiddenAt, tc.wantAt) {
+				t.Fatalf("pushed %+v (ok=%v), want hidden=%v at=%v", pushed, ok, tc.wantHidden, tc.wantAt)
+			}
+		})
+	}
+}
+
 func TestSyncSettingsRevision(t *testing.T) {
 	t.Run("unchanged revision: local settings win and are pushed", func(t *testing.T) {
 		h := newHarness(t)

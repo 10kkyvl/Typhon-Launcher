@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"typhon/internal/account"
@@ -20,6 +22,8 @@ const (
 	maxSyncResponseBytes = 16 << 20
 	syncRequestTimeout   = 30 * time.Second
 	syncPath             = account.APIPrefix + "/me/sync"
+	featuresHeader       = "X-Typhon-Sync-Features"
+	featureHidden        = "hidden"
 )
 
 var (
@@ -60,6 +64,8 @@ type wireGame struct {
 	FavoriteAt      *time.Time `json:"favoriteAt"`
 	Status          string     `json:"status"`
 	StatusAt        *time.Time `json:"statusAt"`
+	Hidden          bool       `json:"hidden,omitempty"`
+	HiddenAt        *time.Time `json:"hiddenAt,omitempty"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`
 	PlaytimeSeconds int64      `json:"playtimeSeconds"`
 	Removed         bool       `json:"removed,omitempty"`
@@ -95,6 +101,40 @@ type httpClient struct {
 	baseURL string
 	token   func() (string, error)
 	client  *http.Client
+
+	featMu     sync.Mutex
+	featToken  string
+	hiddenSync bool
+}
+
+func (c *httpClient) supportsHidden() bool {
+	c.featMu.Lock()
+	defer c.featMu.Unlock()
+	return c.hiddenSync
+}
+
+func (c *httpClient) noteFeatures(tok string, h http.Header) {
+	hidden := false
+	for _, value := range h.Values(featuresHeader) {
+		for _, feature := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(feature), featureHidden) {
+				hidden = true
+			}
+		}
+	}
+	c.featMu.Lock()
+	c.featToken = tok
+	c.hiddenSync = hidden
+	c.featMu.Unlock()
+}
+
+func (c *httpClient) forgetFeaturesIfAccountChanged(tok string) {
+	c.featMu.Lock()
+	if c.featToken != tok {
+		c.featToken = tok
+		c.hiddenSync = false
+	}
+	c.featMu.Unlock()
 }
 
 func newHTTPClient(baseURL string, token func() (string, error)) (*httpClient, error) {
@@ -159,6 +199,8 @@ func (c *httpClient) do(ctx context.Context, method string, reqBody, out any) er
 		reader = bytes.NewReader(encoded)
 	}
 
+	c.forgetFeaturesIfAccountChanged(tok)
+
 	httpReq, err := http.NewRequestWithContext(ctx, method, c.baseURL+syncPath, reader)
 	if err != nil {
 		return fmt.Errorf("build sync request: %w", err)
@@ -181,6 +223,9 @@ func (c *httpClient) do(ctx context.Context, method string, reqBody, out any) er
 
 	limited := io.LimitReader(resp.Body, maxSyncResponseBytes)
 
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		c.noteFeatures(tok, resp.Header)
+	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
 	}

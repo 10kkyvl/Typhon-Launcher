@@ -17,6 +17,8 @@ type Game struct {
 	FavoriteAt      *time.Time
 	Status          string
 	StatusAt        *time.Time
+	Hidden          bool
+	HiddenAt        *time.Time
 }
 
 type LibraryPort interface {
