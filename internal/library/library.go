@@ -151,6 +151,10 @@ var (
 	errInstallationChanged  = uierr.New("library.installation_changed", "установка изменилась во время обновления")
 )
 
+func IsGameNotFound(err error) bool {
+	return uierr.Code(err) == uierr.Code(errNotFound)
+}
+
 const MaxFavorites = 6
 
 const (
