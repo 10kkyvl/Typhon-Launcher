@@ -73,7 +73,10 @@ func (s *Service) OpenReferenceLink(gameID, kind string, appID int64) error {
 		if title == "" {
 			return errLinkNoData
 		}
-		link = hltbSearchPrefix + url.QueryEscape(title)
+		// HowLongToBeat keeps q percent-encoded twice in its own search URLs and
+		// rewrites any other form into that, so the link uses it directly.
+		once := strings.ReplaceAll(url.QueryEscape(title), "+", "%20")
+		link = hltbSearchPrefix + url.QueryEscape(once)
 	case LinkSteamDLC:
 		info := s.steam.info(game.ID)
 		if info == nil {

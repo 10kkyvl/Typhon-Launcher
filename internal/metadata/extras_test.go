@@ -374,8 +374,15 @@ func TestOpenReferenceLinkEscapesTitle(t *testing.T) {
 	if err := svc.OpenReferenceLink(odd.ID, LinkHowLongToBeat, 0); err != nil {
 		t.Fatal(err)
 	}
-	if got := (*opened)[0]; got != "https://howlongtobeat.com/?q=Half-Life+%26+Co%2F%231+%3Fx%3Dy" {
+	if got := (*opened)[0]; got != "https://howlongtobeat.com/?q=Half-Life%2520%2526%2520Co%252F%25231%2520%253Fx%253Dy" {
 		t.Fatalf("opened %q", got)
+	}
+	spaced := addGame(t, svc.catalog, catalog.Game{Title: "Portal 2"})
+	if err := svc.OpenReferenceLink(spaced.ID, LinkHowLongToBeat, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := (*opened)[1]; got != "https://howlongtobeat.com/?q=Portal%25202" {
+		t.Fatalf("opened %q, want the double-encoded form the site itself uses", got)
 	}
 }
 
