@@ -167,6 +167,9 @@ func (sc *scanner) scanGames() error {
 		if err := sc.ctx.Err(); err != nil {
 			return err
 		}
+		if g.Uninstalled {
+			continue
+		}
 		m := sc.measure(g.InstallDir)
 		if m.err != nil {
 			return m.err
@@ -198,7 +201,7 @@ func (sc *scanner) scanGames() error {
 func (sc *scanner) scanDownloads() error {
 	owners := map[string]string{}
 	for _, g := range sc.games {
-		if g.SourceDownloadID != "" {
+		if g.SourceDownloadID != "" && !g.Uninstalled {
 			owners[g.SourceDownloadID] = g.ID
 		}
 	}

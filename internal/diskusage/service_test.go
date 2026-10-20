@@ -483,6 +483,31 @@ func TestScanGames(t *testing.T) {
 	}
 }
 
+func TestScanSkipsUninstalledGames(t *testing.T) {
+	r := newRig(t)
+	r.addGame(t, "kept", 10)
+	left := r.addGame(t, "left", 30)
+	r.lib.games[1].Uninstalled = true
+	r.lib.games = append(r.lib.games,
+		library.Game{ID: "emptyDir", Title: "EmptyDir", Uninstalled: true},
+		library.Game{ID: "goneDir", Title: "GoneDir", InstallDir: filepath.Join(r.games, "goneDir"), Uninstalled: true},
+	)
+
+	rep, err := r.svc.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Games) != 1 || rep.Games[0].ID != "kept" {
+		t.Fatalf("games = %+v, want only the installed one", rep.Games)
+	}
+	if rep.Totals.GamesBytes != 10 || rep.Totals.UnknownSizes {
+		t.Fatalf("totals = %+v", rep.Totals)
+	}
+	if _, refreshed := r.lib.updates[left.ID]; refreshed {
+		t.Fatal("an uninstalled game must not get a measured size")
+	}
+}
+
 func TestScanReportsLibraryRefreshFailureAsWarning(t *testing.T) {
 	r := newRig(t)
 	r.addGame(t, "a", 10)
@@ -521,10 +546,14 @@ func TestScanDownloads(t *testing.T) {
 	seed := mk("seed", download.StatusCompleted)
 	seed.Seeding = true
 	running := mk("running", download.StatusDownloading)
+	orphan := mk("orphan", download.StatusCompleted)
 	flat := download.Download{ID: "flat", Destination: r.downloads, Status: download.StatusCompleted, Flat: true}.WithRoot("x")
-	r.dl.items = []download.Download{free, used, seed, running, flat}
+	r.dl.items = []download.Download{free, used, seed, running, orphan, flat}
 	r.inst.blocked["used"] = errDownloadBusy
-	r.lib.games = []library.Game{{ID: "g1", Title: "G", SourceDownloadID: "free", InstallDir: filepath.Join(r.games, "g1")}}
+	r.lib.games = []library.Game{
+		{ID: "g1", Title: "G", SourceDownloadID: "free", InstallDir: filepath.Join(r.games, "g1")},
+		{ID: "g2", Title: "Removed", SourceDownloadID: "orphan", InstallDir: filepath.Join(r.games, "g2"), Uninstalled: true},
+	}
 
 	rep, err := r.svc.Scan(context.Background())
 	if err != nil {
@@ -540,13 +569,16 @@ func TestScanDownloads(t *testing.T) {
 	if d := by["free"]; d.Referenced || d.SizeBytes != 50 || !d.Installed || d.GameID != "g1" {
 		t.Fatalf("free = %+v", d)
 	}
+	if d := by["orphan"]; d.Installed || d.GameID != "" {
+		t.Fatalf("orphan = %+v, want no owner: its game was uninstalled", d)
+	}
 	for _, id := range []string{"used", "seed", "running"} {
 		if d := by[id]; !d.Referenced || d.Reason == "" {
 			t.Fatalf("%s = %+v, want referenced with a reason", id, d)
 		}
 	}
-	if rep.Totals.ReclaimableBytes != 50 {
-		t.Fatalf("reclaimable = %d, want only the unreferenced download", rep.Totals.ReclaimableBytes)
+	if rep.Totals.ReclaimableBytes != 100 {
+		t.Fatalf("reclaimable = %d, want only the unreferenced downloads", rep.Totals.ReclaimableBytes)
 	}
 }
 
