@@ -64,6 +64,8 @@ export const errLibrary = {
   'settings.library_create_failed': 'не удалось создать папку библиотеки',
   'settings.library_not_writable': 'нет доступа на запись в папку библиотеки',
   'settings.network_mode_invalid': 'неизвестный режим сети',
+  'settings.play_download_mode_invalid': 'неизвестный режим загрузок во время игры',
+  'settings.play_rate_limit_required': 'для ограничения на время игры нужна скорость больше нуля',
   'settings.overlay_hotkey_invalid': 'неизвестная горячая клавиша оверлея',
   'overlay.hotkey_unavailable': 'это сочетание клавиш уже занято другой программой',
   'overlay.browser_url': 'такой адрес нельзя открыть: нужен сайт http или https',

@@ -20,6 +20,9 @@ export interface Settings {
   maxActiveDownloads: number;
   downloadRateLimit: number;
   uploadRateLimit: number;
+  playDownloadMode: string;
+  playDownloadRateLimit: number;
+  playUploadRateLimit: number;
   uploadWhileDownloading: boolean;
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
@@ -82,6 +85,9 @@ const fallbackDefaults: Settings = {
   maxActiveDownloads: 2,
   downloadRateLimit: 0,
   uploadRateLimit: 0,
+  playDownloadMode: 'off',
+  playDownloadRateLimit: 0,
+  playUploadRateLimit: 0,
   uploadWhileDownloading: false,
   seedAfterDownload: false,
   installCleanupPolicy: 'delete',
