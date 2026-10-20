@@ -146,6 +146,9 @@ type Manager struct {
 
 	client          *client
 	max             int
+	rateCfg         settings.Settings
+	gamesRunning    bool
+	playShown       PlayThrottleState
 	onCompleted     func(Download)
 	onStarted       func(Download)
 	onGone          func(string)
@@ -246,6 +249,7 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		return nil, err
 	}
 	m.pieceCompletion = completion
+	m.rateCfg = m.config()
 	m.max = maxActive(m.config())
 	return m, nil
 }
@@ -273,6 +277,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	m.ctx, m.cancel = runCtx, cancelRun
 	cfg := m.config()
 	m.max = maxActive(cfg)
+	m.rateCfg = cfg
 	m.netKey = netKeyOf(cfg)
 	// Until the route is checked nothing may start, and a window that asks
 	// meanwhile should be told the network is not ready, not that no client
@@ -1520,8 +1525,8 @@ func (m *Manager) startLocked(d *Download) bool {
 		return false
 	}
 	eng.setPriorities(selectionOf(d))
-	eng.allowDownload()
-	applyUpload(eng, m.config().UploadWhileDownloading)
+	m.allowDownloadLocked(eng)
+	m.applyUploadLocked(eng, m.config().UploadWhileDownloading)
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
@@ -1734,11 +1739,11 @@ func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
 	d.Progress = ratio(done, d.Total)
 	d.ETASeconds = etaSeconds(d.Total-done, d.DownloadSpeed)
 
-	updateStallLocked(d, r, done, now)
+	updateStallLocked(d, r, done, now, m.playPausedLocked())
 }
 
-func updateStallLocked(d *Download, r *rateState, done int64, now time.Time) {
-	if r.lastChange.IsZero() || done > r.lastDownloaded {
+func updateStallLocked(d *Download, r *rateState, done int64, now time.Time, gated bool) {
+	if gated || r.lastChange.IsZero() || done > r.lastDownloaded {
 		r.lastDownloaded = done
 		r.lastChange = now
 		d.Stalled = false
@@ -1766,7 +1771,7 @@ func (m *Manager) completeLocked(d *Download) {
 	if eng := m.engines[d.ID]; eng != nil {
 		eng.disallowDownload()
 		if seed {
-			eng.allowUpload()
+			m.allowUploadLocked(eng)
 		} else {
 			m.detachEngineLocked(d.ID, eng)
 		}
@@ -1850,8 +1855,15 @@ func (m *Manager) applySettings(next settings.Settings) {
 		m.clearPasswordCache()
 		m.kickNetwork()
 	}
-	if m.client != nil {
-		m.client.applyLimits(next.DownloadRateLimit, next.UploadRateLimit)
+	wasPaused := m.playPausedLocked()
+	m.rateCfg = next
+	m.applyRatesLocked()
+	if wasPaused != m.playPausedLocked() {
+		m.syncPlayLocked()
+	}
+	if state := m.playStateLocked(); state != m.playShown {
+		m.playShown = state
+		emit(eventPlayThrottle, state)
 	}
 	m.max = maxActive(next)
 	for _, d := range m.items {
@@ -1861,7 +1873,7 @@ func (m *Manager) applySettings(next settings.Settings) {
 			// anything queued, paused or failed keeps its engine attached and
 			// must be gated off, or the toggle would never reach it.
 			if eng != nil {
-				applyUpload(eng, next.UploadWhileDownloading && d.Status == StatusDownloading)
+				m.applyUploadLocked(eng, next.UploadWhileDownloading && d.Status == StatusDownloading)
 			}
 			continue
 		}
@@ -1885,7 +1897,7 @@ func (m *Manager) applySettings(next settings.Settings) {
 		case eng != nil:
 			if !d.Seeding {
 				d.Seeding = true
-				eng.allowUpload()
+				m.allowUploadLocked(eng)
 				emit(eventUpdated, snapshot(d))
 			}
 		default:
@@ -2105,7 +2117,7 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 		seed := m.config().SeedAfterDownload
 		d.Seeding = seed
 		if seed {
-			eng.allowUpload()
+			m.allowUploadLocked(eng)
 		} else {
 			m.detachEngineLocked(j.id, eng)
 		}

@@ -78,6 +78,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'settings.library_create_failed': 'Could not create the library folder',
   'settings.library_not_writable': 'No write access to the library folder',
   'settings.network_mode_invalid': 'Unknown network mode',
+  'settings.play_download_mode_invalid': 'Unknown download mode for gaming',
+  'settings.play_rate_limit_required': 'Set a speed above zero for the in-game limit',
   'settings.overlay_hotkey_invalid': 'Unknown overlay hotkey',
   'overlay.hotkey_unavailable': 'This key combination is already taken by another program',
   'overlay.browser_url': 'This address cannot be opened: only http and https sites are allowed',

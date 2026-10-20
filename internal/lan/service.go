@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"typhon/internal/history"
@@ -102,6 +103,26 @@ type Service struct {
 	rootCtx     context.Context
 	unsubscribe func()
 	run         *runState
+
+	// Atomic and limitsMu instead of mu: SetGamesRunning runs under the
+	// library mutex and must not wait on mu, which is held while the client starts.
+	playing    atomic.Bool
+	liveClient atomic.Pointer[lanClient]
+	limitsMu   sync.Mutex
+}
+
+//wails:ignore
+func (s *Service) SetGamesRunning(running bool) {
+	s.playing.Store(running)
+	s.applyLimits(s.currentSettings())
+}
+
+func (s *Service) applyLimits(cfg settings.Settings) {
+	s.limitsMu.Lock()
+	defer s.limitsMu.Unlock()
+	if cl := s.liveClient.Load(); cl != nil {
+		cl.applyLimits(cfg.PlayRates(s.playing.Load()))
+	}
 }
 
 func NewService(settingsSvc *settings.Service, lib *library.Service) (*Service, error) {
@@ -212,9 +233,7 @@ func (s *Service) onSettingsChanged(next settings.Settings) {
 	root := s.rootCtx
 	s.mu.Unlock()
 
-	if run != nil && run.cl != nil {
-		run.cl.applyLimits(next.DownloadRateLimit, next.UploadRateLimit)
-	}
+	s.applyLimits(next)
 
 	running := run != nil
 	if next.LANSharing == running {
@@ -247,6 +266,7 @@ func (s *Service) enable(parent context.Context) error {
 	if s.torrentPort != 0 {
 		port = s.torrentPort
 	}
+	cfg.DownloadRateLimit, cfg.UploadRateLimit = cfg.PlayRates(s.playing.Load())
 	cl, err := newLANClient(cfg, dataDir, port)
 	if err != nil {
 		s.mu.Unlock()
@@ -272,8 +292,10 @@ func (s *Service) enable(parent context.Context) error {
 		transfers: map[string]*transferState{},
 	}
 	s.run = run
+	s.liveClient.Store(cl)
 	shares := s.store.list()
 	s.mu.Unlock()
+	s.applyLimits(s.currentSettings())
 
 	for _, sh := range shares {
 		if !sh.Enabled {
@@ -294,6 +316,7 @@ func (s *Service) disable() {
 	s.mu.Lock()
 	run := s.run
 	s.run = nil
+	s.liveClient.Store(nil)
 	s.mu.Unlock()
 	if run == nil {
 		return

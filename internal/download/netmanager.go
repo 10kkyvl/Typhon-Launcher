@@ -632,6 +632,7 @@ func (m *Manager) bringUp(ctx context.Context, cfg settings.Settings, plan netPl
 	m.gen++
 	cl.gen = m.gen
 	m.client = cl
+	m.applyRatesLocked()
 	m.clientCtx, m.clientCancel = clientCtx, cancelClient
 	// Cleared in the step that installs the client: a request that comes in
 	// afterwards finds a client, and one that came in before was told to wait.

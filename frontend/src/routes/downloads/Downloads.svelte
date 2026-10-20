@@ -7,6 +7,8 @@
     Download,
     FolderOpen,
     Menu,
+    Gauge,
+    Pause,
     Plus,
     RotateCcw,
     Settings,
@@ -44,11 +46,13 @@
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
+  import { playThrottle } from '../../lib/stores/playThrottle';
+  import { playThrottleBanner } from '../../lib/services/playThrottle';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
-  import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, clockTime, rateLimitLabel, relativeDate, speedBytes } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
   const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
@@ -56,6 +60,16 @@
   function pickConcurrency(id: string) {
     updateSettings({ maxActiveDownloads: Number(id) });
   }
+
+  const playBanner = $derived(playThrottleBanner($playThrottle));
+  const playBannerText = $derived.by(() => {
+    if (!playBanner) return '';
+    if (playBanner.kind === 'pause') return msg('transfers.playPausedBanner');
+    return msg('transfers.playLimitedBanner', {
+      down: rateLimitLabel(playBanner.downloadLimit),
+      up: rateLimitLabel(playBanner.uploadLimit),
+    });
+  });
 
   let addOpen = $state(false);
   let detailsOpen = $state(false);
@@ -140,6 +154,18 @@
     </Button>
   {/snippet}
 </PageHeader>
+
+{#if playBanner}
+  <div class="play-banner" role="status">
+    {#if playBanner.kind === 'pause'}
+      <Pause size="1.5rem" strokeWidth={1.8} />
+    {:else}
+      <Gauge size="1.5rem" strokeWidth={1.8} />
+    {/if}
+    <span class="play-text">{playBannerText}</span>
+    <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
+  </div>
+{/if}
 
 {#if nothing}
   <EmptyState
@@ -328,6 +354,25 @@
 <InstallModal bind:open={installOpen} downloadId={installDownloadId} />
 
 <style>
+  .play-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    max-width: 140rem;
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    font-size: var(--font-sm);
+    color: var(--accent);
+  }
+
+  .play-text {
+    flex: 1;
+    color: var(--text-1);
+  }
+
   .summary {
     display: flex;
     align-items: center;

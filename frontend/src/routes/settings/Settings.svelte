@@ -44,6 +44,7 @@
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
   import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
+  import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
   import {
     exportLogs,
     elevationSupported,
@@ -446,6 +447,30 @@
 
   const downloadLimitPresets = [10, 25, 50];
   const uploadLimitPresets = [1, 5, 10];
+  const playDownloadPresets = [1, 2, 5, 10];
+  const playUploadPresets = [0.5, 1, 2, 5];
+
+  const playModeOptions = $derived([
+    { id: 'off', label: msg('settings.downloadsPlayOff') },
+    { id: 'pause', label: msg('settings.downloadsPlayPause') },
+    { id: 'limit', label: msg('settings.downloadsPlayLimit') },
+  ]);
+
+  const playModeValue = $derived(
+    current?.playDownloadMode === 'pause' || current?.playDownloadMode === 'limit' ? current.playDownloadMode : 'off',
+  );
+
+  function pickPlayMode(id: string) {
+    if (id !== 'limit') {
+      set({ playDownloadMode: id });
+      return;
+    }
+    set({
+      playDownloadMode: id,
+      playDownloadRateLimit: current?.playDownloadRateLimit || defaultPlayDownloadLimit,
+      playUploadRateLimit: current?.playUploadRateLimit || defaultPlayUploadLimit,
+    });
+  }
 
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
@@ -894,6 +919,37 @@
               onchange={(bytes) => set({ uploadRateLimit: bytes })}
             />
           </div>
+          <div class='row'>
+            <div class='row-text'>
+              <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
+              <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
+            </div>
+            <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
+          </div>
+          {#if playModeValue === 'limit'}
+            <div class='row'>
+              <div class='row-text'>
+                <span class='row-label'>{msg('settings.downloadsPlayLimitDownLabel')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.playDownloadRateLimit ?? 0}
+                presets={playDownloadPresets}
+                allowUnlimited={false}
+                onchange={(bytes) => set({ playDownloadRateLimit: bytes })}
+              />
+            </div>
+            <div class='row'>
+              <div class='row-text'>
+                <span class='row-label'>{msg('settings.downloadsPlayLimitUpLabel')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.playUploadRateLimit ?? 0}
+                presets={playUploadPresets}
+                allowUnlimited={false}
+                onchange={(bytes) => set({ playUploadRateLimit: bytes })}
+              />
+            </div>
+          {/if}
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
