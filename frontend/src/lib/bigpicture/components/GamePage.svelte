@@ -691,6 +691,14 @@
             {/if}
           </section>
         {/if}
+        {#if localGame?.notes}
+          <section class="detail-extras">
+            <article class="description-card">
+              <h2>{bp('bp.game.notes')}</h2>
+              <p class="summary">{localGame.notes}</p>
+            </article>
+          </section>
+        {/if}
       {:else}
         <section class="release-section" aria-label={bp('bp.game.releases')}>
           <div class="section-title"><div><span class="section-kicker">{bp('bp.game.eyebrow')}</span><h2>{bp('bp.game.releases')}</h2></div>

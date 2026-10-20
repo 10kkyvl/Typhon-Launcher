@@ -71,6 +71,7 @@ type Game struct {
 	Status            string     `json:"status,omitempty"`
 	StatusAt          *time.Time `json:"statusAt,omitempty"`
 	Tags              []string   `json:"tags,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
 	Hidden            bool       `json:"hidden,omitempty"`
 	HiddenAt          *time.Time `json:"hiddenAt,omitempty"`
 	HidePresence      bool       `json:"hidePresence,omitempty"`
@@ -885,7 +886,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds

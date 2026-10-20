@@ -46,6 +46,7 @@ export interface LibraryGame {
   statusAt?: string | null;
   tags?: string[];
   hidden?: boolean;
+  notes?: string;
 }
 
 export interface LibraryCollection {
@@ -177,6 +178,16 @@ export async function setTags(id: string, tags: string[]): Promise<LibraryGame> 
 export async function setHidden(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetHidden(id, on)) as unknown as LibraryGame;
+}
+
+export async function setNotes(id: string, text: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.SetNotes(id, text);
+}
+
+export async function notesLimit(): Promise<number> {
+  if (!inWails) throw unavailable();
+  return await LibraryService.NotesLimit();
 }
 
 export async function allTags(): Promise<string[]> {

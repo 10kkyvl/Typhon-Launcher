@@ -387,4 +387,10 @@ export const games: Record<GamesKey, Message> = {
   'games.sourceTyphonTitle': 'Installed with Typhon',
   'games.sourceDiskTitle': 'Found on disk',
   'games.filterSourceAll': 'All sources',
+  'games.notesHeading': 'Notes',
+  'games.notesPlaceholder': 'Codes, where you stopped, what to install…',
+  'games.notesCounter': '{count} of {limit}',
+  'games.notesSaving': 'Saving…',
+  'games.notesSaved': 'Saved',
+  'games.notesSaveError': 'Could not save the note',
 };

@@ -40,6 +40,8 @@ export const errLibrary = {
   'library.saves_path_unavailable': 'папка сохранений недоступна',
   'library.launch_args_invalid': 'в параметрах запуска недопустимые символы',
   'library.launch_args_too_long': 'слишком длинные параметры запуска',
+  'library.notes_too_long': 'заметка слишком длинная',
+  'library.notes_invalid': 'заметка содержит недопустимые символы',
 
   'theme.file_too_large': 'файл темы превышает допустимый размер',
   'theme.unsupported_version': 'неподдерживаемая версия файла темы',

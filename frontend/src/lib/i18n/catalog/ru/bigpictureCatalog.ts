@@ -62,6 +62,7 @@ export const bigpictureCatalog = {
   'bp.game.descriptionScrollDown': 'Прокрутить вниз',
   'bp.game.descriptionClose': 'Закрыть описание',
   'bp.game.noDescription': 'Описание пока недоступно.',
+  'bp.game.notes': 'Заметки',
   'bp.game.screenshots': 'Скриншоты',
   'bp.game.noScreenshots': 'Скриншоты пока недоступны.',
   'bp.game.requirements': 'Системные требования',

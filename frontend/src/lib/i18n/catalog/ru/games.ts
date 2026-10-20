@@ -385,6 +385,12 @@ export const games = {
   'games.sourceTyphonTitle': 'Установлена через Typhon',
   'games.sourceDiskTitle': 'Найдена на диске',
   'games.filterSourceAll': 'Все источники',
+  'games.notesHeading': 'Заметки',
+  'games.notesPlaceholder': 'Коды, где остановился, что поставить…',
+  'games.notesCounter': '{count} из {limit}',
+  'games.notesSaving': 'Сохраняю…',
+  'games.notesSaved': 'Сохранено',
+  'games.notesSaveError': 'Не удалось сохранить заметку',
 } as const;
 
 export type GamesKey = keyof typeof games;
