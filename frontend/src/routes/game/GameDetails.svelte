@@ -47,6 +47,7 @@
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import GameNotes from './GameNotes.svelte';
   import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
@@ -1199,6 +1200,12 @@
               ondownload={downloadRelease}
             />
           </section>
+        {/if}
+
+        {#if localGame}
+          {#key localGame.id}
+            <GameNotes gameId={localGame.id} stored={localGame.notes ?? ''} />
+          {/key}
         {/if}
 
         <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />

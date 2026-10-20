@@ -62,6 +62,7 @@ export const bigpictureCatalog = {
   'bp.game.descriptionScrollDown': 'Scroll down',
   'bp.game.descriptionClose': 'Close description',
   'bp.game.noDescription': 'No description is available yet.',
+  'bp.game.notes': 'Notes',
   'bp.game.screenshots': 'Screenshots',
   'bp.game.noScreenshots': 'No screenshots are available yet.',
   'bp.game.requirements': 'System requirements',
