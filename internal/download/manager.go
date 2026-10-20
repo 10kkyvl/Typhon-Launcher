@@ -998,6 +998,11 @@ func (m *Manager) watchWriteErrors(id string, lt *liveTorrent) {
 
 func (m *Manager) onWriteError(id string, gen uint64) func(error) {
 	return func(err error) {
+		// A chunk that arrives after drop is refused by the closed storage; the
+		// torrent is gone, so its download has nothing to fail.
+		if errors.Is(err, errStorageClosed) {
+			return
+		}
 		slog.Error("torrent write error", "download_id", id, "error", err)
 		// The engine calls this from its own goroutine at an arbitrary time,
 		// including possibly after ServiceShutdown has started, so the

@@ -1350,6 +1350,17 @@ func TestWorkOfAReplacedClientDoesNotTouchTheNewState(t *testing.T) {
 		}
 	})
 
+	t.Run("a write refused by closed storage fails nothing", func(t *testing.T) {
+		r.m.mu.Lock()
+		gen := r.m.gen
+		r.m.mu.Unlock()
+		r.m.onWriteError("dl", gen)(errStorageClosed)
+		r.m.wg.Wait()
+		if st := r.m.statusOf(t, "dl"); st == StatusFailed {
+			t.Fatal("a late write of a dropped torrent failed the download")
+		}
+	})
+
 	t.Run("a write error from the current client does", func(t *testing.T) {
 		r.m.mu.Lock()
 		gen := r.m.gen
