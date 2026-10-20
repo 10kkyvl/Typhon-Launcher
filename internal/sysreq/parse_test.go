@@ -47,7 +47,15 @@ func TestParseRows(t *testing.T) {
 		{"cpu numeric cores", "Processor", "4 cores @ 3.0 GHz", func(t *testing.T, r reqSet) { eq(t, r.cores, 4) }},
 		{"cpu russian cores", "Процессор", "4-ядерный Intel Core i5", func(t *testing.T, r reqSet) { eq(t, r.cores, 4) }},
 		{"cpu russian word", "Процессор", "Четырёхъядерный процессор", func(t *testing.T, r reqSet) { eq(t, r.cores, 4) }},
-		{"cpu clock only is kept unparsed", "Processor", "2.4 GHz", func(t *testing.T, r reqSet) {
+		{"cpu clock only", "Processor", "2.4 GHz", func(t *testing.T, r reqSet) {
+			eq(t, r.clockMHz, 2400)
+			ok(t, !r.unparsed[KindCPU])
+		}},
+		{"cpu absurd clock is unparsed", "Processor", "99999999999999999999 GHz", func(t *testing.T, r reqSet) {
+			eq(t, r.clockMHz, 0)
+			ok(t, r.unparsed[KindCPU])
+		}},
+		{"cpu without model, cores or clock is unparsed", "Processor", "Any modern processor", func(t *testing.T, r reqSet) {
 			ok(t, r.has(KindCPU))
 			ok(t, r.unparsed[KindCPU])
 		}},

@@ -1,4 +1,5 @@
-import type { MessageKey } from '../i18n';
+import { msg, type MessageKey } from '../i18n';
+import { bytesSize } from '../utils/format';
 import type { SysreqCheck, SysreqKind, SysreqReport, SysreqStatus, SysreqVerdict } from '../services/sysreq';
 
 export type SysreqTone = 'success' | 'warning' | 'danger' | 'neutral';
@@ -81,4 +82,23 @@ export function sortChecks(checks: readonly SysreqCheck[]): SysreqCheck[] {
 
 export function cacheKey(gameId: string, installPath: string, revision = ''): string {
   return JSON.stringify([gameId, installPath, revision]);
+}
+
+export function haveText(check: SysreqCheck): string {
+  const have = check.have;
+  switch (check.kind) {
+    case 'os':
+      return have.text && have.bits ? msg('sysreq.haveOs', { os: have.text, bits: have.bits }) : have.text;
+    case 'cpu':
+      return have.text && have.cores ? msg('sysreq.haveCpu', { cpu: have.text, count: have.cores }) : have.text;
+    case 'ram':
+    case 'vram':
+      return have.bytes > 0 ? bytesSize(have.bytes) : '';
+    case 'gpu':
+      return have.text;
+    case 'directx':
+      return have.directX > 0 ? msg('sysreq.haveDirectx', { version: have.directX }) : '';
+    case 'storage':
+      return have.free === null ? '' : msg('sysreq.haveFree', { size: bytesSize(have.free) });
+  }
 }

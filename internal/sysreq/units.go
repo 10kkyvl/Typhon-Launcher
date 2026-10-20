@@ -58,18 +58,3 @@ func firstSize(text string) (uint64, bool) {
 	}
 	return sizes[0].bytes, true
 }
-
-func formatBytes(b uint64) string {
-	switch {
-	case b >= tib:
-		return trimFloat(float64(b)/float64(tib)) + " TB"
-	case b >= gib:
-		return trimFloat(float64(b)/float64(gib)) + " GB"
-	default:
-		return trimFloat(float64(b)/float64(mib)) + " MB"
-	}
-}
-
-func trimFloat(v float64) string {
-	return strings.TrimSuffix(strconv.FormatFloat(v, 'f', 1, 64), ".0")
-}

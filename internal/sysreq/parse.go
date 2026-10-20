@@ -31,15 +31,16 @@ type Row struct {
 type reqSet struct {
 	texts map[Kind][]string
 
-	osRank  int
-	need64  bool
-	cores   int
-	cpuTier int
-	ram     uint64
-	gpuTier int
-	vram    uint64
-	dx      int
-	storage uint64
+	osRank   int
+	need64   bool
+	cores    int
+	cpuTier  int
+	clockMHz int
+	ram      uint64
+	gpuTier  int
+	vram     uint64
+	dx       int
+	storage  uint64
 
 	cpuPartial bool
 	gpuPartial bool
@@ -150,7 +151,12 @@ func (r *reqSet) apply(kind Kind, value string) {
 		tier, partial := minTier(value, cpuTier)
 		r.add(KindCPU, value)
 		if cores == 0 && tier == 0 {
-			r.markUnparsed(KindCPU)
+			mhz := clockMHz(value)
+			if mhz == 0 {
+				r.markUnparsed(KindCPU)
+				return
+			}
+			r.clockMHz = max(r.clockMHz, mhz)
 			return
 		}
 		r.cores = max(r.cores, cores)
@@ -211,6 +217,7 @@ var (
 	bit64Re      = regexp.MustCompile(`(?i)64[\s-]*(?:bit|бит|разряд)|\bx64\b|requires\s+a\s+64`)
 	windowsRe    = regexp.MustCompile(`(?i)\bwin(?:dows)?\W*(?:®|\(r\)|\(tm\))?\s*(11|10|8\.1|8|7|vista|xp|2000|me|98|95)\b`)
 	coreNumRe    = regexp.MustCompile(`(?i)(\d+)[\s-]*(?:cores?\b|ядер\p{L}*|ядра|ядро)`)
+	clockRe      = regexp.MustCompile(`(?i)(\d+(?:[.,]\d+)?)\s*(ghz|ггц|mhz|мгц)`)
 	coreWordRe   = regexp.MustCompile(`(?i)\b(dual|triple|quad|hexa|six|octa|eight)[\s-]*(?:core)?\b|(двух|трёх|трех|четыр[её]х|шести|восьми)ъ?ядерн`)
 	dxPrefixRe   = regexp.MustCompile(`(?i)(?:direct\s*x|\bdx)\s*(?:®|\(r\))?\s*:?\s*(?:version|ver\.?|версии|версия)?\s*:?\s*(\d+)`)
 	dxValueRe    = regexp.MustCompile(`\d+`)
@@ -248,6 +255,26 @@ func coreCount(text string) int {
 		}[word]
 	}
 	return 0
+}
+
+const maxClockMHz = 100000
+
+func clockMHz(text string) int {
+	m := clockRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0
+	}
+	v, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", "."), 64)
+	if err != nil || v <= 0 {
+		return 0
+	}
+	if u := strings.ToLower(m[2]); u == "ghz" || u == "ггц" {
+		v *= 1000
+	}
+	if v > maxClockMHz {
+		return 0
+	}
+	return int(v)
 }
 
 func directXIn(text string) int {

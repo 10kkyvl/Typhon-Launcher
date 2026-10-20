@@ -12,6 +12,7 @@
   import { checkSystemRequirements, type SysreqReport } from '../services/sysreq';
   import {
     cacheKey,
+    haveText,
     kindLabelKey,
     sortChecks,
     statusLabelKey,
@@ -114,7 +115,7 @@
                 <span class="kind">{msg(kindLabelKey(check.kind))}</span>
                 {#if check.required}<span class="detail">{msg('sysreq.required')}: {check.required}</span>{/if}
                 {#if check.recommended}<span class="detail">{msg('sysreq.recommended')}: {check.recommended}</span>{/if}
-                <span class="detail have {rowTone}">{msg('sysreq.have')}: {check.have || msg('sysreq.haveUnknown')}</span>
+                <span class="detail have {rowTone}">{msg('sysreq.have')}: {haveText(check) || msg('sysreq.haveUnknown')}</span>
               </div>
             </li>
           {/each}

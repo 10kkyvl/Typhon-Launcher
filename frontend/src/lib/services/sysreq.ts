@@ -6,11 +6,20 @@ export type SysreqReason = '' | 'no_requirements' | 'not_comparable' | 'partial'
 export type SysreqKind = 'os' | 'cpu' | 'ram' | 'gpu' | 'vram' | 'directx' | 'storage';
 export type SysreqStatus = 'ok' | 'below_recommended' | 'below_minimum' | 'unknown';
 
+export interface SysreqHave {
+  text: string;
+  cores: number;
+  bits: number;
+  bytes: number;
+  free: number | null;
+  directX: number;
+}
+
 export interface SysreqCheck {
   kind: SysreqKind;
   required: string;
   recommended: string;
-  have: string;
+  have: SysreqHave;
   status: SysreqStatus;
 }
 

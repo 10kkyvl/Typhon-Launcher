@@ -1,7 +1,6 @@
 package sysreq
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -41,8 +40,20 @@ type Check struct {
 	Kind        Kind   `json:"kind"`
 	Required    string `json:"required"`
 	Recommended string `json:"recommended"`
-	Have        string `json:"have"`
+	Have        Have   `json:"have"`
 	Status      Status `json:"status"`
+}
+
+// Have is this machine's side of a check as raw values, so the UI words it in
+// its own language. Zero values mean unknown; Free is set only when the free
+// space is known, since a full disk has zero bytes free.
+type Have struct {
+	Text    string  `json:"text"`
+	Cores   int     `json:"cores"`
+	Bits    int     `json:"bits"`
+	Bytes   uint64  `json:"bytes"`
+	Free    *uint64 `json:"free"`
+	DirectX int     `json:"directX"`
 }
 
 type Report struct {
@@ -177,7 +188,7 @@ func (h Hardware) evalFacts(kind Kind, r *reqSet) tri {
 				}
 			}
 		}
-		return combine(tierAtLeast(h.CPUName, cpuTier, r.cpuTier, r.cpuPartial), cores)
+		return combine(tierAtLeast(h.CPUName, cpuTier, r.cpuTier, r.cpuPartial), cores, h.clockOnly(r.clockMHz))
 	case KindRAM:
 		return atLeast(h.RAMBytes, r.ram)
 	case KindGPU:
@@ -212,6 +223,24 @@ func (h Hardware) evalFacts(kind Kind, r *reqSet) tri {
 	return triNone
 }
 
+// A requirement that names only a clock speed comes from games older than any
+// current CPU family; per-core speed has outgrown clock since, so a part from
+// that tier onwards meets it. Faster clocks or an unknown part stay unknown.
+const (
+	clockOnlyTier   = 6 * 4
+	clockOnlyMaxMHz = 4000
+)
+
+func (h Hardware) clockOnly(needMHz int) tri {
+	if needMHz == 0 {
+		return triNone
+	}
+	if h.CPUName != "" && cpuTier(h.CPUName) >= clockOnlyTier && needMHz <= clockOnlyMaxMHz {
+		return triMet
+	}
+	return triUnknown
+}
+
 // directX is the newest DirectX the installed Windows ships, not what the
 // video card supports; 0 when the Windows version is unknown.
 func (h Hardware) directX() int {
@@ -228,49 +257,40 @@ func (h Hardware) directX() int {
 	return 0
 }
 
-func (h Hardware) have(kind Kind) string {
+func (h Hardware) have(kind Kind) Have {
 	switch kind {
 	case KindOS:
 		if h.OSName == "" {
-			return ""
+			return Have{}
 		}
+		out := Have{Text: h.OSName}
 		if is64, known := h.is64(); known {
+			out.Bits = 32
 			if is64 {
-				return h.OSName + ", 64-bit"
+				out.Bits = 64
 			}
-			return h.OSName + ", 32-bit"
 		}
-		return h.OSName
+		return out
 	case KindCPU:
 		if h.CPUName == "" {
-			return ""
+			return Have{}
 		}
-		if h.PhysicalCores > 0 {
-			return fmt.Sprintf("%s, %d cores", h.CPUName, h.PhysicalCores)
-		}
-		return h.CPUName
+		return Have{Text: h.CPUName, Cores: h.PhysicalCores}
 	case KindRAM:
-		if h.RAMBytes == 0 {
-			return ""
-		}
-		return formatBytes(h.RAMBytes)
+		return Have{Bytes: h.RAMBytes}
 	case KindGPU:
-		return h.GPUName
+		return Have{Text: h.GPUName}
 	case KindVRAM:
-		if h.VRAMBytes == 0 {
-			return ""
-		}
-		return formatBytes(h.VRAMBytes)
+		return Have{Bytes: h.VRAMBytes}
 	case KindDirectX:
-		if dx := h.directX(); dx > 0 {
-			return "DirectX " + strconv.Itoa(dx)
-		}
+		return Have{DirectX: h.directX()}
 	case KindStorage:
 		if h.FreeKnown {
-			return formatBytes(h.FreeBytes) + " free"
+			free := h.FreeBytes
+			return Have{Free: &free}
 		}
 	}
-	return ""
+	return Have{}
 }
 
 func hasRows(rows []Row) bool {

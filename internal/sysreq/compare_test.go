@@ -2,7 +2,6 @@ package sysreq
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -176,7 +175,7 @@ func TestCompareRowsNothingParsed(t *testing.T) {
 	})
 	t.Run("recognised but unreadable rows", func(t *testing.T) {
 		r := compare(rig(),
-			rows("Processor", "2.4 GHz", "Graphics", "GeForce GTX 1630 or RX 6400", "Memory", "Plenty of RAM", "Storage", "SSD"), nil)
+			rows("Processor", "Any modern processor", "Graphics", "GeForce GTX 1630 or RX 6400", "Memory", "Plenty of RAM", "Storage", "SSD"), nil)
 		if r.Verdict != VerdictUnknown || r.Reason != ReasonNotComparable {
 			t.Fatalf("got %+v", r)
 		}
@@ -218,10 +217,10 @@ func TestCheckCarriesTextsAndHave(t *testing.T) {
 			disk = c
 		}
 	}
-	if ram.Required != "8 GB RAM" || ram.Recommended != "16 GB RAM" || ram.Have != "16 GB" || ram.Status != StatusOK {
+	if ram.Required != "8 GB RAM" || ram.Recommended != "16 GB RAM" || ram.Have.Bytes != 16*gib || ram.Status != StatusOK {
 		t.Fatalf("ram = %+v", ram)
 	}
-	if disk.Required != "50 GB available space" || disk.Recommended != "" || disk.Have != "200 GB free" {
+	if disk.Required != "50 GB available space" || disk.Recommended != "" || disk.Have.Free == nil || *disk.Have.Free != 200*gib {
 		t.Fatalf("disk = %+v", disk)
 	}
 	order := []Kind{}
@@ -239,35 +238,74 @@ func TestReportJSONShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"verdict":"good","reason":"","checks":[{"kind":"ram","required":"8 GB RAM","recommended":"","have":"16 GB","status":"ok"}]}`
+	const want = `{"verdict":"good","reason":"","checks":[{"kind":"ram","required":"8 GB RAM","recommended":"","have":{"text":"","cores":0,"bits":0,"bytes":17179869184,"free":null,"directX":0},"status":"ok"}]}`
 	if string(raw) != want {
 		t.Fatalf("json = %s\nwant   %s", raw, want)
 	}
 }
 
-func TestHaveStrings(t *testing.T) {
+func TestHaveValues(t *testing.T) {
 	hw := rig()
+	free := 200 * gib
 	tests := []struct {
 		kind Kind
-		want string
+		want Have
 	}{
-		{KindOS, "Windows 10 Pro (build 19045), 64-bit"},
-		{KindCPU, "Intel(R) Core(TM) i5-8400 CPU @ 2.80GHz, 6 cores"},
-		{KindRAM, "16 GB"},
-		{KindGPU, "NVIDIA GeForce GTX 1060 6GB"},
-		{KindVRAM, "6 GB"},
-		{KindDirectX, "DirectX 12"},
-		{KindStorage, "200 GB free"},
+		{KindOS, Have{Text: "Windows 10 Pro (build 19045)", Bits: 64}},
+		{KindCPU, Have{Text: "Intel(R) Core(TM) i5-8400 CPU @ 2.80GHz", Cores: 6}},
+		{KindRAM, Have{Bytes: 16 * gib}},
+		{KindGPU, Have{Text: "NVIDIA GeForce GTX 1060 6GB"}},
+		{KindVRAM, Have{Bytes: 6 * gib}},
+		{KindDirectX, Have{DirectX: 12}},
+		{KindStorage, Have{Free: &free}},
 	}
 	for _, tc := range tests {
-		if got := hw.have(tc.kind); got != tc.want {
-			t.Errorf("have(%s) = %q, want %q", tc.kind, got, tc.want)
+		got := hw.have(tc.kind)
+		if got.Text != tc.want.Text || got.Cores != tc.want.Cores || got.Bits != tc.want.Bits ||
+			got.Bytes != tc.want.Bytes || got.DirectX != tc.want.DirectX || (got.Free == nil) != (tc.want.Free == nil) ||
+			(got.Free != nil && *got.Free != *tc.want.Free) {
+			t.Errorf("have(%s) = %+v, want %+v", tc.kind, got, tc.want)
 		}
 	}
-	if got := (Hardware{}).have(KindRAM); got != "" {
-		t.Errorf("unknown ram have = %q", got)
+	if got := (Hardware{}).have(KindStorage); got.Free != nil {
+		t.Errorf("unknown free space = %+v, want no value", got)
 	}
-	if !strings.HasPrefix(formatBytes(1536*mib), "1.5") {
-		t.Errorf("formatBytes = %q", formatBytes(1536*mib))
+	full := hw
+	full.FreeBytes = 0
+	if got := full.have(KindStorage); got.Free == nil || *got.Free != 0 {
+		t.Errorf("full disk = %+v, want a known zero", got)
+	}
+	if got := (Hardware{}).have(KindRAM); got.Bytes != 0 {
+		t.Errorf("unknown ram have = %+v", got)
+	}
+}
+
+func TestClockOnlyCPURequirement(t *testing.T) {
+	old := rig()
+	old.CPUName = "Intel(R) Core(TM)2 Duo CPU E8400 @ 3.00GHz"
+	unknown := rig()
+	unknown.CPUName = "Some Vendor CPU"
+	tests := []struct {
+		name string
+		hw   Hardware
+		cpu  string
+		want Status
+	}{
+		{"modern part, 2 Ghz", rig(), "2 Ghz", StatusOK},
+		{"modern part, MHz", rig(), "1500 MHz", StatusOK},
+		{"modern part, comma", rig(), "2,4 ГГц", StatusOK},
+		{"too fast to judge", rig(), "4.5 GHz", StatusUnknown},
+		{"old part", old, "2 Ghz", StatusUnknown},
+		{"unknown part", unknown, "2 Ghz", StatusUnknown},
+		{"no clock", rig(), "a fast one", StatusUnknown},
+		{"cores still decide", rig(), "Dual Core 2.0 Ghz", StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := compare(tc.hw, rows("Processor", tc.cpu), nil)
+			if len(r.Checks) != 1 || r.Checks[0].Status != tc.want {
+				t.Fatalf("checks = %+v, want %s", r.Checks, tc.want)
+			}
+		})
 	}
 }
