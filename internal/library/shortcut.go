@@ -41,6 +41,10 @@ func (systemShortcuts) SetAppID(p, launcher, appID string) error {
 }
 
 func (s *Service) CreateShortcut(id string) error {
+	return s.CreateProfileShortcut(id, "")
+}
+
+func (s *Service) CreateProfileShortcut(id, profileID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -60,7 +64,14 @@ func (s *Service) CreateShortcut(id string) error {
 	if !safeCommandLineID(id) {
 		return fmt.Errorf("%w: %q", errShortcutBadID, id)
 	}
-	if _, err := os.Stat(game.Executable); err != nil {
+	if profileID != "" && !safeCommandLineID(profileID) {
+		return fmt.Errorf("%w: %q", errProfileBadID, profileID)
+	}
+	chosen, err := chooseProfile(game, profileID, true)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(chosen.executable); err != nil {
 		return fmt.Errorf("исполняемый файл игры: %w", err)
 	}
 	launcher, err := s.launcherPath()
@@ -71,13 +82,17 @@ func (s *Service) CreateShortcut(id string) error {
 	if err != nil {
 		return err
 	}
-	name, err := s.shortcuts.FileName(game.Title)
+	title := game.Title
+	if profileID != "" {
+		title = profileTitle(*game, profileID)
+	}
+	name, err := s.shortcuts.FileName(title)
 	if err != nil {
 		return err
 	}
 
 	path := filepath.Join(dir, name)
-	link, err := gameShortcutLink(*game, launcher)
+	link, err := gameShortcutLink(*game, profileID, chosen.executable, launcher)
 	if err != nil {
 		return err
 	}
@@ -85,10 +100,18 @@ func (s *Service) CreateShortcut(id string) error {
 		return err
 	}
 
+	snapshot := *game
 	previous := game.ShortcutPath
-	game.ShortcutPath = path
+	if profileID == "" {
+		game.ShortcutPath = path
+	} else {
+		game.Profiles = cloneProfiles(snapshot.Profiles)
+		p := findProfile(game, profileID)
+		previous = p.ShortcutPath
+		p.ShortcutPath = path
+	}
 	if err := s.persist(); err != nil {
-		game.ShortcutPath = previous
+		*game = snapshot
 		if previous == "" || !strings.EqualFold(previous, path) {
 			if rollback := s.shortcuts.Remove(path); rollback != nil {
 				return errors.Join(err, rollback)
@@ -135,19 +158,37 @@ func (s *Service) RemoveShortcut(id string) error {
 
 // gameShortcutLink собирает ярлык запуска игры. Иконку Windows берёт прямо из
 // исполняемого файла игры, поэтому отдельный .ico не нужен.
-func gameShortcutLink(game Game, launcher string) (shortcut.Link, error) {
-	appID, err := shortcut.GameAppID(game.ID)
+func gameShortcutLink(game Game, profileID, icon, launcher string) (shortcut.Link, error) {
+	appID, args, description, err := shortcutIdentity(game, profileID)
 	if err != nil {
-		return shortcut.Link{}, fmt.Errorf("идентификатор ярлыка игры %q: %w", game.ID, err)
+		return shortcut.Link{}, err
 	}
 	return shortcut.Link{
 		Target:         launcher,
-		Args:           "--play " + game.ID,
+		Args:           args,
 		WorkDir:        filepath.Dir(launcher),
-		Icon:           game.Executable,
-		Description:    game.Title,
+		Icon:           icon,
+		Description:    description,
 		AppUserModelID: appID,
 	}, nil
+}
+
+// shortcutIdentity gives each launch profile its own AppUserModelID, so two
+// profile shortcuts of one game do not share a taskbar group.
+func shortcutIdentity(game Game, profileID string) (appID, args, description string, err error) {
+	gameID := game.ID
+	args = "--play " + game.ID
+	description = game.Title
+	if profileID != "" {
+		gameID += "." + profileID
+		args += " --profile " + profileID
+		description = profileTitle(game, profileID)
+	}
+	appID, err = shortcut.GameAppID(gameID)
+	if err != nil {
+		return "", "", "", fmt.Errorf("идентификатор ярлыка игры %q: %w", game.ID, err)
+	}
+	return appID, args, description, nil
 }
 
 func (s *Service) startShortcutRefresh(ctx context.Context) {
@@ -200,15 +241,23 @@ func (s *Service) refreshShortcuts(ctx context.Context) error {
 		s.mu.Unlock()
 		return nil
 	}
-	var games []Game
+	var links []shortcutRef
 	for _, g := range s.games {
-		if g.ShortcutPath != "" && !g.Uninstalled && g.Executable != "" {
-			games = append(games, g)
+		if g.Uninstalled || g.Executable == "" {
+			continue
+		}
+		if g.ShortcutPath != "" {
+			links = append(links, shortcutRef{gameID: g.ID, path: g.ShortcutPath})
+		}
+		for _, p := range g.Profiles {
+			if p.ShortcutPath != "" {
+				links = append(links, shortcutRef{gameID: g.ID, profileID: p.ID, path: p.ShortcutPath})
+			}
 		}
 	}
 	launcherPath := s.launcherPath
 	s.mu.Unlock()
-	if len(games) == 0 {
+	if len(links) == 0 {
 		return nil
 	}
 	launcher, err := launcherPath()
@@ -217,36 +266,67 @@ func (s *Service) refreshShortcuts(ctx context.Context) error {
 	}
 
 	var errs []error
-	for _, g := range games {
+	for _, ref := range links {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(errs, err)...)
 		}
-		appID, err := shortcut.GameAppID(g.ID)
+		appID, _, _, err := shortcutIdentity(Game{ID: ref.gameID}, ref.profileID)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("идентификатор ярлыка игры %q: %w", g.ID, err))
+			errs = append(errs, err)
 			continue
 		}
-		if err := s.setShortcutAppID(g, launcher, appID); err != nil {
-			errs = append(errs, fmt.Errorf("ярлык игры %q: %w", g.ID, err))
+		if err := s.setShortcutAppID(ref, launcher, appID); err != nil {
+			errs = append(errs, fmt.Errorf("ярлык игры %q: %w", ref.gameID, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (s *Service) setShortcutAppID(g Game, launcher, appID string) error {
+type shortcutRef struct {
+	gameID    string
+	profileID string
+	path      string
+}
+
+func (s *Service) setShortcutAppID(ref shortcutRef, launcher, appID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current := s.findLocked(g.ID)
-	if current == nil || current.Uninstalled || !strings.EqualFold(current.ShortcutPath, g.ShortcutPath) {
+	current := s.findLocked(ref.gameID)
+	if current == nil || current.Uninstalled {
 		return nil
 	}
-	return s.shortcuts.SetAppID(current.ShortcutPath, launcher, appID)
+	path := current.ShortcutPath
+	if ref.profileID != "" {
+		p := findProfile(current, ref.profileID)
+		if p == nil {
+			return nil
+		}
+		path = p.ShortcutPath
+	}
+	if !strings.EqualFold(path, ref.path) {
+		return nil
+	}
+	return s.shortcuts.SetAppID(path, launcher, appID)
 }
 
 // dropShortcutLocked убирает ярлык вместе с установкой. Заблокированный файл
 // ярлыка не повод отказать в удалении игры, поэтому путь остаётся в записи:
 // по нему удаление можно повторить, а очистить поле, потеряв путь, — нельзя.
 func (s *Service) dropShortcutLocked(game *Game) {
+	if game.Profiles != nil {
+		game.Profiles = cloneProfiles(game.Profiles)
+		for i := range game.Profiles {
+			p := &game.Profiles[i]
+			if p.ShortcutPath == "" {
+				continue
+			}
+			if err := s.shortcuts.Remove(p.ShortcutPath); err != nil {
+				slog.Warn("remove profile shortcut", "id", game.ID, "profile", p.ID, "path", p.ShortcutPath, "error", err)
+				continue
+			}
+			p.ShortcutPath = ""
+		}
+	}
 	if game.ShortcutPath == "" {
 		return
 	}

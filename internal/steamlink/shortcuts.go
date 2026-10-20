@@ -26,6 +26,15 @@ func AppID(gameID string) uint32 {
 	return crc32.ChecksumIEEE([]byte("typhon:"+gameID)) | 0x80000000
 }
 
+// ProfileAppID is the app id of a launch profile's shortcut; the profile "" is
+// the game itself, so existing Steam entries keep their id.
+func ProfileAppID(gameID, profileID string) uint32 {
+	if profileID == "" {
+		return AppID(gameID)
+	}
+	return crc32.ChecksumIEEE([]byte("typhon:"+gameID+":"+profileID)) | 0x80000000
+}
+
 type document struct {
 	top []*node
 }

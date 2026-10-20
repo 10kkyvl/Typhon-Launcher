@@ -9,11 +9,13 @@ type fakeGamePlayer struct {
 	err   error
 	calls int
 	ids   []string
+	profs []string
 }
 
-func (f *fakeGamePlayer) PlayGame(id string) error {
+func (f *fakeGamePlayer) PlayGameProfile(id, profileID string) error {
 	f.calls++
 	f.ids = append(f.ids, id)
+	f.profs = append(f.profs, profileID)
 	return f.err
 }
 
@@ -21,7 +23,7 @@ func TestPlayFromShortcutRevealsOnFailure(t *testing.T) {
 	player := &fakeGamePlayer{err: errors.New("library.cannot_confirm_process")}
 	revealed := 0
 
-	playFromShortcut(player, "game-1", func() { revealed++ })
+	playFromShortcut(player, playRequest{id: "game-1"}, func() { revealed++ })
 
 	if player.calls != 1 || len(player.ids) != 1 || player.ids[0] != "game-1" {
 		t.Fatalf("PlayGame calls = %d %v, want exactly one call for game-1", player.calls, player.ids)
@@ -35,7 +37,7 @@ func TestPlayFromShortcutDoesNotRevealOnSuccess(t *testing.T) {
 	player := &fakeGamePlayer{}
 	revealed := 0
 
-	playFromShortcut(player, "game-1", func() { revealed++ })
+	playFromShortcut(player, playRequest{id: "game-1"}, func() { revealed++ })
 
 	if player.calls != 1 {
 		t.Fatalf("PlayGame calls = %d, want 1", player.calls)

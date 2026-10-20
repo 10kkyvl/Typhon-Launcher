@@ -13,6 +13,7 @@
     locateSaves,
     markError,
     playGame,
+    playGameProfile,
     removeFromSteam,
     removeShortcut,
     setFavorite,
@@ -24,6 +25,7 @@
     type SavesResult,
   } from '../services/library';
   import { openGameFolder, openFolder } from '../services/settings';
+  import { profileIdFromItem, withProfileItems } from '../game/profiles';
   import { openMoveGame } from '../game/actions/move';
   import { chooseSavesDir } from '../game/actions/saves';
   import { share as shareLan, shares, unshare as unshareLan } from '../stores/lan';
@@ -79,7 +81,7 @@
 
   const items = $derived(
     game
-      ? quickActions({
+      ? withProfileItems(quickActions({
           installed: !game.uninstalled,
           running: $runningGames.has(game.id),
           hasExecutable: Boolean(game.executable),
@@ -94,7 +96,7 @@
           saveBackups: $saveBackupsEnabled,
           fromSteam: game.external?.provider === 'steam',
           steam: steam && steam.id === game.id ? { added: steam.added } : null,
-        })
+        }), game)
       : [],
   );
 
@@ -260,6 +262,11 @@
 
   function onSelect(id: string) {
     if (!game) return;
+    const profileID = profileIdFromItem(id);
+    if (profileID !== null) {
+      void guard(() => playGameProfile(game.id, profileID));
+      return;
+    }
     void run(game, id as QuickAction);
   }
 </script>

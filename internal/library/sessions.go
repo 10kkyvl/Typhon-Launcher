@@ -69,6 +69,14 @@ var (
 )
 
 func (s *Service) PlayGame(id string) error {
+	return s.play(id, "", false)
+}
+
+func (s *Service) PlayGameProfile(id, profileID string) error {
+	return s.play(id, profileID, true)
+}
+
+func (s *Service) play(id, profileID string, explicit bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -91,23 +99,37 @@ func (s *Service) PlayGame(id string) error {
 	if game.External != nil && game.External.LaunchURI != "" {
 		return s.playExternalLocked(game)
 	}
-	if _, err := os.Stat(game.Executable); err != nil {
-		return uierr.New("library.executable_missing", "исполняемый файл больше не существует")
+	chosen, err := chooseProfile(game, profileID, explicit)
+	if err != nil && !explicit && game.LastProfile != "" {
+		chosen, err = s.fallbackProfileLocked(game, err)
+	}
+	if err != nil {
+		return err
+	}
+	if chosen.executable == "" {
+		return errExecutableMissing
+	}
+	if _, err := os.Stat(chosen.executable); err != nil {
+		return errExecutableMissing
 	}
 
-	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
+	workDir, err := filepath.Abs(filepath.Dir(chosen.executable))
 	if err != nil {
 		return fmt.Errorf("рабочая папка игры: %w", err)
 	}
+	if err := s.rememberProfileLocked(game, chosen.id); err != nil {
+		return err
+	}
 	copyGame := *game
 	game = &copyGame
+	game.Executable = chosen.executable
 	req := launch{
 		installDir: game.InstallDir,
-		executable: game.Executable,
-		args:       game.LaunchArgs,
+		executable: chosen.executable,
+		args:       chosen.args,
 		workDir:    workDir,
 		shared:     game.UsesSharedBottle(),
-		elevated:   game.RunAsAdmin,
+		elevated:   chosen.admin,
 	}
 	ctx := s.ctx
 	// Constructors are also used without startup by synchronous callers.

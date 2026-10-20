@@ -121,6 +121,11 @@ export const games = {
   'games.statusPlayingOther': 'Проходит',
 
   'games.play': 'Играть',
+  'games.profileDefault': 'Основной',
+  'games.playProfile': 'Играть · {name}',
+  'games.playProfileChoose': 'Выбрать профиль запуска',
+  'games.profileFallback': 'Профиль «{name}» не запустить: файл игры не найден. Запущен основной профиль.',
+  'games.actionPlayProfile': 'Играть: {name}',
   'games.stop': 'Остановить',
   'games.openFolder': 'Открыть папку',
   'games.moreLabel': 'Ещё',

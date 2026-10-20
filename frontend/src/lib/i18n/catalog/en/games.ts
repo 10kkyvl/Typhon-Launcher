@@ -123,6 +123,11 @@ export const games: Record<GamesKey, Message> = {
   'games.statusPlayingOther': 'In progress',
 
   'games.play': 'Play',
+  'games.profileDefault': 'Default',
+  'games.playProfile': 'Play · {name}',
+  'games.playProfileChoose': 'Choose launch profile',
+  'games.profileFallback': 'Profile “{name}” can’t start: its game file is missing. Started the main profile instead.',
+  'games.actionPlayProfile': 'Play: {name}',
   'games.stop': 'Stop',
   'games.openFolder': 'Open folder',
   'games.moreLabel': 'More',

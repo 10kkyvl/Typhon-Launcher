@@ -3,6 +3,7 @@
   import { FolderOpen } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import GameProfiles from './GameProfiles.svelte';
   import Toggle from './Toggle.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
   import { errorCode, hasMessage, msg } from '../i18n';
@@ -316,6 +317,8 @@
           {/if}
         </section>
       {/if}
+
+      <GameProfiles {game} {candidates} {adminShown} />
 
       <section class="section">
         <div class="row spread">
