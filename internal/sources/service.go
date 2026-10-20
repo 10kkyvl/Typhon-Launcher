@@ -355,13 +355,13 @@ func (s *Service) SelectFeedFile(language string) (string, error) {
 	if app == nil {
 		return "", errNoDialog
 	}
-	path, err := app.Dialog.OpenFile().
+	path, err := dialogtext.Selection(app.Dialog.OpenFile().
 		SetTitle(labels.FeedTitle).
 		SetMessage(labels.FeedTitle).
 		CanChooseFiles(true).
 		AddFilter(labels.Feeds, "*.json").
 		AddFilter(labels.AllFiles, "*.*").
-		PromptForSingleSelection()
+		PromptForSingleSelection())
 	if err != nil {
 		return "", fmt.Errorf("выбор файла фида: %w", err)
 	}

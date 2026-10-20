@@ -455,7 +455,7 @@ func (s *Service) PickAvatar(language string) (AvatarImage, error) {
 		CanChooseFiles(true).
 		AddFilter(labels.AvatarImages, "*.png;*.jpg;*.jpeg;*.webp;*.gif").
 		AddFilter(labels.AllFiles, "*.*")
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select avatar file", "error", err)
 		return AvatarImage{}, err
@@ -495,7 +495,7 @@ func (s *Service) PickCover(language string) (AvatarImage, error) {
 		CanChooseFiles(true).
 		AddFilter(labels.CoverImages, "*.png;*.jpg;*.jpeg;*.webp").
 		AddFilter(labels.AllFiles, "*.*")
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		return AvatarImage{}, err
 	}

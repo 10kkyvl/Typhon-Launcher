@@ -170,7 +170,7 @@ func (s *Service) SelectTargetFolder(language string) (string, error) {
 		SetMessage(labels.TargetFolder).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select target folder", "error", err)
 		return "", err

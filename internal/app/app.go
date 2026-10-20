@@ -100,7 +100,7 @@ func (s *Service) SelectExecutable(title, language string) (string, error) {
 		CanChooseFiles(true).
 		AddFilter(labels.Executables, "*.exe").
 		AddFilter(labels.AllFiles, "*.*")
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select executable", "error", err)
 		return "", err
@@ -122,7 +122,7 @@ func (s *Service) SelectGameExecutable(title, installDir, current, language stri
 		CanChooseFiles(true).
 		AddFilter(labels.Executables, "*.exe").
 		AddFilter(labels.AllFiles, "*.*")
-	return dialog.PromptForSingleSelection()
+	return dialogtext.Selection(dialog.PromptForSingleSelection())
 }
 
 func (s *Service) SelectFolder(title string) (string, error) {
@@ -131,7 +131,7 @@ func (s *Service) SelectFolder(title string) (string, error) {
 		SetMessage(title).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select folder", "error", err)
 		return "", err

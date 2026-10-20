@@ -578,7 +578,7 @@ func (m *Manager) AddTorrentSelectFile(language string) (string, error) {
 		CanChooseFiles(true).
 		AddFilter(labels.Torrents, "*.torrent").
 		AddFilter(labels.AllFiles, "*.*")
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select torrent file", "error", err)
 		return "", err
