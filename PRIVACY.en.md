@@ -17,7 +17,7 @@ This is a translation of the Russian original. In case of any discrepancy, the R
 The following data is stored locally only and is not sent to the Typhon services:
 
 - **Release sources** — the addresses of the sources added and the contents of their feeds. A feed is requested directly from the source host; the connection runs from the user's device with no Typhon servers in between.
-- **Downloads** — magnet links, infohashes, torrent file lists, the contents of downloaded files, and download history and state.
+- **Downloads** — magnet links, infohashes, torrent file lists, the contents of downloaded files, download history and state, and the paths of removed downloads' files that could not be deleted from disk, kept in `cleanup.json` until the user deletes them on the "Disk usage" screen.
 - **Installations** — installation paths, the set of installed files, the history of installations and removals, and update manifests.
 - **Library** — the list of games, paths to executables, launch profiles (name, executable, launch options), per-game game mode settings, personal notes on games, and the times and durations of play sessions. If cross-device sync is enabled (section 2.3), some of this — the game's identifier in the external IGDB catalog, the last launch date, playtime, the "favorite" mark, the completion status and the "hidden" mark — is sent to the service; paths, file names, release names, launch profiles and notes are not.
 - **App settings**, including BitTorrent parameters. With sync enabled, some settings are sent to the service (section 2.3); directory paths, speed limits and data-collection consents are not.
@@ -31,7 +31,7 @@ The following data is stored locally only and is not sent to the Typhon services
 
 These lists, paths and contents do not leave the device. If the user has enabled anonymous usage statistics (section 8.2), only anonymized information about the outcome of an operation is sent — for example, that an installation succeeded and how many seconds it took — but nothing of the above. If the user has enabled anonymous diagnostics (section 8.3), an anonymized error report is sent — but not the log itself and not fragments of it.
 
-Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, `gamemode.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
+Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `cleanup.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, `gamemode.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
 
 `installation.json` holds only the installation identifier — a random UUIDv4 created the first time the app is started. It is not derived from any device characteristics and is not personal data in itself; where it is sent is described in section 8.
 
