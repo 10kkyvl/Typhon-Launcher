@@ -90,7 +90,7 @@ func (f *fakeRegistrar) CreateShortcut(id string) error {
 	return nil
 }
 
-func (f *fakeRegistrar) RegisterInstalled(g library.InstalledGame) (library.Game, error) {
+func (f *fakeRegistrar) RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.games = append(f.games, g)

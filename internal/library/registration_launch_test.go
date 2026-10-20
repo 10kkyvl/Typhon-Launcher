@@ -18,14 +18,14 @@ func TestRegisterInstalledClearsStaleReleaseMetadataAfterUninstall(t *testing.T)
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.RegisterInstalled(InstalledGame{Title: "Game", Executable: exe, InstallDir: dir, ReleaseID: "r1", SourceID: "s1", DistributionID: "d1", Repacker: "Old"})
+	g, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", Executable: exe, InstallDir: dir, ReleaseID: "r1", SourceID: "s1", DistributionID: "d1", Repacker: "Old"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.MarkUninstalled(g.ID); err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.RegisterInstalled(InstalledGame{Title: "Game", Executable: exe, InstallDir: dir})
+	g, err = s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", Executable: exe, InstallDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestPlayGameDoesNotHoldLibraryLockDuringPreparation(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.AddGame(exe, "Game")
+	g, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,22 +74,22 @@ func TestMeasuresInstallOutsideLibraryLock(t *testing.T) {
 	old := measureInstall
 	defer func() { measureInstall = old }()
 	calls := 0
-	measureInstall = func(id, dir string) (int64, bool) {
+	measureInstall = func(ctx context.Context, id, dir string) (int64, bool) {
 		calls++
 		if !s.mu.TryLock() {
 			t.Fatal("measurement holds library mutex")
 		}
 		s.mu.Unlock()
-		return old(id, dir)
+		return old(ctx, id, dir)
 	}
-	g, err := s.RegisterInstalled(InstalledGame{Title: "Game", InstallDir: dir, Executable: exe})
+	g, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", InstallDir: dir, Executable: exe})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterInstalled(InstalledGame{Title: "Game", InstallDir: dir, Executable: exe}); err != nil {
+	if _, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", InstallDir: dir, Executable: exe}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ApplyInstalledUpdate(InstalledUpdate{ID: g.ID, Version: "2"}); err != nil {
+	if _, err := s.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: g.ID, Version: "2"}); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 3 {
@@ -105,7 +105,7 @@ func TestLegacyCloudOwnershipIsNotRestoredOnLoad(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.AddGame(exe, "Manual")
+	g, err := s.AddGame(t.Context(), exe, "Manual")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestLaunchContextOutlivesCall(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.AddGame(exe, "Game")
+	g, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestPreparingGameStaysResponsiveAndReserved(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("test"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.AddGame(exe, "Game")
+	g, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatal(err)
 	}

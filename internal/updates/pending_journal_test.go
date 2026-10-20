@@ -18,7 +18,7 @@ type failingRollbackLibrary struct {
 	err error
 }
 
-func (f *failingRollbackLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error) {
+func (f *failingRollbackLibrary) ApplyInstalledUpdate(_ context.Context, u library.InstalledUpdate) (library.Game, error) {
 	return library.Game{}, f.err
 }
 
@@ -40,7 +40,7 @@ func TestFailedRollbackPreservesJournalUntilRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			game, err := lib.RegisterInstalled(library.InstalledGame{Title: "Game", InstallDir: current, Executable: filepath.Join(current, "game.exe"), Version: "2", ReleaseID: "r2", SourceID: "s", DistributionID: "d"})
+			game, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{Title: "Game", InstallDir: current, Executable: filepath.Join(current, "game.exe"), Version: "2", ReleaseID: "r2", SourceID: "s", DistributionID: "d"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -58,7 +58,7 @@ func TestFailedRollbackPreservesJournalUntilRecovery(t *testing.T) {
 			if err := s.persistRollbacksLocked(); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Rollback(game.ID); !errors.Is(err, failure) {
+			if err := s.Rollback(t.Context(), game.ID); !errors.Is(err, failure) {
 				t.Fatalf("rollback error = %v", err)
 			}
 			before, err := s.store.loadJournals()

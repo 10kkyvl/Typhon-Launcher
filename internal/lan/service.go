@@ -800,14 +800,14 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 			completed := t.BytesCompleted()
 			s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = completed })
 			if completed >= total {
-				s.completeTransfer(run, id, dest, offer, t)
+				s.completeTransfer(ctx, run, id, dest, offer, t)
 				return
 			}
 		}
 	}
 }
 
-func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
+func (s *Service) completeTransfer(ctx context.Context, run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
 	exePath := filepath.Join(dest, filepath.FromSlash(offer.Exe))
 	if !platform.Inside(dest, exePath) {
 		s.finishTransfer(run, id, TransferFailed, errExeOutsideInstall)
@@ -819,7 +819,7 @@ func (s *Service) completeTransfer(run *runState, id, dest string, offer Offer, 
 		return
 	}
 
-	game, err := s.lib.RegisterInstalled(library.InstalledGame{
+	game, err := s.lib.RegisterInstalled(ctx, library.InstalledGame{
 		Title:         offer.Title,
 		Executable:    exePath,
 		InstallDir:    dest,

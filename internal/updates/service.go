@@ -83,7 +83,7 @@ type degradedStatus struct {
 type librarySource interface {
 	GetInstalledGames() []library.Game
 	GetRunningGames() []string
-	ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error)
+	ApplyInstalledUpdate(ctx context.Context, u library.InstalledUpdate) (library.Game, error)
 	BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 }
@@ -278,7 +278,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	s.mu.Unlock()
 
-	s.recoverJournals()
+	s.recoverJournals(startupCtx)
 
 	for _, gameID := range interrupted {
 		if game, ok := s.installedGame(gameID); ok {

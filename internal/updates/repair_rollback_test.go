@@ -68,7 +68,7 @@ func TestRecoveryRestoresVersionWithRollback(t *testing.T) {
 	writeFile(t, old, "game.exe", "OLD VERSION")
 	h.library.games[0].Version = "2.0"
 	j := SwapJournal{GameID: "local-1", Kind: JournalInplace, Original: &library.InstalledUpdate{ID: "local-1", InstallDir: h.installDir, Executable: filepath.Join(h.installDir, "game.exe"), Version: "1.0"}, InstallDir: h.installDir, Previous: old, Version: "2.0"}
-	h.service.recoverInplaceJournal(j)
+	h.service.recoverInplaceJournal(t.Context(), j)
 	b, err := os.ReadFile(filepath.Join(h.installDir, "game.exe"))
 	if err != nil {
 		t.Fatal(err)

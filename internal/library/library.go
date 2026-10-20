@@ -461,7 +461,7 @@ func (s *Service) GetRunningGames() []string {
 	return ids
 }
 
-func (s *Service) AddGame(executable, title string) (Game, error) {
+func (s *Service) AddGame(ctx context.Context, executable, title string) (Game, error) {
 	info, err := os.Stat(executable)
 	if err != nil || info.IsDir() {
 		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
@@ -476,7 +476,7 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	if installDir == "" {
 		return Game{}, errEmptyInstallDir
 	}
-	size, unknown := measureInstall("", installDir)
+	size, unknown := measureInstall(ctx, "", installDir)
 	game := Game{
 		ID:          newID(),
 		Title:       title,
@@ -547,7 +547,7 @@ func (s *Service) reviveLocked(pos int, title, installDir string, size int64, un
 	return s.games[pos], nil
 }
 
-func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
+func (s *Service) RegisterInstalled(ctx context.Context, g InstalledGame) (Game, error) {
 	info, err := os.Stat(g.Executable)
 	if err != nil || info.IsDir() {
 		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
@@ -557,7 +557,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
-	size, unknown := measureInstall("", installDir)
+	size, unknown := measureInstall(ctx, "", installDir)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -701,7 +701,7 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 }
 
 //wails:ignore
-func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
+func (s *Service) ApplyInstalledUpdate(ctx context.Context, u InstalledUpdate) (Game, error) {
 	const maxMeasureRetries = 3
 	preserveExecutable := false
 	for attempt := 0; attempt < maxMeasureRetries; attempt++ {
@@ -716,7 +716,7 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 		if dir == "" {
 			return Game{}, errEmptyInstallDir
 		}
-		size, unknown := measureInstall(u.ID, dir)
+		size, unknown := measureInstall(ctx, u.ID, dir)
 
 		s.mu.Lock()
 		pos := -1
@@ -1119,10 +1119,6 @@ func newID() string {
 	return hex.EncodeToString(buf)
 }
 
-func dirSize(dir string) (int64, error) {
-	return walkSize(dir, func() error { return nil })
-}
-
 func dirSizeCtx(ctx context.Context, dir string) (int64, error) {
 	return walkSize(dir, ctx.Err)
 }
@@ -1166,8 +1162,8 @@ var measureExternal = func(ctx context.Context, dir string) (int64, bool) {
 
 // measureInstall не роняет регистрацию игры: недоступный подкаталог не повод
 // потерять запись, но и нулевой размер выдавать за настоящий нельзя.
-var measureInstall = func(id, dir string) (int64, bool) {
-	size, err := dirSize(dir)
+var measureInstall = func(ctx context.Context, id, dir string) (int64, bool) {
+	size, err := dirSizeCtx(ctx, dir)
 	if err != nil {
 		slog.Warn("measure install dir", "id", id, "error", err)
 		return 0, true

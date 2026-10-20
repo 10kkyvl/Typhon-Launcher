@@ -171,7 +171,7 @@ func TestMissingStateFilesStartEmptyAndCreateThemOnFirstSave(t *testing.T) {
 	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
 		t.Fatalf("starting without state created files: %v %v", entries, err)
 	}
-	if _, err := s.AddGame(tempGameExe(t), "First"); err != nil {
+	if _, err := s.AddGame(t.Context(), tempGameExe(t), "First"); err != nil {
 		t.Fatal(err)
 	}
 	if got := decodeRecords(t, readFile(t, path)); len(got) != 1 || got[0]["title"] != "First" {
@@ -208,14 +208,14 @@ func newSaveFixture(t *testing.T) *saveFixture {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exeA := tempGameExe(t)
-	a, err := s.RegisterInstalled(InstalledGame{
+	a, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title: "A", Executable: exeA, InstallDir: filepath.Dir(exeA), Version: "1.0",
 		SourceID: "src", ReleaseID: "rel", CanonicalGameID: "canon-a",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err := s.AddGame(tempGameExe(t), "U")
+	u, err := s.AddGame(t.Context(), tempGameExe(t), "U")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,23 +248,23 @@ func TestMutationsRollBackMemoryWhenTheSaveFails(t *testing.T) {
 		name string
 		run  func(f *saveFixture) error
 	}{
-		{"AddGame", func(f *saveFixture) error { _, err := f.s.AddGame(f.freshEx, "New"); return err }},
+		{"AddGame", func(f *saveFixture) error { _, err := f.s.AddGame(t.Context(), f.freshEx, "New"); return err }},
 		{"AddGame reviving an uninstalled card", func(f *saveFixture) error {
-			_, err := f.s.AddGame(f.u.Executable, "Back")
+			_, err := f.s.AddGame(t.Context(), f.u.Executable, "Back")
 			return err
 		}},
 		{"RegisterInstalled new game", func(f *saveFixture) error {
-			_, err := f.s.RegisterInstalled(InstalledGame{Title: "New", Executable: f.freshEx, InstallDir: filepath.Dir(f.freshEx)})
+			_, err := f.s.RegisterInstalled(t.Context(), InstalledGame{Title: "New", Executable: f.freshEx, InstallDir: filepath.Dir(f.freshEx)})
 			return err
 		}},
 		{"RegisterInstalled existing game", func(f *saveFixture) error {
-			_, err := f.s.RegisterInstalled(InstalledGame{
+			_, err := f.s.RegisterInstalled(t.Context(), InstalledGame{
 				Title: "Renamed", Executable: f.a.Executable, InstallDir: f.a.InstallDir, Version: "9.9", ReleaseID: "other",
 			})
 			return err
 		}},
 		{"ApplyInstalledUpdate", func(f *saveFixture) error {
-			_, err := f.s.ApplyInstalledUpdate(InstalledUpdate{ID: f.a.ID, Version: "2.0", ReleaseID: "rel-2", SourceID: "src", DistributionID: "d"})
+			_, err := f.s.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: f.a.ID, Version: "2.0", ReleaseID: "rel-2", SourceID: "src", DistributionID: "d"})
 			return err
 		}},
 		{"BindDistribution", func(f *saveFixture) error {
@@ -363,7 +363,7 @@ func TestRemoveGameArchivesPlaytimeAndStatus(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.RegisterInstalled(InstalledGame{Title: "Gone", Executable: exe, InstallDir: filepath.Dir(exe), CanonicalGameID: "canon-gone"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Gone", Executable: exe, InstallDir: filepath.Dir(exe), CanonicalGameID: "canon-gone"})
 	if err != nil {
 		t.Fatal(err)
 	}

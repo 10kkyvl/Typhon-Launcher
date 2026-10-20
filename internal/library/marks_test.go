@@ -15,7 +15,7 @@ func addGames(t *testing.T, s *Service, n int) []string {
 	t.Helper()
 	ids := make([]string, 0, n)
 	for i := 0; i < n; i++ {
-		g, err := s.AddGame(tempGameExe(t), fmt.Sprintf("Game %d", i))
+		g, err := s.AddGame(t.Context(), tempGameExe(t), fmt.Sprintf("Game %d", i))
 		if err != nil {
 			t.Fatalf("add game: %v", err)
 		}

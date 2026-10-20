@@ -173,7 +173,7 @@ func steamService(t *testing.T) (*Service, *fakeSteam, Game) {
 	s.steam = fake
 	launcher := filepath.Join(t.TempDir(), "typhon.exe")
 	s.launcherPath = func() (string, error) { return launcher, nil }
-	game, err := s.AddGame(tempGameExe(t), "Half-Life 2")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Half-Life 2")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestServiceStartsWithSteamDisabled(t *testing.T) {
 	if s.steamSync {
 		t.Fatal("a fresh service reconciles at startup")
 	}
-	game, err := s.AddGame(tempGameExe(t), "Game")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Game")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +512,7 @@ func TestFailedRemovalLeavesTheSteamShortcut(t *testing.T) {
 
 func addExeGame(t *testing.T, s *Service, title string) Game {
 	t.Helper()
-	game, err := s.AddGame(tempGameExe(t), title)
+	game, err := s.AddGame(t.Context(), tempGameExe(t), title)
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

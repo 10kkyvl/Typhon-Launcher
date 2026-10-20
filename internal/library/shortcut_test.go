@@ -104,7 +104,7 @@ func shortcutService(t *testing.T) (*Service, *fakeShortcuts, string) {
 
 func addShortcutGame(t *testing.T, s *Service) Game {
 	t.Helper()
-	game, err := s.AddGame(tempGameExe(t), "Half-Life 2")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Half-Life 2")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

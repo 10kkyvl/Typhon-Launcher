@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ type barrierLibrary struct {
 	open   chan struct{}
 }
 
-func (b *barrierLibrary) RegisterInstalled(g library.InstalledGame) (library.Game, error) {
+func (b *barrierLibrary) RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error) {
 	b.mu.Lock()
 	b.in++
 	if b.in == b.want {
@@ -32,7 +33,7 @@ func (b *barrierLibrary) RegisterInstalled(g library.InstalledGame) (library.Gam
 	case <-b.open:
 	case <-time.After(b.window):
 	}
-	return b.fakeRegistrar.RegisterInstalled(g)
+	return b.fakeRegistrar.RegisterInstalled(ctx, g)
 }
 
 func TestConcurrentConfirmsCompleteExactlyOnce(t *testing.T) {

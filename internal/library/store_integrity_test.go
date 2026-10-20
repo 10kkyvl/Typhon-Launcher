@@ -47,7 +47,7 @@ func TestMissingLibraryStartsEmptyAndSaves(t *testing.T) {
 	if len(s.GetInstalledGames()) != 0 {
 		t.Fatalf("games = %+v, want none", s.GetInstalledGames())
 	}
-	if _, err := s.AddGame(tempGameExe(t), "Game"); err != nil {
+	if _, err := s.AddGame(t.Context(), tempGameExe(t), "Game"); err != nil {
 		t.Fatalf("add game: %v", err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -58,7 +58,7 @@ func TestMissingLibraryStartsEmptyAndSaves(t *testing.T) {
 func TestRegisterInstalledRejectsEmptyInstallDir(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	if _, err := s.RegisterInstalled(InstalledGame{Executable: exe, Title: "Game"}); err == nil {
+	if _, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, Title: "Game"}); err == nil {
 		t.Fatal("empty install dir must be rejected")
 	}
 	if games := s.GetInstalledGames(); len(games) != 0 {
@@ -69,14 +69,14 @@ func TestRegisterInstalledRejectsEmptyInstallDir(t *testing.T) {
 func TestApplyInstalledUpdateRejectsEmptyInstallDir(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
 	s.mu.Lock()
 	s.games[0].InstallDir = ""
 	s.mu.Unlock()
-	if _, err := s.ApplyInstalledUpdate(InstalledUpdate{ID: game.ID, Version: "2.0"}); err == nil {
+	if _, err := s.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: game.ID, Version: "2.0"}); err == nil {
 		t.Fatal("empty install dir must be rejected")
 	}
 }

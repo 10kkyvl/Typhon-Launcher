@@ -18,7 +18,7 @@ func profileGame(t *testing.T) (*Service, Game, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(tempGameExe(t), "Half-Life 2")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Half-Life 2")
 	if err != nil {
 		t.Fatal(err)
 	}

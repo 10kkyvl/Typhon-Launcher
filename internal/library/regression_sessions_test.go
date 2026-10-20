@@ -79,7 +79,7 @@ func readFile(t *testing.T, path string) []byte {
 func TestPlayStopRecordsPlaytimeThatSurvivesReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.AddGame(tempGameExe(t), "Playtime")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Playtime")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestPlayGameRefusalStartsNothing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "library.json")
 			s := mustServiceAt(t, path)
-			game, err := s.AddGame(tempGameExe(t), "Refused")
+			game, err := s.AddGame(t.Context(), tempGameExe(t), "Refused")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -351,7 +351,7 @@ func TestPlayGameRefusalStartsNothing(t *testing.T) {
 
 func TestStopGameRefusesWhatIsNotRunning(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Idle")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Idle")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestStopGameRefusesWhatIsNotRunning(t *testing.T) {
 
 func TestStopGameKillFailureKeepsTheSessionTracked(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Stubborn")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Stubborn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestStopGameKillFailureKeepsTheSessionTracked(t *testing.T) {
 
 func TestServiceShutdownCancelsALaunchThatIsStillStarting(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Waiting for UAC")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Waiting for UAC")
 	if err != nil {
 		t.Fatal(err)
 	}

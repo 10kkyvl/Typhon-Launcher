@@ -22,7 +22,7 @@ func TestPlayGameTracksSession(t *testing.T) {
 	s.AddSessionWatcher(watcher)
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Session Test")
+	game, err := s.AddGame(t.Context(), exe, "Session Test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestPlayGameRunsInExecutableDir(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
 	watcher := recordingWatcher{started: make(chan Game, 1), stopped: make(chan string, 1)}
 	s.AddSessionWatcher(watcher)
-	game, err := s.AddGame(exe, "Nested Game")
+	game, err := s.AddGame(t.Context(), exe, "Nested Game")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestSessionWatcherSeesStartAndStop(t *testing.T) {
 	s.AddSessionWatcher(watcher)
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Watcher Test")
+	game, err := s.AddGame(t.Context(), exe, "Watcher Test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestAddSessionWatcherMultipleWatchersNotified(t *testing.T) {
 	s.AddSessionWatcher(second)
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Multi Watcher")
+	game, err := s.AddGame(t.Context(), exe, "Multi Watcher")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestPlayGameFailedStartSkipsSessionEvents(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Broken")
+	game, err := s.AddGame(t.Context(), exe, "Broken")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestFinishSessionRecordsUsageDuration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Duration Test")
+	game, err := s.AddGame(t.Context(), exe, "Duration Test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestFinishSessionEmptyGameIDWhenGameRemoved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Removed Mid Session")
+	game, err := s.AddGame(t.Context(), exe, "Removed Mid Session")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestAddSessionWatcherRaceWithSession(t *testing.T) {
 	s := mustServiceAt(t, path)
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Race Test")
+	game, err := s.AddGame(t.Context(), exe, "Race Test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestServiceShutdownDoesNotWaitForChildProcess(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Long Runner")
+	game, err := s.AddGame(t.Context(), exe, "Long Runner")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +432,7 @@ func TestPlayGameGoroutineSkipsPersistAfterShutdown(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Shutdown Race")
+	game, err := s.AddGame(t.Context(), exe, "Shutdown Race")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func fakeExternalSession(s *Service, id string, pid uint32, createdAt time.Time)
 func TestStopGameExternalSessionRejectsMismatchedCreatedAt(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "External")
+	game, err := s.AddGame(t.Context(), exe, "External")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +496,7 @@ func TestStopGameExternalSessionRejectsMismatchedCreatedAt(t *testing.T) {
 func TestStopGameExternalSessionRejectsScanError(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "External Scan Fail")
+	game, err := s.AddGame(t.Context(), exe, "External Scan Fail")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func TestStopGameExternalSessionRejectsScanError(t *testing.T) {
 func TestStopGameExternalSessionRejectsMissingPID(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "External Gone")
+	game, err := s.AddGame(t.Context(), exe, "External Gone")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,7 +537,7 @@ func TestStopGameExternalSessionRejectsMissingPID(t *testing.T) {
 func TestStopGameExternalSessionRejectsUnstartedService(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Not Started")
+	game, err := s.AddGame(t.Context(), exe, "Not Started")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +555,7 @@ func TestStopGameExternalSessionRejectsUnstartedService(t *testing.T) {
 func TestStopGameExternalSessionRejectsUnknownCreatedAt(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Unknown Start Time")
+	game, err := s.AddGame(t.Context(), exe, "Unknown Start Time")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +578,7 @@ func TestFinishSessionPersistFailureRollsBackMemory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Rollback Test")
+	game, err := s.AddGame(t.Context(), exe, "Rollback Test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +614,7 @@ func TestStopGameLaunchedSessionKillsProcessDirectly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Killable")
+	game, err := s.AddGame(t.Context(), exe, "Killable")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +684,7 @@ func TestSessionOutcomeMarksUserStop(t *testing.T) {
 	})
 
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestLaunchFailureIsRecorded(t *testing.T) {
 	}
 
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
@@ -764,7 +764,7 @@ func TestRuntimePreparationFailureIsRecorded(t *testing.T) {
 	}
 
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
@@ -790,7 +790,7 @@ func TestExitCodeReachesTheLog(t *testing.T) {
 	logs := captureSessionLogs(t)
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestStartLogsTheExecutable(t *testing.T) {
 	logs := captureSessionLogs(t)
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe, _ := testExecutable(t)
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

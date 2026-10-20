@@ -122,7 +122,7 @@ func TestApplyDiscoveredEmptyCanonicalIDDoesNotMergeWithEmptyCanonicalRecord(t *
 	oldDir, oldExe := gameDir(t, root, "NoCanonical")
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 
-	installed, err := s.RegisterInstalled(InstalledGame{Title: "No Canonical", Executable: oldExe, InstallDir: oldDir})
+	installed, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "No Canonical", Executable: oldExe, InstallDir: oldDir})
 	if err != nil {
 		t.Fatal(err)
 	}

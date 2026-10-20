@@ -851,7 +851,7 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	version, source := detectVersion(item)
 	var game library.Game
 	if !item.SkipRegister {
-		registered, err := s.register(item, version, source)
+		registered, err := s.register(ctx, item, version, source)
 		if err != nil {
 			return err
 		}
@@ -936,7 +936,7 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Service) register(item Installation, version, source string) (library.Game, error) {
+func (s *Service) register(ctx context.Context, item Installation, version, source string) (library.Game, error) {
 	if s.library == nil {
 		return library.Game{}, errNoLibrary
 	}
@@ -947,7 +947,7 @@ func (s *Service) register(item Installation, version, source string) (library.G
 	if title == "" {
 		title = item.Name
 	}
-	return s.library.RegisterInstalled(library.InstalledGame{
+	return s.library.RegisterInstalled(ctx, library.InstalledGame{
 		Title:             title,
 		Executable:        item.Executable,
 		InstallDir:        item.Destination,

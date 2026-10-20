@@ -19,7 +19,7 @@ func TestDevmockPlayGameRegistersFakeProcess(t *testing.T) {
 	s.start = newGameStarter()
 
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Devmock Game")
+	game, err := s.AddGame(t.Context(), exe, "Devmock Game")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestDevmockDetectTickClosesSessionAfterStop(t *testing.T) {
 	s.start = newGameStarter()
 
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Devmock Detect")
+	game, err := s.AddGame(t.Context(), exe, "Devmock Detect")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestDevmockPlayGameFailsWhenExecutableGone(t *testing.T) {
 	s.start = newGameStarter()
 
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Gone")
+	game, err := s.AddGame(t.Context(), exe, "Gone")
 	if err != nil {
 		t.Fatal(err)
 	}

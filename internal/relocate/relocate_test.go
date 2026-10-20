@@ -87,7 +87,7 @@ func addGameAt(t *testing.T, lib *library.Service, dir, name string) library.Gam
 	if err := os.WriteFile(exe, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	game, err := lib.AddGame(exe, name)
+	game, err := lib.AddGame(t.Context(), exe, name)
 	if err != nil {
 		t.Fatalf("add game %s: %v", name, err)
 	}
@@ -450,7 +450,7 @@ func TestMoveGameRefusesWhileRunning(t *testing.T) {
 	lib := newTestLibrary(t)
 	s := newTestService(t, nil, lib, nil, nil, nil)
 
-	game, err := lib.AddGame(longRunningExecutable(), "Notepad")
+	game, err := lib.AddGame(t.Context(), longRunningExecutable(), "Notepad")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

@@ -13,7 +13,7 @@ func TestSyncSnapshotSkipsGamesWithoutCanonicalID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 
-	if _, err := s.AddGame(tempGameExe(t), "No Canonical ID"); err != nil {
+	if _, err := s.AddGame(t.Context(), tempGameExe(t), "No Canonical ID"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.AddCatalogGame("canon-1", "Has Canonical ID", ""); err != nil {
@@ -34,7 +34,7 @@ func TestSyncSnapshotCopiesLastPlayed(t *testing.T) {
 	s := mustServiceAt(t, path)
 
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Played")
+	game, err := s.AddGame(t.Context(), exe, "Played")
 	if err != nil {
 		t.Fatal(err)
 	}

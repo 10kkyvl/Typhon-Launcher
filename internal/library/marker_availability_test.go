@@ -12,7 +12,7 @@ func TestLegacyOwnershipDistinguishesMissingMarkerFromUnavailableVolume(t *testi
 			path := filepath.Join(t.TempDir(), "library.json")
 			s := mustServiceAt(t, path)
 			dir, exe := discoveredDir(t, "Legacy")
-			g, err := s.AddGame(exe, "Legacy")
+			g, err := s.AddGame(t.Context(), exe, "Legacy")
 			if err != nil {
 				t.Fatal(err)
 			}

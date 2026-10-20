@@ -40,7 +40,7 @@ func TestDetectOpensSessionForProcessInsideInstallDir(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Foo"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDetectComponentWisePathMismatch(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Foo"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestDetectCaseInsensitivePathMatch(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Case"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Case"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,11 +136,11 @@ func TestDetectLongestInstallDirWins(t *testing.T) {
 	innerExe := mustExe(t, filepath.Join(innerDir, "inner.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	outer, err := s.RegisterInstalled(InstalledGame{Executable: outerExe, InstallDir: outerDir, Title: "Outer"})
+	outer, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: outerExe, InstallDir: outerDir, Title: "Outer"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	inner, err := s.RegisterInstalled(InstalledGame{Executable: innerExe, InstallDir: innerDir, Title: "Inner"})
+	inner, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: innerExe, InstallDir: innerDir, Title: "Inner"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestDetectPathUnknownProcessIgnored(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Unknown"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Unknown"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestDetectUninstallerExcluded(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Uninstaller"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Uninstaller"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,13 +211,13 @@ func TestDetectScanErrorLeavesRunningUntouched(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	running, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Running"})
+	running, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Running"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	otherDir := mustDir(t, filepath.Join(root, "Other"))
 	otherExe := mustExe(t, filepath.Join(otherDir, "other.exe"))
-	notRunning, err := s.RegisterInstalled(InstalledGame{Executable: otherExe, InstallDir: otherDir, Title: "NotRunning"})
+	notRunning, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: otherExe, InstallDir: otherDir, Title: "NotRunning"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestDetectSessionClosesImmediatelyOnReliableScan(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Grace"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Grace"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestDetectSessionCloseDelayedWhenScanIncomplete(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Incomplete"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Incomplete"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestServiceStartupRunsImmediateScanBeforeFirstTick(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Immediate"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Immediate"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestDetectKeepsLaunchedSessionAliveWhilePathUnverifiable(t *testing.T) {
 	s.watchInterval = time.Second
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Elevated")
+	game, err := s.AddGame(t.Context(), exe, "Elevated")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestDetectRejectsHeartbeatWhenCreatedAtMismatches(t *testing.T) {
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Reused"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Reused"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +547,7 @@ func TestDetectRaceWithPlayGameAndGetRunningGames(t *testing.T) {
 	s.watchInterval = 10 * time.Millisecond
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Race")
+	game, err := s.AddGame(t.Context(), exe, "Race")
 	if err != nil {
 		t.Fatal(err)
 	}

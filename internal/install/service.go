@@ -107,7 +107,7 @@ type downloadSource interface {
 }
 
 type registrar interface {
-	RegisterInstalled(g library.InstalledGame) (library.Game, error)
+	RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error)
 	Find(id string) (library.Game, error)
 	GetGames() []library.Game
 	IsRunning(id string) bool

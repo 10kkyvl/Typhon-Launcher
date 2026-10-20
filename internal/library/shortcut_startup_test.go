@@ -19,7 +19,7 @@ func TestPlayGameBeforeServiceStartupFailsThenSucceedsAfter(t *testing.T) {
 	s.prepare = func(context.Context, launch) error { return nil }
 
 	exe, exitArgs := testExecutable(t)
-	game, err := s.AddGame(exe, "Shortcut Game")
+	game, err := s.AddGame(t.Context(), exe, "Shortcut Game")
 	if err != nil {
 		t.Fatal(err)
 	}

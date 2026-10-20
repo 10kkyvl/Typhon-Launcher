@@ -16,7 +16,7 @@ func TestUpdateMeasuredSize(t *testing.T) {
 		if err := os.WriteFile(exe, []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		game, err := service.RegisterInstalled(InstalledGame{Title: "Game", InstallDir: dir, Executable: exe})
+		game, err := service.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", InstallDir: dir, Executable: exe})
 		if err != nil {
 			t.Fatal(err)
 		}

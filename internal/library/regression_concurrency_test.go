@@ -14,7 +14,7 @@ import (
 
 func TestConcurrentPlayGameStartsTheGameOnce(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Double click")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Double click")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestConcurrentSessionsOfDifferentGamesStayIndependent(t *testing.T) {
 	byExecutable := map[string]*regProcess{}
 	ids := make([]string, 0, games)
 	for i := range games {
-		game, err := s.AddGame(tempGameExe(t), fmt.Sprintf("Game %d", i))
+		game, err := s.AddGame(t.Context(), tempGameExe(t), fmt.Sprintf("Game %d", i))
 		if err != nil {
 			t.Fatal(err)
 		}

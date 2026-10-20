@@ -118,7 +118,7 @@ func TestElevatingStarterKeepsOtherErrors(t *testing.T) {
 func TestPlayGameElevationDeclinedKeepsItsCode(t *testing.T) {
 	requireElevationPrompt(t)
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Elevated")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Elevated")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestPlayGameElevationDeclinedKeepsItsCode(t *testing.T) {
 func TestPlayGameTracksElevatedProcess(t *testing.T) {
 	requireElevationPrompt(t)
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Elevated")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Elevated")
 	if err != nil {
 		t.Fatal(err)
 	}
