@@ -36,6 +36,7 @@ import { overlay } from './overlay';
 import { redist } from './redist';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
+import { sysreq } from './sysreq';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -75,8 +76,9 @@ export const ru = {
   ...redist,
   ...screenshots,
   ...stats,
+  ...sysreq,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };

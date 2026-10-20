@@ -23,10 +23,16 @@ type StorageInfo struct {
 	UsedBytes  uint64 `json:"usedBytes"`
 }
 
+// SystemInfo: CPUUnknown, OSUnknown and PhysicalCoresUnknown say that the
+// matching field could not be read; the field then holds no usable value.
 type SystemInfo struct {
-	OS       string `json:"os"`
-	Arch     string `json:"arch"`
-	CPU      string `json:"cpu"`
-	Cores    int    `json:"cores"`
-	RAMBytes uint64 `json:"ramBytes"`
+	OS                   string `json:"os"`
+	OSUnknown            bool   `json:"osUnknown"`
+	Arch                 string `json:"arch"`
+	CPU                  string `json:"cpu"`
+	CPUUnknown           bool   `json:"cpuUnknown"`
+	Cores                int    `json:"cores"`
+	PhysicalCores        int    `json:"physicalCores"`
+	PhysicalCoresUnknown bool   `json:"physicalCoresUnknown"`
+	RAMBytes             uint64 `json:"ramBytes"`
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"runtime"
 	"sync/atomic"
@@ -23,12 +24,13 @@ type AppInfo struct {
 }
 
 type Service struct {
-	settings *settings.Service
-	russian  atomic.Bool
+	settings   *settings.Service
+	russian    atomic.Bool
+	systemInfo func() (platform.SystemInfo, error)
 }
 
 func NewService(settingsService *settings.Service) *Service {
-	s := &Service{settings: settingsService}
+	s := &Service{settings: settingsService, systemInfo: platform.GetSystemInfo}
 	s.SetUILanguage(settingsService.GetSettings().Language)
 	return s
 }
@@ -60,9 +62,9 @@ func (s *Service) GetAppInfo() AppInfo {
 }
 
 func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {
-	info, err := platform.GetSystemInfo()
+	info, err := s.systemInfo()
 	if err != nil {
-		slog.Warn("system info", "error", err)
+		return platform.SystemInfo{}, fmt.Errorf("read system info: %w", err)
 	}
 	return info, nil
 }

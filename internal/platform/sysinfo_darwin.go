@@ -17,13 +17,15 @@ func GetSystemInfo() (SystemInfo, error) {
 	}
 	info.RAMBytes = ram
 
-	// CPU and OS names are cosmetic and best-effort, like on Windows (storage_windows.go):
-	// a missing sysctl key keeps the base values rather than failing the call.
+	info.OSUnknown = true
 	if cpu, err := unix.Sysctl("machdep.cpu.brand_string"); err == nil && cpu != "" {
-		info.CPU = cpu
+		info.CPU, info.CPUUnknown = cpu, false
 	}
 	if osVersion, err := unix.Sysctl("kern.osproductversion"); err == nil && osVersion != "" {
-		info.OS = "macOS " + osVersion
+		info.OS, info.OSUnknown = "macOS "+osVersion, false
+	}
+	if cores, err := unix.SysctlUint32("hw.physicalcpu"); err == nil && cores > 0 {
+		info.PhysicalCores, info.PhysicalCoresUnknown = int(cores), false
 	}
 	return info, nil
 }

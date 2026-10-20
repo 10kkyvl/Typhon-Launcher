@@ -42,6 +42,7 @@
   import SteamExtras from '../../lib/components/SteamExtras.svelte';
   import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import SystemRequirements from '../../lib/components/SystemRequirements.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
@@ -130,6 +131,7 @@
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
+  import { settings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
@@ -418,6 +420,11 @@
     });
   });
 
+  const sysreqRevision = $derived(
+    metaView?.steam
+      ? `${metaView.steam.appId}:${metaView.steam.requirements?.minimum?.length ?? 0}:${metaView.steam.requirements?.recommended?.length ?? 0}`
+      : '',
+  );
   const references = $derived(referenceKinds(savePaths, Boolean(canonicalId && title)));
 
   const shotCols = $derived(
@@ -1207,6 +1214,9 @@
         {#if (catalogGame || localGame) && !external}
           <section class="section">
             <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+            {#if canonicalId}
+              <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} revision={sysreqRevision} />
+            {/if}
             {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
             {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
             <ReleaseList
