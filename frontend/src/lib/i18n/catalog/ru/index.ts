@@ -38,6 +38,7 @@ import { redist } from './redist';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
 import { sysreq } from './sysreq';
+import { diskusage } from './diskusage';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -79,6 +80,7 @@ export const ru = {
   ...screenshots,
   ...stats,
   ...sysreq,
+  ...diskusage,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;

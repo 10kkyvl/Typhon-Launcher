@@ -5,7 +5,7 @@
   const logoChannels = $derived(rgb($displayedAccent).map(v => v / 255));
   // Replace the blue chroma (B-R), retaining neutral shadows and highlights.
   const logoMatrix = $derived(logoChannels.map(k => `${1-k} 0 ${k} 0 0`).join(' ') + ' 0 0 0 1 0');
-  import { Activity, ChartColumn, Database, Download, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
+  import { Activity, ChartColumn, Database, Download, HardDrive, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
@@ -35,6 +35,7 @@
       { name: 'library', label: msg('ui.library'), icon: LayoutGrid },
       { name: 'catalog', label: msg('ui.allGames'), icon: Gamepad2 },
       { name: 'installed', label: msg('ui.installed'), icon: MonitorDown },
+      { name: 'diskusage', label: msg('diskusage.nav'), icon: HardDrive },
     ],
     [
       { name: 'downloads', label: msg('ui.downloadsNav'), icon: Download },

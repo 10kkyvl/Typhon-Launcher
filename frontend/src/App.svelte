@@ -49,6 +49,7 @@
   import Activity from './routes/activity/Activity.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
   import Catalog from './routes/catalog/Catalog.svelte';
+  import DiskUsage from './routes/diskusage/DiskUsage.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
   import Friends from './routes/friends/Friends.svelte';
@@ -129,6 +130,8 @@
           <Sources />
         {:else if $route.name === 'installed'}
           <Installed />
+        {:else if $route.name === 'diskusage'}
+          <DiskUsage />
         {:else if $route.name === 'history'}
           <History />
         {:else if $route.name === 'lan'}

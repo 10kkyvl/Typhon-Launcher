@@ -26,6 +26,7 @@ import (
 	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
+	"typhon/internal/diskusage"
 	"typhon/internal/download"
 	"typhon/internal/extlib"
 	"typhon/internal/gamemode"
@@ -337,6 +338,7 @@ func main() {
 	if err != nil {
 		fatal("start install service", err)
 	}
+	downloadManager.SetDeleteGuard(installService.CheckDownloadDeletable)
 	titlesDictService, err := titlesdict.NewService()
 	if err != nil {
 		fatal("start title dictionary service", err)
@@ -473,6 +475,7 @@ func main() {
 	if err != nil {
 		fatal("start updates service", err)
 	}
+	installService.AddDownloadGuard(updateService.CheckDownloadDeletable)
 	relocateService, err := relocate.NewService(settingsService, libraryService, downloadManager, installService, updateService)
 	if err != nil {
 		fatal("start relocate service", err)
@@ -734,6 +737,19 @@ func main() {
 	libraryService.AddSessionWatcher(gameModeService)
 
 	mediaService := media.NewService()
+	diskUsageService, err := diskusage.NewService(diskusage.Deps{
+		Settings:    settingsService.GetSettings,
+		Library:     libraryService,
+		Downloads:   downloadManager,
+		Installs:    installService,
+		Relocations: relocateService,
+		Updates:     updateService,
+		Screenshots: screenshotService,
+		Snapshots:   saveBackupService,
+	})
+	if err != nil {
+		fatal("start disk usage service", err)
+	}
 
 	var trayController *tray.Controller
 
@@ -780,6 +796,7 @@ func main() {
 		application.NewService(screenshotService),
 		application.NewService(gameModeService),
 		application.NewService(mediaService),
+		application.NewService(diskUsageService),
 	}
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)

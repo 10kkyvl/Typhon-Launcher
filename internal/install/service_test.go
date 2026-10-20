@@ -41,7 +41,7 @@ func (f *fakeDownloads) add(id, name, destination string) {
 		Name:        name,
 		Destination: destination,
 		Status:      download.StatusCompleted,
-	}
+	}.WithRoot(name)
 }
 
 func (f *fakeDownloads) Get(id string) (download.Download, error) {
@@ -131,6 +131,16 @@ func (f *fakeRegistrar) Find(id string) (library.Game, error) {
 		return library.Game{}, errFakeNoGame
 	}
 	return game, nil
+}
+
+func (f *fakeRegistrar) GetGames() []library.Game {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]library.Game, 0, len(f.records))
+	for _, game := range f.records {
+		out = append(out, game)
+	}
+	return out
 }
 
 func (f *fakeRegistrar) IsRunning(id string) bool {

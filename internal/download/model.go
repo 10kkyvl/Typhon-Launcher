@@ -86,6 +86,9 @@ type Download struct {
 	// is and applied once the list arrives; nil means the record named none.
 	heldSelection []int
 
+	// deleting is set while DeleteData decides whether the data may go.
+	deleting bool
+
 	// root is the folder below Destination that the torrent writes its files
 	// into: the name the torrent itself carries. Name is only the title the
 	// download is shown under, and AddTask takes it from a feed.

@@ -26,6 +26,8 @@ export const errUpdates = {
     'не удалось сохранить данные обновления из-за более ранней ошибки чтения. Перезапустите Typhon',
   'errUpdates.selfupdateManifestOutdated':
     'эта версия Typhon больше не поддерживается сервером обновлений. Установите новую версию вручную',
+  'errUpdates.updatesDownloadDeleting': 'данные загрузки сейчас удаляются',
+  'errUpdates.updatesDownloadInUse': 'загрузку сейчас использует обновление или починка',
 } as const;
 
 export type ErrUpdatesKey = keyof typeof errUpdates;

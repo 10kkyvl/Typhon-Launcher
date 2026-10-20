@@ -74,7 +74,13 @@ type Service struct {
 	cancel  context.CancelFunc
 	closing bool
 	wg      sync.WaitGroup
+
+	// reservedStaging holds the staging folders that are being deleted from
+	// outside; a move may not copy into one of them.
+	reservedStaging map[string]int
 }
+
+const stagingSuffix = ".staging"
 
 func NewService(set *settings.Service, lib *library.Service, dl *download.Manager, inst, upd busyChecker) (*Service, error) {
 	dir, err := settings.ConfigDir()
@@ -371,11 +377,24 @@ func (s *Service) removeJob(id string) error {
 // is undone by restoring the pre-mutation snapshot on that same pointer: a
 // bare return would leave memory ahead of what made it to disk.
 func (s *Service) transition(id string, stage Stage, mutate func(*Job)) (Job, error) {
+	return s.guardedTransition(id, stage, nil, mutate)
+}
+
+// guardedTransition is transition with a check made under the same lock as
+// the change: the check and the state it protects cannot be separated by
+// another caller.
+func (s *Service) guardedTransition(id string, stage Stage, guard func() error, mutate func(*Job)) (Job, error) {
 	s.mu.Lock()
 	job := s.findJobLocked(id)
 	if job == nil {
 		s.mu.Unlock()
 		return Job{}, ErrJobNotFound
+	}
+	if guard != nil {
+		if err := guard(); err != nil {
+			s.mu.Unlock()
+			return Job{}, err
+		}
 	}
 	previous := job.clone()
 	if mutate != nil {
@@ -843,13 +862,22 @@ var (
 var afterCopyBeforeVerify func(staging string)
 
 func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target string) error {
-	staging := target + ".staging"
-	if _, err := s.transition(jobID, StageCopy, func(j *Job) {
+	staging := target + stagingSuffix
+	guard := func() error {
+		if s.stagingReservedLocked(staging) {
+			return errStagingReserved
+		}
+		return nil
+	}
+	if _, err := s.guardedTransition(jobID, StageCopy, guard, func(j *Job) {
 		j.Staging = staging
 		j.Phase = phaseCopying
 		j.CopiedBytes = 0
 		j.CurrentFile = ""
 	}); err != nil {
+		if errors.Is(err, errStagingReserved) {
+			return s.failOrCancel(jobID, err)
+		}
 		return err
 	}
 

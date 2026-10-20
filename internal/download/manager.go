@@ -97,6 +97,8 @@ var (
 	errDestUnavailable   = uierr.New("download.destination_unavailable", "папка назначения недоступна")
 	errNoFilesSelected   = uierr.New("download.no_files_selected", "не выбрано ни одного файла")
 	errAddTorrentFailed  = uierr.New("download.add_torrent_failed", "не удалось добавить торрент")
+	errDeleting          = uierr.New("download.deleting", "данные этой загрузки уже удаляются")
+	errDataLeft          = uierr.New("download.data_left", "запись удалена, но файлы остались на диске")
 )
 
 type pending struct {
@@ -154,6 +156,10 @@ type Manager struct {
 	onGone          func(string)
 	usageRecorder   func(usagestats.Event)
 	historyRecorder func(history.Record) error
+	deleteGuard     func(Download) error
+	cleanups        []Cleanup
+	cleanupErr      error
+	claims          []string
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -378,6 +384,11 @@ func (m *Manager) loadLocked() error {
 		return err
 	}
 	m.loadErr = nil
+	cleanups, cleanupErr := m.store.loadCleanups()
+	m.cleanups, m.cleanupErr = cleanups, cleanupErr
+	if cleanupErr != nil {
+		slog.Error("read download cleanup list, deletions of download data are refused", "error", cleanupErr)
+	}
 	for _, r := range records {
 		d := &Download{
 			ID:          r.ID,
@@ -1205,42 +1216,125 @@ func (m *Manager) Cancel(id string) error { return m.discard(id, true) }
 
 func (m *Manager) Remove(id string) error { return m.discard(id, false) }
 
-func (m *Manager) DeleteData(id string) error {
+// SetDeleteGuard installs the check DeleteData runs before it touches
+// anything: the owner of the installations knows which download folders are
+// in use, the manager does not.
+//
+//wails:ignore
+func (m *Manager) SetDeleteGuard(fn func(Download) error) {
 	m.mu.Lock()
-	d := m.findLocked(id)
-	if d == nil {
-		m.mu.Unlock()
+	defer m.mu.Unlock()
+	m.deleteGuard = fn
+}
+
+// WithRoot returns the download with the folder name its torrent writes into,
+// for values built outside the manager.
+func (d Download) WithRoot(root string) Download {
+	d.root = root
+	return d
+}
+
+// WithDeleting returns the download marked as claimed by DeleteData, for
+// values built outside the manager.
+func (d Download) WithDeleting(deleting bool) Download {
+	d.deleting = deleting
+	return d
+}
+
+// DataRoot is the folder the download's files live in. A flat or in-place
+// download writes into a folder that is not its own, so it has none.
+func (d Download) DataRoot() (string, bool) {
+	root, ok := removalRoot(&d)
+	if !ok || d.Destination == "" || d.InPlace {
+		return "", false
+	}
+	return filepath.Join(d.Destination, root), true
+}
+
+// Deleting reports that DeleteData has claimed the download's data. Whoever
+// is about to start using the download (an install job) must refuse it.
+func (d Download) Deleting() bool { return d.deleting }
+
+func deleteChecks(d *Download, id string) error {
+	switch {
+	case d == nil:
 		return errNotFound
-	}
-	if d.Status != StatusCompleted {
-		m.mu.Unlock()
+	case d.Status != StatusCompleted:
 		return errUnavailable
-	}
-	if d.Seeding {
-		m.mu.Unlock()
+	case d.Seeding:
 		return errSeeding
-	}
-	if d.InPlace || (d.Flat && len(d.Files) == 0) {
-		m.mu.Unlock()
+	case d.InPlace || (d.Flat && len(d.Files) == 0):
 		return errUnavailable
 	}
-	root, haveRoot := removalRoot(d)
-	if !d.Flat && !haveRoot {
+	if _, haveRoot := removalRoot(d); !d.Flat && !haveRoot {
 		slog.Warn("download folder unknown, data kept", "download_id", id, "root", d.root)
-		m.mu.Unlock()
 		return errRootUnknown
 	}
+	return nil
+}
+
+func (m *Manager) clearDeleting(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if d := m.findLocked(id); d != nil {
+		d.deleting = false
+	}
+}
+
+func (m *Manager) DeleteData(id string) error {
+	// The claim is made under mu before the guard runs: an install that
+	// registers itself afterwards sees the claim, one that registered before
+	// is seen by the guard.
+	m.mu.Lock()
+	d := m.findLocked(id)
+	if err := deleteChecks(d, id); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	if d.deleting {
+		m.mu.Unlock()
+		return errDeleting
+	}
+	guard := m.deleteGuard
+	d.deleting = true
+	snap := snapshot(d)
+	var closing <-chan struct{}
+	if m.ctx != nil {
+		closing = m.ctx.Done()
+	}
+	m.mu.Unlock()
+	// Whatever way this function ends, the claim goes with it; once the
+	// record is dropped there is nothing left to clear.
+	defer m.clearDeleting(id)
+	if guard != nil {
+		if err := guard(snap); err != nil {
+			return err
+		}
+	}
+
+	m.mu.Lock()
+	d = m.findLocked(id)
+	if err := deleteChecks(d, id); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	root, _ := removalRoot(d)
 	infoHash := d.InfoHash
 	destination, name := d.Destination, d.Name
 	flat := d.Flat
 	files := append([]FileState(nil), d.Files...)
+	paths := cleanupPaths(destination, root, flat, files)
 
-	// Removing the record is attempted, and can fail and roll back, before
-	// any of the irreversible teardown below (cancelling the job, dropping
-	// the engine, deleting files) starts.
-	if err := m.dropLocked(id); err != nil {
+	// The paths are written down before the record goes: a record that is
+	// gone while its files are not would leave them untracked for good.
+	if err := m.addCleanupLocked(id, paths); err != nil {
 		m.mu.Unlock()
 		return fmt.Errorf("удалить данные загрузки: %w", err)
+	}
+	if err := m.dropLocked(id); err != nil {
+		rollback := m.removeCleanupLocked(paths)
+		m.mu.Unlock()
+		return errors.Join(fmt.Errorf("удалить данные загрузки: %w", err), rollback)
 	}
 
 	eng := m.engines[id]
@@ -1253,35 +1347,66 @@ func (m *Manager) DeleteData(id string) error {
 	slog.Info("download data deleted", "download_id", id, "name", name)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
+	// With a job or an engine still winding down the teardown finishes after
+	// DeleteData returns, so its failure can only be logged; without them it
+	// is a file removal and its result is the caller's.
+	waitable := job == nil && eng == nil
+	result := make(chan error, 1)
 	started := m.startTeardownLocked(id, job, eng, infoHash, func() {
+		var err error
 		if flat {
-			root, err := os.OpenRoot(destination)
-			if err != nil {
-				slog.Warn("open flat download", "error", err)
-				return
-			}
-			defer func() {
-				if err := root.Close(); err != nil {
-					slog.Warn("close flat download", "error", err)
-				}
-			}()
-			for _, file := range files {
-				if !isSafeTorrentPath(file.Path) {
-					continue
-				}
-				if err := root.Remove(filepath.FromSlash(file.Path)); err != nil && !errors.Is(err, os.ErrNotExist) {
-					slog.Warn("remove flat download file", "error", err)
-				}
-			}
+			err = removeFlatFiles(destination, files)
 		} else {
-			removeContent(destination, root)
+			err = deleteContent(destination, root)
 		}
+		if err == nil {
+			err = m.dropCleanup(paths)
+		}
+		if err != nil && !waitable {
+			slog.Warn("download data left on disk", "download_id", id, "error", err)
+		}
+		result <- err
 	})
 	m.mu.Unlock()
 	if !started {
 		slog.Warn("skipped download data teardown, manager is shutting down", "download_id", id)
+		return nil
+	}
+	if waitable {
+		select {
+		case err := <-result:
+			if err != nil {
+				slog.Warn("download data left on disk", "download_id", id, "error", err)
+				return fmt.Errorf("%w: %w", errDataLeft, err)
+			}
+		case <-closing:
+			slog.Warn("download data removal continues in the background, manager is shutting down", "download_id", id)
+		}
 	}
 	return nil
+}
+
+func removeFlatFiles(destination string, files []FileState) error {
+	root, err := os.OpenRoot(destination)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("open flat download: %w", err)
+	}
+	var errs []error
+	for _, file := range files {
+		if !isSafeTorrentPath(file.Path) {
+			continue
+		}
+		if err := root.Remove(filepath.FromSlash(file.Path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	if err := root.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close flat download: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 func (m *Manager) discard(id string, deleteData bool) error {
@@ -1297,6 +1422,12 @@ func (m *Manager) discard(id string, deleteData bool) error {
 	root, haveRoot := removalRoot(d)
 	flat := d.Flat
 
+	// What an interrupted DeleteData wrote down for this record must not
+	// outlive it: the user keeps the files, so they are not leftovers.
+	if err := m.pruneCleanupIDLocked(id); err != nil {
+		m.mu.Unlock()
+		return fmt.Errorf("удалить загрузку: %w", err)
+	}
 	if err := m.dropLocked(id); err != nil {
 		m.mu.Unlock()
 		return fmt.Errorf("удалить загрузку: %w", err)
@@ -2266,15 +2397,25 @@ func removalRoot(d *Download) (string, bool) {
 }
 
 func removeContent(destination, name string) {
+	if err := deleteContent(destination, name); err != nil {
+		slog.Warn("remove download data", "error", err)
+	}
+}
+
+var removeAll = os.RemoveAll
+
+func deleteContent(destination, name string) error {
 	if destination == "" || !isSafeTorrentPath(name) {
-		return
+		return nil
 	}
 	root := filepath.Join(destination, name)
+	var errs []error
 	for _, path := range []string{root, root + PartFileSuffix} {
-		if err := os.RemoveAll(path); err != nil {
-			slog.Warn("remove download data", "path", path, "error", err)
+		if err := removeAll(path); err != nil {
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
 }
 
 func requiredBytes(files []FileState) (int64, error) {

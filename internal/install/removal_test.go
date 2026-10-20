@@ -594,12 +594,24 @@ func TestPickUninstall(t *testing.T) {
 }
 
 func TestDownloadRootRespectsLayout(t *testing.T) {
-	d := download.Download{Destination: filepath.Join("C:", "Torrents"), Name: "Game"}
-	if got := downloadRoot(d); got != filepath.Join("C:", "Torrents", "Game") {
-		t.Fatalf("root = %q", got)
+	dest := filepath.Join("C:", "Torrents")
+	cases := []struct {
+		name string
+		d    download.Download
+		want string
+	}{
+		{"shown name differs from the folder", download.Download{Destination: dest, Name: "Shown"}.WithRoot("Real"), filepath.Join(dest, "Real")},
+		{"no destination", download.Download{Name: "Game"}.WithRoot("Game"), ""},
+		{"flat download occupies its destination", download.Download{Destination: dest, Name: "Game", Flat: true}.WithRoot("Game"), dest},
+		{"in-place download occupies its destination", download.Download{Destination: dest, Name: "Game", InPlace: true}.WithRoot("Game"), dest},
+		{"folder unknown", download.Download{Destination: dest, Name: "Game"}, ""},
 	}
-	if got := downloadRoot(download.Download{Destination: "", Name: "Game"}); got != "" {
-		t.Fatalf("root = %q", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := downloadRoot(c.d); got != c.want {
+				t.Fatalf("root = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 

@@ -23,6 +23,8 @@ const REASONS: Record<string, MessageKey> = {
   'updates.download_stalled': 'errUpdates.updatesDownloadStalled',
   'updates.no_target': 'errUpdates.updatesNoTarget',
   'updates.repair_unavailable': 'errUpdates.updatesRepairUnavailable',
+  'updates.download_deleting': 'errUpdates.updatesDownloadDeleting',
+  'updates.download_in_use': 'errUpdates.updatesDownloadInUse',
 };
 
 export function updateErrorText(raw: unknown, fallback: string = msg('errUpdates.fallback')): string {

@@ -30,12 +30,14 @@ const (
 )
 
 var (
-	errDownloadFailed = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
-	errInstallFailed  = uierr.New("updates.install_failed", "не удалось установить обновление")
-	errStagingEmpty   = uierr.New("updates.staging_empty", "временная установка пуста")
-	errNoLaunchTarget = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
-	errSwapFailed     = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
-	errCarryOver      = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
+	errDownloadFailed   = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
+	errDownloadDeleting = uierr.New("updates.download_deleting", "данные загрузки сейчас удаляются")
+	errDownloadInUse    = uierr.New("updates.download_in_use", "загрузку сейчас использует обновление или починка")
+	errInstallFailed    = uierr.New("updates.install_failed", "не удалось установить обновление")
+	errStagingEmpty     = uierr.New("updates.staging_empty", "временная установка пуста")
+	errNoLaunchTarget   = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
+	errSwapFailed       = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
+	errCarryOver        = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
 
 	errUnavailablePrefetch = uierr.New("updates.prefetch_unavailable", "предварительная загрузка недоступна для этой стратегии")
 
@@ -472,6 +474,9 @@ func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) e
 		task, err := s.downloads.Get(downloadID)
 		if err != nil {
 			return errDownloadFailed
+		}
+		if task.Deleting() {
+			return errDownloadDeleting
 		}
 		s.mutate(gameID, func(u *Update) { u.Progress = task.Progress })
 		switch task.Status {

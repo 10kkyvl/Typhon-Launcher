@@ -474,11 +474,17 @@ func removableDir(dir string) error {
 	return nil
 }
 
+// downloadRoot is the folder a download occupies. A flat or in-place download
+// has no folder of its own and writes into its destination, which is what a
+// seeding guard has to compare against the game folder.
 func downloadRoot(d download.Download) string {
-	if d.Destination == "" || d.Name == "" {
-		return ""
+	if root, ok := d.DataRoot(); ok {
+		return root
 	}
-	return filepath.Join(d.Destination, d.Name)
+	if (d.Flat || d.InPlace) && d.Destination != "" {
+		return d.Destination
+	}
+	return ""
 }
 
 func sharesPath(a, b string) bool {

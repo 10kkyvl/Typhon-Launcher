@@ -510,6 +510,9 @@ func (s *Service) repair(ctx context.Context, game library.Game, release sources
 		case <-ticker.C:
 		}
 		current, err := s.downloads.Get(task.ID)
+		if err == nil && current.Deleting() {
+			err = errDownloadDeleting
+		}
 		if err != nil {
 			if err := s.stopRepairDownload(task.ID); err != nil {
 				s.failRepair(ctx, game.ID, err)
