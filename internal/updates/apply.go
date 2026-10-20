@@ -1094,10 +1094,10 @@ func (s *Service) Rollback(ctx context.Context, gameID string) error {
 	}
 	s.store.removeManifest(gameID)
 	s.mu.Lock()
-	manifestCtx := s.ctx
+	started := s.ctx != nil
 	s.mu.Unlock()
-	if game, ok := s.installedGame(gameID); ok && manifestCtx != nil {
-		s.runManifest(manifestCtx, game)
+	if game, ok := s.installedGame(gameID); ok && started {
+		s.runManifest(ctx, game)
 	}
 
 	snap, _ := s.mutate(gameID, func(u *Update) {
