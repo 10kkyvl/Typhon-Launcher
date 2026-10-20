@@ -35,6 +35,7 @@
   import Modal from './Modal.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
+  import SystemRequirements from './SystemRequirements.svelte';
   import { msg } from '../i18n';
 
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
@@ -88,6 +89,8 @@
     if (chosen && !list.includes(chosen)) list.push(chosen);
     return list;
   });
+
+  const requirementsGameId = $derived(downloadId ? ($downloadsById.get(downloadId)?.origin?.gameId ?? '') : '');
 
   const askCleanup = $derived($settings?.installCleanupPolicy === 'ask');
   const seedingNow = $derived(!!installation && ($downloadsById.get(installation.downloadId)?.seeding ?? false));
@@ -321,6 +324,10 @@
 
       {#if notEnoughSpace}
         <p class="note danger">{msg('modals.installNotEnoughSpace')}</p>
+      {/if}
+
+      {#if requirementsGameId}
+        <SystemRequirements gameId={requirementsGameId} installPath={destination} heading={false} />
       {/if}
 
       {#if controlled || silent}

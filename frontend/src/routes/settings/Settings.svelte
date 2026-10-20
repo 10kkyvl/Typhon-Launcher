@@ -91,6 +91,7 @@
 
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
+  let systemFailed = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
 
   let legalDocs = $state<LegalMeta[]>([]);
@@ -131,7 +132,11 @@
     });
     void (async () => {
       appInfo = await getAppInfo();
-      systemInfo = await getSystemInfo();
+      try {
+        systemInfo = await getSystemInfo();
+      } catch {
+        systemFailed = true;
+      }
       wineStatus = await getWineStatus();
       try {
         legalDocs = await listLegalDocuments();
@@ -141,6 +146,12 @@
     })();
     return offLogs;
   });
+
+  function cpuLine(info: SystemInfo): string {
+    const threads = msg('settings.aboutCpuThreads', { cores: info.cores });
+    const cores = info.physicalCoresUnknown ? '' : `${msg('settings.aboutCpuCores', { cores: info.physicalCores })} · `;
+    return `${info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu} · ${cores}${threads}`;
+  }
 
   async function saveLogs() {
     if (!inWails) {
@@ -1165,19 +1176,26 @@
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                <span class="row-sub">{systemInfo.os}</span>
+                <span class="row-sub">{systemInfo.osUnknown ? msg('settings.aboutUnknown') : systemInfo.os}</span>
               </div>
             </div>
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-                <span class="row-sub">{systemInfo.cpu} · {msg('settings.aboutCpuThreads', { cores: systemInfo.cores })}</span>
+                <span class="row-sub">{cpuLine(systemInfo)}</span>
               </div>
             </div>
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-                <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+                <span class="row-sub">{systemInfo.ramBytes > 0 ? bytesLabel(systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
+              </div>
+            </div>
+          {:else if systemFailed}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
               </div>
             </div>
           {/if}

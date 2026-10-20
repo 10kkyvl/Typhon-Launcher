@@ -1293,3 +1293,19 @@ func emit(name string, data any) {
 		app.Event.Emit(name, data)
 	}
 }
+
+// SteamRequirements returns the stored Steam requirements of a catalog game;
+// found is false while the store block has not been fetched.
+//
+//wails:ignore
+func (s *Service) SteamRequirements(gameID string) (SteamRequirements, bool, error) {
+	game, err := s.catalog.GetGame(strings.TrimSpace(gameID))
+	if err != nil {
+		return SteamRequirements{}, false, err
+	}
+	info := s.steam.info(game.ID)
+	if info == nil {
+		return SteamRequirements{}, false, nil
+	}
+	return info.Requirements, true, nil
+}

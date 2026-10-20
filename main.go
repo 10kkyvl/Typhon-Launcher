@@ -57,6 +57,7 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/steamlink"
 	"typhon/internal/support"
+	"typhon/internal/sysreq"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
 	"typhon/internal/titles"
@@ -705,6 +706,11 @@ func main() {
 	screenshotService.SetArmer(overlayService.SetScreenshotsArmed)
 	libraryService.AddSessionWatcher(screenshotService)
 
+	sysreqService, err := sysreq.NewService(metadataService)
+	if err != nil {
+		fatal("start requirements check", err)
+	}
+
 	mediaService := media.NewService()
 
 	var trayController *tray.Controller
@@ -732,6 +738,7 @@ func main() {
 		application.NewService(saveBackupService),
 		application.NewService(cloudSavesService),
 		application.NewService(metadataService),
+		application.NewService(sysreqService),
 		application.NewService(discoveryService),
 		application.NewService(extlibService),
 		application.NewService(discordService),

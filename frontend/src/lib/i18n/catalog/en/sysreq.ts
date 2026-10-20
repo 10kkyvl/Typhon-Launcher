@@ -1,0 +1,33 @@
+import type { Message } from '../../types';
+import type { SysreqKey } from '../ru/sysreq';
+
+export const sysreq: Record<SysreqKey, Message> = {
+  'sysreq.heading': 'System requirements',
+  'sysreq.verdictGood': 'Runs well',
+  'sysreq.verdictMinimum': 'Minimum only',
+  'sysreq.verdictNotEnough': 'Too weak',
+  'sysreq.verdictUnknown': 'Could not compare',
+  'sysreq.verdictPartial': 'Partly: not everything could be compared',
+  'sysreq.verdictNoData': 'The game lists no requirements',
+  'sysreq.estimate': 'An estimate based on model names, it can be wrong. Hardware details stay on this computer.',
+  'sysreq.show': 'Details',
+  'sysreq.hide': 'Collapse',
+  'sysreq.loading': 'Comparing with your computer…',
+  'sysreq.failed': 'Could not check the requirements',
+  'sysreq.retry': 'Retry',
+  'sysreq.required': 'Required',
+  'sysreq.recommended': 'Recommended',
+  'sysreq.have': 'You have',
+  'sysreq.haveUnknown': 'unknown',
+  'sysreq.kindOs': 'System',
+  'sysreq.kindCpu': 'Processor',
+  'sysreq.kindGpu': 'Graphics card',
+  'sysreq.kindRam': 'Memory',
+  'sysreq.kindVram': 'Video memory',
+  'sysreq.kindDirectx': 'DirectX',
+  'sysreq.kindStorage': 'Disk space',
+  'sysreq.statusOk': 'Meets it',
+  'sysreq.statusBelowRecommended': 'Below recommended',
+  'sysreq.statusBelowMinimum': 'Below minimum',
+  'sysreq.statusUnknown': 'Could not compare',
+};

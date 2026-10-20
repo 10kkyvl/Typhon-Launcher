@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -54,18 +55,41 @@ func GetSystemInfo() (SystemInfo, error) {
 	}
 	info.RAMBytes = mem.TotalPhys
 
+	info.OSUnknown = true
 	if name, err := cpuName(); err == nil && name != "" {
-		info.CPU = name
+		info.CPU, info.CPUUnknown = name, false
 	}
 	if osName, err := windowsProductName(); err == nil && osName != "" {
-		info.OS = osName
+		info.OS, info.OSUnknown = osName, false
+	}
+	if cores, err := physicalCores(); err == nil {
+		info.PhysicalCores, info.PhysicalCoresUnknown = cores, false
 	}
 	return info, nil
+}
+
+func physicalCores() (int, error) {
+	var size uint32
+	r1, _, callErr := procGetLogicalProcessorInformationEx.Call(relationProcessorCore, 0, uintptr(unsafe.Pointer(&size))) //nolint:gosec // G103: указатель на локальную переменную size, живущую весь вызов (правило 4 unsafe.Pointer)
+	if r1 != 0 {
+		return 0, errors.New("GetLogicalProcessorInformationEx succeeded with an empty buffer")
+	}
+	if !errors.Is(callErr, windows.ERROR_INSUFFICIENT_BUFFER) {
+		return 0, fmt.Errorf("GetLogicalProcessorInformationEx size: %w", callErr)
+	}
+	buf := make([]byte, size)
+	r1, _, callErr = procGetLogicalProcessorInformationEx.Call(relationProcessorCore, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size))) //nolint:gosec // G103: buf и size живут весь вызов (правило 4 unsafe.Pointer)
+	if r1 == 0 {
+		return 0, fmt.Errorf("GetLogicalProcessorInformationEx: %w", callErr)
+	}
+	return countCores(buf[:size])
 }
 
 var (
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGlobalMemoryStatusEx = kernel32.NewProc("GlobalMemoryStatusEx")
+
+	procGetLogicalProcessorInformationEx = kernel32.NewProc("GetLogicalProcessorInformationEx")
 )
 
 type memoryStatusEx struct {
@@ -87,7 +111,7 @@ func cpuName() (string, error) {
 	}
 	defer closeKey(key)
 	name, _, err := key.GetStringValue("ProcessorNameString")
-	return name, err
+	return strings.TrimSpace(name), err
 }
 
 func windowsProductName() (string, error) {
