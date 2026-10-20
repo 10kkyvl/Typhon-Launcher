@@ -8,6 +8,7 @@ export type RouteName =
   | 'downloads'
   | 'sources'
   | 'installed'
+  | 'diskusage'
   | 'history'
   | 'lan'
   | 'friends'

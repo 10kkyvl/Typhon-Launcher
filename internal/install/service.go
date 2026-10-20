@@ -58,6 +58,8 @@ var (
 	errNotCompleted     = uierr.New("install.not_completed", "загрузка ещё не завершена")
 	errBusy             = uierr.New("install.busy", "установка этой загрузки уже выполняется")
 	errNoDestination    = uierr.New("install.no_destination", "укажите папку установки")
+	errDownloadDeleting = uierr.New("install.download_deleting", "данные этой загрузки сейчас удаляются")
+	errPartialReserved  = uierr.New("install.partial_reserved", "временную папку этой установки сейчас удаляют")
 	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
 	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
@@ -107,6 +109,7 @@ type downloadSource interface {
 type registrar interface {
 	RegisterInstalled(g library.InstalledGame) (library.Game, error)
 	Find(id string) (library.Game, error)
+	GetGames() []library.Game
 	IsRunning(id string) bool
 	RemoveGame(id string) error
 	MarkUninstalled(id string) error
@@ -120,13 +123,17 @@ type job struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	settings  *settings.Service
-	downloads downloadSource
-	library   registrar
-	store     *store
-	removals  *removalStore
-	runner    runner
+	mu sync.Mutex
+	// reservedPartials holds the .partial folders that are being deleted from
+	// outside; no job may be registered on top of one of them.
+	reservedPartials map[string]int
+	downloadGuards   []func(download.Download) error
+	settings         *settings.Service
+	downloads        downloadSource
+	library          registrar
+	store            *store
+	removals         *removalStore
+	runner           runner
 	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
 	// не прямой вызов: на macOS настоящая реализация заводит бутыль
 	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
@@ -1041,6 +1048,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		}
 	}
 	s.items = append(s.items, item)
+	if err := s.claimLocked(item); err != nil {
+		s.items = s.items[:len(s.items)-1]
+		s.mu.Unlock()
+		return Installation{}, err
+	}
 	if err := s.persistLocked(); err != nil {
 		s.items = s.items[:len(s.items)-1]
 		s.mu.Unlock()
@@ -1353,6 +1365,11 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 			item.Unattended = false
 		}
 	}
+	if err := s.claimLocked(item); err != nil {
+		*item = prev
+		s.mu.Unlock()
+		return err
+	}
 	if err := s.persistLocked(); err != nil {
 		*item = prev
 		s.mu.Unlock()
@@ -1513,7 +1530,27 @@ func (s *Service) completedDownload(id string) (download.Download, error) {
 	if d.Status != download.StatusCompleted {
 		return download.Download{}, errNotCompleted
 	}
+	if d.Deleting() {
+		return download.Download{}, errDownloadDeleting
+	}
 	return d, nil
+}
+
+// claimLocked is the last step of registering a job, taken once the item is
+// visible to s.items: DeleteData claims its download before it asks the guard,
+// so either the guard sees this item or this check sees the claim.
+func (s *Service) claimLocked(item *Installation) error {
+	if item.Destination != "" && s.partialReservedLocked(item.Destination+partialSuffix) {
+		return errPartialReserved
+	}
+	d, err := s.downloads.Get(item.DownloadID)
+	if err != nil {
+		return err
+	}
+	if d.Deleting() {
+		return errDownloadDeleting
+	}
+	return nil
 }
 
 // baseLocked отдаёт контекст жизни сервиса. До ServiceStartup (и в тестах,

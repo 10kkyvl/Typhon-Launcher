@@ -1,7 +1,7 @@
 <script lang="ts">
   import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
-  import { Copy, Download, Eye, FolderOpen, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, HardDrive, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -641,6 +641,16 @@
               {msg('settings.generalLibraryEmptyHint')}
             </span>
           {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('diskusage.settingsLabel')}</span>
+              <span class="row-sub">{msg('diskusage.settingsSub')}</span>
+            </div>
+            <Button size="sm" onclick={() => navigate('diskusage')}>
+              <HardDrive size="1.5rem" strokeWidth={1.8} />
+              {msg('diskusage.settingsOpen')}
+            </Button>
+          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.extlibLabel')}</span>

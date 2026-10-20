@@ -37,6 +37,7 @@ import { overlay } from './overlay';
 import { redist } from './redist';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
+import { diskusage } from './diskusage';
 
 export const en: Record<MessageKey, Message> = {
   ...bigpictureCatalog,
@@ -76,6 +77,7 @@ export const en: Record<MessageKey, Message> = {
   ...redist,
   ...screenshots,
   ...stats,
+  ...diskusage,
 };
 
 export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats };

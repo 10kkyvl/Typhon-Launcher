@@ -36,6 +36,7 @@ import { overlay } from './overlay';
 import { redist } from './redist';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
+import { diskusage } from './diskusage';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -75,6 +76,7 @@ export const ru = {
   ...redist,
   ...screenshots,
   ...stats,
+  ...diskusage,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
