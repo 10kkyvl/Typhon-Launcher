@@ -2,6 +2,12 @@ import { Service as SettingsService } from '../../../bindings/typhon/internal/se
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 
+export interface GameMode {
+  highPerformance: boolean;
+  hideLauncher: boolean;
+  raisePriority: boolean;
+}
+
 export interface Settings {
   theme: string;
   accentColor: string;
@@ -63,6 +69,7 @@ export interface Settings {
   overlayHotkey: string;
   screenshotsEnabled: boolean;
   screenshotHotkey: string;
+  gameMode: GameMode;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -128,6 +135,7 @@ const fallbackDefaults: Settings = {
   overlayHotkey: 'Alt+`',
   screenshotsEnabled: true,
   screenshotHotkey: 'Ctrl+F12',
+  gameMode: { highPerformance: false, hideLauncher: false, raisePriority: false },
 };
 
 export const maxActiveDownloadOptions = [

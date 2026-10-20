@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"typhon/internal/account"
@@ -27,6 +28,7 @@ import (
 	"typhon/internal/discovery"
 	"typhon/internal/download"
 	"typhon/internal/extlib"
+	"typhon/internal/gamemode"
 	"typhon/internal/heartbeat"
 	"typhon/internal/history"
 	"typhon/internal/install"
@@ -715,6 +717,21 @@ func main() {
 	if err != nil {
 		fatal("start requirements check", err)
 	}
+	gameModeWindow := &lateWindow{trayOn: func() bool { return settingsService.GetSettings().MinimizeToTray }}
+	gameModeDeps := gamemode.SystemDeps()
+	gameModeDeps.Settings = settingsService.GetSettings
+	gameModeDeps.PID = libraryService.RunningPID
+	gameModeDeps.Window = gameModeWindow
+	gameModeDeps.Emit = func(name string, data any) {
+		if app := application.Get(); app != nil {
+			app.Event.Emit(name, data)
+		}
+	}
+	gameModeService, err := gamemode.New(configDir, gameModeDeps)
+	if err != nil {
+		fatal("start game mode service", err)
+	}
+	libraryService.AddSessionWatcher(gameModeService)
 
 	mediaService := media.NewService()
 
@@ -761,6 +778,7 @@ func main() {
 		application.NewService(selfupdateService),
 		application.NewService(overlayService),
 		application.NewService(screenshotService),
+		application.NewService(gameModeService),
 		application.NewService(mediaService),
 	}
 	services = append(services, extraServices...)
@@ -821,6 +839,8 @@ func main() {
 		},
 		URL: "/",
 	})
+
+	gameModeWindow.window.Store(window)
 
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
@@ -963,6 +983,35 @@ func (w windowControl) Hide() {
 
 func (w windowControl) Focus() {
 	w.window.Focus()
+}
+
+// lateWindow exists before the window does.
+type lateWindow struct {
+	window atomic.Pointer[application.WebviewWindow]
+	trayOn func() bool
+}
+
+// CanHide is false without the tray icon: a hidden window nobody can reopen
+// leaves a process the user cannot reach.
+func (w *lateWindow) CanHide() bool {
+	return w.window.Load() != nil && w.trayOn()
+}
+
+func (w *lateWindow) Visible() bool {
+	win := w.window.Load()
+	return win != nil && win.IsVisible() && !win.IsMinimised()
+}
+
+func (w *lateWindow) Hide() {
+	if win := w.window.Load(); win != nil {
+		win.Hide()
+	}
+}
+
+func (w *lateWindow) Show() {
+	if win := w.window.Load(); win != nil {
+		win.Show()
+	}
 }
 
 func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {

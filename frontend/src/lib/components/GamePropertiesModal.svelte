@@ -4,6 +4,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
+  import Select from './Select.svelte';
   import Toggle from './Toggle.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
   import { errorCode, hasMessage, msg } from '../i18n';
@@ -14,6 +15,7 @@
     selectGameExecutable,
     setExecutable,
     setLaunchArgsLine,
+    setGameModeOverride,
     setHidePresence,
     setRunAsAdmin,
   } from '../services/library';
@@ -21,6 +23,15 @@
   import { appInfo, elevationSupported } from '../services/system';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
   import { libraryGames } from '../stores/library';
+  import { settings } from '../stores/settings';
+  import {
+    gameModeKeys,
+    inheritLabel,
+    overrideState,
+    withOverride,
+    type GameModeKey,
+    type OverrideState,
+  } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { truncateMiddle } from '../utils/format';
 
@@ -47,6 +58,31 @@
   let presence = $state(true);
   let presenceBusy = $state(false);
   let presenceError = $state('');
+
+  let gameModeBusy = $state(false);
+  let gameModeError = $state('');
+  let gameModeShown = $state(false);
+  let gameModeMac = $state(false);
+
+  const gameModeTitles = {
+    highPerformance: 'settings.gameModePowerLabel',
+    hideLauncher: 'settings.gameModeHideLabel',
+    raisePriority: 'settings.gameModePriorityLabel',
+  } as const;
+
+  const gameModeRows = $derived(
+    gameModeKeys
+      .filter((key) => !(gameModeMac && key !== 'hideLauncher'))
+      .map((key) => ({
+        key,
+        title: msg(gameModeTitles[key]),
+        options: [
+          { id: 'inherit', label: inheritLabel(Boolean($settings?.gameMode?.[key])) },
+          { id: 'on', label: msg('modals.propertiesGameModeOn') },
+          { id: 'off', label: msg('modals.propertiesGameModeOff') },
+        ],
+      })),
+  );
 
   let savesBusy = $state(false);
   let savesError = $state('');
@@ -79,6 +115,7 @@
       argsSaved = '';
       argsError = '';
       adminError = '';
+      gameModeError = '';
       presenceError = '';
       savesError = '';
       void load(current.gameId);
@@ -121,6 +158,8 @@
       argsError = errorText(line.reason, msg('modals.propertiesArgsLoadFailed'));
     }
     adminShown = info.status === 'fulfilled' && elevationSupported(info.value);
+    gameModeShown = info.status === 'fulfilled';
+    gameModeMac = info.status === 'fulfilled' && info.value.platform === 'darwin';
   }
 
   async function pickCandidate(path: string) {
@@ -184,6 +223,20 @@
       toast(adminError, 'danger');
     } finally {
       adminBusy = false;
+    }
+  }
+
+  async function changeGameMode(key: GameModeKey, state: OverrideState) {
+    if (!game || gameModeBusy) return;
+    gameModeBusy = true;
+    gameModeError = '';
+    try {
+      await setGameModeOverride(game.id, withOverride(game.gameMode, key, state));
+    } catch (err) {
+      gameModeError = errorText(err, msg('modals.propertiesGameModeFailed'));
+      toast(gameModeError, 'danger');
+    } finally {
+      gameModeBusy = false;
     }
   }
 
@@ -319,6 +372,26 @@
       {/if}
 
       <GameProfiles {game} {candidates} {adminShown} />
+      {#if gameModeShown}
+        <section class="section">
+          <h4>{msg('modals.propertiesGameModeTitle')}</h4>
+          {#each gameModeRows as row (row.key)}
+            <div class="row spread">
+              <span class="label">{row.title}</span>
+              <Select
+                value={overrideState(game.gameMode, row.key)}
+                width="26rem"
+                options={row.options}
+                onchange={(id) => changeGameMode(row.key, id as OverrideState)}
+              />
+            </div>
+          {/each}
+          <p class="hint">{msg('modals.propertiesGameModeHint')}</p>
+          {#if gameModeError}
+            <p class="failure">{gameModeError}</p>
+          {/if}
+        </section>
+      {/if}
 
       <section class="section">
         <div class="row spread">

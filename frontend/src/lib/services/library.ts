@@ -41,6 +41,12 @@ export interface ProfileView {
   shortcutPath?: string;
 }
 
+export interface GameModeOverride {
+  highPerformance?: boolean | null;
+  hideLauncher?: boolean | null;
+  raisePriority?: boolean | null;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -76,6 +82,7 @@ export interface LibraryGame {
   notes?: string;
   profiles?: LaunchProfile[] | null;
   lastProfile?: string;
+  gameMode?: GameModeOverride | null;
 }
 
 export interface LibraryCollection {
@@ -327,6 +334,11 @@ export async function setRunAsAdmin(id: string, on: boolean): Promise<LibraryGam
 export async function setHidePresence(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetHidePresence(id, on)) as unknown as LibraryGame;
+}
+
+export async function setGameModeOverride(id: string, o: GameModeOverride): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetGameModeOverride(id, o)) as unknown as LibraryGame;
 }
 
 export async function selectExecutable(title: string): Promise<string> {

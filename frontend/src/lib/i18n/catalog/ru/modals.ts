@@ -432,6 +432,14 @@ export const modals = {
   'modals.propertiesSavesBrowse': 'Выбрать папку…',
   'modals.propertiesSavesReset': 'Сбросить',
   'modals.propertiesSavesFailed': 'Не удалось изменить папку сохранений',
+  'modals.propertiesGameModeTitle': 'Игровой режим',
+  'modals.propertiesGameModeHint': 'Для этой игры каждый пункт можно оставить как в настройках, включить или выключить',
+  'modals.propertiesGameModeInherit': 'Как в настройках ({state})',
+  'modals.propertiesGameModeOn': 'Вкл',
+  'modals.propertiesGameModeOff': 'Выкл',
+  'modals.propertiesGameModeStateOn': 'вкл',
+  'modals.propertiesGameModeStateOff': 'выкл',
+  'modals.propertiesGameModeFailed': 'Не удалось сохранить игровой режим для игры',
 } as const;
 
 export type ModalsKey = keyof typeof modals;

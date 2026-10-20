@@ -331,6 +331,15 @@ export const settings = {
   'settings.extlibDetailError': '{provider}: {error}',
   'settings.extlibDetailSkipped': '{provider}, «{title}»: {reason}',
   'settings.extlibDetailMetadata': 'Описание и обложки: {error}',
+  'settings.gameModeCardTitle': 'Игровой режим',
+  'settings.gameModeDuring': 'Во время игры',
+  'settings.gameModePowerLabel': 'Схема питания «Высокая производительность»',
+  'settings.gameModePowerSub': 'Прежняя схема вернётся после выхода из игры',
+  'settings.gameModeHideLabel': 'Скрывать лаунчер в трей',
+  'settings.gameModeHideSub': 'Окно лаунчера прячется, пока идёт игра',
+  'settings.gameModeHideNeedsTray': 'Нужно включить сворачивание в трей',
+  'settings.gameModePriorityLabel': 'Повышать приоритет игры',
+  'settings.gameModePrioritySub': 'Выше обычного. Для игр, запущенных от администратора, может не сработать',
 } as const;
 
 export type SettingsKey = keyof typeof settings;

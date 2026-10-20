@@ -29,6 +29,7 @@ import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 import { errSaves } from './errSaves';
+import { errGameMode } from './errGameMode';
 import { errSupport } from './errSupport';
 import { saves } from './saves';
 import { cloudsaves } from './cloudsaves';
@@ -69,6 +70,7 @@ export const en: Record<MessageKey, Message> = {
   ...errLibrary,
   ...errLogs,
   ...errSaves,
+  ...errGameMode,
   ...errSupport,
   ...saves,
   ...cloudsaves,
@@ -80,4 +82,4 @@ export const en: Record<MessageKey, Message> = {
   ...sysreq,
 };
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };
