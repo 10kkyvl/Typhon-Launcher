@@ -15,6 +15,7 @@
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
+  import { initGameModeNotices } from './lib/stores/gamemode';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initHistory } from './lib/stores/history';
@@ -63,6 +64,7 @@
 
   onDestroy(initNativeLanguage());
   initDegradedNotices();
+  initGameModeNotices();
   initDownloads();
   initNetwork();
   initInstalls();

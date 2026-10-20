@@ -324,4 +324,13 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.extlibDetailError': '{provider}: {error}',
   'settings.extlibDetailSkipped': '{provider}, "{title}": {reason}',
   'settings.extlibDetailMetadata': 'Descriptions and covers: {error}',
+  'settings.gameModeCardTitle': 'Game mode',
+  'settings.gameModeDuring': 'While a game is running',
+  'settings.gameModePowerLabel': '“High performance” power plan',
+  'settings.gameModePowerSub': 'The previous plan comes back when you quit the game',
+  'settings.gameModeHideLabel': 'Hide the launcher in the tray',
+  'settings.gameModeHideSub': 'The launcher window stays hidden while a game runs',
+  'settings.gameModeHideNeedsTray': 'Turn on minimize to tray first',
+  'settings.gameModePriorityLabel': 'Raise game priority',
+  'settings.gameModePrioritySub': 'Above normal. May not apply to games run as administrator',
 };

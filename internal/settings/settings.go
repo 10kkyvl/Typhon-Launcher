@@ -202,6 +202,14 @@ type Settings struct {
 	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
 
 	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
+
+	GameMode GameMode `json:"gameMode"`
+}
+
+type GameMode struct {
+	HighPerformance bool `json:"highPerformance"`
+	HideLauncher    bool `json:"hideLauncher"`
+	RaisePriority   bool `json:"raisePriority"`
 }
 
 // TelemetryConsentRecorded reports whether the user has answered the consent

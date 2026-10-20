@@ -67,6 +67,7 @@ var localNames = []string{
 	"telemetryConsentVersion",
 	"legalAcceptedVersion",
 	"presenceStatus",
+	"gameMode",
 }
 
 func jsonNames(v any) []string {

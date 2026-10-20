@@ -28,6 +28,7 @@ import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 import { errSaves } from './errSaves';
+import { errGameMode } from './errGameMode';
 import { errSupport } from './errSupport';
 import { saves } from './saves';
 import { cloudsaves } from './cloudsaves';
@@ -67,6 +68,7 @@ export const ru = {
   ...errLibrary,
   ...errLogs,
   ...errSaves,
+  ...errGameMode,
   ...errSupport,
   ...saves,
   ...cloudsaves,
@@ -79,4 +81,4 @@ export const ru = {
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats };

@@ -409,4 +409,12 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.propertiesSavesBrowse': 'Choose folder…',
   'modals.propertiesSavesReset': 'Reset',
   'modals.propertiesSavesFailed': 'Could not change the save folder',
+  'modals.propertiesGameModeTitle': 'Game mode',
+  'modals.propertiesGameModeHint': 'For this game each item can follow the settings, be turned on, or be turned off',
+  'modals.propertiesGameModeInherit': 'As in settings ({state})',
+  'modals.propertiesGameModeOn': 'On',
+  'modals.propertiesGameModeOff': 'Off',
+  'modals.propertiesGameModeStateOn': 'on',
+  'modals.propertiesGameModeStateOff': 'off',
+  'modals.propertiesGameModeFailed': 'Could not save game mode for this game',
 };

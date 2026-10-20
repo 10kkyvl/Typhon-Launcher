@@ -43,7 +43,7 @@
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
-  import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, maxActiveDownloadOptions, openFolder, type GameMode, type Settings } from '../../lib/services/settings';
   import {
     exportLogs,
     elevationSupported,
@@ -347,6 +347,14 @@
     updateSettings(patch);
   }
 
+  const gameModeMac = $derived(appInfo?.platform === 'darwin');
+  const trayEnabled = $derived(current?.minimizeToTray ?? true);
+
+  function setGameMode(change: Partial<GameMode>) {
+    const base = current?.gameMode ?? { highPerformance: false, hideLauncher: false, raisePriority: false };
+    updateSettings({ gameMode: { ...base, ...change } });
+  }
+
   let overlayInfo = $state<OverlayStatus | null>(null);
   let overlayInfoFailed = $state(false);
   let overlayError = $state('');
@@ -537,6 +545,53 @@
               onchange={(v) => set({ discordRichPresence: v })}
             />
           </div>
+        </div>
+      </Card>
+
+      <Card title={msg('settings.gameModeCardTitle')}>
+        <div class="rows">
+          <span class="row-sub">{msg('settings.gameModeDuring')}</span>
+          {#if !gameModeMac}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.gameModePowerLabel')}</span>
+                <span class="row-sub">{msg('settings.gameModePowerSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.gameMode?.highPerformance ?? false}
+                label={msg('settings.gameModePowerLabel')}
+                onchange={(v) => setGameMode({ highPerformance: v })}
+              />
+            </div>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.gameModeHideLabel')}</span>
+              <span class="row-sub">{msg('settings.gameModeHideSub')}</span>
+              {#if !trayEnabled}
+                <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
+              {/if}
+            </div>
+            <Toggle
+              checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
+              disabled={!trayEnabled}
+              label={msg('settings.gameModeHideLabel')}
+              onchange={(v) => setGameMode({ hideLauncher: v })}
+            />
+          </div>
+          {#if !gameModeMac}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.gameModePriorityLabel')}</span>
+                <span class="row-sub">{msg('settings.gameModePrioritySub')}</span>
+              </div>
+              <Toggle
+                checked={current?.gameMode?.raisePriority ?? false}
+                label={msg('settings.gameModePriorityLabel')}
+                onchange={(v) => setGameMode({ raisePriority: v })}
+              />
+            </div>
+          {/if}
         </div>
       </Card>
 
