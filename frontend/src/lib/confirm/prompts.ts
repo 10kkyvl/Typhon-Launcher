@@ -192,3 +192,11 @@ export function deleteScreenshotPrompt(name: string): ConfirmPrompt {
     confirm: msg('screenshots.delete'),
   };
 }
+
+export function deleteProfilePrompt(name: string): ConfirmPrompt {
+  return {
+    title: msg('modals.profilesDelete'),
+    text: msg('modals.profilesDeleteConfirm', { name }),
+    confirm: msg('modals.profilesDelete'),
+  };
+}

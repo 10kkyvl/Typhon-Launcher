@@ -88,6 +88,8 @@ var errNoBrokerDir = errors.New("--install-broker требует путь к к�
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 var errNoPlayTarget = errors.New("--play требует идентификатор игры")
 
+var errBadProfileTarget = errors.New("--profile требует идентификатор профиля из букв, цифр, дефиса и подчёркивания")
+
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
 	application.RegisterEvent[[]library.Game]("library:updated")
@@ -286,7 +288,7 @@ func main() {
 	// A shortcut with a broken argument must not keep the launcher from
 	// starting: the window opens as usual and the user can launch the game
 	// by hand, which is strictly better than refusing to start at all.
-	playID, playRequested, err := playTarget(os.Args)
+	playReq, playRequested, err := playTarget(os.Args)
 	if err != nil {
 		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
 		playRequested = false
@@ -763,7 +765,7 @@ func main() {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: singleInstanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				id, requested, err := playTarget(data.Args)
+				req, requested, err := playTarget(data.Args)
 				if err != nil {
 					slog.Error("parse play argument", "args", data.Args, "error", err)
 				}
@@ -771,8 +773,8 @@ func main() {
 					trayController.Open()
 					return
 				}
-				if err := libraryService.PlayGame(id); err != nil {
-					slog.Error("play from shortcut", "id", id, "error", err)
+				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
+					slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
 					trayController.Open()
 				}
 			},
@@ -870,7 +872,7 @@ func main() {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
 		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
 		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			playFromShortcut(libraryService, playID, func() { window.Show() })
+			playFromShortcut(libraryService, playReq, func() { window.Show() })
 		})
 	}
 
@@ -881,31 +883,53 @@ func main() {
 }
 
 type gamePlayer interface {
-	PlayGame(id string) error
+	PlayGameProfile(id, profileID string) error
 }
 
-func playFromShortcut(player gamePlayer, id string, reveal func()) {
-	if err := player.PlayGame(id); err != nil {
-		slog.Error("play from shortcut", "id", id, "error", err)
+// playRequest is what a shortcut asks for: a game and, optionally, one of its
+// launch profiles. An empty profile is the game's own executable.
+type playRequest struct {
+	id      string
+	profile string
+}
+
+func playFromShortcut(player gamePlayer, req playRequest, reveal func()) {
+	if err := player.PlayGameProfile(req.id, req.profile); err != nil {
+		slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
 		reveal()
 	}
 }
 
-func playTarget(args []string) (string, bool, error) {
+func playTarget(args []string) (playRequest, bool, error) {
+	var req playRequest
+	requested := false
 	for i := 1; i < len(args); i++ {
-		if args[i] != "--play" {
-			continue
+		switch args[i] {
+		case "--play":
+			if i+1 >= len(args) {
+				return playRequest{}, true, errNoPlayTarget
+			}
+			req.id = strings.TrimSpace(args[i+1])
+			if req.id == "" {
+				return playRequest{}, true, errNoPlayTarget
+			}
+			requested = true
+			i++
+		case "--profile":
+			if i+1 >= len(args) {
+				return playRequest{}, true, errBadProfileTarget
+			}
+			req.profile = strings.TrimSpace(args[i+1])
+			if !library.SafeProfileID(req.profile) {
+				return playRequest{}, true, errBadProfileTarget
+			}
+			i++
 		}
-		if i+1 >= len(args) {
-			return "", true, errNoPlayTarget
-		}
-		id := strings.TrimSpace(args[i+1])
-		if id == "" {
-			return "", true, errNoPlayTarget
-		}
-		return id, true, nil
 	}
-	return "", false, nil
+	if !requested {
+		return playRequest{}, false, nil
+	}
+	return req, true, nil
 }
 
 func browserArgs(hardwareAcceleration bool) []string {

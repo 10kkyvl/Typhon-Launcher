@@ -97,15 +97,31 @@ func (s *Service) SetSteamArt(fn func(canonicalID string) (steamlink.Art, error)
 // steamTarget is what Steam has to start for a game: the game itself, or the
 // launcher with --play when the game needs administrator rights.
 func steamTarget(game Game, launcherPath func() (string, error)) (steamlink.Shortcut, error) {
-	if game.Executable == "" {
+	return steamProfileTarget(game, "", launcherPath)
+}
+
+func steamProfileTarget(game Game, profileID string, launcherPath func() (string, error)) (steamlink.Shortcut, error) {
+	chosen, err := chooseProfile(&game, profileID, true)
+	if err != nil {
+		return steamlink.Shortcut{}, err
+	}
+	if chosen.executable == "" {
 		return steamlink.Shortcut{}, errShortcutNoExecutable
 	}
 	sc := steamlink.Shortcut{
-		AppID: steamlink.AppID(game.ID),
+		AppID: steamlink.ProfileAppID(game.ID, profileID),
 		Name:  game.Title,
-		Icon:  game.Executable,
+		Icon:  chosen.executable,
 	}
-	if game.RunAsAdmin {
+	playArgs := "--play " + game.ID
+	if profileID != "" {
+		if !safeCommandLineID(profileID) {
+			return steamlink.Shortcut{}, fmt.Errorf("%w: %q", errProfileBadID, profileID)
+		}
+		sc.Name = profileTitle(game, profileID)
+		playArgs += " --profile " + profileID
+	}
+	if chosen.admin {
 		if !safeCommandLineID(game.ID) {
 			return steamlink.Shortcut{}, fmt.Errorf("%w: %q", errShortcutBadID, game.ID)
 		}
@@ -115,17 +131,25 @@ func steamTarget(game Game, launcherPath func() (string, error)) (steamlink.Shor
 		}
 		sc.Exe = launcher
 		sc.StartDir = filepath.Dir(launcher)
-		sc.LaunchOptions = "--play " + game.ID
+		sc.LaunchOptions = playArgs
 		return sc, nil
 	}
-	workDir, err := filepath.Abs(filepath.Dir(game.Executable))
+	workDir, err := filepath.Abs(filepath.Dir(chosen.executable))
 	if err != nil {
 		return steamlink.Shortcut{}, fmt.Errorf("рабочая папка игры: %w", err)
 	}
-	sc.Exe = game.Executable
+	sc.Exe = chosen.executable
 	sc.StartDir = workDir
-	sc.LaunchOptions = steamlink.JoinArgs(game.LaunchArgs)
+	sc.LaunchOptions = steamlink.JoinArgs(chosen.args)
 	return sc, nil
+}
+
+// profileTitle is the display name of a profile entry: "Title (Profile)".
+func profileTitle(game Game, profileID string) string {
+	if p := findProfile(&game, profileID); p != nil {
+		return game.Title + " (" + p.Name + ")"
+	}
+	return game.Title
 }
 
 // steamState is the part of the library that decides which Steam shortcuts are
@@ -134,14 +158,16 @@ type steamState struct {
 	live         []Game
 	liveIDs      map[string]struct{}
 	goneIDs      []string
+	goneProfiles map[string][]uint32
 	launcherPath func() (string, error)
 }
 
 func (s *Service) steamStateLocked() steamState {
-	st := steamState{liveIDs: map[string]struct{}{}, launcherPath: s.launcherPath}
+	st := steamState{liveIDs: map[string]struct{}{}, goneProfiles: map[string][]uint32{}, launcherPath: s.launcherPath}
 	for _, g := range s.games {
 		if g.Uninstalled {
 			st.goneIDs = append(st.goneIDs, g.ID)
+			st.noteGoneProfiles(g)
 			continue
 		}
 		st.live = append(st.live, g)
@@ -149,8 +175,15 @@ func (s *Service) steamStateLocked() steamState {
 	}
 	for _, g := range s.archived {
 		st.goneIDs = append(st.goneIDs, g.ID)
+		st.noteGoneProfiles(g)
 	}
 	return st
+}
+
+func (st *steamState) noteGoneProfiles(g Game) {
+	for _, p := range g.Profiles {
+		st.goneProfiles[g.ID] = append(st.goneProfiles[g.ID], steamlink.ProfileAppID(g.ID, p.ID))
+	}
 }
 
 // plan lists the shortcuts to refresh (installed games whose target can be
@@ -162,15 +195,24 @@ func (st steamState) plan() steamlink.Sync {
 		if g.External != nil && g.External.Provider == ProviderSteam {
 			continue
 		}
-		sc, err := steamTarget(g, st.launcherPath)
-		if err != nil {
-			continue
+		if sc, err := steamTarget(g, st.launcherPath); err == nil {
+			if err := sc.Validate(); err != nil {
+				slog.Warn("steam shortcut skipped", "id", g.ID, "error", err)
+			} else {
+				plan.Update = append(plan.Update, sc)
+			}
 		}
-		if err := sc.Validate(); err != nil {
-			slog.Warn("steam shortcut skipped", "id", g.ID, "error", err)
-			continue
+		for _, p := range g.Profiles {
+			psc, err := steamProfileTarget(g, p.ID, st.launcherPath)
+			if err != nil {
+				continue
+			}
+			if err := psc.Validate(); err != nil {
+				slog.Warn("steam profile shortcut skipped", "id", g.ID, "profile", p.ID, "error", err)
+				continue
+			}
+			plan.Update = append(plan.Update, psc)
 		}
-		plan.Update = append(plan.Update, sc)
 	}
 	seen := map[uint32]struct{}{}
 	for _, id := range st.goneIDs {
@@ -183,11 +225,22 @@ func (st steamState) plan() steamlink.Sync {
 		}
 		seen[appID] = struct{}{}
 		plan.Drop = append(plan.Drop, appID)
+		for _, profileApp := range st.goneProfiles[id] {
+			if _, dup := seen[profileApp]; dup {
+				continue
+			}
+			seen[profileApp] = struct{}{}
+			plan.Drop = append(plan.Drop, profileApp)
+		}
 	}
 	return plan
 }
 
 func (s *Service) AddToSteam(id string) error {
+	return s.AddProfileToSteam(id, "")
+}
+
+func (s *Service) AddProfileToSteam(id, profileID string) error {
 	if !s.steam.Supported() {
 		return steamlink.ErrUnsupported
 	}
@@ -215,12 +268,12 @@ func (s *Service) AddToSteam(id string) error {
 	if ctx == nil {
 		return errSteamNotStarted
 	}
-	if _, err := os.Stat(game.Executable); err != nil {
-		return fmt.Errorf("исполняемый файл игры: %w", err)
-	}
-	sc, err := steamTarget(game, state.launcherPath)
+	sc, err := steamProfileTarget(game, profileID, state.launcherPath)
 	if err != nil {
 		return err
+	}
+	if _, err := os.Stat(sc.Icon); err != nil {
+		return fmt.Errorf("исполняемый файл игры: %w", err)
 	}
 
 	var art steamlink.Art
@@ -233,11 +286,15 @@ func (s *Service) AddToSteam(id string) error {
 	if err := s.steam.Add(ctx, sc, art, state.plan()); err != nil {
 		return err
 	}
-	slog.Info("game added to steam", "id", id, "title", game.Title, "exe", sc.Exe)
+	slog.Info("game added to steam", "id", id, "profile", profileID, "title", sc.Name, "exe", sc.Exe)
 	return nil
 }
 
 func (s *Service) RemoveFromSteam(id string) error {
+	return s.RemoveProfileFromSteam(id, "")
+}
+
+func (s *Service) RemoveProfileFromSteam(id, profileID string) error {
 	if !s.steam.Supported() {
 		return steamlink.ErrUnsupported
 	}
@@ -248,14 +305,42 @@ func (s *Service) RemoveFromSteam(id string) error {
 	if ctx == nil {
 		return errSteamNotStarted
 	}
-	if err := s.steam.Remove(ctx, steamlink.AppID(id), state.plan()); err != nil {
+	if err := s.steam.Remove(ctx, steamlink.ProfileAppID(id, profileID), state.plan()); err != nil {
 		return err
 	}
 	slog.Info("game removed from steam", "id", id)
 	return nil
 }
 
+// removeSteamEntry drops one entry before its owner is deleted. No Steam, no
+// entry and an unsupported platform all mean there is nothing to orphan; a
+// running Steam or an unreadable file is an error, so the owner stays.
+func (s *Service) removeSteamEntry(ctx context.Context, id, profileID string) error {
+	if !s.steam.Supported() {
+		return nil
+	}
+	if ctx == nil {
+		return errSteamNotStarted
+	}
+	appID := steamlink.ProfileAppID(id, profileID)
+	added, err := s.steam.Contains(ctx, appID)
+	if errors.Is(err, steamlink.ErrNotInstalled) || errors.Is(err, steamlink.ErrUnsupported) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !added {
+		return nil
+	}
+	return s.steam.Remove(ctx, appID, steamlink.Sync{})
+}
+
 func (s *Service) SteamStatus(id string) (SteamStatus, error) {
+	return s.SteamProfileStatus(id, "")
+}
+
+func (s *Service) SteamProfileStatus(id, profileID string) (SteamStatus, error) {
 	status := SteamStatus{Supported: s.steam.Supported()}
 	if !status.Supported {
 		return status, nil
@@ -266,7 +351,7 @@ func (s *Service) SteamStatus(id string) (SteamStatus, error) {
 	if ctx == nil {
 		return SteamStatus{}, errSteamNotStarted
 	}
-	added, err := s.steam.Contains(ctx, steamlink.AppID(id))
+	added, err := s.steam.Contains(ctx, steamlink.ProfileAppID(id, profileID))
 	if errors.Is(err, steamlink.ErrNotInstalled) {
 		return status, nil
 	}
@@ -283,6 +368,10 @@ func (s *Service) SteamStatus(id string) (SteamStatus, error) {
 // or unreadable must not turn that into a failure; the shortcut stays and the
 // next Steam operation or the startup reconcile removes it.
 func (s *Service) dropSteam(ctx context.Context, id string) {
+	s.dropSteamApp(ctx, steamlink.AppID(id), id)
+}
+
+func (s *Service) dropSteamApp(ctx context.Context, appID uint32, id string) {
 	if !s.steam.Supported() {
 		return
 	}
@@ -290,7 +379,7 @@ func (s *Service) dropSteam(ctx context.Context, id string) {
 		slog.Warn("steam shortcut left behind: library not started", "id", id)
 		return
 	}
-	logSteamReconcile("drop", id, s.steam.Reconcile(ctx, nil, []uint32{steamlink.AppID(id)}))
+	logSteamReconcile("drop", id, s.steam.Reconcile(ctx, nil, []uint32{appID}))
 }
 
 // reconcileSteam brings the shortcuts in Steam in line with the library:

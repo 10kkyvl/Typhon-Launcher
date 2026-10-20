@@ -14,6 +14,33 @@ export interface LibraryExternal {
   launchUri?: string;
 }
 
+export interface LaunchProfile {
+  id: string;
+  name: string;
+  executable: string;
+  args?: string[] | null;
+  runAsAdmin?: boolean;
+  shortcutPath?: string;
+}
+
+export interface ProfileInput {
+  name: string;
+  executable: string;
+  argsLine: string;
+  runAsAdmin: boolean;
+}
+
+export interface ProfileView {
+  id: string;
+  name: string;
+  executable: string;
+  argsLine: string;
+  runAsAdmin: boolean;
+  isDefault: boolean;
+  isLast: boolean;
+  shortcutPath?: string;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -47,6 +74,8 @@ export interface LibraryGame {
   tags?: string[];
   hidden?: boolean;
   notes?: string;
+  profiles?: LaunchProfile[] | null;
+  lastProfile?: string;
 }
 
 export interface LibraryCollection {
@@ -65,6 +94,12 @@ export interface SavesResult {
   unreadable: number;
   hintsError?: string;
   hint?: { source: string; license: string; via: string; pageUrl: string } | null;
+}
+
+export interface ProfileFallback {
+  gameId: string;
+  profileName: string;
+  code: string;
 }
 
 export interface SessionEvent {
@@ -117,6 +152,55 @@ export async function launchGame(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+export async function playGameProfile(id: string, profileID: string): Promise<boolean> {
+  if (!inWails) throw unavailable();
+  try { await LibraryService.PlayGameProfile(id, profileID); } catch (err) {
+    if (errorCode(err) !== 'library.launch_cancelled') throw err;
+    return false;
+  }
+  return true;
+}
+
+export async function getProfiles(id: string): Promise<ProfileView[]> {
+  if (!inWails) return [];
+  return ((await LibraryService.Profiles(id)) ?? []) as ProfileView[];
+}
+
+export async function addProfile(id: string, input: ProfileInput): Promise<ProfileView> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.AddProfile(id, input)) as ProfileView;
+}
+
+export async function updateProfile(id: string, profileID: string, input: ProfileInput): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.UpdateProfile(id, profileID, input);
+}
+
+export async function removeProfile(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveProfile(id, profileID);
+}
+
+export async function createProfileShortcut(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.CreateProfileShortcut(id, profileID);
+}
+
+export async function profileSteamStatus(id: string, profileID: string): Promise<SteamStatus> {
+  if (!inWails) return { supported: false, installed: false, added: false };
+  return await LibraryService.SteamProfileStatus(id, profileID);
+}
+
+export async function addProfileToSteam(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.AddProfileToSteam(id, profileID);
+}
+
+export async function removeProfileFromSteam(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveProfileFromSteam(id, profileID);
 }
 
 export async function stopGame(id: string): Promise<void> {

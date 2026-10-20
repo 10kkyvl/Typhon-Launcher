@@ -1,7 +1,7 @@
 import { derived, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getGames, getRunningGames, type LibraryGame, type SessionEvent } from '../services/library';
+import { getGames, getRunningGames, type LibraryGame, type ProfileFallback, type SessionEvent } from '../services/library';
 import { msg } from '../i18n';
 import { clearCrashes, recordCrash } from './crash';
 import { toast } from './toasts';
@@ -17,6 +17,10 @@ export async function initLibrary() {
 
   Events.On('library:updated', (event) => {
     libraryGames.set((event.data as LibraryGame[]) ?? []);
+  });
+  Events.On('library:profile-fallback', (event) => {
+    const { profileName } = event.data as ProfileFallback;
+    toast(msg('games.profileFallback', { name: profileName }), 'danger');
   });
   Events.On('game:started', (event) => {
     const { gameId } = event.data as SessionEvent;

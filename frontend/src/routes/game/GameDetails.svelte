@@ -52,6 +52,8 @@
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { playLabel } from '../../lib/game/profiles';
+  import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
@@ -86,6 +88,7 @@
     createShortcut,
     markError,
     playGame,
+    playGameProfile,
     removeShortcut,
     setFavorite,
     setRequiresSteam,
@@ -791,6 +794,15 @@
     }
   }
 
+  async function playProfile(profileID: string) {
+    if (!localGame) return;
+    try {
+      await playGameProfile(localGame.id, profileID);
+    } catch (err) {
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+    }
+  }
+
   async function stop() {
     if (!localGame) return;
     try {
@@ -941,11 +953,14 @@
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
-            <span class="lead">
+            <span class="lead" class:split={Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" onclick={play}>
                 <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-                {msg('games.play')}
+                {localGame ? playLabel(localGame) : msg('games.play')}
               </Button>
+              {#if localGame}
+                <PlayProfileMenu game={localGame} onpick={playProfile} />
+              {/if}
             </span>
             <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
               {#if updateIsRelease}
@@ -956,7 +971,7 @@
               {primary.label}
             </Button>
           {:else}
-            <span class="lead">
+            <span class="lead" class:split={primary.kind === 'play' && Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
                 {#if primary.kind === 'play'}
                   <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
@@ -967,8 +982,11 @@
                 {:else if primary.kind === 'install-download'}
                   <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
                 {/if}
-                {primary.label}
+                {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
               </Button>
+              {#if primary.kind === 'play' && localGame}
+                <PlayProfileMenu game={localGame} disabled={primary.disabled} onpick={playProfile} />
+              {/if}
             </span>
           {/if}
 
@@ -1487,6 +1505,11 @@
   .lead :global(.btn) {
     min-width: 18rem;
     padding: 0 2.8rem;
+  }
+
+  .lead.split :global(.btn) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .cta :global(.icon-btn) {
