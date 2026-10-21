@@ -745,10 +745,20 @@ func (s *Service) sweepPartial(ctx context.Context, items []Installation) {
 // в s.wg, поэтому ServiceShutdown дожидается её, и не стартует, если сервис уже
 // закрывается или ctx отменён (инвариант 19).
 func (s *Service) spawnSweep(ctx context.Context, item Installation) {
+	s.spawnCleanup(ctx, item, nil)
+}
+
+// spawnCleanup — spawnSweep плюс уборка Destination, если release не nil:
+// резерв из holdDiscardLocked снимается на любом выходе, в том числе когда
+// горутина не стартует.
+func (s *Service) spawnCleanup(ctx context.Context, item Installation, release func()) {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
 		slog.Info("skip partial sweep, service is closing", "id", item.ID)
+		if release != nil {
+			release()
+		}
 		return
 	}
 	s.wg.Add(1)
@@ -756,9 +766,13 @@ func (s *Service) spawnSweep(ctx context.Context, item Installation) {
 	go func() {
 		defer s.wg.Done()
 		if ctx.Err() != nil {
+			if release != nil {
+				release()
+			}
 			return
 		}
 		s.sweepPartialItem(ctx, item)
+		s.discardAfter(item, release)
 	}()
 }
 
@@ -1139,6 +1153,10 @@ func (s *Service) Cancel(id string) error {
 
 	err := s.markCancelledLocked(item)
 	snap := snapshotOf(item)
+	var release func()
+	if err == nil {
+		release = s.holdDiscardLocked(item)
+	}
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -1148,8 +1166,11 @@ func (s *Service) Cancel(id string) error {
 	// только уборку (инвариант 20), а не результат Cancel.
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after cancel, service not started", "id", snap.ID, "error", err)
+		if release != nil {
+			release()
+		}
 	} else {
-		s.spawnSweep(base, snap)
+		s.spawnCleanup(base, snap, release)
 	}
 	s.notifyFinished(snap)
 	return nil
@@ -1463,14 +1484,18 @@ func (s *Service) Dismiss(id string) error {
 		s.mu.Unlock()
 		return wrapPersistError(err)
 	}
+	release := s.holdDiscardLocked(item)
 	s.mu.Unlock()
 
 	// Сам Dismiss уже состоялся выше: подметание .partial — уборка после
 	// него, а не его часть (та же логика, что и в Cancel).
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after dismiss, service not started", "id", id, "error", err)
+		if release != nil {
+			release()
+		}
 	} else {
-		s.spawnSweep(base, snap)
+		s.spawnCleanup(base, snap, release)
 	}
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
@@ -1750,11 +1775,16 @@ func (s *Service) fail(id string, cause error) {
 		// пользовательская отмена — не провал, событие install_failed не шлём
 		err := s.markCancelledLocked(item)
 		snap := snapshotOf(item)
+		var release func()
+		if err == nil {
+			release = s.holdDiscardLocked(item)
+		}
 		s.mu.Unlock()
 		if err != nil {
 			slog.Error("persist cancelled installation while failing job", "id", id, "error", err)
 		}
 		s.notifyFinished(snap)
+		s.discardAfter(snap, release)
 	case s.closing || errors.Is(cause, context.Canceled):
 		// лаунчер закрывается — событие всё равно не успеет улететь
 		if err := s.persistLocked(); err != nil {

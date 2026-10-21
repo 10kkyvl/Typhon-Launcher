@@ -313,3 +313,85 @@ func TestInspectUnrecognizedSingleFile(t *testing.T) {
 		t.Fatalf("err = %v, matches wrong sentinel", err)
 	}
 }
+
+func TestInspectArchiveDominance(t *testing.T) {
+	big := make([]byte, 64<<10)
+	small := []zipEntry{{name: "m.txt", data: []byte("manifest")}}
+	bigEntry := []zipEntry{{name: "Game.exe", data: big}}
+
+	cases := []struct {
+		name     string
+		build    func(t *testing.T, root string)
+		wantType Type
+		wantArch string
+	}{
+		{
+			name: "small archive next to an installed game folder is not the game",
+			build: func(t *testing.T, root string) {
+				mkText(t, filepath.Join(root, "Game version.txt"), "1.0")
+				writeZip(t, filepath.Join(root, "Manifests.zip"), small)
+				mkFile(t, filepath.Join(root, "Game", "Game.exe"), 2<<20)
+				mkFile(t, filepath.Join(root, "Game", "Game_Data", "data.pak"), 2<<20)
+			},
+			wantType: TypePortable,
+		},
+		{
+			name: "small archive next to an exe in the root is not the game",
+			build: func(t *testing.T, root string) {
+				writeZip(t, filepath.Join(root, "Manifests.zip"), small)
+				mkFile(t, filepath.Join(root, "Game.exe"), 2<<20)
+				mkFile(t, filepath.Join(root, "Data", "assets.pak"), 2<<20)
+			},
+			wantType: TypePortable,
+		},
+		{
+			name: "one big archive and text files",
+			build: func(t *testing.T, root string) {
+				writeZip(t, filepath.Join(root, "game.zip"), bigEntry)
+				mkText(t, filepath.Join(root, "readme.txt"), "hello")
+				mkText(t, filepath.Join(root, "release.nfo"), "info")
+			},
+			wantType: TypeArchiveZip,
+			wantArch: "game.zip",
+		},
+		{
+			name: "big archive and a small folder with a readme",
+			build: func(t *testing.T, root string) {
+				writeZip(t, filepath.Join(root, "game.zip"), bigEntry)
+				mkText(t, filepath.Join(root, "Extras", "readme.txt"), "hello")
+			},
+			wantType: TypeArchiveZip,
+			wantArch: "game.zip",
+		},
+		{
+			name: "archive volumes together are the bulk of the folder",
+			build: func(t *testing.T, root string) {
+				writeZip(t, filepath.Join(root, "game.part1.zip"), bigEntry)
+				writeZip(t, filepath.Join(root, "game.part2.zip"), bigEntry)
+				mkText(t, filepath.Join(root, "readme.txt"), "hello")
+			},
+			wantType: TypeArchiveZip,
+			wantArch: "game.part1.zip",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.build(t, root)
+
+			plan, err := Inspect(context.Background(), root)
+			if err != nil {
+				t.Fatalf("Inspect: %v", err)
+			}
+			if plan.Type != tc.wantType {
+				t.Fatalf("type = %s, want %s", plan.Type, tc.wantType)
+			}
+			if tc.wantArch != "" && filepath.Base(plan.ArchivePath) != tc.wantArch {
+				t.Fatalf("archivePath = %s, want %s", plan.ArchivePath, tc.wantArch)
+			}
+			if tc.wantType == TypePortable && plan.ArchivePath != "" {
+				t.Fatalf("portable plan keeps archivePath %s", plan.ArchivePath)
+			}
+		})
+	}
+}
