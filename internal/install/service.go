@@ -61,6 +61,8 @@ var (
 	errDownloadDeleting = uierr.New("install.download_deleting", "данные этой загрузки сейчас удаляются")
 	errPartialReserved  = uierr.New("install.partial_reserved", "временную папку этой установки сейчас удаляют")
 	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
+	errDestUnreadable   = uierr.New("install.dest_unreadable", "не удалось проверить папку установки")
+	errNoFreeFolder     = errors.New("не нашлось свободного имени подпапки")
 	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
 	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
@@ -165,6 +167,9 @@ type Service struct {
 	// sameVolume — поле, чтобы тест мог выдать две папки временного каталога
 	// за разные тома: настоящих двух томов на машине разработчика нет.
 	sameVolume func(a, b string) bool
+	// checkDest — поле, чтобы тест мог выдать ошибку прав: на Windows папку без
+	// доступа из теста не сделать.
+	checkDest func(string) (destStatus, error)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -203,6 +208,7 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		freeSpace: platform.GetStorageInfo,
 
 		sameVolume: SameVolume,
+		checkDest:  destState,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
@@ -946,7 +952,10 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	cfg := s.config()
 	name := s.nameFor(d)
 	if ownDestination(plan.Type, plan.Silent) || plan.Type == TypeUnknown {
-		plan.Destination = s.proposeDestinationFor(cfg, name)
+		plan.Destination, err = s.proposeDestinationFor(cfg, name)
+		if err != nil {
+			return PlanInfo{}, err
+		}
 	}
 	free, err := s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath))
 	if err != nil {
@@ -1060,8 +1069,8 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		if err != nil {
 			return Installation{}, err
 		}
-		if !destAvailable(dest) {
-			return Installation{}, errDestNotEmpty
+		if err := s.prepareDestination(dest, item.Name); err != nil {
+			return Installation{}, err
 		}
 		item.Destination = dest
 		item.Owned = controlled(plan.Type)
@@ -1356,7 +1365,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	}
 	silent := supportsSilent(engine) && !interactive
 	if external(kind) && silent && destination == "" {
-		destination = s.proposeDestinationFor(s.config(), title)
+		destination, err = s.proposeDestinationFor(s.config(), title)
+		if err != nil {
+			return err
+		}
 		if destination == "" {
 			return errNoDestination
 		}
@@ -1870,21 +1882,27 @@ func (s *Service) waitForUser(id string, candidates []Candidate) error {
 	return nil
 }
 
-func (s *Service) proposeDestination(gamesPath, name string) string {
-	if gamesPath == "" {
-		return ""
+// proposeDestination подбирает под root свободную подпапку с именем игры:
+// "Name", затем "Name (2)" и дальше. Пустой root — пустой ответ без ошибки.
+func (s *Service) proposeDestination(root, name string) (string, error) {
+	if root == "" {
+		return "", nil
 	}
-	base := filepath.Join(gamesPath, sanitizeName(name))
-	if destAvailable(base) {
-		return base
-	}
-	for i := 2; i < maxSuffixAttempt; i++ {
-		candidate := fmt.Sprintf("%s (%d)", base, i)
-		if destAvailable(candidate) {
-			return candidate
+	base := filepath.Join(root, sanitizeName(name))
+	for i := 1; i < maxSuffixAttempt; i++ {
+		candidate := base
+		if i > 1 {
+			candidate = fmt.Sprintf("%s (%d)", base, i)
+		}
+		state, err := s.checkDest(candidate)
+		if err != nil {
+			return "", fmt.Errorf("%w: %s: %w", errDestUnreadable, candidate, err)
+		}
+		if state != destNotEmpty {
+			return candidate, nil
 		}
 	}
-	return base
+	return "", fmt.Errorf("%w: %s", errNoFreeFolder, base)
 }
 
 func (s *Service) freeBytes(path string) (int64, error) {

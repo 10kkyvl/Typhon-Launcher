@@ -49,7 +49,7 @@ func (s *Service) chooseRoot(cfg settings.Settings) string {
 	return best
 }
 
-func (s *Service) proposeDestinationFor(cfg settings.Settings, name string) string {
+func (s *Service) proposeDestinationFor(cfg settings.Settings, name string) (string, error) {
 	return s.proposeDestination(s.chooseRoot(cfg), name)
 }
 

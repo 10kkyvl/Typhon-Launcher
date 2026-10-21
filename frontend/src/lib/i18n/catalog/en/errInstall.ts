@@ -21,6 +21,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installCopyVerifyFailed': 'Copying finished but verification failed',
   'errInstall.installDestExists': 'The destination path already exists',
   'errInstall.installDestNotEmpty': 'The install folder already exists and is not empty',
+  'errInstall.installDestNotEmptyAt': 'The install folder already exists and is not empty, choose a subfolder such as {path}',
+  'errInstall.installDestUnreadable': 'Could not check the install folder',
   'errInstall.installBrokerOutsidePin':
     'The install job stepped outside the bounds agreed when administrator rights were requested',
   'errInstall.installElevationDeclined':

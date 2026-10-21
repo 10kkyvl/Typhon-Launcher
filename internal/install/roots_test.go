@@ -92,11 +92,13 @@ func TestProposeDestinationForUsesTheChosenRoot(t *testing.T) {
 	mkFile(t, filepath.Join(extra, "Game", "taken.txt"), 4)
 	cfg := settings.Settings{GamesPath: games, ExtraLibraryPaths: []string{extra}}
 
-	if got, want := s.proposeDestinationFor(cfg, "Game"), filepath.Join(extra, "Game (2)"); got != want {
-		t.Fatalf("destination = %q, want %q", got, want)
+	got, err := s.proposeDestinationFor(cfg, "Game")
+	if want := filepath.Join(extra, "Game (2)"); err != nil || got != want {
+		t.Fatalf("destination = %q, %v, want %q", got, err, want)
 	}
-	if got := s.proposeDestinationFor(settings.Settings{}, "Game"); got != "" {
-		t.Fatalf("destination without any folder = %q, want empty", got)
+	got, err = s.proposeDestinationFor(settings.Settings{}, "Game")
+	if err != nil || got != "" {
+		t.Fatalf("destination without any folder = %q, %v, want empty", got, err)
 	}
 }
 

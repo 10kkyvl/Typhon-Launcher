@@ -17,6 +17,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',
   'install.dest_exists': 'errInstall.installDestExists',
   'install.dest_not_empty': 'errInstall.installDestNotEmpty',
+  'install.dest_unreadable': 'errInstall.installDestUnreadable',
   'install.broker_outside_pin': 'errInstall.installBrokerOutsidePin',
   'install.elevation_declined': 'errInstall.installElevationDeclined',
   'install.empty_destination': 'errInstall.installEmptyDestination',
@@ -146,8 +147,18 @@ export const REASONS: Record<string, MessageKey> = {
   'wine.not_installed': 'errInstall.wineNotInstalled',
 };
 
+function suggestedPath(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  return /например\s+(.+)$/s.exec(raw)?.[1]?.trim() ?? '';
+}
+
 export function installErrorText(err: unknown, fallback: string = msg('errInstall.fallback')): string {
-  const key = REASONS[errorCode(err)];
+  const code = errorCode(err);
+  if (code === 'install.dest_not_empty') {
+    const path = suggestedPath(err);
+    if (path) return msg('errInstall.installDestNotEmptyAt', { path });
+  }
+  const key = REASONS[code];
   return key ? msg(key) : fallback;
 }
 

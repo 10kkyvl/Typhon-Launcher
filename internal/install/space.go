@@ -117,11 +117,18 @@ func (s *Service) PlanSpace(downloadID, destination, mode string) (SpaceInfo, er
 	if err != nil {
 		return SpaceInfo{}, err
 	}
-	return SpaceInfo{
+	info := SpaceInfo{
 		RequiredBytes: need,
 		FreeBytes:     free,
 		SameVolume:    same,
 		Mode:          resolved,
 		Enough:        free >= need,
-	}, nil
+		Suggested:     dest,
+	}
+	if ownDestination(plan.Type, plan.Silent) || plan.Type == TypeUnknown {
+		if err := s.destinationAdvice(&info, dest, s.nameFor(d)); err != nil {
+			return SpaceInfo{}, err
+		}
+	}
+	return info, nil
 }
