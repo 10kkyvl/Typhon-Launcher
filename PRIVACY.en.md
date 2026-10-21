@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 19 October 2026.
+Revision of 21 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -28,10 +28,11 @@ The following data is stored locally only and is not sent to the Typhon services
 - **Screenshots** — pressing the screenshot key during play saves an image of that game's window as a PNG in the `Screenshots` folder inside the library directory, one subfolder per game. A screenshot is taken only on that key press and only if the window belongs to a running game from the library; the app registers a single key combination with the system and receives no other key presses. Screenshots are not sent anywhere, and capturing can be turned off in the settings.
 - **Computer details for the system requirements check** — the graphics card model and its video memory, the processor model and core count, the amount of RAM, the Windows version and the free space on the chosen drive. The app reads them on the device when the game page or the install window shows whether the computer can run the game. They are kept only in memory until the app closes, are not written to disk and are not sent anywhere.
 - **Game mode** — if switching the power plan or hiding the launcher during play is turned on, the previous power plan and whether the launcher window was open are written to `gamemode.json` before the change. They are used to put everything back after the game exits, including after the app crashed; when there is nothing to put back, the file is deleted.
+- **Achievements** — for a game with a known Steam identifier, after a play session ends or on a button on the game page, the app reads the achievement progress files `achievements.json` and `achievements.ini` that Steam API compatibility layers write next to the game or in profile directories, and stores in `achievements.json` the keys of unlocked achievements with their unlock times, plus a cache of the achievement list received from the service (section 2.2). The contents of those files, their paths and the unlocked keys do not leave the device.
 
 These lists, paths and contents do not leave the device. If the user has enabled anonymous usage statistics (section 8.2), only anonymized information about the outcome of an operation is sent — for example, that an installation succeeded and how many seconds it took — but nothing of the above. If the user has enabled anonymous diagnostics (section 8.3), an anonymized error report is sent — but not the log itself and not fragments of it.
 
-Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `cleanup.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, `gamemode.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache.
+Local state is stored in the `%APPDATA%\Typhon` directory, in the files `settings.json`, `account.json`, `profile.json`, `sync.json`, `library.json`, `playlog.json`, `sources.json`, `downloads.json`, `cleanup.json`, `installations.json`, `removals.json`, `catalog.json`, `match_overrides.json`, `installation.json`, `compat.json`, `compat-client.json`, `compat-stats.json`, `watchlist.json`, `gamemode.json`, `achievements.json`, and in the `releases/` and `manifests/` subdirectories and the metadata cache. In portable mode — when a `portable.txt` file sits next to the executable — all of the same is stored not in `%APPDATA%\Typhon` but in the `data` directory (or the subdirectory named in that file) next to the executable; the embedded browser profile and the `credentials.json` file (section 2.1) live there too.
 
 `installation.json` holds only the installation identifier — a random UUIDv4 created the first time the app is started. It is not derived from any device characteristics and is not personal data in itself; where it is sent is described in section 8.
 
@@ -61,7 +62,7 @@ Stored on the server are: the account identifier, username, display name, email 
 
 Acceptance of the Terms of Use is stored as a record: the revision, the time of acceptance and where it was made — on the website or in the app. Records are only added: accepting a new revision adds a new one, earlier ones remain. The IP address and browser or device details do not go into this record.
 
-The session token is stored on the device in the Windows credential store (Credential Manager), not in the settings file.
+The session token is stored on the device in the Windows credential store (Credential Manager), not in the settings file. In portable mode (section 1) the system store is not used: the session token and the proxy password, if one is set, are written to a `credentials.json` file in the data directory next to the executable, readable only by the file's owner; moving that directory to another drive moves the token with it.
 
 The same account works on the `typhon-launcher.com` website: there you can register, sign in, write to support, and confirm an address or change a password through a link from an email. A website session is the same kind of session record as an app session (token hash, creation time, expiry, issued length, revocation flag), but the token itself lives not in the Windows credential store but in a browser cookie (section 8.4). When registering on the website, the checkbox accepts the Terms of Use and confirms that the user has read the Privacy Policy: without it no account is created, and the accepted revision and time are recorded on the server. In the app, the accepted revision is recorded in the settings on the device and, if the user is signed in, sent to the server — on registration, when a new revision is accepted, and on sign-in and launch if the server does not yet hold a record of the accepted current revision; a failed send is retried until the record appears. Accounts created before these records existed get one at the next acceptance in the app.
 
@@ -71,7 +72,8 @@ To show cover art, descriptions and release years, the app queries the metadata 
 
 - search by game title;
 - resolution of a list of titles into game identifiers;
-- retrieval of a game card by identifier.
+- retrieval of a game card by identifier;
+- retrieval of a game's achievement list by its Steam identifier: only that identifier and the interface language are sent, and the response carries the names, descriptions and icons of the achievements, which the service takes from Steam and caches on its side; which achievements the user has unlocked is not sent to the service.
 
 Metadata is available without an account too: in guest mode these requests are made in the same way, simply without a token.
 
