@@ -349,7 +349,7 @@ export const games = {
   'games.catalogEmptyTitle': 'Каталог пуст',
   'games.catalogEmptyDescription': 'В серверном индексе пока нет игр. Повторите загрузку позже.',
   'games.catalogMoreFailed': 'Не удалось загрузить следующую страницу. Попробуй ещё раз.',
-  'games.catalogLoadingMore': 'Загрузка…',
+  'games.catalogLoadingMore': 'Загружаем…',
   'games.catalogShowMore': 'Показать ещё',
   'games.catalogShownOf': 'Загружено {shown} из {total}',
   'games.catalogTotalCount': { one: '{count} игра', few: '{count} игры', many: '{count} игр', other: '{count} игры' },

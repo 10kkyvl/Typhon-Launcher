@@ -7,6 +7,7 @@
   import { latestRunner, serialQueue } from '../../lib/catalog/serial';
   import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix, withoutStale } from '../../lib/catalog/pages';
   import { applyFreshPage, canWarmNextPage, createFreshPageBuffer, staleKeyOf, type FreshPageEvent } from '../../lib/catalog/stale';
+  import { maxAutoPages, observerAvailable, shouldLoadMore, watchSentinel } from '../../lib/catalog/infinite';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -115,6 +116,8 @@
   let page = $state(restored?.page ?? 0);
   let loading = $state(!restored);
   let appending = $state(false);
+  let sentinel = $state<HTMLElement>();
+  let autoPages = $state(0);
   let failed = $state(restored?.failed ?? false);
   let backendOutdated = $state(false);
   let revision = $state(restored?.revision ?? 0);
@@ -224,6 +227,7 @@
     const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
     loading = true;
     appending = next > 1;
+    if (next === 1) autoPages = 0;
     try {
       const request = {
         ...personalQuery(),
@@ -646,6 +650,25 @@
     return [moreAction, dismissAction, favoriteAction];
   }
 
+  const hasMore = $derived(items.length < total);
+  const autoLoad = observerAvailable();
+  const showMoreButton = $derived(hasMore && (!autoLoad || failed || autoPages >= maxAutoPages));
+
+  $effect(() => {
+    if (!sentinel || !autoLoad) return;
+    if (!shouldLoadMore({ hasMore, loading, failed, pagesSinceScroll: autoPages })) return;
+    return watchSentinel(sentinel, () => {
+      autoPages += 1;
+      void fetchPage(page + 1);
+    });
+  });
+
+  onMount(() => {
+    const resetAutoPages = () => { if (autoPages) autoPages = 0; };
+    document.addEventListener('scroll', resetAutoPages, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', resetAutoPages, true);
+  });
+
   let stuck = $state(false);
 
   function watchStuck(dock: HTMLElement) {
@@ -884,10 +907,11 @@
   {/if}
 
   {#if items.length > 0}
+    {#if autoLoad}<div class="sentinel" bind:this={sentinel} aria-hidden="true"></div>{/if}
     <div class="more">
-      {#if items.length < total}<Button onclick={() => fetchPage(page + 1)} disabled={loading}>
+      {#if showMoreButton}<Button onclick={() => { autoPages = 0; void fetchPage(page + 1); }} disabled={loading}>
         {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
-      </Button>{/if}
+      </Button>{:else if hasMore && appending}<span class="muted" role="status">{msg('games.catalogLoadingMore')}</span>{/if}
       {#if failed}<span class="more-error" role="alert">{msg('games.catalogMoreFailed')}</span>{/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
@@ -1084,6 +1108,8 @@
     min-width: 10rem;
     text-align: right;
   }
+
+  .sentinel { height: 1px; }
 
   .more {
     display: flex;
