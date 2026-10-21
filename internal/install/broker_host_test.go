@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -167,8 +168,8 @@ func TestStartBrokerPinsToTheDownload(t *testing.T) {
 	if pin.ContentRoot != d.Destination {
 		t.Errorf("ContentRoot = %q, ожидался %q", pin.ContentRoot, d.Destination)
 	}
-	if pin.LibraryRoot != s.config().GamesPath {
-		t.Errorf("LibraryRoot = %q, ожидался %q", pin.LibraryRoot, s.config().GamesPath)
+	if !slices.Equal(pin.LibraryRoots, s.config().GamesRoots()) {
+		t.Errorf("LibraryRoots = %q, ожидался %q", pin.LibraryRoots, s.config().GamesRoots())
 	}
 	if pin.StateDir != s.store.dir {
 		t.Errorf("StateDir = %q, ожидался %q", pin.StateDir, s.store.dir)

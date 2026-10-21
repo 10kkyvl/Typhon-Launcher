@@ -43,6 +43,7 @@
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
+  import { gamesOnVolume } from '../../lib/library/folders';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
@@ -123,8 +124,9 @@
     return update.kind === 'update' ? msg('games.updateKindUpdate') : msg('games.updateKindNewRelease');
   }
 
-  const gamesBytes = $derived($installedGames.reduce((sum, game) => sum + game.sizeBytes, 0));
-  const hasUnknownSize = $derived($installedGames.some((game) => game.sizeUnknown));
+  const volumeGames = $derived(gamesOnVolume($settings?.libraryPath ?? '', $installedGames));
+  const gamesBytes = $derived(volumeGames.reduce((sum, game) => sum + game.sizeBytes, 0));
+  const hasUnknownSize = $derived(volumeGames.some((game) => game.sizeUnknown));
   const usedPct = $derived($storageInfo ? ($storageInfo.usedBytes / $storageInfo.totalBytes) * 100 : 0);
   const otherBytes = $derived.by(() => {
     if (!$storageInfo || hasUnknownSize) return null;

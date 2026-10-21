@@ -28,6 +28,7 @@
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
+  import LibraryFoldersRow from './LibraryFoldersRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
   import NetworkSettingsCard from './NetworkSettingsCard.svelte';
   import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -754,6 +755,9 @@
             <span class="row-sub">
               {msg('settings.generalLibraryEmptyHint')}
             </span>
+          {/if}
+          {#if current?.libraryPath}
+            <LibraryFoldersRow />
           {/if}
           <div class="row">
             <div class="row-text">

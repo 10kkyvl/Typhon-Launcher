@@ -54,6 +54,8 @@ var localNames = []string{
 	"downloadsPath",
 	"gamesPath",
 	"screenshotsPath",
+	"extraLibraryPaths",
+	"lastInstallRoot",
 	"launchOnStartup",
 	"hardwareAcceleration",
 	"maxActiveDownloads",

@@ -945,7 +945,7 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	cfg := s.config()
 	name := s.nameFor(d)
 	if ownDestination(plan.Type, plan.Silent) || plan.Type == TypeUnknown {
-		plan.Destination = s.proposeDestination(cfg.GamesPath, name)
+		plan.Destination = s.proposeDestinationFor(cfg, name)
 	}
 	free, err := s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath))
 	if err != nil {
@@ -968,6 +968,7 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 		Seeding:       d.Seeding,
 		Mode:          mode,
 		SameVolume:    same,
+		Roots:         cfg.GamesRoots(),
 	}, nil
 }
 
@@ -1105,6 +1106,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 	s.mu.Unlock()
 
+	s.rememberInstallRoot(snap.Destination)
 	slog.Info("install started", "id", item.ID, "name", item.Name, "type", item.Type, "mode", item.Mode)
 	emit(eventStarted, snap)
 	s.recordUsage(usagestats.Event{
@@ -1353,7 +1355,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	}
 	silent := supportsSilent(engine) && !interactive
 	if external(kind) && silent && destination == "" {
-		destination = s.proposeDestination(s.config().GamesPath, title)
+		destination = s.proposeDestinationFor(s.config(), title)
 		if destination == "" {
 			return errNoDestination
 		}
@@ -1916,7 +1918,7 @@ func (s *Service) installRoots() []string {
 	if len(s.roots) > 0 {
 		return append([]string(nil), s.roots...)
 	}
-	paths := []string{s.config().GamesPath}
+	paths := s.config().GamesRoots()
 	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"} {
 		paths = append(paths, os.Getenv(env))
 	}
