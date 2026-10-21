@@ -53,6 +53,16 @@ export interface PlanInfo {
   requiredBytes: number;
   freeBytes: number;
   seeding: boolean;
+  mode: string;
+  sameVolume: boolean;
+}
+
+export interface SpaceInfo {
+  requiredBytes: number;
+  freeBytes: number;
+  sameVolume: boolean;
+  mode: string;
+  enough: boolean;
 }
 
 export interface Installation {
@@ -80,6 +90,7 @@ export interface Installation {
   startedAt: string;
   completedAt: string | null;
   error: string;
+  warning?: string;
   engine: string;
   silent: boolean;
 }
@@ -160,6 +171,11 @@ export async function listInstallations(): Promise<Installation[]> {
 export async function inspectDownload(downloadID: string): Promise<PlanInfo> {
   if (!inWails) throw unavailable();
   return (await InstallService.InspectDownload(downloadID)) as unknown as PlanInfo;
+}
+
+export async function planSpace(downloadID: string, destination: string, mode: string): Promise<SpaceInfo> {
+  if (!inWails) throw unavailable();
+  return (await InstallService.PlanSpace(downloadID, destination, mode)) as unknown as SpaceInfo;
 }
 
 export async function startInstall(downloadID: string, opts: StartOptions): Promise<Installation> {

@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -81,28 +82,52 @@ func TestTypeGroups(t *testing.T) {
 	}
 }
 
-func TestInstallMode(t *testing.T) {
+func TestResolveMode(t *testing.T) {
+	own := download.Download{ID: "d1", Name: "Game", Destination: t.TempDir(), Status: download.StatusCompleted}.WithRoot("Game")
+	root, ok := own.DataRoot()
+	if !ok {
+		t.Fatal("fixture download has no data root")
+	}
 	cases := []struct {
 		name    string
 		mode    string
-		seeding bool
+		d       download.Download
+		content string
 		want    string
+		wantErr error
 	}{
-		{"move on request", ModeMove, false, ModeMove},
-		{"copy on request", ModeCopy, false, ModeCopy},
-		{"nothing asked", "", false, ModeCopy},
-		{"garbage asked", "teleport", false, ModeCopy},
-		{"seeding forces copy over move", ModeMove, true, ModeCopy},
-		{"seeding keeps copy", ModeCopy, true, ModeCopy},
+		{"move on request", ModeMove, own, root, ModeMove, nil},
+		{"move on request below the root", ModeMove, own, filepath.Join(root, "Inner"), ModeMove, nil},
+		{"copy on request", ModeCopy, own, root, ModeCopy, nil},
+		{"nothing asked moves", "", own, root, ModeMove, nil},
+		{"garbage asked", "teleport", own, root, "", errUnknownMode},
+		{"seeding forces copy over move", ModeMove, withSeeding(own), root, ModeCopy, nil},
+		{"seeding keeps copy", ModeCopy, withSeeding(own), root, ModeCopy, nil},
+		{"seeding, nothing asked", "", withSeeding(own), root, ModeCopy, nil},
+		{"move out of the shared downloads folder", ModeMove, own, own.Destination, "", errMoveSource},
+		{"nothing asked, shared downloads folder", "", own, own.Destination, ModeCopy, nil},
+		{"move out of a sibling download", ModeMove, own, filepath.Join(own.Destination, "Other"), "", errMoveSource},
+		{"move of an in-place download", ModeMove, withInPlace(own), root, "", errMoveSource},
+		{"nothing asked, in-place download", "", withInPlace(own), root, ModeCopy, nil},
+		{"move of a flat download", ModeMove, withFlat(own), root, "", errMoveSource},
+		{"move of a download without a known root", ModeMove, download.Download{ID: "d2", Destination: own.Destination}, root, "", errMoveSource},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := installMode(tc.mode, tc.seeding); got != tc.want {
-				t.Fatalf("installMode(%q, %v) = %q, want %q", tc.mode, tc.seeding, got, tc.want)
+			got, err := resolveMode(tc.mode, tc.d, tc.content)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("resolveMode(%q) error = %v, want %v", tc.mode, err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("resolveMode(%q) = %q, want %q", tc.mode, got, tc.want)
 			}
 		})
 	}
 }
+
+func withSeeding(d download.Download) download.Download { d.Seeding = true; return d }
+func withInPlace(d download.Download) download.Download { d.InPlace = true; return d }
+func withFlat(d download.Download) download.Download    { d.Flat = true; return d }
 
 func TestRequiredBytes(t *testing.T) {
 	cases := []struct {

@@ -90,7 +90,7 @@
   let installRequest = 0;
   let planInfo = $state<PlanInfo | null>(null);
   let installDestination = $state('');
-  let installMode = $state<InstallMode>('copy');
+  let installMode = $state<InstallMode | ''>('');
   let chosenExecutable = $state('');
   let cleanupResolved = $state(false);
 
@@ -477,7 +477,7 @@
       if (!currentRequest()) return;
       planInfo = info;
       installDestination = info.plan.destination;
-      installMode = 'copy';
+      installMode = info.mode === 'move' && !info.seeding ? 'move' : 'copy';
       chosenExecutable = '';
       cleanupResolved = false;
     });

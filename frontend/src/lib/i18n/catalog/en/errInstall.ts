@@ -63,6 +63,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installNotDir': 'The source is not a folder',
   'errInstall.installNotEnoughSpace': 'Not enough disk space',
   'errInstall.installNotFound': 'Installation not found',
+  'errInstall.installModeInvalid': 'Unknown install mode',
+  'errInstall.installMoveSourceUnavailable': 'Moving is not possible: the download data is not in its own folder, choose copying',
   'errInstall.installNothingToRemove': 'There is nothing to remove from disk',
   'errInstall.installOutsideInstall': 'The file is outside the install folder',
   'errInstall.installRelativeDestination': 'The install path must be absolute',

@@ -10,6 +10,7 @@ import (
 // библиотеку: отказ регистрации не должен лишать пользователя файлов.
 func TestPortableMoveKeepsTheSourceUntilTheGameIsRegistered(t *testing.T) {
 	r := newRig(t)
+	r.s.sameVolume = differentVolumes
 	root := t.TempDir()
 	source := portableSource(t, root, "Game")
 	r.download("d1", "Game", root)
@@ -39,6 +40,7 @@ func TestPortableMoveKeepsTheSourceUntilTheGameIsRegistered(t *testing.T) {
 // игра уже на месте и записана.
 func TestPortableMoveSourceCleanupFailureDoesNotFailTheInstall(t *testing.T) {
 	r := newRig(t)
+	r.s.sameVolume = differentVolumes
 	root := t.TempDir()
 	source := portableSource(t, root, "Game")
 	r.download("d1", "Game", root)
