@@ -414,7 +414,13 @@
   }
 
   .layer {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
     gap: var(--space-5);
+  }
+
+  .layer > * {
+    flex: 1 1 26rem;
   }
 
   .toast {
