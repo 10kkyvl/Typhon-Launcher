@@ -19,7 +19,13 @@ var (
 	arcRe    = regexp.MustCompile(`(?i)\barc\W*(?:tm\W*)?([ab]\d{3})\b`)
 	irisRe   = regexp.MustCompile(`(?i)\biris\b`)
 	radIGP   = regexp.MustCompile(`(?i)\bradeon\W*(?:tm\W*)?(?:vega\s*\d+\s*)?graphics\b`)
+
+	nvidiaSeriesRe = regexp.MustCompile(`(?i)\b(?:gtx|rtx|gt)\s*-?\s*(\d{2,4})\s*-?\s*series\b`)
+	radeonRXSeries = regexp.MustCompile(`(?i)\brx\s*-?\s*(\d{3,4})\s*-?\s*series\b`)
+	radeonHDSeries = regexp.MustCompile(`(?i)\bhd\s*-?\s*(\d{4})\s*-?\s*series\b`)
 )
+
+const seriesFloorTier = 4
 
 var nvidiaTiers = map[string]int{
 	"450": 2, "460": 3, "465": 3, "470": 4, "480": 4,
@@ -58,6 +64,21 @@ var intelGPUTiers = map[string]int{
 }
 
 func gpuTier(text string) int {
+	if m := nvidiaSeriesRe.FindStringSubmatch(text); m != nil {
+		if prefix, digits, ok := nvidiaGeneration(m[1]); ok {
+			return generationTier(nvidiaTiers, "", prefix, digits)
+		}
+	}
+	if m := radeonRXSeries.FindStringSubmatch(text); m != nil {
+		if prefix, digits, ok := radeonGeneration(m[1]); ok {
+			return generationTier(radeonTiers, "rx", prefix, digits)
+		}
+	}
+	if m := radeonHDSeries.FindStringSubmatch(text); m != nil {
+		if prefix, digits, ok := radeonGeneration(m[1]); ok {
+			return generationTier(radeonTiers, "hd", prefix, digits)
+		}
+	}
 	if m := nvidiaRe.FindStringSubmatch(text); m != nil {
 		return lookup(nvidiaTiers, m[1], strings.ToLower(m[2]))
 	}
@@ -94,6 +115,53 @@ func gpuTier(text string) int {
 	return 0
 }
 
+func nvidiaGeneration(s string) (prefix string, digits int, ok bool) {
+	switch {
+	case len(s) == 2:
+		return s, 4, true
+	case len(s) == 3 && s[1:] == "00":
+		return s[:1], 3, true
+	case len(s) == 4 && s[2:] == "00":
+		return s[:2], 4, true
+	}
+	return "", 0, false
+}
+
+func radeonGeneration(s string) (prefix string, digits int, ok bool) {
+	switch {
+	case len(s) == 3 && s[1:] == "00":
+		return s[:1], 3, true
+	case len(s) == 4 && s[1:] == "000":
+		return s[:1], 4, true
+	}
+	return "", 0, false
+}
+
+// generationTier is the lowest tier of at least seriesFloorTier among the
+// models that start with prefix and have the given number of digits, or 0
+// when the table holds no such model.
+func generationTier(table map[string]int, lead, prefix string, digits int) int {
+	best := 0
+	for key, t := range table {
+		model, ok := strings.CutPrefix(key, lead+prefix)
+		if !ok || t < seriesFloorTier || len(prefix)+leadingDigits(model) != digits {
+			continue
+		}
+		if best == 0 || t < best {
+			best = t
+		}
+	}
+	return best
+}
+
+func leadingDigits(s string) int {
+	n := 0
+	for n < len(s) && s[n] >= '0' && s[n] <= '9' {
+		n++
+	}
+	return n
+}
+
 func lookup(table map[string]int, base, suffix string) int {
 	if suffix != "" {
 		if t, ok := table[base+suffix]; ok {
@@ -105,7 +173,7 @@ func lookup(table map[string]int, base, suffix string) int {
 
 var altSplit = regexp.MustCompile(`(?i)\s+or\s+|\s+или\s+|\s*/\s*|\s*\|\s*|;`)
 
-var fillerAlt = regexp.MustCompile(`(?i)\b(equivalent|better|higher|newer|faster|compatible)\b|аналог|лучше|выше|новее|совместим`)
+var fillerAlt = regexp.MustCompile(`(?i)\b(equivalent|similar|better|higher|above|newer|faster|compatible)\b|аналог|лучше|выше|новее|совместим|похож|подобн`)
 
 // minTier returns the least demanding alternative among those it can rate:
 // the user meets an "A or B" requirement by meeting either part. partial is

@@ -82,6 +82,15 @@ func TestParseRows(t *testing.T) {
 			ok(t, r.gpuPartial)
 			eq(t, r.gpuTier, 6)
 		}},
+		{"gpu generation with similar tail", "Graphics", "GeForce GTX 700 series or similar", func(t *testing.T, r reqSet) {
+			eq(t, r.gpuTier, 4)
+			ok(t, !r.gpuPartial)
+			ok(t, !r.unparsed[KindGPU])
+		}},
+		{"gpu nonexistent generation is unparsed", "Graphics", "GeForce GTX 9900 series or similar", func(t *testing.T, r reqSet) {
+			eq(t, r.gpuTier, 0)
+			ok(t, r.unparsed[KindGPU])
+		}},
 		{"ram without size is unparsed", "Memory", "Enough RAM", func(t *testing.T, r reqSet) { ok(t, r.unparsed[KindRAM]) }},
 		{"storage without size is unparsed", "Storage", "SSD recommended", func(t *testing.T, r reqSet) { ok(t, r.unparsed[KindStorage]) }},
 		{"directx without version is unparsed", "DirectX", "Compatible", func(t *testing.T, r reqSet) { ok(t, r.unparsed[KindDirectX]) }},

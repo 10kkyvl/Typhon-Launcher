@@ -39,6 +39,55 @@ func TestGPUTier(t *testing.T) {
 	}
 }
 
+// A "<N>00 series" generation rates as its lowest model of tier 4 or above, so
+// office-grade and entry parts (tier 1-3) never stand for the whole generation;
+// NVIDIA and AMD follow the same rule, and a generation with no such model in
+// the tables stays 0 (unknown) instead of passing.
+func TestGPUTierGeneration(t *testing.T) {
+	tests := []struct {
+		name string
+		want int
+	}{
+		{"GeForce GTX 700 series", 4},
+		{"GeForce GTX 700-series", 4},
+		{"GeForce GTX 700 Series", 4},
+		{"GeForce GTX 400 series", 4},
+		{"GeForce GTX 500 series", 4},
+		{"GeForce GTX 900 series", 5},
+		{"GeForce GTX 1000 series", 4},
+		{"GeForce GTX 10 series", 4},
+		{"GeForce GTX 16 series", 6},
+		{"GeForce GTX 1600 series", 6},
+		{"GeForce RTX 20 series", 8},
+		{"GeForce RTX 2000 series", 8},
+		{"GeForce RTX 30 series", 7},
+		{"GeForce RTX 40 series", 8},
+		{"GeForce GTX 1050 series", 4},
+		{"GeForce GTX 1060 series", 6},
+		{"GeForce GTX 750 series", 4},
+		{"Radeon RX 500 series", 4},
+		{"Radeon RX 500-series", 4},
+		{"Radeon RX 400 series", 4},
+		{"Radeon RX 5000 series", 6},
+		{"Radeon RX 6000 series", 6},
+		{"Radeon RX 7000 series", 8},
+		{"Radeon HD 7000 series", 4},
+		{"Radeon HD 6000 series", 4},
+		{"GeForce GTX 9900 series", 0},
+		{"GeForce GTX 99 series", 0},
+		{"GeForce GTX 100 series", 0},
+		{"Radeon RX 9900 series", 0},
+		{"Radeon RX 900 series", 0},
+		{"Radeon HD 9000 series", 0},
+		{"GeForce GTX 9999", 0},
+	}
+	for _, tc := range tests {
+		if got := gpuTier(tc.name); got != tc.want {
+			t.Errorf("gpuTier(%q) = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestCPUTier(t *testing.T) {
 	tests := []struct {
 		name string
@@ -130,6 +179,16 @@ func TestMinTierTakesEasiestAlternative(t *testing.T) {
 		{"or equivalent", gpuTier, 0, false},
 		{"GTX 1630 or GTX 1060", gpuTier, 6, true},
 		{"GTX 1630 or RX 6400", gpuTier, 0, false},
+		{"GeForce GTX 1050 series or similar", gpuTier, 4, false},
+		{"GeForce GTX 700 series or similar", gpuTier, 4, false},
+		{"GeForce GTX 700 series or equivalent", gpuTier, 4, false},
+		{"GeForce GTX 700 series or better", gpuTier, 4, false},
+		{"GeForce GTX 700 series and above", gpuTier, 4, false},
+		{"GeForce GTX 700 series или аналог", gpuTier, 4, false},
+		{"GeForce GTX 700 series и выше", gpuTier, 4, false},
+		{"GeForce GTX 700 series or similar AMD", gpuTier, 4, false},
+		{"GeForce GTX 9900 series or similar", gpuTier, 0, false},
+		{"GeForce GTX 700 series or GTX 1630", gpuTier, 4, true},
 	}
 	for _, tc := range tests {
 		got, partial := minTier(tc.text, tc.rate)
