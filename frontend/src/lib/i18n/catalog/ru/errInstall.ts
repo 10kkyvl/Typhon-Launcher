@@ -7,7 +7,7 @@ export const errInstall = {
   'errInstall.installArchiveResultMismatch':
     'распакованные файлы не совпадают с оглавлением архива: возможно, файл удалил антивирус или имя пришлось изменить',
   'errInstall.installArchiveToolFailed': 'архив не распаковался ни встроенным распаковщиком, ни 7-Zip или WinRAR',
-  'errInstall.installArchiveToolMissing': 'встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR либо распакуйте вручную',
+  'errInstall.installArchiveToolMissing': 'встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR (если архиватор только что установлен, повторите попытку) либо распакуйте вручную',
   'errInstall.installArchiveToolOutdated':
     'установленный WinRAR или 7-Zip слишком старый или не опознан: обновите его (WinRAR 7.13+, 7-Zip 25.01+) либо распакуйте архив вручную',
   'errInstall.installArchiveToolWriteFailed': 'распаковщик не смог записать файлы на диск',

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	rardecode "github.com/nwaples/rardecode/v2"
 
@@ -16,7 +17,7 @@ import (
 )
 
 var (
-	errArchiveToolMissing  = uierr.New("install.archive_tool_missing", "встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR либо распакуйте вручную")
+	errArchiveToolMissing  = uierr.New("install.archive_tool_missing", "встроенный распаковщик не справился с архивом: установите 7-Zip или WinRAR (если архиватор только что установлен, повторите попытку) либо распакуйте вручную")
 	errArchiveToolFailed   = uierr.New("install.archive_tool_failed", "архив не распаковался ни встроенным распаковщиком, ни 7-Zip или WinRAR")
 	errArchiveUnsafe       = uierr.New("install.archive_unsafe_entries", "в архиве есть ссылки или пути за пределы папки, распакуйте его вручную")
 	errArchiveEncrypted    = uierr.New("install.archive_encrypted", "архив защищён паролем, распакуйте его вручную")
@@ -318,8 +319,10 @@ func extractRarWithTool(ctx context.Context, archivePath, dest string, rep *repo
 	set := lookupArchiveTools(ctx)
 	if len(set.tools) == 0 {
 		if len(set.refused) > 0 {
+			slog.Warn("archive tools found but refused", "archive", archivePath, "refused", errors.Join(set.refused...), "skipped", strings.Join(set.searched, "; "), "builtin", decodeErr)
 			return fmt.Errorf("%w: %w; встроенный: %w", errArchiveToolOutdated, errors.Join(set.refused...), decodeErr)
 		}
+		slog.Warn("no archive tool found", "archive", archivePath, "checked", strings.Join(set.searched, "; "), "builtin", decodeErr)
 		return fmt.Errorf("%w: %w", errArchiveToolMissing, decodeErr)
 	}
 	listing, err := checkToolEntries(archivePath, dest)
