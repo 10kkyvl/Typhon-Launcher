@@ -13,23 +13,23 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - Download schedule: the download settings take windows of weekdays and hours. Outside every window downloads and seeding stand still, and a banner on the Downloads page says when the next window opens
 - A single download can be sent "Download now": it runs outside the schedule until it finishes and is marked "Outside schedule"
 - Downloads can pause or slow down while a game runs: the mode is picked in the download settings, kicks in with the first running game and lifts when the last one closes. Downloads you paused yourself are left alone
-- Portable mode: an empty `portable.txt` next to `typhon.exe` moves everything — settings, library, log, sign-in — into a `data` folder beside the program. Such a copy lives on a USB stick and runs alongside an installed one
-- A portable copy has no autostart and writes nothing to the registry
-- Releases ship a `typhon-windows-portable.zip`, and a portable copy updates itself from it without the installer
+- Portable mode: an empty `portable.txt` next to `typhon.exe` moves everything into a `data` folder beside the program; such a copy lives on a USB stick and runs alongside an installed one. Releases ship a `typhon-windows-portable.zip`, and the copy updates itself from it
 - Achievements: a game with a known Steam id gets an "Achievements" card on its page with names and icons. Which ones are unlocked is read from progress files next to the game or in the profile after each play session
 - New achievements pop up as a toast; which ones you have unlocked is never sent to the server
 - System requirements on the game page and in the install dialog: "Runs well", "Minimum" or "Won't run" from comparing the Steam requirements with your CPU, graphics card, memory, DirectX and disk space
 - The requirements estimate goes by model names and may be wrong; hardware details stay on the computer
 - Game mode in the settings: while a game runs the "High performance" power plan is on, the launcher hides to the tray and the game's priority rises above normal. Everything is put back when the game exits, even if the launcher crashed meanwhile
-- A game's Properties can turn game mode on or off for that game alone
 - Launch profiles in a game's Properties: up to eight profiles, each with its own executable, arguments and permissions. The Play button starts the last chosen one, and every profile gets its own shortcut and Steam entry
 - Notes on a game's page: codes, where you stopped, what to install. Up to 4000 characters, saved as you type, kept on the computer and never sent to the server
 - A "Disk usage" screen in the sidebar: how much games, downloads without an install, leftovers, screenshots and save snapshots take, and what can be freed with one button. Games not played for 90 days are marked
 - The game page shows Steam details: DLC with links to their pages, controller support, the Metacritic score and the recommendation count, and a "Reference" block links to PCGamingWiki and HowLongToBeat
-- The save backups window says which data located the save folder and under which licence it was published
 - A friend's profile has a "You both play" card: shared games with each player's time, a "Both played recently" mark and an "Invite to play" button that drafts a chat message
 - On the Downloads page a download that came from the catalog has a "Game page" button, so the description and requirements are one click away
 
+- Several game folders: the Library card in the settings takes folders on other disks. The install dialog offers the library folders to choose from, and Find games and Disk usage look in all of them
+- Your own colours in the profile appearance: the Custom theme gets a "colours as is" switch without darkening, and the name and the avatar frame each take their own colour instead of the accent. Text turns dark by itself on a light background
+- The theme editor in the settings names colours in plain words ("Cards and windows", "Borders", "Text"), says where each one is used and shows a small window that repaints as you edit
+- A source refresh shows a bar with the stage and a counter ("Parsing entries N of M", "Matching N of M") instead of a spinner, and Refresh all shows the overall percentage
 ### Changed
 - The install dialog measures "Space required" and "Free on disk" for the folder you typed or picked and recalculates on every change. It used to look at the library disk and never noticed you chose another drive
 - A portable build moves to the same disk with a single rename: no copy, no doubled space, done in seconds. Move is now the default when seeding is off; to another disk the game is still copied with verification
@@ -39,14 +39,21 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - When removing a game, the "folder in use" error names what to close: the game itself and Explorer windows showing that folder
 - The documents move to the 21 October 2026 edition: the policy describes portable mode and achievements. The launcher asks you to accept them again
 
+- The catalog loads the next page by itself when you reach the end; the Show more button stays only after a failed load
+- Source refreshes are several times faster: the server's answer about a found game is kept for a week instead of a day, and release files are rewritten only when something changed. Each cycle used to ask the server about half of the releases again
+- A catalog search puts the game with exactly that title first, then titles that start with the query, and only then the rest by popularity
+- The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change and on Ctrl+Alt+R
 ### Fixed
 - Downloads no longer fill the log with thousands of "short write" warnings and no longer lose finished pieces when two neighbouring ones finish at once, which used to surface as "error promoting part file" on Windows
 - Cancelling a file or folder dialog is no longer shown as an error
 - CPU requirements given only as a clock speed and graphics requirements like "GTX 700 series" are now compared instead of staying "could not compare"
 - The disk usage screen no longer lists removed games with an unknown size
 - A cancelled download no longer leaves a `.part` file behind
-- Chat reactions are drawn with their own icons: on Windows 10 one of them showed as an empty box. The chat button no longer shifts when a message arrives
+- Chat reactions are drawn with their own icons: on Windows 10 one of them showed as an empty box. The chat button no longer shifts when a message arrives, and the desktop popup for a new message is redrawn
 
+- The launcher finds WinRAR and 7-Zip installed anywhere, even after it started: the lookup also reads the installation records, and the log says where it looked. The error asks to try again when the archiver was just installed
+- A download with a game folder and a small manifests archive next to it is no longer taken for an archive: the type follows the archive's share of the data
+- A cancelled archive install removes the folder it created itself; folders that existed before the install are left alone
 ## 1.1.0 — 2026-10-19
 Games from Steam, GOG and Epic now sit in one library with the rest, saves sync through your account, and every game gets its own properties, tags, screenshots and statistics.
 
