@@ -222,8 +222,6 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.appearanceExportingEllipsis': 'Exporting…',
   'settings.appearanceExportButton': 'Export',
   'settings.appearanceDeletingEllipsis': 'Deleting…',
-  'settings.appearancePreviewSub': 'Live theme preview',
-  'settings.appearancePreviewButtonLabel': 'Button',
   'settings.appearanceResetCardTitle': 'Reset',
   'settings.appearanceResetLabel': 'Restore default appearance',
   'settings.appearanceResetSub': 'Resets the personal accent and icon tint and restores the built-in dark theme. Also available via Ctrl+Shift+Alt+T',

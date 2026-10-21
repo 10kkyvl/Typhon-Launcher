@@ -1,5 +1,6 @@
 <script lang="ts">
   import AccentPicker from './AccentPicker.svelte';
+  import ThemePreview from './ThemePreview.svelte';
   import { msg } from '../../lib/i18n';
   import { themeDisplayName, personalThemeVars, displayedAccent } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
@@ -19,6 +20,16 @@
   import { activeTheme, refreshThemes, resetAppearance, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
   import { toast } from '../../lib/stores/toasts';
   import { themeErrorText } from '../../lib/theme/themeErrors';
+  import {
+    groupedTokenNames,
+    groupTitleKey,
+    isHexColor,
+    tokenGroups,
+    tokenHintKey,
+    tokenKey,
+    tokenLabelKey,
+    type TokenGroupId,
+  } from '../../lib/theme/tokens';
 
   const list = $derived($themeList);
   const active = $derived($activeTheme);
@@ -55,8 +66,50 @@
     draft = { ...draft, tokens: { ...draft.tokens, [name]: value } };
   }
 
-  function isColorValue(value: string) {
-    return /^#[0-9a-fA-F]{3,8}$/.test(value.trim());
+  interface TokenSection {
+    id: TokenGroupId | 'other';
+    colors: boolean;
+    collapsed: boolean;
+    names: string[];
+  }
+
+  const sections = $derived.by<TokenSection[]>(() => {
+    if (!draft) return [];
+    const present = new Set(Object.keys(draft.tokens));
+    const found: TokenSection[] = tokenGroups.map((group) => ({
+      id: group.id,
+      colors: group.colors,
+      collapsed: group.collapsed,
+      names: group.tokens.filter((name) => present.has(name)),
+    }));
+    found.push({
+      id: 'other',
+      colors: false,
+      collapsed: false,
+      names: [...present].filter((name) => !groupedTokenNames.has(name)),
+    });
+    return found.filter((section) => section.names.length > 0);
+  });
+
+  const stored = $derived(draft ? (list.find((t) => t.id === draft!.id) ?? null) : null);
+
+  function sameTokens(a: Record<string, string>, b: Record<string, string>) {
+    const left = Object.keys(a);
+    return left.length === Object.keys(b).length && left.every((name) => a[name] === b[name]);
+  }
+
+  const dirty = $derived(
+    draft !== null &&
+      stored !== null &&
+      (draftName !== themeDisplayName(stored) ||
+        cssDraft !== (stored.css ?? '') ||
+        !sameTokens(draft.tokens, stored.tokens)),
+  );
+
+  function revertDraft() {
+    if (!stored) return;
+    startEditing(stored);
+    toast(msg('settings.themeRevertedToast', { name: themeDisplayName(stored) }), 'info');
   }
 
   function validateDraft(): string[] {
@@ -206,6 +259,21 @@
           {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
         </Button>
       </div>
+      {#if draft}
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">
+              {draft.builtIn ? msg('settings.themeUnsavedRevert') : msg('settings.themeCustomRevert')}
+            </span>
+            <span class="row-sub">
+              {draft.builtIn ? msg('settings.themeUnsavedRevertSub') : msg('settings.themeCustomRevertSub')}
+            </span>
+          </div>
+          <Button size="sm" variant="secondary" disabled={!dirty} onclick={revertDraft}>
+            {msg('settings.themeRevertButton')}
+          </Button>
+        </div>
+      {/if}
     </Card>
 
     {#if draft}
@@ -225,25 +293,53 @@
               <input class="input" type="text" bind:value={draftName} />
             </label>
 
-            <div class="token-rows">
-              {#each Object.keys(draft.tokens) as name (name)}
-                <div class="token-row">
-                  <span class="token-name">{name}</span>
-                  {#if isColorValue(draft.tokens[name] ?? '')}
-                    <input
-                      class="color-input"
-                      type="color"
-                      value={draft.tokens[name]}
-                      oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
-                    />
-                  {/if}
-                  <input
-                    class="input sm token-value"
-                    type="text"
-                    value={draft.tokens[name] ?? ''}
-                    oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
-                  />
-                </div>
+            <p class="hint">{msg('settings.themeTokensIntro')}</p>
+            <div class="token-groups">
+              {#each sections as section (section.id)}
+                <details class="token-group" open={!section.collapsed}>
+                  <summary>{msg(groupTitleKey(section.id))}</summary>
+                  <div class="token-rows">
+                    {#each section.names as name (name)}
+                      {@const value = draft.tokens[name] ?? ''}
+                      {@const known = groupedTokenNames.has(name)}
+                      {@const label = known ? msg(tokenLabelKey(name)) : name}
+                      {@const fieldId = `theme-token-${tokenKey(name)}`}
+                      <div class="token-row">
+                        <div class="token-text">
+                          <label class="token-label" for={fieldId} title={name}>{label}</label>
+                          {#if known}
+                            <span class="token-hint" id={`${fieldId}-hint`}>{msg(tokenHintKey(name))}</span>
+                          {/if}
+                        </div>
+                        <div class="token-controls">
+                          {#if section.colors}
+                            {#if isHexColor(value)}
+                              <input
+                                class="color-input"
+                                type="color"
+                                aria-label={label}
+                                title={name}
+                                {value}
+                                oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                              />
+                            {:else}
+                              <span class="swatch" style:background={value} aria-hidden="true"></span>
+                            {/if}
+                          {/if}
+                          <input
+                            id={fieldId}
+                            class="input sm token-value"
+                            type="text"
+                            title={name}
+                            aria-describedby={known ? `${fieldId}-hint` : undefined}
+                            {value}
+                            oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                          />
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </details>
               {/each}
             </div>
 
@@ -281,12 +377,8 @@
           </div>
 
           <div class="editor-preview">
-            <Card surface="panel">
-              <div class="preview" style={previewStyle}>
-                <span class="preview-title">Typhon</span>
-                <span class="preview-sub">{msg('settings.appearancePreviewSub')}</span>
-                <button type="button" class="preview-btn">{msg('settings.appearancePreviewButtonLabel')}</button>
-              </div>
+            <Card surface="panel" title={msg('settings.themePreviewTitle')}>
+              <ThemePreview vars={previewStyle} />
             </Card>
           </div>
         </div>
@@ -411,27 +503,78 @@
     gap: var(--space-2);
   }
 
+  .token-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .token-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .token-group > summary {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .token-group > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .token-rows {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
+    padding: 0 var(--space-4) var(--space-4);
   }
 
   .token-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
   }
 
-  .token-name {
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    font-family: monospace;
-    flex: 1 1 auto;
+  .token-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 16rem;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  .token-label {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .token-hint {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .token-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 1 22rem;
+    min-width: 0;
+  }
+
+  .swatch {
+    width: 3.4rem;
+    height: var(--control-sm);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
   }
 
   .color-input {
@@ -445,7 +588,7 @@
   }
 
   .token-value {
-    flex: 1 1 18rem;
+    flex: 1 1 auto;
     min-width: 0;
   }
 
@@ -497,41 +640,11 @@
     min-width: 0;
   }
 
-  .preview {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    background: var(--bg);
-    border-radius: var(--radius-md);
-    color: var(--text);
-  }
-
-  .preview-title {
-    font-size: var(--font-lg);
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .preview-sub {
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
-  .preview-btn {
-    padding: 0 1.5rem;
-    height: var(--control-md);
-    background: var(--accent);
-    color: var(--accent-on, #fff);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-  }
-
   @container settings-card (min-width: 76rem) {
     .editor-preview {
       order: 0;
+      position: sticky;
+      top: var(--space-4);
     }
     .editor-layout {
       grid-template-columns: minmax(0, 1fr) 28rem;

@@ -39,6 +39,7 @@ import { screenshots } from './screenshots';
 import { stats } from './stats';
 import { sysreq } from './sysreq';
 import { diskusage } from './diskusage';
+import { themeTokens } from './themeTokens';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -81,6 +82,7 @@ export const ru = {
   ...stats,
   ...sysreq,
   ...diskusage,
+  ...themeTokens,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
