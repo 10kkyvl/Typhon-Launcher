@@ -65,7 +65,6 @@ export const errInstall = {
   'errInstall.installNothingToRemove': 'удалять с диска нечего',
   'errInstall.installOutsideInstall': 'файл находится вне папки установки',
   'errInstall.installRelativeDestination': 'путь установки должен быть абсолютным',
-  'errInstall.installRemoveSeeding': 'раздача активна, остановите её перед удалением',
   'errInstall.installSymlinkPrivilege': 'нет прав на создание символических ссылок',
   'errInstall.installUnavailable': 'недоступно для этой установки',
   'errInstall.installUninstallCancelled': 'удаление отменено в установщике',
@@ -105,7 +104,7 @@ export const errInstall = {
   'errInstall.downloadNotEnoughSpace': 'недостаточно места на диске',
   'errInstall.downloadNotFound': 'загрузка не найдена',
   'errInstall.downloadRestoreFailed': 'не удалось восстановить загрузку',
-  'errInstall.downloadSeeding': 'файлы сейчас раздаются — сначала остановите раздачу',
+  'errInstall.downloadSeeding': 'не удалось остановить раздачу перед удалением',
   'errInstall.downloadTorrentReadFailed': 'не удалось прочитать torrent-файл',
   'errInstall.downloadUnavailable': 'недоступно для этой загрузки',
 

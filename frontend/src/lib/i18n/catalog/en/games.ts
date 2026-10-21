@@ -217,7 +217,7 @@ export const games: Record<GamesKey, Message> = {
   'games.detailRemoveDownloadConfirm':
     'Remove the “{name}” download from the list? The downloaded files stay on disk, but the launcher stops tracking them.',
   'games.detailDiscardDownloadConfirm':
-    'Remove the “{name}” download together with its files? They are erased from disk and would have to be downloaded again.',
+    'Remove the “{name}” download together with its files? They are erased from disk and would have to be downloaded again. If the files are being seeded, seeding will stop.',
   'games.detailShortcutCreateError': 'Failed to create shortcut',
   'games.detailShortcutRemoveError': 'Failed to remove shortcut',
   'games.detailMetaRefreshedToast': 'Metadata updated',

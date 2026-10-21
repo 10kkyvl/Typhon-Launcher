@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '../i18n/catalog/en';
 import { ru } from '../i18n/catalog/ru';
-import type { GameUsage } from '../services/diskusage';
+import type { DownloadUsage, GameUsage } from '../services/diskusage';
 import {
   ageOf,
   ageText,
   canManageGame,
   countUnknown,
+  downloadBlocked,
   gameBlockedKey,
   isStale,
   leftoverKindKey,
@@ -42,6 +43,39 @@ function game(patch: Partial<GameUsage>): GameUsage {
     ...patch,
   };
 }
+
+function download(patch: Partial<DownloadUsage>): DownloadUsage {
+  return {
+    id: 'd',
+    name: 'Download',
+    root: 'C:\Downloads\Download',
+    sizeBytes: 100,
+    sizeUnknown: false,
+    missing: false,
+    seeding: false,
+    installed: false,
+    gameId: '',
+    referenced: false,
+    reason: '',
+    reasonCode: '',
+    ...patch,
+  };
+}
+
+describe('downloadBlocked', () => {
+  it('does not block a download only because it is seeding', () => {
+    expect(downloadBlocked(download({ seeding: true }))).toBe(false);
+  });
+
+  it('blocks a referenced download, seeding or not', () => {
+    expect(downloadBlocked(download({ referenced: true }))).toBe(true);
+    expect(downloadBlocked(download({ referenced: true, seeding: true }))).toBe(true);
+  });
+
+  it('leaves a plain download deletable', () => {
+    expect(downloadBlocked(download({}))).toBe(false);
+  });
+});
 
 describe('ageOf', () => {
   it('treats a missing or broken date as never played', () => {
@@ -197,7 +231,7 @@ describe('reason codes', () => {
   });
 
   it('translates by code and falls back to the backend text for an unknown one', () => {
-    expect(reasonLabel('diskusage.reason.seeding', 'x')).toBe('Файлы раздаются');
+    expect(reasonLabel('diskusage.reason.seeding', 'x')).toBe('Раздаётся, при удалении остановится');
     expect(reasonLabel('diskusage.reason.new_one', 'text from go')).toBe('text from go');
     expect(reasonLabel('', 'text from go')).toBe('text from go');
   });

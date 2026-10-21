@@ -27,6 +27,8 @@ type fakeDownloads struct {
 	items   map[string]download.Download
 	getErr  map[string]error
 	deleted []string
+	stopped []string
+	stopErr error
 }
 
 func newFakeDownloads() *fakeDownloads {
@@ -61,6 +63,20 @@ func (f *fakeDownloads) DeleteData(id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deleted = append(f.deleted, id)
+	if _, ok := f.items[id]; !ok {
+		return download.ErrNotFound
+	}
+	delete(f.items, id)
+	return nil
+}
+
+func (f *fakeDownloads) StopAndWait(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.stopErr; err != nil {
+		return err
+	}
+	f.stopped = append(f.stopped, id)
 	delete(f.items, id)
 	return nil
 }

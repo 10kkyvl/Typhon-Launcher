@@ -54,7 +54,7 @@ export const diskusage = {
   'diskusage.downloadSeeding': 'Раздаётся',
   'diskusage.downloadInstalled': 'Игра установлена',
   'diskusage.downloadConfirmTitle': 'Удалить файлы загрузки',
-  'diskusage.downloadConfirmText': 'Файлы загрузки «{name}» будут удалены с диска без возможности восстановления.',
+  'diskusage.downloadConfirmText': 'Файлы загрузки «{name}» будут удалены с диска без возможности восстановления. Если файлы раздаются, раздача остановится.',
   'diskusage.downloadDeleted': 'Файлы загрузки удалены',
 
   'diskusage.leftoversTitle': 'Остатки',
@@ -79,7 +79,7 @@ export const diskusage = {
   'diskusage.reason.symlink': 'Это ссылка, а не папка с данными',
   'diskusage.reason.foreign_part': 'Эти файлы принадлежат другой загрузке',
   'diskusage.reason.owned_by_download': 'Файлы принадлежат загрузке',
-  'diskusage.reason.seeding': 'Файлы раздаются',
+  'diskusage.reason.seeding': 'Раздаётся, при удалении остановится',
   'diskusage.reason.incomplete': 'Загрузка не завершена',
   'diskusage.reason.unreadable': 'Не удалось прочитать папку',
   'diskusage.reason.unknown': 'Причина неизвестна',

@@ -242,6 +242,9 @@ func TestScanDownloadReasonCodes(t *testing.T) {
 		if d.Referenced && d.Reason == "" {
 			t.Fatalf("%s is referenced without a reason", d.ID)
 		}
+		if d.ID == "seed" && d.Referenced {
+			t.Fatalf("seed = %+v, want deletable: removal stops the seeding itself", d)
+		}
 	}
 }
 

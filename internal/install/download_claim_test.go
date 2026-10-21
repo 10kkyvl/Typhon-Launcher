@@ -10,7 +10,7 @@ import (
 	"typhon/internal/library"
 )
 
-func TestRemoveGameRefusesSeedingFlatOrInPlaceIntoInstallDir(t *testing.T) {
+func TestRemoveGameStopsSeedingFlatOrInPlaceIntoInstallDir(t *testing.T) {
 	for _, layout := range []string{"flat", "in place"} {
 		t.Run(layout, func(t *testing.T) {
 			s, downloads, registrar := newTestService(t)
@@ -24,11 +24,14 @@ func TestRemoveGameRefusesSeedingFlatOrInPlaceIntoInstallDir(t *testing.T) {
 			downloads.mu.Unlock()
 			registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
 
-			if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); !errors.Is(err, errRemoveSeeding) {
-				t.Fatalf("remove: %v, want errRemoveSeeding", err)
+			if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); err != nil {
+				t.Fatalf("remove: %v", err)
 			}
-			if missing(t, dir) {
-				t.Fatal("files deleted while seeding from them")
+			if got := downloads.stoppedIDs(); len(got) != 1 || got[0] != "d1" {
+				t.Fatalf("stopped downloads = %v, want [d1]", got)
+			}
+			if !missing(t, dir) {
+				t.Fatal("files kept after seeding was stopped")
 			}
 		})
 	}

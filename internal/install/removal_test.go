@@ -23,6 +23,12 @@ func (f *fakeDownloads) deletedIDs() []string {
 	return append([]string(nil), f.deleted...)
 }
 
+func (f *fakeDownloads) stoppedIDs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.stopped...)
+}
+
 func (f *fakeDownloads) setSeeding(id string, seeding bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -232,18 +238,96 @@ func TestRemoveGameRefusesActiveInstallInSameDir(t *testing.T) {
 	}
 }
 
-func TestRemoveGameRefusesSeedingIntoInstallDir(t *testing.T) {
+func TestRemoveGameStopsSeedingFromInstallDir(t *testing.T) {
 	s, downloads, registrar := newTestService(t)
 	dir := gameDir(t, "Seeded")
 	downloads.add("d1", "Seeded", filepath.Dir(dir))
 	downloads.setSeeding("d1", true)
 	registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
 
-	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); !errors.Is(err, errRemoveSeeding) {
+	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
+	if got := downloads.stoppedIDs(); len(got) != 1 || got[0] != "d1" {
+		t.Fatalf("stopped downloads = %v, want [d1]", got)
+	}
+	if !missing(t, dir) {
+		t.Fatal("files kept after seeding was stopped")
+	}
+}
+
+func TestRemoveGameKeepsFilesWhenSeedingWillNotStop(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	dir := gameDir(t, "Seeded")
+	downloads.add("d1", "Seeded", filepath.Dir(dir))
+	downloads.setSeeding("d1", true)
+	cause := errors.New("engine busy")
+	downloads.stopErr = cause
+	registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
+
+	err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true})
+	if !errors.Is(err, errRemoveSeeding) || !errors.Is(err, cause) {
+		t.Fatalf("remove: %v, want errRemoveSeeding wrapping the cause", err)
+	}
 	if missing(t, dir) {
-		t.Fatal("files deleted while seeding from them")
+		t.Fatal("files deleted although seeding was not stopped")
+	}
+	if _, err := registrar.Find("g1"); err != nil {
+		t.Fatalf("library record dropped: %v", err)
+	}
+}
+
+func TestRemoveGameKeepsSeedingWhenNoFilesGo(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	dir := gameDir(t, "Seeded")
+	downloads.add("d1", "Seeded", filepath.Dir(dir))
+	downloads.setSeeding("d1", true)
+	registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
+
+	if err := s.RemoveGame("g1", RemoveOptions{}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if got := downloads.stoppedIDs(); len(got) != 0 {
+		t.Fatalf("stopped downloads = %v, want none", got)
+	}
+	if missing(t, dir) {
+		t.Fatal("files deleted although the user kept them")
+	}
+}
+
+func TestRemoveGameDeletesSeedingDownloadOnRequest(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	dir := gameDir(t, "Seeded")
+	downloads.add("d1", "Seeded", t.TempDir())
+	downloads.setSeeding("d1", true)
+	registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
+
+	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true, DeleteDownload: true}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if got := downloads.deletedIDs(); len(got) != 1 || got[0] != "d1" {
+		t.Fatalf("deleted downloads = %v, want [d1]", got)
+	}
+	if got := downloads.stoppedIDs(); len(got) != 0 {
+		t.Fatalf("stopped downloads = %v, want none: DeleteData stops seeding itself", got)
+	}
+}
+
+func TestRemoveGameWithSeedingDownloadAndDeleteDownload(t *testing.T) {
+	s, downloads, registrar := newTestService(t)
+	dir := gameDir(t, "Seeded")
+	downloads.add("d1", "Seeded", filepath.Dir(dir))
+	downloads.setSeeding("d1", true)
+	registrar.put(library.Game{ID: "g1", InstallDir: dir, Owned: true, SourceDownloadID: "d1"})
+
+	if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true, DeleteDownload: true}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if got := downloads.stoppedIDs(); len(got) != 1 {
+		t.Fatalf("stopped downloads = %v, want one", got)
+	}
+	if !missing(t, dir) {
+		t.Fatal("files kept")
 	}
 }
 

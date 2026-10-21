@@ -60,7 +60,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.nothing_to_remove': 'errInstall.installNothingToRemove',
   'install.outside_install': 'errInstall.installOutsideInstall',
   'install.relative_destination': 'errInstall.installRelativeDestination',
-  'install.remove_seeding': 'errInstall.installRemoveSeeding',
+  'install.remove_seeding': 'errInstall.downloadSeeding',
   'install.symlink_privilege': 'errInstall.installSymlinkPrivilege',
   'install.unavailable': 'errInstall.installUnavailable',
   'install.uninstall_cancelled': 'errInstall.installUninstallCancelled',
