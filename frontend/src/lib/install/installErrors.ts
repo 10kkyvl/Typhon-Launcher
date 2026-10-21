@@ -39,6 +39,8 @@ export const REASONS: Record<string, MessageKey> = {
   'install.installer_not_confirmed_stopped': 'errInstall.installInstallerNotConfirmedStopped',
   'install.installer_still_running': 'errInstall.installInstallerStillRunning',
   'install.mixed_installers': 'errInstall.installMixedInstallers',
+  'install.mode_invalid': 'errInstall.installModeInvalid',
+  'install.move_source_unavailable': 'errInstall.installMoveSourceUnavailable',
   'install.needs_user': 'errInstall.installNeedsUser',
   'install.nested_paths': 'errInstall.installNestedPaths',
   'install.no_destination': 'errInstall.installNoDestination',

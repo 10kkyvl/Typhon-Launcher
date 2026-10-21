@@ -11,12 +11,15 @@
     inspectDownload,
     isControlled,
     isExternal,
+    planSpace,
     retryInstall,
     retryInstallInteractive,
     startInstall,
     type PlanInfo,
+    type SpaceInfo,
   } from '../services/install';
   import { installErrorText, needsInteractiveInstall } from '../install/installErrors';
+  import { createSpacePlanner } from '../install/spacePlanner';
   import { installIndeterminate, installTotalUnknown } from '../install/progress';
   import { openGameFolder, selectFolder } from '../services/settings';
   import { downloadsById } from '../stores/downloads';
@@ -50,10 +53,29 @@
   let loading = $state(false);
   let busy = $state(false);
   let destination = $state('');
-  let mode = $state('copy');
+  let mode = $state('');
   let chosen = $state('');
   let cleanupResolved = $state(false);
+  let space = $state<SpaceInfo | null>(null);
+  let spacePending = $state(false);
+  let spaceError = $state('');
   let token = 0;
+
+  const planner = createSpacePlanner({
+    fetch: planSpace,
+    onPending: () => {
+      spacePending = true;
+    },
+    onResult: (result) => {
+      space = result;
+      spaceError = '';
+      spacePending = false;
+    },
+    onError: (err) => {
+      spaceError = installErrorText(err);
+      spacePending = false;
+    },
+  });
 
   const installation = $derived(installId ? $installations.find((i) => i.id === installId) : undefined);
   const plan = $derived(info?.plan);
@@ -61,9 +83,11 @@
   const external = $derived(plan ? isExternal(plan.type) : false);
   const portable = $derived(plan?.type === 'portable');
   const silent = $derived(plan?.silent ?? false);
-  const notEnoughSpace = $derived(
-    !!info && info.requiredBytes > 0 && info.freeBytes > 0 && info.freeBytes < info.requiredBytes,
-  );
+  const spaceDriven = $derived(controlled || silent);
+  const requestMode = $derived(portable ? (info?.seeding ? 'copy' : mode) : '');
+  const notEnoughSpace = $derived(!spacePending && !spaceError && !!space && !space.enough);
+  const spaceBlocked = $derived(notEnoughSpace || (!spacePending && spaceError !== ''));
+  const movesInPlace = $derived(requestMode === 'move' && !spaceError && space?.mode === 'move' && space.sameVolume);
 
   const phase = $derived.by(() => {
     const item = installation;
@@ -98,7 +122,7 @@
   const primaryLabel = $derived.by(() => {
     switch (plan?.type) {
       case 'portable':
-        return mode === 'move' ? msg('modals.installMoveAndInstall') : msg('modals.installCopyAndInstall');
+        return requestMode === 'move' ? msg('modals.installMoveAndInstall') : msg('modals.installCopyAndInstall');
       case 'archive_zip':
       case 'archive_7z':
       case 'archive_rar':
@@ -113,14 +137,37 @@
 
   function reset() {
     token++;
+    planner.cancel();
     installId = null;
     info = null;
     loading = false;
     busy = false;
     destination = '';
-    mode = 'copy';
+    mode = '';
     chosen = '';
     cleanupResolved = false;
+    space = null;
+    spacePending = false;
+    spaceError = '';
+  }
+
+  function replan(immediate: boolean) {
+    const current = info;
+    if (!current || !spaceDriven) return;
+    const request = { downloadId: current.downloadId, destination, mode: requestMode };
+    if (immediate) planner.now(request);
+    else planner.schedule(request);
+  }
+
+  function setMode(next: string) {
+    if (next === mode) return;
+    mode = next;
+    replan(true);
+  }
+
+  function onDestinationInput(event: Event & { currentTarget: HTMLInputElement }) {
+    destination = event.currentTarget.value;
+    replan(false);
   }
 
   async function load(id: string) {
@@ -136,7 +183,15 @@
       if (!open || current !== token) return;
       info = result;
       destination = result.plan.destination;
-      mode = 'copy';
+      mode = result.seeding ? 'copy' : result.mode;
+      space = {
+        requiredBytes: result.requiredBytes,
+        freeBytes: result.freeBytes,
+        sameVolume: result.sameVolume,
+        mode: result.mode,
+        enough: result.freeBytes >= result.requiredBytes,
+      };
+      replan(true);
     } catch (err) {
       if (!open || current !== token) return;
       toast(installErrorText(err), 'danger');
@@ -155,6 +210,8 @@
     });
   });
 
+  $effect(() => () => planner.cancel());
+
   $effect(() => {
     const item = installation;
     if (!item || item.status !== 'waiting_for_user') return;
@@ -172,7 +229,10 @@
   async function browseDestination() {
     try {
       const path = await selectFolder(msg('modals.installChooseFolder'));
-      if (path) destination = path;
+      if (path) {
+        destination = path;
+        replan(true);
+      }
     } catch {
       toast(msg('modals.installFolderDialogFailed'), 'danger');
     }
@@ -194,7 +254,7 @@
     return run(async () => {
       const item = await startInstall(current.downloadId, {
         destination: controlled || silent ? destination : '',
-        mode: portable ? (current.seeding ? 'copy' : mode) : '',
+        mode: requestMode,
         type: current.plan.type,
         installerPath: current.plan.installerPath,
       });
@@ -308,21 +368,21 @@
           <span class="key">{msg('modals.installSource')}</span>
           <span class="value">{truncateMiddle(plan.sourcePath, 48)}</span>
         </div>
-        {#if info.requiredBytes > 0}
+        {#if space}
           <div class="row">
             <span class="key">{msg('modals.installRequiredSpace')}</span>
-            <span class="value" class:danger={notEnoughSpace}>{bytesSize(info.requiredBytes)}</span>
+            <span class="value" class:danger={notEnoughSpace} class:stale={spacePending}>{bytesSize(space.requiredBytes)}</span>
           </div>
-        {/if}
-        {#if info.freeBytes > 0}
           <div class="row">
             <span class="key">{msg('modals.installFreeSpace')}</span>
-            <span class="value" class:danger={notEnoughSpace}>{bytesSize(info.freeBytes)}</span>
+            <span class="value" class:danger={notEnoughSpace} class:stale={spacePending}>{bytesSize(space.freeBytes)}</span>
           </div>
         {/if}
       </div>
 
-      {#if notEnoughSpace}
+      {#if spacePending}
+        <p class="note">{msg('modals.installRecalculating')}</p>
+      {:else if notEnoughSpace}
         <p class="note danger">{msg('modals.installNotEnoughSpace')}</p>
       {/if}
 
@@ -334,9 +394,12 @@
         <div class="field">
           <span class="field-label">{msg('modals.installDestinationFolder')}</span>
           <div class="field-controls">
-            <input class="input sm" type="text" bind:value={destination} />
+            <input class="input sm" type="text" value={destination} oninput={onDestinationInput} />
             <Button size="sm" onclick={browseDestination}>{msg('modals.installBrowse')}</Button>
           </div>
+          {#if spaceError && !spacePending}
+            <p class="note danger">{spaceError}</p>
+          {/if}
         </div>
       {/if}
 
@@ -346,8 +409,11 @@
         {:else}
           <div class="field">
             <span class="field-label">{msg('modals.installModeLabel')}</span>
-            <SegmentedControl options={modeOptions} bind:value={mode} />
+            <SegmentedControl options={modeOptions} bind:value={() => mode, setMode} />
           </div>
+        {/if}
+        {#if movesInPlace}
+          <p class="note">{msg('modals.installSameVolumeNote')}</p>
         {/if}
       {/if}
 
@@ -434,6 +500,9 @@
           <span class="value">{installation.detectedVersion || msg('modals.installUnknownVersion')}</span>
         </div>
       </div>
+      {#if installation.warning}
+        <p class="note warning">{installation.warning}</p>
+      {/if}
       {#if askCleanup && !cleanupResolved}
         <div class="field">
           <span class="field-label">{msg('modals.installDownloadedFilesLabel')}</span>
@@ -463,7 +532,7 @@
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
-          disabled={busy || notEnoughSpace || ((controlled || silent) && destination.trim() === '')}
+          disabled={busy || spaceBlocked || ((controlled || silent) && destination.trim() === '')}
           onclick={start}
         >
           {primaryLabel}
@@ -576,6 +645,10 @@
     color: var(--danger);
   }
 
+  .value.stale {
+    opacity: 0.6;
+  }
+
   .field {
     display: flex;
     flex-direction: column;
@@ -607,6 +680,10 @@
 
   .note.danger {
     color: var(--danger);
+  }
+
+  .note.warning {
+    color: var(--warning);
   }
 
   .choices {

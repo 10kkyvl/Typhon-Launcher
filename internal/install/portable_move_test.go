@@ -9,6 +9,7 @@ import (
 
 func TestPortableMoveKeepsSourceWhenCommitFails(t *testing.T) {
 	s, _, _ := newTestService(t)
+	s.sameVolume = differentVolumes
 	src := filepath.Join(t.TempDir(), "source")
 	if err := os.MkdirAll(src, 0755); err != nil {
 		t.Fatal(err)

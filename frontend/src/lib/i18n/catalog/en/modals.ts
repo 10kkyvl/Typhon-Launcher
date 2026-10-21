@@ -315,6 +315,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.installRequiredSpace': 'Space required',
   'modals.installFreeSpace': 'Free on disk',
   'modals.installNotEnoughSpace': 'Not enough disk space to install.',
+  'modals.installSameVolumeNote': 'Moving within the same disk: no copy needed',
+  'modals.installRecalculating': 'recalculating…',
   'modals.installDestinationFolder': 'Install folder',
   'modals.installBrowse': 'Browse',
   'modals.installSeedingCopyNote': 'Files are being seeded — copying will be used',

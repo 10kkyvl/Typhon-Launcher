@@ -161,6 +161,9 @@ type Service struct {
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
+	// sameVolume — поле, чтобы тест мог выдать две папки временного каталога
+	// за разные тома: настоящих двух томов на машине разработчика нет.
+	sameVolume func(a, b string) bool
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -197,6 +200,8 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		jobs:      map[string]*job{},
 		brokers:   map[string]*broker{},
 		freeSpace: platform.GetStorageInfo,
+
+		sameVolume: SameVolume,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
@@ -758,12 +763,13 @@ func (s *Service) spawnSweep(ctx context.Context, item Installation) {
 }
 
 // sweepPartialItem решает, можно ли стереть .partial записи, или он —
-// единственная копия данных пользователя (инвариант 9). ModeMove консумирует
-// ContentRoot первым же MoveDir: если он уже пропал, а .partial ещё жив,
-// значит крах случился между этим MoveDir и вторым, внутри commit() (он же
-// делает MoveDir(.partial -> Destination) при кросс-девайсном переносе) —
-// стирать в этом случае можно только Destination (недописанный второй
-// перенос), а .partial обязан быть докатан, а не стёрт.
+// единственная копия данных пользователя (инвариант 9). Прежние версии в
+// ModeMove первым же MoveDir консумировали ContentRoot в .partial: если он уже
+// пропал, а .partial ещё жив, значит крах случился между этим MoveDir и вторым,
+// внутри commit() — стирать в этом случае можно только Destination (недописанный
+// второй перенос), а .partial обязан быть докатан, а не стёрт. Нынешний перенос
+// .partial не создаёт: на одном томе это одно переименование без него, на
+// разных — копия, источник которой цел до регистрации.
 func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 	partial := partialPath(&item)
 	if partial == "" {
@@ -786,10 +792,10 @@ func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 	slog.Info("removed partial install", "path", partial)
 }
 
-// recoverMovePartial докатывает Move-режим портативной установки, прерванной
-// между MoveDir(ContentRoot -> partial) и commit(partial -> Destination):
-// ContentRoot уже удалён первым MoveDir, поэтому partial — единственная копия
-// данных. Destination либо недописан кросс-девайсным commit() (меньше
+// recoverMovePartial докатывает Move-режим портативной установки, начатой
+// прежней версией и прерванной между MoveDir(ContentRoot -> partial) и
+// commit(partial -> Destination): ContentRoot уже убран, поэтому partial —
+// единственная копия данных. Destination либо недописан кросс-девайсным commit() (меньше
 // записей верхнего уровня — стираем и переносим заново), либо уже полная
 // копия, после которой процесс умер до RemoveAll(partial) — это проверяется
 // по хешу (инвариант 10), и тогда partial удаляется как дубликат. Любая
@@ -931,13 +937,23 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	if err != nil {
 		return PlanInfo{}, err
 	}
+	mode := ""
+	if plan.Type == TypePortable {
+		mode, err = resolveMode("", d, plan.ContentRoot)
+		if err != nil {
+			return PlanInfo{}, err
+		}
+	}
+	same := plan.Destination != "" && s.sameVolume(plan.ContentRoot, plan.Destination)
 	return PlanInfo{
 		Plan:          plan,
 		DownloadID:    d.ID,
 		Name:          name,
-		RequiredBytes: requiredBytes(plan),
+		RequiredBytes: spaceNeeded(plan, mode, same),
 		FreeBytes:     free,
 		Seeding:       d.Seeding,
+		Mode:          mode,
+		SameVolume:    same,
 	}, nil
 }
 
@@ -993,6 +1009,14 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		return Installation{}, errNoExecutable
 	}
 
+	mode := ""
+	if plan.Type == TypePortable {
+		mode, err = resolveMode(opts.Mode, d, plan.ContentRoot)
+		if err != nil {
+			return Installation{}, err
+		}
+	}
+
 	item := &Installation{
 		ID:              newID(),
 		DownloadID:      d.ID,
@@ -1016,24 +1040,22 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	if ownDestination(plan.Type, plan.Silent) {
-		dest := strings.TrimSpace(opts.Destination)
-		if dest == "" {
-			return Installation{}, errNoDestination
-		}
-		if !filepath.IsAbs(dest) {
-			return Installation{}, errRelativeDestination
+		dest, err := cleanDestination(opts.Destination)
+		if err != nil {
+			return Installation{}, err
 		}
 		if !destAvailable(dest) {
 			return Installation{}, errDestNotEmpty
 		}
-		item.Destination = filepath.Clean(dest)
+		item.Destination = dest
 		item.Owned = controlled(plan.Type)
-		if err := s.checkSpace(item.Destination, requiredBytes(plan)); err != nil {
+		need := spaceNeeded(plan, mode, s.sameVolume(plan.ContentRoot, dest))
+		if err := s.checkSpace(item.Destination, need); err != nil {
 			return Installation{}, err
 		}
 	}
 	if plan.Type == TypePortable {
-		item.Mode = installMode(opts.Mode, d.Seeding)
+		item.Mode = mode
 	}
 
 	s.mu.Lock()
@@ -1268,6 +1290,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	manual := item.ManualInstaller
 	destination := item.Destination
 	title := item.Name
+	storedMode := item.Mode
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -1281,6 +1304,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	plan, err := Inspect(base, source)
 	if err != nil {
 		return err
+	}
+	mode := storedMode
+	if kind == TypePortable {
+		mode, err = resolveMode(storedMode, d, plan.ContentRoot)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Установщик, выбранный пользователем вручную, переживает повтор вместе со
@@ -1346,7 +1376,9 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
 		item.BytesTotal = progressTotal(item.Type, plan)
-		item.Mode = installMode(item.Mode, d.Seeding)
+		if item.Type == TypePortable {
+			item.Mode = mode
+		}
 	}
 	if external(item.Type) {
 		item.InstallerPath = installer
@@ -1903,16 +1935,6 @@ func partialPath(item *Installation) string {
 		return ""
 	}
 	return item.Destination + partialSuffix
-}
-
-func installMode(mode string, seeding bool) string {
-	if seeding {
-		return ModeCopy
-	}
-	if mode == ModeMove {
-		return ModeMove
-	}
-	return ModeCopy
 }
 
 func volumeTarget(destination, fallback string) string {

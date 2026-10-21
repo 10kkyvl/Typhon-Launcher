@@ -312,6 +312,8 @@ export const modals = {
   'modals.installRequiredSpace': 'Требуется места',
   'modals.installFreeSpace': 'Свободно на диске',
   'modals.installNotEnoughSpace': 'Недостаточно места на диске для установки.',
+  'modals.installSameVolumeNote': 'Перенос на том же диске: копия не нужна',
+  'modals.installRecalculating': 'пересчёт…',
   'modals.installDestinationFolder': 'Папка установки',
   'modals.installBrowse': 'Обзор',
   'modals.installSeedingCopyNote': 'Файлы раздаются — будет использовано копирование',

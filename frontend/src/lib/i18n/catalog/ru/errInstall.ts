@@ -60,6 +60,8 @@ export const errInstall = {
   'errInstall.installNotDir': 'источник не является папкой',
   'errInstall.installNotEnoughSpace': 'недостаточно места на диске',
   'errInstall.installNotFound': 'установка не найдена',
+  'errInstall.installModeInvalid': 'неизвестный режим установки',
+  'errInstall.installMoveSourceUnavailable': 'перенос невозможен: данные загрузки лежат не в её собственной папке, выберите копирование',
   'errInstall.installNothingToRemove': 'удалять с диска нечего',
   'errInstall.installOutsideInstall': 'файл находится вне папки установки',
   'errInstall.installRelativeDestination': 'путь установки должен быть абсолютным',

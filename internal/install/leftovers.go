@@ -17,9 +17,10 @@ var errPartialRefused = uierr.New("install.partial_refused", "эту време�
 
 // PartialVerdict answers whether the folder at path is an abandoned .partial
 // of an installation and may be deleted. Every doubt is a refusal: a
-// ModeMove install consumed its source into the partial, so the partial can be
-// the only copy, and a folder no record explains is not provably ours. The
-// code is one of the diskreason values, the reason is text for logs.
+// ModeMove install begun by an earlier version consumed its source into the
+// partial, so the partial can be the only copy, and a folder no record
+// explains is not provably ours. The code is one of the diskreason values,
+// the reason is text for logs.
 //
 //wails:ignore
 func (s *Service) PartialVerdict(path string) (ok bool, code, reason string) {

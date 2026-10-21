@@ -348,7 +348,13 @@
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
             {:else if install.status === 'completed'}
-              <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
+              {#if install.warning}
+                <span title={install.warning}>
+                  <StatusBadge kind="warning" label={msg('transfers.downloadsInstalledStatus')} plain />
+                </span>
+              {:else}
+                <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
+              {/if}
             {:else if install.status === 'failed'}
               <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsInstallErrorAction')}</Button>
             {:else}
