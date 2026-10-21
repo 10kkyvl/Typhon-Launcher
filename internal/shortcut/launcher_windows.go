@@ -15,7 +15,13 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"typhon/internal/settings"
 )
+
+// portableMode is a seam for tests: a portable launcher leaves the links of any
+// installed copy of itself alone.
+var portableMode = settings.IsPortable
 
 const (
 	stgmReadWrite = 2
@@ -34,6 +40,9 @@ type LinkSpot struct {
 // LauncherLinkSpots lists where the launcher's Start menu, desktop and
 // taskbar-pinned links live for the current user.
 func LauncherLinkSpots() ([]LinkSpot, error) {
+	if portableMode() {
+		return nil, nil
+	}
 	programs, err := windows.KnownFolderPath(windows.FOLDERID_Programs, windows.KF_FLAG_DEFAULT)
 	if err != nil {
 		return nil, fmt.Errorf("shortcut: известная папка Programs: %w", err)
@@ -59,6 +68,9 @@ func LauncherLinkSpots() ([]LinkSpot, error) {
 // other targets, game links (--play) and links that already carry id are not
 // written.
 func RefreshLauncherLinks(ctx context.Context, spots []LinkSpot, exe, id string) error {
+	if portableMode() {
+		return nil
+	}
 	if err := validateLinkAppID(exe, id); err != nil {
 		return err
 	}

@@ -39,6 +39,9 @@ type artifactSpec struct {
 	kind string
 	path string
 	name string
+
+	portablePath string
+	portableName string
 }
 
 func parseArtifactSpec(s string) (artifactSpec, error) {
@@ -65,6 +68,10 @@ func parseArtifactSpec(s string) (artifactSpec, error) {
 			spec.path = value
 		case "name":
 			spec.name = value
+		case "portable":
+			spec.portablePath = value
+		case "portablename":
+			spec.portableName = value
 		default:
 			return artifactSpec{}, fmt.Errorf("signrelease: unknown artifact field %q", key)
 		}
@@ -74,6 +81,12 @@ func parseArtifactSpec(s string) (artifactSpec, error) {
 	}
 	if spec.name == "" {
 		spec.name = filepath.Base(spec.path)
+	}
+	if spec.portableName != "" && spec.portablePath == "" {
+		return artifactSpec{}, fmt.Errorf("signrelease: artifact spec %q names a portable archive but has no portable path", s)
+	}
+	if spec.portablePath != "" && spec.portableName == "" {
+		spec.portableName = filepath.Base(spec.portablePath)
 	}
 	return spec, nil
 }
@@ -122,7 +135,7 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.out, "out", "", "path to write the signed manifest to")
 	fs.StringVar(&cfg.changelog, "changelog", "", "path to CHANGELOG.md; its entries ship in the manifest as the in-app release notes")
 	fs.IntVar(&cfg.maxReleases, "max-releases", 10, "how many changelog entries the manifest carries")
-	fs.Var(&cfg.artifacts, "artifact", "artifact spec os=...,arch=...,kind=...,path=...[,name=...] (repeatable)")
+	fs.Var(&cfg.artifacts, "artifact", "artifact spec os=...,arch=...,kind=...,path=...[,name=...][,portable=<zip>[,portablename=...]] (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -185,6 +198,16 @@ func buildArtifact(spec artifactSpec, baseURL, version string) (selfupdate.Artif
 		URL:    url,
 		Size:   size,
 		SHA256: sum,
+	}
+	if spec.portablePath != "" {
+		pSize, pSum, err := hashFile(spec.portablePath)
+		if err != nil {
+			return selfupdate.Artifact{}, err
+		}
+		a.PortableName = spec.portableName
+		a.PortableURL = strings.TrimRight(baseURL, "/") + "/" + version + "/" + spec.portableName
+		a.PortableSize = pSize
+		a.PortableSHA256 = pSum
 	}
 	if err := a.Validate(); err != nil {
 		return selfupdate.Artifact{}, fmt.Errorf("signrelease: artifact %q: %w", spec.path, err)

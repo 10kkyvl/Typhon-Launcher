@@ -360,6 +360,15 @@
     updateSettings(patch);
   }
 
+  const portable = $derived(appInfo?.portable ?? false);
+
+  async function setLaunchOnStartup(value: boolean) {
+    await updateSettingsReporting({ launchOnStartup: value }, (err) => {
+      const code = errorCode(err);
+      toast(code && hasMessage(code) ? msg(code) : msg('state.settingsSaveFailed'), 'danger');
+    });
+  }
+
   const gameModeMac = $derived(appInfo?.platform === 'darwin');
   const trayEnabled = $derived(current?.minimizeToTray ?? true);
 
@@ -564,12 +573,13 @@
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
-              <span class="row-sub">{msg('settings.generalLaunchOnStartupSub')}</span>
+              <span class="row-sub">{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
             </div>
             <Toggle
-              checked={current?.launchOnStartup ?? false}
+              checked={!portable && (current?.launchOnStartup ?? false)}
+              disabled={portable}
               label={msg('settings.generalLaunchOnStartupLabel')}
-              onchange={(v) => set({ launchOnStartup: v })}
+              onchange={(v) => void setLaunchOnStartup(v)}
             />
           </div>
           <div class="row">
@@ -1316,6 +1326,14 @@
           </div>
         </div>
         <div class="rows">
+          {#if appInfo?.portable}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: appInfo.dataDir })}</span>
+              </div>
+            </div>
+          {/if}
           {#if systemInfo}
             <div class="row">
               <div class="row-text">

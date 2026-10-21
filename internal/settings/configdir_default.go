@@ -2,4 +2,13 @@
 
 package settings
 
-func configDirOverride() (string, error) { return "", nil }
+func configDirOverride() (string, error) {
+	dir, ok, err := PortableDir()
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", nil
+	}
+	return dir, nil
+}

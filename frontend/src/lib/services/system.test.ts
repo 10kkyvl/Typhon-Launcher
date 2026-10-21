@@ -13,7 +13,7 @@ const bindings = {
 vi.mock('../../../bindings/typhon/internal/app', () => ({ Service: bindings }));
 
 function info(patch: Partial<AppInfo> = {}): AppInfo {
-  return { version: '0.5.2', platform: 'windows', arch: 'amd64', devMock: false, ...patch };
+  return { version: '0.5.2', platform: 'windows', arch: 'amd64', devMock: false, portable: false, dataDir: '', ...patch };
 }
 
 async function load(inWails: boolean) {

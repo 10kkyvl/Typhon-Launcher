@@ -165,6 +165,10 @@ export const state = {
   'state.selfupdateReasonInstallerNotFound': 'Установщик не найден. Скачайте обновление заново.',
   'state.selfupdateReasonBundleBroken': 'Архив обновления повреждён.',
   'state.selfupdateReasonNotABundle': 'Лаунчер запущен не из приложения Typhon — обновите его вручную.',
+  'state.selfupdateReasonPortableUnavailable': 'Портативной сборки для этой версии нет.',
+  'state.selfupdateReasonPortableUnsafeEntry': 'В архиве обновления недопустимый путь.',
+  'state.selfupdateReasonPortableNoExecutable': 'В архиве обновления нет исполняемого файла.',
+  'state.selfupdateReasonPortableBadExecutable': 'Исполняемый файл в архиве повреждён или не один.',
   'state.selfupdateReasonInstallerFailed': 'Установщик завершился с ошибкой.',
   'state.selfupdateReasonServerStalled':
     'Сервер обновлений перестал отдавать данные. Проверьте соединение и попробуйте ещё раз.',

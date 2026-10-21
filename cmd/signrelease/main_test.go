@@ -408,3 +408,63 @@ func dropFlag(args []string, flagName string) []string {
 	}
 	return out
 }
+
+func TestParseArtifactSpecPortable(t *testing.T) {
+	got, err := parseArtifactSpec("os=windows,arch=amd64,kind=installer,path=bin/setup.exe,portable=bin/typhon-windows-portable.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.portablePath != "bin/typhon-windows-portable.zip" || got.portableName != "typhon-windows-portable.zip" {
+		t.Fatalf("spec = %+v, want the portable archive named after its file", got)
+	}
+	if _, err := parseArtifactSpec("os=windows,arch=amd64,kind=installer,path=bin/setup.exe,portablename=x.zip"); err == nil {
+		t.Fatal("a portable name without a portable path was accepted")
+	}
+}
+
+func TestRun_PortableArchiveLandsInTheSignedManifest(t *testing.T) {
+	dir := t.TempDir()
+	installer := writeArtifactFile(t, dir, "typhon-amd64-installer.exe", []byte("installer bytes"))
+	portable := []byte("portable archive bytes")
+	zipPath := writeArtifactFile(t, dir, "typhon-windows-portable.zip", portable)
+	sum := sha256.Sum256(portable)
+
+	priv, pub := generateKey(t)
+	args := []string{
+		"-version", "1.2.3",
+		"-notes", "portable",
+		"-base-url", "https://api.typhon-launcher.com/launcher/download",
+		"-out", filepath.Join(dir, "manifest.json"),
+		"-artifact", "os=windows,arch=amd64,kind=installer,path=" + installer + ",portable=" + zipPath,
+	}
+	env := envFor(map[string]string{privateKeyEnv: base64.StdEncoding.EncodeToString(priv)})
+
+	signed, err := run(args, &bytes.Buffer{}, env)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	m, err := selfupdate.VerifyManifest(signed, pub)
+	if err != nil {
+		t.Fatalf("VerifyManifest: %v", err)
+	}
+	a := m.Artifacts[0]
+	if a.PortableName != "typhon-windows-portable.zip" ||
+		a.PortableURL != "https://api.typhon-launcher.com/launcher/download/1.2.3/typhon-windows-portable.zip" ||
+		a.PortableSize != int64(len(portable)) || a.PortableSHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("portable fields = %+v", a)
+	}
+	got, err := m.PortableArtifactFor("windows", "amd64")
+	if err != nil || got.Kind != selfupdate.KindPortable {
+		t.Fatalf("PortableArtifactFor() = %+v, %v", got, err)
+	}
+}
+
+func TestBuildArtifact_PortableArchiveMustBeAZip(t *testing.T) {
+	dir := t.TempDir()
+	installer := writeArtifactFile(t, dir, "setup.exe", []byte("installer"))
+	notZip := writeArtifactFile(t, dir, "portable.tar", []byte("tar"))
+	spec := artifactSpec{os: "windows", arch: "amd64", kind: "installer", path: installer, name: "setup.exe", portablePath: notZip, portableName: "portable.tar"}
+	if _, err := buildArtifact(spec, "https://api.typhon-launcher.com/launcher/download", "1.2.3"); !errors.Is(err, selfupdate.ErrInvalidArtifactName) {
+		t.Fatalf("buildArtifact() error = %v, want ErrInvalidArtifactName", err)
+	}
+}

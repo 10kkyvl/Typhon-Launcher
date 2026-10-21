@@ -52,6 +52,9 @@ func (m Manifest) Validate() error {
 	}
 	seen := make(map[string]bool, len(m.Artifacts))
 	for _, a := range m.Artifacts {
+		if a.Kind == KindPortable {
+			return ErrUnsupportedKind
+		}
 		if err := a.Validate(); err != nil {
 			return err
 		}
@@ -80,6 +83,35 @@ func (m Manifest) ArtifactFor(goos, goarch string) (Artifact, error) {
 	}
 	if len(offered) > 0 {
 		return Artifact{}, fmt.Errorf("%w: %s/%s offers only %s", ErrNoArtifact, goos, goarch, strings.Join(offered, ", "))
+	}
+	return Artifact{}, ErrNoArtifact
+}
+
+// PortableArtifactFor turns the zip announced next to the installer into the
+// artifact the downloader and the worker handle like any other. A release that
+// ships no zip is an error for the caller to show, never a reason to fall back
+// to the installer: that one would write outside the portable folder.
+func (m Manifest) PortableArtifactFor(goos, goarch string) (Artifact, error) {
+	for _, a := range m.Artifacts {
+		if a.OS != goos || a.Arch != goarch || a.Kind != KindInstaller {
+			continue
+		}
+		if !a.hasPortableFields() {
+			return Artifact{}, ErrPortableUpdateUnavailable
+		}
+		portable := Artifact{
+			OS:     a.OS,
+			Arch:   a.Arch,
+			Kind:   KindPortable,
+			Name:   a.PortableName,
+			URL:    a.PortableURL,
+			Size:   a.PortableSize,
+			SHA256: a.PortableSHA256,
+		}
+		if err := portable.Validate(); err != nil {
+			return Artifact{}, err
+		}
+		return portable, nil
 	}
 	return Artifact{}, ErrNoArtifact
 }

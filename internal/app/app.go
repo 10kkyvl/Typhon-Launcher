@@ -21,6 +21,8 @@ type AppInfo struct {
 	Platform string `json:"platform"`
 	Arch     string `json:"arch"`
 	DevMock  bool   `json:"devMock"`
+	Portable bool   `json:"portable"`
+	DataDir  string `json:"dataDir"`
 }
 
 type Service struct {
@@ -49,12 +51,19 @@ func (s *Service) UILanguage() string {
 }
 
 func CurrentInfo() AppInfo {
-	return AppInfo{
+	info := AppInfo{
 		Version:  Version,
 		Platform: runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		DevMock:  devmock.Enabled,
 	}
+	// A marker error stops the launcher before any service exists (main.go), so
+	// by the time the UI asks, the portable state is settled.
+	if dir, ok, err := settings.PortableDir(); err == nil && ok {
+		info.Portable = true
+		info.DataDir = dir
+	}
+	return info
 }
 
 func (s *Service) GetAppInfo() AppInfo {

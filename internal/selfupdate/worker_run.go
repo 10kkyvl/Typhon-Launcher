@@ -18,6 +18,7 @@ import (
 var (
 	parentAlive      = workerProcessAlive
 	applyInstaller   = Apply
+	applyPortable    = ApplyPortable
 	relaunchLauncher = relaunch
 )
 
@@ -128,7 +129,12 @@ func runUpdate(waitCtx, applyCtx context.Context, spec updateSpec, ui stageRepor
 	if err != nil {
 		return err
 	}
-	if err := applyInstaller(applyCtx, spec.InstallerPath, spec.InstallDir, spec.RelaunchPath); err != nil {
+	if spec.Portable {
+		err = applyPortable(applyCtx, spec.InstallerPath, spec.RelaunchPath)
+	} else {
+		err = applyInstaller(applyCtx, spec.InstallerPath, spec.InstallDir, spec.RelaunchPath)
+	}
+	if err != nil {
 		return err
 	}
 	after, err := fileDigest(applyCtx, spec.RelaunchPath)
