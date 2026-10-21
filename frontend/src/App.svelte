@@ -41,6 +41,7 @@
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
+  import { initSourceProgress } from './lib/stores/sourceProgress';
   import { initSupport } from './lib/stores/support';
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
@@ -77,6 +78,7 @@
   initLibrary();
   initMoves();
   initSources();
+  initSourceProgress();
   initUpdates();
   initSelfUpdate();
   initMetadata();
