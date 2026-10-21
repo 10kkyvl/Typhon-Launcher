@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"typhon/internal/platform"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 
@@ -175,6 +176,9 @@ type Settings struct {
 	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
 	DesktopShortcuts       bool    `json:"desktopShortcuts"`
 
+	ExtraLibraryPaths []string `json:"extraLibraryPaths"`
+	LastInstallRoot   string   `json:"lastInstallRoot"`
+
 	DownloadSchedule []ScheduleWindow `json:"downloadSchedule"`
 
 	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
@@ -282,6 +286,7 @@ func Defaults() Settings {
 		InstallSkipExtras:      true,
 		InstallVerifyRepack:    false,
 		DesktopShortcuts:       true,
+		ExtraLibraryPaths:      []string{},
 
 		UpdateCheckAutomatically: true,
 		UpdateAutoDownload:       false,
@@ -579,6 +584,10 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	s.LibraryPath = library
 	s = derivePaths(s)
+	s, err = sanitizeExtraLibraryPaths(s)
+	if err != nil {
+		return Settings{}, err
+	}
 	s, err = sanitizeNetwork(s)
 	if err != nil {
 		return Settings{}, err
@@ -674,6 +683,8 @@ type Service struct {
 	nextSub  int
 	appliers []func(prev, next Settings) error
 	version  uint64
+
+	storageInfo func(path string) (platform.StorageInfo, error)
 }
 
 func NewService() (*Service, error) {
@@ -688,7 +699,7 @@ func NewServiceAt(path string) (*Service, error) {
 	if path == "" {
 		return nil, errors.New("settings path unavailable")
 	}
-	s := &Service{current: Defaults(), path: path}
+	s := &Service{current: Defaults(), path: path, storageInfo: platform.GetStorageInfo}
 	current, err := s.load()
 	if err != nil {
 		return nil, err

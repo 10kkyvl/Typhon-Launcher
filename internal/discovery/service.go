@@ -157,7 +157,7 @@ func (s *Service) finish() {
 
 func (s *Service) roots() ([]string, error) {
 	cfg := s.settings.GetSettings()
-	return normalizeRoots([]string{cfg.GamesPath})
+	return normalizeRoots(cfg.GamesRoots())
 }
 
 func normalizeRoots(paths []string) ([]string, error) {

@@ -52,6 +52,7 @@ function goDefaults(): Map<string, string | number | boolean> {
     const match = /^\t\t(\w+):\s*(.+?),\s*(?:\/\/.*)?$/.exec(line);
     if (!match) continue;
     const raw = match[2].trim();
+    if (/^\[\]\w+\{\}$/.test(raw)) continue;
     if (raw === 'true' || raw === 'false') byName.set(match[1], raw === 'true');
     else if (/^-?\d+(\.\d+)?$/.test(raw)) byName.set(match[1], Number(raw));
     else if (/^"[^"]*"$/.test(raw)) byName.set(match[1], raw.slice(1, -1));

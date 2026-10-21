@@ -73,6 +73,7 @@ export const errLibrary = {
   'settings.library_path_root': 'библиотека не может быть корнем диска',
   'settings.library_parent_empty': 'не выбрана папка для библиотеки',
   'settings.library_create_failed': 'не удалось создать папку библиотеки',
+  'settings.extra_library_nested': 'дополнительная папка не может лежать внутри библиотеки или другой папки игр, и наоборот',
   'settings.library_not_writable': 'нет доступа на запись в папку библиотеки',
   'settings.network_mode_invalid': 'неизвестный режим сети',
   'settings.play_download_mode_invalid': 'неизвестный режим загрузок во время игры',

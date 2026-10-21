@@ -76,6 +76,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'settings.library_path_root': 'The library cannot be a drive root',
   'settings.library_parent_empty': 'No library folder was chosen',
   'settings.library_create_failed': 'Could not create the library folder',
+  'settings.extra_library_nested': 'An extra folder cannot be inside the library or another games folder, or contain one',
   'settings.library_not_writable': 'No write access to the library folder',
   'settings.network_mode_invalid': 'Unknown network mode',
   'settings.play_download_mode_invalid': 'Unknown download mode for gaming',

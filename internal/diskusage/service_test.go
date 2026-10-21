@@ -309,6 +309,7 @@ type rig struct {
 	snaps     *fakeSnaps
 	games     string
 	downloads string
+	extra     []string
 }
 
 func newRig(t *testing.T) *rig {
@@ -334,6 +335,7 @@ func newRig(t *testing.T) *rig {
 		Settings: func() settings.Settings {
 			s := settings.Defaults()
 			s.GamesPath, s.DownloadsPath = r.games, r.downloads
+			s.ExtraLibraryPaths = r.extra
 			return s
 		},
 		Library: r.lib, Downloads: r.dl, Installs: r.inst, Relocations: r.rel, Updates: r.upd, Screenshots: r.shots, Snapshots: r.snaps,
@@ -647,6 +649,34 @@ func TestScanLeftovers(t *testing.T) {
 	}
 	if len(rep.Leftovers) != len(want) {
 		t.Fatalf("leftovers = %+v, want %d", rep.Leftovers, len(want))
+	}
+}
+
+func TestScanLeftoversLooksInExtraLibraryFolders(t *testing.T) {
+	r := newRig(t)
+	extra := filepath.Join(filepath.Dir(r.games), "second-disk")
+	r.extra = []string{extra}
+	mainPartial := filepath.Join(r.games, "Main.partial")
+	extraPartial := filepath.Join(extra, "Other.partial")
+	writeBytes(t, filepath.Join(mainPartial, "a.bin"), 12)
+	writeBytes(t, filepath.Join(extraPartial, "b.bin"), 34)
+	r.inst.partial[mainPartial] = true
+	r.inst.partial[extraPartial] = true
+
+	rep, err := r.svc.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]Leftover{}
+	for _, l := range rep.Leftovers {
+		by[l.Path] = l
+	}
+	got, ok := by[extraPartial]
+	if !ok || got.Kind != KindInstallPartial || got.SizeBytes != 34 || !got.Deletable {
+		t.Fatalf("leftover in the extra folder = %+v (listed %v)", got, ok)
+	}
+	if _, ok := by[mainPartial]; !ok {
+		t.Fatalf("the main games folder was dropped: %+v", rep.Leftovers)
 	}
 }
 

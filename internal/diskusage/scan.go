@@ -26,7 +26,7 @@ const (
 type scanner struct {
 	ctx           context.Context
 	s             *Service
-	gamesPath     string
+	gamesRoots    []string
 	downloadsPath string
 	report        Report
 	entries       map[string]entry
@@ -55,7 +55,7 @@ func (s *Service) Scan(ctx context.Context) (Report, error) {
 	sc := &scanner{
 		ctx:           ctx,
 		s:             s,
-		gamesPath:     cfg.GamesPath,
+		gamesRoots:    cfg.GamesRoots(),
 		downloadsPath: cfg.DownloadsPath,
 		entries:       map[string]entry{},
 		games:         games,
@@ -295,7 +295,9 @@ func (sc *scanner) group(gameID string, count int, size int64, unknown bool) Gro
 func (sc *scanner) scanLeftovers() error {
 	partialRoots := newPathSet()
 	partRoots := newPathSet()
-	partialRoots.add(sc.gamesPath)
+	for _, root := range sc.gamesRoots {
+		partialRoots.add(root)
+	}
 	partRoots.add(sc.downloadsPath)
 	for _, item := range sc.s.deps.Installs.List() {
 		if item.Destination != "" {

@@ -55,6 +55,7 @@ export interface PlanInfo {
   seeding: boolean;
   mode: string;
   sameVolume: boolean;
+  roots: string[] | null;
 }
 
 export interface SpaceInfo {

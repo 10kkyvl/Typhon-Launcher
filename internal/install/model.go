@@ -126,8 +126,9 @@ type PlanInfo struct {
 	// Mode — режим по умолчанию для портативной сборки ("move" или "copy");
 	// для остальных типов пуст. SameVolume — лежит ли предложенная папка на
 	// том же томе, что и данные загрузки.
-	Mode       string `json:"mode"`
-	SameVolume bool   `json:"sameVolume"`
+	Mode       string   `json:"mode"`
+	SameVolume bool     `json:"sameVolume"`
+	Roots      []string `json:"roots"`
 }
 
 type SpaceInfo struct {

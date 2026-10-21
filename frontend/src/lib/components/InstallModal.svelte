@@ -21,7 +21,8 @@
   import { installErrorText, needsInteractiveInstall } from '../install/installErrors';
   import { createSpacePlanner } from '../install/spacePlanner';
   import { installIndeterminate, installTotalUnknown } from '../install/progress';
-  import { openGameFolder, selectFolder } from '../services/settings';
+  import { libraryFolders, openGameFolder, selectFolder, type LibraryFolder } from '../services/settings';
+  import { destinationInRoot, rootOfDestination } from '../library/folders';
   import { downloadsById } from '../stores/downloads';
   import {
     installActive,
@@ -36,6 +37,7 @@
   import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Select from './Select.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import SystemRequirements from './SystemRequirements.svelte';
@@ -59,7 +61,10 @@
   let space = $state<SpaceInfo | null>(null);
   let spacePending = $state(false);
   let spaceError = $state('');
+  let folders = $state<LibraryFolder[]>([]);
   let token = 0;
+
+  const OTHER_ROOT = '__other__';
 
   const planner = createSpacePlanner({
     fetch: planSpace,
@@ -87,6 +92,17 @@
   const requestMode = $derived(portable ? (info?.seeding ? 'copy' : mode) : '');
   const notEnoughSpace = $derived(!spacePending && !spaceError && !!space && !space.enough);
   const spaceBlocked = $derived(notEnoughSpace || (!spacePending && spaceError !== ''));
+  const roots = $derived(info?.roots ?? []);
+  const rootChoice = $derived(rootOfDestination(roots, destination) || OTHER_ROOT);
+  const rootOptions = $derived([
+    ...roots.map((root) => {
+      const folder = folders.find((f) => f.path === root);
+      const label =
+        folder?.available ? msg('modals.installRootOption', { path: root, free: bytesSize(folder.freeBytes) }) : root;
+      return { id: root, label };
+    }),
+    { id: OTHER_ROOT, label: msg('modals.installRootOther') },
+  ]);
   const movesInPlace = $derived(requestMode === 'move' && !spaceError && space?.mode === 'move' && space.sameVolume);
 
   const phase = $derived.by(() => {
@@ -149,6 +165,7 @@
     space = null;
     spacePending = false;
     spaceError = '';
+    folders = [];
   }
 
   function replan(immediate: boolean) {
@@ -163,6 +180,24 @@
     if (next === mode) return;
     mode = next;
     replan(true);
+  }
+
+  function pickRoot(id: string) {
+    if (id === OTHER_ROOT) {
+      void browseDestination();
+      return;
+    }
+    destination = destinationInRoot(id, destination);
+    replan(true);
+  }
+
+  async function loadFolders(current: number) {
+    try {
+      const list = await libraryFolders();
+      if (current === token) folders = list;
+    } catch (err) {
+      if (current === token) toast(installErrorText(err), 'danger');
+    }
   }
 
   function onDestinationInput(event: Event & { currentTarget: HTMLInputElement }) {
@@ -192,6 +227,7 @@
         enough: result.freeBytes >= result.requiredBytes,
       };
       replan(true);
+      if ((result.roots?.length ?? 0) > 1) void loadFolders(current);
     } catch (err) {
       if (!open || current !== token) return;
       toast(installErrorText(err), 'danger');
@@ -388,6 +424,13 @@
 
       {#if requirementsGameId}
         <SystemRequirements gameId={requirementsGameId} installPath={destination} heading={false} />
+      {/if}
+
+      {#if (controlled || silent) && roots.length > 1}
+        <div class="field">
+          <span class="field-label">{msg('modals.installRootLabel')}</span>
+          <Select width="100%" options={rootOptions} bind:value={() => rootChoice, pickRoot} />
+        </div>
       {/if}
 
       {#if controlled || silent}

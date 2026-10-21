@@ -23,6 +23,8 @@ export interface Settings {
   libraryPath: string;
   downloadsPath: string;
   gamesPath: string;
+  extraLibraryPaths: string[];
+  lastInstallRoot: string;
   screenshotsPath: string;
   launchOnStartup: boolean;
   minimizeToTray: boolean;
@@ -90,6 +92,8 @@ const fallbackDefaults: Settings = {
   libraryPath: '',
   downloadsPath: '',
   gamesPath: '',
+  extraLibraryPaths: [],
+  lastInstallRoot: '',
   screenshotsPath: '',
   launchOnStartup: false,
   minimizeToTray: true,
@@ -156,7 +160,7 @@ export const maxActiveDownloadOptions = [
 
 // Go sends a nil slice as null.
 function normalize(s: Settings): Settings {
-  return { ...s, downloadSchedule: s.downloadSchedule ?? [] };
+  return { ...s, downloadSchedule: s.downloadSchedule ?? [], extraLibraryPaths: s.extraLibraryPaths ?? [] };
 }
 
 export async function getSettings(): Promise<Settings> {
@@ -198,6 +202,29 @@ export async function proposeLibraryPath(parent: string): Promise<string> {
 export async function setupLibrary(parent: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
   return normalize((await SettingsService.SetupLibrary(parent)) as Settings);
+}
+
+export interface LibraryFolder {
+  path: string;
+  primary: boolean;
+  freeBytes: number;
+  totalBytes: number;
+  available: boolean;
+}
+
+export async function libraryFolders(): Promise<LibraryFolder[]> {
+  if (!inWails) return [];
+  return ((await SettingsService.LibraryFolders()) ?? []) as LibraryFolder[];
+}
+
+export async function addLibraryFolder(path: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return normalize((await SettingsService.AddLibraryFolder(path)) as Settings);
+}
+
+export async function removeLibraryFolder(path: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return normalize((await SettingsService.RemoveLibraryFolder(path)) as Settings);
 }
 
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
