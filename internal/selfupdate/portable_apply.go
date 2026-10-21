@@ -31,7 +31,8 @@ func applyPortableZip(ctx context.Context, zipPath, target string) error {
 	if target == "" {
 		return errors.New("selfupdate: portable target path is empty")
 	}
-	if _, err := os.Stat(target); err != nil {
+	current, err := os.Stat(target)
+	if err != nil {
 		return fmt.Errorf("selfupdate: portable target: %w", err)
 	}
 
@@ -60,7 +61,7 @@ func applyPortableZip(ctx context.Context, zipPath, target string) error {
 	if err := removeIfExists(previous); err != nil {
 		return fmt.Errorf("selfupdate: remove stale %s: %w", previous, err)
 	}
-	if err := extractEntry(ctx, entry, staged); err != nil {
+	if err := extractPortableExecutable(ctx, entry, staged, current.Mode().Perm()); err != nil {
 		return err
 	}
 
@@ -111,7 +112,7 @@ func validateZipEntryName(name string) error {
 	return nil
 }
 
-func extractEntry(ctx context.Context, entry *zip.File, dst string) (err error) {
+func extractPortableExecutable(ctx context.Context, entry *zip.File, dst string, perm os.FileMode) (err error) {
 	rc, err := entry.Open()
 	if err != nil {
 		return fmt.Errorf("selfupdate: open %s in the portable archive: %w", entry.Name, err)
@@ -122,7 +123,7 @@ func extractEntry(ctx context.Context, entry *zip.File, dst string) (err error) 
 		}
 	}()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o755)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return fmt.Errorf("selfupdate: create %s: %w", dst, err)
 	}
@@ -142,7 +143,8 @@ func extractEntry(ctx context.Context, entry *zip.File, dst string) (err error) 
 	if err != nil {
 		return fmt.Errorf("selfupdate: extract %s: %w", entry.Name, err)
 	}
-	if written > MaxArtifactSize || uint64(written) != entry.UncompressedSize64 {
+	declared := entry.UncompressedSize64
+	if written < 0 || written > MaxArtifactSize || declared > MaxArtifactSize || written != int64(declared) {
 		return fmt.Errorf("%w: %s unpacked to %d bytes, the archive declares %d", ErrPortableZipExecutable, entry.Name, written, entry.UncompressedSize64)
 	}
 	if err := out.Sync(); err != nil {

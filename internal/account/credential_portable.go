@@ -75,7 +75,7 @@ func (s portableCredentialStore) Load() (Credential, error) {
 	if !ok || rec.Token == "" {
 		return Credential{}, ErrNoCredential
 	}
-	return Credential{Token: rec.Token, Username: rec.Username}, nil
+	return Credential(rec), nil
 }
 
 func (s portableCredentialStore) Save(cred Credential) error {
@@ -91,7 +91,7 @@ func (s portableCredentialStore) Save(cred Credential) error {
 		}
 		doc = portableCredentialDoc{Entries: map[string]portableCredentialRecord{}}
 	}
-	doc.Entries[s.key] = portableCredentialRecord{Token: cred.Token, Username: cred.Username}
+	doc.Entries[s.key] = portableCredentialRecord(cred)
 	return s.write(doc)
 }
 

@@ -36,8 +36,6 @@ func fakeLauncher(t *testing.T, marker *string) string {
 	return dir
 }
 
-func str(s string) *string { return &s }
-
 func TestPortableDirWithoutMarkerIsOrdinaryMode(t *testing.T) {
 	fakeLauncher(t, nil)
 	dir, ok, err := PortableDir()

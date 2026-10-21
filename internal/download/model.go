@@ -83,7 +83,7 @@ type Download struct {
 
 	// IgnoreSchedule lets this download run outside the schedule windows. It
 	// ends with the download: completeLocked clears it.
-	IgnoreSchedule bool `json:"ignoreSchedule,omitempty"`
+	IgnoreSchedule bool `json:"ignoreSchedule"`
 
 	// heldSelection is the selection a stored record named while the torrent's
 	// file list is not known (no cached torrent yet). It is written back as it

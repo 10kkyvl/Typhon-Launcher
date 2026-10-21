@@ -282,7 +282,7 @@ func (s *Service) loadSchema(ctx context.Context, gameID, appID string) (schemaS
 		items, none = nil, true
 	case err != nil:
 		cached.fetchErr = err
-		return cached, nil
+		return cached, nil //nolint:nilerr // the fetch failure travels in fetchErr and reaches the UI as SchemaUnavailable; the returned error is reserved for the store (invariant 27)
 	}
 	if err := s.cacheSchema(gameID, appID, lang, items, none); err != nil {
 		return schemaState{}, err
