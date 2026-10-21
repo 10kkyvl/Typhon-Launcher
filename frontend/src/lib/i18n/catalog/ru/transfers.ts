@@ -19,6 +19,7 @@ export const transfers = {
   'transfers.scheduleAndPlayBannerNoNext': 'Загрузки стоят: идёт игра и закрыто окно расписания',
   'transfers.downloadNow': 'Скачать сейчас',
   'transfers.outsideSchedule': 'Вне расписания',
+  'transfers.gamePage': 'Страница игры',
   'transfers.playBannerSettings': 'Настроить',
   'transfers.downloadsEmptyActiveDescription': 'Добавьте торрент или выберите релиз на странице игры.',
   'transfers.downloadsQueueHeading': 'В очереди',

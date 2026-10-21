@@ -58,7 +58,6 @@ export const state: Record<StateKey, Message> = {
   'state.notifUpdateInProgress': 'Updating — {percent}',
   'state.notifUpdateAvailable': 'Update available',
   'state.notifInstallProgress': 'Installing — {percent}',
-  'state.notifDownloadProgress': 'Downloading — {percent}',
 
   'state.relocateTransferredNamed': '"{title}" moved',
   'state.relocateTransferredLibrary': 'Library moved',

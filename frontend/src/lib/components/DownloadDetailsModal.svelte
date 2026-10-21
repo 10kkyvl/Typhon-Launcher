@@ -1,8 +1,10 @@
 <script lang="ts">
   import { installErrorText } from '../install/installErrors';
-  import { FolderOpen } from '@lucide/svelte';
+  import { FolderOpen, Gamepad2 } from '@lucide/svelte';
+  import { gamePageId } from '../services/downloads';
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
+  import { navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
   import { bytesSize, dateTime, progressPercent, speedBytes } from '../utils/format';
   import IconButton from './IconButton.svelte';
@@ -13,6 +15,12 @@
   let { open = $bindable(false), id }: { open?: boolean; id: string | null } = $props();
 
   const download = $derived(id ? $downloadsById.get(id) : undefined);
+  const gameId = $derived(download ? gamePageId(download) : '');
+
+  function openGamePage(target: string) {
+    open = false;
+    navigate('game', { id: target });
+  }
 
   function addedLabel(iso: string) {
     const date = new Date(iso);
@@ -45,6 +53,11 @@
               <IconButton label={msg('modals.downloadDetailsOpenFolder')} size="sm" onclick={() => openDestination(download.destination)}>
                 <FolderOpen size="1.6rem" strokeWidth={1.8} />
               </IconButton>
+              {#if gameId}
+                <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => openGamePage(gameId)}>
+                  <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+                </IconButton>
+              {/if}
             </span>
           </div>
           <div class="row">

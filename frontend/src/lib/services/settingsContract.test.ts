@@ -37,7 +37,7 @@ interface GoField {
 
 function goFields(): GoField[] {
   const body = /type Settings struct \{([\s\S]*?)\n\}/.exec(goSource())?.[1] ?? '';
-  return [...body.matchAll(/^\t(\w+)\s+(\w+)\s+`json:"(\w+)"`/gm)].map((match) => ({
+  return [...body.matchAll(/^\t(\w+)\s+((?:\[\])?\w+)\s+`json:"(\w+)"`/gm)].map((match) => ({
     name: match[1],
     type: match[2],
     json: match[3],
@@ -101,7 +101,7 @@ describe('settings across the bridge', () => {
   it('gives the browser fallback the same defaults as Go', async () => {
     const mine = (await getSettings()) as unknown as Record<string, unknown>;
     const theirs = goDefaults();
-    const scalar = goFields().filter((field) => field.type !== 'GameMode');
+    const scalar = goFields().filter((field) => field.type !== 'GameMode' && !field.type.startsWith('[]'));
     expect([...theirs.keys()].sort()).toEqual(scalar.map((field) => field.json).sort());
     const different = [...theirs]
       .filter(([name, value]) => mine[name] !== value)

@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, ChevronRight, Pause, Play, X } from '@lucide/svelte';
-  import type { Download } from '../services/downloads';
+  import { ArrowDown, ArrowUp, ChevronRight, Gamepad2, Pause, Play, X } from '@lucide/svelte';
+  import { gamePageId, type Download } from '../services/downloads';
   import { cancelDownloadPrompt } from '../confirm/prompts';
   import { cancel, downloadNow, pause, resume, statusLabels } from '../stores/downloads';
   import { playThrottle } from '../stores/playThrottle';
   import { gameArt, requestArt } from '../stores/metadata';
+  import { navigate } from '../stores/router';
   import { sources } from '../stores/sources';
   import { bytesSize, etaLabel, speedBytes } from '../utils/format';
   import { msg } from '../i18n';
@@ -41,6 +42,7 @@
     download.status !== 'failed',
   );
 
+  const gameId = $derived(gamePageId(download));
   const sourceTag = $derived($sources.find((s) => s.id === download.origin.sourceId)?.name ?? '');
   const cover = $derived((download.origin.gameId && $gameArt[download.origin.gameId]?.cover) || '');
 
@@ -148,6 +150,18 @@
         </Button>
       {/if}
     </span>
+    {#if gameId}
+      <IconButton
+        label={msg('transfers.gamePage')}
+        size="sm"
+        onclick={(e) => {
+          stop(e);
+          navigate('game', { id: gameId });
+        }}
+      >
+        <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+      </IconButton>
+    {/if}
     <IconButton
       label={msg('ui.cancelVerb')}
       size="sm"
@@ -182,7 +196,7 @@
 <style>
   .item {
     display: grid;
-    grid-template-columns: 4.8rem minmax(0, 1fr) 10.5rem 20.5rem;
+    grid-template-columns: 4.8rem minmax(0, 1fr) 10.5rem 24rem;
     align-items: center;
     column-gap: var(--space-5);
     padding: var(--space-3) var(--space-5);
@@ -326,7 +340,7 @@
 
   @media (max-width: 1300px) {
     .item {
-      grid-template-columns: 4.8rem minmax(0, 1fr) 9.5rem 20.5rem;
+      grid-template-columns: 4.8rem minmax(0, 1fr) 9.5rem 24rem;
       column-gap: var(--space-4);
     }
 
