@@ -46,6 +46,13 @@ describe('appearance normalisation', () => {
     ['auto theme', { theme: 'auto' }, { theme: 'auto' }],
     ['parallax off', { parallax: false }, { parallax: false }],
     ['parallax not a boolean', { parallax: 'no' }, { parallax: true }],
+    ['valid name and frame colours', { nameColor: '#112233', frameColor: '#AABBCC' }, { nameColor: '#112233', frameColor: '#AABBCC' }],
+    ['bad name colour', { nameColor: 'red' }, { nameColor: '' }],
+    ['short frame colour', { frameColor: '#12345' }, { frameColor: '' }],
+    ['injected frame colour', { frameColor: '#112233;display:none' }, { frameColor: '' }],
+    ['non-string colours', { nameColor: 5, frameColor: null }, { nameColor: '', frameColor: '' }],
+    ['pure on', { customPure: true }, { customPure: true }],
+    ['pure not a boolean', { customPure: 'yes' }, { customPure: false }],
     ['null fields', { customFrom: null, avatarFrame: null, parallax: null }, { customFrom: '#142235', avatarFrame: 'none', parallax: true }],
   ];
   it.each(cases)('%s', (_name, input, expected) => {
@@ -70,6 +77,27 @@ describe('profile themes', () => {
       const theme = themeOf(appearanceOf({ theme: 'custom', customFrom: from, customTo: to }));
       expect(contrast(PROFILE_TEXT_3, theme.background)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(PROFILE_TEXT_3, theme.surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps the custom colours untouched when they are shown as is', () => {
+    const light = themeOf(appearanceOf({ theme: 'custom', customFrom: '#ffffff', customTo: '#ffffff', customPure: true }));
+    expect(light.background).toBe('#ffffff');
+    expect(light.banner).toBe('linear-gradient(125deg, #ffffff, #ffffff)');
+    expect(light.ink?.text).toBe('#121821');
+    const plain = themeOf(appearanceOf({ theme: 'custom', customFrom: '#ffffff', customTo: '#ffffff' }));
+    expect(plain.background).not.toBe('#ffffff');
+    expect(plain.ink).toBeUndefined();
+  });
+  it('ignores the pure flag outside the custom theme', () => {
+    expect(themeOf(appearanceOf({ theme: 'black', customPure: true }))).toEqual(themeOf(appearanceOf({ theme: 'black' })));
+    expect(themeOf(appearanceOf({ theme: 'black', customPure: true })).ink).toBeUndefined();
+  });
+  it('keeps the accent readable on a light pure background', () => {
+    for (const accent of ['#67d8ef', '#ffffff', '#000000', '#f3b56b']) {
+      const a = appearanceOf({ theme: 'custom', customFrom: '#f4eedd', customTo: '#ffffff', customPure: true, accent });
+      const palette = appearancePalette(a);
+      expect(contrast(palette['--accent'], themeOf(a).background)).toBeGreaterThanOrEqual(3);
+      expect(contrast(palette['--accent-text'], themeOf(a).background)).toBeGreaterThanOrEqual(4.5);
     }
   });
   it('builds a palette for every theme, with and without art', () => {

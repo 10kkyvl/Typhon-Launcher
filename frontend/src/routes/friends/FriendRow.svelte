@@ -43,7 +43,7 @@
 </script>
 
 {#snippet who()}
-  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} frame={look.appearance.avatarFrame} frameColor={look.accent} />
+  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} frame={look.appearance.avatarFrame} frameColor={look.appearance.frameColor || look.accent} />
   <span class="names">
     <span class="name">{user.displayName || user.username}</span>
     {#if !compact}<span class="handle">@{user.username}</span>{/if}

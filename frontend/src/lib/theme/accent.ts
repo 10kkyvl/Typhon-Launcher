@@ -28,7 +28,7 @@ export function rgb(value: string, background: RGB = [17, 23, 31]): RGB {
 
 const hex = (c: RGB) => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 const mix = (a: RGB, b: RGB, t: number): RGB => a.map((v, i) => v + (b[i] - v) * t) as RGB;
-function luminance(c: RGB): number {
+export function luminance(c: RGB): number {
   return c.map(v => { const n = v / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((n, v, i) => n + v * [.2126, .7152, .0722][i], 0);
 }
 export function contrast(a: string, b: string): number {

@@ -58,6 +58,32 @@ describe('PlayerCard', () => {
     expect(out).not.toContain('frame-hologram');
   });
 
+  it('passes the name and frame colours to the card', () => {
+    const out = html({
+      ...base,
+      card: { accent: '#ff8800', avatarFrame: 'ring', nameStyle: 'glow', nameColor: '#112233', frameColor: '#445566' },
+    });
+    expect(out).toContain('--name-color: #112233');
+    expect(out).toContain('--frame-color: #445566');
+  });
+
+  it('uses the accent when the colours are empty or broken', () => {
+    for (const bad of ['', 'red', '#12']) {
+      const out = html({
+        ...base,
+        card: { accent: '#ff8800', avatarFrame: 'ring', nameStyle: 'glow', nameColor: bad, frameColor: bad },
+      });
+      expect(out).not.toContain('--name-color');
+      expect(out).not.toContain('--frame-color');
+    }
+  });
+
+  it('switches the card text to dark on a light pure gradient only', () => {
+    const card = { accent: '#ff8800', avatarFrame: 'none' as const, nameStyle: 'plain' as const, theme: 'custom', customFrom: '#ffffff', customTo: '#f3e6c8' };
+    expect(html({ ...base, card: { ...card, customPure: true } })).toContain('--text: #121821');
+    expect(html({ ...base, card })).toContain('--text: #f1f4f8');
+  });
+
   it('shows presence when it is passed', () => {
     const out = html(base, { status: 'online', gameId: 5, gameTitle: 'Hades' });
     expect(out).toContain('Hades');

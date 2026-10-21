@@ -24,4 +24,8 @@ describe('Avatar frame', () => {
   it('takes the frame colour from the prop', () => {
     expect(html({ frame: 'ring', frameColor: '#ff8800' })).toContain('--frame-color: #ff8800');
   });
+
+  it('leaves the accent in charge when the frame colour is empty', () => {
+    expect(html({ frame: 'ring', frameColor: '' })).not.toContain('--frame-color');
+  });
 });
