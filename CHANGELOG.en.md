@@ -30,7 +30,7 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - Your own colours in the profile appearance: the Custom theme gets a "colours as is" switch without darkening, and the name and the avatar frame each take their own colour instead of the accent. Text turns dark by itself on a light background
 - The theme editor in the settings names colours in plain words ("Cards and windows", "Borders", "Text"), says where each one is used and shows a small window that repaints as you edit
 - A source refresh shows a bar with the stage and a counter ("Parsing entries N of M", "Matching N of M") instead of a spinner, and Refresh all shows the overall percentage
-- A chat message can carry one image up to 8 MB, by the paperclip button or by pasting from the clipboard. It shows as a preview, opens full size, is stored on the server with the message and deleted with it after 7 days
+- A chat message can carry up to four images, each up to 8 MB, by the paperclip button or by pasting from the clipboard. They show as previews, open full size, are stored on the server with the message and deleted with it after 7 days
 ### Changed
 - The install dialog measures "Space required" and "Free on disk" for the folder you typed or picked and recalculates on every change. It used to look at the library disk and never noticed you chose another drive
 - A portable build moves to the same disk with a single rename: no copy, no doubled space, done in seconds. Move is now the default when seeding is off; to another disk the game is still copied with verification
