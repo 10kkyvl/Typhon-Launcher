@@ -166,6 +166,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.hide': 'Hide',
 
   'ui.resetAppearance': 'Reset appearance',
+  'ui.resetAppearanceHint': 'Shows for a few seconds after a theme change. Bring it up any time with Ctrl+Alt+R',
 
   'ui.changeAdded': 'Added',
   'ui.changeChanged': 'Changed',
