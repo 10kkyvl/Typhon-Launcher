@@ -50,10 +50,25 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    flex: 0 0 9rem;
+    flex: 0 0 6.5rem;
+    min-width: 0;
     padding: var(--space-3) var(--space-2);
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
+  }
+
+  .side-item,
+  .title,
+  .sub,
+  .muted,
+  .field {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .buttons {
+    flex-wrap: wrap;
   }
 
   .side-item {

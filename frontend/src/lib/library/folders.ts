@@ -59,7 +59,7 @@ function folderName(path: string): string {
 }
 
 export function destinationInRoot(root: string, destination: string): string {
-  const name = folderName(destination);
+  const name = folderName(destination).replace(/ \(\d+\)$/, '');
   const base = root.trim().replace(/[\\/]+$/, '');
   if (name === '') return base === '' ? root : base;
   const separator = windowsStyle(root.trim()) ? '\\' : '/';

@@ -2,7 +2,6 @@ import { activeTheme, resetAppearance } from '../stores/theme';
 import { locale, msg } from '../i18n';
 
 const guardAfterChangeMs = 8000;
-const guardAfterHotkeyMs = 15000;
 
 function randomHostId(): string {
   const bytes = new Uint32Array(4);
@@ -86,14 +85,6 @@ export function mountThemeGuard(): () => void {
     else if (!risky) button.style.display = 'none';
   });
 
-  const onKey = (event: KeyboardEvent) => {
-    if (event.ctrlKey && event.altKey && !event.shiftKey && event.code === 'KeyR') {
-      event.preventDefault();
-      show(guardAfterHotkeyMs);
-    }
-  };
-  window.addEventListener('keydown', onKey);
-
   const unsubscribeLocale = locale.subscribe(() => {
     button.textContent = msg('ui.resetAppearance');
     button.title = msg('ui.resetAppearanceHint');
@@ -102,7 +93,6 @@ export function mountThemeGuard(): () => void {
   return () => {
     unsubscribe();
     unsubscribeLocale();
-    window.removeEventListener('keydown', onKey);
     if (hideTimer) clearTimeout(hideTimer);
     observer.disconnect();
     host.remove();

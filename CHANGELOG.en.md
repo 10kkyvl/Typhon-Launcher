@@ -42,7 +42,7 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - The catalog loads the next page by itself when you reach the end; the Show more button stays only after a failed load
 - Source refreshes are several times faster: the server's answer about a found game is kept for a week instead of a day, and release files are rewritten only when something changed. Each cycle used to ask the server about half of the releases again
 - A catalog search puts the game with exactly that title first, then titles that start with the query, and only then the rest by popularity
-- The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change and on Ctrl+Alt+R
+- The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change, and Ctrl+Shift+Alt+T still resets at any time
 ### Fixed
 - Downloads no longer fill the log with thousands of "short write" warnings and no longer lose finished pieces when two neighbouring ones finish at once, which used to surface as "error promoting part file" on Windows
 - Cancelling a file or folder dialog is no longer shown as an error
