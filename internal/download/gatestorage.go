@@ -18,10 +18,18 @@ var errStorageClosed = errors.New("хранилище загрузки закр�
 // before Torrent.Drop can land after it and, through O_CREATE, bring back a
 // .part file that the removal has already deleted. Close waits for the
 // writes in flight and refuses the ones that come later.
+//
+// It also runs MarkComplete and MarkNotComplete one at a time. Each of them
+// fsyncs the files of its piece through a handle opened without
+// FILE_SHARE_DELETE, outside the engine's per-file lock, and the one that
+// finishes a file then renames its .part. On Windows that rename fails with a
+// sharing violation whenever a neighbouring piece of the same file is still in
+// its fsync, and the engine logs the failure and never retries it.
 type gatedStorage struct {
 	inner  storage.ClientImplCloser
 	mu     sync.RWMutex
 	closed bool
+	marks  sync.Mutex
 }
 
 func gateStorage(inner storage.ClientImplCloser) *gatedStorage {
@@ -34,10 +42,10 @@ func (s *gatedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, inf
 		return t, err
 	}
 	if piece := t.Piece; piece != nil {
-		t.Piece = func(p metainfo.Piece) storage.PieceImpl { return s.wrap(piece(p)) }
+		t.Piece = func(p metainfo.Piece) storage.PieceImpl { return s.wrap(p, piece(p)) }
 	}
 	if piece := t.PieceWithHash; piece != nil {
-		t.PieceWithHash = func(p metainfo.Piece, hash g.Option[[]byte]) storage.PieceImpl { return s.wrap(piece(p, hash)) }
+		t.PieceWithHash = func(p metainfo.Piece, hash g.Option[[]byte]) storage.PieceImpl { return s.wrap(p, piece(p, hash)) }
 	}
 	return t, nil
 }
@@ -60,10 +68,10 @@ func (s *gatedStorage) enter() error {
 
 func (s *gatedStorage) leave() { s.mu.RUnlock() }
 
-func (s *gatedStorage) wrap(p storage.PieceImpl) storage.PieceImpl {
+func (s *gatedStorage) wrap(meta metainfo.Piece, p storage.PieceImpl) storage.PieceImpl {
 	gp := gatedPiece{PieceImpl: p, gate: s}
 	if w, ok := p.(io.WriterTo); ok {
-		return gatedWriterToPiece{gatedPiece: gp, to: w}
+		return gatedWriterToPiece{gatedPiece: gp, to: w, meta: meta}
 	}
 	return gp
 }
@@ -86,6 +94,8 @@ func (p gatedPiece) MarkComplete() error {
 		return err
 	}
 	defer p.gate.leave()
+	p.gate.marks.Lock()
+	defer p.gate.marks.Unlock()
 	return p.PieceImpl.MarkComplete()
 }
 
@@ -94,12 +104,28 @@ func (p gatedPiece) MarkNotComplete() error {
 		return err
 	}
 	defer p.gate.leave()
+	p.gate.marks.Lock()
+	defer p.gate.marks.Unlock()
 	return p.PieceImpl.MarkNotComplete()
 }
 
 type gatedWriterToPiece struct {
 	gatedPiece
-	to io.WriterTo
+	to   io.WriterTo
+	meta metainfo.Piece
 }
 
-func (p gatedWriterToPiece) WriteTo(w io.Writer) (int64, error) { return p.to.WriteTo(w) }
+// The file storage copies a piece through a writer that refuses bytes past the
+// end of the piece's extent, and io.Copy only finds that end by reading one
+// buffer too far, so every piece that ends inside a file comes back with
+// io.ErrShortWrite after all of its bytes were written. The engine reads that
+// as a storage failure: it logs a warning per piece, skips banning the peers
+// that sent bad blocks and does not count a failed hash against them. The error
+// is dropped only when the whole piece was written.
+func (p gatedWriterToPiece) WriteTo(w io.Writer) (int64, error) {
+	n, err := p.to.WriteTo(w)
+	if errors.Is(err, io.ErrShortWrite) && n == p.meta.Length() {
+		return n, nil
+	}
+	return n, err
+}
