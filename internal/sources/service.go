@@ -703,7 +703,7 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
 		return Summary{}, matchErr
 	}
-	return s.settle(ctx, id, incoming, result, started, initial, result.NotModified, matches, partial, run) //nolint:contextcheck // инвариант 19: слушатели обновления живут дольше refresh (его ctx с таймаутом отменяется при возврате), поэтому notifyRefreshed идёт под ctx сервиса и учтён в wg
+	return s.settle(ctx, id, incoming, result, started, initial, result.NotModified, matches, partial, run)
 }
 
 func (s *Service) parseIncoming(ctx context.Context, id string, result feed.Result, run *refreshRun) ([]*Release, error) {
@@ -1029,7 +1029,7 @@ func (s *Service) settle(ctx context.Context, id string, incoming []*Release, re
 	if summary.Added > 0 || summary.Updated > 0 || summary.Restored > 0 {
 		s.notifyChanged()
 	}
-	s.notifyRefreshed()
+	s.notifyRefreshed() //nolint:contextcheck // инвариант 19: слушатели обновления живут дольше refresh (его ctx с таймаутом отменяется при возврате), поэтому notifyRefreshed идёт под ctx сервиса и учтён в wg
 	return summary, nil
 }
 
