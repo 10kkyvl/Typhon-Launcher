@@ -30,7 +30,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installEmptyInstallerPath': 'The installer path is not set',
   'errInstall.installEmptySource': 'The download folder is empty — no files were downloaded',
   'errInstall.installExternalRuns': 'The installer is running separately, wait for it to finish',
-  'errInstall.installFilesLocked': "The game's files are in use by another process",
+  'errInstall.installFilesLocked': 'The game folder is in use: close the game, any Explorer windows showing this folder and programs that use it, then try again',
   'errInstall.installFreeSpaceUnknown': 'Could not determine free disk space',
   'errInstall.installGameBusy': 'This game is being installed or updated',
   'errInstall.installGameRunning': 'The game is running, close it before removing it',

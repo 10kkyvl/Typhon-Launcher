@@ -27,7 +27,7 @@ export const errInstall = {
   'errInstall.installEmptyInstallerPath': 'путь до установщика не задан',
   'errInstall.installEmptySource': 'папка загрузки пуста — файлы не были загружены',
   'errInstall.installExternalRuns': 'установщик запущен отдельно, дождитесь его завершения',
-  'errInstall.installFilesLocked': 'файлы игры заняты другим процессом',
+  'errInstall.installFilesLocked': 'папка игры занята: закройте игру, окна Проводника с этой папкой и программы, которые её используют, и повторите',
   'errInstall.installFreeSpaceUnknown': 'не удалось определить свободное место на диске',
   'errInstall.installGameBusy': 'по этой игре идёт установка или обновление',
   'errInstall.installGameRunning': 'игра запущена, закройте её перед удалением',

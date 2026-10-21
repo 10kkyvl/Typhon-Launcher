@@ -34,7 +34,7 @@ var (
 	errGameRunning        = uierr.New("install.game_running", "игра запущена, закройте её перед удалением")
 	errGameBusy           = uierr.New("install.game_busy", "по этой игре идёт установка или обновление")
 	errRemoveSeeding      = uierr.New("install.remove_seeding", "раздача активна, остановите её перед удалением")
-	errFilesLocked        = uierr.New("install.files_locked", "файлы игры заняты другим процессом")
+	errFilesLocked        = uierr.New("install.files_locked", "папка игры занята: закройте игру, окна Проводника с этой папкой и программы, которые её используют, и повторите")
 	errUninstallCancelled = uierr.New("install.uninstall_cancelled", "удаление отменено в установщике")
 	errUninstallFailed    = uierr.New("install.uninstall_failed", "деинсталлятор завершился с ошибкой")
 	errNoUninstaller      = uierr.New("install.no_uninstaller", "деинсталлятор не найден")
