@@ -287,6 +287,12 @@
           <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
         {/if}
         <div class="editor-layout">
+          <div class="editor-preview">
+            <Card surface="panel" title={msg('settings.themePreviewTitle')}>
+              <ThemePreview vars={previewStyle} />
+            </Card>
+          </div>
+
           <div class="editor-fields">
             <label class="field">
               <span class="row-label">{msg('settings.appearanceNameFieldLabel')}</span>
@@ -374,12 +380,6 @@
                 </Button>
               {/if}
             </div>
-          </div>
-
-          <div class="editor-preview">
-            <Card surface="panel" title={msg('settings.themePreviewTitle')}>
-              <ThemePreview vars={previewStyle} />
-            </Card>
           </div>
         </div>
       </Card>
@@ -485,7 +485,7 @@
 
   .editor-layout {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-6);
     align-items: start;
   }
@@ -636,18 +636,6 @@
   }
 
   .editor-preview {
-    order: -1;
     min-width: 0;
-  }
-
-  @container settings-card (min-width: 76rem) {
-    .editor-preview {
-      order: 0;
-      position: sticky;
-      top: var(--space-4);
-    }
-    .editor-layout {
-      grid-template-columns: minmax(0, 1fr) 28rem;
-    }
   }
 </style>
