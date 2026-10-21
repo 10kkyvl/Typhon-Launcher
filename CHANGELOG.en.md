@@ -27,12 +27,12 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - On the Downloads page a download that came from the catalog has a "Game page" button, so the description and requirements are one click away
 
 - Several game folders: the Library card in the settings takes folders on other disks. The install dialog offers the library folders to choose from, and Find games and Disk usage look in all of them
-- Your own colours in the profile appearance: the Custom theme gets a "colours as is" switch without darkening, and the name and the avatar frame each take their own colour instead of the accent. Text turns dark by itself on a light background
-- The theme editor in the settings names colours in plain words ("Cards and windows", "Borders", "Text"), says where each one is used and shows a small window that repaints as you edit
+- Your own colours in the profile appearance: a custom background colour sits under the theme tiles, the Custom theme adds a second colour, an angle and "colours as is" without darkening, and the name and the avatar frame each take their own colour instead of the accent. The appearance panel scrolls on its own
+- The theme editor in the settings names colours in plain words ("Cards and windows", "Borders", "Text"), says where each one is used and shows a full-width preview above the fields: menu, search, cards, hovered buttons, a focused field, a toast, a dialog and a download progress bar
 - A source refresh shows a bar with the stage and a counter ("Parsing entries N of M", "Matching N of M") instead of a spinner, and Refresh all shows the overall percentage
 - A chat message can carry up to four images, each up to 8 MB, by the paperclip button or by pasting from the clipboard. They show as previews, open full size, are stored on the server with the message and deleted with it after 7 days
 ### Changed
-- The install dialog measures "Space required" and "Free on disk" for the folder you typed or picked and recalculates on every change. It used to look at the library disk and never noticed you chose another drive
+- The install dialog measures space for the folder you typed or picked and recalculates on every change. When the chosen folder is not empty it puts the game into a subfolder named after it, and it replaces the leftovers of an earlier failed extraction instead of refusing with "folder is not empty"
 - A portable build moves to the same disk with a single rename: no copy, no doubled space, done in seconds. Move is now the default when seeding is off; to another disk the game is still copied with verification
 - The bell no longer lists "Downloading N%" for every running download: completion and failures arrive as toasts
 - Hidden games are hidden from friends too: the "hidden" mark travels to the account with the rest
