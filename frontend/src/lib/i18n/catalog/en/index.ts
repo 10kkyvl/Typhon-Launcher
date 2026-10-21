@@ -40,6 +40,7 @@ import { screenshots } from './screenshots';
 import { stats } from './stats';
 import { sysreq } from './sysreq';
 import { diskusage } from './diskusage';
+import { themeTokens } from './themeTokens';
 
 export const en: Record<MessageKey, Message> = {
   ...bigpictureCatalog,
@@ -82,6 +83,7 @@ export const en: Record<MessageKey, Message> = {
   ...stats,
   ...sysreq,
   ...diskusage,
+  ...themeTokens,
 };
 
 export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };

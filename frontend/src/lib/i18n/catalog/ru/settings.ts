@@ -219,8 +219,6 @@ export const settings = {
   'settings.appearanceExportingEllipsis': 'Экспорт…',
   'settings.appearanceExportButton': 'Экспорт',
   'settings.appearanceDeletingEllipsis': 'Удаление…',
-  'settings.appearancePreviewSub': 'Живое превью темы',
-  'settings.appearancePreviewButtonLabel': 'Кнопка',
   'settings.appearanceResetCardTitle': 'Сброс',
   'settings.appearanceResetLabel': 'Вернуть оформление по умолчанию',
   'settings.appearanceResetSub': 'Сбрасывает личный акцент, окраску значка и возвращает встроенную тёмную тему. Также доступно по Ctrl+Shift+Alt+T',
