@@ -2,7 +2,8 @@
   import { ArrowDown, ArrowUp, ChevronRight, Pause, Play, X } from '@lucide/svelte';
   import type { Download } from '../services/downloads';
   import { cancelDownloadPrompt } from '../confirm/prompts';
-  import { cancel, pause, resume, statusLabels } from '../stores/downloads';
+  import { cancel, downloadNow, pause, resume, statusLabels } from '../stores/downloads';
+  import { playThrottle } from '../stores/playThrottle';
   import { gameArt, requestArt } from '../stores/metadata';
   import { sources } from '../stores/sources';
   import { bytesSize, etaLabel, speedBytes } from '../utils/format';
@@ -32,6 +33,13 @@
     if (download.origin.gameId || download.origin.releaseId) return msg('ui.game');
     return '';
   });
+
+  const canDownloadNow = $derived(
+    $playThrottle.schedule?.blocked === true &&
+    !download.ignoreSchedule &&
+    download.status !== 'completed' &&
+    download.status !== 'failed',
+  );
 
   const sourceTag = $derived($sources.find((s) => s.id === download.origin.sourceId)?.name ?? '');
   const cover = $derived((download.origin.gameId && $gameArt[download.origin.gameId]?.cover) || '');
@@ -65,11 +73,24 @@
   <div class="main">
     <div class="head">
       <span class="title" title={download.name}>{download.name}</span>
-      {#if typeTag || sourceTag}
+      {#if typeTag || sourceTag || download.ignoreSchedule}
         <div class="tags">
           {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
           {#if sourceTag}<StatusBadge kind="neutral" label={sourceTag} dot={false} />{/if}
+          {#if download.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
         </div>
+      {/if}
+      {#if canDownloadNow}
+        <Button
+          size="sm"
+          variant="ghost"
+          onclick={(e) => {
+            stop(e);
+            downloadNow(download.id);
+          }}
+        >
+          {msg('transfers.downloadNow')}
+        </Button>
       {/if}
     </div>
     <div class="progress-row">

@@ -63,7 +63,7 @@ func TestAppliersAreUndoneWhenTheSettingsCannotBeWritten(t *testing.T) {
 		t.Fatalf("effects = %+v, want the previous (startup %v, tray %v): the write failed but the change stayed applied",
 			*fx, base.LaunchOnStartup, base.MinimizeToTray)
 	}
-	if got := svc.GetSettings(); got != base {
+	if got := svc.GetSettings(); !sameSettings(got, base) {
 		t.Fatalf("memory changed by a failed save: %+v", got)
 	}
 }

@@ -2,6 +2,7 @@
   import {
     ArrowDown,
     ArrowUp,
+    CalendarClock,
     ChevronDown,
     CircleAlert,
     Download,
@@ -32,6 +33,7 @@
   import {
     active,
     completed,
+    downloadNow,
     failed,
     forceStart,
     moveDown,
@@ -47,7 +49,7 @@
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { playThrottle } from '../../lib/stores/playThrottle';
-  import { playThrottleBanner } from '../../lib/services/playThrottle';
+  import { playThrottleBanner, scheduleOpenLabel } from '../../lib/services/playThrottle';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
@@ -61,9 +63,18 @@
     updateSettings({ maxActiveDownloads: Number(id) });
   }
 
+  const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
+
   const playBanner = $derived(playThrottleBanner($playThrottle));
   const playBannerText = $derived.by(() => {
     if (!playBanner) return '';
+    if (playBanner.kind === 'schedule') {
+      const when = scheduleOpenLabel(playBanner.nextOpenAt);
+      if (playBanner.game) {
+        return when ? msg('transfers.scheduleAndPlayBanner', { when }) : msg('transfers.scheduleAndPlayBannerNoNext');
+      }
+      return when ? msg('transfers.scheduleBanner', { when }) : msg('transfers.scheduleBannerNoNext');
+    }
     if (playBanner.kind === 'pause') return msg('transfers.playPausedBanner');
     return msg('transfers.playLimitedBanner', {
       down: rateLimitLabel(playBanner.downloadLimit),
@@ -157,7 +168,9 @@
 
 {#if playBanner}
   <div class="play-banner" role="status">
-    {#if playBanner.kind === 'pause'}
+    {#if playBanner.kind === 'schedule'}
+      <CalendarClock size="1.5rem" strokeWidth={1.8} />
+    {:else if playBanner.kind === 'pause'}
       <Pause size="1.5rem" strokeWidth={1.8} />
     {:else}
       <Gauge size="1.5rem" strokeWidth={1.8} />
@@ -247,10 +260,11 @@
           </div>
           <div class="info inline">
             <span class="title" title={q.name}>{q.name}</span>
-            {#if typeTag(q) || sourceTag(q)}
+            {#if typeTag(q) || sourceTag(q) || q.ignoreSchedule}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
                 {#if sourceTag(q)}<StatusBadge kind="neutral" label={sourceTag(q)} dot={false} />{/if}
+                {#if q.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
               </div>
             {/if}
           </div>
@@ -258,6 +272,9 @@
             <span class="status-main">{msg('transfers.downloadsStatusWaiting')}</span>
           </div>
           <div class="row-actions">
+            {#if scheduleHeld && !q.ignoreSchedule}
+              <Button size="sm" onclick={() => downloadNow(q.id)}>{msg('transfers.downloadNow')}</Button>
+            {/if}
             <DropdownMenu
               items={[
                 ...(i > 0 ? [{ id: 'up', label: msg('transfers.downloadsMoveUp') }] : []),

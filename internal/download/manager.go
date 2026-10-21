@@ -161,6 +161,13 @@ type Manager struct {
 	cleanupErr      error
 	claims          []string
 
+	// scheduleBlocked is true while the download schedule has no open window;
+	// scheduleMinute is the minute it was last judged at. clock replaces the
+	// tick time in tests.
+	scheduleBlocked bool
+	scheduleMinute  time.Time
+	clock           func() time.Time
+
 	ctx         context.Context
 	cancel      context.CancelFunc
 	closing     bool
@@ -284,6 +291,7 @@ func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	cfg := m.config()
 	m.max = maxActive(cfg)
 	m.rateCfg = cfg
+	m.refreshScheduleLocked(m.scheduleTime(time.Now()))
 	m.netKey = netKeyOf(cfg)
 	// Until the route is checked nothing may start, and a window that asks
 	// meanwhile should be told the network is not ready, not that no client
@@ -409,6 +417,8 @@ func (m *Manager) loadLocked() error {
 			AddedAt:     r.AddedAt,
 			CompletedAt: r.CompletedAt,
 			Error:       r.Error,
+
+			IgnoreSchedule: r.IgnoreSchedule,
 		}
 		if d.Type == "" {
 			d.Type = TypeTorrent
@@ -510,6 +520,8 @@ func (m *Manager) persistLocked() error {
 			AddedAt:     d.AddedAt,
 			CompletedAt: d.CompletedAt,
 			Error:       d.Error,
+
+			IgnoreSchedule: d.IgnoreSchedule,
 		})
 	}
 	if err := m.store.save(records); err != nil {
@@ -1638,7 +1650,9 @@ func (m *Manager) move(id string, step int) error {
 func (m *Manager) schedule() {
 	active := 0
 	for _, d := range m.items {
-		if occupiesSlot(d.Status) {
+		// A download held back by the schedule moves no data, so it must not
+		// keep a slot from one that may run.
+		if occupiesSlot(d.Status) && (d.Status != StatusDownloading || !m.schedulePausedLocked(d)) {
 			active++
 		}
 	}
@@ -1646,7 +1660,7 @@ func (m *Manager) schedule() {
 		if active >= m.max {
 			return
 		}
-		if d.Status != StatusQueued {
+		if d.Status != StatusQueued || m.schedulePausedLocked(d) {
 			continue
 		}
 		if m.startLocked(d) {
@@ -1661,8 +1675,8 @@ func (m *Manager) startLocked(d *Download) bool {
 		return false
 	}
 	eng.setPriorities(selectionOf(d))
-	m.allowDownloadLocked(eng)
-	m.applyUploadLocked(eng, m.config().UploadWhileDownloading)
+	m.allowDownloadLocked(d, eng)
+	m.applyUploadLocked(d, eng, m.config().UploadWhileDownloading)
 	d.Status = StatusDownloading
 	d.Error = ""
 	d.ETASeconds = -1
@@ -1755,6 +1769,7 @@ func (m *Manager) tick() {
 func (m *Manager) sample(ctx context.Context, now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.sampleScheduleLocked(now)
 	changed := false
 	for _, d := range m.items {
 		eng := m.engines[d.ID]
@@ -1875,7 +1890,7 @@ func (m *Manager) updateLocked(d *Download, eng engineTorrent, now time.Time) {
 	d.Progress = ratio(done, d.Total)
 	d.ETASeconds = etaSeconds(d.Total-done, d.DownloadSpeed)
 
-	updateStallLocked(d, r, done, now, m.playPausedLocked())
+	updateStallLocked(d, r, done, now, m.pausedLocked(d))
 }
 
 func updateStallLocked(d *Download, r *rateState, done int64, now time.Time, gated bool) {
@@ -1898,6 +1913,7 @@ func (m *Manager) completeLocked(d *Download) {
 	now := time.Now()
 	m.markVerifiedLocked(d.ID)
 	m.idleLocked(d, StatusCompleted)
+	d.IgnoreSchedule = false
 	d.CompletedAt = &now
 	d.Progress = 1
 	d.ETASeconds = 0
@@ -1907,7 +1923,7 @@ func (m *Manager) completeLocked(d *Download) {
 	if eng := m.engines[d.ID]; eng != nil {
 		eng.disallowDownload()
 		if seed {
-			m.allowUploadLocked(eng)
+			m.allowUploadLocked(d, eng)
 		} else {
 			m.detachEngineLocked(d.ID, eng)
 		}
@@ -1993,14 +2009,12 @@ func (m *Manager) applySettings(next settings.Settings) {
 	}
 	wasPaused := m.playPausedLocked()
 	m.rateCfg = next
+	scheduleChanged := m.refreshScheduleLocked(m.scheduleTime(time.Now()))
 	m.applyRatesLocked()
-	if wasPaused != m.playPausedLocked() {
+	if wasPaused != m.playPausedLocked() || scheduleChanged {
 		m.syncPlayLocked()
 	}
-	if state := m.playStateLocked(); state != m.playShown {
-		m.playShown = state
-		emit(eventPlayThrottle, state)
-	}
+	m.emitPlayStateLocked()
 	m.max = maxActive(next)
 	for _, d := range m.items {
 		eng := m.engines[d.ID]
@@ -2009,7 +2023,7 @@ func (m *Manager) applySettings(next settings.Settings) {
 			// anything queued, paused or failed keeps its engine attached and
 			// must be gated off, or the toggle would never reach it.
 			if eng != nil {
-				m.applyUploadLocked(eng, next.UploadWhileDownloading && d.Status == StatusDownloading)
+				m.applyUploadLocked(d, eng, next.UploadWhileDownloading && d.Status == StatusDownloading)
 			}
 			continue
 		}
@@ -2033,7 +2047,7 @@ func (m *Manager) applySettings(next settings.Settings) {
 		case eng != nil:
 			if !d.Seeding {
 				d.Seeding = true
-				m.allowUploadLocked(eng)
+				m.allowUploadLocked(d, eng)
 				emit(eventUpdated, snapshot(d))
 			}
 		default:
@@ -2253,7 +2267,7 @@ func (m *Manager) settleRestored(ctx context.Context, j restoreJob, eng engineTo
 		seed := m.config().SeedAfterDownload
 		d.Seeding = seed
 		if seed {
-			m.allowUploadLocked(eng)
+			m.allowUploadLocked(d, eng)
 		} else {
 			m.detachEngineLocked(j.id, eng)
 		}

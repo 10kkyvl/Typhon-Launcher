@@ -15,6 +15,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
+  import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
   import Select from '../../lib/components/Select.svelte';
   import { cloudErrorText } from '../../lib/cloudsaves/messages';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -43,7 +44,7 @@
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
-  import { getSettings, maxActiveDownloadOptions, openFolder, type GameMode, type Settings } from '../../lib/services/settings';
+  import { getSettings, maxActiveDownloadOptions, openFolder, type GameMode, type ScheduleWindow, type Settings } from '../../lib/services/settings';
   import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
   import {
     exportLogs,
@@ -477,6 +478,18 @@
       playDownloadMode: id,
       playDownloadRateLimit: current?.playDownloadRateLimit || defaultPlayDownloadLimit,
       playUploadRateLimit: current?.playUploadRateLimit || defaultPlayUploadLimit,
+    });
+  }
+
+  let scheduleError = $state('');
+
+  async function setSchedule(downloadSchedule: ScheduleWindow[]) {
+    scheduleError = '';
+    await updateSettingsReporting({ downloadSchedule }, (err) => {
+      const reason = overlayReason(err);
+      scheduleError = reason
+        ? msg('settings.downloadsScheduleSaveError', { reason })
+        : msg('settings.downloadsScheduleSaveErrorPlain');
     });
   }
 
@@ -1015,6 +1028,16 @@
               />
             </div>
           {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
+              {#if scheduleError}<span class="row-sub row-error" role="alert">{scheduleError}</span>{/if}
+            </div>
+            <div class="schedule-body">
+              <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
+            </div>
+          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
@@ -1599,6 +1622,11 @@
 
   .row-error {
     color: var(--danger);
+  }
+
+  .schedule-body {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .logs-upload-progress {

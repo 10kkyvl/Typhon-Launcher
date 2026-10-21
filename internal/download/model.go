@@ -81,6 +81,10 @@ type Download struct {
 	Stalled       bool        `json:"stalled"`
 	StalledSince  *time.Time  `json:"stalledSince,omitempty"`
 
+	// IgnoreSchedule lets this download run outside the schedule windows. It
+	// ends with the download: completeLocked clears it.
+	IgnoreSchedule bool `json:"ignoreSchedule,omitempty"`
+
 	// heldSelection is the selection a stored record named while the torrent's
 	// file list is not known (no cached torrent yet). It is written back as it
 	// is and applied once the list arrives; nil means the record named none.

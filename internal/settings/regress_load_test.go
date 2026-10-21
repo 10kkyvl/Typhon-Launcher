@@ -167,7 +167,7 @@ func TestLoadToleratesUnknownFields(t *testing.T) {
 func TestMissingSettingsDirectoryStartsWithDefaultsAndSaveCreatesIt(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "deeper", "settings.json")
 	svc := mustServiceAt(t, path)
-	if svc.GetSettings() != Defaults() {
+	if !sameSettings(svc.GetSettings(), Defaults()) {
 		t.Fatalf("got %+v, want defaults", svc.GetSettings())
 	}
 
