@@ -432,8 +432,12 @@ func TestPlanSpace(t *testing.T) {
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("PlanSpace error = %v, want %v", err, tc.wantErr)
 			}
-			if got != tc.want {
-				t.Fatalf("PlanSpace = %+v, want %+v", got, tc.want)
+			want := tc.want
+			if tc.wantErr == nil {
+				want.Suggested = dest
+			}
+			if got != want {
+				t.Fatalf("PlanSpace = %+v, want %+v", got, want)
 			}
 			if tc.wantErr == nil && (len(asked) != 1 || asked[0] != dest) {
 				t.Fatalf("free space asked for %v, want the entered folder %s", asked, dest)

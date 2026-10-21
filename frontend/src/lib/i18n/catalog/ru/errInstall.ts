@@ -18,6 +18,8 @@ export const errInstall = {
   'errInstall.installCopyVerifyFailed': 'копирование завершилось с ошибкой проверки',
   'errInstall.installDestExists': 'путь назначения уже существует',
   'errInstall.installDestNotEmpty': 'папка установки уже существует и не пуста',
+  'errInstall.installDestNotEmptyAt': 'папка установки уже существует и не пуста, выберите подпапку, например {path}',
+  'errInstall.installDestUnreadable': 'не удалось проверить папку установки',
   'errInstall.installBrokerOutsidePin':
     'задание установки вышло за границы, согласованные при запросе прав администратора',
   'errInstall.installElevationDeclined':

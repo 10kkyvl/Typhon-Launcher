@@ -64,6 +64,9 @@ export interface SpaceInfo {
   sameVolume: boolean;
   mode: string;
   enough: boolean;
+  destinationBusy: boolean;
+  suggested: string;
+  reusable: boolean;
 }
 
 export interface Installation {

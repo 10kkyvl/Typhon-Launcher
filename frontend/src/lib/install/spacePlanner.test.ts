@@ -3,7 +3,7 @@ import type { SpaceInfo } from '../services/install';
 import { createSpacePlanner, spaceDebounceMs } from './spacePlanner';
 
 function info(required: number, free: number): SpaceInfo {
-  return { requiredBytes: required, freeBytes: free, sameVolume: false, mode: 'copy', enough: free >= required };
+  return { requiredBytes: required, freeBytes: free, sameVolume: false, mode: 'copy', enough: free >= required, destinationBusy: false, suggested: '', reusable: false };
 }
 
 function deferred<T>() {

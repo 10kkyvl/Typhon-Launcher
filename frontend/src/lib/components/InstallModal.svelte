@@ -20,6 +20,7 @@
   } from '../services/install';
   import { installErrorText, needsInteractiveInstall } from '../install/installErrors';
   import { createSpacePlanner } from '../install/spacePlanner';
+  import { adviseDestination, type DestinationHint, type DestinationOrigin } from '../install/destinationAdvice';
   import { installIndeterminate, installTotalUnknown } from '../install/progress';
   import { libraryFolders, openGameFolder, selectFolder, type LibraryFolder } from '../services/settings';
   import { destinationInRoot, rootOfDestination } from '../library/folders';
@@ -62,7 +63,9 @@
   let spacePending = $state(false);
   let spaceError = $state('');
   let folders = $state<LibraryFolder[]>([]);
+  let hint = $state<DestinationHint | null>(null);
   let token = 0;
+  let origin: DestinationOrigin = 'typed';
 
   const OTHER_ROOT = '__other__';
 
@@ -72,6 +75,9 @@
       spacePending = true;
     },
     onResult: (result) => {
+      const advice = adviseDestination(result, origin, destination);
+      destination = advice.destination;
+      hint = advice.hint;
       space = result;
       spaceError = '';
       spacePending = false;
@@ -166,11 +172,15 @@
     spacePending = false;
     spaceError = '';
     folders = [];
+    hint = null;
+    origin = 'typed';
   }
 
-  function replan(immediate: boolean) {
+  function replan(immediate: boolean, source: DestinationOrigin = 'typed') {
     const current = info;
     if (!current || !spaceDriven) return;
+    origin = source;
+    hint = null;
     const request = { downloadId: current.downloadId, destination, mode: requestMode };
     if (immediate) planner.now(request);
     else planner.schedule(request);
@@ -188,7 +198,7 @@
       return;
     }
     destination = destinationInRoot(id, destination);
-    replan(true);
+    replan(true, 'pick');
   }
 
   async function loadFolders(current: number) {
@@ -225,6 +235,9 @@
         sameVolume: result.sameVolume,
         mode: result.mode,
         enough: result.freeBytes >= result.requiredBytes,
+        destinationBusy: false,
+        suggested: '',
+        reusable: false,
       };
       replan(true);
       if ((result.roots?.length ?? 0) > 1) void loadFolders(current);
@@ -267,11 +280,18 @@
       const path = await selectFolder(msg('modals.installChooseFolder'));
       if (path) {
         destination = path;
-        replan(true);
+        replan(true, 'pick');
       }
     } catch {
       toast(msg('modals.installFolderDialogFailed'), 'danger');
     }
+  }
+
+  function useSuggested() {
+    const current = hint;
+    if (!current) return;
+    destination = current.path;
+    replan(true);
   }
 
   async function run(action: () => Promise<void>) {
@@ -442,6 +462,21 @@
           </div>
           {#if spaceError && !spacePending}
             <p class="note danger">{spaceError}</p>
+          {:else if hint && !spacePending}
+            <div class="hint">
+              <p class="note">
+                {#if hint.kind === 'adjusted'}
+                  {msg('modals.installDestinationAdjusted', { path: hint.path })}
+                {:else if hint.kind === 'suggest'}
+                  {msg('modals.installDestinationBusy', { path: hint.path })}
+                {:else}
+                  {msg('modals.installDestinationReusable')}
+                {/if}
+              </p>
+              {#if hint.kind === 'suggest'}
+                <Button size="sm" onclick={useSuggested}>{msg('modals.installUseSuggested')}</Button>
+              {/if}
+            </div>
           {/if}
         </div>
       {/if}
@@ -719,6 +754,12 @@
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);
+  }
+
+  .hint {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
   }
 
   .note.danger {

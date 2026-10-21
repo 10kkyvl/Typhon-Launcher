@@ -1077,9 +1077,9 @@ func TestProposeDestinationAvoidsCollision(t *testing.T) {
 	games := t.TempDir()
 	mkFile(t, filepath.Join(games, "Game", "taken.txt"), 4)
 
-	got := s.proposeDestination(games, "Game")
-	if got != filepath.Join(games, "Game (2)") {
-		t.Fatalf("destination = %q", got)
+	got, err := s.proposeDestination(games, "Game")
+	if err != nil || got != filepath.Join(games, "Game (2)") {
+		t.Fatalf("destination = %q, %v", got, err)
 	}
 }
 
