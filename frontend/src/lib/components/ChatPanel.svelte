@@ -384,7 +384,7 @@
 </div>
 
 <style>
-  .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; pointer-events: none; }
+  .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
   .chat-root > * { pointer-events: auto; }
   .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
   .chat-toggle:hover { background: var(--accent-hover); }
