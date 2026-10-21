@@ -31,7 +31,7 @@ func TestSaveAndReload(t *testing.T) {
 	}
 
 	reloaded := mustServiceAt(t, path).GetSettings()
-	if reloaded != next {
+	if !sameSettings(reloaded, next) {
 		t.Fatalf("got %+v, want %+v", reloaded, next)
 	}
 }
@@ -530,7 +530,7 @@ func TestApplierErrorPreventsPersistAndNotify(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("subscriber called %d times, want 0", calls)
 	}
-	if got := s.GetSettings(); got != base {
+	if got := s.GetSettings(); !sameSettings(got, base) {
 		t.Fatalf("in-memory settings changed: got %+v, want %+v", got, base)
 	}
 	after, err := os.ReadFile(filepath.Clean(path))

@@ -8,6 +8,12 @@ export interface GameMode {
   raisePriority: boolean;
 }
 
+export interface ScheduleWindow {
+  days: number[];
+  from: string;
+  to: string;
+}
+
 export interface Settings {
   theme: string;
   accentColor: string;
@@ -29,6 +35,7 @@ export interface Settings {
   playDownloadMode: string;
   playDownloadRateLimit: number;
   playUploadRateLimit: number;
+  downloadSchedule: ScheduleWindow[];
   uploadWhileDownloading: boolean;
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
@@ -95,6 +102,7 @@ const fallbackDefaults: Settings = {
   playDownloadMode: 'off',
   playDownloadRateLimit: 0,
   playUploadRateLimit: 0,
+  downloadSchedule: [],
   uploadWhileDownloading: false,
   seedAfterDownload: false,
   installCleanupPolicy: 'delete',
@@ -146,9 +154,14 @@ export const maxActiveDownloadOptions = [
 ];
 
 
+// Go sends a nil slice as null.
+function normalize(s: Settings): Settings {
+  return { ...s, downloadSchedule: s.downloadSchedule ?? [] };
+}
+
 export async function getSettings(): Promise<Settings> {
   if (inWails) {
-    return (await SettingsService.GetSettings()) as Settings;
+    return normalize((await SettingsService.GetSettings()) as Settings);
   }
   try {
     const raw = localStorage.getItem(FALLBACK_KEY);
@@ -160,7 +173,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function saveSettingsPatch(patch: Partial<Settings>): Promise<Settings> {
   if (inWails) {
-    return (await SettingsService.SaveSettingsPatch(patch)) as Settings;
+    return normalize((await SettingsService.SaveSettingsPatch(patch)) as Settings);
   }
   const merged = { ...(await getSettings()), ...patch };
   localStorage.setItem(FALLBACK_KEY, JSON.stringify(merged));
@@ -184,17 +197,17 @@ export async function proposeLibraryPath(parent: string): Promise<string> {
 
 export async function setupLibrary(parent: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SetupLibrary(parent)) as Settings;
+  return normalize((await SettingsService.SetupLibrary(parent)) as Settings);
 }
 
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+  return normalize((await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings);
 }
 
 export async function saveLegalAcceptance(version: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SaveLegalAcceptance(version)) as Settings;
+  return normalize((await SettingsService.SaveLegalAcceptance(version)) as Settings);
 }
 
 export async function openGameFolder(path: string, executable: string): Promise<void> {

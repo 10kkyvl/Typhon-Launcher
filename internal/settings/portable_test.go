@@ -62,6 +62,7 @@ var localNames = []string{
 	"playDownloadMode",
 	"playDownloadRateLimit",
 	"playUploadRateLimit",
+	"downloadSchedule",
 	"accountSync",
 	"sourcesNoticeAccepted",
 	"anonymousUsageStats",

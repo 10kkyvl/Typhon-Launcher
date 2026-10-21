@@ -105,7 +105,7 @@ func TestConfigDirCreatesNothingOnItsOwn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService on a fresh machine: %v", err)
 	}
-	if svc.GetSettings() != Defaults() {
+	if !sameSettings(svc.GetSettings(), Defaults()) {
 		t.Fatalf("a fresh machine did not start from the defaults: %+v", svc.GetSettings())
 	}
 }

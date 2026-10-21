@@ -55,13 +55,13 @@ func TestSaveSettingsPatchChangesOnlyTheNamedFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("SaveSettingsPatch: %v", err)
 			}
-			if got != want {
+			if !sameSettings(got, want) {
 				t.Fatalf("returned %+v, want %+v", got, want)
 			}
-			if mem := svc.GetSettings(); mem != want {
+			if mem := svc.GetSettings(); !sameSettings(mem, want) {
 				t.Fatalf("memory %+v, want %+v", mem, want)
 			}
-			if disk := mustServiceAt(t, path).GetSettings(); disk != want {
+			if disk := mustServiceAt(t, path).GetSettings(); !sameSettings(disk, want) {
 				t.Fatalf("disk %+v, want %+v", disk, want)
 			}
 		})
@@ -106,7 +106,7 @@ func TestSaveSettingsPatchRefusesWhatItCannotApply(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.inText) {
 				t.Fatalf("error %q does not name %q", err, tc.inText)
 			}
-			if got := svc.GetSettings(); got != before {
+			if got := svc.GetSettings(); !sameSettings(got, before) {
 				t.Fatalf("memory changed to %+v", got)
 			}
 			if _, statErr := os.Stat(path); !errors.Is(statErr, fs.ErrNotExist) {
@@ -124,7 +124,7 @@ func TestSaveSettingsPatchAppliesNothingWhenOneKeyIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if got := svc.GetSettings(); got != before {
+	if got := svc.GetSettings(); !sameSettings(got, before) {
 		t.Fatalf("a half of the patch was applied: %+v", got)
 	}
 }
@@ -139,7 +139,7 @@ func TestSaveSettingsPatchWithNothingToChangeWritesNothing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if got != before {
+		if !sameSettings(got, before) {
 			t.Fatalf("%s: returned %+v, want the stored settings", name, got)
 		}
 	}
@@ -160,10 +160,10 @@ func TestSaveSettingsPatchFailedWriteKeepsMemory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the write to fail")
 	}
-	if got != (Settings{}) {
+	if !sameSettings(got, (Settings{})) {
 		t.Fatalf("a failed save returned %+v", got)
 	}
-	if mem := svc.GetSettings(); mem != before {
+	if mem := svc.GetSettings(); !sameSettings(mem, before) {
 		t.Fatalf("a failed write changed the stored settings: %+v", mem)
 	}
 }

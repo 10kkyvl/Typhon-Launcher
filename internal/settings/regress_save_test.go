@@ -51,7 +51,7 @@ func TestEveryFlagAndValueSurvivesSaveAndReload(t *testing.T) {
 	if err := svc.SaveSettings(next); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if got := svc.GetSettings(); got != next {
+	if got := svc.GetSettings(); !sameSettings(got, next) {
 		t.Fatalf("the save changed a valid value: got %+v, want %+v", got, next)
 	}
 
@@ -100,7 +100,7 @@ func TestRejectedSaveChangesNothing(t *testing.T) {
 				t.Fatal("expected the save to be rejected")
 			}
 
-			if got := svc.GetSettings(); got != base {
+			if got := svc.GetSettings(); !sameSettings(got, base) {
 				t.Fatalf("memory changed by a rejected save: %+v", got)
 			}
 			if got := readBytes(t, path); got != stored {
@@ -143,7 +143,7 @@ func TestFailedWriteKeepsMemorySubscribersAndFileUntouched(t *testing.T) {
 		t.Fatal("expected the write to fail")
 	}
 
-	if got := svc.GetSettings(); got != base {
+	if got := svc.GetSettings(); !sameSettings(got, base) {
 		t.Fatalf("memory ran ahead of the disk: %+v", got)
 	}
 	if notified != 0 {
@@ -169,7 +169,7 @@ func TestFailedConsentWriteKeepsThePromptPending(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the consent write to fail")
 	}
-	if got != (Settings{}) {
+	if !sameSettings(got, (Settings{})) {
 		t.Fatalf("a failed answer returned settings: %+v", got)
 	}
 	current := svc.GetSettings()
@@ -215,7 +215,7 @@ func TestConcurrentSavesNeverTearTheFile(t *testing.T) {
 	}
 
 	reloaded := mustServiceAt(t, path).GetSettings()
-	if reloaded != svc.GetSettings() {
+	if !sameSettings(reloaded, svc.GetSettings()) {
 		t.Fatalf("file and memory disagree after concurrent saves: %+v vs %+v", reloaded, svc.GetSettings())
 	}
 	if n := reloaded.MaxActiveDownloads; n < 1 || n > savers {

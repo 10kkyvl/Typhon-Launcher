@@ -99,7 +99,7 @@ func TestConcurrentUpdatesOfDifferentFieldsAllSurvive(t *testing.T) {
 		"memory": svc.GetSettings(),
 		"disk":   mustServiceAt(t, path).GetSettings(),
 	} {
-		if got != want {
+		if !sameSettings(got, want) {
 			t.Errorf("%s: %+v, want every update applied: %+v", name, got, want)
 		}
 	}
@@ -136,7 +136,7 @@ func TestUpdateChangesNothingWhenTheCallbackFails(t *testing.T) {
 			if tt.want != nil && !errors.Is(err, tt.want) {
 				t.Fatalf("Update() error = %v, want it to wrap %v", err, tt.want)
 			}
-			if got := svc.GetSettings(); got != base {
+			if got := svc.GetSettings(); !sameSettings(got, base) {
 				t.Fatalf("memory changed: %+v", got)
 			}
 			if calls.Load() != 0 {
@@ -171,7 +171,7 @@ func TestUpdateUndoesAppliersWhenTheSettingsCannotBeWritten(t *testing.T) {
 	if fx.startup != base.LaunchOnStartup || fx.tray != base.MinimizeToTray {
 		t.Fatalf("effects = %+v, want the previous: the write failed but the change stayed applied", *fx)
 	}
-	if got := svc.GetSettings(); got != base {
+	if got := svc.GetSettings(); !sameSettings(got, base) {
 		t.Fatalf("memory changed by a failed update: %+v", got)
 	}
 }
@@ -195,7 +195,7 @@ func TestUpdateStopsAtTheFirstFailingApplier(t *testing.T) {
 	if fx.startup != base.LaunchOnStartup || fx.tray != base.MinimizeToTray {
 		t.Fatalf("effects = %+v, want the previous: an applier before the failing one stayed applied", *fx)
 	}
-	if got := svc.GetSettings(); got != base {
+	if got := svc.GetSettings(); !sameSettings(got, base) {
 		t.Fatalf("memory changed by a refused update: %+v", got)
 	}
 }

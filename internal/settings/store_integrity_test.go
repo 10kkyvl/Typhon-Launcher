@@ -44,7 +44,7 @@ func TestCorruptSettingsFailStartupAndKeepFile(t *testing.T) {
 func TestMissingSettingsStartWithDefaultsAndSave(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	s := mustServiceAt(t, path)
-	if s.GetSettings() != Defaults() {
+	if !sameSettings(s.GetSettings(), Defaults()) {
 		t.Fatalf("got %+v, want defaults", s.GetSettings())
 	}
 	if err := s.SaveSettings(s.GetSettings()); err != nil {

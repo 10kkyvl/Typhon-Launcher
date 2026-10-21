@@ -2,6 +2,7 @@ package download
 
 import (
 	"sync"
+	"time"
 
 	"typhon/internal/library"
 	"typhon/internal/settings"
@@ -10,10 +11,29 @@ import (
 const eventPlayThrottle = "downloads:play-throttle"
 
 type PlayThrottleState struct {
-	Active        bool   `json:"active"`
-	Mode          string `json:"mode"`
-	DownloadLimit int64  `json:"downloadLimit"`
-	UploadLimit   int64  `json:"uploadLimit"`
+	Active        bool           `json:"active"`
+	Mode          string         `json:"mode"`
+	DownloadLimit int64          `json:"downloadLimit"`
+	UploadLimit   int64          `json:"uploadLimit"`
+	Schedule      *ScheduleState `json:"schedule,omitempty"`
+}
+
+// ScheduleState is present only while a schedule is set. NextOpenAt is the
+// start of the next window in RFC 3339 and is empty while the window is open
+// or when no start can be named.
+type ScheduleState struct {
+	Blocked    bool   `json:"blocked"`
+	NextOpenAt string `json:"nextOpenAt"`
+}
+
+func (s PlayThrottleState) same(o PlayThrottleState) bool {
+	if s.Active != o.Active || s.Mode != o.Mode || s.DownloadLimit != o.DownloadLimit || s.UploadLimit != o.UploadLimit {
+		return false
+	}
+	if s.Schedule == nil || o.Schedule == nil {
+		return s.Schedule == o.Schedule
+	}
+	return *s.Schedule == *o.Schedule
 }
 
 // Runs under the library mutex: takes only m.mu and calls nothing outside the package.
@@ -36,15 +56,32 @@ func (m *Manager) PlayThrottle() PlayThrottleState {
 }
 
 func (m *Manager) playStateLocked() PlayThrottleState {
-	mode := m.rateCfg.PlayDownloadMode
-	if !m.gamesRunning || (mode != settings.PlayDownloadPause && mode != settings.PlayDownloadLimit) {
-		return PlayThrottleState{Mode: settings.PlayDownloadOff}
+	state := PlayThrottleState{Mode: settings.PlayDownloadOff}
+	if mode := m.rateCfg.PlayDownloadMode; m.gamesRunning && (mode == settings.PlayDownloadPause || mode == settings.PlayDownloadLimit) {
+		state.Active, state.Mode = true, mode
+		if mode == settings.PlayDownloadLimit {
+			state.DownloadLimit, state.UploadLimit = m.rateCfg.PlayRates(true)
+		}
 	}
-	state := PlayThrottleState{Active: true, Mode: mode}
-	if mode == settings.PlayDownloadLimit {
-		state.DownloadLimit, state.UploadLimit = m.rateCfg.PlayRates(true)
+	if len(m.rateCfg.DownloadSchedule) > 0 {
+		state.Schedule = &ScheduleState{Blocked: m.scheduleBlocked}
+		if m.scheduleBlocked {
+			state.Active = true
+			if next, ok := m.rateCfg.NextScheduleOpen(m.scheduleTime(time.Now())); ok {
+				state.Schedule.NextOpenAt = next.Format(time.RFC3339)
+			}
+		}
 	}
 	return state
+}
+
+func (m *Manager) emitPlayStateLocked() {
+	state := m.playStateLocked()
+	if state.same(m.playShown) {
+		return
+	}
+	m.playShown = state
+	emit(eventPlayThrottle, state)
 }
 
 func (m *Manager) playPausedLocked() bool {
@@ -58,7 +95,7 @@ func (m *Manager) syncPlayLocked() {
 		if eng == nil {
 			continue
 		}
-		if m.playPausedLocked() {
+		if m.pausedLocked(d) {
 			eng.disallowDownload()
 			eng.disallowUpload()
 			continue
@@ -74,11 +111,7 @@ func (m *Manager) syncPlayLocked() {
 			eng.allowUpload()
 		}
 	}
-	state := m.playStateLocked()
-	if state != m.playShown {
-		m.playShown = state
-		emit(eventPlayThrottle, state)
-	}
+	m.emitPlayStateLocked()
 }
 
 func (m *Manager) applyRatesLocked() {
@@ -88,22 +121,22 @@ func (m *Manager) applyRatesLocked() {
 	m.client.applyLimits(m.rateCfg.PlayRates(m.gamesRunning))
 }
 
-func (m *Manager) allowDownloadLocked(eng engineTorrent) {
-	if m.playPausedLocked() {
+func (m *Manager) allowDownloadLocked(d *Download, eng engineTorrent) {
+	if m.pausedLocked(d) {
 		return
 	}
 	eng.allowDownload()
 }
 
-func (m *Manager) allowUploadLocked(eng engineTorrent) {
-	if m.playPausedLocked() {
+func (m *Manager) allowUploadLocked(d *Download, eng engineTorrent) {
+	if m.pausedLocked(d) {
 		return
 	}
 	eng.allowUpload()
 }
 
-func (m *Manager) applyUploadLocked(eng engineTorrent, allow bool) {
-	applyUpload(eng, allow && !m.playPausedLocked())
+func (m *Manager) applyUploadLocked(d *Download, eng engineTorrent, allow bool) {
+	applyUpload(eng, allow && !m.pausedLocked(d))
 }
 
 type PlayWatcher struct {

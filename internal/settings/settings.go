@@ -175,6 +175,8 @@ type Settings struct {
 	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
 	DesktopShortcuts       bool    `json:"desktopShortcuts"`
 
+	DownloadSchedule []ScheduleWindow `json:"downloadSchedule"`
+
 	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
 	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
 	UpdateAutoInstall        bool   `json:"updateAutoInstall"`
@@ -594,6 +596,9 @@ func sanitize(s Settings) (Settings, error) {
 		s.MaxActiveDownloads = 10
 	}
 	if err := sanitizePlayDownload(&s); err != nil {
+		return Settings{}, err
+	}
+	if err := sanitizeSchedule(&s); err != nil {
 		return Settings{}, err
 	}
 	if s.DownloadRateLimit < 0 {

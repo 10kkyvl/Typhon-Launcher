@@ -31,7 +31,7 @@ func TestPersonalAccentPersistence(t *testing.T) {
 		if err := s.SaveSettings(invalid); err == nil {
 			t.Fatalf("accepted %q", color)
 		}
-		if s.GetSettings() != loaded {
+		if !sameSettings(s.GetSettings(), loaded) {
 			t.Fatal("invalid save changed memory")
 		}
 	}
@@ -56,7 +56,7 @@ func TestPersonalAccentFailedSaveKeepsMemory(t *testing.T) {
 	if err := s.SaveSettings(next); err == nil {
 		t.Fatal("expected write failure")
 	}
-	if s.GetSettings() != before {
+	if !sameSettings(s.GetSettings(), before) {
 		t.Fatal("failed persistence changed saved accent")
 	}
 }

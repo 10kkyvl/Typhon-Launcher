@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import {
   cancelDownload as cancelRequest,
+  downloadNow as downloadNowRequest,
   forceStartDownload,
   listDownloads,
   moveDownloadDown,
@@ -181,6 +182,10 @@ export function remove(id: string) {
 
 export function forceStart(id: string) {
   return run(() => forceStartDownload(id));
+}
+
+export function downloadNow(id: string) {
+  return run(() => downloadNowRequest(id));
 }
 
 export function moveUp(id: string) {
