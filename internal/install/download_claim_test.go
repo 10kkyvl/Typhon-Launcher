@@ -27,9 +27,7 @@ func TestRemoveGameStopsSeedingFlatOrInPlaceIntoInstallDir(t *testing.T) {
 			if err := s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); err != nil {
 				t.Fatalf("remove: %v", err)
 			}
-			if got := downloads.stoppedIDs(); len(got) != 1 || got[0] != "d1" {
-				t.Fatalf("stopped downloads = %v, want [d1]", got)
-			}
+			requireStoppedButKept(t, downloads, "d1")
 			if !missing(t, dir) {
 				t.Fatal("files kept after seeding was stopped")
 			}

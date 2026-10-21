@@ -153,7 +153,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		}
 	}
 	if seedsFromGame && (deleteFiles || plan.method == RemovalInstaller) {
-		if err := s.downloads.StopAndWait(game.SourceDownloadID); err != nil {
+		if err := s.downloads.StopSeeding(game.SourceDownloadID); err != nil {
 			return fmt.Errorf("%w: %w", errRemoveSeeding, err)
 		}
 	}
@@ -211,10 +211,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		"files", deleteFiles, "kept", opts.KeepInLibrary)
 
 	if opts.DeleteDownload && present {
-		// A download that was stopped above is already gone, together with
-		// the files it shared with the game.
-		err := s.downloads.DeleteData(game.SourceDownloadID)
-		if err != nil && (!seedsFromGame || !errors.Is(err, download.ErrNotFound)) {
+		if err := s.downloads.DeleteData(game.SourceDownloadID); err != nil {
 			return fmt.Errorf("удалить загрузку: %w", err)
 		}
 	}

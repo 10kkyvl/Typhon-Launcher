@@ -29,6 +29,8 @@ type fakeDownloads struct {
 	deleted []string
 	stopped []string
 	stopErr error
+
+	deleteErr error
 }
 
 func newFakeDownloads() *fakeDownloads {
@@ -63,6 +65,9 @@ func (f *fakeDownloads) DeleteData(id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deleted = append(f.deleted, id)
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	if _, ok := f.items[id]; !ok {
 		return download.ErrNotFound
 	}
@@ -70,14 +75,19 @@ func (f *fakeDownloads) DeleteData(id string) error {
 	return nil
 }
 
-func (f *fakeDownloads) StopAndWait(id string) error {
+func (f *fakeDownloads) StopSeeding(id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.stopErr; err != nil {
 		return err
 	}
+	d, ok := f.items[id]
+	if !ok {
+		return download.ErrNotFound
+	}
 	f.stopped = append(f.stopped, id)
-	delete(f.items, id)
+	d.Seeding = false
+	f.items[id] = d
 	return nil
 }
 

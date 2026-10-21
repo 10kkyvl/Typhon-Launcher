@@ -1408,14 +1408,20 @@ func (m *Manager) DeleteData(id string) error {
 		return nil
 	}
 	if waitable {
+		var err error
 		select {
-		case err := <-result:
-			if err != nil {
-				slog.Warn("download data left on disk", "download_id", id, "error", err)
-				return fmt.Errorf("%w: %w", errDataLeft, err)
-			}
+		case err = <-result:
 		case <-closing:
-			slog.Warn("download data removal continues in the background, manager is shutting down", "download_id", id)
+			select {
+			case err = <-result:
+			default:
+				slog.Warn("download data removal continues in the background, manager is shutting down", "download_id", id)
+				return fmt.Errorf("лаунчер закрывается, удаление не завершено: %w", errUnavailable)
+			}
+		}
+		if err != nil {
+			slog.Warn("download data left on disk", "download_id", id, "error", err)
+			return fmt.Errorf("%w: %w", errDataLeft, err)
 		}
 	}
 	return nil
@@ -2570,6 +2576,71 @@ func (m *Manager) StopAndWait(id string) error {
 		eng.drop()
 	}
 	emit(eventRemoved, RemovedEvent{ID: id})
+	return nil
+}
+
+// StopSeeding takes one completed download out of the swarm and keeps its
+// record and files, so a caller that is about to touch the files can do so
+// and, if it backs out, leave the download as it was apart from the seeding.
+// A seed that sync or a restart brings back later is expected.
+//
+//wails:ignore
+func (m *Manager) StopSeeding(id string) error {
+	m.mu.Lock()
+	var d *Download
+	for {
+		if m.closing {
+			m.mu.Unlock()
+			return errUnavailable
+		}
+		d = m.findLocked(id)
+		if d == nil {
+			m.mu.Unlock()
+			return errNotFound
+		}
+		if d.Status != StatusCompleted {
+			m.mu.Unlock()
+			return nil
+		}
+		// A restore job in flight attaches its engine when it lands, whatever
+		// it was cancelled for, so the stop is decided only after it is gone.
+		job := m.jobs[id]
+		if job == nil {
+			break
+		}
+		job.cancel()
+		m.mu.Unlock()
+		<-job.done
+		m.mu.Lock()
+	}
+	eng := m.engines[id]
+	if !d.Seeding && eng == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	was := d.Seeding
+	d.Seeding = false
+	if err := m.persistLocked(); err != nil {
+		d.Seeding = was
+		m.mu.Unlock()
+		return fmt.Errorf("остановить раздачу: %w", err)
+	}
+	snap := snapshot(d)
+	if eng == nil {
+		m.mu.Unlock()
+		emit(eventUpdated, snap)
+		return nil
+	}
+	eng.disallowUpload()
+	delete(m.engines, id)
+	delete(m.rates, id)
+	done := m.trackTeardownLocked(id)
+	m.wg.Add(1)
+	m.mu.Unlock()
+	defer m.wg.Done()
+	defer m.finishTeardown(id, done)
+	eng.drop()
+	emit(eventUpdated, snap)
 	return nil
 }
 
