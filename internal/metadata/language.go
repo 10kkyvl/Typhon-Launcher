@@ -8,6 +8,12 @@ func requestLanguage(ctx context.Context, lang string) context.Context {
 	return context.WithValue(ctx, languageKey{}, lang)
 }
 
+// WithLanguage carries the UI language to a Typhon API request made outside
+// the metadata service.
+func WithLanguage(ctx context.Context, lang string) context.Context {
+	return requestLanguage(ctx, lang)
+}
+
 // Language returns the UI language captured when this operation started.
 func Language(ctx context.Context) string {
 	if lang, ok := ctx.Value(languageKey{}).(string); ok && lang == "ru" {

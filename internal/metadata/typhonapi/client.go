@@ -32,12 +32,24 @@ const (
 	maxBrowseGETURL = 6 << 10
 
 	codeSavePathsNotFound = "save_paths_not_found"
+
+	maxAppIDDigits     = 12
+	maxAchievements    = 2000
+	maxAchievementKey  = 128
+	maxAchievementName = 200
+	maxAchievementDesc = 1000
+	maxAchievementURL  = 512
 )
 
 var (
 	ErrUpstream   = errors.New("сервер метаданных недоступен")
 	ErrBadRequest = errors.New("сервер метаданных отклонил запрос")
 	ErrOutdated   = errors.New("лаунчер устарел, нужно обновление")
+)
+
+var (
+	ErrNoAchievements   = errors.New("у игры нет достижений в Steam")
+	ErrSteamUnavailable = errors.New("сервер не смог получить достижения из Steam")
 )
 
 type httpStatusError struct {
@@ -276,6 +288,91 @@ func (c *Client) SavePaths(ctx context.Context, providerID string) (metadata.Sav
 		License: payload.License,
 		Via:     payload.Via,
 	})
+}
+
+// Achievements returns the Steam achievement list of an app in the language
+// the context carries (metadata.WithLanguage). An app without achievements is
+// ErrNoAchievements and a server that cannot reach Steam is
+// ErrSteamUnavailable, so a caller never mistakes a failure for an empty list.
+func (c *Client) Achievements(ctx context.Context, appID string) (AchievementSet, error) {
+	appID = strings.TrimSpace(appID)
+	if !numeric(appID) || len(appID) > maxAppIDDigits {
+		return AchievementSet{}, fmt.Errorf("%w: некорректный Steam AppID %q", ErrBadRequest, appID)
+	}
+	var payload achievementsResponse
+	err := c.get(ctx, account.APIPrefix+"/steam/apps/"+appID+"/achievements", &payload)
+	var statusErr *httpStatusError
+	if errors.As(err, &statusErr) {
+		switch statusErr.status {
+		case http.StatusNotFound:
+			return AchievementSet{}, fmt.Errorf("%w: HTTP %d", ErrNoAchievements, statusErr.status)
+		case http.StatusServiceUnavailable, http.StatusBadGateway:
+			return AchievementSet{}, fmt.Errorf("%w: HTTP %d %s", ErrSteamUnavailable, statusErr.status, statusErr.code)
+		}
+	}
+	if err != nil {
+		return AchievementSet{}, err
+	}
+	if strconv.FormatInt(payload.AppID, 10) != appID {
+		return AchievementSet{}, fmt.Errorf("%w: ответ про другое приложение: %d вместо %s", ErrUpstream, payload.AppID, appID)
+	}
+	if len(payload.Items) > maxAchievements {
+		return AchievementSet{}, fmt.Errorf("%w: слишком много достижений: %d", ErrUpstream, len(payload.Items))
+	}
+	set := AchievementSet{AppID: appID, Items: make([]Achievement, 0, len(payload.Items))}
+	seen := make(map[string]struct{}, len(payload.Items))
+	for _, it := range payload.Items {
+		if !validAchievementKey(it.Key) {
+			slog.Warn("пропущено достижение с некорректным ключом", "appId", appID)
+			continue
+		}
+		if _, dup := seen[it.Key]; dup {
+			continue
+		}
+		seen[it.Key] = struct{}{}
+		set.Items = append(set.Items, Achievement{
+			Key:         it.Key,
+			Name:        clipRunes(strings.TrimSpace(it.Name), maxAchievementName),
+			Description: clipRunes(strings.TrimSpace(it.Description), maxAchievementDesc),
+			Hidden:      it.Hidden,
+			Icon:        httpsURL(it.Icon),
+			IconGray:    httpsURL(it.IconGray),
+		})
+	}
+	return set, nil
+}
+
+func validAchievementKey(key string) bool {
+	if key == "" || len(key) > maxAchievementKey || strings.Contains(key, "..") {
+		return false
+	}
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func clipRunes(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit])
+}
+
+func httpsURL(raw string) string {
+	if len(raw) > maxAchievementURL {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return ""
+	}
+	return raw
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {

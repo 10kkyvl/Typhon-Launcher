@@ -15,6 +15,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/accountsync"
+	"typhon/internal/achievements"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
@@ -163,6 +164,7 @@ func init() {
 	application.RegisterEvent[screenshots.Failed](screenshots.EventFailed)
 	application.RegisterEvent[savebackup.Event](savebackup.EventName)
 	application.RegisterEvent[cloudsaves.Event](cloudsaves.EventName)
+	application.RegisterEvent[achievements.Event](achievements.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
@@ -471,6 +473,7 @@ func main() {
 	if err != nil {
 		fatal("start cloud saves service", err)
 	}
+	achievementsService := newAchievementsService(configDir, accountService, libraryService, catalogService, appService)
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
@@ -600,6 +603,7 @@ func main() {
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
 	libraryService.AddSessionWatcher(cloudSavesService)
+	libraryService.AddSessionWatcher(achievementsService)
 	playWatcher := downloadManager.PlayWatcher()
 	playWatcher.Listen(lanService.SetGamesRunning)
 	libraryService.AddSessionWatcher(playWatcher)
@@ -775,6 +779,7 @@ func main() {
 		application.NewService(updateService),
 		application.NewService(saveBackupService),
 		application.NewService(cloudSavesService),
+		application.NewService(achievementsService),
 		application.NewService(metadataService),
 		application.NewService(sysreqService),
 		application.NewService(discoveryService),
@@ -1057,6 +1062,26 @@ func newSystemTray(wails *application.App, controller *tray.Controller, language
 		systemTray.ShowMenu()
 	})
 	return systemTray, nil
+}
+
+func newAchievementsService(configDir string, accountService *account.Service, libraryService *library.Service, catalogService *catalog.Service, appService *app.Service) *achievements.Service {
+	client, err := typhonapi.New(account.BaseURL(), accountService.SessionToken)
+	if err != nil {
+		fatal("start achievements api client", err)
+	}
+	games, err := achievements.NewLookup(libraryService, catalogService)
+	if err != nil {
+		fatal("start achievements lookup", err)
+	}
+	schema, err := achievements.NewSchemaSource(client)
+	if err != nil {
+		fatal("start achievements schema source", err)
+	}
+	service, err := achievements.New(achievements.Config{ConfigDir: configDir, Games: games, Schema: schema, Language: appService.UILanguage})
+	if err != nil {
+		fatal("start achievements service", err)
+	}
+	return service
 }
 
 func metadataProvider(accountService *account.Service) metadata.Provider {

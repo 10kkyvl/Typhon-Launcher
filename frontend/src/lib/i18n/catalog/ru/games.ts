@@ -396,6 +396,22 @@ export const games = {
   'games.notesSaving': 'Сохраняю…',
   'games.notesSaved': 'Сохранено',
   'games.notesSaveError': 'Не удалось сохранить заметку',
+  'games.achievementsTitle': 'Достижения',
+  'games.achievementsProgress': '{unlocked} из {total}',
+  'games.achievementsRefresh': 'Обновить',
+  'games.achievementsLoadError': 'Не удалось загрузить достижения',
+  'games.achievementsRefreshError': 'Не удалось обновить достижения',
+  'games.achievementsHidden': 'Скрытое достижение',
+  'games.achievementsLocked': 'Не получено',
+  'games.achievementsUnlockedOn': 'Получено: {date}',
+  'games.achievementsSchemaUnavailable': 'Названия недоступны: сервер не отвечает',
+  'games.achievementsSchemaNone': 'Для этой игры нет списка достижений, показаны ключи из файлов прогресса',
+  'games.achievementsSchemaUnknown': 'Названия недоступны',
+  'games.achievementsPartial': 'Часть файлов прогресса прочитать не удалось',
+  'games.achievementsSource': 'Прогресс читается из файлов рядом с игрой; ничего не отправляется',
+  'games.achievementsListLabel': 'Список достижений',
+  'games.achievementsUnlocked': 'Достижение получено: {name}',
+  'games.achievementsUnlockedMore': 'Достижение получено: {name} и ещё {count}',
 } as const;
 
 export type GamesKey = keyof typeof games;

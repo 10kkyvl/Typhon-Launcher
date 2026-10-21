@@ -117,6 +117,9 @@ export const errLibrary = {
   'extlib.busy': 'поиск игр уже идёт',
   'extlib.not_started': 'сервис поиска игр не запущен',
   'extlib.unsupported': 'импорт игр из других лаунчеров поддерживается только в Windows',
+  'achievements.no_steam_id': 'у игры нет Steam AppID, достижения для неё недоступны',
+  'achievements.game_not_found': 'игра не найдена в библиотеке',
+  'achievements.store_broken': 'файл достижений не читается, сохранение остановлено',
 } as const;
 
 export type ErrLibraryKey = keyof typeof errLibrary;

@@ -21,6 +21,7 @@
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
+  import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -1254,6 +1255,10 @@
             {/each}
           </dl>
         </Card>
+      {/if}
+
+      {#if localGame}
+        <AchievementsCard gameId={localGame.id} />
       {/if}
 
       <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={scrollToReviews} />

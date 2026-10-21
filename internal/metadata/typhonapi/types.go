@@ -86,3 +86,32 @@ type errorResponse struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
+
+type achievementsResponse struct {
+	AppID int64                `json:"appId"`
+	Total int                  `json:"total"`
+	Items []achievementPayload `json:"items"`
+}
+
+type achievementPayload struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Hidden      bool   `json:"hidden"`
+	Icon        string `json:"icon"`
+	IconGray    string `json:"iconGray"`
+}
+
+type Achievement struct {
+	Key         string
+	Name        string
+	Description string
+	Hidden      bool
+	Icon        string
+	IconGray    string
+}
+
+type AchievementSet struct {
+	AppID string
+	Items []Achievement
+}

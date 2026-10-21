@@ -19,6 +19,7 @@
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
+  import { initAchievements } from './lib/stores/achievements';
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
@@ -69,6 +70,7 @@
   initGameModeNotices();
   initDownloads();
   initPlayThrottle();
+  onDestroy(initAchievements());
   initNetwork();
   initInstalls();
   refreshStorage();
