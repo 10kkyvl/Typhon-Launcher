@@ -39,7 +39,8 @@
   import { currentUser } from '../stores/user';
   import { clockTime, shortDate } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
-  import { REACTION_GLYPHS, REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
+  import { REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
+  import { reactionIcons } from './reactions/icons';
   import { msg, t } from '../i18n';
 
   let draft = $state('');
@@ -315,8 +316,9 @@
                     {#if message.reactions.length > 0}
                       <div class="reactions">
                         {#each message.reactions as reaction (reaction.emoji)}
+                          {@const ReactionIcon = reactionIcons[reaction.emoji as ReactionKey]}
                           <button class:reacted={reaction.userIds.includes($currentUser?.id ?? '')} type="button" onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}>
-                            {REACTION_GLYPHS[reaction.emoji as ReactionKey] ?? reaction.emoji} {reaction.userIds.length}
+                            {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
                           </button>
                         {/each}
                       </div>
@@ -324,7 +326,8 @@
                     {#if reactionMenu === message.id}
                       <div class="reaction-menu">
                         {#each REACTION_KEYS as key}
-                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}>{REACTION_GLYPHS[key]}</button>
+                          {@const MenuIcon = reactionIcons[key]}
+                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}><MenuIcon /></button>
                         {/each}
                       </div>
                     {/if}
@@ -418,7 +421,8 @@
   .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; padding: 0.25rem; background: transparent; color: var(--text-3); font-size: 1rem; cursor: pointer; }
   .retry { color: var(--danger); }
   .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
-  .reactions button, .reaction-menu button { border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .reactions button :global(svg), .reaction-menu button :global(svg) { width: 1.4em; height: 1.4em; }
   .reactions button.reacted { border-color: var(--accent); background: var(--accent-subtle); }
   .reaction-menu { padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
   .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
