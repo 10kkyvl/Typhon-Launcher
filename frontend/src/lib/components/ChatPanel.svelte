@@ -316,7 +316,7 @@
                     {#if message.reactions.length > 0}
                       <div class="reactions">
                         {#each message.reactions as reaction (reaction.emoji)}
-                          {@const ReactionIcon = reactionIcons[reaction.emoji as ReactionKey]}
+                          {@const ReactionIcon = Object.hasOwn(reactionIcons, reaction.emoji) ? reactionIcons[reaction.emoji as ReactionKey] : undefined}
                           <button class:reacted={reaction.userIds.includes($currentUser?.id ?? '')} type="button" onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}>
                             {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
                           </button>
