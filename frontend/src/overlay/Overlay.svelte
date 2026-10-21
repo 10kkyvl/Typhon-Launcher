@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { Globe, X } from '@lucide/svelte';
+  import { Globe, Trophy, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import IconButton from '../lib/components/IconButton.svelte';
   import Tabs from '../lib/components/Tabs.svelte';
   import { msg } from '../lib/i18n';
   import type { ChatPeer } from '../lib/services/messaging';
+  import { unlockMessage } from '../lib/services/achievements';
   import { DEFAULT_OVERLAY_HOTKEY, hideOverlay, onOverlayEvent, onOverlayStatus } from '../lib/services/overlay';
+  import { initAchievements, lastUnlock } from '../lib/stores/achievements';
   import { initMessaging, openChat, unreadCount } from '../lib/stores/messaging';
   import { settings } from '../lib/stores/settings';
   import { needsSocialConsent } from '../lib/stores/social';
@@ -24,6 +26,8 @@
   let hideFailed = $state(false);
   let browser = $state(false);
   let statusHotkey = $state('');
+  let unlockToast = $state('');
+  let unlockTimer: ReturnType<typeof setTimeout> | undefined;
   let panel = $state<HTMLElement | undefined>(undefined);
   let root = $state<HTMLElement | undefined>(undefined);
 
@@ -58,9 +62,20 @@
     tab = 'chat';
   }
 
+  function showUnlock(text: string): void {
+    unlockToast = text;
+    clearTimeout(unlockTimer);
+    unlockTimer = setTimeout(() => (unlockToast = ''), 5000);
+  }
+
   onMount(() => {
     initMessaging({ passive: true });
     const offs = [
+      initAchievements({ notify: false }),
+      lastUnlock.subscribe((event) => {
+        if (event) showUnlock(unlockMessage(event));
+      }),
+      () => clearTimeout(unlockTimer),
       onOverlayEvent('overlay:shown', () => {
         shown = true;
         hideFailed = false;
@@ -138,6 +153,12 @@
       </div>
     {/if}
   </aside>
+  {#if unlockToast}
+    <div class="unlock" role="status" aria-label={msg('overlay.achievementLabel')}>
+      <Trophy size="1.8rem" strokeWidth={1.8} />
+      <span>{unlockToast}</span>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -228,6 +249,41 @@
     color: var(--accent-text);
     font: inherit;
     text-decoration: underline;
+  }
+
+  .unlock {
+    position: absolute;
+    left: var(--space-6);
+    bottom: var(--space-6);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    max-width: 38rem;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-pop);
+    color: var(--text);
+    font-size: var(--font-sm);
+    pointer-events: none;
+    animation: unlock-in var(--dur-panel) var(--ease);
+  }
+
+  .unlock :global(svg) {
+    flex-shrink: 0;
+    color: var(--success);
+  }
+
+  @keyframes unlock-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.6rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .state {

@@ -121,4 +121,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'extlib.busy': 'The game search is already running',
   'extlib.not_started': 'The game search service is not running',
   'extlib.unsupported': 'Importing games from other launchers is supported on Windows only',
+  'achievements.no_steam_id': 'The game has no Steam AppID, so achievements are not available for it',
+  'achievements.game_not_found': 'Game not found in the library',
+  'achievements.store_broken': 'The achievements file cannot be read, saving is stopped',
 };
