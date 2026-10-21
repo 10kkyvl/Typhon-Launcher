@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -30,7 +31,10 @@ func TestReleaseHintsKeepExplicitChaptersAndEditions(t *testing.T) {
 			if got := remoteReleaseNames(r); !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("names=%q, want %q", got, tc.want)
 			}
-			keys, queries := remoteReleaseQueries([]*Release{r})
+			keys, queries, err := remoteReleaseQueries(context.Background(), newTitleMemo(), []*Release{r})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if len(keys) != 1 || keys[0] != remoteQueryKey(r) || !reflect.DeepEqual(queries[0].Titles, tc.want) {
 				t.Fatalf("lookup key/query diverged: %q %+v", keys, queries)
 			}

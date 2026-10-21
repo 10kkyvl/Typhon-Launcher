@@ -88,6 +88,10 @@ type Service struct {
 
 	refreshListeners []func(ctx context.Context)
 
+	now     func() time.Time
+	events  func(name string, data any)
+	newMemo func() *titleMemo
+
 	ctx     context.Context
 	cancel  context.CancelFunc
 	closing bool
@@ -125,6 +129,9 @@ func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Se
 		retryAt:    map[string]time.Time{},
 		sem:        make(chan struct{}, refreshConcurrency),
 		client:     feed.NewClient(),
+		now:        time.Now,
+		events:     emit,
+		newMemo:    newTitleMemo,
 	}
 	if err := s.load(); err != nil {
 		return nil, err
@@ -672,33 +679,71 @@ func (s *Service) refresh(ctx context.Context, id string, scheduled bool) (Summa
 	}()
 
 	slog.Info("source refresh started", "source_id", id, "name", name, "source_type", string(kind), "scheduled", scheduled, "timeout_ms", refreshTimeout.Milliseconds())
+	run := s.newRun(id)
+	defer run.log()
+	run.progress(stageFetch, 0, 1)
+	endFetch := run.begin(stageFetch)
 	result, err := s.fetchFeed(ctx, kind, location, cond)
+	endFetch()
 	if err != nil {
 		s.fail(id, err, scheduled, "stage", "fetch", "duration_ms", time.Since(started).Milliseconds(), "timeout_ms", refreshTimeout.Milliseconds())
 		return Summary{}, err
 	}
-	incoming := parseEntries(id, result.Feed.Entries, time.Now())
-	if result.NotModified {
-		s.mu.Lock()
-		incoming = cloneReleases(s.releases[id])
-		s.mu.Unlock()
-		for _, r := range incoming {
-			reparseRelease(r)
-		}
-	} else {
-		// Freshly parsed releases carry no cache; without this any changed
-		// feed body would re-query every release.
-		s.mu.Lock()
-		previous := s.releases[id]
-		s.mu.Unlock()
-		carryRemoteMatchForward(previous, incoming)
+	run.progress(stageFetch, 1, 1)
+
+	endParse := run.begin(stageParse)
+	incoming, err := s.parseIncoming(ctx, id, result, run)
+	endParse()
+	if err != nil {
+		s.fail(id, err, scheduled, "stage", stageParse)
+		return Summary{}, err
 	}
-	matches, partial, matchErr := s.resolveRemoteReleases(ctx, incoming)
+	matches, partial, matchErr := s.resolveRemoteReleases(ctx, incoming, run)
 	if matchErr != nil {
 		s.fail(id, matchErr, scheduled, "stage", "catalog-match")
 		return Summary{}, matchErr
 	}
-	return s.settle(id, incoming, result, started, initial, result.NotModified, matches, partial) //nolint:contextcheck // инвариант 19: слушатели обновления живут дольше refresh (его ctx с таймаутом отменяется при возврате), поэтому notifyRefreshed идёт под ctx сервиса и учтён в wg
+	return s.settle(ctx, id, incoming, result, started, initial, result.NotModified, matches, partial, run) //nolint:contextcheck // инвариант 19: слушатели обновления живут дольше refresh (его ctx с таймаутом отменяется при возврате), поэтому notifyRefreshed идёт под ctx сервиса и учтён в wg
+}
+
+func (s *Service) parseIncoming(ctx context.Context, id string, result feed.Result, run *refreshRun) ([]*Release, error) {
+	report := func(done, total int) { run.progress(stageParse, done, total) }
+	if result.NotModified {
+		s.mu.Lock()
+		incoming := cloneReleases(s.releases[id])
+		s.mu.Unlock()
+		if err := reparseList(ctx, run.memo, incoming, report); err != nil {
+			return nil, err
+		}
+		return incoming, nil
+	}
+	incoming, err := parseFeedEntries(ctx, id, result.Feed.Entries, s.now(), run.memo, report)
+	if err != nil {
+		return nil, err
+	}
+	// Freshly parsed releases carry no cache; without this any changed
+	// feed body would re-query every release.
+	s.mu.Lock()
+	previous := s.releases[id]
+	s.mu.Unlock()
+	carryRemoteMatchForward(previous, incoming)
+	return incoming, nil
+}
+
+func reparseList(ctx context.Context, memo *titleMemo, list []*Release, progress func(done, total int)) error {
+	for i, r := range list {
+		if err := interrupted(ctx, i); err != nil {
+			return err
+		}
+		if progress != nil && i > 0 && i%progressStep == 0 {
+			progress(i, len(list))
+		}
+		memo.reparse(r)
+	}
+	if progress != nil {
+		progress(len(list), len(list))
+	}
+	return nil
 }
 
 func (s *Service) fetchFeed(ctx context.Context, kind Type, location string, cond feed.Conditional) (feed.Result, error) {
@@ -782,8 +827,8 @@ func retryDelay(failures int, interval time.Duration) time.Duration {
 	return delay
 }
 
-func (s *Service) settle(id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved map[string]resolvedRemoteMatch, partial *catalog.PartialMatchError) (Summary, error) {
-	now := time.Now()
+func (s *Service) settle(ctx context.Context, id string, incoming []*Release, result feed.Result, started time.Time, initial, notModified bool, resolved map[string]resolvedRemoteMatch, partial *catalog.PartialMatchError, run *refreshRun) (Summary, error) {
+	now := s.now()
 
 	s.mu.Lock()
 	src := s.findLocked(id)
@@ -795,30 +840,41 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 	beforeFailures, hadFailures := s.failures[id]
 	beforeRetry, hadRetry := s.retryAt[id]
 	summary := Summary{SourceID: id, NotModified: notModified}
+	var saving time.Duration
 	if !notModified || len(resolved) > 0 {
+		abort := func(err error) (Summary, error) {
+			s.mu.Unlock()
+			s.fail(id, err, false, "stage", stageApply)
+			return Summary{SourceID: id, Error: err.Error()}, err
+		}
+		endApply := run.begin(stageApply)
+		run.progress(stageApply, 0, len(incoming))
 		previous := s.releases[id]
 		list := cloneReleases(previous)
 		mergeSummary := Summary{SourceID: id, NotModified: notModified}
 		if !notModified {
-			list, mergeSummary = merge(list, incoming, now, initial)
-		} else {
-			for _, r := range list {
-				reparseRelease(r)
+			merged, ms, err := mergeReleases(ctx, list, incoming, now, initial)
+			if err != nil {
+				return abort(err)
 			}
+			list, mergeSummary = merged, ms
+		} else if err := reparseList(ctx, run.memo, list, nil); err != nil {
+			return abort(err)
 		}
 		mergeSummary.SourceID = id
 		summary = mergeSummary
 		if err := applyMatches(s.catalog, list); err != nil {
-			s.mu.Unlock()
-			s.fail(id, err, false)
-			return Summary{SourceID: id, Error: err.Error()}, err
+			return abort(err)
 		}
 		if len(resolved) > 0 {
-			for _, r := range list {
+			for i, r := range list {
+				if err := interrupted(ctx, i); err != nil {
+					return abort(err)
+				}
 				if r.Locked || r.Ignored || r.MatchMethod == string(catalog.MethodOverride) {
 					continue
 				}
-				key := remoteQueryKey(r)
+				key := run.memo.queryKey(r)
 				rm, ok := resolved[key]
 				if !ok {
 					continue
@@ -837,12 +893,25 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 				}
 			}
 		}
-		s.releases[id] = list
-		if err := s.store.saveReleases(id, list); err != nil {
-			s.releases[id] = previous
-			s.mu.Unlock()
-			s.fail(id, err, false)
-			return Summary{SourceID: id, Error: err.Error()}, err
+		changed, err := releasesChanged(ctx, previous, list)
+		if err != nil {
+			return abort(err)
+		}
+		endApply()
+		run.progress(stageApply, len(incoming), len(incoming))
+		run.progress(stageSave, 0, 1)
+		// An unchanged list is dropped, not stored: memory must not run ahead
+		// of the file it was not written to (invariant I.4).
+		if changed {
+			savingStarted := time.Now()
+			s.releases[id] = list
+			if err := s.store.saveReleases(id, list); err != nil {
+				s.releases[id] = previous
+				s.mu.Unlock()
+				s.fail(id, err, false)
+				return Summary{SourceID: id, Error: err.Error()}, err
+			}
+			saving += time.Since(savingStarted)
 		}
 		if !notModified {
 			if result.Feed.Name != "" {
@@ -856,6 +925,9 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 			src.Invalid = result.Feed.Invalid
 			src.Warnings = trimWarnings(result.Feed.Warnings)
 		}
+	} else {
+		run.progress(stageApply, 0, 0)
+		run.progress(stageSave, 0, 1)
 	}
 
 	matched, review, unmatched := counts(s.releases[id])
@@ -883,7 +955,11 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 		src.LastError = fmt.Sprintf("не удалось сопоставить %d из %d названий: %v", len(partial.Failed), partial.Total, partial.Err)
 	}
 	src.Status = statusOf(src)
-	if err := s.store.saveSources(flatten(s.sources)); err != nil {
+	savingStarted := time.Now()
+	err := s.store.saveSources(flatten(s.sources))
+	saving += time.Since(savingStarted)
+	run.record(stageSave, saving)
+	if err != nil {
 		// The releases for this source (if any were merged above) are
 		// already committed to disk; only the Source metadata computed from
 		// them rolls back here, so the two never disagree (invariant I.4).
@@ -903,6 +979,7 @@ func (s *Service) settle(id string, incoming []*Release, result feed.Result, sta
 		return Summary{SourceID: id, Error: err.Error()}, fmt.Errorf("save sources: %w", err)
 	}
 	s.clearDegradedLocked()
+	run.progress(stageSave, 1, 1)
 
 	summary.Name = src.Name
 	summary.Entries = src.Entries
