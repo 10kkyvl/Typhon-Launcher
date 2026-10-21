@@ -14,6 +14,12 @@ describe('installer refusals', () => {
     expect(needsInteractiveInstall(undefined)).toBe(false);
   });
 
+  it('maps both seeding stop failures to the same text', () => {
+    const expected = 'не удалось остановить раздачу перед удалением';
+    expect(installErrorText('typhon:install.remove_seeding: не удалось остановить раздачу: x')).toBe(expected);
+    expect(installErrorText('typhon:download.seeding: не удалось остановить раздачу: x')).toBe(expected);
+  });
+
   it('names an interrupted install instead of the fallback', () => {
     expect(installErrorText('typhon:install.interrupted: установка была прервана')).toBe('установка была прервана');
   });

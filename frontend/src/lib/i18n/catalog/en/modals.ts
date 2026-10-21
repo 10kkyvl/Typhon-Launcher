@@ -192,7 +192,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.removeGameFilesNotOwned': 'Typhon did not create these files and will not delete them',
   'modals.removeGameUninstallerLeftover': 'If the uninstaller leaves anything behind — {size}',
   'modals.removeGameDeleteDownloadLabel': 'Delete the downloaded files it was installed from',
-  'modals.removeGameSeedingActive': 'Seeding is active — stop it in downloads first',
+  'modals.removeGameSeedingWillStop': 'Seeding of these files will be stopped',
   'modals.removeGameDownloadInFolder': '{size} in the downloads folder',
   'modals.removeGameDeleteDownloadedFiles': 'Delete downloaded files',
   'modals.removeGameWorking': 'Removing...',

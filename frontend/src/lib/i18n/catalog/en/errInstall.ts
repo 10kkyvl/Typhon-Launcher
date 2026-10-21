@@ -68,7 +68,6 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installNothingToRemove': 'There is nothing to remove from disk',
   'errInstall.installOutsideInstall': 'The file is outside the install folder',
   'errInstall.installRelativeDestination': 'The install path must be absolute',
-  'errInstall.installRemoveSeeding': 'Seeding is active, stop it before removing',
   'errInstall.installSymlinkPrivilege': 'No permission to create symbolic links',
   'errInstall.installUnavailable': 'Unavailable for this installation',
   'errInstall.installUninstallCancelled': 'The removal was cancelled in the uninstaller',
@@ -108,7 +107,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadNotEnoughSpace': 'Not enough disk space',
   'errInstall.downloadNotFound': 'Download not found',
   'errInstall.downloadRestoreFailed': 'Could not restore the download',
-  'errInstall.downloadSeeding': 'The files are currently seeding — stop seeding first',
+  'errInstall.downloadSeeding': 'Seeding could not be stopped before deleting',
   'errInstall.downloadTorrentReadFailed': 'Could not read the torrent file',
   'errInstall.downloadUnavailable': 'Unavailable for this download',
 

@@ -100,7 +100,7 @@ export function sizeSorted<T extends { sizeBytes: number; sizeUnknown: boolean }
 }
 
 export function downloadBlocked(download: DownloadUsage): boolean {
-  return download.referenced || download.seeding;
+  return download.referenced;
 }
 
 export function countUnknown(report: {

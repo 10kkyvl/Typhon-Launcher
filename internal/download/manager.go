@@ -82,7 +82,7 @@ var (
 	errNoClient          = uierr.New("download.no_client", "торрент-клиент недоступен")
 	errNoMetadata        = uierr.New("download.no_metadata", "не удалось получить метаданные торрента")
 	errNoRestore         = uierr.New("download.restore_failed", restoreFailedMessage)
-	errSeeding           = uierr.New("download.seeding", "файлы сейчас раздаются — сначала остановите раздачу")
+	errSeeding           = uierr.New("download.seeding", "не удалось остановить раздачу перед удалением")
 	errBadSizes          = uierr.New("download.bad_sizes", "недопустимые размеры файлов в торренте")
 	errNoFreeSpace       = uierr.New("download.no_free_space", "не удалось определить свободное место на диске")
 	errNotEnoughSpace    = uierr.New("download.not_enough_space", "недостаточно места на диске")
@@ -1278,8 +1278,6 @@ func deleteChecks(d *Download, id string) error {
 		return errNotFound
 	case d.Status != StatusCompleted:
 		return errUnavailable
-	case d.Seeding:
-		return errSeeding
 	case d.InPlace || (d.Flat && len(d.Files) == 0):
 		return errUnavailable
 	}
@@ -1344,18 +1342,31 @@ func (m *Manager) DeleteData(id string) error {
 
 	// The paths are written down before the record goes: a record that is
 	// gone while its files are not would leave them untracked for good.
+	// A seeding download is stopped by this very removal: once the record is
+	// durably gone the engine is silenced and dropped below, and nothing can
+	// seed it again because every restore path looks the record up first.
+	seeding := d.Seeding || m.engines[id] != nil
+	failed := func(err error) error {
+		if seeding {
+			return fmt.Errorf("%w: %w", errSeeding, err)
+		}
+		return fmt.Errorf("удалить данные загрузки: %w", err)
+	}
 	if err := m.addCleanupLocked(id, paths); err != nil {
 		m.mu.Unlock()
-		return fmt.Errorf("удалить данные загрузки: %w", err)
+		return failed(err)
 	}
 	if err := m.dropLocked(id); err != nil {
 		rollback := m.removeCleanupLocked(paths)
 		m.mu.Unlock()
-		return errors.Join(fmt.Errorf("удалить данные загрузки: %w", err), rollback)
+		return errors.Join(failed(err), rollback)
 	}
 
 	eng := m.engines[id]
 	delete(m.engines, id)
+	if eng != nil {
+		eng.disallowUpload()
+	}
 	job := m.jobs[id]
 	if job != nil {
 		job.cancel()
@@ -1364,17 +1375,24 @@ func (m *Manager) DeleteData(id string) error {
 	slog.Info("download data deleted", "download_id", id, "name", name)
 	emit(eventRemoved, RemovedEvent{ID: id})
 	m.schedule()
-	// With a job or an engine still winding down the teardown finishes after
-	// DeleteData returns, so its failure can only be logged; without them it
-	// is a file removal and its result is the caller's.
-	waitable := job == nil && eng == nil
+	// With a job still winding down the teardown finishes after DeleteData
+	// returns, so its failure can only be logged; without one it is the engine
+	// drop and a file removal, and the result is the caller's.
+	waitable := job == nil
 	result := make(chan error, 1)
 	started := m.startTeardownLocked(id, job, eng, infoHash, func() {
+		remove := func() error {
+			if flat {
+				return removeFlatFiles(destination, files)
+			}
+			return deleteContent(destination, root)
+		}
 		var err error
-		if flat {
-			err = removeFlatFiles(destination, files)
+		if eng != nil {
+			// Windows keeps a dropped torrent's files busy for a moment.
+			err = retryBusy(closing, remove)
 		} else {
-			err = deleteContent(destination, root)
+			err = remove()
 		}
 		if err == nil {
 			err = m.dropCleanup(paths)
@@ -1390,14 +1408,20 @@ func (m *Manager) DeleteData(id string) error {
 		return nil
 	}
 	if waitable {
+		var err error
 		select {
-		case err := <-result:
-			if err != nil {
-				slog.Warn("download data left on disk", "download_id", id, "error", err)
-				return fmt.Errorf("%w: %w", errDataLeft, err)
-			}
+		case err = <-result:
 		case <-closing:
-			slog.Warn("download data removal continues in the background, manager is shutting down", "download_id", id)
+			select {
+			case err = <-result:
+			default:
+				slog.Warn("download data removal continues in the background, manager is shutting down", "download_id", id)
+				return fmt.Errorf("лаунчер закрывается, удаление не завершено: %w", errUnavailable)
+			}
+		}
+		if err != nil {
+			slog.Warn("download data left on disk", "download_id", id, "error", err)
+			return fmt.Errorf("%w: %w", errDataLeft, err)
 		}
 	}
 	return nil
@@ -2423,6 +2447,29 @@ func removeContent(destination, name string) {
 
 var removeAll = os.RemoveAll
 
+var (
+	busyRetryDelays = promoteDelays
+	fileBusy        = isSharingViolation
+)
+
+func retryBusy(done <-chan struct{}, remove func() error) error {
+	err := remove()
+	for _, delay := range busyRetryDelays {
+		if err == nil || !fileBusy(err) {
+			return err
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-done:
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+		err = remove()
+	}
+	return err
+}
+
 func deleteContent(destination, name string) error {
 	if destination == "" || !isSafeTorrentPath(name) {
 		return nil
@@ -2529,6 +2576,71 @@ func (m *Manager) StopAndWait(id string) error {
 		eng.drop()
 	}
 	emit(eventRemoved, RemovedEvent{ID: id})
+	return nil
+}
+
+// StopSeeding takes one completed download out of the swarm and keeps its
+// record and files, so a caller that is about to touch the files can do so
+// and, if it backs out, leave the download as it was apart from the seeding.
+// A seed that sync or a restart brings back later is expected.
+//
+//wails:ignore
+func (m *Manager) StopSeeding(id string) error {
+	m.mu.Lock()
+	var d *Download
+	for {
+		if m.closing {
+			m.mu.Unlock()
+			return errUnavailable
+		}
+		d = m.findLocked(id)
+		if d == nil {
+			m.mu.Unlock()
+			return errNotFound
+		}
+		if d.Status != StatusCompleted {
+			m.mu.Unlock()
+			return nil
+		}
+		// A restore job in flight attaches its engine when it lands, whatever
+		// it was cancelled for, so the stop is decided only after it is gone.
+		job := m.jobs[id]
+		if job == nil {
+			break
+		}
+		job.cancel()
+		m.mu.Unlock()
+		<-job.done
+		m.mu.Lock()
+	}
+	eng := m.engines[id]
+	if !d.Seeding && eng == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	was := d.Seeding
+	d.Seeding = false
+	if err := m.persistLocked(); err != nil {
+		d.Seeding = was
+		m.mu.Unlock()
+		return fmt.Errorf("остановить раздачу: %w", err)
+	}
+	snap := snapshot(d)
+	if eng == nil {
+		m.mu.Unlock()
+		emit(eventUpdated, snap)
+		return nil
+	}
+	eng.disallowUpload()
+	delete(m.engines, id)
+	delete(m.rates, id)
+	done := m.trackTeardownLocked(id)
+	m.wg.Add(1)
+	m.mu.Unlock()
+	defer m.wg.Done()
+	defer m.finishTeardown(id, done)
+	eng.drop()
+	emit(eventUpdated, snap)
 	return nil
 }
 

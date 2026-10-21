@@ -104,6 +104,7 @@ var (
 type downloadSource interface {
 	Get(id string) (download.Download, error)
 	DeleteData(id string) error
+	StopSeeding(id string) error
 }
 
 type registrar interface {

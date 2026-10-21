@@ -48,7 +48,7 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.downloadSeeding': 'Seeding',
   'diskusage.downloadInstalled': 'Game installed',
   'diskusage.downloadConfirmTitle': 'Delete download files',
-  'diskusage.downloadConfirmText': 'The files of the download "{name}" will be deleted from disk and cannot be restored.',
+  'diskusage.downloadConfirmText': 'The files of the download "{name}" will be deleted from disk and cannot be restored. If the files are being seeded, seeding will stop.',
   'diskusage.downloadDeleted': 'Download files deleted',
 
   'diskusage.leftoversTitle': 'Leftovers',
@@ -73,7 +73,7 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.reason.symlink': 'This is a link, not a data folder',
   'diskusage.reason.foreign_part': 'These files belong to another download',
   'diskusage.reason.owned_by_download': 'The files belong to a download',
-  'diskusage.reason.seeding': 'The files are being seeded',
+  'diskusage.reason.seeding': 'Seeding, will stop when deleted',
   'diskusage.reason.incomplete': 'The download is not finished',
   'diskusage.reason.unreadable': 'The folder could not be read',
   'diskusage.reason.unknown': 'The reason is unknown',

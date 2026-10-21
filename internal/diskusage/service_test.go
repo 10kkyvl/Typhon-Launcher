@@ -574,12 +574,15 @@ func TestScanDownloads(t *testing.T) {
 	if d := by["orphan"]; d.Installed || d.GameID != "" {
 		t.Fatalf("orphan = %+v, want no owner: its game was uninstalled", d)
 	}
-	for _, id := range []string{"used", "seed", "running"} {
+	for _, id := range []string{"used", "running"} {
 		if d := by[id]; !d.Referenced || d.Reason == "" {
 			t.Fatalf("%s = %+v, want referenced with a reason", id, d)
 		}
 	}
-	if rep.Totals.ReclaimableBytes != 100 {
+	if d := by["seed"]; d.Referenced || !d.Seeding || d.Reason == "" {
+		t.Fatalf("seed = %+v, want seeding, unreferenced, with a reason", d)
+	}
+	if rep.Totals.ReclaimableBytes != 150 {
 		t.Fatalf("reclaimable = %d, want only the unreferenced downloads", rep.Totals.ReclaimableBytes)
 	}
 }

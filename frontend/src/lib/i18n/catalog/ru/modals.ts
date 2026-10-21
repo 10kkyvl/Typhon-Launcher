@@ -189,7 +189,7 @@ export const modals = {
   'modals.removeGameFilesNotOwned': 'Эти файлы Typhon не создавал, удалять их он не будет',
   'modals.removeGameUninstallerLeftover': 'Если деинсталлятор что-то оставит — {size}',
   'modals.removeGameDeleteDownloadLabel': 'Удалить скачанные файлы, из которых ставили',
-  'modals.removeGameSeedingActive': 'Раздача активна — сначала остановите её в загрузках',
+  'modals.removeGameSeedingWillStop': 'Раздача этих файлов будет остановлена',
   'modals.removeGameDownloadInFolder': '{size} в папке загрузок',
   'modals.removeGameDeleteDownloadedFiles': 'Удалить скачанные файлы',
   'modals.removeGameWorking': 'Удаляем...',

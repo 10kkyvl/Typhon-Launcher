@@ -33,7 +33,7 @@ const (
 var (
 	errGameRunning        = uierr.New("install.game_running", "игра запущена, закройте её перед удалением")
 	errGameBusy           = uierr.New("install.game_busy", "по этой игре идёт установка или обновление")
-	errRemoveSeeding      = uierr.New("install.remove_seeding", "раздача активна, остановите её перед удалением")
+	errRemoveSeeding      = uierr.New("install.remove_seeding", "не удалось остановить раздачу перед удалением")
 	errFilesLocked        = uierr.New("install.files_locked", "папка игры занята: закройте игру, окна Проводника с этой папкой и программы, которые её используют, и повторите")
 	errUninstallCancelled = uierr.New("install.uninstall_cancelled", "удаление отменено в установщике")
 	errUninstallFailed    = uierr.New("install.uninstall_failed", "деинсталлятор завершился с ошибкой")
@@ -141,9 +141,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
-	if present && d.Seeding && sharesPath(downloadRoot(d), game.InstallDir) {
-		return errRemoveSeeding
-	}
+	seedsFromGame := present && d.Seeding && sharesPath(downloadRoot(d), game.InstallDir)
 
 	deleteFiles := opts.DeleteFiles && plan.owned && plan.game.InstallDir != ""
 	if opts.KeepInLibrary && !deleteFiles && plan.method != RemovalInstaller {
@@ -152,6 +150,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	if deleteFiles {
 		if err := removableDir(game.InstallDir); err != nil {
 			return err
+		}
+	}
+	if seedsFromGame && (deleteFiles || plan.method == RemovalInstaller) {
+		if err := s.downloads.StopSeeding(game.SourceDownloadID); err != nil {
+			return fmt.Errorf("%w: %w", errRemoveSeeding, err)
 		}
 	}
 

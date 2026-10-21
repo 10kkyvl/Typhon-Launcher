@@ -231,10 +231,10 @@ func (sc *scanner) scanDownloads() error {
 		switch checkErr := sc.s.deps.Installs.CheckDownloadDeletable(d); {
 		case d.Status != download.StatusCompleted:
 			usage.Referenced, usage.Reason, usage.ReasonCode = true, "загрузка не завершена", diskreason.Incomplete
-		case d.Seeding:
-			usage.Referenced, usage.Reason, usage.ReasonCode = true, "файлы раздаются", diskreason.Seeding
 		case checkErr != nil:
 			usage.Referenced, usage.Reason, usage.ReasonCode = true, checkErr.Error(), downloadReasonCode(checkErr)
+		case d.Seeding:
+			usage.Reason, usage.ReasonCode = "файлы раздаются, при удалении раздача остановится", diskreason.Seeding
 		}
 		sc.report.Downloads = append(sc.report.Downloads, usage)
 	}

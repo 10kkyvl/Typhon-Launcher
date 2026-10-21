@@ -16,6 +16,7 @@
     ageText,
     canManageGame,
     countUnknown,
+    downloadBlocked,
     gameBlockedKey,
     isStale,
     leftoverKindKey,
@@ -340,13 +341,15 @@
       {:else}
         <div class="list">
           {#each downloads as download (download.id)}
-            {@const blocked = download.referenced || download.seeding}
+            {@const blocked = downloadBlocked(download)}
             <div class="row">
               <div class="main">
                 <span class="title">{download.name}</span>
                 <span class="path" title={download.root}>{download.root}</span>
                 {#if blocked}
                   <span class="reason">{reasonLabel(download.reasonCode, download.reason)}</span>
+                {:else if download.seeding}
+                  <span class="reason">{msg('diskusage.reason.seeding')}</span>
                 {/if}
               </div>
               <div class="badges">
