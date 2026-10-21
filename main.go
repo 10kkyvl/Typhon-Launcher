@@ -195,6 +195,14 @@ func registerLocalIdentity() {
 }
 
 func main() {
+	// A broken portable marker must stop the launcher before it picks a data
+	// directory: falling back to the profile would quietly start with an empty one.
+	if err := settings.PortableError(); err != nil {
+		fmt.Fprintf(os.Stderr, "Typhon: cannot start in portable mode: %v\n", err)
+		platform.FatalDialog("Typhon", fmt.Sprintf("Typhon не может запуститься в портативном режиме: %v", err))
+		os.Exit(1)
+	}
+
 	// A locked or unwritable log file must not stop the launcher from
 	// starting, but it must not pass silently either: stderr logging is
 	// already live here, so the failure is recorded rather than discarded.
@@ -801,14 +809,21 @@ func main() {
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)
 
+	windowsOptions := application.WindowsOptions{
+		AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
+	}
+	instanceID := singleInstanceID
+	if settings.IsPortable() {
+		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
+		instanceID = portableInstanceID(configDir)
+	}
+
 	wails := application.New(application.Options{
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
-		Windows: application.WindowsOptions{
-			AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
-		},
+		Windows:     windowsOptions,
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: singleInstanceID,
+			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				req, requested, err := playTarget(data.Args)
 				if err != nil {
@@ -864,7 +879,12 @@ func main() {
 	chatDesktop.SetSuppress(overlayService.Visible)
 	defer chatDesktop.Close()
 	overlayService.Attach(wails)
-	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
+	portable := settings.IsPortable()
+	autostartManager := autostart.ForPlatform(wails.Autostart)
+	if portable {
+		autostartManager = autostart.Unsupported("автозапуск недоступен в портативном режиме")
+	}
+	autostartService, err := autostart.NewService(autostartManager)
 	if err != nil {
 		fatal("start autostart service", err)
 	}
@@ -897,8 +917,10 @@ func main() {
 	// A locked-down registry or a refused tray icon must not keep the launcher
 	// from starting: the toggle in settings goes through SaveSettingsPatch, which
 	// runs the same appliers and does report the failure to the user.
-	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
-		slog.Error("apply autostart", "error", err)
+	if !portable {
+		if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
+			slog.Error("apply autostart", "error", err)
+		}
 	}
 	if err := trayController.Apply(current.MinimizeToTray); err != nil {
 		slog.Error("apply tray", "error", err)

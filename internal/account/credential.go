@@ -27,7 +27,7 @@ type envCredentialStore struct {
 
 //nolint:staticcheck // SA4023: на платформах без системного хранилища (credential_other.go) конструктор всегда возвращает ошибку, поэтому проверка err «всегда истинна»; под windows и devmock та же ветка берётся по-настоящему, и убирать её нельзя
 func NewCredentialStore() (CredentialStore, error) {
-	inner, err := newSystemCredentialStore()
+	inner, err := openCredentialStore(accountCredentialKey, newSystemCredentialStore)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,9 @@ func NewNamedCredentialStore(name string) (CredentialStore, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, errors.New("credential store name is empty")
 	}
-	return newNamedCredentialStore(name)
+	return openCredentialStore(namedCredentialKeyPrefix+name, func() (CredentialStore, error) {
+		return newNamedCredentialStore(name)
+	})
 }
 
 func (s envCredentialStore) Load() (Credential, error) {

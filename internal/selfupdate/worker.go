@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 )
@@ -34,6 +35,7 @@ type updateSpec struct {
 	ParentPID     int    `json:"parentPid"`
 	RelaunchPath  string `json:"relaunchPath"`
 	Version       string `json:"version"`
+	Portable      bool   `json:"portable,omitempty"`
 }
 
 // Outcome is what the worker leaves behind for the relaunched launcher: the
@@ -64,6 +66,20 @@ func WorkerDir(configDir string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, workerDirName), nil
+}
+
+// workerEnvironment is nil, which inherits the launcher environment, outside
+// portable mode. In portable mode the worker is a copy in the cache with no
+// marker beside it, so it is told where the data lives.
+func workerEnvironment() ([]string, error) {
+	dir, ok, err := settings.PortableDir()
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: portable data directory: %w", err)
+	}
+	if !ok {
+		return nil, nil
+	}
+	return append(os.Environ(), settings.PortableEnv+"="+dir), nil
 }
 
 func OutcomePath(configDir string) (string, error) {

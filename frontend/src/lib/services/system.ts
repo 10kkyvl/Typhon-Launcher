@@ -17,6 +17,8 @@ export interface AppInfo {
   platform: string;
   arch: string;
   devMock: boolean;
+  portable: boolean;
+  dataDir: string;
 }
 
 export interface SystemInfo {
@@ -66,7 +68,7 @@ const fixtureStorage: StorageInfo = {
 
 export async function getAppInfo(): Promise<AppInfo> {
   if (inWails) return (await AppService.GetAppInfo()) as AppInfo;
-  return { version: '0.1.0', platform: 'browser', arch: 'dev', devMock: false };
+  return { version: '0.1.0', platform: 'browser', arch: 'dev', devMock: false, portable: false, dataDir: '' };
 }
 
 let pendingAppInfo: Promise<AppInfo> | null = null;
