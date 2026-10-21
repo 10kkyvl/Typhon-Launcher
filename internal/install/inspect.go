@@ -15,7 +15,7 @@ import (
 const (
 	junkFileLimit    = 1 << 20
 	maxDescendDepth  = 3
-	dominantFraction = 0.8
+	dominantFraction = 0.5
 )
 
 var errNoSource = uierr.New("install.no_source", "папка загрузки недоступна")
@@ -408,29 +408,29 @@ func versionToken(t string) bool {
 	return true
 }
 
+// pickDominantArchive: архив ведёт установку, только если архивы корня вместе
+// занимают не меньше половины данных; маленький Manifests.rar рядом с папкой
+// игры игрой не является.
 func pickDominantArchive(root string, files []sizedEntry, total int64) string {
 	var archives []sizedEntry
-	meaningful := 0
+	var archived int64
 	for _, f := range files {
 		if IsArchive(f.name) {
 			archives = append(archives, f)
-		}
-		if !isJunk(f) {
-			meaningful++
+			archived += f.size
 		}
 	}
-	if len(archives) == 0 {
+	if len(archives) == 0 || total <= 0 {
 		return ""
 	}
-	sort.Slice(archives, func(i, j int) bool { return archives[i].size > archives[j].size })
-	largest := archives[0]
-	path := filepath.Join(root, largest.name)
-
-	if meaningful == 1 && len(archives) == 1 {
-		return path
+	if float64(archived) < float64(total)*dominantFraction {
+		return ""
 	}
-	if total > 0 && float64(largest.size) >= float64(total)*dominantFraction {
-		return path
-	}
-	return ""
+	sort.Slice(archives, func(i, j int) bool {
+		if archives[i].size != archives[j].size {
+			return archives[i].size > archives[j].size
+		}
+		return archives[i].name < archives[j].name
+	})
+	return filepath.Join(root, archives[0].name)
 }

@@ -48,6 +48,9 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	if err := s.setStatus(id, StatusPreparing); err != nil {
 		return err
 	}
+	if err := s.rememberCreatedDestination(id, item.Destination); err != nil {
+		return err
+	}
 	partial := item.Destination + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
 		return err
@@ -128,6 +131,9 @@ func (s *Service) renameSource(item Installation) error {
 
 func (s *Service) runArchive(ctx context.Context, id string, item Installation) error {
 	if err := s.setStatus(id, StatusPreparing); err != nil {
+		return err
+	}
+	if err := s.rememberCreatedDestination(id, item.Destination); err != nil {
 		return err
 	}
 	partial := item.Destination + partialSuffix
