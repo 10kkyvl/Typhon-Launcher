@@ -37,7 +37,7 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - The bell no longer lists "Downloading N%" for every running download: completion and failures arrive as toasts
 - Hidden games are hidden from friends too: the "hidden" mark travels to the account with the rest
 - Steam tools and applications such as Proton, Steamworks and Wallpaper Engine no longer land in the library — only games, demos, betas and mods
-- When removing a game, the "folder in use" error names what to close: the game itself and Explorer windows showing that folder
+- Removing a game or download data stops seeding those files on its own instead of sending you to the settings to turn it off. The "folder in use" error names what to close: the game itself and Explorer windows showing that folder
 - The documents move to the 21 October 2026 edition: the policy describes portable mode and achievements. The launcher asks you to accept them again
 
 - The catalog loads the next page by itself when you reach the end; the Show more button stays only after a failed load
