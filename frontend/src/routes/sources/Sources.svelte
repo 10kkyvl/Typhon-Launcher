@@ -23,6 +23,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -32,6 +33,8 @@
   import { removeSourcePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
   import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
+  import { sourceProgress } from '../../lib/stores/sourceProgress';
+  import { isIndeterminate, overallPercent, progressPercent, type SourceProgress } from '../../lib/sources/progress';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
   import { clockTime, formatCount, numericDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
@@ -43,6 +46,25 @@
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
   let statusFilter = $state('all');
+
+  const progressList = $derived(Object.values($sourceProgress));
+  const allPercent = $derived(Math.round(overallPercent(progressList)));
+
+  function stageLabel(p: SourceProgress): string {
+    const counts = { done: formatCount(p.done), total: formatCount(p.total) };
+    switch (p.stage) {
+      case 'fetch':
+        return msg('transfers.sourcesStageFetch');
+      case 'parse':
+        return msg('transfers.sourcesStageParse', counts);
+      case 'match':
+        return msg('transfers.sourcesStageMatch', counts);
+      case 'apply':
+        return msg('transfers.sourcesStageApply');
+      case 'save':
+        return msg('transfers.sourcesStageSave');
+    }
+  }
 
   function startAddSource() {
     if (needsSourcesNotice()) {
@@ -156,7 +178,14 @@
         <span class="spin" class:on={$refreshingAll}>
           <RefreshCw size="1.5rem" strokeWidth={1.8} />
         </span>
-        {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}
+        {#if $refreshingAll && progressList.length > 0}
+          <span class="all-progress">
+            <span>{msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })}</span>
+            <ProgressBar value={allPercent} height={3} />
+          </span>
+        {:else}
+          {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}
+        {/if}
       </Button>
       <Button variant="primary" onclick={startAddSource}>
         <Plus size="1.5rem" strokeWidth={2} />
@@ -204,6 +233,7 @@
         {#each filteredSources as source (source.id)}
           {@const badge = statusBadgeFor(source.status)}
           {@const health = healthMetaFor(source.health)}
+          {@const live = source.status === 'updating' ? $sourceProgress[source.id] : undefined}
           <div class="row" class:disabled={!source.enabled}>
             <button class="source" onclick={() => openDetails(source.id)}>
               <span class="type-icon">
@@ -229,9 +259,20 @@
               </span>
             </button>
             <span class="cell status">
-              <StatusBadge kind={badge.kind} label={badge.label} plain />
-              {#if source.status === 'updating'}
-                <span class="spin on busy"><RefreshCw size="1.3rem" strokeWidth={2} /></span>
+              {#if live}
+                {@const percent = Math.round(progressPercent(live))}
+                <span class="live" title={stageLabel(live)}>
+                  <span class="live-label">{stageLabel(live)}</span>
+                  <span class="live-bar">
+                    <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} />
+                    {#if !isIndeterminate(live)}<span class="live-percent">{percent}%</span>{/if}
+                  </span>
+                </span>
+              {:else}
+                <StatusBadge kind={badge.kind} label={badge.label} plain />
+                {#if source.status === 'updating'}
+                  <span class="spin on busy"><RefreshCw size="1.3rem" strokeWidth={2} /></span>
+                {/if}
               {/if}
               {#if source.lastError}
                 <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
@@ -333,6 +374,42 @@
 
   .busy {
     color: var(--text-3);
+  }
+
+  .all-progress {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 12rem;
+    text-align: left;
+  }
+
+  .live {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .live-label {
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .live-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .live-percent {
+    flex-shrink: 0;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 
   .thead,
