@@ -34,6 +34,9 @@ export interface ProfileAppearance {
   avatarFrame: AvatarFrame;
   nameStyle: NameStyle;
   parallax: boolean;
+  nameColor: string;
+  frameColor: string;
+  customPure: boolean;
 }
 
 export const BLOCK_TYPES = [

@@ -14,6 +14,9 @@ export interface PlayerCardStyle {
   customFrom?: string;
   customTo?: string;
   customAngle?: number;
+  customPure?: boolean;
+  nameColor?: string;
+  frameColor?: string;
   coverUrl?: string;
   pinned?: GameCard | null;
 }

@@ -26,6 +26,9 @@ type PlayerCardStyle struct {
 	CustomTo    string    `json:"customTo,omitempty"`
 	CustomAngle *int      `json:"customAngle,omitempty"`
 	CoverURL    string    `json:"coverUrl,omitempty"`
+	NameColor   string    `json:"nameColor,omitempty"`
+	FrameColor  string    `json:"frameColor,omitempty"`
+	CustomPure  bool      `json:"customPure,omitempty"`
 	Pinned      *GameCard `json:"pinned,omitempty"`
 }
 

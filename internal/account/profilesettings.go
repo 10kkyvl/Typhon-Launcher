@@ -39,6 +39,9 @@ type ProfileAppearance struct {
 	AvatarFrame   string `json:"avatarFrame"`
 	NameStyle     string `json:"nameStyle"`
 	Parallax      bool   `json:"parallax"`
+	NameColor     string `json:"nameColor"`
+	FrameColor    string `json:"frameColor"`
+	CustomPure    bool   `json:"customPure"`
 }
 
 func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
@@ -191,5 +194,8 @@ func mergeAppearance(defaults, value ProfileAppearance) ProfileAppearance {
 		defaults.NameStyle = value.NameStyle
 	}
 	defaults.Parallax = value.Parallax
+	defaults.NameColor = value.NameColor
+	defaults.FrameColor = value.FrameColor
+	defaults.CustomPure = value.CustomPure
 	return defaults
 }

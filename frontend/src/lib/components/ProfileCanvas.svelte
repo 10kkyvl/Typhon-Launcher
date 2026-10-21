@@ -2,11 +2,13 @@
   import type { Snippet } from 'svelte';
   import type { ProfileAppearance } from '../services/account';
   import { appearanceAccentStyle, appearanceOf, AUTO_THEME, themeOf } from '../profile/appearance';
+  import { LIGHT_INK } from '../profile/appearanceColor';
   import { artStatus, loadArtPalette, type ArtPalette } from '../profile/artPalette';
   let { appearance, autoArt, children }: { appearance?: ProfileAppearance; autoArt?: string; children: Snippet } = $props();
   const a = $derived(appearanceOf(appearance));
   let art = $state<ArtPalette | null>(null);
   const theme = $derived(themeOf(a, art));
+  const ink = $derived(theme.ink ?? LIGHT_INK);
 
   $effect(() => {
     const url = a.theme === AUTO_THEME ? autoArt : '';
@@ -28,8 +30,8 @@
 <div class="canvas" style={appearanceAccentStyle(a, art)}
   style:--profile-bg={theme.background} style:--surface-2={theme.surface}
   style:--surface={theme.background} style:--surface-3={`color-mix(in srgb, ${theme.surface}, white 7%)`}
-  style:--text="#f1f4f8" style:--text-2="#bec7d2" style:--text-3="#99a5b5"
-  style:--border="rgba(200, 220, 240, .12)" style:--border-strong="rgba(200, 220, 240, .23)"
+  style:--text={ink.text} style:--text-2={ink.text2} style:--text-3={ink.text3}
+  style:--border={ink.border} style:--border-strong={ink.borderStrong}
 >
   {@render children()}
 </div>

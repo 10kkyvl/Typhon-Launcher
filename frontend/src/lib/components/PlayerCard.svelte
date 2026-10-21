@@ -2,6 +2,7 @@
   import Avatar from './Avatar.svelte';
   import StyledName from './StyledName.svelte';
   import { playerCardOf } from '../profile/appearanceCard';
+  import { LIGHT_INK } from '../profile/appearanceColor';
   import { presenceDot, presenceLine } from '../social/presence';
   import { wideArt } from '../social/art';
   import type { PresenceView, UserCard } from '../services/social';
@@ -14,9 +15,11 @@
   const art = $derived(view.coverUrl || wideArt(view.pinned));
   const status = $derived(presence ? presenceDot(presence) : undefined);
   const line = $derived(presence ? presenceLine(presence) : '');
+  const ink = $derived(view.theme.ink ?? LIGHT_INK);
 </script>
 
-<div class="card" style={view.style} style:--card-bg={view.theme.background} style:--card-surface={view.theme.surface}>
+<div class="card" style={view.style} style:--card-bg={view.theme.background} style:--card-surface={view.theme.surface}
+  style:--text={ink.text} style:--text-2={ink.text2} style:--text-3={ink.text3}>
   <div class="banner" style:background={view.theme.banner}>
     {#if art}<img src={art} alt="" loading="lazy" draggable="false" />{/if}
     <div class="tint" style:background={view.theme.banner}></div>
@@ -24,9 +27,9 @@
   </div>
   <div class="body">
     <div class="head">
-      <span class="avatar"><Avatar size="md" {name} src={user.avatarUrl} {status} frame={view.appearance.avatarFrame} /></span>
+      <span class="avatar"><Avatar size="md" {name} src={user.avatarUrl} {status} frame={view.appearance.avatarFrame} frameColor={view.appearance.frameColor} /></span>
       <div class="ident">
-        <span class="name"><StyledName {name} styleName={view.appearance.nameStyle} /></span>
+        <span class="name"><StyledName {name} styleName={view.appearance.nameStyle} nameColor={view.appearance.nameColor} /></span>
         <span class="handle">@{user.username}</span>
       </div>
     </div>

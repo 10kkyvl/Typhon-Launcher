@@ -22,6 +22,9 @@ export function playerCardOf(card?: PlayerCardStyle | null): PlayerCardView {
     customAngle: card?.customAngle,
     avatarFrame: card?.avatarFrame,
     nameStyle: card?.nameStyle,
+    customPure: card?.customPure,
+    nameColor: card?.nameColor,
+    frameColor: card?.frameColor,
   });
   return {
     appearance,

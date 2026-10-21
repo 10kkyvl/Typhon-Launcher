@@ -48,10 +48,10 @@
 <section class="user-header">
   <div class="header-surface">
     <div class="head">
-      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} frame={look.avatarFrame} />
+      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} frame={look.avatarFrame} frameColor={look.frameColor} />
 
       <div class="identity">
-        <h2 class="display-name"><StyledName {name} styleName={look.nameStyle} /></h2>
+        <h2 class="display-name"><StyledName {name} styleName={look.nameStyle} nameColor={look.nameColor} /></h2>
         <span class="username">@{profile.username}</span>
         {#if profile.statusEmoji || profile.statusText}
           <p class="status">{#if profile.statusEmoji}<span class="status-emoji">{profile.statusEmoji}</span>{/if}{#if profile.statusText}<span>{profile.statusText}</span>{/if}</p>

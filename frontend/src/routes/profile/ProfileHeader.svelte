@@ -152,6 +152,7 @@
         src={isGuest ? undefined : $currentUser?.avatarUrl}
         status={isGuest ? undefined : statusDot($shownPresence)}
         frame={isGuest ? 'none' : look.avatarFrame}
+        frameColor={look.frameColor}
       />
 
       <div class="identity">
@@ -159,7 +160,7 @@
           <h2 class="display-name">{msg('social.guestName')}</h2>
           <span class="username">{msg('social.guestProfileHint')}</span>
         {:else if $currentUser}
-          <h2 class="display-name"><StyledName name={$currentUser.displayName} styleName={look.nameStyle} /></h2>
+          <h2 class="display-name"><StyledName name={$currentUser.displayName} styleName={look.nameStyle} nameColor={look.nameColor} /></h2>
           <span class="username">@{$currentUser.username}</span>
           {#if statusEmoji || statusText}
             <p class="status">{#if statusEmoji}<span class="status-emoji">{statusEmoji}</span>{/if}{#if statusText}<span>{statusText}</span>{/if}</p>
