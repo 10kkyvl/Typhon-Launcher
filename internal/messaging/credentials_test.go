@@ -71,7 +71,7 @@ func TestAcceptedSendSurvivesCredentialReadFailure(t *testing.T) {
 	})
 	result := make(chan error, 1)
 	go func() {
-		message, err := h.svc.Send("b", "sent-once", "delivered")
+		message, err := h.svc.Send("b", "sent-once", "delivered", nil)
 		if err == nil && message.ID != "42" {
 			err = fmt.Errorf("accepted response lost: %+v", message)
 		}

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
+import { msg } from '../i18n';
 
 const handlers = new Map<string, (event: { data: unknown }) => void>();
 const api: Record<string, any> = {
@@ -204,8 +205,8 @@ describe('messaging store session and event races', () => {
     await expect(messaging.sendMessage(peer.id, 'hello', 'same-client')).rejects.toThrow('network');
     await messaging.retryMessage(peer.id, 'same-client');
 
-    expect(api.send).toHaveBeenNthCalledWith(1, peer.id, 'same-client', 'hello');
-    expect(api.send).toHaveBeenNthCalledWith(2, peer.id, 'same-client', 'hello');
+    expect(api.send).toHaveBeenNthCalledWith(1, peer.id, 'same-client', 'hello', []);
+    expect(api.send).toHaveBeenNthCalledWith(2, peer.id, 'same-client', 'hello', []);
     expect(get(messaging.failedMessages).has('same-client')).toBe(false);
   });
 
@@ -601,5 +602,88 @@ describe('chat recovery regressions', () => {
     finish(message({ senderId: 'me', recipientId: peer.id, clientId: 'old-draft' }));
     await pending;
     expect(messaging.getDraft(peer.id)).toBe('next message');
+  });
+
+  it('sends the attachment ids and shows the pictures in the local message', async () => {
+    const { messaging } = await load();
+    const first = { id: 'att-1', url: 'data:image/png;base64,AAAA', width: 2, height: 2, bytes: 4 };
+    const second = { id: 'att-2', url: 'data:image/png;base64,BBBB', width: 2, height: 2, bytes: 4 };
+    let finish!: (value: unknown) => void;
+    api.send.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+
+    messaging.openChat(peer);
+    await flush();
+    const pending = messaging.sendMessage(peer.id, '', 'pic-client', [first, second]);
+    const local = get(messaging.messagesByPeer)[peer.id].find((item) => item.clientId === 'pic-client');
+    expect(local?.attachments).toEqual([first, second]);
+    expect(local?.text).toBe('');
+    expect(api.send).toHaveBeenCalledWith(peer.id, 'pic-client', '', ['att-1', 'att-2']);
+
+    const sent = message({
+      senderId: 'me', recipientId: peer.id, id: 'sent-pic', clientId: 'pic-client', text: '',
+      attachments: [{ ...first, url: 'https://cdn.example/1.png' }, { ...second, url: 'https://cdn.example/2.png' }],
+    });
+    finish(sent);
+    await pending;
+    expect(get(messaging.messagesByPeer)[peer.id]).toEqual([sent]);
+  });
+
+  it('refuses a message with neither text nor pictures', async () => {
+    const { messaging } = await load();
+    await expect(messaging.sendMessage(peer.id, '  ', 'empty-client', [])).rejects.toThrow('message_empty');
+    expect(api.send).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed picture message with the same attachment ids', async () => {
+    const { messaging } = await load();
+    const first = { id: 'att-1', url: 'data:image/png;base64,AAAA', width: 2, height: 2, bytes: 4 };
+    const sent = message({ senderId: 'me', recipientId: peer.id, id: 'sent-1', clientId: 'pic-retry', text: '', attachments: [first] });
+    api.send.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(sent);
+
+    await expect(messaging.sendMessage(peer.id, '', 'pic-retry', [first])).rejects.toThrow('network');
+    await messaging.retryMessage(peer.id, 'pic-retry');
+
+    expect(api.send).toHaveBeenNthCalledWith(1, peer.id, 'pic-retry', '', ['att-1']);
+    expect(api.send).toHaveBeenNthCalledWith(2, peer.id, 'pic-retry', '', ['att-1']);
+    expect(get(messaging.failedMessages).has('pic-retry')).toBe(false);
+  });
+
+  it('names a picture-only message in the notification', async () => {
+    await load();
+    const incoming = message({
+      id: 'pic-in', clientId: 'pic-in-client', text: '',
+      attachments: [{ id: 'att-1', url: 'https://cdn.example/1.png', width: 2, height: 2, bytes: 4 }],
+    });
+    await emit('chat:event', { ownerId: 'me', kind: 'message', peerId: peer.id, message: incoming });
+
+    expect(api.notify).toHaveBeenCalledWith(peer.id, 'Friend', msg('social.chatImageLabel'));
+  });
+
+  it('allows emptying the text of a message that has pictures and nothing else', async () => {
+    const { messaging } = await load();
+    const withPicture = message({
+      id: 'own-pic', clientId: 'own-pic-client', senderId: 'me', recipientId: peer.id, text: 'caption',
+      attachments: [{ id: 'att-1', url: 'https://cdn.example/1.png', width: 2, height: 2, bytes: 4 }],
+    });
+    const plain = message({ id: 'own-text', clientId: 'own-text-client', senderId: 'me', recipientId: peer.id, text: 'plain' });
+    messaging.messagesByPeer.set({ [peer.id]: [withPicture, plain] });
+    api.edit.mockResolvedValueOnce({ ...withPicture, text: '' });
+
+    await messaging.editMessage(peer.id, 'own-pic', '  ');
+    expect(api.edit).toHaveBeenCalledWith(peer.id, 'own-pic', '');
+    await expect(messaging.editMessage(peer.id, 'own-text', '  ')).rejects.toThrow('message_empty');
+  });
+
+  it('keeps picture drafts per dialog and drops them when the session changes', async () => {
+    const { user, messaging } = await load();
+    const draft = { key: 'k1', name: 'a.png', bytes: 4, encoded: 'AAAA', previewUrl: 'data:image/png;base64,AAAA' };
+    messaging.setAttachmentDrafts(peer.id, [draft]);
+    expect(get(messaging.attachmentDrafts)[peer.id]).toEqual([draft]);
+    messaging.setAttachmentDrafts(peer.id, []);
+    expect(get(messaging.attachmentDrafts)).toEqual({});
+    messaging.setAttachmentDrafts(peer.id, [draft]);
+    user.currentUser.set(null);
+    user.authState.set('unauthenticated');
+    await vi.waitFor(() => expect(get(messaging.attachmentDrafts)).toEqual({}));
   });
 });

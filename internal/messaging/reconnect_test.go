@@ -122,7 +122,7 @@ func TestStreamReconnectsAfterTransientHTTPFailure(t *testing.T) {
 			if e := awaitKind(t, events, "connection"); e.Connected {
 				t.Fatal("initial failure did not disconnect")
 			}
-			if m, err := s.Send("peer", "client", "while reconnecting"); err != nil || m.ID != "1" {
+			if m, err := s.Send("peer", "client", "while reconnecting", nil); err != nil || m.ID != "1" {
 				t.Fatalf("sending during stream retry: %+v, %v", m, err)
 			}
 			awaitKind(t, events, "sync")

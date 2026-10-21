@@ -1,4 +1,6 @@
+import { get } from 'svelte/store';
 import { Service as MessagingService } from '../../../bindings/typhon/internal/messaging';
+import { locale } from '../i18n/locale';
 import { inWails } from './backend';
 
 export interface ChatPeer {
@@ -13,6 +15,21 @@ export interface Reaction {
   userIds: string[];
 }
 
+export interface Attachment {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+  bytes: number;
+}
+
+export interface ChatImage {
+  name: string;
+  mime: string;
+  bytes: number;
+  encoded: string;
+}
+
 export interface Message {
   id: string;
   clientId: string;
@@ -23,6 +40,7 @@ export interface Message {
   editedAt?: string | null;
   expiresAt: string;
   reactions: Reaction[];
+  attachments?: Attachment[] | null;
 }
 
 export interface Conversation {
@@ -50,6 +68,9 @@ export interface ChatEvent {
 }
 
 export const MAX_MESSAGE_LENGTH = 2000;
+export const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_CHAT_ATTACHMENTS = 4;
+export const CHAT_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 export const HISTORY_DAYS = 7;
 export const REACTION_KEYS = ['fire', 'salute', 'heart', 'clap', 'skull', 'party', 'eyes', 'joy'] as const;
 export type ReactionKey = (typeof REACTION_KEYS)[number];
@@ -80,6 +101,7 @@ export function normalizeMessage(value: Message): Message {
       emoji: reaction.emoji,
       userIds: reaction.userIds ?? [],
     })),
+    attachments: value.attachments ?? [],
   };
 }
 
@@ -105,9 +127,20 @@ export async function messages(peerId: string, before = ''): Promise<MessagePage
   };
 }
 
-export async function send(peerId: string, clientId: string, text: string): Promise<Message> {
+export async function send(peerId: string, clientId: string, text: string, attachmentIds: string[] = []): Promise<Message> {
   if (!inWails) return unavailable();
-  return (await MessagingService.Send(peerId, clientId, text)) as unknown as Message;
+  return (await MessagingService.Send(peerId, clientId, text, attachmentIds)) as unknown as Message;
+}
+
+export async function pickChatImages(): Promise<ChatImage[]> {
+  if (!inWails) return unavailable();
+  const images = (await MessagingService.PickChatImages(get(locale))) as unknown as ChatImage[] | null;
+  return (images ?? []).filter((image) => image.encoded !== '');
+}
+
+export async function uploadChatImage(encoded: string): Promise<Attachment> {
+  if (!inWails) return unavailable();
+  return (await MessagingService.UploadChatImage(encoded)) as unknown as Attachment;
 }
 
 export async function edit(peerId: string, messageId: string, text: string): Promise<Message> {

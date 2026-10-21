@@ -28,3 +28,17 @@ func TestSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestSelections(t *testing.T) {
+	failure := errors.New("dialog failed")
+	picked := []string{`C:\a.png`, `C:\b.png`}
+	if got, err := Selections(picked, nil); err != nil || len(got) != 2 {
+		t.Fatalf("picked: %v, %v", got, err)
+	}
+	if got, err := Selections(nil, errors.New("cancelled by user")); err != nil || len(got) != 0 {
+		t.Fatalf("cancelled: %v, %v", got, err)
+	}
+	if _, err := Selections(nil, failure); !errors.Is(err, failure) {
+		t.Fatalf("failed: %v", err)
+	}
+}

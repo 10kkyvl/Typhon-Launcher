@@ -60,7 +60,7 @@ func TestLiveChatBridge(t *testing.T) {
 	a, ae := makeClient(f.Alice.Token)
 	b, be := makeClient(f.Bob.Token)
 	cid := uuid.NewString()
-	first, err := a.Send(f.Bob.ID, cid, "Проверка лички 🎮 "+cid)
+	first, err := a.Send(f.Bob.ID, cid, "Проверка лички 🎮 "+cid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestLiveChatBridge(t *testing.T) {
 	if sent.PeerID != f.Bob.ID {
 		t.Fatalf("wrong outgoing peer: %+v", sent)
 	}
-	duplicate, err := a.Send(f.Bob.ID, cid, first.Text)
+	duplicate, err := a.Send(f.Bob.ID, cid, first.Text, nil)
 	if err != nil || duplicate.ID != first.ID {
 		t.Fatalf("retry duplicated: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestLiveChatBridge(t *testing.T) {
 		t.Fatal("typing did not stop")
 	}
 	b.Stop()
-	offline, err := a.Send(f.Bob.ID, uuid.NewString(), "Доставить после входа")
+	offline, err := a.Send(f.Bob.ID, uuid.NewString(), "Доставить после входа", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
