@@ -2,6 +2,7 @@ package download
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -33,6 +34,12 @@ func (m *Manager) refreshScheduleLocked(now time.Time) bool {
 		return false
 	}
 	m.scheduleBlocked = blocked
+	if blocked {
+		next, _ := m.rateCfg.NextScheduleOpen(now)
+		slog.Info("downloads held by the schedule", "next_window", next.Format(time.RFC3339))
+	} else {
+		slog.Info("schedule window open, downloads released")
+	}
 	return true
 }
 
