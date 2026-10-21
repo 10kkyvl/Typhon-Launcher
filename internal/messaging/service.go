@@ -9,16 +9,26 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"typhon/internal/account"
+	"typhon/internal/dialogtext"
 )
 
 var errSignedOut = errors.New("unauthenticated")
 
 const prefix = account.APIPrefix + "/me/chat"
+
+const maxMessageRunes = 2000
+
+var (
+	errMessageTooLong = errors.New("message_too_long")
+	errMessageEmpty   = errors.New("message_empty")
+)
 
 type session struct {
 	ctx          context.Context
@@ -38,6 +48,7 @@ type Service struct {
 	notify      func(owner, peer, title, body string) bool
 	clearNotify func()
 	wg          sync.WaitGroup
+	pickFiles   func(dialogtext.Labels) ([]string, error)
 }
 
 func NewService(base string, token func() (string, error), enabled func() bool) (*Service, error) {
@@ -59,6 +70,7 @@ func NewService(base string, token func() (string, error), enabled func() bool) 
 		ResponseHeaderTimeout: 20 * time.Second,
 	}
 	s := &Service{base: base, token: token, enabled: enabled, http: &http.Client{Transport: transport, CheckRedirect: account.CheckRedirect}}
+	s.pickFiles = chooseImageFiles
 	s.emit = func(event Event) {
 		if a := application.Get(); a != nil {
 			a.Event.Emit(EventName, event)
@@ -260,8 +272,21 @@ func (s *Service) Messages(peerID, before string) (Page, error) {
 	err = s.request(r, http.MethodGet, path, nil, &out)
 	return out, err
 }
-func (s *Service) Send(peerID, clientID, text string) (Message, error) {
-	return s.message(http.MethodPost, peerID, "", map[string]string{"clientId": clientID, "text": text})
+func (s *Service) Send(peerID, clientID, text string, attachmentIDs []string) (Message, error) {
+	if utf8.RuneCountInString(text) > maxMessageRunes {
+		return Message{}, errMessageTooLong
+	}
+	if err := checkAttachmentIDs(attachmentIDs); err != nil {
+		return Message{}, err
+	}
+	if strings.TrimSpace(text) == "" && len(attachmentIDs) == 0 {
+		return Message{}, errMessageEmpty
+	}
+	body := map[string]any{"clientId": clientID, "text": text}
+	if len(attachmentIDs) > 0 {
+		body["attachmentIds"] = attachmentIDs
+	}
+	return s.message(http.MethodPost, peerID, "", body)
 }
 func (s *Service) Edit(peerID, messageID, text string) (Message, error) {
 	return s.message(http.MethodPatch, peerID, messageID, map[string]string{"text": text})

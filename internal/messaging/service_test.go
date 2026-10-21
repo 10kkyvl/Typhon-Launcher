@@ -157,7 +157,7 @@ func TestMessagingContractsAndRetryIdentity(t *testing.T) {
 		t.Fatalf("page=%+v err=%v", p, err)
 	}
 	for i := 0; i < 2; i++ {
-		m, err := h.svc.Send("b", "retry-id", "го играть")
+		m, err := h.svc.Send("b", "retry-id", "го играть", nil)
 		if err != nil || m.ID != "42" || m.ExpiresAt == "" {
 			t.Fatalf("send=%+v err=%v", m, err)
 		}

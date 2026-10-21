@@ -14,3 +14,15 @@ func TestResolvedUILanguage(t *testing.T) {
 		t.Fatalf("unknown locale must use the same fallback as the frontend: %+v", got)
 	}
 }
+
+func TestChatImageLabelsExistInBothLanguages(t *testing.T) {
+	for _, language := range []string{"ru", "en"} {
+		got := For(language)
+		if got.ChatImageTitle == "" || got.ChatImages == "" {
+			t.Fatalf("%s chat image labels are empty: %+v", language, got)
+		}
+	}
+	if For("ru").ChatImages == For("en").ChatImages {
+		t.Fatal("chat image filter label is not localised")
+	}
+}

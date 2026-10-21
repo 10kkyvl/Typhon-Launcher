@@ -11,6 +11,7 @@ type Labels struct {
 	ThemeTitle, Themes, ExportTheme, Theme string
 	AvatarTitle, AvatarImages              string
 	CoverTitle, CoverImages                string
+	ChatImageTitle, ChatImages             string
 }
 
 func For(language string) Labels {
@@ -25,6 +26,7 @@ func For(language string) Labels {
 			ExportTheme: "Сохранить тему", Theme: "Файл темы (*.typhontheme)",
 			AvatarTitle: "Выберите аватар", AvatarImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 			CoverTitle: "Выберите обложку профиля", CoverImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp)",
+			ChatImageTitle: "Выберите изображение для чата", ChatImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 		}
 	}
 	return Labels{
@@ -37,5 +39,6 @@ func For(language string) Labels {
 		ExportTheme: "Save theme", Theme: "Theme file (*.typhontheme)",
 		AvatarTitle: "Choose an avatar", AvatarImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 		CoverTitle: "Choose a profile cover", CoverImages: "Images (*.png, *.jpg, *.jpeg, *.webp)",
+		ChatImageTitle: "Choose an image for the chat", ChatImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 	}
 }

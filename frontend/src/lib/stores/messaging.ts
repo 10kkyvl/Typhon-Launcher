@@ -5,6 +5,7 @@ import { needsSocialConsent } from './social';
 import { authState, currentUser } from './user';
 import { presenceStatus } from './presence';
 import { msg } from '../i18n';
+import { attachmentsOf, messagePreview, type ChatAttachmentDraft } from '../social/chatImage';
 import {
   HISTORY_DAYS,
   isMessageAlive,
@@ -19,6 +20,7 @@ import {
   start,
   stop,
   typing as typingCall,
+  type Attachment,
   type ChatEvent,
   type ChatPeer,
   type Conversation,
@@ -45,6 +47,7 @@ export const chatPanelVisible = writable(false);
 export const pendingMessages = writable<Set<string>>(new Set());
 export const failedMessages = writable<Set<string>>(new Set());
 export const editingMessageId = writable<string | null>(null);
+export const attachmentDrafts = writable<Record<string, ChatAttachmentDraft[]>>({});
 
 export const unreadCount = derived(conversations, ($conversations) =>
   $conversations.reduce((sum, item) => sum + Math.max(0, item.unread), 0),
@@ -73,6 +76,15 @@ let unreadMessageIds = new Map<string, Set<string>>();
 let messageRevisions = new Map<string, number>();
 let sessionQueue = Promise.resolve();
 let sessionSerial = 0;
+
+export function setAttachmentDrafts(peerId: string, drafts: ChatAttachmentDraft[]): void {
+  attachmentDrafts.update((all) => {
+    const next = { ...all };
+    if (drafts.length > 0) next[peerId] = drafts;
+    else delete next[peerId];
+    return next;
+  });
+}
 
 export function draftKey(peerId: string, accountId = get(currentUser)?.id ?? ''): string {
   return `${DRAFT_PREFIX}:${accountId}:${peerId}`;
@@ -273,7 +285,7 @@ function markFailed(clientId: string, value: boolean): void {
   });
 }
 
-function localMessage(peerId: string, clientId: string, text: string): Message {
+function localMessage(peerId: string, clientId: string, text: string, attachments: Attachment[] = []): Message {
   const now = new Date().toISOString();
   const ownId = get(currentUser)?.id ?? 'me';
   return {
@@ -285,6 +297,7 @@ function localMessage(peerId: string, clientId: string, text: string): Message {
     createdAt: now,
     expiresAt: new Date(Date.now() + HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     reactions: [],
+    ...(attachments.length > 0 ? { attachments } : {}),
   };
 }
 
@@ -438,20 +451,25 @@ export async function markPeerRead(peerId: string): Promise<void> {
   }
 }
 
-export async function sendMessage(peerId: string, text: string, clientId: string = crypto.randomUUID()): Promise<Message> {
+export async function sendMessage(
+  peerId: string,
+  text: string,
+  clientId: string = crypto.randomUUID(),
+  attachments: Attachment[] = [],
+): Promise<Message> {
   const value = text.trim();
-  if (!value) throw new Error('message_empty');
+  if (!value && attachments.length === 0) throw new Error('message_empty');
   if (Array.from(value).length > 2000) throw new Error('message_too_long');
   const expectedGeneration = generation;
   const outgoingPeer = peerFor(peerId);
   const submittedDraft = getDraft(peerId);
-  const optimistic = localMessage(peerId, clientId, value);
+  const optimistic = localMessage(peerId, clientId, value, attachments);
   setMessage(peerId, optimistic);
   markPending(clientId, true);
   markFailed(clientId, false);
   stopTyping(peerId);
   try {
-    const sent = await sendMessageCall(peerId, clientId, value);
+    const sent = await sendMessageCall(peerId, clientId, value, attachments.map((item) => item.id));
     if (expectedGeneration !== generation) throw new Error('session_changed');
     if (getDraft(peerId) === submittedDraft && submittedDraft.trim() === sent.text.trim()) setDraft(peerId, '');
     replaceLocalMessage(clientId, sent);
@@ -475,7 +493,7 @@ export async function retryMessage(peerId: string, clientId: string): Promise<Me
   const outgoingPeer = peerFor(peerId);
   const submittedDraft = getDraft(peerId);
   try {
-    const sent = await sendMessageCall(peerId, clientId, local.text);
+    const sent = await sendMessageCall(peerId, clientId, local.text, attachmentsOf(local).map((item) => item.id));
     if (expectedGeneration !== generation) throw new Error('session_changed');
     if (getDraft(peerId) === submittedDraft && submittedDraft.trim() === sent.text.trim()) setDraft(peerId, '');
     replaceLocalMessage(clientId, sent);
@@ -492,7 +510,8 @@ export async function retryMessage(peerId: string, clientId: string): Promise<Me
 
 export async function editMessage(peerId: string, messageId: string, text: string): Promise<void> {
   const value = text.trim();
-  if (!value) throw new Error('message_empty');
+  const hasAttachments = attachmentsOf((get(messagesByPeer)[peerId] ?? []).find((item) => item.id === messageId)).length > 0;
+  if (!value && !hasAttachments) throw new Error('message_empty');
   if (Array.from(value).length > 2000) throw new Error('message_too_long');
   const expectedGeneration = generation;
   const sent = await editMessageCall(peerId, messageId, value);
@@ -599,7 +618,7 @@ async function incomingMessage(peerId: string, message: Message, expectedGenerat
   const notifyKey = message.id || message.clientId;
   if (notifyIds.has(notifyKey)) return;
   notifyIds.add(notifyKey);
-  const popupShown = await notify(peerId, resolved.displayName || resolved.username, message.text).catch(() => false);
+  const popupShown = await notify(peerId, resolved.displayName || resolved.username, messagePreview(message)).catch(() => false);
   if (expectedGeneration !== generation || get(currentUser)?.id !== ownId) return;
   if (!popupShown) showChatToast(resolved, message);
 }
@@ -669,6 +688,7 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   failedMessages.set(new Set());
   chatTyping.set({});
   editingMessageId.set(null);
+  attachmentDrafts.set({});
   closeChat();
   if (!nextKey) {
     chatConnected.set(false);
