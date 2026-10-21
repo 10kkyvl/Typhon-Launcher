@@ -22,6 +22,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.scheduleAndPlayBannerNoNext': 'Downloads are held: a game is running and the schedule window is closed',
   'transfers.downloadNow': 'Download now',
   'transfers.outsideSchedule': 'Outside schedule',
+  'transfers.gamePage': 'Game page',
   'transfers.playBannerSettings': 'Configure',
   'transfers.downloadsEmptyActiveDescription': 'Add a torrent or pick a release on a game page.',
   'transfers.downloadsQueueHeading': 'Queued',

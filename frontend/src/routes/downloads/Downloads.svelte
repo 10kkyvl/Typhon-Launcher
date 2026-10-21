@@ -7,6 +7,7 @@
     CircleAlert,
     Download,
     FolderOpen,
+    Gamepad2,
     Menu,
     Gauge,
     Pause,
@@ -28,7 +29,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import type { Download as DownloadRecord } from '../../lib/services/downloads';
+  import { gamePageId, type Download as DownloadRecord } from '../../lib/services/downloads';
   import { maxActiveDownloadOptions, openFolder } from '../../lib/services/settings';
   import {
     active,
@@ -235,6 +236,11 @@
             </span>
           </div>
           <div class="row-actions">
+            {#if gamePageId(item)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
             <Button size="sm" onclick={() => resume(item.id)}>
               <RotateCcw size="1.4rem" strokeWidth={1.8} />
               {msg('common.retry')}
@@ -274,6 +280,11 @@
           <div class="row-actions">
             {#if scheduleHeld && !q.ignoreSchedule}
               <Button size="sm" onclick={() => downloadNow(q.id)}>{msg('transfers.downloadNow')}</Button>
+            {/if}
+            {#if gamePageId(q)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(q) })}>
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
             {/if}
             <DropdownMenu
               items={[
@@ -347,6 +358,11 @@
             {/if}
           </div>
           <div class="row-actions">
+            {#if gamePageId(item)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
+                <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
             <IconButton label={msg('transfers.downloadsShowInFolderLabel')} size="sm" onclick={() => openDestination(item.destination)}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
             </IconButton>

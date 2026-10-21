@@ -63,6 +63,10 @@ export interface Download {
   origin: DownloadOrigin;
 }
 
+export function gamePageId(d: Download): string {
+  return d.origin.gameId || d.origin.libraryId || '';
+}
+
 export interface TorrentInfo {
   infoHash: string;
   name: string;

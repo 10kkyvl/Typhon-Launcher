@@ -55,7 +55,6 @@ export const state = {
   'state.notifUpdateInProgress': 'Обновление идёт — {percent}',
   'state.notifUpdateAvailable': 'Доступно обновление',
   'state.notifInstallProgress': 'Установка — {percent}',
-  'state.notifDownloadProgress': 'Загрузка — {percent}',
 
   'state.relocateTransferredNamed': '«{title}» перенесена',
   'state.relocateTransferredLibrary': '«Библиотека» перенесена',

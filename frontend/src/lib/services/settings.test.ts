@@ -111,7 +111,16 @@ describe('settings in the desktop app', () => {
     bindings.GetSettings.mockResolvedValue({ theme: 'light' });
     const settings = await load(true);
 
-    await expect(settings.getSettings()).resolves.toEqual({ theme: 'light' });
+    await expect(settings.getSettings()).resolves.toEqual({ theme: 'light', downloadSchedule: [] });
+  });
+
+  it('turns the nil schedule Go sends into an empty list and keeps a real one', async () => {
+    const window = { days: [1, 2], from: '23:00', to: '07:00' };
+    bindings.GetSettings.mockResolvedValueOnce({ downloadSchedule: null }).mockResolvedValueOnce({ downloadSchedule: [window] });
+    const settings = await load(true);
+
+    await expect(settings.getSettings()).resolves.toEqual({ downloadSchedule: [] });
+    await expect(settings.getSettings()).resolves.toEqual({ downloadSchedule: [window] });
   });
 
   it('sends exactly the patch to the backend, returns what it stored and lets a refusal reach the caller', async () => {
@@ -120,7 +129,7 @@ describe('settings in the desktop app', () => {
     const settings = await load(true);
     const patch = { proxyPort: 1080 };
 
-    await expect(settings.saveSettingsPatch(patch)).resolves.toEqual(stored);
+    await expect(settings.saveSettingsPatch(patch)).resolves.toEqual({ ...stored, downloadSchedule: [] });
     expect(bindings.SaveSettingsPatch).toHaveBeenCalledWith({ proxyPort: 1080 });
 
     await expect(settings.saveSettingsPatch(patch)).rejects.toThrow('network_mode_invalid');
@@ -133,8 +142,8 @@ describe('settings in the desktop app', () => {
     const settings = await load(true);
 
     await expect(settings.proposeLibraryPath('D:\\')).resolves.toBe('D:\\TyphonLibrary');
-    await expect(settings.setupLibrary('D:\\')).resolves.toEqual({ libraryPath: 'D:\\TyphonLibrary' });
-    await expect(settings.saveConsent(false, true)).resolves.toEqual({ telemetryConsentVersion: 2 });
+    await expect(settings.setupLibrary('D:\\')).resolves.toEqual({ libraryPath: 'D:\\TyphonLibrary', downloadSchedule: [] });
+    await expect(settings.saveConsent(false, true)).resolves.toEqual({ telemetryConsentVersion: 2, downloadSchedule: [] });
     expect(bindings.SaveConsent).toHaveBeenCalledWith(false, true);
   });
 
