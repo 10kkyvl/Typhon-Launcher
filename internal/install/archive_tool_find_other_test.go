@@ -131,3 +131,40 @@ func TestReadToolBannerReturnsEmptyOutputOfASilentTool(t *testing.T) {
 		t.Fatal("readToolBanner succeeded for a tool that does not exist")
 	}
 }
+
+func TestFindArchiveToolsSeesAToolInstalledBetweenCalls(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	prev := toolSearchDirs
+	toolSearchDirs = []string{dir}
+	t.Cleanup(func() { toolSearchDirs = prev })
+	useBanners(t, currentBanners)
+	if got := findArchiveTools(context.Background()); len(got.tools) != 0 {
+		t.Fatalf("findArchiveTools before the install = %v, want nothing", got.tools)
+	}
+	writeTool(t, filepath.Join(dir, "unrar"))
+	got := findArchiveTools(context.Background())
+	if len(got.tools) != 1 || got.tools[0].name != "UnRAR" {
+		t.Fatalf("findArchiveTools after the install = %v, want UnRAR: the search must not remember the empty result", got.tools)
+	}
+}
+
+func TestFindArchiveToolsReportsWhereItLooked(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	prev := toolSearchDirs
+	toolSearchDirs = []string{dir}
+	t.Cleanup(func() { toolSearchDirs = prev })
+	useBanners(t, currentBanners)
+	set := findArchiveTools(context.Background())
+	for _, want := range []string{
+		"UnRAR: путь не определён",
+		"UnRAR: " + filepath.Join(dir, "unrar") + ": нет файла",
+		"7-Zip: " + filepath.Join(dir, "7zz") + ": нет файла",
+		"7-Zip: " + filepath.Join(dir, "7z") + ": нет файла",
+	} {
+		if !slices.Contains(set.searched, want) {
+			t.Errorf("searched = %q, want it to contain %q", set.searched, want)
+		}
+	}
+}

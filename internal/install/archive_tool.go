@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -242,25 +243,41 @@ func (b *tailBuffer) text() string {
 }
 
 // Кандидаты — догадки о месте установки: отсутствующий или нечитаемый путь
-// значит лишь, что распаковщика там нет, и проверяется следующий.
-func firstRegularFile(candidates []string) string {
+// значит лишь, что распаковщика там нет, и проверяется следующий. Возвращаются
+// все обычные файлы без повторов (реестр и Program Files часто называют один
+// и тот же), потому что первый из них может оказаться старой версией, а новая
+// лежит дальше. Вторым значением идут отвергнутые кандидаты с причиной: по
+// ним в логе видно, где искали.
+func regularFiles(candidates []string) ([]string, []string) {
+	var found, skipped []string
 	for _, path := range candidates {
-		if path == "" || !filepath.IsAbs(path) {
+		if path == "" {
+			skipped = append(skipped, "путь не определён")
+			continue
+		}
+		if !filepath.IsAbs(path) {
+			skipped = append(skipped, path+": путь не абсолютный")
 			continue
 		}
 		info, err := os.Stat(path)
 		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				slog.Warn("stat archive tool candidate", "path", path, "error", err)
+			if errors.Is(err, fs.ErrNotExist) {
+				skipped = append(skipped, path+": нет файла")
+				continue
 			}
+			slog.Warn("stat archive tool candidate", "path", path, "error", err)
+			skipped = append(skipped, fmt.Sprintf("%s: ошибка stat: %v", path, err))
 			continue
 		}
 		if !info.Mode().IsRegular() {
+			skipped = append(skipped, path+": не обычный файл")
 			continue
 		}
-		return path
+		if !slices.ContainsFunc(found, func(seen string) bool { return samePath(seen, path) }) {
+			found = append(found, path)
+		}
 	}
-	return ""
+	return found, skipped
 }
 
 // Ненайденный в PATH распаковщик — штатный случай «не установлен», а

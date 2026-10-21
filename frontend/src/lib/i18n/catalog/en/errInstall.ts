@@ -10,7 +10,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installArchiveResultMismatch':
     'The unpacked files do not match the archive listing: an antivirus may have removed a file or a name had to be changed',
   'errInstall.installArchiveToolFailed': 'Neither the built-in extractor nor 7-Zip or WinRAR could unpack the archive',
-  'errInstall.installArchiveToolMissing': 'The built-in extractor could not unpack this archive: install 7-Zip or WinRAR, or extract it manually',
+  'errInstall.installArchiveToolMissing': 'The built-in extractor could not unpack this archive: install 7-Zip or WinRAR (if you just installed one, try again), or extract it manually',
   'errInstall.installArchiveToolOutdated':
     'The installed WinRAR or 7-Zip is too old or not recognised: update it (WinRAR 7.13+, 7-Zip 25.01+) or extract the archive manually',
   'errInstall.installArchiveToolWriteFailed': 'The extractor could not write files to disk',

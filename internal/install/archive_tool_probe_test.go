@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -175,4 +176,55 @@ func TestRefusedToolsDecideTheErrorWhenNothingIsLeft(t *testing.T) {
 			t.Fatalf("err = %v, want errArchiveToolFailed that still carries the refusal", err)
 		}
 	})
+}
+
+func TestNoUsableToolIsLoggedWithWhereItLooked(t *testing.T) {
+	searched := []string{
+		`UnRAR: C:\Program Files\WinRAR\UnRAR.exe: нет файла`,
+		`7-Zip: C:\Program Files\7-Zip\7z.exe: не обычный файл`,
+		`UnRAR: C:\Tools\UnRAR.exe: ошибка stat: access denied`,
+	}
+	cases := []struct {
+		name     string
+		set      toolSet
+		wantIs   error
+		wantLog  []string
+		wantText []string
+	}{
+		{
+			name:     "nothing found",
+			set:      toolSet{searched: searched},
+			wantIs:   errArchiveToolMissing,
+			wantLog:  append([]string{"no archive tool found"}, searched...),
+			wantText: []string{"повторите попытку"},
+		},
+		{
+			name:     "found but too old",
+			set:      toolSet{refused: []error{refusal("UnRAR", "UnRAR.exe", errors.New("версия 7.12 ниже 7.13"))}, searched: searched[1:]},
+			wantIs:   errArchiveToolOutdated,
+			wantLog:  append([]string{"archive tools found but refused", "7.12"}, searched[1:]...),
+			wantText: []string{"7.12", "7.13"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := captureLogs(t)
+			useToolSet(t, tc.set)
+			err := ExtractArchive(context.Background(), brokenRar(t), filepath.Join(t.TempDir(), "out"), nil)
+			if !errors.Is(err, tc.wantIs) {
+				t.Fatalf("err = %v, want %v", err, tc.wantIs)
+			}
+			for _, want := range tc.wantText {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("err = %q, want it to contain %q", err, want)
+				}
+			}
+			logged := strings.ReplaceAll(sink.text(), `\\`, `\`)
+			for _, want := range tc.wantLog {
+				if !strings.Contains(logged, want) {
+					t.Errorf("log = %q, want it to contain %q", logged, want)
+				}
+			}
+		})
+	}
 }
