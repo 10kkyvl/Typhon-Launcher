@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,10 +22,16 @@ type matcher interface {
 	Epoch() uint64
 }
 
-func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Release {
+func parseFeedEntries(ctx context.Context, sourceID string, entries []feed.Entry, now time.Time, memo *titleMemo, progress func(done, total int)) ([]*Release, error) {
 	parsedEntries := make([]*Release, 0, len(entries))
-	for _, e := range entries {
-		parsed := titles.Parse(e.Title)
+	for i, e := range entries {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, err
+		}
+		if progress != nil && i > 0 && i%progressStep == 0 {
+			progress(i, len(entries))
+		}
+		parsed := memo.Parse(e.Title)
 		kind := KindRelease
 		if e.Type == feed.TypePatch {
 			kind = KindPatch
@@ -32,7 +39,7 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		base, normalized := parsed.Base, parsed.Normalized
 		year := parsed.Year
 		if e.Game != "" {
-			hint := titles.Parse(e.Game)
+			hint := memo.Parse(e.Game)
 			base, normalized = hint.Base, hint.Normalized
 			if hint.Year != 0 {
 				year = hint.Year
@@ -105,10 +112,13 @@ func parseEntries(sourceID string, entries []feed.Entry, now time.Time) []*Relea
 		seen[key] = true
 		out = append(out, r)
 	}
-	return out
+	if progress != nil {
+		progress(len(entries), len(entries))
+	}
+	return out, nil
 }
 
-func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary) {
+func mergeReleases(ctx context.Context, existing, incoming []*Release, now time.Time, initial bool) ([]*Release, Summary, error) {
 	var summary Summary
 	index := make(map[string]*Release, len(existing))
 	legacyIndex := make(map[string]*Release, len(existing))
@@ -117,7 +127,10 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 	for _, r := range incoming {
 		incomingLegacyCounts[r.legacyIdentity()]++
 	}
-	for _, r := range existing {
+	for i, r := range existing {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, Summary{}, err
+		}
 		index[r.identity()] = r
 		if r.DistributionID != "" {
 			continue
@@ -132,7 +145,10 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 
 	present := make(map[string]bool, len(incoming))
 	merged := append([]*Release(nil), existing...)
-	for _, next := range incoming {
+	for i, next := range incoming {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, Summary{}, err
+		}
 		key := next.identity()
 		present[key] = true
 		current, ok := index[key]
@@ -196,14 +212,17 @@ func merge(existing, incoming []*Release, now time.Time, initial bool) ([]*Relea
 		current.LastSeenAt = now
 	}
 
-	for _, r := range merged {
+	for i, r := range merged {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, Summary{}, err
+		}
 		if present[r.identity()] || r.Availability == AvailabilityRemoved {
 			continue
 		}
 		r.Availability = AvailabilityRemoved
 		summary.Removed++
 	}
-	return evictStaleRemoved(merged), summary
+	return evictStaleRemoved(merged), summary, nil
 }
 
 // evictStaleRemoved bounds how many AvailabilityRemoved releases a source
