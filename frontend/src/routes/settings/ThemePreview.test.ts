@@ -34,7 +34,7 @@ describe('ThemePreview', () => {
   });
 
   it('uses every theme token that is not explicitly excluded', () => {
-    const missing = allTokens.filter((name) => !notPreviewed.has(name) && !source.includes(`var(${name}`));
+    const missing = allTokens.filter((name) => !notPreviewed.has(name) && !source.includes(`var(${name})`) && !source.includes(`var(${name},`));
     expect(missing).toEqual([]);
   });
 
