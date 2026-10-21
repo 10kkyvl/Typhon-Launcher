@@ -27,7 +27,7 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - On the Downloads page a download that came from the catalog has a "Game page" button, so the description and requirements are one click away
 
 - Several game folders: the Library card in the settings takes folders on other disks. The install dialog offers the library folders to choose from, and Find games and Disk usage look in all of them
-- Your own colours in the profile appearance: a custom background colour sits under the theme tiles, the Custom theme adds a second colour, an angle and "colours as is" without darkening, and the name and the avatar frame each take their own colour instead of the accent. The appearance panel scrolls on its own
+- Your own colours in the profile appearance: a custom background colour sits under the theme tiles, the Custom theme adds a second colour and "colours as is" without darkening, and the name and the avatar frame take their own colour instead of the accent. The appearance panel scrolls on its own
 - The theme editor in the settings names colours in plain words ("Cards and windows", "Borders", "Text"), says where each one is used and shows a full-width preview above the fields: menu, search, cards, hovered buttons, a focused field, a toast, a dialog and a download progress bar
 - A source refresh shows a bar with the stage and a counter ("Parsing entries N of M", "Matching N of M") instead of a spinner, and Refresh all shows the overall percentage
 - A chat message can carry up to four images, each up to 8 MB, by the paperclip button or by pasting from the clipboard. They show as previews, open full size, are stored on the server with the message and deleted with it after 7 days
