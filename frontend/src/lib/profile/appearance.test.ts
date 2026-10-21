@@ -1,7 +1,7 @@
 import { contrast } from '../theme/accent';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
-import { appearanceOf, appearancePalette, customBanner, themeOf, DEFAULT_APPEARANCE, PROFILE_THEMES } from './appearance';
+import { appearanceOf, appearancePalette, customBanner, pickCustomColor, themeOf, DEFAULT_APPEARANCE, PROFILE_THEMES } from './appearance';
 import { PROFILE_TEXT_3 } from './appearanceColor';
 
 describe('profile appearance compatibility', () => {
@@ -120,5 +120,27 @@ describe('profile themes', () => {
     const a = appearanceOf({ theme: 'auto', accent: '#729bff' });
     expect(themeOf(a, null).background).toBe(themeOf(DEFAULT_APPEARANCE).background);
     expect(appearancePalette(a, null)).toEqual(appearancePalette({ ...a, theme: 'midnight' }));
+  });
+});
+
+describe('picking a custom background colour', () => {
+  it('switches any other theme to a flat custom colour shown as is', () => {
+    for (const theme of ['midnight', 'black', 'auto']) {
+      const start = appearanceOf({ theme, customFrom: '#112233', customTo: '#445566', customPure: false, accent: '#729bff' });
+      const next = pickCustomColor(start, '#ff8800');
+      expect(next).toEqual({ ...start, theme: 'custom', customFrom: '#ff8800', customTo: '#ff8800', customPure: true });
+      expect(themeOf(next).background).toBe('#ff8800');
+      expect(customBanner(next)).toBe('linear-gradient(125deg, #ff8800, #ff8800)');
+    }
+  });
+  it('changes only the first colour while the custom theme is active', () => {
+    const start = appearanceOf({ theme: 'custom', customFrom: '#112233', customTo: '#445566', customPure: false, customAngle: 40 });
+    expect(pickCustomColor(start, '#ff8800')).toEqual({ ...start, customFrom: '#ff8800' });
+  });
+  it('does not mutate the appearance it was given', () => {
+    const start = appearanceOf({ theme: 'forest' });
+    const copy = { ...start };
+    pickCustomColor(start, '#ff8800');
+    expect(start).toEqual(copy);
   });
 });

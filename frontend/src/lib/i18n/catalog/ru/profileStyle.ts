@@ -4,6 +4,8 @@ export const profileStyle = {
   'profileStyle.themeAuto': 'Авто из игры',
   'profileStyle.colorFrom': 'Цвет 1',
   'profileStyle.colorTo': 'Цвет 2',
+  'profileStyle.customColor': 'Свой цвет',
+  'profileStyle.singleColor': 'Один цвет',
   'profileStyle.angle': 'Угол градиента',
   'profileStyle.customPure': 'Цвета как есть',
   'profileStyle.customPureHint': 'Градиент без затемнения. Текст на светлом фоне станет тёмным сам.',

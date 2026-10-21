@@ -7,6 +7,8 @@ export const profileStyle: Record<ProfileStyleKey, Message> = {
   'profileStyle.themeAuto': 'Auto from game',
   'profileStyle.colorFrom': 'Color 1',
   'profileStyle.colorTo': 'Color 2',
+  'profileStyle.customColor': 'Custom color',
+  'profileStyle.singleColor': 'Single color',
   'profileStyle.angle': 'Gradient angle',
   'profileStyle.customPure': 'Colors as is',
   'profileStyle.customPureHint': 'The gradient is not darkened. Text on a light background turns dark on its own.',

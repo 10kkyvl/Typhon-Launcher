@@ -20,7 +20,7 @@
   import { accountErrorText } from '../../lib/services/accountMessages';
   import {
     appearanceAccentStyle, appearanceOf, AUTO_THEME, CUSTOM_THEME, customBanner, DEFAULT_APPEARANCE,
-    PROFILE_ACCENTS, PROFILE_THEMES, themeOf,
+    pickCustomColor, PROFILE_ACCENTS, PROFILE_THEMES, themeOf,
   } from '../../lib/profile/appearance';
   import { artStatus } from '../../lib/profile/artPalette';
   import { STATUS_EMOJI } from '../../lib/profile/appearanceEmoji';
@@ -34,6 +34,7 @@
 
   const a = $derived(appearanceOf(draft.appearance));
   const previewName = $derived($currentUser?.displayName || $currentUser?.username || msg('social.guestName'));
+  const fromLabel = $derived(a.theme === CUSTOM_THEME ? msg('profileStyle.colorFrom') : msg('profileStyle.customColor'));
   const accentStyle = $derived(
     appearanceAccentStyle(a).split(';').filter((rule) => rule.startsWith('--accent')).join(';'),
   );
@@ -72,7 +73,9 @@
     if (field === 'accent') accentText = value;
     else if (field === 'customFrom') fromText = value;
     else toText = value;
-    if (validAccent(value)) patch({ [field]: value });
+    if (!validAccent(value)) return;
+    if (field === 'customFrom') draft.appearance = pickCustomColor(a, value);
+    else patch({ [field]: value });
   }
   function setOptionalColor(field: 'nameColor' | 'frameColor', value: string) {
     if (field === 'nameColor') nameText = value;
@@ -158,24 +161,28 @@
         </button>
       </div>
 
-      {#if a.theme === CUSTOM_THEME}
-        <div class="custom">
+      <div class="custom">
+        {#if a.theme === CUSTOM_THEME}
           <div class="gradient-preview" style:background={customBanner(a)}>
             <span class="gradient-card" style:background={themeOf(a).surface} style:color={themeOf(a).ink?.text}>{previewName}</span>
           </div>
-          <div class="pick">
-            <span class="pick-label">{msg('profileStyle.colorFrom')}</span>
-            <button type="button" class="color" style:background={a.customFrom} aria-label={msg('profileStyle.colorFrom')} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
-            <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
-          </div>
-          {#if palette === 'from'}<ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} />{/if}
+        {/if}
+        <div class="pick">
+          <span class="pick-label">{fromLabel}</span>
+          <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
+          <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
+        </div>
+        {#if palette === 'from'}<ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} />{/if}
+        {#if !validAccent(fromText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
+        {#if a.theme === CUSTOM_THEME}
           <div class="pick">
             <span class="pick-label">{msg('profileStyle.colorTo')}</span>
             <button type="button" class="color" style:background={a.customTo} aria-label={msg('profileStyle.colorTo')} aria-expanded={palette === 'to'} onclick={() => togglePalette('to')}></button>
             <HexColorField value={toText} onchange={(v) => setColor('customTo', v)} disabled={locked} />
+            {#if a.customTo !== a.customFrom}<Button size="sm" variant="ghost" onclick={() => patch({ customTo: a.customFrom })}>{msg('profileStyle.singleColor')}</Button>{/if}
           </div>
           {#if palette === 'to'}<ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} />{/if}
-          {#if !validAccent(fromText) || !validAccent(toText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
+          {#if !validAccent(toText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
           <label class="slider"><span>{msg('profileStyle.angle')} <output>{a.customAngle}°</output></span>
             <input class="zoom-slider" style:--zoom-progress={`${a.customAngle / 3.6}%`} type="range" aria-label={msg('profileStyle.angle')} min="0" max="360" value={a.customAngle} oninput={(e) => patch({ customAngle: Number(e.currentTarget.value) })} />
           </label>
@@ -186,8 +193,9 @@
             </div>
             <Toggle label={msg('profileStyle.customPure')} checked={a.customPure} disabled={locked} onchange={(value) => patch({ customPure: value })} />
           </div>
-        </div>
-      {:else if a.theme === AUTO_THEME}
+        {/if}
+      </div>
+      {#if a.theme === AUTO_THEME}
         <div class="custom">
           <p class="hint">{msg('profileStyle.autoHint')}</p>
           <div class="options" role="group" aria-label={msg('profileStyle.autoSource')}>

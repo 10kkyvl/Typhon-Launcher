@@ -61,6 +61,11 @@ export function customBanner(value: Pick<ProfileAppearance, 'customFrom' | 'cust
   return `linear-gradient(${value.customAngle}deg, ${value.customFrom}, ${value.customTo})`;
 }
 
+export function pickCustomColor(value: ProfileAppearance, color: string): ProfileAppearance {
+  if (value.theme === CUSTOM_THEME) return { ...value, customFrom: color };
+  return { ...value, theme: CUSTOM_THEME, customFrom: color, customTo: color, customPure: true };
+}
+
 export function themeOf(value: ProfileAppearance, art?: ArtPalette | null): ProfileTheme {
   if (value.theme === CUSTOM_THEME && value.customPure) {
     const { background, surface, ink } = pureSurfaces(value.customFrom, value.customTo);

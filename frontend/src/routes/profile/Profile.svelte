@@ -507,6 +507,10 @@
     position: sticky;
     top: 1.6rem;
     align-self: flex-start;
+    max-height: calc(100vh - var(--topbar-h) - 2 * 1.6rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-1);
   }
 
   .topbar {
@@ -592,6 +596,9 @@
     .workspace.editing .side {
       position: static;
       width: 100%;
+      max-height: none;
+      overflow: visible;
+      padding: 0;
     }
 
     .profile {
