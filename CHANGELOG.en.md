@@ -43,13 +43,13 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - The catalog loads the next page by itself when you reach the end; the Show more button stays only after a failed load
 - Source refreshes are several times faster: the server's answer about a found game is kept for a week instead of a day, and release files are rewritten only when something changed. Each cycle used to ask the server about half of the releases again
 - A catalog search puts the game with exactly that title first, then titles that start with the query, and only then the rest by popularity
-- The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change, and Ctrl+Shift+Alt+T still resets at any time
+- The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change, and Ctrl+Shift+Alt+T still resets at any time. The theme editor opens for the current theme right away instead of only after clicking a tile
+- When the Typhon server does not answer, the bar at the top explains that the profile comes from cache, links to the service status page that shows what happened and when it is fixed, and closes with a cross until the next outage
 ### Fixed
-- Downloads no longer fill the log with thousands of "short write" warnings and no longer lose finished pieces when two neighbouring ones finish at once, which used to surface as "error promoting part file" on Windows
+- Downloads no longer fill the log with thousands of "short write" warnings and no longer lose finished pieces when two neighbouring ones finish at once, which used to surface as "error promoting part file" on Windows. A cancelled download no longer leaves a `.part` file behind
 - Cancelling a file or folder dialog is no longer shown as an error
 - CPU requirements given only as a clock speed and graphics requirements like "GTX 700 series" are now compared instead of staying "could not compare"
 - The disk usage screen no longer lists removed games with an unknown size
-- A cancelled download no longer leaves a `.part` file behind
 - Chat reactions are drawn with their own icons: on Windows 10 one of them showed as an empty box. The chat button no longer shifts when a message arrives, and the desktop popup for a new message is redrawn
 
 - The launcher finds WinRAR and 7-Zip installed anywhere, even after it started: the lookup also reads the installation records, and the log says where it looked. The error asks to try again when the archiver was just installed

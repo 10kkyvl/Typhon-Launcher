@@ -56,6 +56,11 @@
     errors = [];
   }
 
+  $effect(() => {
+    if (draft !== null || $themeMode !== 'theme' || !active) return;
+    startEditing(active);
+  });
+
   function pickTheme(theme: Theme) {
     selectTheme(theme.id);
     startEditing(theme);

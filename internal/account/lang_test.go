@@ -139,6 +139,33 @@ func TestOpenForgotPasswordWithoutApplication(t *testing.T) {
 	}
 }
 
+func TestOpenStatusPage(t *testing.T) {
+	s := startedService(t, &fakeStore{}, "https://api.example.com")
+	var opened []string
+	s.openURL = func(link string) error {
+		opened = append(opened, link)
+		return nil
+	}
+	s.SetLanguage(func() string { return "en" })
+
+	if err := s.OpenStatusPage(); err != nil {
+		t.Fatalf("OpenStatusPage: %v", err)
+	}
+	if len(opened) != 1 || opened[0] != "https://typhon.betteruptime.com" {
+		t.Fatalf("opened = %v, want the status page", opened)
+	}
+}
+
+func TestOpenStatusPageReportsBrowserFailure(t *testing.T) {
+	s := startedService(t, &fakeStore{}, "https://api.example.com")
+	refused := errors.New("no default browser")
+	s.openURL = func(string) error { return refused }
+
+	if err := s.OpenStatusPage(); !errors.Is(err, refused) {
+		t.Fatalf("error = %v, want it to wrap the browser failure", err)
+	}
+}
+
 func TestOpenSupportSite(t *testing.T) {
 	cases := []struct {
 		name     string

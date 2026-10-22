@@ -323,6 +323,15 @@ export async function openForgotPassword(): Promise<void> {
   }
 }
 
+export async function openStatusPage(): Promise<void> {
+  if (!inWails) throw unauthenticated();
+  try {
+    await AccountService.OpenStatusPage();
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
 export async function openSupportSite(): Promise<void> {
   if (!inWails) throw unauthenticated();
   try {
