@@ -13,6 +13,7 @@ export interface SysreqHave {
   bytes: number;
   free: number | null;
   directX: number;
+  installed: boolean;
 }
 
 export interface SysreqCheck {
@@ -29,8 +30,8 @@ export interface SysreqReport {
   checks: SysreqCheck[];
 }
 
-export async function checkSystemRequirements(gameId: string, installPath: string): Promise<SysreqReport> {
+export async function checkSystemRequirements(gameId: string, installPath: string, installed = false): Promise<SysreqReport> {
   if (!inWails) return { verdict: 'unknown', reason: 'no_requirements', checks: [] };
-  const report = await SysreqService.Check(gameId, installPath);
+  const report = await SysreqService.Check(gameId, installPath, installed);
   return { ...report, checks: report.checks ?? [] } as SysreqReport;
 }

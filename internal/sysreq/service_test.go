@@ -47,7 +47,7 @@ func TestCheckEmptyGameID(t *testing.T) {
 	var n int
 	s := testService(&fakeSource{}, &n)
 	for _, id := range []string{"", "   "} {
-		if _, err := s.Check(ctx, id, "C:/Games"); !errors.Is(err, ErrEmptyGameID) {
+		if _, err := s.Check(ctx, id, "C:/Games", false); !errors.Is(err, ErrEmptyGameID) {
 			t.Fatalf("Check(%q) err = %v", id, err)
 		}
 	}
@@ -58,7 +58,7 @@ func TestCheckSourceError(t *testing.T) {
 	ctx := context.Background()
 	var n int
 	s := testService(&fakeSource{err: boom}, &n)
-	if _, err := s.Check(ctx, "g1", "C:/Games"); !errors.Is(err, boom) {
+	if _, err := s.Check(ctx, "g1", "C:/Games", false); !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -67,7 +67,7 @@ func TestCheckWithoutRequirementsIsUnknownNotError(t *testing.T) {
 	ctx := context.Background()
 	var n int
 	s := testService(&fakeSource{found: false}, &n)
-	r, err := s.Check(ctx, "g1", "C:/Games")
+	r, err := s.Check(ctx, "g1", "C:/Games", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +79,31 @@ func TestCheckWithoutRequirementsIsUnknownNotError(t *testing.T) {
 	}
 }
 
+func TestCheckInstalledGamePassesStorageWithoutProbing(t *testing.T) {
+	ctx := context.Background()
+	var n int
+	src := &fakeSource{found: true, reqs: metadata.SteamRequirements{
+		Minimum: []metadata.Requirement{{Label: "Storage", Value: "50 GB available space"}, {Label: "Memory", Value: "8 GB RAM"}},
+	}}
+	s := testService(src, &n)
+	s.storage = func(string) (platform.StorageInfo, error) {
+		t.Fatal("free space must not be probed for an installed game")
+		return platform.StorageInfo{}, nil
+	}
+	r, err := s.Check(ctx, "g1", "D:/Games", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Verdict != VerdictGood || statusOf(t, r, KindStorage) != StatusOK {
+		t.Fatalf("report = %+v", r)
+	}
+	for _, c := range r.Checks {
+		if c.Kind == KindStorage && (!c.Have.Installed || c.Have.Free != nil) {
+			t.Fatalf("storage have = %+v, want installed without free bytes", c.Have)
+		}
+	}
+}
+
 func TestCheckUsesInstallVolumeAndCachesHardware(t *testing.T) {
 	ctx := context.Background()
 	var n int
@@ -86,7 +111,7 @@ func TestCheckUsesInstallVolumeAndCachesHardware(t *testing.T) {
 		Minimum: []metadata.Requirement{{Label: "Storage", Value: "50 GB available space"}, {Label: "Memory", Value: "8 GB RAM"}},
 	}}
 	s := testService(src, &n)
-	r, err := s.Check(ctx, " g1 ", "D:/Games")
+	r, err := s.Check(ctx, " g1 ", "D:/Games", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +121,7 @@ func TestCheckUsesInstallVolumeAndCachesHardware(t *testing.T) {
 	if r.Verdict != VerdictNotEnough || statusOf(t, r, KindStorage) != StatusBelowMinimum {
 		t.Fatalf("report = %+v", r)
 	}
-	if _, err := s.Check(ctx, "g1", "D:/Games"); err != nil {
+	if _, err := s.Check(ctx, "g1", "D:/Games", false); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
@@ -114,7 +139,7 @@ func TestCheckStorageProblemsMakeSpaceUnknown(t *testing.T) {
 			var n int
 			s := testService(src, &n)
 			s.storage = func(string) (platform.StorageInfo, error) { return platform.StorageInfo{}, platform.ErrEmptyPath }
-			r, err := s.Check(ctx, "g1", path)
+			r, err := s.Check(ctx, "g1", path, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -137,7 +162,7 @@ func TestIncompleteDetectionIsRetried(t *testing.T) {
 		return Hardware{}, false
 	}
 	for range 2 {
-		r, err := s.Check(ctx, "g1", "")
+		r, err := s.Check(ctx, "g1", "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -169,7 +194,7 @@ func TestCheckAbandonsHungFreeSpaceQueryOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	go func() {
-		_, err := s.Check(ctx, "g1", `\dead-host\share`)
+		_, err := s.Check(ctx, "g1", `\dead-host\share`, false)
 		result <- err
 	}()
 	<-started
@@ -188,7 +213,7 @@ func TestCheckCanceledBeforeStart(t *testing.T) {
 	s := testService(storageSource(), &n)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := s.Check(ctx, "g1", "D:/Games"); !errors.Is(err, context.Canceled) {
+	if _, err := s.Check(ctx, "g1", "D:/Games", false); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -205,7 +230,7 @@ func TestHardwareProbeRunsOutsideTheLock(t *testing.T) {
 		}
 		return rig(), true
 	}
-	if _, err := s.Check(context.Background(), "g1", ""); err != nil {
+	if _, err := s.Check(context.Background(), "g1", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if lockedDuringProbe {

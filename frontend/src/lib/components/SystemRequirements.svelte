@@ -25,9 +25,10 @@
   let {
     gameId,
     installPath,
+    installed = false,
     revision = '',
     heading = true,
-  }: { gameId: string; installPath: string; revision?: string; heading?: boolean } = $props();
+  }: { gameId: string; installPath: string; installed?: boolean; revision?: string; heading?: boolean } = $props();
 
   let report = $state<SysreqReport | null>(null);
   let failure = $state('');
@@ -37,7 +38,8 @@
   const SETTLE_MS = 300;
 
   function fetchReport(id: string, path: string, rev: string, fresh: boolean): Promise<SysreqReport> {
-    return reports.fetch(cacheKey(id, path, rev), () => checkSystemRequirements(id, path), fresh);
+    const onDisk = installed;
+    return reports.fetch(cacheKey(id, onDisk ? '' : path, rev), () => checkSystemRequirements(id, path, onDisk), fresh);
   }
 
   async function load(id: string, path: string, rev: string, fresh: boolean) {
@@ -62,7 +64,7 @@
   $effect(() => {
     const id = gameId;
     const path = installPath;
-    const rev = revision;
+    const rev = `${revision}|${installed}`;
     expanded = false;
     report = null;
     failure = '';

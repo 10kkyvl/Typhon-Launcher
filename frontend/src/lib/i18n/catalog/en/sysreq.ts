@@ -23,6 +23,7 @@ export const sysreq: Record<SysreqKey, Message> = {
   'sysreq.haveCpu': { one: '{cpu}, {count} core', other: '{cpu}, {count} cores' },
   'sysreq.haveDirectx': 'DirectX {version}',
   'sysreq.haveFree': '{size} free',
+  'sysreq.haveInstalled': 'the game is already installed',
   'sysreq.kindOs': 'System',
   'sysreq.kindCpu': 'Processor',
   'sysreq.kindGpu': 'Graphics card',

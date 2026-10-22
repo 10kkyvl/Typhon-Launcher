@@ -24,6 +24,7 @@ export const sysreq = {
   },
   'sysreq.haveDirectx': 'DirectX {version}',
   'sysreq.haveFree': 'свободно {size}',
+  'sysreq.haveInstalled': 'игра уже установлена',
   'sysreq.kindOs': 'Система',
   'sysreq.kindCpu': 'Процессор',
   'sysreq.kindGpu': 'Видеокарта',

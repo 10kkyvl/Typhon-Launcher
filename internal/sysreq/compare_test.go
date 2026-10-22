@@ -248,7 +248,7 @@ func TestReportJSONShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"verdict":"good","reason":"","checks":[{"kind":"ram","required":"8 GB RAM","recommended":"","have":{"text":"","cores":0,"bits":0,"bytes":17179869184,"free":null,"directX":0},"status":"ok"}]}`
+	const want = `{"verdict":"good","reason":"","checks":[{"kind":"ram","required":"8 GB RAM","recommended":"","have":{"text":"","cores":0,"bits":0,"bytes":17179869184,"free":null,"directX":0,"installed":false},"status":"ok"}]}`
 	if string(raw) != want {
 		t.Fatalf("json = %s\nwant   %s", raw, want)
 	}

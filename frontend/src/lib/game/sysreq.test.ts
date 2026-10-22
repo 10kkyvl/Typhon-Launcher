@@ -4,7 +4,7 @@ import { cacheKey, haveText, sortChecks, statusTone, verdictLabelKey, verdictTon
 import type { SysreqCheck, SysreqHave } from '../services/sysreq';
 
 function check(kind: SysreqCheck['kind'], status: SysreqCheck['status']): SysreqCheck {
-  return { kind, required: '', recommended: '', have: { text: '', cores: 0, bits: 0, bytes: 0, free: null, directX: 0 }, status };
+  return { kind, required: '', recommended: '', have: { text: '', cores: 0, bits: 0, bytes: 0, free: null, directX: 0, installed: false }, status };
 }
 
 describe('verdictLabelKey', () => {
@@ -87,5 +87,12 @@ describe('haveText', () => {
     expect(haveText(withHave('directx', {}))).toBe('');
     expect(haveText(withHave('cpu', { text: 'X' }))).toBe('X');
     expect(haveText(withHave('storage', { free: 0 }))).not.toBe('');
+  });
+
+  it('says an installed game already sits on the disk instead of quoting free space', () => {
+    locale.set('ru');
+    expect(haveText(withHave('storage', { installed: true, free: 0 }))).toBe('игра уже установлена');
+    locale.set('en');
+    expect(haveText(withHave('storage', { installed: true, free: null }))).toBe('the game is already installed');
   });
 });
