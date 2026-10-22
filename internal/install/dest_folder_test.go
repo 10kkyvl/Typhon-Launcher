@@ -77,24 +77,46 @@ func TestPlanSpaceJudgesTheDestinationFolder(t *testing.T) {
 			},
 		},
 		{
-			name: "failed install that did not create the folder does not own it", dest: "Game", wantBusy: true, wantSuggested: filepath.Join("Game", "Game"),
+			name: "failed install that did not create the folder does not own it", dest: "Game", wantBusy: true, wantSuggested: "Game (2)",
 			setup: func(t *testing.T, r *rig, archive, games string) {
 				seedFailedInstall(t, r, archive, filepath.Join(games, "Game"), false)
 			},
 		},
 		{
-			name: "failed install whose archive is gone may hold the only copy", dest: "Game", wantBusy: true, wantSuggested: filepath.Join("Game", "Game"),
+			name: "failed install whose archive is gone may hold the only copy", dest: "Game", wantBusy: true, wantSuggested: "Game (2)",
 			setup: func(t *testing.T, r *rig, _, games string) {
 				seedFailedInstall(t, r, filepath.Join(t.TempDir(), "gone.zip"), filepath.Join(games, "Game"), true)
 			},
 		},
 		{
-			name: "failed install whose folder is a library game", dest: "Game", wantBusy: true, wantSuggested: filepath.Join("Game", "Game"),
+			name: "failed install whose folder is a library game", dest: "Game", wantBusy: true, wantSuggested: "Game (2)",
 			setup: func(t *testing.T, r *rig, archive, games string) {
 				dest := filepath.Join(games, "Game")
 				seedFailedInstall(t, r, archive, dest, true)
 				r.reg.put(library.Game{ID: "g1", Title: "Game", InstallDir: dest})
 			},
+		},
+		{
+			name: "folder named after the game gets a neighbour", dest: "Game", wantBusy: true, wantSuggested: "Game (2)",
+			setup: func(t *testing.T, _ *rig, _, games string) { mkFile(t, filepath.Join(games, "Game", "g.exe"), 8) },
+		},
+		{
+			name: "folder inside a library game gets a neighbour of the game", dest: filepath.Join("Doom", "Sub"), wantBusy: true, wantSuggested: "Game",
+			setup: func(t *testing.T, r *rig, _, games string) {
+				mkFile(t, filepath.Join(games, "Doom", "d.exe"), 8)
+				r.reg.put(library.Game{ID: "g1", Title: "Doom", InstallDir: filepath.Join(games, "Doom")})
+			},
+		},
+		{
+			name: "folder inside a finished install gets a neighbour of it", dest: filepath.Join("Doom", "Sub"), wantBusy: true, wantSuggested: "Game",
+			setup: func(t *testing.T, r *rig, _, games string) {
+				mkFile(t, filepath.Join(games, "Doom", "d.exe"), 8)
+				r.putItem(&Installation{ID: "done1", Status: StatusCompleted, Destination: filepath.Join(games, "Doom")})
+			},
+		},
+		{
+			name: "file in place of the folder", dest: "Game", wantErr: errDestNotFolder,
+			setup: func(t *testing.T, _ *rig, _, games string) { mkFile(t, filepath.Join(games, "Game"), 8) },
 		},
 		{
 			name: "folder cannot be read", dest: "Game", wantErr: errDestUnreadable,
@@ -171,7 +193,7 @@ func TestDestStateTellsEveryCaseApart(t *testing.T) {
 		{filepath.Join(dir, "missing"), destMissing},
 		{empty, destEmpty},
 		{full, destNotEmpty},
-		{file, destNotEmpty},
+		{file, destNotFolder},
 	}
 	for _, tc := range cases {
 		got, err := destState(tc.path)
@@ -240,9 +262,8 @@ func TestStartRemovesTheLeftoverOfAFailedInstall(t *testing.T) {
 	if !exists(filepath.Join(dest, "Game", "Game.exe")) && !exists(filepath.Join(dest, "Game.exe")) {
 		t.Fatalf("the archive was not extracted into %s", dest)
 	}
-	old := r.get("failed1")
-	if old.OwnedDestination != "" {
-		t.Fatalf("the failed record still owns %q", old.OwnedDestination)
+	if _, ok := r.s.snapshot("failed1"); ok {
+		t.Fatal("the failed record outlived the cleanup of its folder")
 	}
 }
 
@@ -284,16 +305,15 @@ func TestStartKeepsAFolderItCannotProveIsALeftover(t *testing.T) {
 	}
 }
 
-func TestDismissOfAFailedInstallRemovesWhatItCreated(t *testing.T) {
+func TestDismissOfAFailedInstallKeepsItsFiles(t *testing.T) {
 	cases := []struct {
 		name        string
 		owned       bool
 		dropArchive bool
-		wantKept    bool
 	}{
 		{name: "folder was created by the install", owned: true},
-		{name: "folder existed before the install", owned: false, wantKept: true},
-		{name: "archive is gone, folder may be the only copy", owned: true, dropArchive: true, wantKept: true},
+		{name: "folder existed before the install", owned: false},
+		{name: "archive is gone, folder may be the only copy", owned: true, dropArchive: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -310,8 +330,8 @@ func TestDismissOfAFailedInstallRemovesWhatItCreated(t *testing.T) {
 			}
 			r.s.wg.Wait()
 
-			if got := exists(filepath.Join(dest, "stale.bin")); got != tc.wantKept {
-				t.Fatalf("folder content kept = %v, want %v", got, tc.wantKept)
+			if !exists(filepath.Join(dest, "stale.bin")) {
+				t.Fatal("Dismiss of a failed install removed its folder, the extracted game may be the only copy")
 			}
 			if _, ok := r.s.snapshot("failed1"); ok {
 				t.Fatal("the record survived the dismiss")

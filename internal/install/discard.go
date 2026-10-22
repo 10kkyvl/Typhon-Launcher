@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"slices"
 
 	"typhon/internal/platform"
 )
@@ -47,8 +48,6 @@ func (s *Service) rememberCreatedDestination(id, destination string) error {
 	return nil
 }
 
-// usedByOtherLocked — запись, которая сейчас пользуется папкой item.Destination
-// (идёт установка в неё или она уже стала игрой); nil, если такой нет.
 func (s *Service) usedByOtherLocked(item *Installation) *Installation {
 	for _, other := range s.items {
 		if other == item || !sharesPath(other.Destination, item.Destination) {
@@ -62,16 +61,21 @@ func (s *Service) usedByOtherLocked(item *Installation) *Installation {
 }
 
 // holdDiscardLocked решает под s.mu, можно ли убирать Destination отменённой
-// или проваленной установки, и пока уборка идёт, закрывает его от новых
-// установок: резерв той же .partial-папки, что и у удаления извне, не пускает
-// Start и Retry в claimLocked. Возвращает release, либо nil — убирать нечего.
-// Проваленная установка в момент провала файлы оставляет: Retry подхватывает их
-// (регистрация в библиотеке отказала уже после переноса). Убрать их можно только
-// по явному решению: Dismiss записи или Start, который занимает ту же папку.
+// установки, и пока уборка идёт, закрывает его от новых установок: резерв той
+// же .partial-папки, что и у удаления извне, не пускает Start и Retry в
+// claimLocked. Возвращает release, либо nil — убирать нечего. Проваленная
+// установка файлы оставляет, и Dismiss их не трогает: Retry подхватывает их
+// (регистрация в библиотеке отказала уже после переноса), а распакованная
+// игра может быть единственной копией. Убирает их только reclaimLeftover, когда
+// новая установка занимает ту же папку.
 func (s *Service) holdDiscardLocked(item *Installation) func() {
-	if item.Status != StatusCancelled && item.Status != StatusFailed {
+	if item.Status != StatusCancelled {
 		return nil
 	}
+	return s.holdLocked(item)
+}
+
+func (s *Service) holdLocked(item *Installation) func() {
 	if !controlled(item.Type) || item.Destination == "" || !samePath(item.OwnedDestination, item.Destination) {
 		return nil
 	}
@@ -154,9 +158,6 @@ func (s *Service) discardBlocker(item Installation) error {
 	return removableDir(item.Destination)
 }
 
-// leftoverLocked — проваленная запись, которая сама создала папку dest и
-// оставила в ней файлы: их можно убрать без вопросов. nil, если такой записи
-// нет или папкой уже пользуется другая.
 func (s *Service) leftoverLocked(dest string) *Installation {
 	if dest == "" {
 		return nil
@@ -187,10 +188,6 @@ func (s *Service) leftoverReusable(dest string) bool {
 	return s.discardBlocker(snap) == nil
 }
 
-// reclaimLeftover убирает остаток проваленной установки из dest перед новой.
-// false без ошибки — убирать нельзя (папка не от проваленной записи, источника
-// нет, папкой пользуется игра): вызывающий отвечает «папка занята». Ошибка —
-// уборка началась и не удалась.
 func (s *Service) reclaimLeftover(dest string) (bool, error) {
 	s.mu.Lock()
 	item := s.leftoverLocked(dest)
@@ -198,40 +195,60 @@ func (s *Service) reclaimLeftover(dest string) (bool, error) {
 		s.mu.Unlock()
 		return false, nil
 	}
+	if s.partialReservedLocked(dest + partialSuffix) {
+		s.mu.Unlock()
+		return false, errPartialReserved
+	}
 	snap := snapshotOf(item)
-	s.mu.Unlock()
-	if err := s.discardBlocker(snap); err != nil {
-		slog.Warn("keep the leftover of a failed install, it cannot be proven safe to remove",
-			"id", snap.ID, "destination", dest, "error", err)
-		return false, nil
-	}
-
-	s.mu.Lock()
-	var release func()
-	if cur := s.leftoverLocked(dest); cur != nil && cur.ID == snap.ID {
-		release = s.holdDiscardLocked(cur)
-	}
+	release := s.holdLocked(item)
 	s.mu.Unlock()
 	if release == nil {
 		return false, nil
 	}
 	defer release()
-	if err := s.discardDestination(snap); err != nil {
-		return false, fmt.Errorf("не удалось убрать остаток прошлой установки в %s: %w", dest, err)
+	if err := s.discardBlocker(snap); err != nil {
+		slog.Warn("keep the leftover of a failed install, it cannot be proven safe to remove",
+			"id", snap.ID, "destination", dest, "error", err)
+		return false, nil
+	}
+	if err := s.removeInstallDir(dest); err != nil {
+		// Без этого следующая непустая папка с тем же именем выглядела бы остатком.
+		return false, errors.Join(err, s.forgetCreatedDestination(snap.ID, dest))
+	}
+	if err := s.dropRecord(snap.ID); err != nil {
+		return false, err
 	}
 	slog.Info("removed the leftover of a failed install before a new one", "id", snap.ID, "destination", dest)
+	emit(eventRemoved, RemovedEvent{ID: snap.ID})
 	return true, nil
 }
 
-// prepareDestination проверяет папку перед Start: свободная или пустая годится,
-// остаток проваленной установки убирается, чужая непустая отклоняется с
-// подсказкой свободной подпапки.
+func (s *Service) dropRecord(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findLocked(id)
+	if item == nil {
+		return nil
+	}
+	idx := slices.Index(s.items, item)
+	s.items = slices.Delete(s.items, idx, idx+1)
+	if err := s.persistLocked(); err != nil {
+		s.items = slices.Insert(s.items, idx, item)
+		return wrapPersistError(err)
+	}
+	return nil
+}
+
 func (s *Service) prepareDestination(dest, name string) error {
 	state, err := s.checkDest(dest)
 	if err != nil {
 		return fmt.Errorf("%w: %s: %w", errDestUnreadable, dest, err)
 	}
-	if state != destNotEmpty {
+	switch state {
+	case destNotFolder:
+		return fmt.Errorf("%w: %s", errDestNotFolder, dest)
+	case destNotEmpty:
+	default:
 		return nil
 	}
 	reclaimed, err := s.reclaimLeftover(dest)
@@ -241,29 +258,33 @@ func (s *Service) prepareDestination(dest, name string) error {
 	if reclaimed {
 		return nil
 	}
-	suggested, err := s.proposeDestination(dest, name)
+	suggested, err := s.suggestDestination(dest, name)
 	if err != nil {
 		return err
 	}
 	return fmt.Errorf("%w: выберите подпапку, например %s", errDestNotEmpty, suggested)
 }
 
-// destinationAdvice заполняет в SpaceInfo то, что Start решит про папку dest:
-// годится она, годится после уборки остатка или занята.
 func (s *Service) destinationAdvice(info *SpaceInfo, dest, name string) error {
 	info.Suggested = dest
-	state, err := s.checkDest(dest)
-	if err != nil {
-		return fmt.Errorf("%w: %s: %w", errDestUnreadable, dest, err)
+	busy := s.insideGame(dest)
+	if !busy {
+		state, err := s.checkDest(dest)
+		if err != nil {
+			return fmt.Errorf("%w: %s: %w", errDestUnreadable, dest, err)
+		}
+		if state == destNotFolder {
+			return fmt.Errorf("%w: %s", errDestNotFolder, dest)
+		}
+		if state != destNotEmpty {
+			return nil
+		}
+		if s.leftoverReusable(dest) {
+			info.Reusable = true
+			return nil
+		}
 	}
-	if state != destNotEmpty {
-		return nil
-	}
-	if s.leftoverReusable(dest) {
-		info.Reusable = true
-		return nil
-	}
-	suggested, err := s.proposeDestination(dest, name)
+	suggested, err := s.suggestDestination(dest, name)
 	if err != nil {
 		return err
 	}
