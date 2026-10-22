@@ -44,7 +44,9 @@ Downloads follow a schedule, the launcher runs from a USB stick, a game's page s
 - Source refreshes are several times faster: the server's answer about a found game is kept for a week instead of a day, and release files are rewritten only when something changed. Each cycle used to ask the server about half of the releases again
 - A catalog search puts the game with exactly that title first, then titles that start with the query, and only then the rest by popularity
 - The Reset appearance button no longer sits in the corner for good: it shows for a few seconds after a theme change, and Ctrl+Shift+Alt+T still resets at any time
+- When the Typhon server does not answer, the bar at the top explains that the profile comes from cache, links to the service status page that shows what happened and when it is fixed, and closes with a cross until the next outage
 ### Fixed
+- The theme editor in settings opens for the current theme right away instead of only after clicking a tile
 - Downloads no longer fill the log with thousands of "short write" warnings and no longer lose finished pieces when two neighbouring ones finish at once, which used to surface as "error promoting part file" on Windows
 - Cancelling a file or folder dialog is no longer shown as an error
 - CPU requirements given only as a clock speed and graphics requirements like "GTX 700 series" are now compared instead of staying "could not compare"
