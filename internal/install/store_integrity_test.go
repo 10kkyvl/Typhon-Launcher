@@ -67,7 +67,7 @@ func TestMissingInstallationsStartEmptyAndSave(t *testing.T) {
 func TestRegisterRejectsEmptyDestination(t *testing.T) {
 	s := mustServiceAt(t, t.TempDir())
 	s.library = &fakeRegistrar{}
-	if _, err := s.register(Installation{ID: "a", Name: "Game"}, "1.0", "manual"); err == nil {
+	if _, err := s.register(t.Context(), Installation{ID: "a", Name: "Game"}, "1.0", "manual"); err == nil {
 		t.Fatal("empty destination must be rejected")
 	}
 }

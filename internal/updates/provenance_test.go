@@ -73,7 +73,7 @@ func TestInstalledDistributionFlowImportsRegistersAndSelectsExactLine(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	game, err := lib.RegisterInstalled(library.InstalledGame{
+	game, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{
 		Title:             "Flow Game",
 		Executable:        executable,
 		InstallDir:        installDir,

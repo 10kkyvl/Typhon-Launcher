@@ -126,6 +126,11 @@ func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error)
 		lt.drop()
 		return Download{}, fmt.Errorf("добавить загрузку: %w", err)
 	}
+	if area, ok := areaOf(d); ok && m.claimedLocked(area) {
+		m.mu.Unlock()
+		lt.drop()
+		return Download{}, errCleanupClaimed
+	}
 	m.items = append(m.items, d)
 	if !req.Verify {
 		m.engines[d.ID] = lt

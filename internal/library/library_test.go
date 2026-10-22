@@ -52,7 +52,7 @@ func TestAddAndReload(t *testing.T) {
 	s := mustServiceAt(t, path)
 
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "  ")
+	game, err := s.AddGame(t.Context(), exe, "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestAddAndReload(t *testing.T) {
 		t.Fatal("size not computed")
 	}
 
-	if _, err := s.AddGame(exe, "Duplicate"); err == nil {
+	if _, err := s.AddGame(t.Context(), exe, "Duplicate"); err == nil {
 		t.Fatal("expected duplicate error")
 	}
 
@@ -87,7 +87,7 @@ func TestPlayMissingExecutable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Ghost")
+	game, err := s.AddGame(t.Context(), exe, "Ghost")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRegisterInstalledAddsGame(t *testing.T) {
 	exe := tempGameExe(t)
 
 	uploadedAt := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:             "  Space Game  ",
 		Executable:        exe,
 		InstallDir:        filepath.Dir(exe),
@@ -138,12 +138,12 @@ func TestRegisterInstalledUpdatesExisting(t *testing.T) {
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
 
-	first, err := s.AddGame(exe, "Original")
+	first, err := s.AddGame(t.Context(), exe, "Original")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updated, err := s.RegisterInstalled(InstalledGame{
+	updated, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Executable:       strings.ToUpper(exe),
 		InstallDir:       filepath.Dir(exe),
 		Version:          "2.0",
@@ -169,7 +169,7 @@ func TestRegisterInstalledUpdatesExisting(t *testing.T) {
 func TestRegisterInstalledRejectsMissingExecutable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
-	if _, err := s.RegisterInstalled(InstalledGame{Executable: filepath.Join(t.TempDir(), "nope.exe")}); err == nil {
+	if _, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: filepath.Join(t.TempDir(), "nope.exe")}); err == nil {
 		t.Fatal("expected error for missing executable")
 	}
 }
@@ -180,7 +180,7 @@ func TestRegisterInstalledKeepsTheBuild(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe, _ := testExecutable(t)
 
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
 		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
 		Repacker: "fitgirl", ReleaseVersion: "1.0.28518",
@@ -203,7 +203,7 @@ func TestReinstallReplacesTheBuild(t *testing.T) {
 		ReleaseID: "rel-1", CanonicalGameID: "canon-1",
 		Repacker: "fitgirl", ReleaseVersion: "1.0",
 	}
-	if _, err := s.RegisterInstalled(base); err != nil {
+	if _, err := s.RegisterInstalled(t.Context(), base); err != nil {
 		t.Fatalf("первая установка: %v", err)
 	}
 
@@ -211,7 +211,7 @@ func TestReinstallReplacesTheBuild(t *testing.T) {
 	next.ReleaseID = "rel-2"
 	next.Repacker = "dodi"
 	next.ReleaseVersion = "1.2"
-	game, err := s.RegisterInstalled(next)
+	game, err := s.RegisterInstalled(t.Context(), next)
 	if err != nil {
 		t.Fatalf("переустановка: %v", err)
 	}
@@ -227,14 +227,14 @@ func TestReinstallReplacesDistributionBindingAtomically(t *testing.T) {
 		Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe),
 		ReleaseID: "rel-a", SourceID: "src", DistributionID: "distribution-a",
 	}
-	if _, err := s.RegisterInstalled(base); err != nil {
+	if _, err := s.RegisterInstalled(t.Context(), base); err != nil {
 		t.Fatalf("first install: %v", err)
 	}
 
 	next := base
 	next.ReleaseID = "rel-b"
 	next.DistributionID = ""
-	game, err := s.RegisterInstalled(next)
+	game, err := s.RegisterInstalled(t.Context(), next)
 	if err != nil {
 		t.Fatalf("reinstall: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestBindDistributionPersistsOnlyExactLegacyRelease(t *testing.T) {
 	}
 	path := filepath.Join(root, "library.json")
 	s := mustServiceAt(t, path)
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title: "Game", Executable: executable, InstallDir: dir, ReleaseID: "release-a", SourceID: "source-a",
 	})
 	if err != nil {

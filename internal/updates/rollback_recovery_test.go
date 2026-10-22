@@ -30,7 +30,7 @@ func TestRecoveryAtEachRollbackBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			game, err := lib.RegisterInstalled(library.InstalledGame{Title: "Game", InstallDir: current, Executable: filepath.Join(current, "game.exe"), Version: "2", ReleaseID: "r2", SourceID: "s", DistributionID: "d"})
+			game, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{Title: "Game", InstallDir: current, Executable: filepath.Join(current, "game.exe"), Version: "2", ReleaseID: "r2", SourceID: "s", DistributionID: "d"})
 			if err != nil {
 				t.Fatal(err)
 			}

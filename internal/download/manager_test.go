@@ -923,21 +923,6 @@ func TestPersistedStateReloads(t *testing.T) {
 	}
 }
 
-func TestDeleteDataRefusesWhileSeeding(t *testing.T) {
-	m := newTestManager(t, 2)
-	m.addTestItem("a", StatusCompleted)
-	m.mu.Lock()
-	m.findLocked("a").Seeding = true
-	m.mu.Unlock()
-
-	if err := m.DeleteData("a"); !errors.Is(err, errSeeding) {
-		t.Fatalf("error = %v, want %v", err, errSeeding)
-	}
-	if _, err := m.Get("a"); err != nil {
-		t.Fatalf("download dropped: %v", err)
-	}
-}
-
 func TestDeleteDataRefusesUnfinishedDownload(t *testing.T) {
 	m := newTestManager(t, 2)
 	m.addTestItem("a", StatusQueued)

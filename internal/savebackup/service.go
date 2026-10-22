@@ -336,6 +336,9 @@ func (s *Service) autoBackup(ctx context.Context, gameID string) {
 	case ctx.Err() != nil:
 		slog.Info("session backup interrupted", "game", gameID, "error", ctx.Err())
 		return
+	case library.IsGameNotFound(err):
+		slog.Info("session backup skipped: game left the library", "game", gameID)
+		return
 	case created:
 		ev = createdEvent(snap, err)
 	case errors.Is(err, errUnchanged):

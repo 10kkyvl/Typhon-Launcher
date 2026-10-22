@@ -93,7 +93,7 @@ func TestNetworkValidationCodes(t *testing.T) {
 			if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
 				t.Fatalf("a rejected save must not write the file, stat error = %v", statErr)
 			}
-			if got := svc.GetSettings(); got != Defaults() {
+			if got := svc.GetSettings(); !sameSettings(got, Defaults()) {
 				t.Fatalf("a rejected save changed the settings: %+v", got)
 			}
 		})
@@ -137,7 +137,7 @@ func TestNetworkValidationAccepts(t *testing.T) {
 			if err := svc.SaveSettings(next); err != nil {
 				t.Fatalf("SaveSettings: %v", err)
 			}
-			if got := mustServiceAt(t, path).GetSettings(); got != next {
+			if got := mustServiceAt(t, path).GetSettings(); !sameSettings(got, next) {
 				t.Fatalf("reloaded %+v, want %+v", got, next)
 			}
 		})

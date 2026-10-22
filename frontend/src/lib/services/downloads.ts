@@ -56,10 +56,15 @@ export interface Download {
   seeding: boolean;
   stalled?: boolean;
   stalledSince?: string | null;
+  ignoreSchedule?: boolean;
   addedAt: string;
   completedAt: string | null;
   error: string;
   origin: DownloadOrigin;
+}
+
+export function gamePageId(d: Download): string {
+  return d.origin.gameId || d.origin.libraryId || '';
 }
 
 export interface TorrentInfo {
@@ -160,4 +165,9 @@ export async function moveDownloadDown(id: string): Promise<void> {
 export async function forceStartDownload(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await Manager.ForceStart(id);
+}
+
+export async function downloadNow(id: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await Manager.DownloadNow(id);
 }

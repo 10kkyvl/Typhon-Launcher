@@ -12,6 +12,13 @@ import (
 var ErrBadPrivateKey = errors.New("selfupdate: private key is not an ed25519 private key")
 
 var (
+	ErrPortableUpdateUnavailable = uierr.New("selfupdate.portable_update_unavailable", "selfupdate: в этом выпуске нет портативной сборки")
+	ErrPortableZipUnsafeEntry    = uierr.New("selfupdate.portable_zip_unsafe_entry", "selfupdate: в архиве портативной сборки небезопасное имя файла")
+	ErrPortableZipNoExecutable   = uierr.New("selfupdate.portable_zip_no_executable", "selfupdate: в архиве портативной сборки нет typhon.exe")
+	ErrPortableZipExecutable     = uierr.New("selfupdate.portable_zip_executable", "selfupdate: typhon.exe в архиве не обычный файл допустимого размера")
+)
+
+var (
 	ErrBadPublicKey        = uierr.New("selfupdate.bad_public_key", "selfupdate: embedded public key is invalid")
 	ErrUnknownKey          = uierr.New("selfupdate.unknown_key", "selfupdate: manifest signed by an unknown key")
 	ErrBadSignature        = uierr.New("selfupdate.bad_signature", "selfupdate: manifest signature does not verify")

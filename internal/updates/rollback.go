@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -19,7 +20,7 @@ func (s *Service) HasRollback(gameID string) bool {
 
 // finishRollback is idempotent at every filesystem and metadata boundary.
 // The journal survives until both the library and rollback state are saved.
-func (s *Service) finishRollback(j SwapJournal) error {
+func (s *Service) finishRollback(ctx context.Context, j SwapJournal) error {
 	r := j.Rollback
 	if r == nil || j.InstallDir == "" || j.Staging == "" || j.Previous == "" {
 		return fmt.Errorf("%w: incomplete rollback journal", errSwapFailed)
@@ -42,7 +43,7 @@ func (s *Service) finishRollback(j SwapJournal) error {
 	if s.library == nil {
 		return errNoLibrary
 	}
-	if _, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
+	if _, err := s.library.ApplyInstalledUpdate(ctx, library.InstalledUpdate{
 		ID: j.GameID, InstallDir: r.InstallDir, Executable: r.Executable,
 		Version: r.Version, VersionSource: string(VersionSourceRelease),
 		ReleaseID: r.ReleaseID, SourceID: r.SourceID, DistributionID: r.DistributionID,

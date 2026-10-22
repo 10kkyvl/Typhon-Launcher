@@ -44,7 +44,7 @@ func TestFinishedSessionCarriesTheExitCode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-			game, err := s.AddGame(tempGameExe(t), "Exit")
+			game, err := s.AddGame(t.Context(), tempGameExe(t), "Exit")
 			if err != nil {
 				t.Fatal(err)
 			}

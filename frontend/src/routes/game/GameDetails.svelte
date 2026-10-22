@@ -21,6 +21,7 @@
   } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
+  import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -38,17 +39,23 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import ReferenceLinks from '../../lib/components/ReferenceLinks.svelte';
+  import SteamExtras from '../../lib/components/SteamExtras.svelte';
   import StoreLinks from '../../lib/components/StoreLinks.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import SystemRequirements from '../../lib/components/SystemRequirements.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
+  import GameNotes from './GameNotes.svelte';
   import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
+  import { playLabel } from '../../lib/game/profiles';
+  import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { releaseOrigin } from '../../lib/game/releases';
   import { statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
@@ -83,6 +90,7 @@
     createShortcut,
     markError,
     playGame,
+    playGameProfile,
     removeShortcut,
     setFavorite,
     setRequiresSteam,
@@ -92,11 +100,16 @@
     dismissMetadataMatch,
     ensureMetadataFresh,
     getMetadataView,
+    getSavePaths,
+    openReferenceLink,
     openStoreLink,
     refreshMetadata,
     type MetadataView,
+    type ReferenceKind,
+    type SavePaths,
     type StoreId,
   } from '../../lib/services/metadata';
+  import { referenceKinds, steamFacts } from '../../lib/game/extras';
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
@@ -119,9 +132,10 @@
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
+  import { settings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesSize, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -382,8 +396,37 @@
       { label: msg('games.detailFactDeveloper'), value: info?.developer },
       { label: msg('games.detailFactPublisher'), value: info?.publisher },
       { label: msg('games.detailFactPlatforms'), value: joinLimited(platforms, 4), full: platforms.join(', ') },
+      ...steamFacts(metaView?.steam, msg, formatCount),
     ]),
   );
+
+  let savePaths = $state<SavePaths | null>(null);
+  let savePathsToken = 0;
+
+  $effect(() => {
+    const gameId = canonicalId;
+    untrack(() => {
+      const current = ++savePathsToken;
+      savePaths = null;
+      if (!gameId) return;
+      getSavePaths(gameId).then(
+        (paths) => {
+          if (current === savePathsToken) savePaths = paths;
+        },
+        () => {
+          // a failed lookup only hides the optional PCGamingWiki link; the user sees no toast for it by design
+          if (current === savePathsToken) savePaths = null;
+        },
+      );
+    });
+  });
+
+  const sysreqRevision = $derived(
+    metaView?.steam
+      ? `${metaView.steam.appId}:${metaView.steam.requirements?.minimum?.length ?? 0}:${metaView.steam.requirements?.recommended?.length ?? 0}`
+      : '',
+  );
+  const references = $derived(referenceKinds(savePaths, Boolean(canonicalId && title)));
 
   const shotCols = $derived(
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
@@ -632,6 +675,15 @@
     }
   }
 
+  async function openReference(kind: ReferenceKind, appId = 0) {
+    if (!canonicalId) return;
+    try {
+      await openReferenceLink(canonicalId, kind, appId);
+    } catch (err) {
+      toast(metadataErrorText(err, msg('games.detailDlcOpenError')), 'danger');
+    }
+  }
+
   function openShot(index: number) {
     lightboxIndex = index;
     lightboxOpen = true;
@@ -745,6 +797,15 @@
     if (!localGame) return;
     try {
       await playGame(localGame.id);
+    } catch (err) {
+      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+    }
+  }
+
+  async function playProfile(profileID: string) {
+    if (!localGame) return;
+    try {
+      await playGameProfile(localGame.id, profileID);
     } catch (err) {
       toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
@@ -900,11 +961,14 @@
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
-            <span class="lead">
+            <span class="lead" class:split={Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" onclick={play}>
                 <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-                {msg('games.play')}
+                {localGame ? playLabel(localGame) : msg('games.play')}
               </Button>
+              {#if localGame}
+                <PlayProfileMenu game={localGame} onpick={playProfile} />
+              {/if}
             </span>
             <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
               {#if updateIsRelease}
@@ -915,7 +979,7 @@
               {primary.label}
             </Button>
           {:else}
-            <span class="lead">
+            <span class="lead" class:split={primary.kind === 'play' && Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
                 {#if primary.kind === 'play'}
                   <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
@@ -926,8 +990,11 @@
                 {:else if primary.kind === 'install-download'}
                   <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
                 {/if}
-                {primary.label}
+                {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
               </Button>
+              {#if primary.kind === 'play' && localGame}
+                <PlayProfileMenu game={localGame} disabled={primary.disabled} onpick={playProfile} />
+              {/if}
             </span>
           {/if}
 
@@ -1090,6 +1157,7 @@
 
         <div class="stores">
           <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+          <ReferenceLinks kinds={references} onopen={(kind) => openReference(kind)} />
         </div>
 
         {#if showUpdateCard && update}
@@ -1147,6 +1215,9 @@
         {#if (catalogGame || localGame) && !external}
           <section class="section">
             <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+            {#if canonicalId}
+              <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} revision={sysreqRevision} />
+            {/if}
             {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
             {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
             <ReleaseList
@@ -1159,6 +1230,14 @@
             />
           </section>
         {/if}
+
+        {#if localGame}
+          {#key localGame.id}
+            <GameNotes gameId={localGame.id} stored={localGame.notes ?? ''} />
+          {/key}
+        {/if}
+
+        <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />
 
         <GameReviews canonicalGameId={canonicalId ?? ''} />
       {/if}
@@ -1176,6 +1255,10 @@
             {/each}
           </dl>
         </Card>
+      {/if}
+
+      {#if localGame}
+        <AchievementsCard gameId={localGame.id} />
       {/if}
 
       <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={scrollToReviews} />
@@ -1437,6 +1520,11 @@
   .lead :global(.btn) {
     min-width: 18rem;
     padding: 0 2.8rem;
+  }
+
+  .lead.split :global(.btn) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .cta :global(.icon-btn) {

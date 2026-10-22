@@ -8,11 +8,13 @@
     value,
     presets,
     width = '20rem',
+    allowUnlimited = true,
     onchange,
   }: {
     value: number;
     presets: number[];
     width?: string;
+    allowUnlimited?: boolean;
     onchange: (bytes: number) => void;
   } = $props();
 
@@ -21,7 +23,7 @@
   const maxMb = 1000;
 
   const options = $derived([
-    { id: 'none', label: rateLimitLabel(0) },
+    ...(allowUnlimited ? [{ id: 'none', label: rateLimitLabel(0) }] : []),
     ...presets.map((mb) => ({ id: String(mb), label: rateLimitLabel(mb * MB) })),
     { id: 'custom', label: msg('ui.customValue') },
   ]);

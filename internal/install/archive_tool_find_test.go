@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -43,31 +44,43 @@ func currentBanners(path string) (string, error) {
 	return sevenZipBanner2501, nil
 }
 
-func TestFirstRegularFile(t *testing.T) {
+func TestRegularFiles(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first.bin")
 	second := filepath.Join(dir, "second.bin")
 	writeTool(t, first)
 	writeTool(t, second)
+	absent := filepath.Join(dir, "absent.bin")
 	cases := []struct {
 		name       string
 		candidates []string
-		want       string
+		want       []string
+		wantNotes  []string
 	}{
 		{name: "no candidates"},
-		{name: "empty string is skipped", candidates: []string{"", first}, want: first},
-		{name: "relative path is refused even though the file exists next to the test", candidates: []string{"archive_tool.go"}},
-		{name: "relative path is skipped for the next candidate", candidates: []string{"archive_tool.go", first}, want: first},
-		{name: "missing file is skipped", candidates: []string{filepath.Join(dir, "absent.bin"), first}, want: first},
-		{name: "directory is refused", candidates: []string{dir}},
-		{name: "directory is skipped for the next candidate", candidates: []string{dir, second}, want: second},
-		{name: "path that cannot be stat'ed is skipped", candidates: []string{filepath.Join(dir, "bad\x00name"), first}, want: first},
-		{name: "first existing candidate wins", candidates: []string{first, second}, want: first},
+		{name: "empty string is skipped", candidates: []string{"", first}, want: []string{first}, wantNotes: []string{"путь не определён"}},
+		{name: "relative path is refused even though the file exists next to the test", candidates: []string{"archive_tool.go"}, wantNotes: []string{"archive_tool.go: путь не абсолютный"}},
+		{name: "relative path is skipped for the next candidate", candidates: []string{"archive_tool.go", first}, want: []string{first}, wantNotes: []string{"archive_tool.go: путь не абсолютный"}},
+		{name: "missing file is skipped", candidates: []string{absent, first}, want: []string{first}, wantNotes: []string{absent + ": нет файла"}},
+		{name: "directory is refused", candidates: []string{dir}, wantNotes: []string{dir + ": не обычный файл"}},
+		{name: "directory is skipped for the next candidate", candidates: []string{dir, second}, want: []string{second}, wantNotes: []string{dir + ": не обычный файл"}},
+		{name: "path that cannot be stat'ed is skipped", candidates: []string{filepath.Join(dir, "bad\x00name"), first}, want: []string{first}, wantNotes: []string{"ошибка stat"}},
+		{name: "every existing candidate is returned in order", candidates: []string{first, second}, want: []string{first, second}},
+		{name: "a file named twice is returned once", candidates: []string{first, first}, want: []string{first}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := firstRegularFile(tc.candidates); got != tc.want {
-				t.Fatalf("firstRegularFile(%q) = %q, want %q", tc.candidates, got, tc.want)
+			got, notes := regularFiles(tc.candidates)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("regularFiles(%q) = %q, want %q", tc.candidates, got, tc.want)
+			}
+			if len(notes) != len(tc.wantNotes) {
+				t.Fatalf("notes = %q, want %d entries containing %q", notes, len(tc.wantNotes), tc.wantNotes)
+			}
+			for i, want := range tc.wantNotes {
+				if !strings.Contains(notes[i], want) {
+					t.Fatalf("notes[%d] = %q, want it to contain %q", i, notes[i], want)
+				}
 			}
 		})
 	}

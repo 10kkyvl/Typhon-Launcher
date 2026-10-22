@@ -14,6 +14,39 @@ export interface LibraryExternal {
   launchUri?: string;
 }
 
+export interface LaunchProfile {
+  id: string;
+  name: string;
+  executable: string;
+  args?: string[] | null;
+  runAsAdmin?: boolean;
+  shortcutPath?: string;
+}
+
+export interface ProfileInput {
+  name: string;
+  executable: string;
+  argsLine: string;
+  runAsAdmin: boolean;
+}
+
+export interface ProfileView {
+  id: string;
+  name: string;
+  executable: string;
+  argsLine: string;
+  runAsAdmin: boolean;
+  isDefault: boolean;
+  isLast: boolean;
+  shortcutPath?: string;
+}
+
+export interface GameModeOverride {
+  highPerformance?: boolean | null;
+  hideLauncher?: boolean | null;
+  raisePriority?: boolean | null;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -46,6 +79,10 @@ export interface LibraryGame {
   statusAt?: string | null;
   tags?: string[];
   hidden?: boolean;
+  notes?: string;
+  profiles?: LaunchProfile[] | null;
+  lastProfile?: string;
+  gameMode?: GameModeOverride | null;
 }
 
 export interface LibraryCollection {
@@ -62,6 +99,14 @@ export interface SavesResult {
   path: string;
   candidates: string[] | null;
   unreadable: number;
+  hintsError?: string;
+  hint?: { source: string; license: string; via: string; pageUrl: string } | null;
+}
+
+export interface ProfileFallback {
+  gameId: string;
+  profileName: string;
+  code: string;
 }
 
 export interface SessionEvent {
@@ -114,6 +159,55 @@ export async function launchGame(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+export async function playGameProfile(id: string, profileID: string): Promise<boolean> {
+  if (!inWails) throw unavailable();
+  try { await LibraryService.PlayGameProfile(id, profileID); } catch (err) {
+    if (errorCode(err) !== 'library.launch_cancelled') throw err;
+    return false;
+  }
+  return true;
+}
+
+export async function getProfiles(id: string): Promise<ProfileView[]> {
+  if (!inWails) return [];
+  return ((await LibraryService.Profiles(id)) ?? []) as ProfileView[];
+}
+
+export async function addProfile(id: string, input: ProfileInput): Promise<ProfileView> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.AddProfile(id, input)) as ProfileView;
+}
+
+export async function updateProfile(id: string, profileID: string, input: ProfileInput): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.UpdateProfile(id, profileID, input);
+}
+
+export async function removeProfile(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveProfile(id, profileID);
+}
+
+export async function createProfileShortcut(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.CreateProfileShortcut(id, profileID);
+}
+
+export async function profileSteamStatus(id: string, profileID: string): Promise<SteamStatus> {
+  if (!inWails) return { supported: false, installed: false, added: false };
+  return await LibraryService.SteamProfileStatus(id, profileID);
+}
+
+export async function addProfileToSteam(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.AddProfileToSteam(id, profileID);
+}
+
+export async function removeProfileFromSteam(id: string, profileID: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.RemoveProfileFromSteam(id, profileID);
 }
 
 export async function stopGame(id: string): Promise<void> {
@@ -177,6 +271,16 @@ export async function setHidden(id: string, on: boolean): Promise<LibraryGame> {
   return (await LibraryService.SetHidden(id, on)) as unknown as LibraryGame;
 }
 
+export async function setNotes(id: string, text: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.SetNotes(id, text);
+}
+
+export async function notesLimit(): Promise<number> {
+  if (!inWails) throw unavailable();
+  return await LibraryService.NotesLimit();
+}
+
 export async function allTags(): Promise<string[]> {
   if (!inWails) return [];
   return (await LibraryService.AllTags()) ?? [];
@@ -230,6 +334,11 @@ export async function setRunAsAdmin(id: string, on: boolean): Promise<LibraryGam
 export async function setHidePresence(id: string, on: boolean): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetHidePresence(id, on)) as unknown as LibraryGame;
+}
+
+export async function setGameModeOverride(id: string, o: GameModeOverride): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.SetGameModeOverride(id, o)) as unknown as LibraryGame;
 }
 
 export async function selectExecutable(title: string): Promise<string> {

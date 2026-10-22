@@ -27,6 +27,10 @@ type fakeDownloads struct {
 	items   map[string]download.Download
 	getErr  map[string]error
 	deleted []string
+	stopped []string
+	stopErr error
+
+	deleteErr error
 }
 
 func newFakeDownloads() *fakeDownloads {
@@ -41,7 +45,7 @@ func (f *fakeDownloads) add(id, name, destination string) {
 		Name:        name,
 		Destination: destination,
 		Status:      download.StatusCompleted,
-	}
+	}.WithRoot(name)
 }
 
 func (f *fakeDownloads) Get(id string) (download.Download, error) {
@@ -61,7 +65,29 @@ func (f *fakeDownloads) DeleteData(id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deleted = append(f.deleted, id)
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	if _, ok := f.items[id]; !ok {
+		return download.ErrNotFound
+	}
 	delete(f.items, id)
+	return nil
+}
+
+func (f *fakeDownloads) StopSeeding(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.stopErr; err != nil {
+		return err
+	}
+	d, ok := f.items[id]
+	if !ok {
+		return download.ErrNotFound
+	}
+	f.stopped = append(f.stopped, id)
+	d.Seeding = false
+	f.items[id] = d
 	return nil
 }
 
@@ -90,7 +116,7 @@ func (f *fakeRegistrar) CreateShortcut(id string) error {
 	return nil
 }
 
-func (f *fakeRegistrar) RegisterInstalled(g library.InstalledGame) (library.Game, error) {
+func (f *fakeRegistrar) RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.games = append(f.games, g)
@@ -131,6 +157,16 @@ func (f *fakeRegistrar) Find(id string) (library.Game, error) {
 		return library.Game{}, errFakeNoGame
 	}
 	return game, nil
+}
+
+func (f *fakeRegistrar) GetGames() []library.Game {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]library.Game, 0, len(f.records))
+	for _, game := range f.records {
+		out = append(out, game)
+	}
+	return out
 }
 
 func (f *fakeRegistrar) IsRunning(id string) bool {
@@ -1041,9 +1077,9 @@ func TestProposeDestinationAvoidsCollision(t *testing.T) {
 	games := t.TempDir()
 	mkFile(t, filepath.Join(games, "Game", "taken.txt"), 4)
 
-	got := s.proposeDestination(games, "Game")
-	if got != filepath.Join(games, "Game (2)") {
-		t.Fatalf("destination = %q", got)
+	got, err := s.proposeDestination(games, "Game")
+	if err != nil || got != filepath.Join(games, "Game (2)") {
+		t.Fatalf("destination = %q, %v", got, err)
 	}
 }
 

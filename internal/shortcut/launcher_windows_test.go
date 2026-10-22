@@ -428,3 +428,30 @@ func TestSetLinkAppIDSkipsMissingTarget(t *testing.T) {
 		t.Fatal("link to a missing target was rewritten")
 	}
 }
+
+func TestPortableLauncherLeavesLinksAlone(t *testing.T) {
+	exe := selfExe(t)
+	dir := t.TempDir()
+	path := makeLink(t, dir, "Typhon.lnk", exe, "--minimized")
+	before, _ := snapshot(t, path)
+
+	prev := portableMode
+	portableMode = func() bool { return true }
+	t.Cleanup(func() { portableMode = prev })
+
+	if err := RefreshLauncherLinks(context.Background(), []LinkSpot{{Dir: dir, Name: "Typhon.lnk"}}, exe, LauncherAppID); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := snapshot(t, path)
+	if !bytes.Equal(before, after) {
+		t.Fatal("a portable launcher rewrote a link")
+	}
+	if got := inspectLink(t, path); got.id != "" {
+		t.Fatalf("link id = %q, want none", got.id)
+	}
+
+	spots, err := LauncherLinkSpots()
+	if err != nil || len(spots) != 0 {
+		t.Fatalf("LauncherLinkSpots() = %v, %v; want none in portable mode", spots, err)
+	}
+}

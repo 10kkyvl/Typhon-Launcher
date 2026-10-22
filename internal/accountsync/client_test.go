@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func testToken() (string, error) { return "tok", nil }
@@ -186,4 +188,34 @@ func TestHTTPClientPut(t *testing.T) {
 			t.Fatalf("unexpected skipped list: %+v", resp.Skipped)
 		}
 	})
+}
+
+func TestWireGameOmitsHiddenKeysWhenNothingIsHidden(t *testing.T) {
+	raw, err := json.Marshal(wireGame{IGDBID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"hidden"`, `"hiddenAt"`} {
+		if strings.Contains(string(raw), key) {
+			t.Fatalf("%s present in %s: an old backend rejects unknown fields", key, raw)
+		}
+	}
+}
+
+func TestWireGameCarriesHidden(t *testing.T) {
+	at := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	raw, err := json.Marshal(wireGame{IGDBID: 1, Hidden: true, HiddenAt: &at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back wireGame
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Hidden || back.HiddenAt == nil || !back.HiddenAt.Equal(at) {
+		t.Fatalf("round trip = %+v from %s", back, raw)
+	}
+	if !strings.Contains(string(raw), `"hidden":true`) || !strings.Contains(string(raw), `"hiddenAt":"2026-10-19T12:00:00Z"`) {
+		t.Fatalf("wire = %s", raw)
+	}
 }

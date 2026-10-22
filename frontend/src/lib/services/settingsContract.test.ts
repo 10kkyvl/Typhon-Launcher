@@ -37,7 +37,7 @@ interface GoField {
 
 function goFields(): GoField[] {
   const body = /type Settings struct \{([\s\S]*?)\n\}/.exec(goSource())?.[1] ?? '';
-  return [...body.matchAll(/^\t(\w+)\s+(\w+)\s+`json:"(\w+)"`/gm)].map((match) => ({
+  return [...body.matchAll(/^\t(\w+)\s+((?:\[\])?\w+)\s+`json:"(\w+)"`/gm)].map((match) => ({
     name: match[1],
     type: match[2],
     json: match[3],
@@ -52,6 +52,7 @@ function goDefaults(): Map<string, string | number | boolean> {
     const match = /^\t\t(\w+):\s*(.+?),\s*(?:\/\/.*)?$/.exec(line);
     if (!match) continue;
     const raw = match[2].trim();
+    if (/^\[\]\w+\{\}$/.test(raw)) continue;
     if (raw === 'true' || raw === 'false') byName.set(match[1], raw === 'true');
     else if (/^-?\d+(\.\d+)?$/.test(raw)) byName.set(match[1], Number(raw));
     else if (/^"[^"]*"$/.test(raw)) byName.set(match[1], raw.slice(1, -1));
@@ -66,7 +67,7 @@ function goDefaults(): Map<string, string | number | boolean> {
       defaults.set(field.json, false);
     } else if (field.type === 'string') {
       defaults.set(field.json, '');
-    } else {
+    } else if (/^(?:u?int\d*|float\d+)$/.test(field.type)) {
       defaults.set(field.json, 0);
     }
   }
@@ -91,7 +92,8 @@ describe('settings across the bridge', () => {
 
   it('keeps the generated model on the Go json names', () => {
     const generated = bindingSources['typhon/internal/settings/models.ts'];
-    const names = [...generated.matchAll(/^\s*"(\w+)"\??:/gm)].map((match) => match[1]).sort();
+    const block = /export interface Settings \{([\s\S]*?)\n\}/.exec(generated)?.[1] ?? '';
+    const names = [...block.matchAll(/^\s*"(\w+)"\??:/gm)].map((match) => match[1]).sort();
     expect(names, 'regenerate with: wails3 task common:generate:bindings').toEqual(
       goFields().map((field) => field.json).sort(),
     );
@@ -100,10 +102,24 @@ describe('settings across the bridge', () => {
   it('gives the browser fallback the same defaults as Go', async () => {
     const mine = (await getSettings()) as unknown as Record<string, unknown>;
     const theirs = goDefaults();
+    const scalar = goFields().filter((field) => field.type !== 'GameMode' && !field.type.startsWith('[]'));
+    expect([...theirs.keys()].sort()).toEqual(scalar.map((field) => field.json).sort());
     const different = [...theirs]
       .filter(([name, value]) => mine[name] !== value)
       .map(([name, value]) => `${name}: Go ${JSON.stringify(value)}, fallback ${JSON.stringify(mine[name])}`);
     expect(different).toEqual([]);
+  });
+});
+
+describe('settings nested structs', () => {
+  it('gives the browser fallback the zero values of the Go game mode struct', async () => {
+    const body = /type GameMode struct \{([\s\S]*?)\n\}/.exec(goSource())?.[1] ?? '';
+    const fields = [...body.matchAll(/^\t\w+\s+(\w+)\s+`json:"(\w+)"`/gm)];
+    expect(fields.length).toBe(3);
+    expect(fields.every((field) => field[1] === 'bool')).toBe(true);
+    const expected = Object.fromEntries(fields.map((field) => [field[2], false]));
+    const mine = await getSettings();
+    expect(mine.gameMode).toEqual(expected);
   });
 });
 

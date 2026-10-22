@@ -30,6 +30,7 @@ export const overlay: Record<OverlayKey, Message> = {
   'overlay.browserForward': 'Forward',
   'overlay.browserReload': 'Reload',
   'overlay.browserClose': 'Close browser',
+  'overlay.achievementLabel': 'Achievement notification',
   'overlay.browserError': 'Browser: {reason}',
   'settings.overlayCardTitle': 'Game overlay',
   'settings.overlayEnabledLabel': 'Overlay over the game',

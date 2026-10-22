@@ -39,7 +39,7 @@
   });
 </script>
 
-<span class="avatar {size}" class:framed={frame !== 'none'} style:--frame-color={frameColor}>
+<span class="avatar {size}" class:framed={frame !== 'none'} style:--frame-color={frameColor || undefined}>
   {#if frame !== 'none'}
     <span class="frame frame-{frame}" aria-hidden="true"></span>
   {/if}

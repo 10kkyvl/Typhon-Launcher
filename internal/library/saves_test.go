@@ -33,7 +33,7 @@ func addSavesGame(t *testing.T, s *Service, title, installDir string) Game {
 	if err := os.WriteFile(exe, []byte("stub"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	game, err := s.AddGame(exe, title)
+	game, err := s.AddGame(t.Context(), exe, title)
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

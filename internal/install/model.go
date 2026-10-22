@@ -106,6 +106,11 @@ type Installation struct {
 	CompletedAt      *time.Time        `json:"completedAt"`
 	Error            string            `json:"error"`
 
+	// Warning — установка состоялась, но шаг после неё не удался (например,
+	// запись загрузки после переноса не удалилась). Не провал: Status остаётся
+	// Completed.
+	Warning string `json:"warning,omitempty"`
+
 	// OwnedDestination records the empty target before starting an installer.
 	// Unlike a filesystem snapshot, it survives retries and launcher restarts.
 	OwnedDestination string `json:"ownedDestination,omitempty"`
@@ -118,6 +123,24 @@ type PlanInfo struct {
 	RequiredBytes int64  `json:"requiredBytes"`
 	FreeBytes     int64  `json:"freeBytes"`
 	Seeding       bool   `json:"seeding"`
+	// Mode — режим по умолчанию для портативной сборки ("move" или "copy");
+	// для остальных типов пуст. SameVolume — лежит ли предложенная папка на
+	// том же томе, что и данные загрузки.
+	Mode       string   `json:"mode"`
+	SameVolume bool     `json:"sameVolume"`
+	Roots      []string `json:"roots"`
+}
+
+type SpaceInfo struct {
+	RequiredBytes int64  `json:"requiredBytes"`
+	FreeBytes     int64  `json:"freeBytes"`
+	SameVolume    bool   `json:"sameVolume"`
+	Mode          string `json:"mode"`
+	Enough        bool   `json:"enough"`
+
+	DestinationBusy bool   `json:"destinationBusy"`
+	Suggested       string `json:"suggested"`
+	Reusable        bool   `json:"reusable"`
 }
 
 type StartOptions struct {

@@ -18,7 +18,7 @@ var errStopAfterCapture = errors.New("stop after capture")
 func propertiesService(t *testing.T) (*Service, Game) {
 	t.Helper()
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.AddGame(tempGameExe(t), "Props")
+	game, err := s.AddGame(t.Context(), tempGameExe(t), "Props")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestLaunchArgsEmptyArgumentRoundTrip(t *testing.T) {
 func TestUserPropertiesSurviveReinstallAndUpdate(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	exe := tempGameExe(t)
-	installed, err := s.RegisterInstalled(InstalledGame{Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe), Version: "1"})
+	installed, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe), Version: "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,18 +386,18 @@ func TestUserPropertiesSurviveReinstallAndUpdate(t *testing.T) {
 		}
 	}
 
-	if _, err := s.RegisterInstalled(InstalledGame{Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe), Version: "2"}); err != nil {
+	if _, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", Executable: exe, InstallDir: filepath.Dir(exe), Version: "2"}); err != nil {
 		t.Fatal(err)
 	}
 	check("reinstall")
-	if _, err := s.ApplyInstalledUpdate(InstalledUpdate{ID: installed.ID, Version: "3"}); err != nil {
+	if _, err := s.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: installed.ID, Version: "3"}); err != nil {
 		t.Fatal(err)
 	}
 	check("update")
 	if err := s.MarkUninstalled(installed.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddGame(exe, ""); err != nil {
+	if _, err := s.AddGame(t.Context(), exe, ""); err != nil {
 		t.Fatal(err)
 	}
 	check("revive")

@@ -12,7 +12,7 @@ func TestMarkUninstalledKeepsRecord(t *testing.T) {
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Kept")
 
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:       "Kept",
 		Executable:  exe,
 		InstallDir:  dir,
@@ -67,7 +67,7 @@ func TestMarkUninstalledKeepsPlaytime(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Played")
-	game, err := s.RegisterInstalled(InstalledGame{Title: "Played", Executable: exe, InstallDir: dir})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Played", Executable: exe, InstallDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestPlayGameRefusesUninstalled(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Gone")
-	game, err := s.RegisterInstalled(InstalledGame{Title: "Gone", Executable: exe, InstallDir: dir})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Gone", Executable: exe, InstallDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestRegisterInstalledRevivesUninstalledRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	first, exe := discoveredDir(t, "Again")
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:           "Again",
 		Executable:      exe,
 		InstallDir:      first,
@@ -118,7 +118,7 @@ func TestRegisterInstalledRevivesUninstalledRecord(t *testing.T) {
 	}
 
 	second, secondExe := discoveredDir(t, "AgainReinstalled")
-	revived, err := s.RegisterInstalled(InstalledGame{
+	revived, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:           "Again",
 		Executable:      secondExe,
 		InstallDir:      second,
@@ -149,7 +149,7 @@ func TestAddGameRevivesUninstalledRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := s.AddGame(exe, "Manual")
+	game, err := s.AddGame(t.Context(), exe, "Manual")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestAddGameRevivesUninstalledRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	again, err := s.AddGame(exe, "")
+	again, err := s.AddGame(t.Context(), exe, "")
 	if err != nil {
 		t.Fatalf("add after uninstall: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestApplyDiscoveredRevivesUninstalledRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Rescanned")
-	game, err := s.RegisterInstalled(InstalledGame{Title: "Rescanned", Executable: exe, InstallDir: dir})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Rescanned", Executable: exe, InstallDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}

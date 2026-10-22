@@ -79,6 +79,7 @@ type Service struct {
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 
+	portable        bool
 	currentVersion  string
 	pendingArtifact *Artifact
 	pendingVersion  string
@@ -92,6 +93,10 @@ func NewService() (*Service, error) {
 	dir, err := settings.ConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: resolve config dir: %w", err)
+	}
+	_, portable, err := settings.PortableDir()
+	if err != nil {
+		return nil, fmt.Errorf("selfupdate: resolve portable mode: %w", err)
 	}
 	base, err := manifestBaseURL()
 	if err != nil {
@@ -114,6 +119,7 @@ func NewService() (*Service, error) {
 		client:         client,
 		store:          store,
 		notes:          notes,
+		portable:       portable,
 		currentVersion: app.Version,
 	}, nil
 }
@@ -179,7 +185,15 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	// Best effort on purpose: this only tells a future installer run where the
 	// launcher lives, and a registry it cannot write is no reason to refuse to
 	// start. Updates still carry the directory on the installer command line.
-	if err := recordInstallDir(); err != nil {
+	if s.portable {
+		if err := s.recoverPortable(); err != nil {
+			s.mu.Lock()
+			s.cancel = nil
+			s.mu.Unlock()
+			cancel()
+			return err
+		}
+	} else if err := recordInstallDir(); err != nil {
 		slog.Warn("record install dir", "error", err)
 	}
 
@@ -331,6 +345,14 @@ func (s *Service) dropStaleWorker() error {
 		slog.Warn("remove selfupdate worker copy", "dir", dir, "error", err)
 	}
 	return nil
+}
+
+func (s *Service) recoverPortable() error {
+	exe, err := portableExecutable()
+	if err != nil {
+		return fmt.Errorf("selfupdate: resolve executable: %w", err)
+	}
+	return recoverPortableSwap(exe)
 }
 
 func (s *Service) staleForCurrent(v stored) (bool, error) {
@@ -663,7 +685,13 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 		return fail("manifest", err)
 	}
 
-	art, artErr := m.ArtifactFor(runtime.GOOS, runtime.GOARCH)
+	var art Artifact
+	var artErr error
+	if s.portable {
+		art, artErr = m.PortableArtifactFor(runtime.GOOS, runtime.GOARCH)
+	} else {
+		art, artErr = m.ArtifactFor(runtime.GOOS, runtime.GOARCH)
+	}
 	var newer bool
 	var newerErr error
 	if artErr == nil {
@@ -834,6 +862,7 @@ func (s *Service) ApplyUpdate(language string) error {
 		return ErrNotReady
 	}
 	readyPath := s.readyPath
+	readyArtifact := s.readyArtifact
 	version := s.status.AvailableVersion
 	s.status = clearError(s.status)
 	s.status.State = StateApplying
@@ -849,6 +878,12 @@ func (s *Service) ApplyUpdate(language string) error {
 		s.mu.Unlock()
 		emit(eventStatus, status)
 		return cause
+	}
+
+	// A portable launcher must never run an installer and an installed one must
+	// never unpack a zip over itself: the record has to match the mode.
+	if s.portable != (readyArtifact != nil && readyArtifact.Kind == KindPortable) {
+		return rollback(ErrNotReady)
 	}
 
 	exe, err := os.Executable()
@@ -880,6 +915,7 @@ func (s *Service) ApplyUpdate(language string) error {
 		ParentPID:     os.Getpid(),
 		RelaunchPath:  exe,
 		Version:       version,
+		Portable:      s.portable,
 	}
 
 	specPath, err := SpecPath(s.dir)

@@ -97,7 +97,7 @@ func TestScanDiscoversAndKeepsKnownGames(t *testing.T) {
 	f := newFixture(t)
 	known := installedGame(t, f.root, "Portal")
 	installedGame(t, f.root, "Doom")
-	if _, err := f.lib.RegisterInstalled(library.InstalledGame{
+	if _, err := f.lib.RegisterInstalled(t.Context(), library.InstalledGame{
 		Title:      "Portal",
 		Executable: filepath.Join(known, "Portal.exe"),
 		InstallDir: known,
@@ -235,7 +235,7 @@ func TestScanPrefersMarkerOverDirectoryName(t *testing.T) {
 func TestScanMovesKnownInstallInsteadOfDuplicating(t *testing.T) {
 	f := newFixture(t)
 	dir := installedGame(t, f.root, "Portal")
-	registered, err := f.lib.RegisterInstalled(library.InstalledGame{
+	registered, err := f.lib.RegisterInstalled(t.Context(), library.InstalledGame{
 		Title:      "Portal",
 		Executable: filepath.Join(dir, "Portal.exe"),
 		InstallDir: dir,

@@ -38,6 +38,8 @@ type record struct {
 	AddedAt     time.Time  `json:"addedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 	Error       string     `json:"error"`
+
+	IgnoreSchedule bool `json:"ignoreSchedule,omitempty"`
 }
 
 type store struct {

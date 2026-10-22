@@ -20,7 +20,7 @@
   import { accountErrorText } from '../../lib/services/accountMessages';
   import {
     appearanceAccentStyle, appearanceOf, AUTO_THEME, CUSTOM_THEME, customBanner, DEFAULT_APPEARANCE,
-    PROFILE_ACCENTS, PROFILE_THEMES, themeOf,
+    pickCustomColor, PROFILE_ACCENTS, PROFILE_THEMES, themeOf,
   } from '../../lib/profile/appearance';
   import { artStatus } from '../../lib/profile/artPalette';
   import { STATUS_EMOJI } from '../../lib/profile/appearanceEmoji';
@@ -34,6 +34,7 @@
 
   const a = $derived(appearanceOf(draft.appearance));
   const previewName = $derived($currentUser?.displayName || $currentUser?.username || msg('social.guestName'));
+  const fromLabel = $derived(a.theme === CUSTOM_THEME ? msg('profileStyle.colorFrom') : msg('profileStyle.customColor'));
   const accentStyle = $derived(
     appearanceAccentStyle(a).split(';').filter((rule) => rule.startsWith('--accent')).join(';'),
   );
@@ -46,7 +47,11 @@
   $effect(() => { accentText = a.accent; });
   $effect(() => { fromText = a.customFrom; });
   $effect(() => { toText = a.customTo; });
-  let palette = $state<'accent' | 'from' | 'to' | null>(null);
+  let nameText = $state('');
+  let frameText = $state('');
+  $effect(() => { nameText = a.nameColor; });
+  $effect(() => { frameText = a.frameColor; });
+  let palette = $state<'accent' | 'from' | 'to' | 'name' | 'frame' | null>(null);
   let emojiOpen = $state(false);
   let input: HTMLInputElement | undefined = $state();
   let cropOpen = $state(false);
@@ -68,9 +73,16 @@
     if (field === 'accent') accentText = value;
     else if (field === 'customFrom') fromText = value;
     else toText = value;
-    if (validAccent(value)) patch({ [field]: value });
+    if (!validAccent(value)) return;
+    if (field === 'customFrom') draft.appearance = pickCustomColor(a, value);
+    else patch({ [field]: value });
   }
-  function togglePalette(kind: 'accent' | 'from' | 'to') {
+  function setOptionalColor(field: 'nameColor' | 'frameColor', value: string) {
+    if (field === 'nameColor') nameText = value;
+    else frameText = value;
+    if (value === '' || validAccent(value)) patch({ [field]: value });
+  }
+  function togglePalette(kind: 'accent' | 'from' | 'to' | 'name' | 'frame') {
     palette = palette === kind ? null : kind;
   }
   function setStatusText(event: Event) {
@@ -149,29 +161,41 @@
         </button>
       </div>
 
-      {#if a.theme === CUSTOM_THEME}
-        <div class="custom">
+      <div class="custom">
+        {#if a.theme === CUSTOM_THEME}
           <div class="gradient-preview" style:background={customBanner(a)}>
-            <span class="gradient-card" style:background={themeOf(a).surface}>{previewName}</span>
+            <span class="gradient-card" style:background={themeOf(a).surface} style:color={themeOf(a).ink?.text}>{previewName}</span>
           </div>
-          <div class="pick">
-            <span class="pick-label">{msg('profileStyle.colorFrom')}</span>
-            <button type="button" class="color" style:background={a.customFrom} aria-label={msg('profileStyle.colorFrom')} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
-            <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
-          </div>
-          {#if palette === 'from'}<ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} />{/if}
+        {/if}
+        <div class="pick">
+          <span class="pick-label">{fromLabel}</span>
+          <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
+          <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
+        </div>
+        {#if palette === 'from'}<ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} />{/if}
+        {#if !validAccent(fromText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
+        {#if a.theme === CUSTOM_THEME}
           <div class="pick">
             <span class="pick-label">{msg('profileStyle.colorTo')}</span>
             <button type="button" class="color" style:background={a.customTo} aria-label={msg('profileStyle.colorTo')} aria-expanded={palette === 'to'} onclick={() => togglePalette('to')}></button>
             <HexColorField value={toText} onchange={(v) => setColor('customTo', v)} disabled={locked} />
+            {#if a.customTo !== a.customFrom}<Button size="sm" variant="ghost" onclick={() => patch({ customTo: a.customFrom })}>{msg('profileStyle.singleColor')}</Button>{/if}
           </div>
           {#if palette === 'to'}<ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} />{/if}
-          {#if !validAccent(fromText) || !validAccent(toText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
+          {#if !validAccent(toText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
           <label class="slider"><span>{msg('profileStyle.angle')} <output>{a.customAngle}°</output></span>
             <input class="zoom-slider" style:--zoom-progress={`${a.customAngle / 3.6}%`} type="range" aria-label={msg('profileStyle.angle')} min="0" max="360" value={a.customAngle} oninput={(e) => patch({ customAngle: Number(e.currentTarget.value) })} />
           </label>
-        </div>
-      {:else if a.theme === AUTO_THEME}
+          <div class="toggle-row">
+            <div>
+              <span class="pick-label">{msg('profileStyle.customPure')}</span>
+              <p class="hint">{msg('profileStyle.customPureHint')}</p>
+            </div>
+            <Toggle label={msg('profileStyle.customPure')} checked={a.customPure} disabled={locked} onchange={(value) => patch({ customPure: value })} />
+          </div>
+        {/if}
+      </div>
+      {#if a.theme === AUTO_THEME}
         <div class="custom">
           <p class="hint">{msg('profileStyle.autoHint')}</p>
           <div class="options" role="group" aria-label={msg('profileStyle.autoSource')}>
@@ -216,11 +240,19 @@
       <div class="frames">
         {#each AVATAR_FRAMES as frame}
           <button type="button" class="pick-card" class:selected={a.avatarFrame === frame} aria-pressed={a.avatarFrame === frame} onclick={() => patch({ avatarFrame: frame })}>
-            <Avatar size="sm" name={previewName} src={$currentUser?.avatarUrl} {frame} />
+            <Avatar size="sm" name={previewName} src={$currentUser?.avatarUrl} {frame} frameColor={a.frameColor} />
             <span>{msg(`profileStyle.frame.${frame}`)}</span>
           </button>
         {/each}
       </div>
+      <div class="pick">
+        <span class="pick-label">{msg('profileStyle.frameColor')}</span>
+        <button type="button" class="color" style:background={a.frameColor || a.accent} aria-label={msg('profileStyle.frameColor')} aria-expanded={palette === 'frame'} onclick={() => togglePalette('frame')}></button>
+        <HexColorField value={frameText} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />
+        {#if a.frameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('frameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
+      </div>
+      {#if palette === 'frame'}<ColorPalette value={a.frameColor || a.accent} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />{/if}
+      {#if frameText !== '' && !validAccent(frameText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
     </section>
 
     <section>
@@ -228,11 +260,19 @@
       <div class="names">
         {#each NAME_STYLES as style}
           <button type="button" class="pick-card name-card" class:selected={a.nameStyle === style} aria-pressed={a.nameStyle === style} onclick={() => patch({ nameStyle: style })}>
-            <StyledName name={previewName} styleName={style} />
+            <StyledName name={previewName} styleName={style} nameColor={a.nameColor} />
             <small>{msg(`profileStyle.nameStyle.${style}`)}</small>
           </button>
         {/each}
       </div>
+      <div class="pick">
+        <span class="pick-label">{msg('profileStyle.nameColor')}</span>
+        <button type="button" class="color" style:background={a.nameColor || a.accent} aria-label={msg('profileStyle.nameColor')} aria-expanded={palette === 'name'} onclick={() => togglePalette('name')}></button>
+        <HexColorField value={nameText} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />
+        {#if a.nameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('nameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
+      </div>
+      {#if palette === 'name'}<ColorPalette value={a.nameColor || a.accent} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />{/if}
+      {#if nameText !== '' && !validAccent(nameText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
     </section>
 
     <section>
@@ -295,6 +335,7 @@
   .gradient-card { padding: .5rem 1rem; border-radius: var(--radius-sm); font-size: var(--font-xs); color: #f1f4f8; }
   .pick { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
   .pick-label { font-size: var(--font-xs); color: var(--text-2); min-width: 6rem; }
+  .frames + .pick, .names + .pick { margin-top: 1.2rem; }
   .options { display: flex; flex-wrap: wrap; gap: .8rem; }
   .option { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .7rem 1.2rem; color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; }
   .file { display: none; } .accents { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }

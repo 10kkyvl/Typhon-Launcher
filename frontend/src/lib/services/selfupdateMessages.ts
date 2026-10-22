@@ -58,6 +58,10 @@ const REASONS: Record<string, MessageKey> = {
   'selfupdate.launcher_path_not_regular': 'state.selfupdateReasonInstallerFailed',
   'selfupdate.launcher_digest_mismatch': 'state.selfupdateReasonInstallerFailed',
   'selfupdate.relaunch_path_empty': 'state.selfupdateReasonInstallerFailed',
+  'selfupdate.portable_update_unavailable': 'state.selfupdateReasonPortableUnavailable',
+  'selfupdate.portable_zip_unsafe_entry': 'state.selfupdateReasonPortableUnsafeEntry',
+  'selfupdate.portable_zip_no_executable': 'state.selfupdateReasonPortableNoExecutable',
+  'selfupdate.portable_zip_executable': 'state.selfupdateReasonPortableBadExecutable',
 };
 
 // net/http, crypto/tls and the OS surface these directly, with no sentinel of

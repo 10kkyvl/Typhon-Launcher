@@ -26,7 +26,7 @@ func TestRollbackRefusesObsoleteLocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := lib.RegisterInstalled(library.InstalledGame{Title: "Game", Executable: filepath.Join(old, "game.exe"), InstallDir: old})
+	g, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{Title: "Game", Executable: filepath.Join(old, "game.exe"), InstallDir: old})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestRollbackRefusesObsoleteLocation(t *testing.T) {
 	if _, err := lib.Relocate(g.ID, next); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Rollback(g.ID); err == nil {
+	if err := s.Rollback(t.Context(), g.ID); err == nil {
 		t.Fatal("rollback at obsolete location accepted")
 	}
 	after, err := lib.Find(g.ID)

@@ -166,18 +166,40 @@ jobs:
         with:
           version: v3.0.0-beta.17
 
+      # The pinned official archive comes first: during the 1.1.0 release the
+      # Chocolatey feed kept answering 503, and a tag run cannot pick up a
+      # workflow fix, so Chocolatey is only the fallback.
       - name: Install NSIS
         shell: pwsh
+        env:
+          NSIS_VERSION: "3.13"
+          NSIS_SHA256: ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8
         run: |
-          choco install nsis -y --no-progress
-          # "$env:ProgramFiles(x86)" parses as $env:ProgramFiles plus a literal "(x86)".
-          $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) | Where-Object { $_ }
-          $nsisDir = $roots |
-            ForEach-Object { Join-Path $_ 'NSIS' } |
-            Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } |
-            Select-Object -First 1
-          if (-not $nsisDir) {
-            throw "makensis.exe not found after installing NSIS; looked in: $($roots -join ', ')"
+          $zip = Join-Path $env:RUNNER_TEMP "nsis-$env:NSIS_VERSION.zip"
+          $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/$env:NSIS_VERSION/nsis-$env:NSIS_VERSION.zip"
+          curl.exe -fsSL --retry 4 --retry-all-errors --retry-delay 15 --max-time 300 -o $zip $url
+          if ($LASTEXITCODE -eq 0) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+            if ($hash -ne $env:NSIS_SHA256) {
+              throw "nsis-$env:NSIS_VERSION.zip has sha256 $hash, expected $env:NSIS_SHA256"
+            }
+            Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+            $nsisDir = Join-Path $env:RUNNER_TEMP "nsis-$env:NSIS_VERSION"
+          } else {
+            Write-Warning "NSIS archive download failed with curl exit code $LASTEXITCODE; falling back to Chocolatey"
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "choco install nsis failed with exit code $LASTEXITCODE"
+            }
+            # "$env:ProgramFiles(x86)" parses as $env:ProgramFiles plus a literal "(x86)".
+            $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) | Where-Object { $_ }
+            $nsisDir = $roots |
+              ForEach-Object { Join-Path $_ 'NSIS' } |
+              Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } |
+              Select-Object -First 1
+          }
+          if (-not $nsisDir -or -not (Test-Path (Join-Path $nsisDir 'makensis.exe'))) {
+            throw "makensis.exe not found in '$nsisDir' after installing NSIS"
           }
           Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
 
@@ -290,11 +312,47 @@ jobs:
             exit 1
           fi
 
+      - name: Package the portable build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'portable'
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item bin/typhon.exe (Join-Path $stage 'typhon.exe')
+          # An empty marker next to the executable is what switches the
+          # launcher to keeping its data in a data folder beside it.
+          New-Item -ItemType File -Path (Join-Path $stage 'portable.txt') | Out-Null
+          $zip = Join-Path (Get-Location) 'bin/typhon-windows-portable.zip'
+          if (Test-Path $zip) { Remove-Item -Force $zip }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+
+      - name: Verify the portable archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path (Get-Location) 'bin/typhon-windows-portable.zip'))
+          try {
+            $names = $zip.Entries | ForEach-Object { $_.FullName } | Sort-Object
+            if (($names -join ',') -ne 'portable.txt,typhon.exe') {
+              throw "unexpected portable archive entries: $($names -join ', ')"
+            }
+            $marker = $zip.Entries | Where-Object { $_.FullName -eq 'portable.txt' }
+            if ($marker.Length -ne 0) { throw "portable.txt must be empty, it is $($marker.Length) bytes" }
+            $exe = $zip.Entries | Where-Object { $_.FullName -eq 'typhon.exe' }
+            if ($exe.Length -ne (Get-Item bin/typhon.exe).Length) { throw "typhon.exe in the archive differs in size from bin/typhon.exe" }
+          } finally {
+            $zip.Dispose()
+          }
+
       - name: Upload the installer for the release job
         uses: actions/upload-artifact@v4
         with:
           name: typhon-windows-amd64
-          path: bin/typhon-amd64-installer.exe
+          path: |
+            bin/typhon-amd64-installer.exe
+            bin/typhon-windows-portable.zip
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -345,7 +403,10 @@ jobs:
 
       - name: Verify the Windows artifact
         shell: bash
-        run: test -s bin/typhon-amd64-installer.exe
+        run: |
+          set -euo pipefail
+          test -s bin/typhon-amd64-installer.exe
+          test -s bin/typhon-windows-portable.zip
 
       - name: Download the macOS bundle
         uses: actions/download-artifact@v4
@@ -375,7 +436,7 @@ jobs:
             -changelog CHANGELOG.md \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
-            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe" \
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe,portable=bin/typhon-windows-portable.zip" \
             -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
 
           # A launcher older than 0.5.0 validates every artifact in the
@@ -439,6 +500,10 @@ jobs:
             "s3://$bucket/launcher/releases/$version/typhon-darwin-arm64.zip" \
             --endpoint-url http://127.0.0.1:3900
 
+          run_aws s3 cp /data/typhon-windows-portable.zip \
+            "s3://$bucket/launcher/releases/$version/typhon-windows-portable.zip" \
+            --endpoint-url http://127.0.0.1:3900
+
           if [ -n "${RELEASES_S3_ENDPOINT:-}" ]; then
             r2_bucket="${RELEASES_S3_BUCKET:?RELEASES_S3_ENDPOINT is set without RELEASES_S3_BUCKET}"
             run_r2() {
@@ -451,7 +516,7 @@ jobs:
                 --endpoint-url "https://$RELEASES_S3_ENDPOINT"
             }
 
-            for file in typhon-amd64-installer.exe typhon-darwin-arm64.zip; do
+            for file in typhon-amd64-installer.exe typhon-darwin-arm64.zip typhon-windows-portable.zip; do
               run_r2 s3 cp "/data/$file" \
                 "s3://$r2_bucket/launcher/releases/$version/$file" \
                 --cache-control "public, max-age=31536000, immutable"
@@ -483,6 +548,7 @@ jobs:
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
             bin/typhon-darwin-arm64.zip \
+            bin/typhon-windows-portable.zip \
             manifest.json \
             manifest-legacy.json \
             publish-remote.sh \
@@ -560,18 +626,21 @@ jobs:
             printf 'Установленный лаунчер обновится сам.\n\n'
             printf 'Windows 10+ x64. Download `typhon-amd64-installer.exe` below.\n'
             printf 'An installed launcher updates itself.\n\n'
+            printf 'Без установки: распакуйте `typhon-windows-portable.zip` в любую папку, данные лежат рядом в `data`.\n'
+            printf 'No install: unpack `typhon-windows-portable.zip` into any folder; the data stays beside it in `data`.\n\n'
             printf 'macOS 13+ Apple Silicon: `typhon-darwin-arm64.zip`. Для Windows-игр нужен CrossOver.\n'
             printf 'macOS 13+ Apple Silicon: download `typhon-darwin-arm64.zip`. Windows games require CrossOver.\n\n'
-            printf 'Контрольные суммы обоих файлов — в `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
-            printf 'Checksums for both files are in `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
+            printf 'Контрольные суммы всех файлов — в `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
+            printf 'Checksums for every file are in `SHA256SUMS`: `sha256sum -c SHA256SUMS`.\n'
           } > release-body.md
 
-          (cd bin && sha256sum typhon-amd64-installer.exe typhon-darwin-arm64.zip > SHA256SUMS)
+          (cd bin && sha256sum typhon-amd64-installer.exe typhon-darwin-arm64.zip typhon-windows-portable.zip > SHA256SUMS)
           (cd bin && sha256sum -c SHA256SUMS)
 
           gh release create "$RELEASE_TAG" \
             bin/typhon-amd64-installer.exe \
             bin/typhon-darwin-arm64.zip \
+            bin/typhon-windows-portable.zip \
             bin/SHA256SUMS \
             --title "Typhon $RELEASE_VERSION" \
             --notes-file release-body.md

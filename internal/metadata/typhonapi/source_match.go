@@ -12,6 +12,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/catalog"
+	"typhon/internal/matchprogress"
 	"typhon/internal/metadata"
 )
 
@@ -37,6 +38,7 @@ func (c *Client) MatchReleases(ctx context.Context, queries []catalog.ReleaseQue
 		firstTransient   error
 		transientCount   int
 		succeededBatches int
+		processed        int
 		failedIdx        = map[int]bool{}
 	)
 	var stopDispatch atomic.Bool
@@ -65,11 +67,15 @@ func (c *Client) MatchReleases(ctx context.Context, queries []catalog.ReleaseQue
 					copy(out[start:], matches)
 					mu.Lock()
 					succeededBatches++
+					processed += len(batch)
+					matchprogress.Report(ctx, processed, len(queries))
 					mu.Unlock()
 					continue
 				}
 				mu.Lock()
 				markFailed(start)
+				processed += len(batch)
+				matchprogress.Report(ctx, processed, len(queries))
 				fatal := fatalBatchError(err)
 				if fatal {
 					if fatalErr == nil {

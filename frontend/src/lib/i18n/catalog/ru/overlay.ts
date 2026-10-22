@@ -28,6 +28,7 @@ export const overlay = {
   'overlay.browserReload': 'Обновить',
   'overlay.browserClose': 'Закрыть браузер',
   'overlay.browserError': 'Браузер: {reason}',
+  'overlay.achievementLabel': 'Уведомление о достижении',
   'settings.overlayCardTitle': 'Игровой оверлей',
   'settings.overlayEnabledLabel': 'Оверлей поверх игры',
   'settings.overlayEnabledSub': 'Чат, друзья, музыка и браузер по горячей клавише, не сворачивая игру',

@@ -307,7 +307,7 @@ func TestRollbackRefusalsLeaveTheInstallationAlone(t *testing.T) {
 			h.waitState(t, StateIdle)
 			tc.arrange(t, h)
 
-			err := h.service.Rollback("local-1")
+			err := h.service.Rollback(t.Context(), "local-1")
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}

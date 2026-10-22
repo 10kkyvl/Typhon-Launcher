@@ -14,7 +14,7 @@ func TestReceivedExecutableFailuresHaveLocalizableReasons(t *testing.T) {
 			state := &transferState{transfer: Transfer{ID: "transfer", Status: TransferReceiving}}
 			run := &runState{transfers: map[string]*transferState{"transfer": state}}
 			service := &Service{}
-			service.completeTransfer(run, "transfer", t.TempDir(), Offer{Exe: test.exe}, nil)
+			service.completeTransfer(t.Context(), run, "transfer", t.TempDir(), Offer{Exe: test.exe}, nil)
 			if state.transfer.Status != TransferFailed || !strings.Contains(state.transfer.Error, "typhon:"+test.code) {
 				t.Fatalf("failed transfer must retain a translatable error: %+v", state.transfer)
 			}

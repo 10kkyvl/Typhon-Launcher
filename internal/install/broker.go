@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"typhon/internal/uierr"
@@ -41,10 +43,20 @@ var (
 
 // brokerPin restricts paths; signed jobs authenticate the parent separately.
 type brokerPin struct {
-	DownloadID  string `json:"downloadId"`
-	ContentRoot string `json:"contentRoot"`
-	LibraryRoot string `json:"libraryRoot"`
+	DownloadID   string   `json:"downloadId"`
+	ContentRoot  string   `json:"contentRoot"`
+	LibraryRoots []string `json:"libraryRoots"`
+	// LibraryRoot is what pins written before extra library folders held.
+	LibraryRoot string `json:"libraryRoot,omitempty"`
 	StateDir    string `json:"stateDir"`
+}
+
+func (p brokerPin) libraryRoots() []string {
+	roots := slices.Clone(p.LibraryRoots)
+	if p.LibraryRoot != "" {
+		roots = append(roots, p.LibraryRoot)
+	}
+	return roots
 }
 
 func brokerPinPath(dir string) string   { return filepath.Join(dir, "pin.json") }
@@ -76,7 +88,7 @@ func readBrokerPin(path string) (brokerPin, error) {
 	if err := json.Unmarshal(data, &pin); err != nil {
 		return brokerPin{}, fmt.Errorf("parse broker pin %s: %w", path, err)
 	}
-	if pin.ContentRoot == "" || pin.LibraryRoot == "" || pin.StateDir == "" {
+	if pin.ContentRoot == "" || len(pin.libraryRoots()) == 0 || slices.Contains(pin.libraryRoots(), "") || pin.StateDir == "" {
 		return brokerPin{}, fmt.Errorf("%w: %s", errBrokerNoPin, path)
 	}
 	return pin, nil
@@ -130,7 +142,6 @@ func validateBrokerSpec(pin brokerPin, spec workerSpec) error {
 	}{
 		{pin.ContentRoot, spec.InstallerPath},
 		{pin.ContentRoot, spec.WorkingDir},
-		{pin.LibraryRoot, spec.Destination},
 		{pin.StateDir, spec.StatePath},
 		{pin.StateDir, spec.CancelPath},
 		{pin.StateDir, spec.LogPath},
@@ -142,6 +153,14 @@ func validateBrokerSpec(pin brokerPin, spec workerSpec) error {
 		}
 		if !inside(pair.root, pair.path) && !samePath(pair.root, pair.path) {
 			return fmt.Errorf("%w: %s вне %s", errBrokerOutsidePin, pair.path, pair.root)
+		}
+	}
+	if spec.Destination != "" {
+		roots := pin.libraryRoots()
+		if !slices.ContainsFunc(roots, func(root string) bool {
+			return root != "" && (inside(root, spec.Destination) || samePath(root, spec.Destination))
+		}) {
+			return fmt.Errorf("%w: %s вне %s", errBrokerOutsidePin, spec.Destination, strings.Join(roots, ", "))
 		}
 	}
 	if spec.InstallerPath == "" {

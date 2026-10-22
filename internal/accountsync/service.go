@@ -353,6 +353,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	if err != nil {
 		return fmt.Errorf("fetch account sync snapshot: %w", err)
 	}
+	hiddenSync := s.client.supportsHidden()
 
 	if err := ensureOwner(); err != nil {
 		return err
@@ -443,6 +444,11 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			favorite, favoriteAt = remote.Favorite, remote.FavoriteAt
 		}
 
+		hidden, hiddenAt := local.Hidden, local.HiddenAt
+		if hiddenSync && hasRemote && remote.HiddenAt != nil && (hiddenAt == nil || remote.HiddenAt.After(*hiddenAt)) {
+			hidden, hiddenAt = remote.Hidden, remote.HiddenAt
+		}
+
 		results[igdbID] = gameCompute{
 			combined: Game{
 				IGDBID:          igdbID,
@@ -454,6 +460,8 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 				FavoriteAt:      favoriteAt,
 				Status:          status,
 				StatusAt:        statusAt,
+				Hidden:          hidden,
+				HiddenAt:        hiddenAt,
 			},
 			device: prev.DeviceSeconds + delta,
 		}
@@ -470,7 +478,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 		if err != nil {
 			return fmt.Errorf("parse igdb id %q: %w", igdbID, err)
 		}
-		pushGames = append(pushGames, wireGame{
+		wire := wireGame{
 			IGDBID:          id,
 			RemovedAt:       restored[id],
 			Owned:           r.combined.Owned,
@@ -480,7 +488,12 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			StatusAt:        r.combined.StatusAt,
 			LastPlayedAt:    r.combined.LastPlayed,
 			PlaytimeSeconds: r.device,
-		})
+		}
+		if hiddenSync {
+			wire.Hidden = r.combined.Hidden
+			wire.HiddenAt = r.combined.HiddenAt
+		}
+		pushGames = append(pushGames, wire)
 	}
 	for igdbID, removedAt := range pendingRemoved {
 		id, err := strconv.ParseInt(igdbID, 10, 64)
@@ -500,7 +513,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	if err != nil {
 		return err
 	}
-	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB) && len(pendingRemoved) == 0
+	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB, hiddenSync) && len(pendingRemoved) == 0
 
 	for i, chunk := range chunkGames(pushGames, maxGamesPerRequest) {
 		if idle {
@@ -615,7 +628,7 @@ func sameStamp(a, b *time.Time) bool {
 	return a.Truncate(time.Microsecond).Equal(b.Truncate(time.Microsecond))
 }
 
-func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame) bool {
+func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame, hiddenSync bool) bool {
 	for igdbID, r := range results {
 		rem, known := remote[igdbID]
 		if !known {
@@ -629,6 +642,9 @@ func upToDate(st syncState, results map[string]gameCompute, remote map[string]wi
 			return false
 		}
 		if !sameStamp(rem.FavoriteAt, r.combined.FavoriteAt) || !sameStamp(rem.StatusAt, r.combined.StatusAt) {
+			return false
+		}
+		if hiddenSync && (rem.Hidden != r.combined.Hidden || !sameStamp(rem.HiddenAt, r.combined.HiddenAt)) {
 			return false
 		}
 		if !sameStamp(rem.LastPlayedAt, r.combined.LastPlayed) {

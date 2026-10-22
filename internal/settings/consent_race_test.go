@@ -169,7 +169,7 @@ func TestConsentSurvivesConcurrentStaleSaves(t *testing.T) {
 	if got.AnonymousUsageStats || got.AnonymousDiagnostics {
 		t.Fatalf("a refusal turned into %+v", got)
 	}
-	if reloaded := mustServiceAt(t, path).GetSettings(); reloaded != got {
+	if reloaded := mustServiceAt(t, path).GetSettings(); !sameSettings(reloaded, got) {
 		t.Fatalf("file and memory disagree: %+v vs %+v", reloaded, got)
 	}
 }

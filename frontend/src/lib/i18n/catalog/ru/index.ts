@@ -28,6 +28,8 @@ import { errSources } from './errSources';
 import { errLibrary } from './errLibrary';
 import { errLogs } from './errLogs';
 import { errSaves } from './errSaves';
+import { errChat } from './errChat';
+import { errGameMode } from './errGameMode';
 import { errSupport } from './errSupport';
 import { saves } from './saves';
 import { cloudsaves } from './cloudsaves';
@@ -36,6 +38,9 @@ import { overlay } from './overlay';
 import { redist } from './redist';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
+import { sysreq } from './sysreq';
+import { diskusage } from './diskusage';
+import { themeTokens } from './themeTokens';
 
 export const ru = {
   ...bigpictureCatalog,
@@ -67,6 +72,8 @@ export const ru = {
   ...errLibrary,
   ...errLogs,
   ...errSaves,
+  ...errChat,
+  ...errGameMode,
   ...errSupport,
   ...saves,
   ...cloudsaves,
@@ -75,8 +82,11 @@ export const ru = {
   ...redist,
   ...screenshots,
   ...stats,
+  ...sysreq,
+  ...diskusage,
+  ...themeTokens,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errChat, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };

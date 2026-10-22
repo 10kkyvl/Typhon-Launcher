@@ -476,14 +476,42 @@ func SameVolume(a, b string) bool {
 	return strings.EqualFold(volA, volB)
 }
 
-func destAvailable(path string) bool {
+type destStatus int
+
+const (
+	destMissing destStatus = iota
+	destEmpty
+	destNotEmpty
+	destNotFolder
+)
+
+// destState различает «нет», «пуста», «занята» и «не удалось узнать»: ошибка
+// Stat или ReadDir (права, антивирус) не превращается ни в одно из первых трёх.
+// Файл на месте папки — destNotFolder: заменой пустой папке он не годится.
+func destState(path string) (destStatus, error) {
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return true
+		return destMissing, nil
 	}
-	if err != nil || !info.IsDir() {
-		return false
+	if err != nil {
+		return destNotEmpty, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return destNotFolder, nil
 	}
 	entries, err := os.ReadDir(path)
-	return err == nil && len(entries) == 0
+	if err != nil {
+		return destNotEmpty, fmt.Errorf("read dir %s: %w", path, err)
+	}
+	if len(entries) == 0 {
+		return destEmpty, nil
+	}
+	return destNotEmpty, nil
+}
+
+// destAvailable — «можно писать»: только для проверок, которые на любой ошибке
+// обязаны отказать, а не объяснять причину (CopyDir, MoveDir).
+func destAvailable(path string) bool {
+	state, err := destState(path)
+	return err == nil && (state == destMissing || state == destEmpty)
 }

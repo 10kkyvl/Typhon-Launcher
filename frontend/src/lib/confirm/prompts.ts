@@ -68,6 +68,16 @@ export function deleteThemePrompt(name: string): ConfirmPrompt {
   };
 }
 
+export function removeLibraryFolderPrompt(path: string): ConfirmPrompt {
+  return {
+    title: msg('settings.libraryFolderRemoveTitle'),
+    text: msg('settings.libraryFolderRemoveText', { path }),
+    note: msg('settings.libraryFolderRemoveNote'),
+    confirm: msg('settings.libraryFolderRemove'),
+    tone: 'primary',
+  };
+}
+
 export function forgetSyncPrompt(): ConfirmPrompt {
   return {
     title: msg('settings.generalSyncForgetLabel'),
@@ -190,5 +200,13 @@ export function deleteScreenshotPrompt(name: string): ConfirmPrompt {
     title: msg('screenshots.delete'),
     text: msg('screenshots.deleteConfirm', { name }),
     confirm: msg('screenshots.delete'),
+  };
+}
+
+export function deleteProfilePrompt(name: string): ConfirmPrompt {
+  return {
+    title: msg('modals.profilesDelete'),
+    text: msg('modals.profilesDeleteConfirm', { name }),
+    confirm: msg('modals.profilesDelete'),
   };
 }

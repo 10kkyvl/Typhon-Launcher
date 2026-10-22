@@ -24,6 +24,15 @@ type fakeLibrary struct {
 	syncItems   []library.ExternalGame
 	syncPresent map[string]map[string]bool
 	syncErr     error
+	removed     []library.ExternalRef
+	removeErr   error
+}
+
+func (f *fakeLibrary) RemoveExternal(refs []library.ExternalRef) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, refs...)
+	return len(refs), f.removeErr
 }
 
 func (f *fakeLibrary) ExternalRefs() []library.ExternalRef {

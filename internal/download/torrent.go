@@ -248,7 +248,7 @@ func (c *client) add(spec *torrent.TorrentSpec, destination string, opts storage
 	if len(spec.PieceLayers) == 0 {
 		spec.PieceLayers = nil
 	}
-	st := newStorage(destination, opts, c.completion)
+	st := gateStorage(newStorage(destination, opts, c.completion))
 	spec.Storage = st
 	var announce [][]string
 	var lost []lostTracker

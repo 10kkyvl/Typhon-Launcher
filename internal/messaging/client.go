@@ -30,14 +30,18 @@ func (s *Service) newRequest(ctx context.Context, r *session, method, path strin
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+r.token)
-	req.Header.Set("User-Agent", account.UserAgent)
-	req.Header.Set("X-Typhon-Version", app.Version)
+	authorize(req, r)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	return req, nil
 }
+func authorize(req *http.Request, r *session) {
+	req.Header.Set("Authorization", "Bearer "+r.token)
+	req.Header.Set("User-Agent", account.UserAgent)
+	req.Header.Set("X-Typhon-Version", app.Version)
+}
+
 func (s *Service) request(r *session, method, path string, body, out any) error {
 	if err := s.sessionError(r); err != nil {
 		return err

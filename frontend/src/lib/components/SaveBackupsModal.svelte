@@ -11,6 +11,9 @@
   import { errorCode, msg } from '../i18n';
   import { saveBackupErrorText, snapshotKindLabel, snapshotWhen } from '../savebackup/messages';
   import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
+  import { saveAttribution } from '../game/extras';
+  import { metadataErrorText } from '../metadata/metadataErrors';
+  import { openReferenceLink } from '../services/metadata';
   import { locateSaves, setSavesDir, type SavesResult } from '../services/library';
   import {
     createBackup,
@@ -267,6 +270,19 @@
     navigate('settings', { tab: 'downloads' });
   }
 
+  const attribution = $derived(saveAttribution(saves?.hint));
+
+  async function openSource() {
+    const id = canonicalId;
+    if (!id) return;
+    failure = '';
+    try {
+      await openReferenceLink(id, 'pcgamingwiki');
+    } catch (err) {
+      failure = metadataErrorText(err);
+    }
+  }
+
   function openSaves() {
     const path = saves?.path;
     if (!path) return;
@@ -298,6 +314,18 @@
   }
 </script>
 
+{#snippet source()}
+  {#if attribution}
+    <p class="source">
+      {msg('saves.hintPrefix')}
+      <button class="source-link" disabled={busy} onclick={openSource}>{attribution.source}</button>
+      {attribution.via
+        ? msg('saves.hintSuffix', { via: attribution.via, license: attribution.license })
+        : msg('saves.hintSuffixNoVia', { license: attribution.license })}
+    </p>
+  {/if}
+{/snippet}
+
 <Modal
   open={!!target}
   title={target ? msg('saves.title', { title: target.title }) : msg('games.actionSavesBackups')}
@@ -312,6 +340,7 @@
           <p class="hint">{msg('saves.folderLoading')}</p>
         {:else if saves?.path}
           <p class="path">{saves.path}</p>
+          {@render source()}
           <div class="actions">
             <Button size="sm" disabled={busy} onclick={openSaves}>{msg('saves.open')}</Button>
             <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.change')}</Button>
@@ -323,6 +352,7 @@
           </div>
         {:else if saves?.candidates && saves.candidates.length > 0}
           <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
+          {@render source()}
           <div class="actions">
             <Button size="sm" disabled={busy} onclick={() => (candidatesOpen = true)}>
               {msg('saves.pickFolder')}
@@ -330,6 +360,9 @@
           </div>
         {:else}
           <p class="hint">{saves && saves.unreadable > 0 ? msg('ui.savesPartialUnreadable') : msg('ui.savesNotFound')}</p>
+          {#if saves?.hintsError}
+            <p class="hint">{msg('saves.hintsFailed')}</p>
+          {/if}
           <div class="actions">
             <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
           </div>
@@ -494,6 +527,19 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .source {
+    margin: 0;
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .source-link {
+    padding: 0;
+    color: var(--accent);
+    text-decoration: underline;
+    font-size: inherit;
   }
 
   .field-label {

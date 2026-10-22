@@ -738,6 +738,49 @@ func TestClient_UserGamesDecodesNext(t *testing.T) {
 	}
 }
 
+func TestClient_UserCommonDecodesBothSides(t *testing.T) {
+	var gotPath, gotCursor string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotCursor = r.URL.Path, r.URL.Query().Get("cursor")
+		if _, err := io.WriteString(w, `{"games":[{"igdbId":1942,"title":"The Witcher 3","viewerOwned":true,"targetOwned":true,"viewerPlaytimeSeconds":60,"targetPlaytimeSeconds":120,"viewerLastPlayedAt":"2026-10-01T00:00:00Z"}],"next":"6"}`); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+
+	page, err := c.userCommon(t.Context(), "alex", "3")
+	if err != nil {
+		t.Fatalf("userCommon: %v", err)
+	}
+	if !strings.HasSuffix(gotPath, "/users/alex/common") || gotCursor != "3" {
+		t.Fatalf("request = %s cursor %q", gotPath, gotCursor)
+	}
+	if page.Next != "6" || len(page.Games) != 1 {
+		t.Fatalf("page = %+v", page)
+	}
+	g := page.Games[0]
+	if g.ViewerPlaytimeSeconds == nil || *g.ViewerPlaytimeSeconds != 60 || g.TargetPlaytimeSeconds == nil || *g.TargetPlaytimeSeconds != 120 {
+		t.Fatalf("playtime = %v / %v", g.ViewerPlaytimeSeconds, g.TargetPlaytimeSeconds)
+	}
+	if g.ViewerLastPlayedAt == nil || g.TargetLastPlayedAt != nil {
+		t.Fatalf("last played = %v / %v", g.ViewerLastPlayedAt, g.TargetLastPlayedAt)
+	}
+}
+
+func TestClient_UserCommonEmptyIsNotNil(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := io.WriteString(w, `{"games":null,"next":""}`); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	})
+	page, err := c.userCommon(t.Context(), "alex", "")
+	if err != nil {
+		t.Fatalf("userCommon: %v", err)
+	}
+	if page.Games == nil {
+		t.Fatal("games is nil, want empty slice")
+	}
+}
+
 func TestModel_JSONTags(t *testing.T) {
 	encoded, err := json.Marshal(FriendView{UserCard: UserCard{ID: "u1", Username: "alex", DisplayName: "Alex", AvatarURL: "https://a/1.png"}})
 	if err != nil {
@@ -826,7 +869,7 @@ func TestClient_FeedKeepsTheWideShot(t *testing.T) {
 }
 
 func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
-	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15,"customFrom":"#1a1033","customTo":"#0b2a3a","customAngle":90,"autoSource":"pinned","avatarFrame":"orbit","nameStyle":"gradient","parallax":false}`, `null`} {
+	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15,"customFrom":"#1a1033","customTo":"#0b2a3a","customAngle":90,"autoSource":"pinned","avatarFrame":"orbit","nameStyle":"gradient","parallax":false,"nameColor":"","frameColor":"","customPure":false}`, `null`} {
 		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`); err != nil {

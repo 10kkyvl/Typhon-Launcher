@@ -30,12 +30,14 @@ const (
 )
 
 var (
-	errDownloadFailed = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
-	errInstallFailed  = uierr.New("updates.install_failed", "не удалось установить обновление")
-	errStagingEmpty   = uierr.New("updates.staging_empty", "временная установка пуста")
-	errNoLaunchTarget = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
-	errSwapFailed     = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
-	errCarryOver      = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
+	errDownloadFailed   = uierr.New("updates.download_failed", "не удалось скачать данные обновления")
+	errDownloadDeleting = uierr.New("updates.download_deleting", "данные загрузки сейчас удаляются")
+	errDownloadInUse    = uierr.New("updates.download_in_use", "загрузку сейчас использует обновление или починка")
+	errInstallFailed    = uierr.New("updates.install_failed", "не удалось установить обновление")
+	errStagingEmpty     = uierr.New("updates.staging_empty", "временная установка пуста")
+	errNoLaunchTarget   = uierr.New("updates.no_launch_target", "исполняемый файл не найден после обновления")
+	errSwapFailed       = uierr.New("updates.swap_failed", "не удалось заменить установленную версию")
+	errCarryOver        = uierr.New("updates.carry_over_failed", "не удалось перенести пользовательские файлы из предыдущей версии")
 
 	errUnavailablePrefetch = uierr.New("updates.prefetch_unavailable", "предварительная загрузка недоступна для этой стратегии")
 
@@ -472,6 +474,9 @@ func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) e
 		task, err := s.downloads.Get(downloadID)
 		if err != nil {
 			return errDownloadFailed
+		}
+		if task.Deleting() {
+			return errDownloadDeleting
 		}
 		s.mutate(gameID, func(u *Update) { u.Progress = task.Progress })
 		switch task.Status {
@@ -945,7 +950,7 @@ func (s *Service) registerVersionAs(ctx context.Context, game library.Game, vers
 			distributionID = release.DistributionID
 		}
 	}
-	updated, err := s.library.ApplyInstalledUpdate(library.InstalledUpdate{
+	updated, err := s.library.ApplyInstalledUpdate(ctx, library.InstalledUpdate{
 		ID:                game.ID,
 		Executable:        executable,
 		InstallDir:        installDir,
@@ -1044,7 +1049,7 @@ func (s *Service) settlePrevious(gameID, path string) {
 	}
 }
 
-func (s *Service) Rollback(gameID string) error {
+func (s *Service) Rollback(ctx context.Context, gameID string) error {
 	s.mu.Lock()
 	entry, ok := s.rollbacks[gameID]
 	if !ok {
@@ -1084,15 +1089,15 @@ func (s *Service) Rollback(gameID string) error {
 	if err := s.setJournal(j); err != nil {
 		return err
 	}
-	if err := s.finishRollback(j); err != nil {
+	if err := s.finishRollback(ctx, j); err != nil {
 		return err
 	}
 	s.store.removeManifest(gameID)
 	s.mu.Lock()
-	manifestCtx := s.ctx
+	started := s.ctx != nil
 	s.mu.Unlock()
-	if game, ok := s.installedGame(gameID); ok && manifestCtx != nil {
-		s.runManifest(manifestCtx, game)
+	if game, ok := s.installedGame(gameID); ok && started {
+		s.runManifest(ctx, game)
 	}
 
 	snap, _ := s.mutate(gameID, func(u *Update) {
@@ -1232,7 +1237,7 @@ const journalMissingRenameText = "Обновление прервано: фай�
 // recoverJournals finishes or rolls back every multi-rename operation left in
 // flight by a crash. It runs once from ServiceStartup, before any new job
 // can register another journal for the same game.
-func (s *Service) recoverJournals() {
+func (s *Service) recoverJournals(ctx context.Context) {
 	s.mu.Lock()
 	journals := make([]SwapJournal, 0, len(s.journals))
 	for _, j := range s.journals {
@@ -1264,27 +1269,27 @@ func (s *Service) recoverJournals() {
 				s.failJournalRecovery(j, err)
 			}
 		case JournalRollback:
-			if err := s.finishRollback(j); err != nil {
+			if err := s.finishRollback(ctx, j); err != nil {
 				s.failJournalRecovery(j, err)
 			}
 		case JournalSwap:
-			s.recoverSwapJournal(j)
+			s.recoverSwapJournal(ctx, j)
 		case JournalPatch:
-			s.recoverPatchJournal(j)
+			s.recoverPatchJournal(ctx, j)
 		case JournalInplace:
-			s.recoverInplaceJournal(j)
+			s.recoverInplaceJournal(ctx, j)
 		default:
 			slog.Error("unknown swap journal kind", "game", j.GameID, "kind", j.Kind)
 		}
 	}
 }
 
-func (s *Service) recoverPatchJournal(j SwapJournal) {
+func (s *Service) recoverPatchJournal(ctx context.Context, j SwapJournal) {
 	if err := install.RestoreMergeBackup(j.InstallDir, j.Previous); err != nil {
 		s.failJournalRecovery(j, err)
 		return
 	}
-	if err := s.restoreJournalMetadata(j); err != nil {
+	if err := s.restoreJournalMetadata(ctx, j); err != nil {
 		s.failJournalRecovery(j, err)
 		return
 	}
@@ -1301,7 +1306,7 @@ func (s *Service) recoverPatchJournal(j SwapJournal) {
 	})
 }
 
-func (s *Service) recoverInplaceJournal(j SwapJournal) {
+func (s *Service) recoverInplaceJournal(ctx context.Context, j SwapJournal) {
 	if exists(j.Previous) {
 		if err := restoreDirectories(j.InstallDir, j.Previous); err != nil {
 			s.failJournalRecovery(j, err)
@@ -1311,7 +1316,7 @@ func (s *Service) recoverInplaceJournal(j SwapJournal) {
 			s.forgetRollbackBestEffort(j.GameID)
 		}
 	}
-	if err := s.restoreJournalMetadata(j); err != nil {
+	if err := s.restoreJournalMetadata(ctx, j); err != nil {
 		s.failJournalRecovery(j, err)
 		return
 	}
@@ -1327,7 +1332,7 @@ func (s *Service) recoverInplaceJournal(j SwapJournal) {
 	})
 }
 
-func (s *Service) recoverSwapJournal(j SwapJournal) {
+func (s *Service) recoverSwapJournal(ctx context.Context, j SwapJournal) {
 	msg := interruptedUpdateText
 	if !exists(j.Previous) && !exists(j.InstallDir) && exists(j.Staging) {
 		msg = journalMissingRenameText
@@ -1342,7 +1347,7 @@ func (s *Service) recoverSwapJournal(j SwapJournal) {
 	}
 
 	removeTree(j.Staging)
-	if err := s.restoreJournalMetadata(j); err != nil {
+	if err := s.restoreJournalMetadata(ctx, j); err != nil {
 		s.failJournalRecovery(j, err)
 		return
 	}
@@ -1590,10 +1595,10 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 	rec(ev)
 }
 
-func (s *Service) restoreJournalMetadata(j SwapJournal) error {
+func (s *Service) restoreJournalMetadata(ctx context.Context, j SwapJournal) error {
 	if j.Original == nil || s.library == nil {
 		return nil
 	}
-	_, err := s.library.ApplyInstalledUpdate(*j.Original)
+	_, err := s.library.ApplyInstalledUpdate(ctx, *j.Original)
 	return err
 }

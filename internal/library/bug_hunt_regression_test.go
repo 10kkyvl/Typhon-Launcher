@@ -16,7 +16,7 @@ func TestUnreadableLegacyMarkerDoesNotDropLocalOwnership(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.json")
 	service := mustServiceAt(t, path)
 	exe := tempGameExe(t)
-	game, err := service.AddGame(exe, "Legacy")
+	game, err := service.AddGame(t.Context(), exe, "Legacy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestStopDuringStartStopsTheLateGame(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			service := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-			game, err := service.AddGame(tempGameExe(t), "Game")
+			game, err := service.AddGame(t.Context(), tempGameExe(t), "Game")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -148,7 +148,7 @@ func TestStopDuringPrepareReturnsCodedCancellation(t *testing.T) {
 
 			service := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 			exe := tempGameExe(t)
-			game, err := service.AddGame(exe, "Game")
+			game, err := service.AddGame(t.Context(), exe, "Game")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -199,7 +199,7 @@ func TestApplyInstalledUpdateRetriesAfterExecutableRepoint(t *testing.T) {
 	if err := os.WriteFile(newExe, []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	game, err := service.RegisterInstalled(InstalledGame{Title: "Game", InstallDir: dir, Executable: oldExe})
+	game, err := service.RegisterInstalled(t.Context(), InstalledGame{Title: "Game", InstallDir: dir, Executable: oldExe})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestApplyInstalledUpdateRetriesAfterExecutableRepoint(t *testing.T) {
 	release := make(chan struct{})
 	var mu sync.Mutex
 	calls := 0
-	measureInstall = func(id, path string) (int64, bool) {
+	measureInstall = func(_ context.Context, id, path string) (int64, bool) {
 		mu.Lock()
 		calls++
 		first := calls == 1
@@ -228,7 +228,7 @@ func TestApplyInstalledUpdateRetriesAfterExecutableRepoint(t *testing.T) {
 		// The update was resolved against oldExe. The user changes the
 		// executable while its size is being measured; the retry must keep
 		// the newer user choice instead of writing oldExe back.
-		updated, err := service.ApplyInstalledUpdate(InstalledUpdate{ID: game.ID, Version: "2", Executable: oldExe})
+		updated, err := service.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: game.ID, Version: "2", Executable: oldExe})
 		done <- struct {
 			game Game
 			err  error

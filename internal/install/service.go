@@ -58,7 +58,13 @@ var (
 	errNotCompleted     = uierr.New("install.not_completed", "загрузка ещё не завершена")
 	errBusy             = uierr.New("install.busy", "установка этой загрузки уже выполняется")
 	errNoDestination    = uierr.New("install.no_destination", "укажите папку установки")
+	errDownloadDeleting = uierr.New("install.download_deleting", "данные этой загрузки сейчас удаляются")
+	errPartialReserved  = uierr.New("install.partial_reserved", "временную папку этой установки сейчас удаляют")
 	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
+	errDestUnreadable   = uierr.New("install.dest_unreadable", "не удалось проверить папку установки")
+	errDestNotFolder    = uierr.New("install.dest_not_folder", "по этому пути лежит файл, а не папка")
+	errDestInsideGame   = uierr.New("install.dest_inside_game", "папка внутри другой установленной игры")
+	errNoFreeFolder     = uierr.New("install.no_free_folder", "не нашлось свободного имени подпапки")
 	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
 	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
@@ -102,11 +108,13 @@ var (
 type downloadSource interface {
 	Get(id string) (download.Download, error)
 	DeleteData(id string) error
+	StopSeeding(id string) error
 }
 
 type registrar interface {
-	RegisterInstalled(g library.InstalledGame) (library.Game, error)
+	RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error)
 	Find(id string) (library.Game, error)
+	GetGames() []library.Game
 	IsRunning(id string) bool
 	RemoveGame(id string) error
 	MarkUninstalled(id string) error
@@ -120,13 +128,17 @@ type job struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	settings  *settings.Service
-	downloads downloadSource
-	library   registrar
-	store     *store
-	removals  *removalStore
-	runner    runner
+	mu sync.Mutex
+	// reservedPartials holds the .partial folders that are being deleted from
+	// outside; no job may be registered on top of one of them.
+	reservedPartials map[string]int
+	downloadGuards   []func(download.Download) error
+	settings         *settings.Service
+	downloads        downloadSource
+	library          registrar
+	store            *store
+	removals         *removalStore
+	runner           runner
 	// prepareRuntime готовит окружение запуска установленной игры. Поле, а
 	// не прямой вызов: на macOS настоящая реализация заводит бутыль
 	// CrossOver, и тесты обязаны иметь возможность её подменить — иначе
@@ -154,6 +166,12 @@ type Service struct {
 
 	roots     []string
 	freeSpace func(string) (platform.StorageInfo, error)
+	// sameVolume — поле, чтобы тест мог выдать две папки временного каталога
+	// за разные тома: настоящих двух томов на машине разработчика нет.
+	sameVolume func(a, b string) bool
+	// checkDest — поле, чтобы тест мог выдать ошибку прав: на Windows папку без
+	// доступа из теста не сделать.
+	checkDest func(string) (destStatus, error)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -190,6 +208,9 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		jobs:      map[string]*job{},
 		brokers:   map[string]*broker{},
 		freeSpace: platform.GetStorageInfo,
+
+		sameVolume: SameVolume,
+		checkDest:  destState,
 	}
 	s.runner = newRunner(func() string { return s.config().GamesPath })
 	s.prepareRuntime = prepareRuntime
@@ -733,10 +754,20 @@ func (s *Service) sweepPartial(ctx context.Context, items []Installation) {
 // в s.wg, поэтому ServiceShutdown дожидается её, и не стартует, если сервис уже
 // закрывается или ctx отменён (инвариант 19).
 func (s *Service) spawnSweep(ctx context.Context, item Installation) {
+	s.spawnCleanup(ctx, item, nil)
+}
+
+// spawnCleanup — spawnSweep плюс уборка Destination, если release не nil:
+// резерв из holdDiscardLocked снимается на любом выходе, в том числе когда
+// горутина не стартует.
+func (s *Service) spawnCleanup(ctx context.Context, item Installation, release func()) {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
 		slog.Info("skip partial sweep, service is closing", "id", item.ID)
+		if release != nil {
+			release()
+		}
 		return
 	}
 	s.wg.Add(1)
@@ -744,19 +775,24 @@ func (s *Service) spawnSweep(ctx context.Context, item Installation) {
 	go func() {
 		defer s.wg.Done()
 		if ctx.Err() != nil {
+			if release != nil {
+				release()
+			}
 			return
 		}
 		s.sweepPartialItem(ctx, item)
+		s.discardAfter(item, release)
 	}()
 }
 
 // sweepPartialItem решает, можно ли стереть .partial записи, или он —
-// единственная копия данных пользователя (инвариант 9). ModeMove консумирует
-// ContentRoot первым же MoveDir: если он уже пропал, а .partial ещё жив,
-// значит крах случился между этим MoveDir и вторым, внутри commit() (он же
-// делает MoveDir(.partial -> Destination) при кросс-девайсном переносе) —
-// стирать в этом случае можно только Destination (недописанный второй
-// перенос), а .partial обязан быть докатан, а не стёрт.
+// единственная копия данных пользователя (инвариант 9). Прежние версии в
+// ModeMove первым же MoveDir консумировали ContentRoot в .partial: если он уже
+// пропал, а .partial ещё жив, значит крах случился между этим MoveDir и вторым,
+// внутри commit() — стирать в этом случае можно только Destination (недописанный
+// второй перенос), а .partial обязан быть докатан, а не стёрт. Нынешний перенос
+// .partial не создаёт: на одном томе это одно переименование без него, на
+// разных — копия, источник которой цел до регистрации.
 func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 	partial := partialPath(&item)
 	if partial == "" {
@@ -779,10 +815,10 @@ func (s *Service) sweepPartialItem(ctx context.Context, item Installation) {
 	slog.Info("removed partial install", "path", partial)
 }
 
-// recoverMovePartial докатывает Move-режим портативной установки, прерванной
-// между MoveDir(ContentRoot -> partial) и commit(partial -> Destination):
-// ContentRoot уже удалён первым MoveDir, поэтому partial — единственная копия
-// данных. Destination либо недописан кросс-девайсным commit() (меньше
+// recoverMovePartial докатывает Move-режим портативной установки, начатой
+// прежней версией и прерванной между MoveDir(ContentRoot -> partial) и
+// commit(partial -> Destination): ContentRoot уже убран, поэтому partial —
+// единственная копия данных. Destination либо недописан кросс-девайсным commit() (меньше
 // записей верхнего уровня — стираем и переносим заново), либо уже полная
 // копия, после которой процесс умер до RemoveAll(partial) — это проверяется
 // по хешу (инвариант 10), и тогда partial удаляется как дубликат. Любая
@@ -918,19 +954,33 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 	cfg := s.config()
 	name := s.nameFor(d)
 	if ownDestination(plan.Type, plan.Silent) || plan.Type == TypeUnknown {
-		plan.Destination = s.proposeDestination(cfg.GamesPath, name)
+		plan.Destination, err = s.proposeDestinationFor(cfg, name)
+		if err != nil {
+			return PlanInfo{}, err
+		}
 	}
 	free, err := s.freeBytes(volumeTarget(plan.Destination, cfg.GamesPath))
 	if err != nil {
 		return PlanInfo{}, err
 	}
+	mode := ""
+	if plan.Type == TypePortable {
+		mode, err = resolveMode("", d, plan.ContentRoot)
+		if err != nil {
+			return PlanInfo{}, err
+		}
+	}
+	same := plan.Destination != "" && s.sameVolume(plan.ContentRoot, plan.Destination)
 	return PlanInfo{
 		Plan:          plan,
 		DownloadID:    d.ID,
 		Name:          name,
-		RequiredBytes: requiredBytes(plan),
+		RequiredBytes: spaceNeeded(plan, mode, same),
 		FreeBytes:     free,
 		Seeding:       d.Seeding,
+		Mode:          mode,
+		SameVolume:    same,
+		Roots:         cfg.GamesRoots(),
 	}, nil
 }
 
@@ -986,6 +1036,14 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		return Installation{}, errNoExecutable
 	}
 
+	mode := ""
+	if plan.Type == TypePortable {
+		mode, err = resolveMode(opts.Mode, d, plan.ContentRoot)
+		if err != nil {
+			return Installation{}, err
+		}
+	}
+
 	item := &Installation{
 		ID:              newID(),
 		DownloadID:      d.ID,
@@ -1009,38 +1067,44 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	if ownDestination(plan.Type, plan.Silent) {
-		dest := strings.TrimSpace(opts.Destination)
-		if dest == "" {
-			return Installation{}, errNoDestination
+		dest, err := cleanDestination(opts.Destination)
+		if err != nil {
+			return Installation{}, err
 		}
-		if !filepath.IsAbs(dest) {
-			return Installation{}, errRelativeDestination
+		if s.insideGame(dest) {
+			return Installation{}, fmt.Errorf("%w: %s", errDestInsideGame, dest)
 		}
-		if !destAvailable(dest) {
-			return Installation{}, errDestNotEmpty
-		}
-		item.Destination = filepath.Clean(dest)
+		item.Destination = dest
 		item.Owned = controlled(plan.Type)
-		if err := s.checkSpace(item.Destination, requiredBytes(plan)); err != nil {
+		s.mu.Lock()
+		err = s.startBlockedLocked(item, downloadID)
+		s.mu.Unlock()
+		if err != nil {
+			return Installation{}, err
+		}
+		need := spaceNeeded(plan, mode, s.sameVolume(plan.ContentRoot, dest))
+		if err := s.checkSpace(item.Destination, need); err != nil {
+			return Installation{}, err
+		}
+		if err := s.prepareDestination(dest, item.Name); err != nil {
 			return Installation{}, err
 		}
 	}
 	if plan.Type == TypePortable {
-		item.Mode = installMode(opts.Mode, d.Seeding)
+		item.Mode = mode
 	}
 
 	s.mu.Lock()
-	if s.closing {
+	if err := s.startBlockedLocked(item, downloadID); err != nil {
 		s.mu.Unlock()
-		return Installation{}, errUnavailable
-	}
-	for _, existing := range s.items {
-		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
-			s.mu.Unlock()
-			return Installation{}, errBusy
-		}
+		return Installation{}, err
 	}
 	s.items = append(s.items, item)
+	if err := s.claimLocked(item); err != nil {
+		s.items = s.items[:len(s.items)-1]
+		s.mu.Unlock()
+		return Installation{}, err
+	}
 	if err := s.persistLocked(); err != nil {
 		s.items = s.items[:len(s.items)-1]
 		s.mu.Unlock()
@@ -1057,6 +1121,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 	s.mu.Unlock()
 
+	s.rememberInstallRoot(snap.Destination)
 	slog.Info("install started", "id", item.ID, "name", item.Name, "type", item.Type, "mode", item.Mode)
 	emit(eventStarted, snap)
 	s.recordUsage(usagestats.Event{
@@ -1069,6 +1134,18 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	})
 	emit(eventUpdated, snap)
 	return snap, nil
+}
+
+func (s *Service) startBlockedLocked(item *Installation, downloadID string) error {
+	if s.closing {
+		return errUnavailable
+	}
+	for _, existing := range s.items {
+		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
+			return errBusy
+		}
+	}
+	return nil
 }
 
 func (s *Service) Cancel(id string) error {
@@ -1105,6 +1182,10 @@ func (s *Service) Cancel(id string) error {
 
 	err := s.markCancelledLocked(item)
 	snap := snapshotOf(item)
+	var release func()
+	if err == nil {
+		release = s.holdDiscardLocked(item)
+	}
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -1114,8 +1195,11 @@ func (s *Service) Cancel(id string) error {
 	// только уборку (инвариант 20), а не результат Cancel.
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after cancel, service not started", "id", snap.ID, "error", err)
+		if release != nil {
+			release()
+		}
 	} else {
-		s.spawnSweep(base, snap)
+		s.spawnCleanup(base, snap, release)
 	}
 	s.notifyFinished(snap)
 	return nil
@@ -1210,6 +1294,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	if s.usedByOtherLocked(item) != nil {
+		s.mu.Unlock()
+		return errBusy
+	}
 	if forceInteractive && (!external(item.Type) || item.Status == StatusCancelled) {
 		s.mu.Unlock()
 		return errUnavailable
@@ -1256,6 +1344,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	manual := item.ManualInstaller
 	destination := item.Destination
 	title := item.Name
+	storedMode := item.Mode
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -1269,6 +1358,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	plan, err := Inspect(base, source)
 	if err != nil {
 		return err
+	}
+	mode := storedMode
+	if kind == TypePortable {
+		mode, err = resolveMode(storedMode, d, plan.ContentRoot)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Установщик, выбранный пользователем вручную, переживает повтор вместе со
@@ -1290,7 +1386,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	}
 	silent := supportsSilent(engine) && !interactive
 	if external(kind) && silent && destination == "" {
-		destination = s.proposeDestination(s.config().GamesPath, title)
+		destination, err = s.proposeDestinationFor(s.config(), title)
+		if err != nil {
+			return err
+		}
 		if destination == "" {
 			return errNoDestination
 		}
@@ -1308,6 +1407,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	if !retryable(item.Status) || s.jobs[id] != nil || s.closing {
 		s.mu.Unlock()
 		return errUnavailable
+	}
+	if s.usedByOtherLocked(item) != nil {
+		s.mu.Unlock()
+		return errBusy
 	}
 	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
@@ -1334,7 +1437,9 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
 		item.BytesTotal = progressTotal(item.Type, plan)
-		item.Mode = installMode(item.Mode, d.Seeding)
+		if item.Type == TypePortable {
+			item.Mode = mode
+		}
 	}
 	if external(item.Type) {
 		item.InstallerPath = installer
@@ -1352,6 +1457,11 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 			item.Destination = ""
 			item.Unattended = false
 		}
+	}
+	if err := s.claimLocked(item); err != nil {
+		*item = prev
+		s.mu.Unlock()
+		return err
 	}
 	if err := s.persistLocked(); err != nil {
 		*item = prev
@@ -1414,14 +1524,18 @@ func (s *Service) Dismiss(id string) error {
 		s.mu.Unlock()
 		return wrapPersistError(err)
 	}
+	release := s.holdDiscardLocked(item)
 	s.mu.Unlock()
 
 	// Сам Dismiss уже состоялся выше: подметание .partial — уборка после
 	// него, а не его часть (та же логика, что и в Cancel).
 	if base, err := s.baseContext(); err != nil {
 		slog.Warn("skip partial sweep after dismiss, service not started", "id", id, "error", err)
+		if release != nil {
+			release()
+		}
 	} else {
-		s.spawnSweep(base, snap)
+		s.spawnCleanup(base, snap, release)
 	}
 	slog.Info("install dismissed", "id", id)
 	emit(eventRemoved, RemovedEvent{ID: id})
@@ -1513,7 +1627,27 @@ func (s *Service) completedDownload(id string) (download.Download, error) {
 	if d.Status != download.StatusCompleted {
 		return download.Download{}, errNotCompleted
 	}
+	if d.Deleting() {
+		return download.Download{}, errDownloadDeleting
+	}
 	return d, nil
+}
+
+// claimLocked is the last step of registering a job, taken once the item is
+// visible to s.items: DeleteData claims its download before it asks the guard,
+// so either the guard sees this item or this check sees the claim.
+func (s *Service) claimLocked(item *Installation) error {
+	if item.Destination != "" && s.partialReservedLocked(item.Destination+partialSuffix) {
+		return errPartialReserved
+	}
+	d, err := s.downloads.Get(item.DownloadID)
+	if err != nil {
+		return err
+	}
+	if d.Deleting() {
+		return errDownloadDeleting
+	}
+	return nil
 }
 
 // baseLocked отдаёт контекст жизни сервиса. До ServiceStartup (и в тестах,
@@ -1681,11 +1815,16 @@ func (s *Service) fail(id string, cause error) {
 		// пользовательская отмена — не провал, событие install_failed не шлём
 		err := s.markCancelledLocked(item)
 		snap := snapshotOf(item)
+		var release func()
+		if err == nil {
+			release = s.holdDiscardLocked(item)
+		}
 		s.mu.Unlock()
 		if err != nil {
 			slog.Error("persist cancelled installation while failing job", "id", id, "error", err)
 		}
 		s.notifyFinished(snap)
+		s.discardAfter(snap, release)
 	case s.closing || errors.Is(cause, context.Canceled):
 		// лаунчер закрывается — событие всё равно не успеет улететь
 		if err := s.persistLocked(); err != nil {
@@ -1768,23 +1907,6 @@ func (s *Service) waitForUser(id string, candidates []Candidate) error {
 	return nil
 }
 
-func (s *Service) proposeDestination(gamesPath, name string) string {
-	if gamesPath == "" {
-		return ""
-	}
-	base := filepath.Join(gamesPath, sanitizeName(name))
-	if destAvailable(base) {
-		return base
-	}
-	for i := 2; i < maxSuffixAttempt; i++ {
-		candidate := fmt.Sprintf("%s (%d)", base, i)
-		if destAvailable(candidate) {
-			return candidate
-		}
-	}
-	return base
-}
-
 func (s *Service) freeBytes(path string) (int64, error) {
 	if path == "" {
 		return 0, errEmptyDestination
@@ -1817,7 +1939,7 @@ func (s *Service) installRoots() []string {
 	if len(s.roots) > 0 {
 		return append([]string(nil), s.roots...)
 	}
-	paths := []string{s.config().GamesPath}
+	paths := s.config().GamesRoots()
 	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"} {
 		paths = append(paths, os.Getenv(env))
 	}
@@ -1866,16 +1988,6 @@ func partialPath(item *Installation) string {
 		return ""
 	}
 	return item.Destination + partialSuffix
-}
-
-func installMode(mode string, seeding bool) string {
-	if seeding {
-		return ModeCopy
-	}
-	if mode == ModeMove {
-		return ModeMove
-	}
-	return ModeCopy
 }
 
 func volumeTarget(destination, fallback string) string {

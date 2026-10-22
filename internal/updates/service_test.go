@@ -38,7 +38,7 @@ func (f *fakeLibrary) GetRunningGames() []string {
 	return append([]string(nil), f.running...)
 }
 
-func (f *fakeLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error) {
+func (f *fakeLibrary) ApplyInstalledUpdate(_ context.Context, u library.InstalledUpdate) (library.Game, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.applied = append(f.applied, u)
@@ -397,7 +397,7 @@ func TestRollbackRestoresPreviousVersion(t *testing.T) {
 	}
 	h.waitState(t, StateIdle)
 
-	if err := h.service.Rollback("local-1"); err != nil {
+	if err := h.service.Rollback(t.Context(), "local-1"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(h.installDir, "game.exe"))
@@ -411,7 +411,7 @@ func TestRollbackRestoresPreviousVersion(t *testing.T) {
 	if last.Version != "1.0" || last.ReleaseID != "r1" {
 		t.Fatalf("library rollback = %+v", last)
 	}
-	if err := h.service.Rollback("local-1"); !errors.Is(err, errNoRollback) {
+	if err := h.service.Rollback(t.Context(), "local-1"); !errors.Is(err, errNoRollback) {
 		t.Fatalf("second rollback = %v", err)
 	}
 }
@@ -642,7 +642,7 @@ func TestManifestRebuiltAfterRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.waitState(t, StateIdle)
-	if err := h.service.Rollback("local-1"); err != nil {
+	if err := h.service.Rollback(t.Context(), "local-1"); err != nil {
 		t.Fatal(err)
 	}
 	h.service.wg.Wait()

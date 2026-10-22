@@ -66,7 +66,7 @@ func TestRegisterInstalledClearsExclusion(t *testing.T) {
 		t.Fatalf("remove: %v", err)
 	}
 
-	if _, err := s.RegisterInstalled(InstalledGame{
+	if _, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:       "Reinstalled",
 		Executable:  exe,
 		InstallDir:  dir,
@@ -114,7 +114,7 @@ func TestRegisterInstalledStoresRemovalFields(t *testing.T) {
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Installed")
 
-	game, err := s.RegisterInstalled(InstalledGame{
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:       "Installed",
 		Executable:  exe,
 		InstallDir:  dir,

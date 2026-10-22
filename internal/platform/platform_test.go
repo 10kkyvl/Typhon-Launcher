@@ -48,7 +48,7 @@ func TestGetSystemInfo(t *testing.T) {
 	if info.RAMBytes == 0 {
 		t.Fatal("no ram reported")
 	}
-	if info.OS == "" || info.CPU == "" {
+	if info.OS == "" || (info.CPU == "" && !info.CPUUnknown) || (info.PhysicalCores <= 0 && !info.PhysicalCoresUnknown) {
 		t.Fatalf("empty os/cpu: %+v", info)
 	}
 }

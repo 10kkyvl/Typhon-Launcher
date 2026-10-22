@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { ArrowLeft, Check, ChevronUp, MessageCircle, MoreHorizontal, Pencil, RefreshCw, Send, X } from '@lucide/svelte';
+  import { ArrowLeft, Check, ChevronUp, MessageCircle, MoreHorizontal, Paperclip, Pencil, RefreshCw, Send, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
+  import ChatAttachments from './ChatAttachments.svelte';
+  import Lightbox, { type LightboxItem } from './Lightbox.svelte';
   import {
     activePeer,
+    attachmentDrafts,
     chatConnected,
     chatLoading,
     chatLoadingMore,
@@ -30,6 +33,7 @@
     retryMessage,
     retryMessaging,
     sendMessage,
+    setAttachmentDrafts,
     setDraft,
     setPanelVisible,
     setTyping,
@@ -37,9 +41,13 @@
     nextByPeer,
   } from '../stores/messaging';
   import { currentUser } from '../stores/user';
-  import { clockTime, shortDate } from '../utils/format';
+  import { toast } from '../stores/toasts';
+  import { bytesSize, clockTime, shortDate } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
-  import { REACTION_GLYPHS, REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
+  import { chatErrorText } from '../social/chatErrors';
+  import { appendDrafts, attachmentsOf, checkChatImage, clipboardImages, draftFromFile, draftFromPicked, messagePreview, type ChatAttachmentDraft } from '../social/chatImage';
+  import { pickChatImages, uploadChatImage, REACTION_KEYS, type Attachment, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
+  import { reactionIcons } from './reactions/icons';
   import { msg, t } from '../i18n';
 
   let draft = $state('');
@@ -47,6 +55,10 @@
   let composer = $state<HTMLTextAreaElement | undefined>(undefined);
   let scrollBox = $state<HTMLElement | undefined>(undefined);
   let sending = $state(false);
+  let uploadProgress = $state({ current: 0, total: 0 });
+  let lightboxOpen = $state(false);
+  let lightboxIndex = $state(0);
+  let lightboxItems = $state<LightboxItem[]>([]);
   let error = $state('');
   let reactionMenu = $state<string | null>(null);
   let now = $state(new Date());
@@ -56,6 +68,7 @@
   const activeMessages = $derived(peer ? ($messagesByPeer[peer.id] ?? []) : []);
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
+  const draftList = $derived(peer ? ($attachmentDrafts[peer.id] ?? []) : []);
   const hasUnread = $derived($conversations.some((item) => item.unread > 0));
 
   function displayName(target: ChatPeer): string {
@@ -96,22 +109,101 @@
     }
   }
 
+  function addDrafts(targetPeerId: string, incoming: ChatAttachmentDraft[]): void {
+    const { drafts, overflow } = appendDrafts($attachmentDrafts[targetPeerId] ?? [], incoming);
+    setAttachmentDrafts(targetPeerId, drafts);
+    if (overflow) toast(msg('chat.too_many_attachments'), 'danger');
+  }
+
+  async function attach(): Promise<void> {
+    if (!peer || !canSend || sending) return;
+    const targetPeerId = peer.id;
+    try {
+      const images = await pickChatImages();
+      const accepted: ChatAttachmentDraft[] = [];
+      for (const image of images) {
+        const checked = checkChatImage({ type: image.mime, size: image.bytes });
+        if (checked.ok) accepted.push(draftFromPicked(image));
+        else toast(msg(checked.code), 'danger');
+      }
+      if (accepted.length > 0) addDrafts(targetPeerId, accepted);
+    } catch (err) {
+      toast(chatErrorText(err, 'chat.image_unreadable'), 'danger');
+    }
+  }
+
+  async function onPaste(event: ClipboardEvent): Promise<void> {
+    const files = clipboardImages(event.clipboardData?.items);
+    if (files.length === 0) return;
+    event.preventDefault();
+    if (!peer || !canSend || sending) return;
+    const targetPeerId = peer.id;
+    const accepted: ChatAttachmentDraft[] = [];
+    for (const file of files) {
+      const checked = checkChatImage(file);
+      if (!checked.ok) {
+        toast(msg(checked.code), 'danger');
+        continue;
+      }
+      try {
+        accepted.push(await draftFromFile(file));
+      } catch (err) {
+        toast(chatErrorText(err, 'chat.image_unreadable'), 'danger');
+      }
+    }
+    if (accepted.length > 0) addDrafts(targetPeerId, accepted);
+  }
+
+  function removeAttachment(key: string): void {
+    if (peer && !sending) setAttachmentDrafts(peer.id, draftList.filter((item) => item.key !== key));
+  }
+
+  async function uploadDrafts(targetPeerId: string, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
+    let list = pending;
+    const total = list.filter((item) => !item.uploaded).length;
+    let done = 0;
+    uploadProgress = { current: 0, total };
+    for (const item of pending) {
+      if (item.uploaded) continue;
+      uploadProgress = { current: done + 1, total };
+      try {
+        const uploaded = await uploadChatImage(item.encoded);
+        list = list.map((entry) => (entry.key === item.key ? { ...entry, uploaded } : entry));
+        setAttachmentDrafts(targetPeerId, list);
+        done += 1;
+      } catch (err) {
+        toast(chatErrorText(err, 'social.chatSendError'), 'danger');
+        return null;
+      }
+    }
+    return list.map((item) => ({ ...(item.uploaded as Attachment), url: item.previewUrl }));
+  }
+
   async function submit(): Promise<void> {
-    if (!peer || !canSend || !draft.trim() || sending) return;
+    const pending = draftList;
+    if (!peer || !canSend || (!draft.trim() && pending.length === 0) || sending) return;
     const targetPeerId = peer.id;
     const submitted = draft.trim();
     sending = true;
     error = '';
     try {
-      await sendMessage(targetPeerId, submitted);
+      let attachments: Attachment[] = [];
+      if (pending.length > 0) {
+        const uploaded = await uploadDrafts(targetPeerId, pending);
+        if (!uploaded) return;
+        attachments = uploaded;
+      }
+      await sendMessage(targetPeerId, submitted, undefined, attachments);
+      if (attachments.length > 0) setAttachmentDrafts(targetPeerId, []);
       if ($activePeer?.id === targetPeerId && draft.trim() === submitted) draft = '';
       if ($activePeer?.id === targetPeerId) {
         composer?.focus();
         scrollToEnd();
       }
     } catch (err) {
-      error = err instanceof Error && err.message === 'message_too_long' ? msg('social.chatTooLong') : msg('social.chatSendError');
+      error = chatErrorText(err, 'social.chatSendError');
     } finally {
+      uploadProgress = { current: 0, total: 0 };
       sending = false;
     }
   }
@@ -129,11 +221,11 @@
   }
 
   async function saveEdit(message: Message): Promise<void> {
-    if (!peer || !editDraft.trim()) return;
+    if (!peer || (!editDraft.trim() && attachmentsOf(message).length === 0)) return;
     try {
       await editMessage(peer.id, message.id, editDraft.trim());
     } catch (err) {
-      error = err instanceof Error && err.message === 'message_too_long' ? msg('social.chatTooLong') : msg('social.chatEditError');
+      error = chatErrorText(err, 'social.chatEditError');
     }
   }
 
@@ -144,9 +236,19 @@
     try {
       await retryMessage(targetPeerId, message.clientId);
       if ($activePeer?.id === targetPeerId && draft.trim() === message.text.trim()) draft = '';
-    } catch {
-      error = msg('social.chatSendError');
+    } catch (err) {
+      error = chatErrorText(err, 'social.chatSendError');
     }
+  }
+
+  function openImages(messageId: string, urls: string[], position: number): void {
+    lightboxItems = urls.map((url, index) => ({ id: `${messageId}:${index}`, url }));
+    lightboxIndex = position;
+    lightboxOpen = true;
+  }
+
+  function imageLoaded(message: Message): void {
+    if (activeMessages[activeMessages.length - 1]?.id === message.id) scrollToEnd();
   }
 
   function scrollToEnd(): void {
@@ -234,7 +336,7 @@
       <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} />
       <span class="toast-copy">
         <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>
-        <span>{$chatToast.message.text}</span>
+        <span>{messagePreview($chatToast.message)}</span>
       </span>
       <X size="1.5rem" strokeWidth={1.8} />
     </button>
@@ -293,11 +395,15 @@
                       <Button size="sm" variant="primary" onclick={() => saveEdit(message)}><Check size="1.3rem" /> {msg('social.chatSave')}</Button>
                     </div>
                   {:else}
-                    <p class="message-text">
-                      {#each chatTextParts(message.text) as part}
-                        {#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}
-                      {/each}
-                    </p>
+                    {@const attachments = attachmentsOf(message)}
+                    {#if message.text.trim() || attachments.length === 0}
+                      <p class="message-text">
+                        {#each chatTextParts(message.text) as part}
+                          {#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}
+                        {/each}
+                      </p>
+                    {/if}
+                    <ChatAttachments {attachments} onopen={(urls, position) => openImages(message.id, urls, position)} onload={() => imageLoaded(message)} />
                     <div class="message-footer">
                       {#if $pendingMessages.has(message.clientId)}
                         <span class="sending-status" role="status">{msg('social.chatSending')}</span>
@@ -315,8 +421,9 @@
                     {#if message.reactions.length > 0}
                       <div class="reactions">
                         {#each message.reactions as reaction (reaction.emoji)}
+                          {@const ReactionIcon = Object.hasOwn(reactionIcons, reaction.emoji) ? reactionIcons[reaction.emoji as ReactionKey] : undefined}
                           <button class:reacted={reaction.userIds.includes($currentUser?.id ?? '')} type="button" onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}>
-                            {REACTION_GLYPHS[reaction.emoji as ReactionKey] ?? reaction.emoji} {reaction.userIds.length}
+                            {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
                           </button>
                         {/each}
                       </div>
@@ -324,7 +431,8 @@
                     {#if reactionMenu === message.id}
                       <div class="reaction-menu">
                         {#each REACTION_KEYS as key}
-                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}>{REACTION_GLYPHS[key]}</button>
+                          {@const MenuIcon = reactionIcons[key]}
+                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}><MenuIcon /></button>
                         {/each}
                       </div>
                     {/if}
@@ -343,7 +451,25 @@
         {#if !canSend}
           <div class="disabled-copy">{msg('social.chatDisabled')}</div>
         {:else}
+          {#if draftList.length > 0}
+            <div class="draft-list">
+              {#each draftList as item (item.key)}
+                <div class="draft-chip">
+                  <img src={item.previewUrl} alt={msg('social.chatImageLabel')} />
+                  <span class="draft-copy">
+                    <strong>{item.name}</strong>
+                    <span>{bytesSize(item.bytes)}</span>
+                  </span>
+                  <button class="tiny-action" type="button" title={msg('social.chatAttachRemove')} aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></button>
+                </div>
+              {/each}
+            </div>
+            {#if uploadProgress.total > 0}
+              <div class="upload-status" role="status">{uploadProgress.total === 1 ? msg('social.chatUploading') : msg('social.chatUploadProgress', { current: uploadProgress.current, total: uploadProgress.total })}</div>
+            {/if}
+          {/if}
           <div class="composer">
+            <button class="attach" type="button" title={msg('social.chatAttachHint')} aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></button>
             <textarea
               bind:this={composer}
               value={draft}
@@ -353,8 +479,9 @@
               disabled={sending}
               oninput={(event) => setComposer((event.currentTarget as HTMLTextAreaElement).value)}
               onkeydown={onKeydown}
+              onpaste={onPaste}
             ></textarea>
-            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={!draft.trim() || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
+            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
           </div>
           <div class="composer-hint">{msg('social.chatHint')}</div>
         {/if}
@@ -371,7 +498,7 @@
                 <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} />
                 <span class="conversation-copy">
                   <strong>{displayName(item.peer)}</strong>
-                  <span>{item.lastMessage?.text ?? msg('social.chatNewConversation')}</span>
+                  <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>
                 </span>
                 {#if item.unread > 0}<span class="conversation-unread">{item.unread}</span>{/if}
               </button>
@@ -381,10 +508,11 @@
       {/if}
     </section>
   {/if}
+  <Lightbox bind:open={lightboxOpen} bind:index={lightboxIndex} items={lightboxItems} />
 </div>
 
 <style>
-  .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; pointer-events: none; }
+  .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
   .chat-root > * { pointer-events: auto; }
   .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
   .chat-toggle:hover { background: var(--accent-hover); }
@@ -418,7 +546,8 @@
   .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; padding: 0.25rem; background: transparent; color: var(--text-3); font-size: 1rem; cursor: pointer; }
   .retry { color: var(--danger); }
   .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
-  .reactions button, .reaction-menu button { border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .reactions button :global(svg), .reaction-menu button :global(svg) { width: 1.4em; height: 1.4em; }
   .reactions button.reacted { border-color: var(--accent); background: var(--accent-subtle); }
   .reaction-menu { padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
   .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
@@ -431,6 +560,16 @@
   .composer textarea { flex: 1; min-height: 4.2rem; }
   .send { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); cursor: pointer; }
   .send:disabled { opacity: 0.45; cursor: default; }
+  .attach { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
+  .attach:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+  .attach:disabled { opacity: 0.45; cursor: default; }
+  .draft-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.8rem 1rem 0; }
+  .draft-chip { display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-3); }
+  .draft-chip img { width: 3.2rem; height: 3.2rem; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; }
+  .draft-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+  .draft-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-xs); }
+  .draft-copy span { color: var(--text-3); font-size: 1rem; }
+  .upload-status { margin: 0.5rem 1rem 0; color: var(--text-3); font-size: 1rem; }
   .composer-hint { padding: 0.45rem 1rem 0.8rem; color: var(--text-3); font-size: 1rem; }
   .conversation-list { flex: 1; overflow-y: auto; padding: 0.8rem; }
   .conversation { display: flex; align-items: center; gap: 1rem; width: 100%; padding: 1rem; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; cursor: pointer; text-align: left; }

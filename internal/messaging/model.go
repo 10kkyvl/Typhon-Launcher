@@ -1,5 +1,7 @@
 package messaging
 
+import "encoding/json"
+
 type UserCard struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
@@ -12,16 +14,39 @@ type Reaction struct {
 	UserIDs []string `json:"userIds"`
 }
 
+type Attachment struct {
+	ID     string `json:"id"`
+	URL    string `json:"url"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Bytes  int64  `json:"bytes"`
+}
+
 type Message struct {
-	ID          string     `json:"id"`
-	ClientID    string     `json:"clientId"`
-	SenderID    string     `json:"senderId"`
-	RecipientID string     `json:"recipientId"`
-	Text        string     `json:"text"`
-	CreatedAt   string     `json:"createdAt"`
-	EditedAt    *string    `json:"editedAt"`
-	ExpiresAt   string     `json:"expiresAt"`
-	Reactions   []Reaction `json:"reactions"`
+	ID          string       `json:"id"`
+	ClientID    string       `json:"clientId"`
+	SenderID    string       `json:"senderId"`
+	RecipientID string       `json:"recipientId"`
+	Text        string       `json:"text"`
+	CreatedAt   string       `json:"createdAt"`
+	EditedAt    *string      `json:"editedAt"`
+	ExpiresAt   string       `json:"expiresAt"`
+	Reactions   []Reaction   `json:"reactions"`
+	Attachments []Attachment `json:"attachments"`
+}
+
+// The server always sends an array; null or a missing field must still reach the UI as an empty list.
+func (m *Message) UnmarshalJSON(data []byte) error {
+	type plain Message
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	if p.Attachments == nil {
+		p.Attachments = []Attachment{}
+	}
+	*m = Message(p)
+	return nil
 }
 
 type Conversation struct {

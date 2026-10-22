@@ -203,22 +203,18 @@
       {/if}
 
       {#if info.downloadPresent}
-        <div class="row" class:off={info.downloadSeeding}>
+        <div class="row">
           <div class="row-text">
             <span class="row-label">{msg('modals.removeGameDeleteDownloadLabel')}</span>
             <span class="row-sub">
               {#if info.downloadSeeding}
-                {msg('modals.removeGameSeedingActive')}
+                {msg('modals.removeGameSeedingWillStop')}
               {:else}
                 {msg('modals.removeGameDownloadInFolder', { size: bytesSize(info.downloadBytes) })}{info.downloadPath ? `: ${info.downloadPath}` : ''}
               {/if}
             </span>
           </div>
-          <Toggle
-            bind:checked={deleteDownload}
-            label={msg('modals.removeGameDeleteDownloadedFiles')}
-            disabled={info.downloadSeeding}
-          />
+          <Toggle bind:checked={deleteDownload} label={msg('modals.removeGameDeleteDownloadedFiles')} />
         </div>
       {/if}
     </div>

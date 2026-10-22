@@ -91,8 +91,13 @@ func relaunch(path string) error {
 }
 
 func startUpdateWorker(workerPath, specPath string) error {
+	env, err := workerEnvironment()
+	if err != nil {
+		return err
+	}
 	//nolint:gosec // G204: workerPath is our own copy of the launcher binary, specPath is our own generated file (invariant 33)
 	cmd := exec.Command(workerPath, "--selfupdate-worker", specPath)
+	cmd.Env = env
 	cmd.SysProcAttr = detachedProcAttr()
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start selfupdate worker: %w", err)

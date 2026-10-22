@@ -6,6 +6,9 @@ const bindings = {
   ProposeLibraryPath: vi.fn(),
   SetupLibrary: vi.fn(),
   SaveConsent: vi.fn(),
+  LibraryFolders: vi.fn(),
+  AddLibraryFolder: vi.fn(),
+  RemoveLibraryFolder: vi.fn(),
 };
 
 const app = {
@@ -111,7 +114,24 @@ describe('settings in the desktop app', () => {
     bindings.GetSettings.mockResolvedValue({ theme: 'light' });
     const settings = await load(true);
 
-    await expect(settings.getSettings()).resolves.toEqual({ theme: 'light' });
+    await expect(settings.getSettings()).resolves.toEqual({ theme: 'light', downloadSchedule: [], extraLibraryPaths: [] });
+  });
+
+  it('turns the nil extra folder list into an empty one and keeps a real one', async () => {
+    bindings.GetSettings.mockResolvedValueOnce({ extraLibraryPaths: null }).mockResolvedValueOnce({ extraLibraryPaths: ['E:\\Games'] });
+    const settings = await load(true);
+
+    await expect(settings.getSettings()).resolves.toMatchObject({ extraLibraryPaths: [] });
+    await expect(settings.getSettings()).resolves.toMatchObject({ extraLibraryPaths: ['E:\\Games'] });
+  });
+
+  it('turns the nil schedule Go sends into an empty list and keeps a real one', async () => {
+    const window = { days: [1, 2], from: '23:00', to: '07:00' };
+    bindings.GetSettings.mockResolvedValueOnce({ downloadSchedule: null }).mockResolvedValueOnce({ downloadSchedule: [window] });
+    const settings = await load(true);
+
+    await expect(settings.getSettings()).resolves.toEqual({ downloadSchedule: [], extraLibraryPaths: [] });
+    await expect(settings.getSettings()).resolves.toEqual({ downloadSchedule: [window], extraLibraryPaths: [] });
   });
 
   it('sends exactly the patch to the backend, returns what it stored and lets a refusal reach the caller', async () => {
@@ -120,7 +140,7 @@ describe('settings in the desktop app', () => {
     const settings = await load(true);
     const patch = { proxyPort: 1080 };
 
-    await expect(settings.saveSettingsPatch(patch)).resolves.toEqual(stored);
+    await expect(settings.saveSettingsPatch(patch)).resolves.toEqual({ ...stored, downloadSchedule: [], extraLibraryPaths: [] });
     expect(bindings.SaveSettingsPatch).toHaveBeenCalledWith({ proxyPort: 1080 });
 
     await expect(settings.saveSettingsPatch(patch)).rejects.toThrow('network_mode_invalid');
@@ -133,9 +153,36 @@ describe('settings in the desktop app', () => {
     const settings = await load(true);
 
     await expect(settings.proposeLibraryPath('D:\\')).resolves.toBe('D:\\TyphonLibrary');
-    await expect(settings.setupLibrary('D:\\')).resolves.toEqual({ libraryPath: 'D:\\TyphonLibrary' });
-    await expect(settings.saveConsent(false, true)).resolves.toEqual({ telemetryConsentVersion: 2 });
+    await expect(settings.setupLibrary('D:\\')).resolves.toEqual({
+      libraryPath: 'D:\\TyphonLibrary',
+      downloadSchedule: [],
+      extraLibraryPaths: [],
+    });
+    await expect(settings.saveConsent(false, true)).resolves.toEqual({
+      telemetryConsentVersion: 2,
+      downloadSchedule: [],
+      extraLibraryPaths: [],
+    });
     expect(bindings.SaveConsent).toHaveBeenCalledWith(false, true);
+  });
+
+  it('lists, adds and removes game folders through the backend and lets a refusal reach the caller', async () => {
+    const folder = { path: 'D:\\Games', primary: true, freeBytes: 1, totalBytes: 2, available: true };
+    bindings.LibraryFolders.mockResolvedValueOnce([folder]).mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('disk'));
+    bindings.AddLibraryFolder.mockResolvedValueOnce({ extraLibraryPaths: ['E:\\Games'] }).mockRejectedValueOnce(
+      new Error('typhon:settings.extra_library_nested: x'),
+    );
+    bindings.RemoveLibraryFolder.mockResolvedValueOnce({ extraLibraryPaths: null });
+    const settings = await load(true);
+
+    await expect(settings.libraryFolders()).resolves.toEqual([folder]);
+    await expect(settings.libraryFolders()).resolves.toEqual([]);
+    await expect(settings.libraryFolders()).rejects.toThrow('disk');
+    await expect(settings.addLibraryFolder('E:\\Games')).resolves.toMatchObject({ extraLibraryPaths: ['E:\\Games'] });
+    expect(bindings.AddLibraryFolder).toHaveBeenCalledWith('E:\\Games');
+    await expect(settings.addLibraryFolder('E:\\Inside')).rejects.toThrow('extra_library_nested');
+    await expect(settings.removeLibraryFolder('E:\\Games')).resolves.toMatchObject({ extraLibraryPaths: [] });
+    expect(bindings.RemoveLibraryFolder).toHaveBeenCalledWith('E:\\Games');
   });
 
   it('opens folders through the app service', async () => {

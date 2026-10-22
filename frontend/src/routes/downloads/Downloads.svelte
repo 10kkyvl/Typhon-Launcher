@@ -2,11 +2,15 @@
   import {
     ArrowDown,
     ArrowUp,
+    CalendarClock,
     ChevronDown,
     CircleAlert,
     Download,
     FolderOpen,
+    Gamepad2,
     Menu,
+    Gauge,
+    Pause,
     Plus,
     RotateCcw,
     Settings,
@@ -25,11 +29,12 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import type { Download as DownloadRecord } from '../../lib/services/downloads';
+  import { gamePageId, type Download as DownloadRecord } from '../../lib/services/downloads';
   import { maxActiveDownloadOptions, openFolder } from '../../lib/services/settings';
   import {
     active,
     completed,
+    downloadNow,
     failed,
     forceStart,
     moveDown,
@@ -44,11 +49,13 @@
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
+  import { playThrottle } from '../../lib/stores/playThrottle';
+  import { playThrottleBanner, scheduleOpenLabel } from '../../lib/services/playThrottle';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
-  import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, clockTime, rateLimitLabel, relativeDate, speedBytes } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
   const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
@@ -56,6 +63,25 @@
   function pickConcurrency(id: string) {
     updateSettings({ maxActiveDownloads: Number(id) });
   }
+
+  const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
+
+  const playBanner = $derived(playThrottleBanner($playThrottle));
+  const playBannerText = $derived.by(() => {
+    if (!playBanner) return '';
+    if (playBanner.kind === 'schedule') {
+      const when = scheduleOpenLabel(playBanner.nextOpenAt);
+      if (playBanner.game) {
+        return when ? msg('transfers.scheduleAndPlayBanner', { when }) : msg('transfers.scheduleAndPlayBannerNoNext');
+      }
+      return when ? msg('transfers.scheduleBanner', { when }) : msg('transfers.scheduleBannerNoNext');
+    }
+    if (playBanner.kind === 'pause') return msg('transfers.playPausedBanner');
+    return msg('transfers.playLimitedBanner', {
+      down: rateLimitLabel(playBanner.downloadLimit),
+      up: rateLimitLabel(playBanner.uploadLimit),
+    });
+  });
 
   let addOpen = $state(false);
   let detailsOpen = $state(false);
@@ -141,6 +167,20 @@
   {/snippet}
 </PageHeader>
 
+{#if playBanner}
+  <div class="play-banner" role="status">
+    {#if playBanner.kind === 'schedule'}
+      <CalendarClock size="1.5rem" strokeWidth={1.8} />
+    {:else if playBanner.kind === 'pause'}
+      <Pause size="1.5rem" strokeWidth={1.8} />
+    {:else}
+      <Gauge size="1.5rem" strokeWidth={1.8} />
+    {/if}
+    <span class="play-text">{playBannerText}</span>
+    <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
+  </div>
+{/if}
+
 {#if nothing}
   <EmptyState
     title={msg('transfers.downloadsEmptyActiveTitle')}
@@ -196,6 +236,11 @@
             </span>
           </div>
           <div class="row-actions">
+            {#if gamePageId(item)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
             <Button size="sm" onclick={() => resume(item.id)}>
               <RotateCcw size="1.4rem" strokeWidth={1.8} />
               {msg('common.retry')}
@@ -221,10 +266,11 @@
           </div>
           <div class="info inline">
             <span class="title" title={q.name}>{q.name}</span>
-            {#if typeTag(q) || sourceTag(q)}
+            {#if typeTag(q) || sourceTag(q) || q.ignoreSchedule}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
                 {#if sourceTag(q)}<StatusBadge kind="neutral" label={sourceTag(q)} dot={false} />{/if}
+                {#if q.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
               </div>
             {/if}
           </div>
@@ -232,6 +278,14 @@
             <span class="status-main">{msg('transfers.downloadsStatusWaiting')}</span>
           </div>
           <div class="row-actions">
+            {#if scheduleHeld && !q.ignoreSchedule}
+              <Button size="sm" onclick={() => downloadNow(q.id)}>{msg('transfers.downloadNow')}</Button>
+            {/if}
+            {#if gamePageId(q)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(q) })}>
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
             <DropdownMenu
               items={[
                 ...(i > 0 ? [{ id: 'up', label: msg('transfers.downloadsMoveUp') }] : []),
@@ -294,7 +348,13 @@
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
             {:else if install.status === 'completed'}
-              <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
+              {#if install.warning}
+                <span title={install.warning}>
+                  <StatusBadge kind="warning" label={msg('transfers.downloadsInstalledStatus')} plain />
+                </span>
+              {:else}
+                <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
+              {/if}
             {:else if install.status === 'failed'}
               <Button size="sm" variant="danger" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsInstallErrorAction')}</Button>
             {:else}
@@ -304,6 +364,11 @@
             {/if}
           </div>
           <div class="row-actions">
+            {#if gamePageId(item)}
+              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
+                <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+              </IconButton>
+            {/if}
             <IconButton label={msg('transfers.downloadsShowInFolderLabel')} size="sm" onclick={() => openDestination(item.destination)}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
             </IconButton>
@@ -328,6 +393,25 @@
 <InstallModal bind:open={installOpen} downloadId={installDownloadId} />
 
 <style>
+  .play-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    max-width: 140rem;
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    font-size: var(--font-sm);
+    color: var(--accent);
+  }
+
+  .play-text {
+    flex: 1;
+    color: var(--text-1);
+  }
+
   .summary {
     display: flex;
     align-items: center;

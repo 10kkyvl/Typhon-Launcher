@@ -86,7 +86,7 @@ export const bigpictureTransfers: Record<BigpictureTransfersKey, Message> = {
   'bp.transfers.unknownVersion': 'Unknown',
   'bp.transfers.cleanupTitle': 'Downloaded files',
   'bp.transfers.cleanupPrompt': 'Delete the downloaded files when they are no longer needed?',
-  'bp.transfers.seedingWarning': 'These files are currently being shared with other users.',
+  'bp.transfers.seedingWarning': 'These files are currently being shared with other users. Deleting them will stop seeding.',
   'bp.transfers.deleteFiles': 'Delete download files',
   'bp.transfers.keepFiles': 'Keep files',
   'bp.transfers.dismissInstall': 'Dismiss this attempt',

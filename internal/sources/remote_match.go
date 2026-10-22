@@ -4,25 +4,38 @@ import (
 	"context"
 	"errors"
 	"hash/crc32"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/matchprogress"
 	"typhon/internal/sources/feed"
-	"typhon/internal/titles"
 )
 
 const (
 	remoteMatchTTL       = 24 * time.Hour
 	remoteMatchJitterMax = 12 * time.Hour
+
+	// A found game rarely changes its answer, so asking again every day would
+	// spend a request per release for nothing. The jitter is wider than one
+	// refresh cycle, so a large source still does not expire in a single pass.
+	remoteMatchKnownTTL       = 7 * 24 * time.Hour
+	remoteMatchKnownJitterMax = 24 * time.Hour
 )
 
 // Stable per key, so a large feed does not expire in a single refresh.
-func remoteMatchJitter(key string) time.Duration {
-	seconds := crc32.ChecksumIEEE([]byte(key)) % uint32(remoteMatchJitterMax/time.Second)
+func remoteMatchJitter(key string, span time.Duration) time.Duration {
+	seconds := crc32.ChecksumIEEE([]byte(key)) % uint32(span.Seconds())
 	return time.Duration(seconds) * time.Second
+}
+
+// A release the server did not know stays on the short lifetime: the server
+// may learn it any day.
+func remoteMatchLifetime(rm *RemoteMatch, key string) time.Duration {
+	if rm.GameID != "" {
+		return remoteMatchKnownTTL + remoteMatchJitter(key, remoteMatchKnownJitterMax)
+	}
+	return remoteMatchTTL + remoteMatchJitter(key, remoteMatchJitterMax)
 }
 
 func remoteMatchFresh(rm *RemoteMatch, key string, now time.Time) bool {
@@ -30,7 +43,7 @@ func remoteMatchFresh(rm *RemoteMatch, key string, now time.Time) bool {
 		return false
 	}
 	age := now.Sub(rm.At)
-	return age >= 0 && age < remoteMatchTTL+remoteMatchJitter(key)
+	return age >= 0 && age < remoteMatchLifetime(rm, key)
 }
 
 type resolvedRemoteMatch struct {
@@ -47,25 +60,6 @@ func cloneReleases(list []*Release) []*Release {
 	return out
 }
 
-// Reparse cached rows too: HTTP 304 only says the feed bytes did not change.
-func reparseRelease(r *Release) {
-	p := titles.Parse(r.RawTitle)
-	r.Title, r.NormalizedTitle = p.Base, p.Normalized
-	if r.GameHint != "" {
-		hint := titles.Parse(r.GameHint)
-		r.Title, r.NormalizedTitle = hint.Base, hint.Normalized
-		if hint.Year != 0 {
-			p.Year = hint.Year
-		}
-	}
-	r.Version, r.RawVersion = p.Version, p.RawVersion
-	if r.ToVersion != "" {
-		r.Version = r.ToVersion
-	}
-	r.Edition, r.Languages, r.Year, r.Tags, r.DLCCount = p.Edition, p.Languages, p.Year, p.Tags, p.DLCCount
-	r.Repacker = titles.Repacker(p.Tags)
-}
-
 func carryRemoteMatchForward(previous, incoming []*Release) {
 	byIdentity := make(map[string]*Release, len(previous))
 	for _, r := range previous {
@@ -78,19 +72,23 @@ func carryRemoteMatchForward(previous, incoming []*Release) {
 	}
 }
 
-func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (map[string]resolvedRemoteMatch, *catalog.PartialMatchError, error) {
+func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, run *refreshRun) (map[string]resolvedRemoteMatch, *catalog.PartialMatchError, error) {
 	if s.catalog == nil || !s.catalog.HasReleaseMatcher() {
 		return nil, nil, nil
 	}
-	now := time.Now()
+	defer run.begin(stageMatch)()
+	now := s.now()
 	out := make(map[string]resolvedRemoteMatch)
 	byKey := map[string]*Release{}
 	cached := map[string]*RemoteMatch{}
-	for _, r := range list {
+	for i, r := range list {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, nil, err
+		}
 		if r.Locked || r.Ignored || r.Availability == AvailabilityRemoved {
 			continue
 		}
-		key := remoteQueryKey(r)
+		key := run.memo.queryKey(r)
 		if _, ok := byKey[key]; !ok {
 			byKey[key] = r
 		}
@@ -124,11 +122,16 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (m
 		needsQuery = append(needsQuery, r)
 	}
 
-	keys, queries := remoteReleaseQueries(needsQuery)
+	keys, queries, err := remoteReleaseQueries(ctx, run.memo, needsQuery)
+	if err != nil {
+		return nil, nil, err
+	}
+	run.progress(stageMatch, 0, len(queries))
 	if len(queries) == 0 {
 		return out, nil, nil
 	}
-	matches, err := s.catalog.ResolveSourceQueries(ctx, queries)
+	matchCtx := matchprogress.With(ctx, func(done, total int) { run.progress(stageMatch, done, total) })
+	matches, err := s.catalog.ResolveSourceQueries(matchCtx, queries)
 	var partial *catalog.PartialMatchError
 	switch {
 	case err == nil:
@@ -136,6 +139,7 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (m
 	default:
 		return nil, nil, err
 	}
+	run.finish(stageMatch, len(queries))
 	failed := map[int]bool{}
 	if partial != nil {
 		for _, i := range partial.Failed {
@@ -150,69 +154,25 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release) (m
 	}
 	return out, partial, nil
 }
-func remoteQueryKey(r *Release) string {
-	return strings.Join(remoteReleaseNames(r), "\x00") + "|" + strconv.Itoa(r.Year)
-}
 
-var singleReleaseChapter = regexp.MustCompile(`^(?:chapter|episode) (?:[0-9]+|[ivxlcdm]+)$`)
-
-// A source's stable game hint can omit the chapter or edition that identifies
-// this particular release. Use the more specific title only when it extends
-// the same base name; unrelated download labels must not overrule the hint.
-func remoteReleaseNames(r *Release) []string {
-	if r.GameHint == "" {
-		return titles.MatchNames(r.RawTitle)
-	}
-	hinted := titles.MatchNames(r.GameHint)
-	raw, hint := titles.Parse(r.RawTitle), titles.Parse(r.GameHint)
-	base, hintedBase := titles.Normalize(raw.Base), titles.Normalize(hint.Base)
-	if base == hintedBase && raw.Edition != "" && hint.Edition == "" {
-		return titles.MatchNames(r.RawTitle)
-	}
-	tail, extends := strings.CutPrefix(base, hintedBase+" ")
-	if hintedBase == "" || !extends || hint.Edition != "" {
-		return hinted
-	}
-	// These suffixes distinguish a different release. MatchNames deliberately
-	// avoids falling back from a remaster to the original game.
-	if tail == "remaster" || tail == "remastered" {
-		return titles.MatchNames(r.RawTitle)
-	}
-	if tail != "enhanced" && !singleReleaseChapter.MatchString(tail) {
-		return hinted
-	}
-	// Episodic games can have either separate chapter cards or one series card.
-	// Bare Enhanced is also used for a base game's update. Prefer a specific
-	// known card while retaining the author's explicit hint in these cases.
-	names := titles.MatchNames(r.RawTitle)
-	seen := map[string]bool{}
-	for _, name := range names {
-		seen[titles.Normalize(name)] = true
-	}
-	for _, name := range hinted {
-		if !seen[titles.Normalize(name)] && len(names) < 6 {
-			names = append(names, name)
-			seen[titles.Normalize(name)] = true
-		}
-	}
-	return names
-}
-
-func remoteReleaseQueries(list []*Release) ([]string, []catalog.ReleaseQuery) {
+func remoteReleaseQueries(ctx context.Context, memo *titleMemo, list []*Release) ([]string, []catalog.ReleaseQuery, error) {
 	keys := []string{}
 	queries := []catalog.ReleaseQuery{}
 	seen := map[string]bool{}
-	for _, r := range list {
+	for i, r := range list {
+		if err := interrupted(ctx, i); err != nil {
+			return nil, nil, err
+		}
 		if r.Locked || r.Ignored || r.Availability == AvailabilityRemoved {
 			continue
 		}
-		names := remoteReleaseNames(r)
-		key := strings.Join(names, "\x00") + "|" + strconv.Itoa(r.Year)
+		names := memo.releaseNames(r)
+		key := memo.queryKey(r)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		valid := names[:0]
+		valid := make([]string, 0, len(names))
 		for _, name := range names {
 			if len([]rune(name)) <= 200 && strings.TrimSpace(name) != "" {
 				valid = append(valid, name)
@@ -224,7 +184,7 @@ func remoteReleaseQueries(list []*Release) ([]string, []catalog.ReleaseQuery) {
 		keys = append(keys, key)
 		queries = append(queries, catalog.ReleaseQuery{Titles: valid, Year: r.Year})
 	}
-	return keys, queries
+	return keys, queries, nil
 }
 
 func (s *Service) previewWithCoverage(ctx context.Context, kind Type, location string, result feed.Result) (Preview, error) {
@@ -232,7 +192,15 @@ func (s *Service) previewWithCoverage(ctx context.Context, kind Type, location s
 	if s.catalog == nil || !s.catalog.HasReleaseMatcher() {
 		return preview, nil
 	}
-	_, queries := remoteReleaseQueries(parseEntries("", result.Feed.Entries, time.Now()))
+	memo := s.newMemo()
+	list, err := parseFeedEntries(ctx, "", result.Feed.Entries, s.now(), memo, nil)
+	if err != nil {
+		return Preview{}, err
+	}
+	_, queries, err := remoteReleaseQueries(ctx, memo, list)
+	if err != nil {
+		return Preview{}, err
+	}
 	matches, err := s.catalog.PreviewSourceQueries(ctx, queries)
 	if err != nil {
 		return Preview{}, err

@@ -1,9 +1,12 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, RefreshCw, Send } from '@lucide/svelte';
   import Avatar from '../lib/components/Avatar.svelte';
+  import ChatAttachments from '../lib/components/ChatAttachments.svelte';
   import { msg } from '../lib/i18n';
   import type { ChatPeer, Message } from '../lib/services/messaging';
   import { chatTextParts } from '../lib/social/chatText';
+  import { chatErrorText } from '../lib/social/chatErrors';
+  import { attachmentsOf, messagePreview } from '../lib/social/chatImage';
   import {
     activePeer,
     canSendByPeer,
@@ -69,6 +72,10 @@
     });
   }
 
+  function imageLoaded(message: Message): void {
+    if (activeMessages[activeMessages.length - 1]?.id === message.id) scrollToEnd();
+  }
+
   function setComposer(value: string): void {
     draft = value;
     if (peer) {
@@ -91,7 +98,7 @@
         scrollToEnd();
       }
     } catch (err) {
-      error = err instanceof Error && err.message === 'message_too_long' ? msg('social.chatTooLong') : msg('social.chatSendError');
+      error = chatErrorText(err, 'social.chatSendError');
     } finally {
       sending = false;
     }
@@ -102,8 +109,8 @@
     error = '';
     try {
       await retryMessage(peer.id, message.clientId);
-    } catch {
-      error = msg('social.chatSendError');
+    } catch (err) {
+      error = chatErrorText(err, 'social.chatSendError');
     }
   }
 
@@ -189,11 +196,14 @@
                 <time datetime={message.createdAt}>{stamp(message.createdAt)}</time>
                 {#if message.editedAt}<span class="edited">{msg('social.chatEdited')}</span>{/if}
               </div>
-              <p class="message-text">
-                {#each chatTextParts(message.text) as part}
-                  {#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}
-                {/each}
-              </p>
+              {#if message.text.trim() || attachmentsOf(message).length === 0}
+                <p class="message-text">
+                  {#each chatTextParts(message.text) as part}
+                    {#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}
+                  {/each}
+                </p>
+              {/if}
+              <ChatAttachments attachments={attachmentsOf(message)} onload={() => imageLoaded(message)} />
               {#if $pendingMessages.has(message.clientId)}
                 <span class="status" role="status">{msg('social.chatSending')}</span>
               {/if}
@@ -242,7 +252,7 @@
             <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} />
             <span class="conversation-copy">
               <strong>{displayName(item.peer)}</strong>
-              <span>{item.lastMessage?.text ?? msg('social.chatNewConversation')}</span>
+              <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>
             </span>
             {#if item.unread > 0}<span class="unread">{item.unread}</span>{/if}
           </button>

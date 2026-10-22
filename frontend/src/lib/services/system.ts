@@ -17,13 +17,19 @@ export interface AppInfo {
   platform: string;
   arch: string;
   devMock: boolean;
+  portable: boolean;
+  dataDir: string;
 }
 
 export interface SystemInfo {
   os: string;
+  osUnknown: boolean;
   arch: string;
   cpu: string;
+  cpuUnknown: boolean;
   cores: number;
+  physicalCores: number;
+  physicalCoresUnknown: boolean;
   ramBytes: number;
 }
 
@@ -62,7 +68,7 @@ const fixtureStorage: StorageInfo = {
 
 export async function getAppInfo(): Promise<AppInfo> {
   if (inWails) return (await AppService.GetAppInfo()) as AppInfo;
-  return { version: '0.1.0', platform: 'browser', arch: 'dev', devMock: false };
+  return { version: '0.1.0', platform: 'browser', arch: 'dev', devMock: false, portable: false, dataDir: '' };
 }
 
 let pendingAppInfo: Promise<AppInfo> | null = null;
@@ -85,7 +91,17 @@ export function elevationSupported(info: AppInfo): boolean {
 
 export async function getSystemInfo(): Promise<SystemInfo> {
   if (inWails) return (await AppService.GetSystemInfo()) as SystemInfo;
-  return { os: 'Browser preview', arch: 'dev', cpu: 'Dev CPU', cores: 8, ramBytes: 16 * GB };
+  return {
+    os: 'Browser preview',
+    osUnknown: false,
+    arch: 'dev',
+    cpu: 'Dev CPU',
+    cpuUnknown: false,
+    cores: 8,
+    physicalCores: 4,
+    physicalCoresUnknown: false,
+    ramBytes: 16 * GB,
+  };
 }
 
 export async function getWineStatus(): Promise<WineStatus> {

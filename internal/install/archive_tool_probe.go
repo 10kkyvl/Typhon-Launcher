@@ -46,6 +46,38 @@ func (v toolVersion) String() string { return fmt.Sprintf("%d.%d", v.major, v.mi
 type toolSet struct {
 	tools   []archiveTool
 	refused []error
+	// Кандидаты, на которых распаковщик не нашёлся, с причиной по каждому.
+	searched []string
+}
+
+// Перебирает кандидатов до первого, который прошёл проверку версии: старый
+// распаковщик в одном месте не должен прятать новый в другом. Отклонённые
+// кандидаты остаются в searched, а если принять не удалось никого, — в
+// refused, и по ним ошибка говорит «слишком старый», а не «не найден».
+func (s *toolSet) find(ctx context.Context, name string, candidates []string, open func(context.Context, string) (archiveTool, error)) {
+	paths, skipped := regularFiles(candidates)
+	for _, note := range skipped {
+		s.searched = append(s.searched, name+": "+note)
+	}
+	var refused []error
+	var where []string
+	for _, path := range paths {
+		tool, err := open(ctx, path)
+		if err != nil {
+			refused = append(refused, err)
+			where = append(where, path)
+			continue
+		}
+		s.tools = append(s.tools, tool)
+		for i, err := range refused {
+			slog.Warn("archive tool refused, a later candidate was accepted", "refused", where[i], "accepted", tool.path, "error", err)
+			s.searched = append(s.searched, fmt.Sprintf("%s: %s: отклонён: %v", name, where[i], err))
+		}
+		return
+	}
+	for _, err := range refused {
+		s.add(archiveTool{}, err)
+	}
 }
 
 func (s *toolSet) add(tool archiveTool, err error) {

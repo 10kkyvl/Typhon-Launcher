@@ -2,6 +2,18 @@ import { Service as SettingsService } from '../../../bindings/typhon/internal/se
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 
+export interface GameMode {
+  highPerformance: boolean;
+  hideLauncher: boolean;
+  raisePriority: boolean;
+}
+
+export interface ScheduleWindow {
+  days: number[];
+  from: string;
+  to: string;
+}
+
 export interface Settings {
   theme: string;
   accentColor: string;
@@ -11,6 +23,8 @@ export interface Settings {
   libraryPath: string;
   downloadsPath: string;
   gamesPath: string;
+  extraLibraryPaths: string[];
+  lastInstallRoot: string;
   screenshotsPath: string;
   launchOnStartup: boolean;
   minimizeToTray: boolean;
@@ -20,6 +34,10 @@ export interface Settings {
   maxActiveDownloads: number;
   downloadRateLimit: number;
   uploadRateLimit: number;
+  playDownloadMode: string;
+  playDownloadRateLimit: number;
+  playUploadRateLimit: number;
+  downloadSchedule: ScheduleWindow[];
   uploadWhileDownloading: boolean;
   seedAfterDownload: boolean;
   installCleanupPolicy: string;
@@ -60,6 +78,7 @@ export interface Settings {
   overlayHotkey: string;
   screenshotsEnabled: boolean;
   screenshotHotkey: string;
+  gameMode: GameMode;
 }
 
 const FALLBACK_KEY = 'typhon.settings';
@@ -73,6 +92,8 @@ const fallbackDefaults: Settings = {
   libraryPath: '',
   downloadsPath: '',
   gamesPath: '',
+  extraLibraryPaths: [],
+  lastInstallRoot: '',
   screenshotsPath: '',
   launchOnStartup: false,
   minimizeToTray: true,
@@ -82,6 +103,10 @@ const fallbackDefaults: Settings = {
   maxActiveDownloads: 2,
   downloadRateLimit: 0,
   uploadRateLimit: 0,
+  playDownloadMode: 'off',
+  playDownloadRateLimit: 0,
+  playUploadRateLimit: 0,
+  downloadSchedule: [],
   uploadWhileDownloading: false,
   seedAfterDownload: false,
   installCleanupPolicy: 'delete',
@@ -122,6 +147,7 @@ const fallbackDefaults: Settings = {
   overlayHotkey: 'Alt+`',
   screenshotsEnabled: true,
   screenshotHotkey: 'Ctrl+F12',
+  gameMode: { highPerformance: false, hideLauncher: false, raisePriority: false },
 };
 
 export const maxActiveDownloadOptions = [
@@ -132,9 +158,14 @@ export const maxActiveDownloadOptions = [
 ];
 
 
+// Go sends a nil slice as null.
+function normalize(s: Settings): Settings {
+  return { ...s, downloadSchedule: s.downloadSchedule ?? [], extraLibraryPaths: s.extraLibraryPaths ?? [] };
+}
+
 export async function getSettings(): Promise<Settings> {
   if (inWails) {
-    return (await SettingsService.GetSettings()) as Settings;
+    return normalize((await SettingsService.GetSettings()) as Settings);
   }
   try {
     const raw = localStorage.getItem(FALLBACK_KEY);
@@ -146,7 +177,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function saveSettingsPatch(patch: Partial<Settings>): Promise<Settings> {
   if (inWails) {
-    return (await SettingsService.SaveSettingsPatch(patch)) as Settings;
+    return normalize((await SettingsService.SaveSettingsPatch(patch)) as Settings);
   }
   const merged = { ...(await getSettings()), ...patch };
   localStorage.setItem(FALLBACK_KEY, JSON.stringify(merged));
@@ -170,17 +201,40 @@ export async function proposeLibraryPath(parent: string): Promise<string> {
 
 export async function setupLibrary(parent: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SetupLibrary(parent)) as Settings;
+  return normalize((await SettingsService.SetupLibrary(parent)) as Settings);
+}
+
+export interface LibraryFolder {
+  path: string;
+  primary: boolean;
+  freeBytes: number;
+  totalBytes: number;
+  available: boolean;
+}
+
+export async function libraryFolders(): Promise<LibraryFolder[]> {
+  if (!inWails) return [];
+  return ((await SettingsService.LibraryFolders()) ?? []) as LibraryFolder[];
+}
+
+export async function addLibraryFolder(path: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return normalize((await SettingsService.AddLibraryFolder(path)) as Settings);
+}
+
+export async function removeLibraryFolder(path: string): Promise<Settings> {
+  if (!inWails) throw new Error('unavailable in browser');
+  return normalize((await SettingsService.RemoveLibraryFolder(path)) as Settings);
 }
 
 export async function saveConsent(usageStats: boolean, diagnostics: boolean): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings;
+  return normalize((await SettingsService.SaveConsent(usageStats, diagnostics)) as Settings);
 }
 
 export async function saveLegalAcceptance(version: string): Promise<Settings> {
   if (!inWails) throw new Error('unavailable in browser');
-  return (await SettingsService.SaveLegalAcceptance(version)) as Settings;
+  return normalize((await SettingsService.SaveLegalAcceptance(version)) as Settings);
 }
 
 export async function openGameFolder(path: string, executable: string): Promise<void> {

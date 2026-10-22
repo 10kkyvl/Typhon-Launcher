@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/download"
 	"typhon/internal/history"
 	"typhon/internal/library"
 	"typhon/internal/settings"
@@ -47,6 +48,9 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	if err := s.setStatus(id, StatusPreparing); err != nil {
 		return err
 	}
+	if err := s.rememberCreatedDestination(id, item.Destination); err != nil {
+		return err
+	}
 	partial := item.Destination + partialSuffix
 	if err := os.RemoveAll(partial); err != nil {
 		return err
@@ -56,6 +60,19 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	}
 	if err := s.setStatus(id, StatusInstalling); err != nil {
 		return err
+	}
+
+	if item.Mode == ModeMove && s.sameVolume(item.ContentRoot, item.Destination) {
+		err := s.renameSource(item)
+		switch {
+		case err == nil:
+			return s.finalize(ctx, id)
+		case errors.Is(err, errRenameRefused):
+			slog.Warn("rename of the source failed, copying instead",
+				"id", id, "source", item.ContentRoot, "destination", item.Destination, "error", err)
+		default:
+			return err
+		}
 	}
 
 	report := func(p Progress) { s.updateProgress(id, p) }
@@ -80,8 +97,43 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	return nil
 }
 
+// renameSource отдаёт папку загрузки установке одним переименованием: на одном
+// томе оно атомарно и промежуточного состояния, которое пришлось бы
+// восстанавливать, нет. Запись с Mode, ContentRoot и Destination уже на диске
+// (Start и setStatus сохранили её), поэтому после краха между переименованием и
+// регистрацией ServiceStartup видит заполненный Destination без .partial и
+// доводит установку (crashFinalizable). errRenameRefused — переименование не
+// удалось, источник цел, и вызывающий копирует: файл внутри занят (антивирус,
+// индексатор) или «тот же том» оказался точкой монтирования другого.
+func (s *Service) renameSource(item Installation) error {
+	if _, err := os.Stat(item.ContentRoot); err != nil {
+		return fmt.Errorf("source of the move: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(item.Destination), 0o755); err != nil {
+		return fmt.Errorf("create parent of destination: %w", err)
+	}
+	empty, err := dirEmpty(item.Destination)
+	if err != nil {
+		return err
+	}
+	if !empty {
+		return errDestNotEmpty
+	}
+	if err := os.Remove(item.Destination); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%w: remove empty destination: %w", errRenameRefused, err)
+	}
+	if err := os.Rename(item.ContentRoot, item.Destination); err != nil {
+		return fmt.Errorf("%w: %w", errRenameRefused, err)
+	}
+	slog.Info("download folder moved into destination", "id", item.ID, "destination", item.Destination)
+	return nil
+}
+
 func (s *Service) runArchive(ctx context.Context, id string, item Installation) error {
 	if err := s.setStatus(id, StatusPreparing); err != nil {
+		return err
+	}
+	if err := s.rememberCreatedDestination(id, item.Destination); err != nil {
 		return err
 	}
 	partial := item.Destination + partialSuffix
@@ -851,7 +903,7 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	version, source := detectVersion(item)
 	var game library.Game
 	if !item.SkipRegister {
-		registered, err := s.register(item, version, source)
+		registered, err := s.register(ctx, item, version, source)
 		if err != nil {
 			return err
 		}
@@ -913,7 +965,10 @@ func (s *Service) complete(ctx context.Context, id string) error {
 		},
 	})
 	emit(eventUpdated, snap)
-	if !item.SkipRegister {
+	switch {
+	case movedSource(item):
+		s.releaseMovedDownload(id, snap.DownloadID)
+	case !item.SkipRegister:
 		s.applyCleanup(cfg, snap.DownloadID)
 	}
 	s.notifyFinished(snap)
@@ -936,7 +991,7 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Service) register(item Installation, version, source string) (library.Game, error) {
+func (s *Service) register(ctx context.Context, item Installation, version, source string) (library.Game, error) {
 	if s.library == nil {
 		return library.Game{}, errNoLibrary
 	}
@@ -947,7 +1002,7 @@ func (s *Service) register(item Installation, version, source string) (library.G
 	if title == "" {
 		title = item.Name
 	}
-	return s.library.RegisterInstalled(library.InstalledGame{
+	return s.library.RegisterInstalled(ctx, library.InstalledGame{
 		Title:             title,
 		Executable:        item.Executable,
 		InstallDir:        item.Destination,
@@ -986,6 +1041,56 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 		return
 	}
 	slog.Info("download data removed after install", "id", downloadID)
+}
+
+// movedSource — данные загрузки ушли в установку переименованием: перенос
+// выбран, а исходной папки уже нет. Только подтверждённое «нет» (ErrNotExist)
+// считается переносом: любая другая ошибка stat не повод удалять запись
+// загрузки, чьи файлы могут быть на месте.
+func movedSource(item Installation) bool {
+	if item.Type != TypePortable || item.Mode != ModeMove || item.ContentRoot == "" {
+		return false
+	}
+	_, err := os.Stat(item.ContentRoot)
+	return errors.Is(err, fs.ErrNotExist)
+}
+
+// releaseMovedDownload убирает запись загрузки, у которой больше нет данных, не
+// глядя на политику очистки: файлы уже в игре. Запись, которой нет, — не
+// ошибка. Неудача остаётся предупреждением установки, а не её провалом.
+func (s *Service) releaseMovedDownload(id, downloadID string) {
+	if s.downloads == nil {
+		return
+	}
+	err := s.downloads.DeleteData(downloadID)
+	if err == nil || errors.Is(err, download.ErrNotFound) {
+		slog.Info("download record removed after move", "id", id, "download", downloadID)
+		return
+	}
+	slog.Warn("remove download record after move", "id", id, "download", downloadID, "error", err)
+	s.setWarning(id, fmt.Sprintf("игра установлена, но запись загрузки не удалена: %v", err))
+}
+
+func (s *Service) setWarning(id, text string) {
+	s.mu.Lock()
+	item := s.findLocked(id)
+	if item == nil {
+		s.mu.Unlock()
+		return
+	}
+	prev := item.Warning
+	item.Warning = text
+	persistErr := s.persistLocked()
+	if persistErr != nil {
+		item.Warning = prev
+	}
+	snap := snapshotOf(item)
+	s.mu.Unlock()
+	if persistErr != nil {
+		slog.Error("persist install warning", "id", id, "error", persistErr)
+		snap.Warning = text
+	}
+	emit(eventUpdated, snap)
 }
 
 // candidatePaths — то, что лаунчер предложил на выбор. Один только счётчик в

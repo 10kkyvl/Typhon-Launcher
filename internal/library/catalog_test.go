@@ -68,7 +68,7 @@ func TestAddCatalogGameIdempotentWhenInstalled(t *testing.T) {
 	s := mustServiceAt(t, path)
 	dir, exe := discoveredDir(t, "Installed")
 
-	installed, err := s.RegisterInstalled(InstalledGame{
+	installed, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:           "Installed",
 		Executable:      exe,
 		InstallDir:      dir,
@@ -164,7 +164,7 @@ func TestRegisterInstalledRevivesCatalogOnlyRecord(t *testing.T) {
 	}
 
 	dir, exe := discoveredDir(t, "SomeGame")
-	installed, err := s.RegisterInstalled(InstalledGame{
+	installed, err := s.RegisterInstalled(t.Context(), InstalledGame{
 		Title:           "Some Game",
 		Executable:      exe,
 		InstallDir:      dir,

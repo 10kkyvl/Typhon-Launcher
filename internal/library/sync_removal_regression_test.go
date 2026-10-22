@@ -12,7 +12,7 @@ func TestRemoteRemovalPreservesLocalInstallation(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "library.json")
 			s := mustServiceAt(t, path)
 			dir, exe := discoveredDir(t, "Installed")
-			g, err := s.RegisterInstalled(InstalledGame{Title: "Installed", CanonicalGameID: "catalog-game", InstallDir: dir, Executable: exe, InstallType: "portable"})
+			g, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Installed", CanonicalGameID: "catalog-game", InstallDir: dir, Executable: exe, InstallType: "portable"})
 			if err != nil {
 				t.Fatal(err)
 			}

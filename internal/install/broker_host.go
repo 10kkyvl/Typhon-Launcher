@@ -93,8 +93,8 @@ func (s *Service) startBroker(d download.Download) error {
 	if d.Destination == "" {
 		return fmt.Errorf("%w: %s", errBrokerNoContentRoot, d.ID)
 	}
-	gamesPath := s.config().GamesPath
-	if gamesPath == "" {
+	gamesRoots := s.config().GamesRoots()
+	if len(gamesRoots) == 0 {
 		return errBrokerNoLibraryRoot
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -107,10 +107,10 @@ func (s *Service) startBroker(d download.Download) error {
 		return err
 	}
 	pin := brokerPin{
-		DownloadID:  d.ID,
-		ContentRoot: d.Destination,
-		LibraryRoot: gamesPath,
-		StateDir:    s.store.dir,
+		DownloadID:   d.ID,
+		ContentRoot:  d.Destination,
+		LibraryRoots: gamesRoots,
+		StateDir:     s.store.dir,
 	}
 	if err := writeBrokerPin(brokerPinPath(dir), pin); err != nil {
 		return err

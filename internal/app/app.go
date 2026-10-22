@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"runtime"
 	"sync/atomic"
@@ -13,22 +14,25 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var Version = "1.1.0"
+var Version = "1.2.0"
 
 type AppInfo struct {
 	Version  string `json:"version"`
 	Platform string `json:"platform"`
 	Arch     string `json:"arch"`
 	DevMock  bool   `json:"devMock"`
+	Portable bool   `json:"portable"`
+	DataDir  string `json:"dataDir"`
 }
 
 type Service struct {
-	settings *settings.Service
-	russian  atomic.Bool
+	settings   *settings.Service
+	russian    atomic.Bool
+	systemInfo func() (platform.SystemInfo, error)
 }
 
 func NewService(settingsService *settings.Service) *Service {
-	s := &Service{settings: settingsService}
+	s := &Service{settings: settingsService, systemInfo: platform.GetSystemInfo}
 	s.SetUILanguage(settingsService.GetSettings().Language)
 	return s
 }
@@ -47,12 +51,19 @@ func (s *Service) UILanguage() string {
 }
 
 func CurrentInfo() AppInfo {
-	return AppInfo{
+	info := AppInfo{
 		Version:  Version,
 		Platform: runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		DevMock:  devmock.Enabled,
 	}
+	// A marker error stops the launcher before any service exists (main.go), so
+	// by the time the UI asks, the portable state is settled.
+	if dir, ok, err := settings.PortableDir(); err == nil && ok {
+		info.Portable = true
+		info.DataDir = dir
+	}
+	return info
 }
 
 func (s *Service) GetAppInfo() AppInfo {
@@ -60,9 +71,9 @@ func (s *Service) GetAppInfo() AppInfo {
 }
 
 func (s *Service) GetSystemInfo() (platform.SystemInfo, error) {
-	info, err := platform.GetSystemInfo()
+	info, err := s.systemInfo()
 	if err != nil {
-		slog.Warn("system info", "error", err)
+		return platform.SystemInfo{}, fmt.Errorf("read system info: %w", err)
 	}
 	return info, nil
 }
@@ -98,7 +109,7 @@ func (s *Service) SelectExecutable(title, language string) (string, error) {
 		CanChooseFiles(true).
 		AddFilter(labels.Executables, "*.exe").
 		AddFilter(labels.AllFiles, "*.*")
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select executable", "error", err)
 		return "", err
@@ -120,7 +131,7 @@ func (s *Service) SelectGameExecutable(title, installDir, current, language stri
 		CanChooseFiles(true).
 		AddFilter(labels.Executables, "*.exe").
 		AddFilter(labels.AllFiles, "*.*")
-	return dialog.PromptForSingleSelection()
+	return dialogtext.Selection(dialog.PromptForSingleSelection())
 }
 
 func (s *Service) SelectFolder(title string) (string, error) {
@@ -129,7 +140,7 @@ func (s *Service) SelectFolder(title string) (string, error) {
 		SetMessage(title).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
-	path, err := dialog.PromptForSingleSelection()
+	path, err := dialogtext.Selection(dialog.PromptForSingleSelection())
 	if err != nil {
 		slog.Warn("select folder", "error", err)
 		return "", err

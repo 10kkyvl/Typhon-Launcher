@@ -1,8 +1,8 @@
 import { get } from 'svelte/store';
 import { showcaseLabel } from '../profile/view';
-import type { Relation } from '../services/social';
+import type { CommonGame, Relation } from '../services/social';
 import type { Notification } from '../stores/notifications';
-import { longDate, relativeDate } from '../utils/format';
+import { longDate, playtime, relativeDate } from '../utils/format';
 import { locale, msg } from '../i18n';
 import type { SocialKey } from '../i18n/catalog/ru/social';
 
@@ -76,6 +76,30 @@ export function commonGameLabel(viewerOwned: boolean, targetOwned: boolean, name
   if (!viewerOwned) return msg('social.userGameInstallYou');
   const owner = name.trim();
   return owner ? msg('social.userGameInstallNamed', { name: owner }) : msg('social.userGameInstallOther');
+}
+
+export const RECENT_PLAY_DAYS = 14;
+
+function playedWithin(iso: string | null | undefined, now: number): boolean {
+  if (!iso) return false;
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return false;
+  return now - at <= RECENT_PLAY_DAYS * 86_400_000;
+}
+
+export function bothPlayedRecently(game: CommonGame, now = Date.now()): boolean {
+  return playedWithin(game.viewerLastPlayedAt, now) && playedWithin(game.targetLastPlayedAt, now);
+}
+
+export function commonPlaytimeLine(game: CommonGame): string {
+  const parts: string[] = [];
+  if (typeof game.viewerPlaytimeSeconds === 'number') {
+    parts.push(msg('social.userCommonYouTime', { time: playtime(game.viewerPlaytimeSeconds) }));
+  }
+  if (typeof game.targetPlaytimeSeconds === 'number') {
+    parts.push(msg('social.userCommonFriendTime', { time: playtime(game.targetPlaytimeSeconds) }));
+  }
+  return parts.join(' · ');
 }
 
 export function joinDate(iso: string): string {

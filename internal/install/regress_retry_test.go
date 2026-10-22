@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -16,11 +17,11 @@ type lockedLibrary struct {
 	locked atomic.Bool
 }
 
-func (l *lockedLibrary) RegisterInstalled(g library.InstalledGame) (library.Game, error) {
+func (l *lockedLibrary) RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error) {
 	if l.locked.Load() {
 		return library.Game{}, errors.New("library is locked")
 	}
-	return l.fakeRegistrar.RegisterInstalled(g)
+	return l.fakeRegistrar.RegisterInstalled(ctx, g)
 }
 
 type retryPlan struct {

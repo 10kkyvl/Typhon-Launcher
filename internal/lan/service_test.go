@@ -31,7 +31,7 @@ func newTestLibraryWithGame(t *testing.T) (*library.Service, library.Game, strin
 	writeTree(t, installDir)
 	exe := filepath.Join(installDir, "game.exe")
 
-	game, err := lib.RegisterInstalled(library.InstalledGame{
+	game, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{
 		Title:      "Test Game",
 		Executable: exe,
 		InstallDir: installDir,

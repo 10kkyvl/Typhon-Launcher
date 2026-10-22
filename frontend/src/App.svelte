@@ -15,8 +15,11 @@
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
+  import { initGameModeNotices } from './lib/stores/gamemode';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
+  import { initPlayThrottle } from './lib/stores/playThrottle';
+  import { initAchievements } from './lib/stores/achievements';
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
@@ -38,6 +41,7 @@
   import { settings } from './lib/stores/settings';
   import { initSocial } from './lib/stores/social';
   import { initSources } from './lib/stores/sources';
+  import { initSourceProgress } from './lib/stores/sourceProgress';
   import { initSupport } from './lib/stores/support';
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
@@ -47,6 +51,7 @@
   import Activity from './routes/activity/Activity.svelte';
   import AuthScreen from './routes/auth/AuthScreen.svelte';
   import Catalog from './routes/catalog/Catalog.svelte';
+  import DiskUsage from './routes/diskusage/DiskUsage.svelte';
   import Downloads from './routes/downloads/Downloads.svelte';
   import GameDetails from './routes/game/GameDetails.svelte';
   import Friends from './routes/friends/Friends.svelte';
@@ -63,13 +68,17 @@
 
   onDestroy(initNativeLanguage());
   initDegradedNotices();
+  initGameModeNotices();
   initDownloads();
+  initPlayThrottle();
+  onDestroy(initAchievements());
   initNetwork();
   initInstalls();
   refreshStorage();
   initLibrary();
   initMoves();
   initSources();
+  initSourceProgress();
   initUpdates();
   initSelfUpdate();
   initMetadata();
@@ -125,6 +134,8 @@
           <Sources />
         {:else if $route.name === 'installed'}
           <Installed />
+        {:else if $route.name === 'diskusage'}
+          <DiskUsage />
         {:else if $route.name === 'history'}
           <History />
         {:else if $route.name === 'lan'}

@@ -14,6 +14,9 @@ export interface PlayerCardStyle {
   customFrom?: string;
   customTo?: string;
   customAngle?: number;
+  customPure?: boolean;
+  nameColor?: string;
+  frameColor?: string;
   coverUrl?: string;
   pinned?: GameCard | null;
 }
@@ -80,6 +83,15 @@ export interface PlayedGame extends GameCard {
 export interface CommonGame extends GameCard {
   viewerOwned: boolean;
   targetOwned: boolean;
+  viewerPlaytimeSeconds?: number | null;
+  targetPlaytimeSeconds?: number | null;
+  viewerLastPlayedAt?: string | null;
+  targetLastPlayedAt?: string | null;
+}
+
+export interface CommonGamesPage {
+  games: CommonGame[];
+  next: string;
 }
 
 export interface CommonGames {
@@ -392,6 +404,16 @@ export async function userGames(username: string, cursor = ''): Promise<GamesPag
   if (!inWails) return { games: [], next: '' };
   try {
     const page = (await SocialService.UserGames(username, cursor)) as unknown as Partial<GamesPage> | null;
+    return { games: list(page?.games), next: page?.next ?? '' };
+  } catch (err) {
+    throw toAccountError(err);
+  }
+}
+
+export async function userCommon(username: string, cursor = ''): Promise<CommonGamesPage> {
+  if (!inWails) return { games: [], next: '' };
+  try {
+    const page = (await SocialService.UserCommon(username, cursor)) as unknown as Partial<CommonGamesPage> | null;
     return { games: list(page?.games), next: page?.next ?? '' };
   } catch (err) {
     throw toAccountError(err);

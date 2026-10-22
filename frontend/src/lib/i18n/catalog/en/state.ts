@@ -58,7 +58,6 @@ export const state: Record<StateKey, Message> = {
   'state.notifUpdateInProgress': 'Updating — {percent}',
   'state.notifUpdateAvailable': 'Update available',
   'state.notifInstallProgress': 'Installing — {percent}',
-  'state.notifDownloadProgress': 'Downloading — {percent}',
 
   'state.relocateTransferredNamed': '"{title}" moved',
   'state.relocateTransferredLibrary': 'Library moved',
@@ -168,6 +167,10 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonInstallerNotFound': 'Installer not found. Download the update again.',
   'state.selfupdateReasonBundleBroken': 'The update archive is damaged.',
   'state.selfupdateReasonNotABundle': 'The launcher is not running from the Typhon app — update it by hand.',
+  'state.selfupdateReasonPortableUnavailable': 'There is no portable build for this version.',
+  'state.selfupdateReasonPortableUnsafeEntry': 'The update archive contains an invalid path.',
+  'state.selfupdateReasonPortableNoExecutable': 'The update archive has no executable.',
+  'state.selfupdateReasonPortableBadExecutable': 'The executable in the update archive is damaged, or there is more than one.',
   'state.selfupdateReasonInstallerFailed': 'The installer exited with an error.',
   'state.selfupdateReasonServerStalled': 'The update server stopped sending data. Check your connection and try again.',
   'state.selfupdateReasonServerTimeout': 'The update server didn’t respond in time. Check your connection and try again.',

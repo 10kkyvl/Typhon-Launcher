@@ -151,7 +151,7 @@ func TestApplyExternalSkipsDirectoryOfExistingGame(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	item, dir := externalFixture(t)
 	exe := testPlaceExecutable(t, filepath.Join(dir, "game.exe"))
-	if _, err := s.AddGame(exe, "Manual"); err != nil {
+	if _, err := s.AddGame(t.Context(), exe, "Manual"); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := s.ApplyExternal(context.Background(), []ExternalGame{item})

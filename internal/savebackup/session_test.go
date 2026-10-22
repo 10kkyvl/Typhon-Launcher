@@ -77,6 +77,20 @@ func TestSessionStoppedReportsEveryOutcome(t *testing.T) {
 	}
 }
 
+func TestSessionStoppedOfARemovedGameIsSilent(t *testing.T) {
+	h := newHarness(t)
+	h.games.mu.Lock()
+	h.games.err = uierr.New("library.game_not_found", "игра не найдена")
+	h.games.mu.Unlock()
+
+	h.svc.SessionStopped(gameID)
+	h.svc.wg.Wait()
+
+	if events := h.drain(); len(events) != 0 || len(h.list()) != 0 {
+		t.Fatalf("events = %+v, want none for a game that left the library", events)
+	}
+}
+
 func TestSessionStoppedHonoursTheSwitch(t *testing.T) {
 	h := newHarness(t)
 	h.setAfter(false)

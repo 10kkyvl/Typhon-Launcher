@@ -38,42 +38,47 @@ type Game struct {
 	// бутыль выбирается, когда он есть, потому что Steam Overlay и Steam API
 	// работают только когда игра и Steam живут в одном wine-префиксе. Явный
 	// false — единственный способ потребовать изолированный бутыль.
-	RequiresSteam     *bool      `json:"requiresSteam,omitempty"`
-	RunAsAdmin        bool       `json:"runAsAdmin,omitempty"`
-	InstallDir        string     `json:"installDir"`
-	Cover             string     `json:"cover"`
-	Version           string     `json:"version"`
-	VersionSource     string     `json:"versionSource,omitempty"`
-	VersionConfidence float64    `json:"versionConfidence,omitempty"`
-	SizeBytes         int64      `json:"sizeBytes"`
-	SizeUnknown       bool       `json:"sizeUnknown,omitempty"`
-	LastPlayed        *time.Time `json:"lastPlayed"`
-	PlaytimeSeconds   int64      `json:"playtimeSeconds"`
-	InstalledAt       time.Time  `json:"installedAt"`
-	SourceDownloadID  string     `json:"sourceDownloadId,omitempty"`
-	ReleaseID         string     `json:"releaseId,omitempty"`
-	SourceID          string     `json:"sourceId,omitempty"`
-	DistributionID    string     `json:"distributionId,omitempty"`
-	ReleaseUploadedAt *time.Time `json:"releaseUploadedAt,omitempty"`
-	CanonicalGameID   string     `json:"canonicalGameId,omitempty"`
-	Repacker          string     `json:"repacker,omitempty"`
-	ReleaseVersion    string     `json:"releaseVersion,omitempty"`
-	Source            string     `json:"source,omitempty"`
-	InstallType       string     `json:"installType,omitempty"`
-	Owned             bool       `json:"owned,omitempty"`
-	Uninstall         Uninstall  `json:"uninstall,omitzero"`
-	UninstallUnknown  bool       `json:"uninstallUnknown,omitempty"`
-	Uninstalled       bool       `json:"uninstalled,omitempty"`
-	ShortcutPath      string     `json:"shortcutPath,omitempty"`
-	SavesDir          string     `json:"savesDir,omitempty"`
-	Favorite          bool       `json:"favorite,omitempty"`
-	FavoriteAt        *time.Time `json:"favoriteAt,omitempty"`
-	Status            string     `json:"status,omitempty"`
-	StatusAt          *time.Time `json:"statusAt,omitempty"`
-	Tags              []string   `json:"tags,omitempty"`
-	Hidden            bool       `json:"hidden,omitempty"`
-	HidePresence      bool       `json:"hidePresence,omitempty"`
-	External          *External  `json:"external,omitempty"`
+	RequiresSteam     *bool             `json:"requiresSteam,omitempty"`
+	RunAsAdmin        bool              `json:"runAsAdmin,omitempty"`
+	Profiles          []LaunchProfile   `json:"profiles,omitempty"`
+	LastProfile       string            `json:"lastProfile,omitempty"`
+	InstallDir        string            `json:"installDir"`
+	Cover             string            `json:"cover"`
+	Version           string            `json:"version"`
+	VersionSource     string            `json:"versionSource,omitempty"`
+	VersionConfidence float64           `json:"versionConfidence,omitempty"`
+	SizeBytes         int64             `json:"sizeBytes"`
+	SizeUnknown       bool              `json:"sizeUnknown,omitempty"`
+	LastPlayed        *time.Time        `json:"lastPlayed"`
+	PlaytimeSeconds   int64             `json:"playtimeSeconds"`
+	InstalledAt       time.Time         `json:"installedAt"`
+	SourceDownloadID  string            `json:"sourceDownloadId,omitempty"`
+	ReleaseID         string            `json:"releaseId,omitempty"`
+	SourceID          string            `json:"sourceId,omitempty"`
+	DistributionID    string            `json:"distributionId,omitempty"`
+	ReleaseUploadedAt *time.Time        `json:"releaseUploadedAt,omitempty"`
+	CanonicalGameID   string            `json:"canonicalGameId,omitempty"`
+	Repacker          string            `json:"repacker,omitempty"`
+	ReleaseVersion    string            `json:"releaseVersion,omitempty"`
+	Source            string            `json:"source,omitempty"`
+	InstallType       string            `json:"installType,omitempty"`
+	Owned             bool              `json:"owned,omitempty"`
+	Uninstall         Uninstall         `json:"uninstall,omitzero"`
+	UninstallUnknown  bool              `json:"uninstallUnknown,omitempty"`
+	Uninstalled       bool              `json:"uninstalled,omitempty"`
+	ShortcutPath      string            `json:"shortcutPath,omitempty"`
+	SavesDir          string            `json:"savesDir,omitempty"`
+	Favorite          bool              `json:"favorite,omitempty"`
+	FavoriteAt        *time.Time        `json:"favoriteAt,omitempty"`
+	Status            string            `json:"status,omitempty"`
+	StatusAt          *time.Time        `json:"statusAt,omitempty"`
+	Tags              []string          `json:"tags,omitempty"`
+	Notes             string            `json:"notes,omitempty"`
+	Hidden            bool              `json:"hidden,omitempty"`
+	HiddenAt          *time.Time        `json:"hiddenAt,omitempty"`
+	HidePresence      bool              `json:"hidePresence,omitempty"`
+	GameMode          *GameModeOverride `json:"gameMode,omitempty"`
+	External          *External         `json:"external,omitempty"`
 }
 
 type External struct {
@@ -150,6 +155,10 @@ var (
 	errInstallationChanged  = uierr.New("library.installation_changed", "установка изменилась во время обновления")
 )
 
+func IsGameNotFound(err error) bool {
+	return uierr.Code(err) == uierr.Code(errNotFound)
+}
+
 const MaxFavorites = 6
 
 const (
@@ -177,6 +186,7 @@ type Service struct {
 	starting        map[string]context.CancelFunc
 	relocating      map[string]struct{}
 	sameCanonical   func(string, string) bool
+	onUpdated       func([]Game)
 	mu              sync.Mutex
 	path            string
 	excludedPath    string
@@ -219,6 +229,11 @@ type Service struct {
 	// возможность её подменить, иначе прогон оставляет после себя
 	// настоящие бутыли на машине разработчика.
 	prepare func(ctx context.Context, req launch) error
+	// saveHints отдаёт шаблоны путей сохранений каталожной игры. Поле, а не
+	// импорт metadata: библиотека не знает про сервис метаданных.
+	saveHints func(ctx context.Context, canonicalID string) (SaveHintSet, error)
+	saveEnvs  func() ([]platform.SaveEnv, error)
+	steamRoot func() (string, error)
 }
 
 type SessionWatcher interface {
@@ -282,6 +297,8 @@ func NewServiceAt(path string) (*Service, error) {
 		steam:           disabledSteam{},
 		launcherPath:    os.Executable,
 		saveRoots:       platform.SaveRoots,
+		saveEnvs:        platform.SaveEnvs,
+		steamRoot:       steamlink.Root,
 		start:           newGameStarter(),
 		openURI:         platform.OpenURI,
 		prepare:         prepareRuntime,
@@ -364,6 +381,10 @@ func (s *Service) load() ([]Game, error) {
 			stamp := legacyStamp()
 			g.FavoriteAt = &stamp
 		}
+		if g.Hidden && g.HiddenAt == nil {
+			stamp := legacyStamp()
+			g.HiddenAt = &stamp
+		}
 		games = append(games, g)
 	}
 	return games, nil
@@ -395,7 +416,15 @@ func emit(name string, data any) {
 }
 
 func (s *Service) emitUpdated() {
-	emit(EventUpdated, s.games)
+	payload := s.updatedPayload()
+	emit(EventUpdated, payload)
+	if s.onUpdated != nil {
+		s.onUpdated(payload)
+	}
+}
+
+func (s *Service) updatedPayload() []Game {
+	return append([]Game(nil), s.games...)
 }
 
 func (s *Service) GetGames() []Game {
@@ -432,7 +461,7 @@ func (s *Service) GetRunningGames() []string {
 	return ids
 }
 
-func (s *Service) AddGame(executable, title string) (Game, error) {
+func (s *Service) AddGame(ctx context.Context, executable, title string) (Game, error) {
 	info, err := os.Stat(executable)
 	if err != nil || info.IsDir() {
 		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
@@ -447,7 +476,7 @@ func (s *Service) AddGame(executable, title string) (Game, error) {
 	if installDir == "" {
 		return Game{}, errEmptyInstallDir
 	}
-	size, unknown := measureInstall("", installDir)
+	size, unknown := measureInstall(ctx, "", installDir)
 	game := Game{
 		ID:          newID(),
 		Title:       title,
@@ -518,7 +547,7 @@ func (s *Service) reviveLocked(pos int, title, installDir string, size int64, un
 	return s.games[pos], nil
 }
 
-func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
+func (s *Service) RegisterInstalled(ctx context.Context, g InstalledGame) (Game, error) {
 	info, err := os.Stat(g.Executable)
 	if err != nil || info.IsDir() {
 		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
@@ -528,7 +557,7 @@ func (s *Service) RegisterInstalled(g InstalledGame) (Game, error) {
 		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
-	size, unknown := measureInstall("", installDir)
+	size, unknown := measureInstall(ctx, "", installDir)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -672,7 +701,7 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 }
 
 //wails:ignore
-func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
+func (s *Service) ApplyInstalledUpdate(ctx context.Context, u InstalledUpdate) (Game, error) {
 	const maxMeasureRetries = 3
 	preserveExecutable := false
 	for attempt := 0; attempt < maxMeasureRetries; attempt++ {
@@ -687,7 +716,7 @@ func (s *Service) ApplyInstalledUpdate(u InstalledUpdate) (Game, error) {
 		if dir == "" {
 			return Game{}, errEmptyInstallDir
 		}
-		size, unknown := measureInstall(u.ID, dir)
+		size, unknown := measureInstall(ctx, u.ID, dir)
 
 		s.mu.Lock()
 		pos := -1
@@ -860,7 +889,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, Tags: game.Tags, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds
@@ -1090,10 +1119,6 @@ func newID() string {
 	return hex.EncodeToString(buf)
 }
 
-func dirSize(dir string) (int64, error) {
-	return walkSize(dir, func() error { return nil })
-}
-
 func dirSizeCtx(ctx context.Context, dir string) (int64, error) {
 	return walkSize(dir, ctx.Err)
 }
@@ -1137,8 +1162,8 @@ var measureExternal = func(ctx context.Context, dir string) (int64, bool) {
 
 // measureInstall не роняет регистрацию игры: недоступный подкаталог не повод
 // потерять запись, но и нулевой размер выдавать за настоящий нельзя.
-var measureInstall = func(id, dir string) (int64, bool) {
-	size, err := dirSize(dir)
+var measureInstall = func(ctx context.Context, id, dir string) (int64, bool) {
+	size, err := dirSizeCtx(ctx, dir)
 	if err != nil {
 		slog.Warn("measure install dir", "id", id, "error", err)
 		return 0, true

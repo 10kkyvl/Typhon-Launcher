@@ -451,6 +451,18 @@ func (s *Service) UserGames(username, cursor string) (GamesPage, error) {
 	return s.client.userGames(ctx, trimmed, strings.TrimSpace(cursor))
 }
 
+func (s *Service) UserCommon(username, cursor string) (CommonPage, error) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(username), "@"))
+	if trimmed == "" {
+		return CommonPage{}, errEmptyUsername
+	}
+	ctx, err := s.runContext()
+	if err != nil {
+		return CommonPage{}, err
+	}
+	return s.client.userCommon(ctx, trimmed, strings.TrimSpace(cursor))
+}
+
 func (s *Service) Feed(cursor string) (FeedPage, error) {
 	trimmed := strings.TrimSpace(cursor)
 	var cur int64

@@ -50,7 +50,7 @@ func TestPayloadsKeepTheirJSONKeys(t *testing.T) {
 	}{
 		{"Download", fullDownload(), []string{
 			"addedAt", "completedAt", "destination", "downloadSpeed", "downloaded", "error", "etaSeconds", "files", "flat",
-			"id", "inPlace", "infoHash", "name", "origin", "peers", "progress", "seeders", "seeding", "source",
+			"id", "ignoreSchedule", "inPlace", "infoHash", "name", "origin", "peers", "progress", "seeders", "seeding", "source",
 			"stalled", "stalledSince", "status", "total", "type", "uploadSpeed",
 		}},
 		{"Origin", fullDownload().Origin, []string{

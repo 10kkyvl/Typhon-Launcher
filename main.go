@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"typhon/internal/account"
 	"typhon/internal/accountsync"
+	"typhon/internal/achievements"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
@@ -25,8 +27,10 @@ import (
 	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
+	"typhon/internal/diskusage"
 	"typhon/internal/download"
 	"typhon/internal/extlib"
+	"typhon/internal/gamemode"
 	"typhon/internal/heartbeat"
 	"typhon/internal/history"
 	"typhon/internal/install"
@@ -57,6 +61,7 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/steamlink"
 	"typhon/internal/support"
+	"typhon/internal/sysreq"
 	"typhon/internal/telemetrylog"
 	"typhon/internal/theme"
 	"typhon/internal/titles"
@@ -81,10 +86,14 @@ const discordClientID = "1541194395964014623"
 
 const singleInstanceID = "com.typhon.launcher"
 
+const saveHintsTimeout = 10 * time.Second
+
 var errNoWorkerSpec = errors.New("--install-worker требует путь к файлу задания")
 var errNoBrokerDir = errors.New("--install-broker требует путь к каталогу задания")
 var errNoSelfupdateWorkerSpec = errors.New("--selfupdate-worker требует путь к файлу задания")
 var errNoPlayTarget = errors.New("--play требует идентификатор игры")
+
+var errBadProfileTarget = errors.New("--profile требует идентификатор профиля из букв, цифр, дефиса и подчёркивания")
 
 func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
@@ -155,6 +164,7 @@ func init() {
 	application.RegisterEvent[screenshots.Failed](screenshots.EventFailed)
 	application.RegisterEvent[savebackup.Event](savebackup.EventName)
 	application.RegisterEvent[cloudsaves.Event](cloudsaves.EventName)
+	application.RegisterEvent[achievements.Event](achievements.EventName)
 	application.RegisterEvent[social.FriendsPage](social.EventFriends)
 	application.RegisterEvent[social.RequestsSignal](social.EventRequests)
 	application.RegisterEvent[messaging.Event](messaging.EventName)
@@ -187,6 +197,14 @@ func registerLocalIdentity() {
 }
 
 func main() {
+	// A broken portable marker must stop the launcher before it picks a data
+	// directory: falling back to the profile would quietly start with an empty one.
+	if err := settings.PortableError(); err != nil {
+		fmt.Fprintf(os.Stderr, "Typhon: cannot start in portable mode: %v\n", err)
+		platform.FatalDialog("Typhon", fmt.Sprintf("Typhon не может запуститься в портативном режиме: %v", err))
+		os.Exit(1)
+	}
+
 	// A locked or unwritable log file must not stop the launcher from
 	// starting, but it must not pass silently either: stderr logging is
 	// already live here, so the failure is recorded rather than discarded.
@@ -284,7 +302,7 @@ func main() {
 	// A shortcut with a broken argument must not keep the launcher from
 	// starting: the window opens as usual and the user can launch the game
 	// by hand, which is strictly better than refusing to start at all.
-	playID, playRequested, err := playTarget(os.Args)
+	playReq, playRequested, err := playTarget(os.Args)
 	if err != nil {
 		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
 		playRequested = false
@@ -330,6 +348,7 @@ func main() {
 	if err != nil {
 		fatal("start install service", err)
 	}
+	downloadManager.SetDeleteGuard(installService.CheckDownloadDeletable)
 	titlesDictService, err := titlesdict.NewService()
 	if err != nil {
 		fatal("start title dictionary service", err)
@@ -387,6 +406,22 @@ func main() {
 		fatal("start metadata service", err)
 	}
 	libraryService.EnableSteam()
+	libraryService.SetSaveHints(func(ctx context.Context, canonicalID string) (library.SaveHintSet, error) {
+		// A save search must not hang on the network: a slower answer falls back to heuristics with the reason shown.
+		ctx, cancel := context.WithTimeout(ctx, saveHintsTimeout)
+		defer cancel()
+		found, err := metadataService.SavePaths(ctx, canonicalID)
+		if errors.Is(err, metadata.ErrNoSaveData) || errors.Is(err, metadata.ErrGameNotResolved) {
+			return library.SaveHintSet{}, nil // the game has no PCGamingWiki page: heuristics take over, nothing failed
+		}
+		if err != nil {
+			return library.SaveHintSet{}, err
+		}
+		return library.SaveHintSet{
+			Templates: found.Windows,
+			Source:    library.SaveHintSource{Source: found.Source, License: found.License, Via: found.Via, PageURL: found.PageURL},
+		}, nil
+	})
 	libraryService.SetSteamArt(func(canonicalID string) (steamlink.Art, error) {
 		files, err := metadataService.ArtFiles(canonicalID)
 		if err != nil {
@@ -446,10 +481,12 @@ func main() {
 	if err != nil {
 		fatal("start cloud saves service", err)
 	}
+	achievementsService := newAchievementsService(configDir, accountService, libraryService, catalogService, appService)
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
 	}
+	installService.AddDownloadGuard(updateService.CheckDownloadDeletable)
 	relocateService, err := relocate.NewService(settingsService, libraryService, downloadManager, installService, updateService)
 	if err != nil {
 		fatal("start relocate service", err)
@@ -574,6 +611,10 @@ func main() {
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
 	libraryService.AddSessionWatcher(cloudSavesService)
+	libraryService.AddSessionWatcher(achievementsService)
+	playWatcher := downloadManager.PlayWatcher()
+	playWatcher.Listen(lanService.SetGamesRunning)
+	libraryService.AddSessionWatcher(playWatcher)
 	settingsService.Subscribe(cloudSavesService.SettingsChanged)
 	presenceWatcher.Apply(settingsService.GetSettings())
 	settingsService.Subscribe(presenceWatcher.Apply)
@@ -687,7 +728,40 @@ func main() {
 	screenshotService.SetArmer(overlayService.SetScreenshotsArmed)
 	libraryService.AddSessionWatcher(screenshotService)
 
+	sysreqService, err := sysreq.NewService(metadataService)
+	if err != nil {
+		fatal("start requirements check", err)
+	}
+	gameModeWindow := &lateWindow{trayOn: func() bool { return settingsService.GetSettings().MinimizeToTray }}
+	gameModeDeps := gamemode.SystemDeps()
+	gameModeDeps.Settings = settingsService.GetSettings
+	gameModeDeps.PID = libraryService.RunningPID
+	gameModeDeps.Window = gameModeWindow
+	gameModeDeps.Emit = func(name string, data any) {
+		if app := application.Get(); app != nil {
+			app.Event.Emit(name, data)
+		}
+	}
+	gameModeService, err := gamemode.New(configDir, gameModeDeps)
+	if err != nil {
+		fatal("start game mode service", err)
+	}
+	libraryService.AddSessionWatcher(gameModeService)
+
 	mediaService := media.NewService()
+	diskUsageService, err := diskusage.NewService(diskusage.Deps{
+		Settings:    settingsService.GetSettings,
+		Library:     libraryService,
+		Downloads:   downloadManager,
+		Installs:    installService,
+		Relocations: relocateService,
+		Updates:     updateService,
+		Screenshots: screenshotService,
+		Snapshots:   saveBackupService,
+	})
+	if err != nil {
+		fatal("start disk usage service", err)
+	}
 
 	var trayController *tray.Controller
 
@@ -713,7 +787,9 @@ func main() {
 		application.NewService(updateService),
 		application.NewService(saveBackupService),
 		application.NewService(cloudSavesService),
+		application.NewService(achievementsService),
 		application.NewService(metadataService),
+		application.NewService(sysreqService),
 		application.NewService(discoveryService),
 		application.NewService(extlibService),
 		application.NewService(discordService),
@@ -731,21 +807,30 @@ func main() {
 		application.NewService(selfupdateService),
 		application.NewService(overlayService),
 		application.NewService(screenshotService),
+		application.NewService(gameModeService),
 		application.NewService(mediaService),
+		application.NewService(diskUsageService),
 	}
 	services = append(services, extraServices...)
 	services = append(services, extraCompatServices...)
 
+	windowsOptions := application.WindowsOptions{
+		AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
+	}
+	instanceID := singleInstanceID
+	if settings.IsPortable() {
+		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
+		instanceID = portableInstanceID(configDir)
+	}
+
 	wails := application.New(application.Options{
 		Name:        "Typhon",
 		Description: "Typhon game launcher",
-		Windows: application.WindowsOptions{
-			AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
-		},
+		Windows:     windowsOptions,
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: singleInstanceID,
+			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				id, requested, err := playTarget(data.Args)
+				req, requested, err := playTarget(data.Args)
 				if err != nil {
 					slog.Error("parse play argument", "args", data.Args, "error", err)
 				}
@@ -753,8 +838,8 @@ func main() {
 					trayController.Open()
 					return
 				}
-				if err := libraryService.PlayGame(id); err != nil {
-					slog.Error("play from shortcut", "id", id, "error", err)
+				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
+					slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
 					trayController.Open()
 				}
 			},
@@ -792,12 +877,19 @@ func main() {
 		URL: "/",
 	})
 
+	gameModeWindow.window.Store(window)
+
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
 	chatDesktop.SetSuppress(overlayService.Visible)
 	defer chatDesktop.Close()
 	overlayService.Attach(wails)
-	autostartService, err := autostart.NewService(autostart.ForPlatform(wails.Autostart))
+	portable := settings.IsPortable()
+	autostartManager := autostart.ForPlatform(wails.Autostart)
+	if portable {
+		autostartManager = autostart.Unsupported("автозапуск недоступен в портативном режиме")
+	}
+	autostartService, err := autostart.NewService(autostartManager)
 	if err != nil {
 		fatal("start autostart service", err)
 	}
@@ -830,8 +922,10 @@ func main() {
 	// A locked-down registry or a refused tray icon must not keep the launcher
 	// from starting: the toggle in settings goes through SaveSettingsPatch, which
 	// runs the same appliers and does report the failure to the user.
-	if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
-		slog.Error("apply autostart", "error", err)
+	if !portable {
+		if err := autostartService.Apply(current.LaunchOnStartup); err != nil {
+			slog.Error("apply autostart", "error", err)
+		}
 	}
 	if err := trayController.Apply(current.MinimizeToTray); err != nil {
 		slog.Error("apply tray", "error", err)
@@ -852,7 +946,7 @@ func main() {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
 		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
 		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			playFromShortcut(libraryService, playID, func() { window.Show() })
+			playFromShortcut(libraryService, playReq, func() { window.Show() })
 		})
 	}
 
@@ -863,31 +957,53 @@ func main() {
 }
 
 type gamePlayer interface {
-	PlayGame(id string) error
+	PlayGameProfile(id, profileID string) error
 }
 
-func playFromShortcut(player gamePlayer, id string, reveal func()) {
-	if err := player.PlayGame(id); err != nil {
-		slog.Error("play from shortcut", "id", id, "error", err)
+// playRequest is what a shortcut asks for: a game and, optionally, one of its
+// launch profiles. An empty profile is the game's own executable.
+type playRequest struct {
+	id      string
+	profile string
+}
+
+func playFromShortcut(player gamePlayer, req playRequest, reveal func()) {
+	if err := player.PlayGameProfile(req.id, req.profile); err != nil {
+		slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
 		reveal()
 	}
 }
 
-func playTarget(args []string) (string, bool, error) {
+func playTarget(args []string) (playRequest, bool, error) {
+	var req playRequest
+	requested := false
 	for i := 1; i < len(args); i++ {
-		if args[i] != "--play" {
-			continue
+		switch args[i] {
+		case "--play":
+			if i+1 >= len(args) {
+				return playRequest{}, true, errNoPlayTarget
+			}
+			req.id = strings.TrimSpace(args[i+1])
+			if req.id == "" {
+				return playRequest{}, true, errNoPlayTarget
+			}
+			requested = true
+			i++
+		case "--profile":
+			if i+1 >= len(args) {
+				return playRequest{}, true, errBadProfileTarget
+			}
+			req.profile = strings.TrimSpace(args[i+1])
+			if !library.SafeProfileID(req.profile) {
+				return playRequest{}, true, errBadProfileTarget
+			}
+			i++
 		}
-		if i+1 >= len(args) {
-			return "", true, errNoPlayTarget
-		}
-		id := strings.TrimSpace(args[i+1])
-		if id == "" {
-			return "", true, errNoPlayTarget
-		}
-		return id, true, nil
 	}
-	return "", false, nil
+	if !requested {
+		return playRequest{}, false, nil
+	}
+	return req, true, nil
 }
 
 func browserArgs(hardwareAcceleration bool) []string {
@@ -911,6 +1027,35 @@ func (w windowControl) Hide() {
 
 func (w windowControl) Focus() {
 	w.window.Focus()
+}
+
+// lateWindow exists before the window does.
+type lateWindow struct {
+	window atomic.Pointer[application.WebviewWindow]
+	trayOn func() bool
+}
+
+// CanHide is false without the tray icon: a hidden window nobody can reopen
+// leaves a process the user cannot reach.
+func (w *lateWindow) CanHide() bool {
+	return w.window.Load() != nil && w.trayOn()
+}
+
+func (w *lateWindow) Visible() bool {
+	win := w.window.Load()
+	return win != nil && win.IsVisible() && !win.IsMinimised()
+}
+
+func (w *lateWindow) Hide() {
+	if win := w.window.Load(); win != nil {
+		win.Hide()
+	}
+}
+
+func (w *lateWindow) Show() {
+	if win := w.window.Load(); win != nil {
+		win.Show()
+	}
 }
 
 func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {
@@ -939,6 +1084,26 @@ func newSystemTray(wails *application.App, controller *tray.Controller, language
 		systemTray.ShowMenu()
 	})
 	return systemTray, nil
+}
+
+func newAchievementsService(configDir string, accountService *account.Service, libraryService *library.Service, catalogService *catalog.Service, appService *app.Service) *achievements.Service {
+	client, err := typhonapi.New(account.BaseURL(), accountService.SessionToken)
+	if err != nil {
+		fatal("start achievements api client", err)
+	}
+	games, err := achievements.NewLookup(libraryService, catalogService)
+	if err != nil {
+		fatal("start achievements lookup", err)
+	}
+	schema, err := achievements.NewSchemaSource(client)
+	if err != nil {
+		fatal("start achievements schema source", err)
+	}
+	service, err := achievements.New(achievements.Config{ConfigDir: configDir, Games: games, Schema: schema, Language: appService.UILanguage})
+	if err != nil {
+		fatal("start achievements service", err)
+	}
+	return service
 }
 
 func metadataProvider(accountService *account.Service) metadata.Provider {

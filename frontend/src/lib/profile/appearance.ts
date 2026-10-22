@@ -1,15 +1,15 @@
 import { accentPalette, validAccent } from '../theme/accent';
 import { AUTO_SOURCES, AVATAR_FRAMES, NAME_STYLES, type ProfileAppearance } from '../services/account';
-import { deriveSurfaces } from './appearanceColor';
+import { DARK_INK, deriveSurfaces, pureSurfaces, type CanvasInk } from './appearanceColor';
 import type { ArtPalette } from './artPalette';
 
 export const DEFAULT_APPEARANCE: ProfileAppearance = {
   theme: 'midnight', accent: '#67d8ef', coverUrl: '', coverDim: 35, coverPosition: 50,
   customFrom: '#142235', customTo: '#111923', customAngle: 125, autoSource: 'playing',
-  avatarFrame: 'none', nameStyle: 'plain', parallax: true,
+  avatarFrame: 'none', nameStyle: 'plain', parallax: true, nameColor: '', frameColor: '', customPure: false,
 };
 
-export interface ProfileTheme { id: string; background: string; surface: string; banner: string }
+export interface ProfileTheme { id: string; background: string; surface: string; banner: string; ink?: CanvasInk }
 
 export const PROFILE_THEMES = [
   { id: 'midnight', background: '#0e141e', surface: '#151d29', banner: 'linear-gradient(125deg, #142235, #29394d 55%, #111923)' },
@@ -51,6 +51,9 @@ export function appearanceOf(value?: Partial<ProfileAppearance> | null): Profile
     avatarFrame: oneOf(AVATAR_FRAMES, a.avatarFrame, defaults.avatarFrame),
     nameStyle: oneOf(NAME_STYLES, a.nameStyle, defaults.nameStyle),
     parallax: typeof a.parallax === 'boolean' ? a.parallax : defaults.parallax,
+    nameColor: hexOr(a.nameColor, ''),
+    frameColor: hexOr(a.frameColor, ''),
+    customPure: a.customPure === true,
   };
 }
 
@@ -58,7 +61,16 @@ export function customBanner(value: Pick<ProfileAppearance, 'customFrom' | 'cust
   return `linear-gradient(${value.customAngle}deg, ${value.customFrom}, ${value.customTo})`;
 }
 
+export function pickCustomColor(value: ProfileAppearance, color: string): ProfileAppearance {
+  if (value.theme === CUSTOM_THEME) return { ...value, customFrom: color };
+  return { ...value, theme: CUSTOM_THEME, customFrom: color, customTo: color, customPure: true };
+}
+
 export function themeOf(value: ProfileAppearance, art?: ArtPalette | null): ProfileTheme {
+  if (value.theme === CUSTOM_THEME && value.customPure) {
+    const { background, surface, ink } = pureSurfaces(value.customFrom, value.customTo);
+    return { id: CUSTOM_THEME, background, surface, banner: customBanner(value), ink };
+  }
   if (value.theme === CUSTOM_THEME) {
     const { background, surface } = deriveSurfaces(value.customFrom, value.customTo);
     return { id: CUSTOM_THEME, background, surface, banner: customBanner(value) };
@@ -72,7 +84,7 @@ export function themeOf(value: ProfileAppearance, art?: ArtPalette | null): Prof
 export function appearancePalette(value: ProfileAppearance, art?: ArtPalette | null): Record<string, string> {
   const theme = themeOf(value, art);
   const accent = value.theme === AUTO_THEME && art ? art.accent : value.accent;
-  return accentPalette(accent, 'dark', {
+  return accentPalette(accent, theme.ink === DARK_INK ? 'light' : 'dark', {
     '--bg': theme.background, '--surface': theme.background,
     '--surface-2': theme.surface, '--surface-3': theme.surface, '--surface-4': theme.surface, '--bg-sidebar': theme.background,
   });

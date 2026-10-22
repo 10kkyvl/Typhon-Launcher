@@ -164,7 +164,7 @@ func TestExpiredRemoteMatchCacheReQueries(t *testing.T) {
 		if r.RemoteMatch == nil {
 			t.Fatal("release has no cached match to expire")
 		}
-		r.RemoteMatch.At = time.Now().Add(-48 * time.Hour)
+		r.RemoteMatch.At = time.Now().Add(-remoteMatchKnownTTL - remoteMatchKnownJitterMax - time.Hour)
 	}
 	s.mu.Unlock()
 

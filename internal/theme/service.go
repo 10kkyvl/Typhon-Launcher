@@ -426,13 +426,13 @@ func (s *Service) SelectThemeFile(language string) (string, error) {
 	if app == nil {
 		return "", errNoDialog
 	}
-	path, err := app.Dialog.OpenFile().
+	path, err := dialogtext.Selection(app.Dialog.OpenFile().
 		SetTitle(labels.ThemeTitle).
 		SetMessage(labels.ThemeTitle).
 		CanChooseFiles(true).
 		AddFilter(labels.Themes, "*.typhontheme;*.json").
 		AddFilter(labels.AllFiles, "*.*").
-		PromptForSingleSelection()
+		PromptForSingleSelection())
 	if err != nil {
 		return "", fmt.Errorf("выбор файла темы: %w", err)
 	}
@@ -445,11 +445,11 @@ func (s *Service) SelectExportPath(language string) (string, error) {
 	if app == nil {
 		return "", errNoDialog
 	}
-	path, err := app.Dialog.SaveFile().
+	path, err := dialogtext.Selection(app.Dialog.SaveFile().
 		SetMessage(labels.ExportTheme).
 		SetFilename("theme.typhontheme").
 		AddFilter(labels.Theme, "*.typhontheme").
-		PromptForSingleSelection()
+		PromptForSingleSelection())
 	if err != nil {
 		return "", fmt.Errorf("выбор пути экспорта темы: %w", err)
 	}

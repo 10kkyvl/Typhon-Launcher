@@ -1,5 +1,4 @@
 import { derived, get, writable } from 'svelte/store';
-import { active } from './downloads';
 import { friendRequestNotification } from '../social/view';
 import { historyRecent } from './history';
 import { locale, msg } from '../i18n';
@@ -100,7 +99,6 @@ function launcherUpdateNotification(status: SelfUpdateStatus): Notification | nu
 
 const allNotifications = derived(
   [
-    active,
     installations,
     updates,
     sources,
@@ -113,7 +111,6 @@ const allNotifications = derived(
     locale,
   ],
   ([
-    $active,
     $installations,
     $updates,
     $sources,
@@ -206,16 +203,6 @@ const allNotifications = derived(
         text: msg('state.notifInstallProgress', {
           percent: installTotalUnknown(install) ? bytesSize(install.bytesDone) : pct(install.progress),
         }),
-        route: 'downloads',
-        terminal: false,
-      });
-    }
-
-    for (const download of $active) {
-      items.push({
-        id: `download:${download.id}`,
-        title: download.name,
-        text: msg('state.notifDownloadProgress', { percent: pct(download.progress) }),
         route: 'downloads',
         terminal: false,
       });

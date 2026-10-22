@@ -164,7 +164,7 @@ func registerOutsideGame(t *testing.T, lib *library.Service) (library.Game, stri
 	installDir := filepath.Join(t.TempDir(), "install")
 	mustMkdirFile(t, installDir, "data.bin", "data")
 	exe := mustMkdirFile(t, filepath.Join(t.TempDir(), "elsewhere"), "game.exe", "stub")
-	game, err := lib.RegisterInstalled(library.InstalledGame{Title: "Outside", Executable: exe, InstallDir: installDir})
+	game, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{Title: "Outside", Executable: exe, InstallDir: installDir})
 	if err != nil {
 		t.Fatal(err)
 	}

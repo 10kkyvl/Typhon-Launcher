@@ -1,7 +1,7 @@
 import { contrast } from '../theme/accent';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
-import { appearanceOf, appearancePalette, customBanner, themeOf, DEFAULT_APPEARANCE, PROFILE_THEMES } from './appearance';
+import { appearanceOf, appearancePalette, customBanner, pickCustomColor, themeOf, DEFAULT_APPEARANCE, PROFILE_THEMES } from './appearance';
 import { PROFILE_TEXT_3 } from './appearanceColor';
 
 describe('profile appearance compatibility', () => {
@@ -46,6 +46,13 @@ describe('appearance normalisation', () => {
     ['auto theme', { theme: 'auto' }, { theme: 'auto' }],
     ['parallax off', { parallax: false }, { parallax: false }],
     ['parallax not a boolean', { parallax: 'no' }, { parallax: true }],
+    ['valid name and frame colours', { nameColor: '#112233', frameColor: '#AABBCC' }, { nameColor: '#112233', frameColor: '#AABBCC' }],
+    ['bad name colour', { nameColor: 'red' }, { nameColor: '' }],
+    ['short frame colour', { frameColor: '#12345' }, { frameColor: '' }],
+    ['injected frame colour', { frameColor: '#112233;display:none' }, { frameColor: '' }],
+    ['non-string colours', { nameColor: 5, frameColor: null }, { nameColor: '', frameColor: '' }],
+    ['pure on', { customPure: true }, { customPure: true }],
+    ['pure not a boolean', { customPure: 'yes' }, { customPure: false }],
     ['null fields', { customFrom: null, avatarFrame: null, parallax: null }, { customFrom: '#142235', avatarFrame: 'none', parallax: true }],
   ];
   it.each(cases)('%s', (_name, input, expected) => {
@@ -72,6 +79,27 @@ describe('profile themes', () => {
       expect(contrast(PROFILE_TEXT_3, theme.surface)).toBeGreaterThanOrEqual(4.5);
     }
   });
+  it('keeps the custom colours untouched when they are shown as is', () => {
+    const light = themeOf(appearanceOf({ theme: 'custom', customFrom: '#ffffff', customTo: '#ffffff', customPure: true }));
+    expect(light.background).toBe('#ffffff');
+    expect(light.banner).toBe('linear-gradient(125deg, #ffffff, #ffffff)');
+    expect(light.ink?.text).toBe('#121821');
+    const plain = themeOf(appearanceOf({ theme: 'custom', customFrom: '#ffffff', customTo: '#ffffff' }));
+    expect(plain.background).not.toBe('#ffffff');
+    expect(plain.ink).toBeUndefined();
+  });
+  it('ignores the pure flag outside the custom theme', () => {
+    expect(themeOf(appearanceOf({ theme: 'black', customPure: true }))).toEqual(themeOf(appearanceOf({ theme: 'black' })));
+    expect(themeOf(appearanceOf({ theme: 'black', customPure: true })).ink).toBeUndefined();
+  });
+  it('keeps the accent readable on a light pure background', () => {
+    for (const accent of ['#67d8ef', '#ffffff', '#000000', '#f3b56b']) {
+      const a = appearanceOf({ theme: 'custom', customFrom: '#f4eedd', customTo: '#ffffff', customPure: true, accent });
+      const palette = appearancePalette(a);
+      expect(contrast(palette['--accent'], themeOf(a).background)).toBeGreaterThanOrEqual(3);
+      expect(contrast(palette['--accent-text'], themeOf(a).background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
   it('builds a palette for every theme, with and without art', () => {
     for (const id of [...PROFILE_THEMES.map((t) => t.id), 'custom', 'auto']) {
       const a = appearanceOf({ theme: id });
@@ -92,5 +120,27 @@ describe('profile themes', () => {
     const a = appearanceOf({ theme: 'auto', accent: '#729bff' });
     expect(themeOf(a, null).background).toBe(themeOf(DEFAULT_APPEARANCE).background);
     expect(appearancePalette(a, null)).toEqual(appearancePalette({ ...a, theme: 'midnight' }));
+  });
+});
+
+describe('picking a custom background colour', () => {
+  it('switches any other theme to a flat custom colour shown as is', () => {
+    for (const theme of ['midnight', 'black', 'auto']) {
+      const start = appearanceOf({ theme, customFrom: '#112233', customTo: '#445566', customPure: false, accent: '#729bff' });
+      const next = pickCustomColor(start, '#ff8800');
+      expect(next).toEqual({ ...start, theme: 'custom', customFrom: '#ff8800', customTo: '#ff8800', customPure: true });
+      expect(themeOf(next).background).toBe('#ff8800');
+      expect(customBanner(next)).toBe('linear-gradient(125deg, #ff8800, #ff8800)');
+    }
+  });
+  it('changes only the first colour while the custom theme is active', () => {
+    const start = appearanceOf({ theme: 'custom', customFrom: '#112233', customTo: '#445566', customPure: false, customAngle: 40 });
+    expect(pickCustomColor(start, '#ff8800')).toEqual({ ...start, customFrom: '#ff8800' });
+  });
+  it('does not mutate the appearance it was given', () => {
+    const start = appearanceOf({ theme: 'forest' });
+    const copy = { ...start };
+    pickCustomColor(start, '#ff8800');
+    expect(start).toEqual(copy);
   });
 });

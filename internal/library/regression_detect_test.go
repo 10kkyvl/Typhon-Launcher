@@ -25,7 +25,7 @@ func newDetectFixture(t *testing.T) *detectFixture {
 	dir := mustDir(t, filepath.Join(root, "Game"))
 	exe := mustExe(t, filepath.Join(dir, "game.exe"))
 	s := mustServiceAt(t, filepath.Join(root, "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Executable: exe, InstallDir: dir, Title: "Detected"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Executable: exe, InstallDir: dir, Title: "Detected"})
 	if err != nil {
 		t.Fatal(err)
 	}

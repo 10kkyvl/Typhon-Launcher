@@ -22,14 +22,8 @@ var unrarFloor toolVersion
 
 func findArchiveTools(ctx context.Context) toolSet {
 	var set toolSet
-	if path := firstRegularFile(toolCandidates("unrar")); path != "" {
-		tool, err := newUnrar(ctx, path)
-		set.add(tool, err)
-	}
-	if path := firstRegularFile(append(toolCandidates("7zz"), toolCandidates("7z")...)); path != "" {
-		tool, err := newSevenZip(ctx, path)
-		set.add(tool, err)
-	}
+	set.find(ctx, "UnRAR", toolCandidates("unrar"), newUnrar)
+	set.find(ctx, "7-Zip", append(toolCandidates("7zz"), toolCandidates("7z")...), newSevenZip)
 	return set
 }
 

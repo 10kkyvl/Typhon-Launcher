@@ -1,6 +1,8 @@
 import { activeTheme, resetAppearance } from '../stores/theme';
 import { locale, msg } from '../i18n';
 
+const guardAfterChangeMs = 8000;
+
 function randomHostId(): string {
   const bytes = new Uint32Array(4);
   crypto.getRandomValues(bytes);
@@ -64,18 +66,34 @@ export function mountThemeGuard(): () => void {
   shadow.appendChild(button);
   document.body.appendChild(host);
 
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  function show(ms: number) {
+    button.style.display = 'block';
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      button.style.display = 'none';
+    }, ms);
+  }
+
+  let seen: string | undefined;
   const unsubscribe = activeTheme.subscribe((theme) => {
-    const visible = Boolean(theme) && (!theme!.builtIn || Boolean(theme!.css));
-    button.style.display = visible ? 'block' : 'none';
+    const risky = Boolean(theme) && (!theme!.builtIn || Boolean(theme!.css));
+    const key = theme ? `${theme.id}:${theme.css ?? ''}` : '';
+    const changed = seen !== undefined && key !== seen;
+    seen = key;
+    if (risky && changed) show(guardAfterChangeMs);
+    else if (!risky) button.style.display = 'none';
   });
 
   const unsubscribeLocale = locale.subscribe(() => {
     button.textContent = msg('ui.resetAppearance');
+    button.title = msg('ui.resetAppearanceHint');
   });
 
   return () => {
     unsubscribe();
     unsubscribeLocale();
+    if (hideTimer) clearTimeout(hideTimer);
     observer.disconnect();
     host.remove();
   };

@@ -1,7 +1,7 @@
 <script lang="ts">
   import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
-  import { Copy, Download, Eye, FolderOpen, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Eye, FolderOpen, HardDrive, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -15,6 +15,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
+  import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
   import Select from '../../lib/components/Select.svelte';
   import { cloudErrorText } from '../../lib/cloudsaves/messages';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -27,6 +28,7 @@
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
+  import LibraryFoldersRow from './LibraryFoldersRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
   import NetworkSettingsCard from './NetworkSettingsCard.svelte';
   import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -43,7 +45,8 @@
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
-  import { getSettings, maxActiveDownloadOptions, openFolder, type Settings } from '../../lib/services/settings';
+  import { getSettings, maxActiveDownloadOptions, openFolder, type GameMode, type ScheduleWindow, type Settings } from '../../lib/services/settings';
+  import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
   import {
     exportLogs,
     elevationSupported,
@@ -91,6 +94,7 @@
 
   let appInfo = $state<AppInfo | null>(null);
   let systemInfo = $state<SystemInfo | null>(null);
+  let systemFailed = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
 
   let legalDocs = $state<LegalMeta[]>([]);
@@ -131,7 +135,11 @@
     });
     void (async () => {
       appInfo = await getAppInfo();
-      systemInfo = await getSystemInfo();
+      try {
+        systemInfo = await getSystemInfo();
+      } catch {
+        systemFailed = true;
+      }
       wineStatus = await getWineStatus();
       try {
         legalDocs = await listLegalDocuments();
@@ -141,6 +149,12 @@
     })();
     return offLogs;
   });
+
+  function cpuLine(info: SystemInfo): string {
+    const threads = msg('settings.aboutCpuThreads', { cores: info.cores });
+    const cores = info.physicalCoresUnknown ? '' : `${msg('settings.aboutCpuCores', { cores: info.physicalCores })} · `;
+    return `${info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu} · ${cores}${threads}`;
+  }
 
   async function saveLogs() {
     if (!inWails) {
@@ -347,6 +361,23 @@
     updateSettings(patch);
   }
 
+  const portable = $derived(appInfo?.portable ?? false);
+
+  async function setLaunchOnStartup(value: boolean) {
+    await updateSettingsReporting({ launchOnStartup: value }, (err) => {
+      const code = errorCode(err);
+      toast(code && hasMessage(code) ? msg(code) : msg('state.settingsSaveFailed'), 'danger');
+    });
+  }
+
+  const gameModeMac = $derived(appInfo?.platform === 'darwin');
+  const trayEnabled = $derived(current?.minimizeToTray ?? true);
+
+  function setGameMode(change: Partial<GameMode>) {
+    const base = current?.gameMode ?? { highPerformance: false, hideLauncher: false, raisePriority: false };
+    updateSettings({ gameMode: { ...base, ...change } });
+  }
+
   let overlayInfo = $state<OverlayStatus | null>(null);
   let overlayInfoFailed = $state(false);
   let overlayError = $state('');
@@ -435,6 +466,42 @@
 
   const downloadLimitPresets = [10, 25, 50];
   const uploadLimitPresets = [1, 5, 10];
+  const playDownloadPresets = [1, 2, 5, 10];
+  const playUploadPresets = [0.5, 1, 2, 5];
+
+  const playModeOptions = $derived([
+    { id: 'off', label: msg('settings.downloadsPlayOff') },
+    { id: 'pause', label: msg('settings.downloadsPlayPause') },
+    { id: 'limit', label: msg('settings.downloadsPlayLimit') },
+  ]);
+
+  const playModeValue = $derived(
+    current?.playDownloadMode === 'pause' || current?.playDownloadMode === 'limit' ? current.playDownloadMode : 'off',
+  );
+
+  function pickPlayMode(id: string) {
+    if (id !== 'limit') {
+      set({ playDownloadMode: id });
+      return;
+    }
+    set({
+      playDownloadMode: id,
+      playDownloadRateLimit: current?.playDownloadRateLimit || defaultPlayDownloadLimit,
+      playUploadRateLimit: current?.playUploadRateLimit || defaultPlayUploadLimit,
+    });
+  }
+
+  let scheduleError = $state('');
+
+  async function setSchedule(downloadSchedule: ScheduleWindow[]) {
+    scheduleError = '';
+    await updateSettingsReporting({ downloadSchedule }, (err) => {
+      const reason = overlayReason(err);
+      scheduleError = reason
+        ? msg('settings.downloadsScheduleSaveError', { reason })
+        : msg('settings.downloadsScheduleSaveErrorPlain');
+    });
+  }
 
   const maxActiveValue = $derived.by(() => {
     const id = String(current?.maxActiveDownloads ?? 2);
@@ -507,12 +574,13 @@
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
-              <span class="row-sub">{msg('settings.generalLaunchOnStartupSub')}</span>
+              <span class="row-sub">{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
             </div>
             <Toggle
-              checked={current?.launchOnStartup ?? false}
+              checked={!portable && (current?.launchOnStartup ?? false)}
+              disabled={portable}
               label={msg('settings.generalLaunchOnStartupLabel')}
-              onchange={(v) => set({ launchOnStartup: v })}
+              onchange={(v) => void setLaunchOnStartup(v)}
             />
           </div>
           <div class="row">
@@ -537,6 +605,53 @@
               onchange={(v) => set({ discordRichPresence: v })}
             />
           </div>
+        </div>
+      </Card>
+
+      <Card title={msg('settings.gameModeCardTitle')}>
+        <div class="rows">
+          <span class="row-sub">{msg('settings.gameModeDuring')}</span>
+          {#if !gameModeMac}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.gameModePowerLabel')}</span>
+                <span class="row-sub">{msg('settings.gameModePowerSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.gameMode?.highPerformance ?? false}
+                label={msg('settings.gameModePowerLabel')}
+                onchange={(v) => setGameMode({ highPerformance: v })}
+              />
+            </div>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.gameModeHideLabel')}</span>
+              <span class="row-sub">{msg('settings.gameModeHideSub')}</span>
+              {#if !trayEnabled}
+                <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
+              {/if}
+            </div>
+            <Toggle
+              checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
+              disabled={!trayEnabled}
+              label={msg('settings.gameModeHideLabel')}
+              onchange={(v) => setGameMode({ hideLauncher: v })}
+            />
+          </div>
+          {#if !gameModeMac}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.gameModePriorityLabel')}</span>
+                <span class="row-sub">{msg('settings.gameModePrioritySub')}</span>
+              </div>
+              <Toggle
+                checked={current?.gameMode?.raisePriority ?? false}
+                label={msg('settings.gameModePriorityLabel')}
+                onchange={(v) => setGameMode({ raisePriority: v })}
+              />
+            </div>
+          {/if}
         </div>
       </Card>
 
@@ -641,6 +756,19 @@
               {msg('settings.generalLibraryEmptyHint')}
             </span>
           {/if}
+          {#if current?.libraryPath}
+            <LibraryFoldersRow />
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('diskusage.settingsLabel')}</span>
+              <span class="row-sub">{msg('diskusage.settingsSub')}</span>
+            </div>
+            <Button size="sm" onclick={() => navigate('diskusage')}>
+              <HardDrive size="1.5rem" strokeWidth={1.8} />
+              {msg('diskusage.settingsOpen')}
+            </Button>
+          </div>
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.extlibLabel')}</span>
@@ -882,6 +1010,47 @@
               presets={uploadLimitPresets}
               onchange={(bytes) => set({ uploadRateLimit: bytes })}
             />
+          </div>
+          <div class='row'>
+            <div class='row-text'>
+              <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
+              <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
+            </div>
+            <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
+          </div>
+          {#if playModeValue === 'limit'}
+            <div class='row'>
+              <div class='row-text'>
+                <span class='row-label'>{msg('settings.downloadsPlayLimitDownLabel')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.playDownloadRateLimit ?? 0}
+                presets={playDownloadPresets}
+                allowUnlimited={false}
+                onchange={(bytes) => set({ playDownloadRateLimit: bytes })}
+              />
+            </div>
+            <div class='row'>
+              <div class='row-text'>
+                <span class='row-label'>{msg('settings.downloadsPlayLimitUpLabel')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.playUploadRateLimit ?? 0}
+                presets={playUploadPresets}
+                allowUnlimited={false}
+                onchange={(bytes) => set({ playUploadRateLimit: bytes })}
+              />
+            </div>
+          {/if}
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
+              <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
+              {#if scheduleError}<span class="row-sub row-error" role="alert">{scheduleError}</span>{/if}
+            </div>
+            <div class="schedule-body">
+              <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
+            </div>
           </div>
           <div class="row">
             <div class="row-text">
@@ -1161,23 +1330,38 @@
           </div>
         </div>
         <div class="rows">
+          {#if appInfo?.portable}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: appInfo.dataDir })}</span>
+              </div>
+            </div>
+          {/if}
           {#if systemInfo}
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                <span class="row-sub">{systemInfo.os}</span>
+                <span class="row-sub">{systemInfo.osUnknown ? msg('settings.aboutUnknown') : systemInfo.os}</span>
               </div>
             </div>
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-                <span class="row-sub">{systemInfo.cpu} · {msg('settings.aboutCpuThreads', { cores: systemInfo.cores })}</span>
+                <span class="row-sub">{cpuLine(systemInfo)}</span>
               </div>
             </div>
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-                <span class="row-sub">{bytesLabel(systemInfo.ramBytes)}</span>
+                <span class="row-sub">{systemInfo.ramBytes > 0 ? bytesLabel(systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
+              </div>
+            </div>
+          {:else if systemFailed}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
               </div>
             </div>
           {/if}
@@ -1460,6 +1644,11 @@
 
   .row-error {
     color: var(--danger);
+  }
+
+  .schedule-body {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .logs-upload-progress {

@@ -77,6 +77,7 @@ type View struct {
 	Provider    string            `json:"provider"`
 	Match       MatchState        `json:"match"`
 	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
+	Steam       *SteamInfo        `json:"steam,omitempty"`
 }
 
 type Art struct {
@@ -101,6 +102,9 @@ type Service struct {
 	provider      Provider
 	store         *assetStore
 	attempts      *attemptStore
+	steam         *steamStore
+	saves         *savesCache
+	clock         func() time.Time
 	budget        *budget
 	images        *http.Client
 	imgGate       chan struct{}
@@ -129,7 +133,18 @@ func NewServiceAt(dir string, cat *catalog.Service, provider Provider) (*Service
 	if err != nil {
 		return nil, err
 	}
+	steam, err := newSteamStore(dir, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	saves, err := newSavesCache(dir)
+	if err != nil {
+		return nil, err
+	}
 	return &Service{
+		steam:         steam,
+		saves:         saves,
+		clock:         time.Now,
 		refreshing:    map[string]bool{},
 		catalog:       cat,
 		applyMetadata: cat.ApplyMetadata,
@@ -389,7 +404,7 @@ func (s *Service) EnsureFresh(gameID string) (bool, error) {
 		return false, nil
 	}
 	providerID := game.ExternalIDs.IGDB
-	if (providerID != "" || game.ExternalIDs.Steam != "") && !s.stale(game) && !game.MetadataPartial {
+	if (providerID != "" || game.ExternalIDs.Steam != "") && !s.stale(game) && !game.MetadataPartial && !s.needsSteam(game) {
 		return false, nil
 	}
 
@@ -855,6 +870,24 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 	if applyMetadata == nil {
 		applyMetadata = s.catalog.ApplyMetadata
 	}
+	var restoreSteam func() error
+	if mode == modeFull || meta.Steam != nil {
+		info, ok := SanitizeSteamInfo(meta.Steam)
+		_, had := s.steam.get(gameID)
+		// A block that failed validation must not overwrite a valid stored one;
+		// without a stored one it is recorded as "none" so the card is not
+		// refetched on every open.
+		if ok || meta.Steam == nil || !had {
+			restoreSteam, err = s.steam.put(gameID, info, s.clock())
+			if err != nil {
+				if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {
+					slog.Error("restore media assets", "game", gameID, "error", restoreErr)
+				}
+				s.store.removeFiles(batch.created)
+				return View{}, err
+			}
+		}
+	}
 	updated, err := applyMetadata(gameID, catalog.MetadataPatch{
 		SteamID:      steamID,
 		Language:     Language(ctx),
@@ -879,6 +912,11 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 			slog.Error("restore media assets", "game", gameID, "error", restoreErr)
 		}
 		s.store.removeFiles(batch.created)
+		if restoreSteam != nil {
+			if restoreErr := restoreSteam(); restoreErr != nil {
+				err = errors.Join(err, restoreErr)
+			}
+		}
 		return View{}, err
 	}
 	s.mu.Lock()
@@ -1052,7 +1090,15 @@ func (s *Service) view(game catalog.Game) View {
 	view.Hero = heroURL(game, view.Screenshots)
 	view.Match = s.matchState(game)
 	view.StoreLinks = validStoreLinks(game.StoreLinks)
+	view.Steam = s.steam.info(game.ID)
 	return view
+}
+
+func (s *Service) needsSteam(game catalog.Game) bool {
+	if _, ok := s.steam.get(game.ID); ok {
+		return false
+	}
+	return s.steam.predates(game.MetadataUpdatedAt)
 }
 
 func (s *Service) matchState(game catalog.Game) MatchState {
@@ -1246,4 +1292,20 @@ func emit(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
 	}
+}
+
+// SteamRequirements returns the stored Steam requirements of a catalog game;
+// found is false while the store block has not been fetched.
+//
+//wails:ignore
+func (s *Service) SteamRequirements(gameID string) (SteamRequirements, bool, error) {
+	game, err := s.catalog.GetGame(strings.TrimSpace(gameID))
+	if err != nil {
+		return SteamRequirements{}, false, err
+	}
+	info := s.steam.info(game.ID)
+	if info == nil {
+		return SteamRequirements{}, false, nil
+	}
+	return info.Requirements, true, nil
 }

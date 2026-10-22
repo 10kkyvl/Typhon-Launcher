@@ -16,7 +16,11 @@ export const REASONS: Record<string, MessageKey> = {
   'install.busy': 'errInstall.installBusy',
   'install.copy_verify_failed': 'errInstall.installCopyVerifyFailed',
   'install.dest_exists': 'errInstall.installDestExists',
+  'install.dest_inside_game': 'errInstall.installDestInsideGame',
   'install.dest_not_empty': 'errInstall.installDestNotEmpty',
+  'install.dest_not_folder': 'errInstall.installDestNotFolder',
+  'install.dest_unreadable': 'errInstall.installDestUnreadable',
+  'install.no_free_folder': 'errInstall.installNoFreeFolder',
   'install.broker_outside_pin': 'errInstall.installBrokerOutsidePin',
   'install.elevation_declined': 'errInstall.installElevationDeclined',
   'install.empty_destination': 'errInstall.installEmptyDestination',
@@ -39,6 +43,8 @@ export const REASONS: Record<string, MessageKey> = {
   'install.installer_not_confirmed_stopped': 'errInstall.installInstallerNotConfirmedStopped',
   'install.installer_still_running': 'errInstall.installInstallerStillRunning',
   'install.mixed_installers': 'errInstall.installMixedInstallers',
+  'install.mode_invalid': 'errInstall.installModeInvalid',
+  'install.move_source_unavailable': 'errInstall.installMoveSourceUnavailable',
   'install.needs_user': 'errInstall.installNeedsUser',
   'install.nested_paths': 'errInstall.installNestedPaths',
   'install.no_destination': 'errInstall.installNoDestination',
@@ -58,7 +64,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.nothing_to_remove': 'errInstall.installNothingToRemove',
   'install.outside_install': 'errInstall.installOutsideInstall',
   'install.relative_destination': 'errInstall.installRelativeDestination',
-  'install.remove_seeding': 'errInstall.installRemoveSeeding',
+  'install.remove_seeding': 'errInstall.downloadSeeding',
   'install.symlink_privilege': 'errInstall.installSymlinkPrivilege',
   'install.unavailable': 'errInstall.installUnavailable',
   'install.uninstall_cancelled': 'errInstall.installUninstallCancelled',
@@ -119,12 +125,43 @@ export const REASONS: Record<string, MessageKey> = {
   'download.proxy_not_configured': 'errInstall.downloadProxyNotConfigured',
   'download.proxy_password_invalid': 'errInstall.downloadProxyPasswordInvalid',
   'download.proxy_unreachable': 'errInstall.downloadProxyUnreachable',
+  'install.download_in_use': 'errInstall.installDownloadInUse',
+  'install.download_is_install': 'errInstall.installDownloadIsInstall',
+  'install.no_game_list': 'errInstall.installNoGameList',
+  'download.data_left': 'errInstall.downloadDataLeft',
+  'download.cleanup_unknown': 'errInstall.downloadCleanupUnknown',
+  'download.cleanup_in_use': 'errInstall.downloadCleanupInUse',
+  'download.cleanup_unsafe': 'errInstall.downloadCleanupUnsafe',
+  'download.deleting': 'errInstall.downloadDeleting',
+  'install.partial_refused': 'errInstall.installPartialRefused',
+  'install.download_deleting': 'errInstall.installDownloadDeleting',
+  'install.partial_reserved': 'errInstall.installPartialReserved',
+  'relocate.staging_refused': 'errInstall.relocateStagingRefused',
+  'relocate.staging_reserved': 'errInstall.relocateStagingReserved',
+  'download.cleanup_claimed': 'errInstall.downloadCleanupClaimed',
+  'updates.download_deleting': 'errUpdates.updatesDownloadDeleting',
+  'updates.download_in_use': 'errUpdates.updatesDownloadInUse',
+  'diskusage.not_started': 'errInstall.diskusageNotStarted',
+  'diskusage.not_scanned': 'errInstall.diskusageNotScanned',
+  'diskusage.not_deletable': 'errInstall.diskusageNotDeletable',
+  'diskusage.unsafe_path': 'errInstall.diskusageUnsafePath',
+  'diskusage.no_game': 'errInstall.diskusageNoGame',
   'wine.bottle_create_failed': 'errInstall.wineBottleCreateFailed',
   'wine.not_installed': 'errInstall.wineNotInstalled',
 };
 
+function suggestedPath(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  return /например\s+(.+)$/s.exec(raw)?.[1]?.trim() ?? '';
+}
+
 export function installErrorText(err: unknown, fallback: string = msg('errInstall.fallback')): string {
-  const key = REASONS[errorCode(err)];
+  const code = errorCode(err);
+  if (code === 'install.dest_not_empty') {
+    const path = suggestedPath(err);
+    if (path) return msg('errInstall.installDestNotEmptyAt', { path });
+  }
+  const key = REASONS[code];
   return key ? msg(key) : fallback;
 }
 

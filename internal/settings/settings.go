@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"typhon/internal/platform"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 
@@ -52,6 +53,10 @@ const (
 	NetworkDirect    = "direct"
 	NetworkInterface = "interface"
 	NetworkProxy     = "proxy"
+
+	PlayDownloadOff   = "off"
+	PlayDownloadPause = "pause"
+	PlayDownloadLimit = "limit"
 
 	ProxySOCKS5 = "socks5"
 	ProxyHTTP   = "http"
@@ -96,6 +101,11 @@ const (
 	dirGames       = "Games"
 	dirDownloads   = "Downloads"
 	dirScreenshots = "Screenshots"
+)
+
+var (
+	ErrPlayDownloadModeInvalid = uierr.New("settings.play_download_mode_invalid", "неизвестный режим загрузок во время игры")
+	ErrPlayRateLimitRequired   = uierr.New("settings.play_rate_limit_required", "для ограничения на время игры нужна скорость больше нуля")
 )
 
 var (
@@ -151,6 +161,9 @@ type Settings struct {
 	MaxActiveDownloads     int     `json:"maxActiveDownloads"`
 	DownloadRateLimit      int64   `json:"downloadRateLimit"`
 	UploadRateLimit        int64   `json:"uploadRateLimit"`
+	PlayDownloadMode       string  `json:"playDownloadMode"`
+	PlayDownloadRateLimit  int64   `json:"playDownloadRateLimit"`
+	PlayUploadRateLimit    int64   `json:"playUploadRateLimit"`
 	UploadWhileDownloading bool    `json:"uploadWhileDownloading"`
 	SeedAfterDownload      bool    `json:"seedAfterDownload"`
 	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
@@ -162,6 +175,11 @@ type Settings struct {
 	InstallSkipExtras      bool    `json:"installSkipExtras"`
 	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
 	DesktopShortcuts       bool    `json:"desktopShortcuts"`
+
+	ExtraLibraryPaths []string `json:"extraLibraryPaths"`
+	LastInstallRoot   string   `json:"lastInstallRoot"`
+
+	DownloadSchedule []ScheduleWindow `json:"downloadSchedule"`
 
 	UpdateCheckAutomatically bool   `json:"updateCheckAutomatically"`
 	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
@@ -202,6 +220,14 @@ type Settings struct {
 	TelemetryConsentVersion int `json:"telemetryConsentVersion"`
 
 	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
+
+	GameMode GameMode `json:"gameMode"`
+}
+
+type GameMode struct {
+	HighPerformance bool `json:"highPerformance"`
+	HideLauncher    bool `json:"hideLauncher"`
+	RaisePriority   bool `json:"raisePriority"`
 }
 
 // TelemetryConsentRecorded reports whether the user has answered the consent
@@ -248,6 +274,7 @@ func Defaults() Settings {
 		MaxActiveDownloads:     2,
 		DownloadRateLimit:      0,
 		UploadRateLimit:        0,
+		PlayDownloadMode:       PlayDownloadOff,
 		UploadWhileDownloading: false,
 		SeedAfterDownload:      false,
 		InstallCleanupPolicy:   CleanupDelete,
@@ -259,6 +286,7 @@ func Defaults() Settings {
 		InstallSkipExtras:      true,
 		InstallVerifyRepack:    false,
 		DesktopShortcuts:       true,
+		ExtraLibraryPaths:      []string{},
 
 		UpdateCheckAutomatically: true,
 		UpdateAutoDownload:       false,
@@ -498,6 +526,41 @@ func NormalizeProxyUsername(name string) (string, error) {
 	return name, nil
 }
 
+func sanitizePlayDownload(s *Settings) error {
+	if s.PlayDownloadRateLimit < 0 {
+		s.PlayDownloadRateLimit = 0
+	}
+	if s.PlayUploadRateLimit < 0 {
+		s.PlayUploadRateLimit = 0
+	}
+	switch s.PlayDownloadMode {
+	case PlayDownloadOff, PlayDownloadPause:
+		return nil
+	case PlayDownloadLimit:
+		if s.PlayDownloadRateLimit <= 0 || s.PlayUploadRateLimit <= 0 {
+			return ErrPlayRateLimitRequired
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: %q", ErrPlayDownloadModeInvalid, s.PlayDownloadMode)
+	}
+}
+
+func (s Settings) PlayRates(gamesRunning bool) (down, up int64) {
+	down, up = s.DownloadRateLimit, s.UploadRateLimit
+	if !gamesRunning || s.PlayDownloadMode != PlayDownloadLimit {
+		return down, up
+	}
+	return minRate(down, s.PlayDownloadRateLimit), minRate(up, s.PlayUploadRateLimit)
+}
+
+func minRate(user, game int64) int64 {
+	if user <= 0 || game < user {
+		return game
+	}
+	return user
+}
+
 func sanitizeOverlay(s Settings) error {
 	if !slices.Contains(OverlayHotkeys(), s.OverlayHotkey) {
 		return fmt.Errorf("%w: %q", ErrOverlayHotkeyInvalid, s.OverlayHotkey)
@@ -521,6 +584,10 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	s.LibraryPath = library
 	s = derivePaths(s)
+	s, err = sanitizeExtraLibraryPaths(s)
+	if err != nil {
+		return Settings{}, err
+	}
 	s, err = sanitizeNetwork(s)
 	if err != nil {
 		return Settings{}, err
@@ -536,6 +603,12 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	if s.MaxActiveDownloads > 10 {
 		s.MaxActiveDownloads = 10
+	}
+	if err := sanitizePlayDownload(&s); err != nil {
+		return Settings{}, err
+	}
+	if err := sanitizeSchedule(&s); err != nil {
+		return Settings{}, err
 	}
 	if s.DownloadRateLimit < 0 {
 		s.DownloadRateLimit = 0
@@ -610,6 +683,8 @@ type Service struct {
 	nextSub  int
 	appliers []func(prev, next Settings) error
 	version  uint64
+
+	storageInfo func(path string) (platform.StorageInfo, error)
 }
 
 func NewService() (*Service, error) {
@@ -624,7 +699,7 @@ func NewServiceAt(path string) (*Service, error) {
 	if path == "" {
 		return nil, errors.New("settings path unavailable")
 	}
-	s := &Service{current: Defaults(), path: path}
+	s := &Service{current: Defaults(), path: path, storageInfo: platform.GetStorageInfo}
 	current, err := s.load()
 	if err != nil {
 		return nil, err

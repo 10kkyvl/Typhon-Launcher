@@ -54,11 +54,17 @@ var localNames = []string{
 	"downloadsPath",
 	"gamesPath",
 	"screenshotsPath",
+	"extraLibraryPaths",
+	"lastInstallRoot",
 	"launchOnStartup",
 	"hardwareAcceleration",
 	"maxActiveDownloads",
 	"downloadRateLimit",
 	"uploadRateLimit",
+	"playDownloadMode",
+	"playDownloadRateLimit",
+	"playUploadRateLimit",
+	"downloadSchedule",
 	"accountSync",
 	"sourcesNoticeAccepted",
 	"anonymousUsageStats",
@@ -67,6 +73,7 @@ var localNames = []string{
 	"telemetryConsentVersion",
 	"legalAcceptedVersion",
 	"presenceStatus",
+	"gameMode",
 }
 
 func jsonNames(v any) []string {

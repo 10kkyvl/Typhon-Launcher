@@ -29,4 +29,6 @@ export const errUpdates: Record<ErrUpdatesKey, Message> = {
     "Couldn't save update data because of an earlier read error. Restart Typhon",
   'errUpdates.selfupdateManifestOutdated':
     'This version of Typhon is no longer supported by the update server. Install the latest version manually',
+  'errUpdates.updatesDownloadDeleting': 'The data of this download is being deleted right now',
+  'errUpdates.updatesDownloadInUse': 'An update or repair is using this download right now',
 };

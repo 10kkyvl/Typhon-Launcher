@@ -127,7 +127,7 @@ func TestRegisterInstalledLeavesMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, err := s.RegisterInstalled(InstalledGame{Title: "Portal", Executable: exe, InstallDir: dir, CanonicalGameID: "cid"})
+	game, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: "Portal", Executable: exe, InstallDir: dir, CanonicalGameID: "cid"})
 	if err != nil {
 		t.Fatalf("register installed: %v", err)
 	}

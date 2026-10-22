@@ -52,4 +52,5 @@ type GameMetadata struct {
 	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
 	Cover       *ImageRef         `json:"cover,omitempty"`
 	Screenshots []ImageRef        `json:"screenshots,omitempty"`
+	Steam       *SteamInfo        `json:"steam,omitempty"`
 }

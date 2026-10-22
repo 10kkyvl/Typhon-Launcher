@@ -83,7 +83,7 @@ export const bigpictureTransfers = {
   'bp.transfers.unknownVersion': 'Не определена',
   'bp.transfers.cleanupTitle': 'Загруженные файлы',
   'bp.transfers.cleanupPrompt': 'Удалить загруженные файлы, когда они больше не нужны?',
-  'bp.transfers.seedingWarning': 'Файлы сейчас раздаются другим пользователям.',
+  'bp.transfers.seedingWarning': 'Файлы сейчас раздаются другим пользователям. При удалении раздача остановится.',
   'bp.transfers.deleteFiles': 'Удалить файлы загрузки',
   'bp.transfers.keepFiles': 'Оставить файлы',
   'bp.transfers.dismissInstall': 'Скрыть эту попытку',

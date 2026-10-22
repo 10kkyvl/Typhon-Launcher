@@ -86,6 +86,12 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 	slog.Info("game relocated", "id", id, "title", next.Title, "installDir", newInstallDir)
 	s.emitUpdated()
 	hasShortcut := next.ShortcutPath != ""
+	var profileLinks []string
+	for _, p := range next.Profiles {
+		if p.ShortcutPath != "" {
+			profileLinks = append(profileLinks, p.ID)
+		}
+	}
 	ctx := s.ctx
 	s.mu.Unlock()
 
@@ -96,8 +102,15 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 	// Игра уже переехала и сохранена: сбой Steam не повод отменять перенос, запись
 	// в Steam подтянется при следующей сверке.
 	s.reconcileSteam(ctx, "relocate")
-	if hasShortcut {
-		if err := s.CreateShortcut(id); err != nil {
+	if hasShortcut || len(profileLinks) > 0 {
+		var linkErrs []error
+		if hasShortcut {
+			linkErrs = append(linkErrs, s.CreateShortcut(id))
+		}
+		for _, pid := range profileLinks {
+			linkErrs = append(linkErrs, s.CreateProfileShortcut(id, pid))
+		}
+		if err := errors.Join(linkErrs...); err != nil {
 			return next, errors.Join(markerErr, err)
 		}
 		if markerErr == nil {

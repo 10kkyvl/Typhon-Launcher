@@ -31,8 +31,8 @@ func (b *blockingLibrary) GetInstalledGames() []library.Game {
 
 func (b *blockingLibrary) GetRunningGames() []string { return b.inner.GetRunningGames() }
 
-func (b *blockingLibrary) ApplyInstalledUpdate(u library.InstalledUpdate) (library.Game, error) {
-	return b.inner.ApplyInstalledUpdate(u)
+func (b *blockingLibrary) ApplyInstalledUpdate(ctx context.Context, u library.InstalledUpdate) (library.Game, error) {
+	return b.inner.ApplyInstalledUpdate(ctx, u)
 }
 
 func (b *blockingLibrary) BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error) {

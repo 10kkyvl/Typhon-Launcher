@@ -44,6 +44,9 @@ const (
 	KindInstaller Kind = "installer"
 	// KindBundle — архив с приложением, которое лаунчер подменяет сам (macOS).
 	KindBundle Kind = "bundle"
+	// KindPortable — zip с typhon.exe для портативной сборки. В манифесте не
+	// встречается: клиент собирает его из Portable* полей установщика.
+	KindPortable Kind = "portable"
 )
 
 type Artifact struct {
@@ -54,6 +57,11 @@ type Artifact struct {
 	URL    string `json:"url"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
+
+	PortableName   string `json:"portableName,omitempty"`
+	PortableURL    string `json:"portableUrl,omitempty"`
+	PortableSize   int64  `json:"portableSize,omitempty"`
+	PortableSHA256 string `json:"portableSha256,omitempty"`
 }
 
 type Manifest struct {
@@ -130,12 +138,15 @@ func PublicKey() (ed25519.PublicKey, error) {
 
 func (a Artifact) Validate() error {
 	switch a.Kind {
-	case KindInstaller, KindBundle:
+	case KindInstaller, KindBundle, KindPortable:
 	default:
 		return ErrUnsupportedKind
 	}
 	if a.OS == "" || a.Arch == "" {
 		return ErrInvalidArtifact
+	}
+	if err := a.validatePortableFields(); err != nil {
+		return err
 	}
 	if err := validateArtifactName(a.Name); err != nil {
 		return err
@@ -150,6 +161,35 @@ func (a Artifact) Validate() error {
 		return err
 	}
 	return nil
+}
+
+func (a Artifact) hasPortableFields() bool {
+	return a.PortableName != "" || a.PortableURL != "" || a.PortableSize != 0 || a.PortableSHA256 != ""
+}
+
+// validatePortableFields holds the optional zip next to an installer to the
+// same rules as the installer itself; a half-filled set is a malformed
+// manifest, not a release without a portable build.
+func (a Artifact) validatePortableFields() error {
+	if !a.hasPortableFields() {
+		return nil
+	}
+	if a.Kind != KindInstaller {
+		return ErrInvalidArtifact
+	}
+	if err := validateArtifactName(a.PortableName); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(strings.ToLower(a.PortableName), ".zip") {
+		return ErrInvalidArtifactName
+	}
+	if err := validateArtifactURL(a.PortableURL); err != nil {
+		return err
+	}
+	if a.PortableSize <= 0 || a.PortableSize > MaxArtifactSize {
+		return ErrInvalidArtifactSize
+	}
+	return validateHash(a.PortableSHA256)
 }
 
 func validateArtifactName(name string) error {

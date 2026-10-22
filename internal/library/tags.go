@@ -85,6 +85,8 @@ func (s *Service) SetHidden(id string, on bool) (Game, error) {
 	}
 	previous := *game
 	game.Hidden = on
+	now := s.now()
+	game.HiddenAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous
 		return Game{}, fmt.Errorf("save library: %w", err)

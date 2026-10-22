@@ -17,7 +17,7 @@ func addRelocateGame(t *testing.T, s *Service) (Game, string) {
 	if err := os.WriteFile(exe, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	game, err := s.AddGame(exe, "Game")
+	game, err := s.AddGame(t.Context(), exe, "Game")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
 	}

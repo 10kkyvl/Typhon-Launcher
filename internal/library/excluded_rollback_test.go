@@ -32,7 +32,7 @@ func TestRemoveGameRollbackRestoresTheExactExclusionState(t *testing.T) {
 					t.Fatalf("first removal: %v", err)
 				}
 			}
-			manual, err := s.AddGame(exe, "Manual")
+			manual, err := s.AddGame(t.Context(), exe, "Manual")
 			if err != nil {
 				t.Fatalf("add: %v", err)
 			}
@@ -104,7 +104,7 @@ func TestRegisterInstalledKeepsTheExclusionWhenTheGameCannotBeSaved(t *testing.T
 				t.Fatalf("first removal: %v", err)
 			}
 			if tt.alreadyAdded {
-				if _, err := s.AddGame(exe, "Again"); err != nil {
+				if _, err := s.AddGame(t.Context(), exe, "Again"); err != nil {
 					t.Fatalf("add: %v", err)
 				}
 			}
@@ -122,7 +122,7 @@ func TestRegisterInstalledKeepsTheExclusionWhenTheGameCannotBeSaved(t *testing.T
 				t.Fatal(err)
 			}
 
-			_, err = s.RegisterInstalled(InstalledGame{Title: "Again", Executable: exe, InstallDir: dir, InstallType: "portable", Owned: true})
+			_, err = s.RegisterInstalled(t.Context(), InstalledGame{Title: "Again", Executable: exe, InstallDir: dir, InstallType: "portable", Owned: true})
 			if err == nil {
 				t.Fatal("the library could not be saved but the registration reported success")
 			}

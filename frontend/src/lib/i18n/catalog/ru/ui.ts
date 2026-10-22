@@ -164,6 +164,7 @@ export const ui = {
   'ui.hide': 'Скрыть',
 
   'ui.resetAppearance': 'Сбросить оформление',
+  'ui.resetAppearanceHint': 'Кнопка появляется на несколько секунд после смены темы. Сбросить оформление в любой момент: Ctrl+Shift+Alt+T',
 
   'ui.changeAdded': 'Добавлено',
   'ui.changeChanged': 'Изменено',
