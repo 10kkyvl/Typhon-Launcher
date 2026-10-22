@@ -317,12 +317,7 @@ func guardedClient(t *testing.T, plan netPlan) (*client, *torrent.ClientConfig) 
 	t.Cleanup(func() { openTorrentClient = orig })
 	openTorrentClient = func(tc *torrent.ClientConfig) (*torrent.Client, error) {
 		cfg = tc
-		tc.ListenPort = 0
-		tc.NoDHT = true
-		tc.DisableTrackers = true
-		tc.DisablePEX = true
-		tc.NoDefaultPortForwarding = true
-		return orig(tc)
+		return openOnRandomPort(orig, tc)
 	}
 	c, err := newClient(t.Context(), settings.Defaults(), t.TempDir(), storage.NewMapPieceCompletion(), plan)
 	if err != nil {

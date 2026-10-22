@@ -57,11 +57,7 @@ func TestNewClientKeepsTryingRandomPorts(t *testing.T) {
 				if len(ports) <= c.failures {
 					return nil, c.failWith()
 				}
-				tc.ListenPort = 0
-				tc.NoDHT = true
-				tc.DisableTrackers = true
-				tc.NoDefaultPortForwarding = true
-				return orig(tc)
+				return openOnRandomPort(orig, tc)
 			}
 
 			cl, err := newClient(t.Context(), settings.Defaults(), t.TempDir(), storage.NewMapPieceCompletion(), netPlan{mode: settings.NetworkDirect})
@@ -104,11 +100,7 @@ func TestNewClientEscapesAnExcludedPortRange(t *testing.T) {
 		if port == listenPort || (port >= first && port <= last) {
 			return nil, forbiddenPortErr()
 		}
-		tc.ListenPort = 0
-		tc.NoDHT = true
-		tc.DisableTrackers = true
-		tc.NoDefaultPortForwarding = true
-		return orig(tc)
+		return openOnRandomPort(orig, tc)
 	}
 
 	cl, err := newClient(t.Context(), settings.Defaults(), t.TempDir(), storage.NewMapPieceCompletion(), netPlan{mode: settings.NetworkDirect})
@@ -150,8 +142,7 @@ func TestStandInClientsKeepTryingRandomPorts(t *testing.T) {
 				if attempts <= 3 {
 					return nil, forbiddenPortErr()
 				}
-				tc.ListenPort = 0
-				return orig(tc)
+				return openOnRandomPort(orig, tc)
 			}
 
 			if err := b.open(t); err != nil {
@@ -159,6 +150,54 @@ func TestStandInClientsKeepTryingRandomPorts(t *testing.T) {
 			}
 			if attempts != 4 {
 				t.Fatalf("client opened on attempt %d, want the fourth after three refused ports", attempts)
+			}
+		})
+	}
+}
+
+// The stand-ins open a real client on a port of their own: the fixed port may
+// be held by the launcher on this machine, and port 0 lands in the range Windows
+// excluded from UDP as surely as the sequential port it replaces, which is what
+// made TestHaltedClientRefusesEveryAnnounceChannel fail once in three runs.
+func TestOpenOnRandomPortRidesOutRefusedPorts(t *testing.T) {
+	cases := []struct {
+		name      string
+		failures  int
+		failWith  func() error
+		wantErr   bool
+		wantTries int
+	}{
+		{"first port free", 0, forbiddenPortErr, false, 1},
+		{"three ports refused", 3, forbiddenPortErr, false, 4},
+		{"every port refused", listenport.Attempts + 1, forbiddenPortErr, true, listenport.Attempts + 1},
+		{"not a port problem", 1, func() error { return errors.New("storage is broken") }, true, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var ports []int
+			open := func(tc *torrent.ClientConfig) (*torrent.Client, error) {
+				ports = append(ports, tc.ListenPort)
+				if len(ports) <= c.failures {
+					return nil, c.failWith()
+				}
+				return new(torrent.Client), nil
+			}
+			tc := clientConfig(settings.Defaults(), t.TempDir(), listenPort, nonClosingCompletion{storage.NewMapPieceCompletion()})
+
+			cl, err := openOnRandomPort(open, tc)
+			if c.wantErr != (err != nil) {
+				t.Fatalf("openOnRandomPort after ports %v: err = %v, want error %v", ports, err, c.wantErr)
+			}
+			if !c.wantErr && cl == nil {
+				t.Fatal("no error and no client")
+			}
+			if len(ports) != c.wantTries {
+				t.Fatalf("ports tried = %v, want %d attempts", ports, c.wantTries)
+			}
+			for _, p := range ports {
+				if p < listenport.First || p > 65535 {
+					t.Fatalf("ports tried = %v, want every attempt on a port of the dynamic range, never 0 or the fixed one", ports)
+				}
 			}
 		})
 	}

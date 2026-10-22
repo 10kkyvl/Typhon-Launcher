@@ -218,12 +218,7 @@ func TestNewClientFallsBackWhenTheFixedPortIsTaken(t *testing.T) {
 		if tc.ListenPort == listenPort {
 			return nil, &net.OpError{Op: "listen", Net: "udp", Err: syscall.EADDRINUSE}
 		}
-		tc.ListenPort = 0
-		tc.NoDHT = true
-		tc.DisableTrackers = true
-		tc.DisablePEX = true
-		tc.NoDefaultPortForwarding = true
-		return orig(tc)
+		return openOnRandomPort(orig, tc)
 	}
 
 	cl, err := newClient(t.Context(), settings.Defaults(), t.TempDir(), storage.NewMapPieceCompletion(), netPlan{mode: settings.NetworkDirect})
