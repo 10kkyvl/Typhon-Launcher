@@ -18,6 +18,10 @@ var apiBaseURL = "https://api.typhon-launcher.com"
 
 const siteBaseURL = "https://typhon-launcher.com"
 
+// StatusPageURL lives on the vendor subdomain on purpose: when typhon-launcher.com
+// itself is down (DNS, certificate), a page on our own domain would be down too.
+const StatusPageURL = "https://typhon.betteruptime.com"
+
 const (
 	forgotPasswordPath = "/account/forgot"
 	supportPath        = "/support"

@@ -267,6 +267,13 @@ func (s *Service) OpenForgotPassword() error {
 	return nil
 }
 
+func (s *Service) OpenStatusPage() error {
+	if err := s.openURL(StatusPageURL); err != nil {
+		return fmt.Errorf("open status page: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) OpenSupportSite() error {
 	if err := s.openURL(SupportURL(s.uiLanguage())); err != nil {
 		return fmt.Errorf("open support page: %w", err)

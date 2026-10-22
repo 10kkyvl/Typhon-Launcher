@@ -68,7 +68,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.speedMbps': 'Speed in MB/s',
 
   'ui.offlineBannerText':
-    'Offline mode: no connection to the accounts server. The profile is shown from cache; the catalog, library, and downloads work as usual.',
+    'No connection to the Typhon server. The profile is shown from cache; the catalog, library, and downloads work as usual. If your internet is fine, check the status page to see what happened.',
+  'ui.offlineBannerStatus': 'Service status',
   'ui.checkingConnection': 'Checking connection…',
 
   'ui.installed': 'Installed',
