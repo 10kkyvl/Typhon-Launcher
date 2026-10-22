@@ -138,10 +138,6 @@ type SpaceInfo struct {
 	Mode          string `json:"mode"`
 	Enough        bool   `json:"enough"`
 
-	// DestinationBusy — введённая папка существует и не пуста, ставить в неё
-	// нельзя; Suggested тогда — свободная подпапка с именем игры. Reusable —
-	// папка не пуста только из-за оставшейся от проваленной установки:
-	// Start уберёт остаток сам. Во всех остальных случаях Suggested — сама папка.
 	DestinationBusy bool   `json:"destinationBusy"`
 	Suggested       string `json:"suggested"`
 	Reusable        bool   `json:"reusable"`

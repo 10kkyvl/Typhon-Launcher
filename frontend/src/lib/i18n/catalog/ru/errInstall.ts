@@ -19,7 +19,10 @@ export const errInstall = {
   'errInstall.installDestExists': 'путь назначения уже существует',
   'errInstall.installDestNotEmpty': 'папка установки уже существует и не пуста',
   'errInstall.installDestNotEmptyAt': 'папка установки уже существует и не пуста, выберите подпапку, например {path}',
+  'errInstall.installDestInsideGame': 'папка внутри другой установленной игры',
+  'errInstall.installDestNotFolder': 'по этому пути лежит файл, а не папка',
   'errInstall.installDestUnreadable': 'не удалось проверить папку установки',
+  'errInstall.installNoFreeFolder': 'не нашлось свободного имени подпапки',
   'errInstall.installBrokerOutsidePin':
     'задание установки вышло за границы, согласованные при запросе прав администратора',
   'errInstall.installElevationDeclined':

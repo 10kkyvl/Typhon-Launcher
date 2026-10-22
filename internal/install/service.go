@@ -62,7 +62,9 @@ var (
 	errPartialReserved  = uierr.New("install.partial_reserved", "временную папку этой установки сейчас удаляют")
 	errDestNotEmpty     = uierr.New("install.dest_not_empty", "папка установки уже существует и не пуста")
 	errDestUnreadable   = uierr.New("install.dest_unreadable", "не удалось проверить папку установки")
-	errNoFreeFolder     = errors.New("не нашлось свободного имени подпапки")
+	errDestNotFolder    = uierr.New("install.dest_not_folder", "по этому пути лежит файл, а не папка")
+	errDestInsideGame   = uierr.New("install.dest_inside_game", "папка внутри другой установленной игры")
+	errNoFreeFolder     = uierr.New("install.no_free_folder", "не нашлось свободного имени подпапки")
 	errUnknownType      = uierr.New("install.unknown_type", "тип пакета не распознан")
 	errUnavailable      = uierr.New("install.unavailable", "недоступно для этой установки")
 	errExternalRuns     = uierr.New("install.external_runs", "установщик запущен отдельно, дождитесь его завершения")
@@ -1069,13 +1071,22 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		if err != nil {
 			return Installation{}, err
 		}
-		if err := s.prepareDestination(dest, item.Name); err != nil {
-			return Installation{}, err
+		if s.insideGame(dest) {
+			return Installation{}, fmt.Errorf("%w: %s", errDestInsideGame, dest)
 		}
 		item.Destination = dest
 		item.Owned = controlled(plan.Type)
+		s.mu.Lock()
+		err = s.startBlockedLocked(item, downloadID)
+		s.mu.Unlock()
+		if err != nil {
+			return Installation{}, err
+		}
 		need := spaceNeeded(plan, mode, s.sameVolume(plan.ContentRoot, dest))
 		if err := s.checkSpace(item.Destination, need); err != nil {
+			return Installation{}, err
+		}
+		if err := s.prepareDestination(dest, item.Name); err != nil {
 			return Installation{}, err
 		}
 	}
@@ -1084,15 +1095,9 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	s.mu.Lock()
-	if s.closing {
+	if err := s.startBlockedLocked(item, downloadID); err != nil {
 		s.mu.Unlock()
-		return Installation{}, errUnavailable
-	}
-	for _, existing := range s.items {
-		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
-			s.mu.Unlock()
-			return Installation{}, errBusy
-		}
+		return Installation{}, err
 	}
 	s.items = append(s.items, item)
 	if err := s.claimLocked(item); err != nil {
@@ -1129,6 +1134,18 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	})
 	emit(eventUpdated, snap)
 	return snap, nil
+}
+
+func (s *Service) startBlockedLocked(item *Installation, downloadID string) error {
+	if s.closing {
+		return errUnavailable
+	}
+	for _, existing := range s.items {
+		if active(existing.Status) && (existing.DownloadID == downloadID || (item.Destination != "" && samePath(existing.Destination, item.Destination))) {
+			return errBusy
+		}
+	}
+	return nil
 }
 
 func (s *Service) Cancel(id string) error {
@@ -1277,6 +1294,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		s.mu.Unlock()
 		return errUnavailable
 	}
+	if s.usedByOtherLocked(item) != nil {
+		s.mu.Unlock()
+		return errBusy
+	}
 	if forceInteractive && (!external(item.Type) || item.Status == StatusCancelled) {
 		s.mu.Unlock()
 		return errUnavailable
@@ -1386,6 +1407,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	if !retryable(item.Status) || s.jobs[id] != nil || s.closing {
 		s.mu.Unlock()
 		return errUnavailable
+	}
+	if s.usedByOtherLocked(item) != nil {
+		s.mu.Unlock()
+		return errBusy
 	}
 	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
@@ -1880,29 +1905,6 @@ func (s *Service) waitForUser(id string, candidates []Candidate) error {
 		"offered", candidatePaths(candidates))
 	emit(eventUpdated, snap)
 	return nil
-}
-
-// proposeDestination подбирает под root свободную подпапку с именем игры:
-// "Name", затем "Name (2)" и дальше. Пустой root — пустой ответ без ошибки.
-func (s *Service) proposeDestination(root, name string) (string, error) {
-	if root == "" {
-		return "", nil
-	}
-	base := filepath.Join(root, sanitizeName(name))
-	for i := 1; i < maxSuffixAttempt; i++ {
-		candidate := base
-		if i > 1 {
-			candidate = fmt.Sprintf("%s (%d)", base, i)
-		}
-		state, err := s.checkDest(candidate)
-		if err != nil {
-			return "", fmt.Errorf("%w: %s: %w", errDestUnreadable, candidate, err)
-		}
-		if state != destNotEmpty {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("%w: %s", errNoFreeFolder, base)
 }
 
 func (s *Service) freeBytes(path string) (int64, error) {

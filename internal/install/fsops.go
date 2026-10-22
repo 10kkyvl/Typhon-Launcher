@@ -482,11 +482,12 @@ const (
 	destMissing destStatus = iota
 	destEmpty
 	destNotEmpty
+	destNotFolder
 )
 
 // destState различает «нет», «пуста», «занята» и «не удалось узнать»: ошибка
 // Stat или ReadDir (права, антивирус) не превращается ни в одно из первых трёх.
-// Файл на месте папки — занято.
+// Файл на месте папки — destNotFolder: заменой пустой папке он не годится.
 func destState(path string) (destStatus, error) {
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -496,7 +497,7 @@ func destState(path string) (destStatus, error) {
 		return destNotEmpty, fmt.Errorf("stat %s: %w", path, err)
 	}
 	if !info.IsDir() {
-		return destNotEmpty, nil
+		return destNotFolder, nil
 	}
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -512,5 +513,5 @@ func destState(path string) (destStatus, error) {
 // обязаны отказать, а не объяснять причину (CopyDir, MoveDir).
 func destAvailable(path string) bool {
 	state, err := destState(path)
-	return err == nil && state != destNotEmpty
+	return err == nil && (state == destMissing || state == destEmpty)
 }
