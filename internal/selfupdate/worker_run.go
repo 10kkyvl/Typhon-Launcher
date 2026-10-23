@@ -19,6 +19,7 @@ var (
 	parentAlive      = workerProcessAlive
 	applyInstaller   = Apply
 	applyPortable    = ApplyPortable
+	applyExe         = applyReadyExe
 	relaunchLauncher = relaunch
 	saveCurrent      = snapshotPrevious
 	rollBack         = performRollback
@@ -158,9 +159,12 @@ func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateS
 	if err != nil {
 		return err
 	}
-	if spec.Portable {
+	switch {
+	case spec.Kind == specKindExe:
+		err = applyExe(applyCtx, configDir, spec.InstallerPath, spec.RelaunchPath, spec.Version, spec.Portable)
+	case spec.Portable:
 		err = applyPortable(applyCtx, spec.InstallerPath, spec.RelaunchPath)
-	} else {
+	default:
 		err = applyInstaller(applyCtx, spec.InstallerPath, spec.InstallDir, spec.RelaunchPath)
 	}
 	if err != nil {

@@ -31,6 +31,9 @@ const (
 const (
 	specKindUpdate   = "update"
 	specKindRollback = "rollback"
+	// specKindExe is an update whose new typhon.exe is already built and sits in
+	// the cache: the worker swaps the file instead of running an installer.
+	specKindExe = "exe"
 
 	// outcomeRolledBack marks the record of a rollback; an update leaves Kind empty.
 	outcomeRolledBack = "rolled_back"
@@ -139,7 +142,7 @@ func readUpdateSpec(path string) (updateSpec, error) {
 		return updateSpec{}, fmt.Errorf("decode selfupdate spec: %w", err)
 	}
 	switch spec.Kind {
-	case "", specKindUpdate, specKindRollback:
+	case "", specKindUpdate, specKindRollback, specKindExe:
 	default:
 		return updateSpec{}, fmt.Errorf("selfupdate spec: unknown kind %q", spec.Kind)
 	}

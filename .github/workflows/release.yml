@@ -256,14 +256,17 @@ jobs:
           CGO_ENABLED: "0"
           GOARCH: amd64
         run: |
-          go test ./cmd/signrelease
+          go test ./cmd/signrelease ./cmd/mkdelta ./internal/selfupdate/delta
           go build -trimpath -o bin/signrelease.exe ./cmd/signrelease
+          go build -trimpath -o bin/mkdelta.exe ./cmd/mkdelta
 
       - name: Upload the manifest signer
         uses: actions/upload-artifact@v4
         with:
           name: typhon-release-tools
-          path: bin/signrelease.exe
+          path: |
+            bin/signrelease.exe
+            bin/mkdelta.exe
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -381,7 +384,9 @@ jobs:
 
       - name: Verify the manifest signer
         shell: bash
-        run: test -s bin/signrelease.exe
+        run: |
+          test -s bin/signrelease.exe
+          test -s bin/mkdelta.exe
 
       - name: Determine release version
         id: version
@@ -424,19 +429,95 @@ jobs:
             exit 1
           fi
 
+      # Launchers that already run the previous releases download a patch
+      # instead of the whole installer. A release that cannot be fetched or
+      # patched is a missing optimisation, never a failed release: its clients
+      # simply take the full installer.
+      - name: Build the patches from the previous releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          DELTA_COUNT: "3"
+        run: |
+          set -euo pipefail
+
+          : > deltas.txt
+          mkdir -p bin/new bin/previous
+
+          if ! command -v 7z >/dev/null; then
+            echo "::warning::7z is not available; this release ships no patches"
+            exit 0
+          fi
+          if ! 7z e -y -obin/new bin/typhon-windows-portable.zip typhon.exe >/dev/null || [ ! -s bin/new/typhon.exe ]; then
+            echo "::warning::typhon.exe could not be taken out of the portable zip; this release ships no patches"
+            rm -f bin/new/typhon.exe
+            exit 0
+          fi
+
+          # Published releases older than this one, newest last. This version
+          # is added to the list so that sorting puts the cut in the right
+          # place even when a re-run finds its own release already published.
+          older="$(
+            { gh release list --limit 50 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[].tagName'; echo "v$RELEASE_VERSION"; } \
+              | sed -n 's/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+              | sort -Vu \
+              | awk -v cur="$RELEASE_VERSION" '$0 == cur { exit } { print }' \
+              | tail -n "$DELTA_COUNT"
+          )"
+
+          for ver in $older; do
+            dest="bin/previous/$ver"
+            mkdir -p "$dest"
+            # The portable zip exists from 1.2.0 on; every release has the
+            # installer, which 7-Zip opens as an NSIS archive.
+            if gh release download "v$ver" -p typhon-windows-portable.zip -D "$dest" 2>/dev/null; then
+              7z e -y -o"$dest" "$dest/typhon-windows-portable.zip" typhon.exe >/dev/null || true
+            elif gh release download "v$ver" -p typhon-amd64-installer.exe -D "$dest" 2>/dev/null; then
+              7z e -y -o"$dest" "$dest/typhon-amd64-installer.exe" typhon.exe >/dev/null || true
+            fi
+            if [ ! -s "$dest/typhon.exe" ]; then
+              echo "::warning::no launcher found for $ver; no patch from it"
+              continue
+            fi
+            patch="bin/typhon-${ver}-to-${RELEASE_VERSION}.delta"
+            if ./bin/mkdelta.exe -old "$dest/typhon.exe" -new bin/new/typhon.exe -out "$patch"; then
+              echo "from=$ver,old=$dest/typhon.exe,patch=$patch" >> deltas.txt
+            else
+              echo "::warning::could not build a patch from $ver; no patch from it"
+            fi
+          done
+
+          echo "patches for: $(cut -d, -f1 deltas.txt | tr '\n' ' ')"
+
       - name: Build and sign the self-update manifest
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
+
+          delta_flags=()
+          while IFS= read -r spec; do
+            if [ -n "$spec" ]; then
+              delta_flags+=(-delta "$spec")
+            fi
+          done < deltas.txt
+
+          exe_field=""
+          if [ -s bin/new/typhon.exe ]; then
+            exe_field=",exe=bin/new/typhon.exe"
+          fi
+
           ./bin/signrelease.exe \
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
-            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe,portable=bin/typhon-windows-portable.zip" \
+            -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe,portable=bin/typhon-windows-portable.zip${exe_field}" \
+            ${delta_flags[@]+"${delta_flags[@]}"} \
             -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
 
           # A launcher older than 0.5.0 validates every artifact in the
@@ -504,6 +585,19 @@ jobs:
             "s3://$bucket/launcher/releases/$version/typhon-windows-portable.zip" \
             --endpoint-url http://127.0.0.1:3900
 
+          # Patches go up before any manifest that names them.
+          patches=()
+          for path in "$remote_dir"/*.delta; do
+            if [ -e "$path" ]; then
+              patches+=("$(basename "$path")")
+            fi
+          done
+          for file in ${patches[@]+"${patches[@]}"}; do
+            run_aws s3 cp "/data/$file" \
+              "s3://$bucket/launcher/releases/$version/$file" \
+              --endpoint-url http://127.0.0.1:3900
+          done
+
           if [ -n "${RELEASES_S3_ENDPOINT:-}" ]; then
             r2_bucket="${RELEASES_S3_BUCKET:?RELEASES_S3_ENDPOINT is set without RELEASES_S3_BUCKET}"
             run_r2() {
@@ -516,7 +610,7 @@ jobs:
                 --endpoint-url "https://$RELEASES_S3_ENDPOINT"
             }
 
-            for file in typhon-amd64-installer.exe typhon-darwin-arm64.zip typhon-windows-portable.zip; do
+            for file in typhon-amd64-installer.exe typhon-darwin-arm64.zip typhon-windows-portable.zip ${patches[@]+"${patches[@]}"}; do
               run_r2 s3 cp "/data/$file" \
                 "s3://$r2_bucket/launcher/releases/$version/$file" \
                 --cache-control "public, max-age=31536000, immutable"
@@ -544,11 +638,16 @@ jobs:
           rm -rf "$remote_dir"
           REMOTE
 
+          shopt -s nullglob
+          patches=(bin/*.delta)
+          shopt -u nullglob
+
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
             bin/typhon-darwin-arm64.zip \
             bin/typhon-windows-portable.zip \
+            ${patches[@]+"${patches[@]}"} \
             manifest.json \
             manifest-legacy.json \
             publish-remote.sh \

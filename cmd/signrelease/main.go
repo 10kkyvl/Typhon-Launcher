@@ -4,6 +4,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"typhon/internal/selfupdate"
+	"typhon/internal/selfupdate/delta"
 	"typhon/internal/storage"
 )
 
@@ -31,6 +34,10 @@ var (
 	errEmptyPrivateKey = fmt.Errorf("signrelease: %s is not set", privateKeyEnv)
 	errBadPrivateKey   = errors.New("signrelease: private key must be a base64-encoded ed25519 seed (32 bytes) or private key (64 bytes)")
 	errManifestTooBig  = selfupdate.ErrManifestTooLarge
+	errDeltaNoExe      = errors.New("signrelease: -delta needs an installer artifact with exe=<path to the new typhon.exe>")
+	errDeltaTwoExe     = errors.New("signrelease: only one artifact can carry exe= and the patches")
+	errExeNotInstaller = errors.New("signrelease: exe= belongs to an installer artifact")
+	errDeltaMismatch   = errors.New("signrelease: the patch does not rebuild the new typhon.exe from the old one")
 )
 
 type artifactSpec struct {
@@ -42,6 +49,71 @@ type artifactSpec struct {
 
 	portablePath string
 	portableName string
+
+	exePath string
+}
+
+type deltaSpec struct {
+	from      string
+	oldPath   string
+	patchPath string
+	name      string
+}
+
+func parseDeltaSpec(s string) (deltaSpec, error) {
+	var spec deltaSpec
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			return deltaSpec{}, fmt.Errorf("signrelease: invalid delta field %q, want key=value", part)
+		}
+		value = strings.TrimSpace(value)
+		switch strings.TrimSpace(key) {
+		case "from":
+			spec.from = value
+		case "old":
+			spec.oldPath = value
+		case "patch":
+			spec.patchPath = value
+		case "name":
+			spec.name = value
+		default:
+			return deltaSpec{}, fmt.Errorf("signrelease: unknown delta field %q", key)
+		}
+	}
+	if spec.from == "" || spec.oldPath == "" || spec.patchPath == "" {
+		return deltaSpec{}, fmt.Errorf("signrelease: delta spec %q missing one of from/old/patch", s)
+	}
+	if spec.name == "" {
+		spec.name = filepath.Base(spec.patchPath)
+	}
+	return spec, nil
+}
+
+type deltaFlags []deltaSpec
+
+func (d *deltaFlags) String() string {
+	if d == nil {
+		return ""
+	}
+	parts := make([]string, len(*d))
+	for i, s := range *d {
+		parts[i] = s.patchPath
+	}
+	return strings.Join(parts, ",")
+}
+
+func (d *deltaFlags) Set(s string) error {
+	spec, err := parseDeltaSpec(s)
+	if err != nil {
+		return err
+	}
+	*d = append(*d, spec)
+	return nil
 }
 
 func parseArtifactSpec(s string) (artifactSpec, error) {
@@ -72,6 +144,8 @@ func parseArtifactSpec(s string) (artifactSpec, error) {
 			spec.portablePath = value
 		case "portablename":
 			spec.portableName = value
+		case "exe":
+			spec.exePath = value
 		default:
 			return artifactSpec{}, fmt.Errorf("signrelease: unknown artifact field %q", key)
 		}
@@ -87,6 +161,9 @@ func parseArtifactSpec(s string) (artifactSpec, error) {
 	}
 	if spec.portablePath != "" && spec.portableName == "" {
 		spec.portableName = filepath.Base(spec.portablePath)
+	}
+	if spec.exePath != "" && spec.kind != string(selfupdate.KindInstaller) {
+		return artifactSpec{}, errExeNotInstaller
 	}
 	return spec, nil
 }
@@ -122,6 +199,7 @@ type config struct {
 	changelog   string
 	maxReleases int
 	artifacts   artifactFlags
+	deltas      deltaFlags
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -135,7 +213,8 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.out, "out", "", "path to write the signed manifest to")
 	fs.StringVar(&cfg.changelog, "changelog", "", "path to CHANGELOG.md; its entries ship in the manifest as the in-app release notes")
 	fs.IntVar(&cfg.maxReleases, "max-releases", 10, "how many changelog entries the manifest carries")
-	fs.Var(&cfg.artifacts, "artifact", "artifact spec os=...,arch=...,kind=...,path=...[,name=...][,portable=<zip>[,portablename=...]] (repeatable)")
+	fs.Var(&cfg.artifacts, "artifact", "artifact spec os=...,arch=...,kind=...,path=...[,name=...][,portable=<zip>[,portablename=...]][,exe=<new typhon.exe>] (repeatable)")
+	fs.Var(&cfg.deltas, "delta", "patch from an older release: from=<version>,old=<its typhon.exe>,patch=<file>[,name=...] (repeatable; needs an artifact with exe=)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -215,6 +294,66 @@ func buildArtifact(spec artifactSpec, baseURL, version string) (selfupdate.Artif
 	return a, nil
 }
 
+// withDeltas gives the installer artifact the hash and size of the executable it
+// installs and the patches that lead to it. A patch is applied here, to the old
+// executable it was cut from, before it is signed: a manifest that vouches for a
+// patch nobody has tried is a release that fails on the first user.
+func withDeltas(ctx context.Context, a selfupdate.Artifact, spec artifactSpec, deltas []deltaSpec, baseURL, version string) (selfupdate.Artifact, error) {
+	exeSize, exeSum, err := hashFile(spec.exePath)
+	if err != nil {
+		return selfupdate.Artifact{}, err
+	}
+	a.ExeSize, a.ExeSHA256 = exeSize, exeSum
+	for _, d := range deltas {
+		oldSize, oldSum, err := hashFile(d.oldPath)
+		if err != nil {
+			return selfupdate.Artifact{}, err
+		}
+		patchSize, patchSum, err := hashFile(d.patchPath)
+		if err != nil {
+			return selfupdate.Artifact{}, err
+		}
+		if err := verifyDelta(ctx, d, oldSize, exeSize, exeSum); err != nil {
+			return selfupdate.Artifact{}, err
+		}
+		a.Deltas = append(a.Deltas, selfupdate.Delta{
+			From:       d.from,
+			FromSHA256: oldSum,
+			Name:       d.name,
+			URL:        strings.TrimRight(baseURL, "/") + "/" + version + "/" + d.name,
+			Size:       patchSize,
+			SHA256:     patchSum,
+		})
+	}
+	if err := a.Validate(); err != nil {
+		return selfupdate.Artifact{}, fmt.Errorf("signrelease: artifact %q with patches: %w", spec.path, err)
+	}
+	return a, nil
+}
+
+func verifyDelta(ctx context.Context, d deltaSpec, oldSize, exeSize int64, exeSum string) error {
+	base, err := os.ReadFile(d.oldPath)
+	if err != nil {
+		return fmt.Errorf("signrelease: read old executable %q: %w", d.oldPath, err)
+	}
+	if int64(len(base)) != oldSize {
+		return fmt.Errorf("signrelease: old executable %q changed while it was read", d.oldPath)
+	}
+	patch, err := os.ReadFile(d.patchPath)
+	if err != nil {
+		return fmt.Errorf("signrelease: read patch %q: %w", d.patchPath, err)
+	}
+	hasher := sha256.New()
+	n, err := delta.Apply(ctx, hasher, base, bytes.NewReader(patch), exeSize)
+	if err != nil {
+		return fmt.Errorf("signrelease: apply patch %q: %w", d.patchPath, err)
+	}
+	if n != exeSize || hex.EncodeToString(hasher.Sum(nil)) != exeSum {
+		return fmt.Errorf("%w: %s", errDeltaMismatch, d.patchPath)
+	}
+	return nil
+}
+
 func buildManifest(version, notes string, publishedAt time.Time, releases []selfupdate.ReleaseNote, artifacts []selfupdate.Artifact) (selfupdate.Manifest, error) {
 	if notes == "" && len(releases) > 0 {
 		notes = releases[0].Summary
@@ -270,7 +409,7 @@ func signManifest(m selfupdate.Manifest, priv ed25519.PrivateKey) ([]byte, error
 	return out, nil
 }
 
-func run(args []string, stderr io.Writer, getenv func(string) string) ([]byte, error) {
+func run(ctx context.Context, args []string, stderr io.Writer, getenv func(string) string) ([]byte, error) {
 	cfg, err := parseFlags(args, stderr)
 	if err != nil {
 		return nil, err
@@ -281,11 +420,29 @@ func run(args []string, stderr io.Writer, getenv func(string) string) ([]byte, e
 		return nil, err
 	}
 
+	withExe := 0
+	for _, spec := range cfg.artifacts {
+		if spec.exePath != "" {
+			withExe++
+		}
+	}
+	switch {
+	case withExe > 1:
+		return nil, errDeltaTwoExe
+	case withExe == 0 && len(cfg.deltas) > 0:
+		return nil, errDeltaNoExe
+	}
+
 	artifacts := make([]selfupdate.Artifact, 0, len(cfg.artifacts))
 	for _, spec := range cfg.artifacts {
 		a, err := buildArtifact(spec, cfg.baseURL, cfg.version)
 		if err != nil {
 			return nil, err
+		}
+		if spec.exePath != "" {
+			if a, err = withDeltas(ctx, a, spec, cfg.deltas, cfg.baseURL, cfg.version); err != nil {
+				return nil, err
+			}
 		}
 		artifacts = append(artifacts, a)
 	}
@@ -320,7 +477,8 @@ func run(args []string, stderr io.Writer, getenv func(string) string) ([]byte, e
 }
 
 func main() {
-	if _, err := run(os.Args[1:], os.Stderr, os.Getenv); err != nil {
+	//nolint:forbidigo // main of a standalone cmd: the one place invariant 20 allows a root context
+	if _, err := run(context.Background(), os.Args[1:], os.Stderr, os.Getenv); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1) //nolint:forbidigo // forbidigo's own rule is "exit only from main"; this is func main of a standalone cmd, the same place root main.go is exempted for
 	}

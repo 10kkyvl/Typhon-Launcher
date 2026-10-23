@@ -576,7 +576,7 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 	}
 
 	if newer && current.State == StateReady && current.AvailableVersion == m.Version &&
-		readyArtifact != nil && *readyArtifact == art {
+		readyMatches(readyArtifact, art) {
 		st := stored{
 			AvailableVersion: m.Version,
 			Notes:            m.Notes,
@@ -594,6 +594,9 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 			CheckedAt:        st.CheckedAt,
 			TotalBytes:       art.Size,
 			DownloadedBytes:  art.Size,
+		}
+		if readyArtifact.Kind == KindExe {
+			status.TotalBytes, status.DownloadedBytes, status.Delta = current.TotalBytes, current.DownloadedBytes, current.Delta
 		}
 		return status, st, nil
 	}
@@ -835,6 +838,20 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		s.downloadCancel = nil
 		s.mu.Unlock()
 	}()
+
+	plan, planErr := planDelta(dlCtx, art, s.currentVersion)
+	switch {
+	case planErr == nil:
+		downloading.TotalBytes = plan.delta.Size
+		downloading.Delta = true
+		s.mu.Lock()
+		s.status = downloading
+		s.mu.Unlock()
+	case errors.Is(planErr, errNoDelta):
+		slog.Debug("selfupdate: downloading the full file", "reason", planErr)
+	case dlCtx.Err() == nil:
+		slog.Info("selfupdate: downloading the full file instead of a patch", "reason", planErr)
+	}
 	emit(eventStatus, downloading)
 
 	failed := func(err error) (Status, error) {
@@ -857,13 +874,37 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		return failed(err)
 	}
 
-	onProgress := func(downloaded int64) {
-		emit(eventProgress, Progress{Version: version, TotalBytes: art.Size, DownloadedBytes: downloaded})
+	progressFor := func(total int64) func(int64) {
+		return func(downloaded int64) {
+			emit(eventProgress, Progress{Version: version, TotalBytes: total, DownloadedBytes: downloaded})
+		}
 	}
 
-	path, err := s.client.Download(dlCtx, art, destDir, onProgress)
-	if err != nil {
-		return failed(err)
+	readyArt := art
+	readyArt.Deltas = nil
+	path, fetched, viaDelta := "", art.Size, false
+	if planErr == nil {
+		exePath, exeArt, derr := s.client.downloadViaDelta(dlCtx, plan, art, destDir, progressFor(plan.delta.Size))
+		switch {
+		case derr == nil:
+			path, readyArt, fetched, viaDelta = exePath, exeArt, plan.delta.Size, true
+		case dlCtx.Err() != nil:
+			return failed(derr)
+		default:
+			slog.Warn("selfupdate: the patch did not work out, downloading the full file", "from", plan.delta.From, "error", derr)
+			downloading.TotalBytes, downloading.DownloadedBytes, downloading.Delta = art.Size, 0, false
+			s.mu.Lock()
+			s.status = downloading
+			s.mu.Unlock()
+			emit(eventStatus, downloading)
+		}
+	}
+	plan.base = nil
+	if !viaDelta {
+		path, err = s.client.Download(dlCtx, art, destDir, progressFor(art.Size))
+		if err != nil {
+			return failed(err)
+		}
 	}
 
 	newStored := stored{
@@ -871,7 +912,7 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		Notes:            base.Notes,
 		PublishedAt:      base.PublishedAt,
 		CheckedAt:        base.CheckedAt,
-		Artifact:         &art,
+		Artifact:         &readyArt,
 		ReadyPath:        path,
 		SkippedVersion:   s.skipped(),
 	}
@@ -881,12 +922,13 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 
 	ready := base
 	ready.State = StateReady
-	ready.TotalBytes = art.Size
-	ready.DownloadedBytes = art.Size
+	ready.TotalBytes = fetched
+	ready.DownloadedBytes = fetched
+	ready.Delta = viaDelta
 	s.mu.Lock()
 	s.status = ready
 	s.readyPath = path
-	s.readyArtifact = &art
+	s.readyArtifact = &readyArt
 	s.mu.Unlock()
 	emit(eventStatus, ready)
 	return ready, nil
@@ -933,7 +975,8 @@ func (s *Service) ApplyUpdate(language string) error {
 
 	// A portable launcher must never run an installer and an installed one must
 	// never unpack a zip over itself: the record has to match the mode.
-	if s.portable != (readyArtifact != nil && readyArtifact.Kind == KindPortable) {
+	isExe := readyArtifact != nil && readyArtifact.Kind == KindExe
+	if !isExe && s.portable != (readyArtifact != nil && readyArtifact.Kind == KindPortable) {
 		return rollback(ErrNotReady)
 	}
 
@@ -968,6 +1011,9 @@ func (s *Service) ApplyUpdate(language string) error {
 		Version:       version,
 		FromVersion:   s.currentVersion,
 		Portable:      s.portable,
+	}
+	if isExe {
+		spec.Kind = specKindExe
 	}
 
 	specPath, err := SpecPath(s.dir)

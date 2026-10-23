@@ -362,7 +362,7 @@ func TestBuildCheckStatusCarriesOverMatchingReadyArtifact(t *testing.T) {
 	if status.TotalBytes != art.Size || status.DownloadedBytes != art.Size {
 		t.Fatalf("TotalBytes/DownloadedBytes = %d/%d, want %d/%d (fully downloaded, not zeroed)", status.TotalBytes, status.DownloadedBytes, art.Size, art.Size)
 	}
-	if st.Artifact == nil || *st.Artifact != art {
+	if st.Artifact == nil || !sameFile(*st.Artifact, art) {
 		t.Fatalf("stored.Artifact = %+v, want the carried-over artifact %+v", st.Artifact, art)
 	}
 	if st.ReadyPath != readyPath {

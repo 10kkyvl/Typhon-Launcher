@@ -180,6 +180,12 @@ func markSkipped(configDir, ver string) error {
 		return err
 	}
 	st.SkippedVersion = ver
+	// The launcher a rollback returns to may not know a rebuilt executable and
+	// would hand it to the installer runner as if it were an installer.
+	if st.Artifact != nil && st.Artifact.Kind == KindExe {
+		st.Artifact = nil
+		st.ReadyPath = ""
+	}
 	return store.Save(st)
 }
 
