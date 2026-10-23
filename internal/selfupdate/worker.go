@@ -59,13 +59,17 @@ type updateSpec struct {
 // indistinguishable from an update that never started. Kind, From and To are
 // set only for a rollback, where Version repeats To.
 type Outcome struct {
-	Kind       string    `json:"kind,omitempty"`
-	Version    string    `json:"version"`
-	From       string    `json:"from,omitempty"`
-	To         string    `json:"to,omitempty"`
-	OK         bool      `json:"ok"`
-	Error      string    `json:"error,omitempty"`
-	FinishedAt time.Time `json:"finishedAt"`
+	Kind    string `json:"kind,omitempty"`
+	Version string `json:"version"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	OK      bool   `json:"ok"`
+	Error   string `json:"error,omitempty"`
+	// SnapshotError is set when the update went ahead without saving the
+	// launcher it replaced (code selfupdate.snapshot_failed): it succeeded,
+	// and a rollback to the previous version is not on offer.
+	SnapshotError string    `json:"snapshotError,omitempty"`
+	FinishedAt    time.Time `json:"finishedAt"`
 }
 
 var (

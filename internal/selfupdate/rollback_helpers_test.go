@@ -14,9 +14,10 @@ import (
 // tests of the worker's orchestration are not about the snapshot itself.
 func stubSaveCurrent(t *testing.T) {
 	t.Helper()
-	restore := saveCurrent
+	restoreSave, restoreCommit := saveCurrent, commitCurrent
 	saveCurrent = func(context.Context, string, string, string) error { return nil }
-	t.Cleanup(func() { saveCurrent = restore })
+	commitCurrent = func(string) error { return nil }
+	t.Cleanup(func() { saveCurrent, commitCurrent = restoreSave, restoreCommit })
 }
 
 func stubRollbackSupported(t *testing.T, err error) {
@@ -120,6 +121,9 @@ func newRollbackFixtureAt(t *testing.T, configDir string, beforeSnapshot ...func
 	}
 	if err := snapshotPrevious(context.Background(), f.configDir, f.target, "1.2.0"); err != nil {
 		t.Fatalf("snapshotPrevious: %v", err)
+	}
+	if err := commitSnapshot(f.configDir); err != nil {
+		t.Fatalf("commitSnapshot: %v", err)
 	}
 
 	writeTestFile(t, f.target, []byte(f.newExe))

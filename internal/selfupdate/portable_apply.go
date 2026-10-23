@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+
+	"typhon/internal/storage"
 )
 
 const (
@@ -199,7 +201,7 @@ func recoverPortableSwap(exe string) error {
 }
 
 func removeIfExists(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := storage.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return nil

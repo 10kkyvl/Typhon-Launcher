@@ -89,7 +89,7 @@ func TestJSONShapesMatchTheFrontendInterfaces(t *testing.T) {
 			TotalBytes: 1, DownloadedBytes: 1, CheckedAt: stamp, Error: "e", ErrorCode: "c", Delta: true,
 		}, "SelfUpdateStatus"},
 		{"progress", Progress{Version: "1.2.3", TotalBytes: 2, DownloadedBytes: 1}, "SelfUpdateProgress"},
-		{"outcome", Outcome{Kind: outcomeRolledBack, Version: "1.2.3", From: "1.3.0", To: "1.2.3", OK: true, Error: "e", FinishedAt: stamp}, "SelfUpdateOutcome"},
+		{"outcome", Outcome{Kind: outcomeRolledBack, Version: "1.2.3", From: "1.3.0", To: "1.2.3", OK: true, Error: "e", SnapshotError: "s", FinishedAt: stamp}, "SelfUpdateOutcome"},
 		{"release note", note, "ReleaseNote"},
 		{"release change", change, "ReleaseChange"},
 		{"release notes", ReleaseNotes{CurrentVersion: "1.0.0", Unseen: []ReleaseNote{note}, History: []ReleaseNote{note}}, "ReleaseNotes"},

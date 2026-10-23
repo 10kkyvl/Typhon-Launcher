@@ -17,7 +17,7 @@ func tempNames(t *testing.T, dir string) []string {
 	}
 	var names []string
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".tmp-") {
+		if strings.HasPrefix(e.Name(), swapTempPrefix) {
 			names = append(names, e.Name())
 		}
 	}
@@ -120,25 +120,28 @@ func TestRecoverSwapRemovesOnlyOldTempFiles(t *testing.T) {
 	exe := filepath.Join(dir, "typhon.exe")
 	writeTestFile(t, exe, []byte("the launcher"))
 	writeTestFile(t, filepath.Join(dir, "uninstall.exe"), []byte("uninstaller"))
-	stale := filepath.Join(dir, ".tmp-111")
-	young := filepath.Join(dir, ".tmp-222")
+	stale := filepath.Join(dir, swapTempPrefix+"111")
+	young := filepath.Join(dir, swapTempPrefix+"222")
 	other := filepath.Join(dir, "notes.tmp-1")
+	foreign := filepath.Join(dir, ".tmp-333")
 	writeTestFile(t, stale, []byte("half of a replacement"))
 	writeTestFile(t, young, []byte("a write in flight"))
 	writeTestFile(t, other, []byte("not ours"))
+	writeTestFile(t, foreign, []byte("somebody else's temp file"))
+	ageFile(t, foreign, 2*swapLeftoverAge)
 	ageFile(t, stale, 2*swapLeftoverAge)
 	ageFile(t, young, swapLeftoverAge/4)
-	if err := os.Mkdir(filepath.Join(dir, ".tmp-dir"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, swapTempPrefix+"dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ageFile(t, filepath.Join(dir, ".tmp-dir"), 2*swapLeftoverAge)
+	ageFile(t, filepath.Join(dir, swapTempPrefix+"dir"), 2*swapLeftoverAge)
 
 	recoverSwap(exe)
 
 	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("stale temp file survived: %v", err)
 	}
-	for _, keep := range []string{exe, young, other, filepath.Join(dir, "uninstall.exe"), filepath.Join(dir, ".tmp-dir")} {
+	for _, keep := range []string{exe, young, other, foreign, filepath.Join(dir, "uninstall.exe"), filepath.Join(dir, swapTempPrefix+"dir")} {
 		if _, err := os.Stat(keep); err != nil {
 			t.Fatalf("recoverSwap removed %s: %v", keep, err)
 		}

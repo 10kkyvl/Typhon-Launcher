@@ -118,3 +118,49 @@ func TestEnvelopeVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteAtomicStreamTempUsesTheCallersPattern(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "typhon.exe")
+	seen := ""
+	err := WriteAtomicStreamTemp(path, 0o700, ".typhon-swap-*", func(w io.Writer) error {
+		names := dirNames(t, dir)
+		if len(names) != 1 {
+			t.Errorf("directory holds %v while writing, want only the temp file", names)
+		} else {
+			seen = names[0]
+		}
+		_, err := io.WriteString(w, "payload")
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(seen, ".typhon-swap-") {
+		t.Fatalf("temp file was named %q", seen)
+	}
+	if names := dirNames(t, dir); len(names) != 1 || names[0] != "typhon.exe" {
+		t.Fatalf("directory holds %v", names)
+	}
+}
+
+func TestRemoveAndRename(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(dir, "b.txt")
+	if err := Rename(file, moved); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if err := Remove(moved); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := Remove(moved); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Remove of a missing file = %v, want ErrNotExist", err)
+	}
+	if err := Rename(moved, file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Rename of a missing file = %v, want ErrNotExist", err)
+	}
+}

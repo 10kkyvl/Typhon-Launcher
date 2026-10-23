@@ -360,17 +360,22 @@ func (s *Service) recoverPortable() error {
 	return recoverPortableSwap(exe)
 }
 
-// recoverRollback finishes what a swap or a rollback that died left behind. A
-// swap is one rename, so all it can leave is a temp file beside the launcher;
-// a rollback that got as far as the swap but not as far as dropping its
-// snapshot leaves a record for the version that is running now, which would
-// offer to "go back" to itself. Neither blocks the start: both are retried
-// on the next one.
+// recoverRollback finishes what a swap, an update or a rollback that died left
+// behind. A swap is one rename, so all it can leave is a temp file beside the
+// launcher; an interrupted rollback or snapshot promotion is settled by
+// RecoverInterrupted (main runs it before any service loads its state, this
+// repeats it, which costs nothing when there is nothing to do); a rollback
+// that got as far as the swap but not as far as dropping its snapshot leaves a
+// record for the version that is running now, which would offer to "go back"
+// to itself. None of it blocks the start: all of it is retried on the next one.
 func (s *Service) recoverRollback() {
 	if exe, err := currentExecutable(); err != nil {
 		slog.Warn("selfupdate: resolve executable for swap recovery", "error", err)
 	} else {
 		recoverSwap(exe)
+	}
+	if err := RecoverInterrupted(s.dir, s.currentVersion); err != nil {
+		slog.Warn("selfupdate: settle an interrupted update", "error", err)
 	}
 	rec, err := loadPrevious(s.dir)
 	if err != nil {
@@ -475,7 +480,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			if d.Name() == workerDirName {
 				return fs.SkipDir
 			}
-			if d.Name() == previousDirName {
+			if d.Name() == previousDirName || d.Name() == stagingDirName {
 				return fs.SkipDir
 			}
 			if keepVersion != "" && d.Name() == keepVersion {
@@ -484,7 +489,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			remove(relPath, root.RemoveAll)
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == startupMarkerName {
+			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == stagingRecordName || d.Name() == snapshotFailedName || d.Name() == startupMarkerName {
 				return nil
 			}
 			remove(relPath, root.Remove)

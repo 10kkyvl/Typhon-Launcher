@@ -227,7 +227,7 @@ func TestServiceStartupDropsTheSnapshotOfTheRunningVersion(t *testing.T) {
 func TestServiceStartupClearsSwapLeftoversBesideTheLauncher(t *testing.T) {
 	f := newRollbackFixture(t)
 	stubCurrentExecutable(t, f.target)
-	stale := filepath.Join(filepath.Dir(f.target), ".tmp-4711")
+	stale := filepath.Join(filepath.Dir(f.target), swapTempPrefix+"4711")
 	writeTestFile(t, stale, []byte("half a launcher"))
 	ageFile(t, stale, 3*swapLeftoverAge)
 

@@ -186,13 +186,17 @@ func TestRunWorkerUpdateSavesTheRunningLauncherBeforeTheInstaller(t *testing.T) 
 		writeTestFile(t, target, []byte("new launcher"))
 		return nil
 	}
+	commitCurrent = func(string) error {
+		order = append(order, "commit")
+		return nil
+	}
 
 	spec := updateSpec{InstallerPath: "setup", InstallDir: filepath.Dir(target), ParentPID: 4242, RelaunchPath: target, Version: "1.3.0", FromVersion: "1.2.0"}
 	specPath := writeWorkerSpec(t, configDir, spec)
 	if err := runWorker(specPath, quietReporter); err != nil {
 		t.Fatalf("runWorker: %v", err)
 	}
-	if !reflect.DeepEqual(order, []string{"save", "install"}) {
+	if !reflect.DeepEqual(order, []string{"save", "install", "commit"}) {
 		t.Fatalf("order = %v", order)
 	}
 	if want := []string{configDir, target, "1.2.0"}; !reflect.DeepEqual(saved, want) {
@@ -203,33 +207,108 @@ func TestRunWorkerUpdateSavesTheRunningLauncherBeforeTheInstaller(t *testing.T) 
 	}
 }
 
-func TestRunWorkerUpdateStopsWhenTheLauncherCannotBeSaved(t *testing.T) {
+// One unreadable cache file must not block every release: the update goes
+// ahead, and the missing snapshot is written down where the user will see it.
+func TestRunWorkerUpdateGoesAheadWhenTheLauncherCannotBeSaved(t *testing.T) {
 	shortWorkerTimeouts(t)
 	stubRollbackSupported(t, nil)
-	configDir := testConfigDir(t)
-	target := filepath.Join(t.TempDir(), "typhon.exe")
-	writeTestFile(t, target, []byte("old launcher"))
-	fakes := &fakePrimitives{applyWrites: []byte("new launcher")}
+	f := newRollbackFixtureAt(t, testConfigDir(t))
+	configDir := f.configDir
+	fakes := &fakePrimitives{applyWrites: []byte("newer launcher")}
 	installFakePrimitives(t, fakes)
-	errDisk := errors.New("disk is full")
+	errDisk := errors.New("catalog.json: access denied")
 	saveCurrent = func(context.Context, string, string, string) error { return errDisk }
+	commitCurrent = func(string) error {
+		t.Error("commitCurrent called without a staged snapshot")
+		return nil
+	}
 
-	spec := updateSpec{InstallerPath: "setup", InstallDir: filepath.Dir(target), ParentPID: 4242, RelaunchPath: target, Version: "1.3.0", FromVersion: "1.2.0"}
-	err := runWorker(writeWorkerSpec(t, configDir, spec), quietReporter)
-	if !errors.Is(err, errDisk) {
-		t.Fatalf("runWorker error = %v, want the save error", err)
+	spec := updateSpec{InstallerPath: "setup", InstallDir: filepath.Dir(f.target), ParentPID: 4242, RelaunchPath: f.target, Version: "1.4.0", FromVersion: "1.3.0"}
+	if err := runWorker(writeWorkerSpec(t, configDir, spec), quietReporter); err != nil {
+		t.Fatalf("runWorker error = %v: the update itself succeeded", err)
 	}
-	if fakes.applyCalls != 0 {
-		t.Fatalf("the installer ran %d times without a saved launcher", fakes.applyCalls)
+
+	if fakes.applyCalls != 1 {
+		t.Fatalf("installer ran %d times, want 1", fakes.applyCalls)
 	}
-	if got := readTestFile(t, target); got != "old launcher" {
-		t.Fatalf("launcher = %q", got)
+	got := readWorkerOutcome(t, configDir)
+	if !got.OK || got.Error != "" {
+		t.Fatalf("outcome = %+v, want a successful update", got)
 	}
-	if got := readWorkerOutcome(t, configDir); got.OK || !strings.Contains(got.Error, "disk is full") {
+	if !strings.Contains(got.SnapshotError, "selfupdate.snapshot_failed") || !strings.Contains(got.SnapshotError, "access denied") {
+		t.Fatalf("outcome.SnapshotError = %q, want the code and the cause", got.SnapshotError)
+	}
+	note, found, err := loadSnapshotFailure(configDir)
+	if err != nil || !found || note.Version != "1.3.0" {
+		t.Fatalf("failure note = %+v, %v, %v", note, found, err)
+	}
+
+	info := rollbackAvailability(configDir, "1.4.0")
+	if info.Available || info.ReasonCode != "selfupdate.snapshot_failed" || !strings.Contains(info.Reason, "access denied") {
+		t.Fatalf("rollback info = %+v, want the honest reason", info)
+	}
+	if rec, err := loadPrevious(configDir); err != nil || rec.Version != "1.2.0" {
+		t.Fatalf("the earlier snapshot = %+v, %v; it must stay on disk", rec, err)
+	}
+}
+
+func TestRunWorkerUpdateThatFailsLeavesNoNoteAndKeepsTheSnapshot(t *testing.T) {
+	shortWorkerTimeouts(t)
+	stubRollbackSupported(t, nil)
+	f := newRollbackFixtureAt(t, testConfigDir(t))
+	fakes := &fakePrimitives{applyErr: errors.New("installer exploded")}
+	installFakePrimitives(t, fakes)
+	saveCurrent = snapshotPrevious
+	commitCurrent = commitSnapshot
+
+	spec := updateSpec{InstallerPath: "setup", InstallDir: filepath.Dir(f.target), ParentPID: 4242, RelaunchPath: f.target, Version: "1.4.0", FromVersion: "1.3.0"}
+	if err := runWorker(writeWorkerSpec(t, f.configDir, spec), quietReporter); err == nil {
+		t.Fatal("runWorker() error = nil for a failed installer")
+	}
+
+	if rec, err := loadPrevious(f.configDir); err != nil || rec.Version != "1.2.0" {
+		t.Fatalf("snapshot in use = %+v, %v; a failed update keeps the one the user had", rec, err)
+	}
+	cache := mustCacheDir(t, f.configDir)
+	for _, name := range []string{stagingDirName, stagingRecordName, snapshotFailedName} {
+		if _, err := os.Stat(filepath.Join(cache, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s left behind: %v", name, err)
+		}
+	}
+	if got := readWorkerOutcome(t, f.configDir); got.OK || got.SnapshotError != "" {
 		t.Fatalf("outcome = %+v", got)
 	}
-	if !reflect.DeepEqual(fakes.relaunchCalls, []string{target}) {
-		t.Fatalf("relaunch calls = %v: the old launcher has to come back", fakes.relaunchCalls)
+}
+
+func TestRunWorkerUpdateThatSucceedsPromotesTheNewSnapshot(t *testing.T) {
+	shortWorkerTimeouts(t)
+	stubRollbackSupported(t, nil)
+	f := newRollbackFixtureAt(t, testConfigDir(t))
+	fakes := &fakePrimitives{applyWrites: []byte("launcher 1.4.0")}
+	installFakePrimitives(t, fakes)
+	saveCurrent = snapshotPrevious
+	commitCurrent = commitSnapshot
+	if err := recordSnapshotFailure(f.configDir, "1.1.0", errors.New("older failure")); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := updateSpec{InstallerPath: "setup", InstallDir: filepath.Dir(f.target), ParentPID: 4242, RelaunchPath: f.target, Version: "1.4.0", FromVersion: "1.3.0"}
+	if err := runWorker(writeWorkerSpec(t, f.configDir, spec), quietReporter); err != nil {
+		t.Fatalf("runWorker: %v", err)
+	}
+
+	rec, err := loadPrevious(f.configDir)
+	if err != nil || rec.Version != "1.3.0" {
+		t.Fatalf("snapshot in use = %+v, %v; want the launcher the update replaced", rec, err)
+	}
+	if rec.SHA256 != sha256Hex(t, []byte(f.newExe)) {
+		t.Fatal("the snapshot does not hold the launcher that was running")
+	}
+	if info := rollbackAvailability(f.configDir, "1.4.0"); !info.Available || info.Version != "1.3.0" {
+		t.Fatalf("rollback info = %+v", info)
+	}
+	if got := readWorkerOutcome(t, f.configDir); !got.OK || got.SnapshotError != "" {
+		t.Fatalf("outcome = %+v", got)
 	}
 }
 

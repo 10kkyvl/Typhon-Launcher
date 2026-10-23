@@ -71,6 +71,7 @@ const REASONS: Record<string, MessageKey> = {
   'selfupdate.rollback_version_differs': 'state.selfupdateReasonRollbackVersionDiffers',
   'selfupdate.snapshot_version': 'state.selfupdateReasonSnapshotVersion',
   'selfupdate.swap_hash': 'state.selfupdateReasonSwapHash',
+  'selfupdate.snapshot_failed': 'state.selfupdateReasonSnapshotFailed',
 };
 
 // net/http, crypto/tls and the OS surface these directly, with no sentinel of

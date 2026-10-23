@@ -27,6 +27,7 @@ type RollbackInfo struct {
 var (
 	rollbackSupported    = platformRollbackSupported
 	updateDisplayVersion = setDisplayVersion
+	swapLauncher         = swapExecutable
 )
 
 func unavailable(err error) RollbackInfo {
@@ -39,6 +40,13 @@ func unavailable(err error) RollbackInfo {
 func checkRollback(configDir, current string) (previousRecord, error) {
 	if err := rollbackSupported(); err != nil {
 		return previousRecord{}, err
+	}
+	failure, failed, err := loadSnapshotFailure(configDir)
+	if err != nil {
+		return previousRecord{}, fmt.Errorf("%w: %w", ErrPreviousBroken, err)
+	}
+	if failed {
+		return previousRecord{}, fmt.Errorf("%w (updating from %s): %s", ErrSnapshotFailed, failure.Version, failure.Reason)
 	}
 	rec, err := loadPrevious(configDir)
 	if err != nil {
@@ -115,11 +123,16 @@ func launchRollback(configDir string, portable bool, current, language string) e
 
 // performRollback is the worker's half of a rollback, run after the launcher
 // has exited. Everything that can fail without changing anything comes first
-// (the saved launcher's hash, every state backup's hash, the skip record, the
-// uninstall entry); the launcher swap is last and is one rename. The order
-// matters if the worker dies half-way: state goes back before the swap because
-// the newer launcher migrates older state forward again, while the older one
-// cannot read newer state. Dying between the two leaves a launcher that starts.
+// (the saved launcher's hash, every state backup's hash, whether the launcher
+// can be replaced at all, the skip record, the uninstall entry). Then the live
+// state files that will be overwritten are kept aside, the saved copies are
+// written, and the launcher swap comes last as one rename. A failure from the
+// first write on puts every overwritten file back and the registry value with
+// it before the error is returned, so "the version did not change" is true of
+// the data too. If the worker dies instead, recoverReplaced does the same at
+// the next start, while the launcher is still the one being left. State goes
+// back before the swap because the newer launcher migrates older state
+// forward again, while the older one cannot read newer state.
 func performRollback(ctx context.Context, configDir, target, from, to string, portable bool) error {
 	if from == "" || to == "" {
 		return errors.New("selfupdate: rollback needs both the current and the target version")
@@ -139,6 +152,9 @@ func performRollback(ctx context.Context, configDir, target, from, to string, po
 	if err != nil {
 		return err
 	}
+	if err := canSwap(target); err != nil {
+		return err
+	}
 	if err := markSkipped(configDir, from); err != nil {
 		return fmt.Errorf("selfupdate: remember the skipped version: %w", err)
 	}
@@ -151,15 +167,26 @@ func performRollback(ctx context.Context, configDir, target, from, to string, po
 		}
 	}
 	fail := func(cause error) error {
-		if rerr := revert(); rerr != nil {
-			return errors.Join(cause, fmt.Errorf("selfupdate: put the registry version back: %w", rerr))
+		errs := []error{cause}
+		if len(items) > 0 {
+			if uerr := undoReplaced(configDir); uerr != nil {
+				errs = append(errs, fmt.Errorf("selfupdate: put the state files back: %w", uerr))
+			}
 		}
-		return cause
+		if rerr := revert(); rerr != nil {
+			errs = append(errs, fmt.Errorf("selfupdate: put the registry version back: %w", rerr))
+		}
+		return errors.Join(errs...)
 	}
-	if err := applyStateRestore(ctx, items); err != nil {
+	if len(items) > 0 {
+		if err := saveReplaced(ctx, configDir, items, from, to); err != nil {
+			return fail(err)
+		}
+	}
+	if err := writeRestored(ctx, items); err != nil {
 		return fail(err)
 	}
-	if err := swapExecutable(ctx, target, exe, rec.SHA256); err != nil {
+	if err := swapLauncher(ctx, target, exe, rec.SHA256); err != nil {
 		return fail(err)
 	}
 	if err := dropPrevious(configDir); err != nil {

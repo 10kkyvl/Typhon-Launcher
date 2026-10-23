@@ -167,39 +167,188 @@ func TestPerformRollbackRegistryFailureChangesNothing(t *testing.T) {
 	}
 }
 
-// A swap that fails after the state went back leaves the newer launcher,
-// which migrates older state forward: the registry value is put back and a
-// second rollback finishes the job.
-func TestPerformRollbackSwapFailureRevertsTheRegistryAndCanBeRetried(t *testing.T) {
+// liveState reads every file of the config dir the rollback may touch, so a
+// test can say "byte for byte as before".
+func liveState(t *testing.T, configDir string) map[string]string {
+	t.Helper()
+	root, err := os.OpenRoot(configDir)
+	if err != nil {
+		t.Fatalf("open the config dir: %v", err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			t.Errorf("close the config dir: %v", err)
+		}
+	}()
+	got := map[string]string{}
+	err = fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if rel == "selfupdate" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		data, err := root.ReadFile(filepath.FromSlash(rel))
+		if err != nil {
+			return err
+		}
+		got[rel] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("read the live state: %v", err)
+	}
+	return got
+}
+
+func assertSameState(t *testing.T, want, got map[string]string) {
+	t.Helper()
+	for path, content := range want {
+		have, ok := got[path]
+		if !ok {
+			t.Errorf("%s is gone", path)
+		} else if have != content {
+			t.Errorf("%s differs from how it was before the rollback", path)
+		}
+	}
+	for path := range got {
+		if _, ok := want[path]; !ok {
+			t.Errorf("%s appeared", path)
+		}
+	}
+}
+
+// failingSwap makes the swap itself fail after the state files were written,
+// the case a pre-flight check cannot see (a scanner grabbing the file between).
+func failingSwap(t *testing.T, err error) {
+	t.Helper()
+	restore := swapLauncher
+	swapLauncher = func(context.Context, string, string, string) error { return err }
+	t.Cleanup(func() { swapLauncher = restore })
+}
+
+// A rollback that fails at the swap has already written the saved state over
+// the live files. The data written since the update must come back with the
+// failure, or "the version did not change" would be a lie about the data.
+func TestPerformRollbackSwapFailureLeavesTheDataExactlyAsItWas(t *testing.T) {
+	f := newRollbackFixture(t)
+	display := stubDisplayVersion(t)
+	errSwap := errors.New("the scanner holds typhon.exe")
+	failingSwap(t, errSwap)
+	before := liveState(t, f.configDir)
+
+	err := performRollback(context.Background(), f.configDir, f.target, "1.3.0", "1.2.0", false)
+	if !errors.Is(err, errSwap) {
+		t.Fatalf("error = %v, want the swap error", err)
+	}
+
+	assertSameState(t, before, liveState(t, f.configDir))
+	if got := readTestFile(t, f.target); got != f.newExe {
+		t.Fatalf("launcher = %q", got)
+	}
+	if display.reverted != 1 {
+		t.Fatalf("registry reverts = %d, want 1", display.reverted)
+	}
+	if _, err := loadPrevious(f.configDir); err != nil {
+		t.Fatalf("the snapshot must stay for a retry: %v", err)
+	}
+	if _, err := os.Stat(mustReplacedDir(t, f.configDir)); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("kept copies survived a completed undo: %v", err)
+	}
+
+	swapLauncher = swapExecutable
+	if err := performRollback(context.Background(), f.configDir, f.target, "1.3.0", "1.2.0", false); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if got := readTestFile(t, f.target); got != f.oldExe {
+		t.Fatalf("launcher after the retry = %q", got)
+	}
+}
+
+func mustReplacedDir(t *testing.T, configDir string) string {
+	t.Helper()
+	dir, err := replacedPath(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// A launcher that cannot be replaced is found out before the first state file
+// is touched.
+func TestPerformRollbackRefusesALauncherItCannotSwapBeforeWritingState(t *testing.T) {
 	f := newRollbackFixture(t)
 	display := stubDisplayVersion(t)
 	blocked := filepath.Join(t.TempDir(), "typhon.exe")
 	if err := os.MkdirAll(filepath.Join(blocked, "child"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	before := liveState(t, f.configDir)
 
-	err := performRollback(context.Background(), f.configDir, blocked, "1.3.0", "1.2.0", false)
-	if err == nil {
+	if err := performRollback(context.Background(), f.configDir, blocked, "1.3.0", "1.2.0", false); err == nil {
 		t.Fatal("performRollback() error = nil with a directory in place of the launcher")
 	}
-	if display.reverted != 1 {
-		t.Fatalf("registry reverts = %d, want 1", display.reverted)
+	assertSameState(t, before, liveState(t, f.configDir))
+	if len(display.set) != 0 {
+		t.Fatalf("the registry was written: %v", display.set)
 	}
-	if v := configEnvelopeVersion(t, f.configDir, "playlog.json"); v != 2 {
-		t.Fatalf("playlog.json is at version %d, the state restore comes before the swap", v)
+	if _, err := os.Stat(mustReplacedDir(t, f.configDir)); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("kept copies were made for a rollback that never started: %v", err)
 	}
-	if _, err := loadPrevious(f.configDir); err != nil {
-		t.Fatalf("the snapshot must stay for a retry: %v", err)
-	}
-	if left := tempNames(t, filepath.Dir(blocked)); len(left) != 0 {
-		t.Fatalf("temp files left: %v", left)
-	}
+}
 
-	if err := performRollback(context.Background(), f.configDir, f.target, "1.3.0", "1.2.0", false); err != nil {
-		t.Fatalf("retry: %v", err)
+func TestCanSwap(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "typhon.exe")
+	writeTestFile(t, exe, []byte("launcher"))
+	if err := canSwap(exe); err != nil {
+		t.Fatalf("canSwap on a writable launcher: %v", err)
 	}
-	if got := readTestFile(t, f.target); got != f.oldExe {
-		t.Fatalf("launcher after the retry = %q", got)
+	if left := tempNames(t, dir); len(left) != 0 {
+		t.Fatalf("the probe left %v", left)
+	}
+	if err := canSwap(filepath.Join(dir, "absent.exe")); err == nil {
+		t.Fatal("canSwap on a missing launcher = nil")
+	}
+	if err := canSwap(filepath.Join(dir, "no-dir", "typhon.exe")); err == nil {
+		t.Fatal("canSwap in a missing folder = nil")
+	}
+}
+
+// The restore stops half-way: the first file is written, the second is not.
+func TestPerformRollbackPartialRestoreIsUndone(t *testing.T) {
+	f := newRollbackFixture(t, func(cfg string) { seedEnveloped(t, cfg, "second.json", 1, "old") })
+	seedEnveloped(t, f.configDir, "second.json", 2, "migrated")
+	display := stubDisplayVersion(t)
+	errDisk := errors.New("disk is full")
+	calls := 0
+	restore := writeStateFile
+	writeStateFile = func(path string, data []byte) error {
+		calls++
+		if calls == 2 {
+			return errDisk
+		}
+		return restore(path, data)
+	}
+	t.Cleanup(func() { writeStateFile = restore })
+	before := liveState(t, f.configDir)
+
+	err := performRollback(context.Background(), f.configDir, f.target, "1.3.0", "1.2.0", false)
+	if !errors.Is(err, errDisk) {
+		t.Fatalf("error = %v, want the write error", err)
+	}
+	if calls != 2 {
+		t.Fatalf("state writes = %d: the setup must reach the second file", calls)
+	}
+	assertSameState(t, before, liveState(t, f.configDir))
+	if got := readTestFile(t, f.target); got != f.newExe {
+		t.Fatalf("launcher = %q", got)
+	}
+	if display.reverted != 1 {
+		t.Fatalf("registry reverts = %d", display.reverted)
 	}
 }
 
@@ -219,7 +368,7 @@ func TestPerformRollbackResumesAfterTheWorkerDiedBetweenSteps(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("restoring %d files, want 1", len(items))
 	}
-	if err := applyStateRestore(context.Background(), items); err != nil {
+	if err := writeRestored(context.Background(), items); err != nil {
 		t.Fatal(err)
 	}
 	if got := readTestFile(t, f.target); got != f.newExe {

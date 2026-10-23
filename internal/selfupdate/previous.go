@@ -29,6 +29,10 @@ const (
 	cacheDirMode = 0o700
 )
 
+// writeStateFile is a seam for tests: the write that puts a saved state file
+// over the live one.
+var writeStateFile = storage.WriteAtomic
+
 // stateFile is one state file as it stood before the update: Version is the
 // storage envelope version the launcher that wrote it understood.
 type stateFile struct {
@@ -94,33 +98,39 @@ func skippedStateFile(rel, name string) bool {
 }
 
 // snapshotPrevious saves the running launcher and the versioned state next to
-// it, so that a rollback can put both back. The record goes last and is
-// removed first: whatever dies in between leaves no record, and with no record
-// nothing is offered.
-func snapshotPrevious(ctx context.Context, configDir, exe, ver string) error {
+// it, so that a rollback can put both back. It builds the copy in a staging
+// directory and leaves the snapshot in use untouched: the new copy replaces
+// it only when the update has gone through (commitSnapshot), and an update
+// that fails must not cost the user the snapshot they already had. The record
+// goes last, so a copy that died half-way has none and is never promoted.
+func snapshotPrevious(ctx context.Context, configDir, exe, ver string) (err error) {
 	if ver == "" || validatePathSegment(ver) != nil {
 		return ErrSnapshotVersion
 	}
 	if exe == "" {
 		return errors.New("selfupdate: snapshot: executable path is empty")
 	}
-	dir, err := PreviousDir(configDir)
+	dir, err := stagingDir(configDir)
 	if err != nil {
 		return err
 	}
-	recordPath, err := previousRecordPath(configDir)
+	recordPath, err := stagingRecordPath(configDir)
 	if err != nil {
 		return err
 	}
-	if err := removeIfExists(recordPath); err != nil {
-		return fmt.Errorf("selfupdate: drop the old rollback record: %w", err)
+	defer func() {
+		if err != nil {
+			if derr := discardStaging(configDir); derr != nil {
+				slog.Warn("selfupdate: remove the unfinished snapshot", "error", derr)
+			}
+		}
+	}()
+	if err := discardStaging(configDir); err != nil {
+		return fmt.Errorf("selfupdate: drop the earlier unfinished snapshot: %w", err)
 	}
 	stateDir := filepath.Join(dir, previousStateName)
-	if err := os.RemoveAll(stateDir); err != nil {
-		return fmt.Errorf("selfupdate: drop the old state backup: %w", err)
-	}
 	if err := os.MkdirAll(stateDir, cacheDirMode); err != nil {
-		return fmt.Errorf("selfupdate: create the rollback directory: %w", err)
+		return fmt.Errorf("selfupdate: create the snapshot directory: %w", err)
 	}
 
 	sum, size, err := copyHashed(ctx, exe, filepath.Join(dir, previousExeName))
@@ -133,7 +143,7 @@ func snapshotPrevious(ctx context.Context, configDir, exe, ver string) error {
 	}
 	rec := previousRecord{Version: ver, SHA256: sum, Size: size, SavedAt: time.Now().UTC(), StateBackup: files}
 	if err := storage.Save(recordPath, previousRecordVersion, rec); err != nil {
-		return fmt.Errorf("selfupdate: write the rollback record: %w", err)
+		return fmt.Errorf("selfupdate: write the snapshot record: %w", err)
 	}
 	return nil
 }
@@ -252,6 +262,10 @@ func loadPrevious(configDir string) (previousRecord, error) {
 	if err != nil {
 		return previousRecord{}, err
 	}
+	return loadRecord(path)
+}
+
+func loadRecord(path string) (previousRecord, error) {
 	var rec previousRecord
 	if err := storage.Load(path, previousRecordVersion, nil, &rec); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -321,11 +335,14 @@ func verifyPreviousExe(ctx context.Context, configDir string, rec previousRecord
 	return path, nil
 }
 
-// restoreItem is one state file chosen for restoring, already read from the
-// backup and checked against its hash.
+// restoreItem is one state file chosen for restoring: rel is its path under
+// the config dir, data the backup (already checked against its hash) and old
+// what the live file holds now, kept so the restore can be undone.
 type restoreItem struct {
+	rel  string
 	dst  string
 	data []byte
+	old  []byte
 }
 
 // planStateRestore picks the backed-up files whose envelope version is no
@@ -366,21 +383,21 @@ func planStateRestore(ctx context.Context, configDir string, rec previousRecord)
 		if int64(len(data)) != f.Size || hex.EncodeToString(sum[:]) != f.SHA256 {
 			return nil, fmt.Errorf("%w: %s", ErrPreviousStateHash, f.Path)
 		}
-		items = append(items, restoreItem{dst: live, data: data})
+		items = append(items, restoreItem{rel: f.Path, dst: live, data: data, old: liveRaw})
 	}
 	return items, nil
 }
 
-// applyStateRestore writes the planned files one by one. Each write is atomic
-// on its own; a rollback that stops half-way leaves files the newer launcher
-// still reads, and running it again finishes the rest.
-func applyStateRestore(ctx context.Context, items []restoreItem) error {
+// writeRestored writes the planned files one by one. Each write is atomic on
+// its own; what a rollback does when it stops half-way is the caller's job
+// (undoReplaced), this only reports the first failure.
+func writeRestored(ctx context.Context, items []restoreItem) error {
 	for _, it := range items {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := storage.WriteAtomic(it.dst, it.data); err != nil {
-			return fmt.Errorf("restore %s: %w", filepath.Base(it.dst), err)
+		if err := writeStateFile(it.dst, it.data); err != nil {
+			return fmt.Errorf("restore %s: %w", it.rel, err)
 		}
 	}
 	return nil

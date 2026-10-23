@@ -194,6 +194,7 @@ export const state = {
   'state.selfupdateReasonRollbackVersionDiffers': 'Сохранённая копия относится к другой версии. Откройте настройки заново и повторите.',
   'state.selfupdateReasonSnapshotVersion': 'Версия запущенного лаунчера неизвестна, поэтому сохранить её для возврата нельзя.',
   'state.selfupdateReasonSwapHash': 'Файл подставляемой версии не совпал с ожидаемым. Возврат отменён.',
+  'state.selfupdateReasonSnapshotFailed': 'Обновление прошло, но прежнюю версию сохранить не удалось: вернуться на неё нельзя.',
   'state.selfupdateRollbackMissedToast': 'Лаунчер не закрылся вовремя, возврат на прежнюю версию отменён.',
   'state.selfupdateRollbackFailedToast': 'Не удалось вернуться на версию {version}',
   'state.selfupdateCodeCheckFailed': 'Не удалось проверить обновления.',

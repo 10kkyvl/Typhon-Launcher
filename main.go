@@ -313,6 +313,12 @@ func main() {
 		fatal("resolve config dir", err)
 	}
 
+	// Before any service reads its state: a file put back after a service has
+	// loaded it would be overwritten by that service's next save.
+	if err := selfupdate.RecoverInterrupted(configDir, app.Version); err != nil {
+		slog.Error("settle an interrupted update or rollback", "error", err)
+	}
+
 	// Counted for --play starts as well: a shortcut start runs the same
 	// services and fails the same way. The workers above never get here, so
 	// an update or a rollback in progress is not counted as a failed start.

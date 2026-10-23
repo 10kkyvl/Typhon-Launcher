@@ -195,6 +195,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonRollbackVersionDiffers': 'The saved copy is for a different version. Reopen settings and try again.',
   'state.selfupdateReasonSnapshotVersion': 'The running launcher\'s version is unknown, so it cannot be saved for a rollback.',
   'state.selfupdateReasonSwapHash': 'The file of the version to restore does not match what was expected. The rollback was cancelled.',
+  'state.selfupdateReasonSnapshotFailed': 'The update went through, but the previous version could not be saved, so there is no going back to it.',
   'state.selfupdateRollbackMissedToast': 'The launcher did not exit in time, so going back to the previous version was cancelled.',
   'state.selfupdateRollbackFailedToast': 'Failed to go back to version {version}',
   'state.selfupdateCodeCheckFailed': 'Failed to check for updates.',

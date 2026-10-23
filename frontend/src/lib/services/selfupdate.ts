@@ -52,6 +52,7 @@ export interface SelfUpdateOutcome {
   to?: string;
   ok: boolean;
   error?: string;
+  snapshotError?: string;
   finishedAt: string;
 }
 

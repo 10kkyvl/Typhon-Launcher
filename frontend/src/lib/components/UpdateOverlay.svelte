@@ -77,6 +77,8 @@
     </div>
     {#if !outcome.ok && outcome.error}
       <span class="meta">{outcomeReason(outcome)}</span>
+    {:else if outcome.ok && outcome.snapshotError}
+      <span class="meta">{msg('state.selfupdateReasonSnapshotFailed')}</span>
     {/if}
   </div>
 {/if}

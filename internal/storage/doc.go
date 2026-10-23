@@ -289,6 +289,17 @@ func Save(path string, version int, data any) error {
 	return WriteAtomic(path, encoded)
 }
 
+// Remove deletes a file; on Windows it waits out the brief lock a virus
+// scanner takes on a file that was just written.
+func Remove(path string) error {
+	return removeFile(path)
+}
+
+// Rename moves a file or a directory, waiting out a scanner's lock on Windows.
+func Rename(from, to string) error {
+	return replaceFile(from, to)
+}
+
 // OpenRead opens a file for reading. On Windows it waits out the brief lock a
 // virus scanner takes on a file that was just written, as WriteAtomic does
 // for the rename.
@@ -324,8 +335,15 @@ func WriteAtomic(path string, data []byte) error {
 // written, such as a copy of a multi-megabyte executable or a file whose hash
 // is taken on the way. mode applies to the file that replaces path.
 func WriteAtomicStream(path string, mode fs.FileMode, fill func(io.Writer) error) error {
+	return WriteAtomicStreamTemp(path, mode, ".tmp-*", fill)
+}
+
+// WriteAtomicStreamTemp is WriteAtomicStream with the name pattern of the temp
+// file, for a caller that writes into a folder it does not own and must be able
+// to tell its own leftovers from anyone else's.
+func WriteAtomicStreamTemp(path string, mode fs.FileMode, tempPattern string, fill func(io.Writer) error) error {
 	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".tmp-*")
+	f, err := os.CreateTemp(dir, tempPattern)
 	if err != nil {
 		return fmt.Errorf("create temp file in %s: %w", dir, err)
 	}

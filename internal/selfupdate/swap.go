@@ -20,6 +20,11 @@ import (
 
 var ErrSwapHash = uierr.New("selfupdate.swap_hash", "selfupdate: the replacement launcher differs from its expected hash")
 
+// swapTempPrefix names the temp files the swap leaves beside the launcher. The
+// folder may be one the user keeps other things in (a portable copy), so the
+// prefix is the updater's own and recoverSwap removes nothing else.
+const swapTempPrefix = ".typhon-swap-"
+
 // swapLeftoverAge is how old a temp file beside the launcher must be before
 // startup treats it as the remains of a swap that died: a younger one may
 // belong to a write that is still going on.
@@ -57,7 +62,7 @@ func swapExecutable(ctx context.Context, target, src, wantSHA256 string) error {
 		}
 	}()
 
-	return storage.WriteAtomicStream(target, mode, func(w io.Writer) error {
+	return storage.WriteAtomicStreamTemp(target, mode, swapTempPrefix+"*", func(w io.Writer) error {
 		hasher := sha256.New()
 		if _, err := io.Copy(io.MultiWriter(w, hasher), &ctxReader{ctx: ctx, r: in}); err != nil {
 			return err
@@ -67,6 +72,24 @@ func swapExecutable(ctx context.Context, target, src, wantSHA256 string) error {
 		}
 		return nil
 	})
+}
+
+// canSwap says whether swapExecutable can work on target: the folder takes a
+// new file and the launcher itself can be opened for writing. It is asked
+// before anything else is changed, so a folder that refuses (permissions, a
+// scanner holding the file) is found out while nothing is yet half-done.
+func canSwap(target string) error {
+	if err := canCreateIn(filepath.Dir(target)); err != nil {
+		return fmt.Errorf("selfupdate: the launcher folder takes no new file: %w", err)
+	}
+	f, err := os.OpenFile(target, os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("selfupdate: the launcher cannot be opened for writing: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("selfupdate: close the launcher after the write check: %w", err)
+	}
+	return nil
 }
 
 // recoverSwap clears what a swap that died leaves beside the launcher: the
@@ -80,7 +103,7 @@ func recoverSwap(exe string) {
 		return
 	}
 	for _, e := range entries {
-		if !strings.HasPrefix(e.Name(), ".tmp-") || !e.Type().IsRegular() {
+		if !strings.HasPrefix(e.Name(), swapTempPrefix) || !e.Type().IsRegular() {
 			continue
 		}
 		info, err := e.Info()

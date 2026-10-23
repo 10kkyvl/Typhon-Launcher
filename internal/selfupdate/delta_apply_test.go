@@ -345,7 +345,7 @@ func TestRunWorkerLeavesTheLauncherWhenTheReadyExecutableIsWrong(t *testing.T) {
 func TestInterruptedSwapLeavesALauncherThatStartsAndAnUpdateThatApplies(t *testing.T) {
 	c := newExeCase(t)
 	fakeRegistry(t)
-	torn := filepath.Join(filepath.Dir(c.target), ".tmp-torn")
+	torn := filepath.Join(filepath.Dir(c.target), swapTempPrefix+"torn")
 	writeTestFile(t, torn, c.newBytes[:len(c.newBytes)/2])
 	ageFile(t, torn, 2*swapLeftoverAge)
 

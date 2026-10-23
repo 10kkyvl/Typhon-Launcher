@@ -75,7 +75,7 @@ func planDelta(ctx context.Context, art Artifact, currentVersion string) (deltaP
 // canCreateIn is the swap's own requirement: the new executable is written
 // beside the old one and renamed over it, so the folder has to take a new file.
 func canCreateIn(dir string) error {
-	f, err := os.CreateTemp(dir, ".tmp-probe-*")
+	f, err := os.CreateTemp(dir, swapTempPrefix+"probe-*")
 	if err != nil {
 		return err
 	}

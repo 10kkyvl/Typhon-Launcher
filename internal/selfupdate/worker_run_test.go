@@ -65,8 +65,9 @@ type fakePrimitives struct {
 
 func installFakePrimitives(t *testing.T, f *fakePrimitives) {
 	t.Helper()
-	restoreAlive, restoreApply, restoreRelaunch, restoreSave := parentAlive, applyInstaller, relaunchLauncher, saveCurrent
+	restoreAlive, restoreApply, restoreRelaunch, restoreSave, restoreCommit := parentAlive, applyInstaller, relaunchLauncher, saveCurrent, commitCurrent
 	saveCurrent = func(context.Context, string, string, string) error { return nil }
+	commitCurrent = func(string) error { return nil }
 	parentAlive = func(int) (bool, error) {
 		f.aliveCalls++
 		return f.aliveCalls <= f.aliveUntil, nil
@@ -86,7 +87,7 @@ func installFakePrimitives(t *testing.T, f *fakePrimitives) {
 		return f.relaunchErr
 	}
 	t.Cleanup(func() {
-		parentAlive, applyInstaller, relaunchLauncher, saveCurrent = restoreAlive, restoreApply, restoreRelaunch, restoreSave
+		parentAlive, applyInstaller, relaunchLauncher, saveCurrent, commitCurrent = restoreAlive, restoreApply, restoreRelaunch, restoreSave, restoreCommit
 	})
 }
 

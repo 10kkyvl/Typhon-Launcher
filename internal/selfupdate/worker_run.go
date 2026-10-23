@@ -22,6 +22,7 @@ var (
 	applyExe         = applyReadyExe
 	relaunchLauncher = relaunch
 	saveCurrent      = snapshotPrevious
+	commitCurrent    = commitSnapshot
 	rollBack         = performRollback
 )
 
@@ -89,16 +90,19 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 		title = text.rollbackTitle(spec.Version)
 	}
 	ui := newReporter(title, text.waiting)
-	var applyErr error
+	var applyErr, snapshotErr error
 	if rollingBack {
 		applyErr = runRollback(waitCtx, applyCtx, dir, spec, ui)
 	} else {
-		applyErr = runUpdate(waitCtx, applyCtx, dir, spec, ui)
+		snapshotErr, applyErr = runUpdate(waitCtx, applyCtx, dir, spec, ui)
 	}
 
 	outcome := Outcome{Version: spec.Version, OK: applyErr == nil, FinishedAt: time.Now()}
 	if rollingBack {
 		outcome.Kind, outcome.From, outcome.To = outcomeRolledBack, spec.FromVersion, spec.Version
+	}
+	if snapshotErr != nil {
+		outcome.SnapshotError = snapshotErr.Error()
 	}
 	if applyErr != nil {
 		outcome.Error = applyErr.Error()
@@ -138,23 +142,58 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	return applyErr
 }
 
-func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateSpec, ui stageReporter) error {
+// runUpdate returns two errors. snapshotErr says the update went ahead without
+// a saved copy of the launcher it replaced; err is the update's own result.
+//
+// The copy is taken after the parent is gone, so no state is being written,
+// and before the installer touches anything, into a staging directory. It
+// becomes the snapshot rollbacks use only once the launcher has been replaced:
+// an update that fails keeps the snapshot the user already had. A copy that
+// cannot be made does not stop the update, because one unreadable cache file
+// would otherwise block every release; the failure is written down instead
+// and the rollback reports it as its reason.
+func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateSpec, ui stageReporter) (snapshotErr, err error) {
 	if err := waitForParentExit(waitCtx, spec.ParentPID); err != nil {
-		return err
+		return nil, err
 	}
 
 	text := workerText(spec.Language)
 	ui.setStage(text.title(spec.Version), text.installing)
 
-	// Taken after the parent is gone, so no state is being written, and before
-	// the installer touches anything. A failed copy stops the update: an
-	// update that quietly cannot be rolled back is worse than one retried.
+	staged := false
 	if rollbackSupported() == nil {
-		if err := saveCurrent(applyCtx, configDir, spec.RelaunchPath, spec.FromVersion); err != nil {
-			return err
+		if serr := saveCurrent(applyCtx, configDir, spec.RelaunchPath, spec.FromVersion); serr != nil {
+			snapshotErr = fmt.Errorf("%w: %w", ErrSnapshotFailed, serr)
+			slog.Warn("selfupdate worker: the running launcher could not be saved, updating without a rollback", "error", serr)
+		} else {
+			staged = true
 		}
 	}
+	err = applyUpdate(applyCtx, configDir, spec)
+	if !staged {
+		if err != nil {
+			return nil, err
+		}
+		if snapshotErr != nil {
+			if rerr := recordSnapshotFailure(configDir, spec.FromVersion, snapshotErr); rerr != nil {
+				slog.Warn("selfupdate worker: record the snapshot failure", "error", rerr)
+			}
+		}
+		return snapshotErr, nil
+	}
+	if err != nil {
+		if derr := discardStaging(configDir); derr != nil {
+			slog.Warn("selfupdate worker: remove the unused snapshot, it is dropped on the next start", "error", derr)
+		}
+		return nil, err
+	}
+	if cerr := commitCurrent(configDir); cerr != nil {
+		slog.Warn("selfupdate worker: promote the snapshot, it is finished on the next start", "error", cerr)
+	}
+	return nil, nil
+}
 
+func applyUpdate(applyCtx context.Context, configDir string, spec updateSpec) error {
 	before, err := fileDigest(applyCtx, spec.RelaunchPath)
 	if err != nil {
 		return err

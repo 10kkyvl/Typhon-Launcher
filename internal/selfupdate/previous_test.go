@@ -43,6 +43,12 @@ func TestSnapshotPreviousSavesTheLauncherAndOnlyVersionedState(t *testing.T) {
 	if err := snapshotPrevious(context.Background(), cfg, exe, "1.2.0"); err != nil {
 		t.Fatalf("snapshotPrevious: %v", err)
 	}
+	if _, err := loadPrevious(cfg); !errors.Is(err, ErrNoPrevious) {
+		t.Fatalf("a snapshot that is only staged is on offer: %v", err)
+	}
+	if err := commitSnapshot(cfg); err != nil {
+		t.Fatalf("commitSnapshot: %v", err)
+	}
 
 	rec, err := loadPrevious(cfg)
 	if err != nil {
@@ -80,33 +86,32 @@ func TestSnapshotPreviousSavesTheLauncherAndOnlyVersionedState(t *testing.T) {
 	}
 }
 
-// A refusal before the first write leaves the earlier snapshot whole and on
-// offer; a failure after it must leave nothing, because the files the record
-// describes are being replaced.
-func TestSnapshotPreviousFailures(t *testing.T) {
+// A snapshot that cannot be made never costs the user the one they have:
+// the new copy is built beside it and thrown away on any failure.
+func TestSnapshotPreviousFailuresKeepTheEarlierSnapshot(t *testing.T) {
 	cases := []struct {
-		name      string
-		ver       string
-		exe       func(t *testing.T) string
-		want      error
-		cancel    bool
-		wantErr   bool
-		untouched bool
+		name   string
+		ver    string
+		exe    func(t *testing.T) string
+		want   error
+		cancel bool
 	}{
-		{name: "empty version", ver: "", exe: okExe, want: ErrSnapshotVersion, untouched: true},
-		{name: "version is not a path segment", ver: "1.2/0", exe: okExe, want: ErrSnapshotVersion, untouched: true},
-		{name: "launcher is missing", ver: "1.2.0", exe: func(t *testing.T) string { return filepath.Join(t.TempDir(), "gone.exe") }, wantErr: true},
-		{name: "launcher path is empty", ver: "1.2.0", exe: func(*testing.T) string { return "" }, wantErr: true, untouched: true},
-		{name: "launcher is a directory", ver: "1.2.0", exe: func(t *testing.T) string { return t.TempDir() }, wantErr: true},
-		{name: "cancelled context", ver: "1.2.0", exe: okExe, cancel: true, wantErr: true},
+		{name: "empty version", ver: "", exe: okExe, want: ErrSnapshotVersion},
+		{name: "version is not a path segment", ver: "1.2/0", exe: okExe, want: ErrSnapshotVersion},
+		{name: "launcher is missing", ver: "1.2.0", exe: func(t *testing.T) string { return filepath.Join(t.TempDir(), "gone.exe") }},
+		{name: "launcher path is empty", ver: "1.2.0", exe: func(*testing.T) string { return "" }},
+		{name: "launcher is a directory", ver: "1.2.0", exe: func(t *testing.T) string { return t.TempDir() }},
+		{name: "cancelled context", ver: "1.2.0", exe: okExe, cancel: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := filepath.Join(t.TempDir(), "Typhon")
 			seedEnveloped(t, cfg, "playlog.json", 2, "a")
-			good := okExe(t)
-			if err := snapshotPrevious(context.Background(), cfg, good, "1.1.0"); err != nil {
+			if err := snapshotPrevious(context.Background(), cfg, okExe(t), "1.1.0"); err != nil {
 				t.Fatalf("first snapshot: %v", err)
+			}
+			if err := commitSnapshot(cfg); err != nil {
+				t.Fatal(err)
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -121,12 +126,18 @@ func TestSnapshotPreviousFailures(t *testing.T) {
 			if tc.want != nil && !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
-			_, loadErr := loadPrevious(cfg)
-			if tc.untouched && loadErr != nil {
-				t.Fatalf("a refused snapshot damaged the earlier one: %v", loadErr)
+			rec, loadErr := loadPrevious(cfg)
+			if loadErr != nil || rec.Version != "1.1.0" {
+				t.Fatalf("the earlier snapshot after a failed one = %+v, %v", rec, loadErr)
 			}
-			if !tc.untouched && !errors.Is(loadErr, ErrNoPrevious) {
-				t.Fatalf("loadPrevious after a failed snapshot = %v, want ErrNoPrevious: the old record would describe files that are being replaced", loadErr)
+			if _, err := verifyPreviousExe(context.Background(), cfg, rec); err != nil {
+				t.Fatalf("the earlier snapshot's launcher: %v", err)
+			}
+			staging := mustCacheDir(t, cfg)
+			for _, name := range []string{stagingDirName, stagingRecordName} {
+				if _, err := os.Stat(filepath.Join(staging, name)); !errors.Is(err, fs.ErrNotExist) {
+					t.Fatalf("%s left behind: %v", name, err)
+				}
 			}
 		})
 	}
@@ -147,10 +158,19 @@ func TestSnapshotPreviousReplacesTheEarlierSnapshotWhole(t *testing.T) {
 	if err := snapshotPrevious(context.Background(), cfg, exe, "1.1.0"); err != nil {
 		t.Fatal(err)
 	}
+	if err := commitSnapshot(cfg); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Remove(filepath.Join(cfg, "old-only.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := snapshotPrevious(context.Background(), cfg, exe, "1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	if rec, err := loadPrevious(cfg); err != nil || rec.Version != "1.1.0" {
+		t.Fatalf("before the commit the snapshot in use is %+v, %v; want the earlier one", rec, err)
+	}
+	if err := commitSnapshot(cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,6 +194,9 @@ func TestSnapshotPreviousWalksIntoDirectoriesNamedLikeJSONFiles(t *testing.T) {
 
 	if err := snapshotPrevious(context.Background(), cfg, okExe(t), "1.2.0"); err != nil {
 		t.Fatalf("snapshotPrevious: %v", err)
+	}
+	if err := commitSnapshot(cfg); err != nil {
+		t.Fatal(err)
 	}
 	rec, err := loadPrevious(cfg)
 	if err != nil {
@@ -348,8 +371,8 @@ func TestPlanStateRestoreTakesOnlyTheFilesTheUpdateMigrated(t *testing.T) {
 		t.Fatalf("restoring %v, want %v: history.json is at its saved version (newer data stays), catalog-pages/p1.json is gone (stays gone)", got, want)
 	}
 
-	if err := applyStateRestore(context.Background(), items); err != nil {
-		t.Fatalf("applyStateRestore: %v", err)
+	if err := writeRestored(context.Background(), items); err != nil {
+		t.Fatalf("writeRestored: %v", err)
 	}
 	if v := configEnvelopeVersion(t, f.configDir, "playlog.json"); v != 2 {
 		t.Fatalf("playlog.json envelope version = %d, want the saved 2", v)
@@ -407,7 +430,7 @@ func TestPlanStateRestoreHonoursCancellation(t *testing.T) {
 	if _, err := planStateRestore(ctx, f.configDir, rec); !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context.Canceled", err)
 	}
-	if err := applyStateRestore(ctx, []restoreItem{{dst: filepath.Join(f.configDir, "x.json"), data: []byte("x")}}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("applyStateRestore error = %v, want context.Canceled", err)
+	if err := writeRestored(ctx, []restoreItem{{rel: "x.json", dst: filepath.Join(f.configDir, "x.json"), data: []byte("x")}}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("writeRestored error = %v, want context.Canceled", err)
 	}
 }
