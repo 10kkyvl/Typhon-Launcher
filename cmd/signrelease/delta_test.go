@@ -179,11 +179,11 @@ func TestRun_RefusesToSignWhatDoesNotWork(t *testing.T) {
 		{
 			name: "truncated patch",
 			mutate: func(t *testing.T, r *deltaRelease, args []string) []string {
-				patch, err := os.ReadFile(r.patches["1.2.0"])
-				if err != nil {
+				var patch bytes.Buffer
+				if err := delta.Encode(&patch, r.olds["1.2.0"], r.newBytes); err != nil {
 					t.Fatal(err)
 				}
-				writeArtifactFile(t, r.dir, "typhon-1.2.0-to-1.3.0.delta", patch[:len(patch)/2])
+				writeArtifactFile(t, r.dir, "typhon-1.2.0-to-1.3.0.delta", patch.Bytes()[:patch.Len()/2])
 				return args
 			},
 			wantErr: delta.ErrCorrupt,
