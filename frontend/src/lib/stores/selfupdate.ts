@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
 import {
   acknowledgeReleaseNotes as acknowledgeReleaseNotesRequest,
+  applyRollback as applyRollbackRequest,
   applyUpdate as applyUpdateRequest,
   cancelDownload as cancelDownloadRequest,
   checkForUpdate as checkForUpdateRequest,
@@ -12,8 +13,11 @@ import {
   toReleaseNotes,
   getOutcome,
   getReleaseNotes as getReleaseNotesRequest,
+  getRollback,
   getStatus,
+  noRollback,
   type ReleaseNotes,
+  type RollbackInfo,
   type SelfUpdateOutcome,
   type SelfUpdateProgress,
   type SelfUpdateStatus,
@@ -29,6 +33,8 @@ export const selfUpdateDownloading = writable(false);
 export const selfUpdateLastAction = writable<'check' | 'download' | null>(null);
 export const selfUpdateOutcome = writable<SelfUpdateOutcome | null>(null);
 export const releaseNotes = writable<ReleaseNotes>(emptyReleaseNotes());
+export const rollbackInfo = writable<RollbackInfo>(noRollback());
+export const rollbackBusy = writable(false);
 
 export const unseenReleaseNotes = derived(releaseNotes, ($notes) => $notes.unseen);
 export const releaseNotesHistory = derived(releaseNotes, ($notes) => $notes.history);
@@ -38,7 +44,7 @@ export const releaseNotesHistory = derived(releaseNotes, ($notes) => $notes.hist
 // the banner into "failed".
 export const selfUpdateView = derived(selfUpdateStatus, ($status) => {
   if ($status.state === 'failed') return 'failed';
-  if (!$status.error) return $status.state;
+  if (!$status.error || $status.errorCode === 'rollback') return $status.state;
   switch ($status.state) {
     case 'ready':
     case 'applying':
@@ -52,8 +58,9 @@ export const selfUpdateView = derived(selfUpdateStatus, ($status) => {
 });
 
 export const selfUpdateBusy = derived(
-  [selfUpdateStatus, selfUpdateDownloading],
-  ([$status, $downloading]) => $downloading || $status.state === 'downloading' || $status.state === 'applying',
+  [selfUpdateStatus, selfUpdateDownloading, rollbackBusy],
+  ([$status, $downloading, $rollbackBusy]) =>
+    $downloading || $rollbackBusy || $status.state === 'downloading' || $status.state === 'applying',
 );
 
 export const OUTCOME_SUCCESS_MS = 2000;
@@ -95,7 +102,12 @@ export async function initSelfUpdate() {
     offs.push(
       Events.On('launcher:update_status', (event) => {
         statusFromEvent = true;
-        applyStatus(event.data as SelfUpdateStatus);
+        const status = event.data as SelfUpdateStatus;
+        applyStatus(status);
+        if (status.errorCode === 'rollback') {
+          rollbackBusy.set(false);
+          toast(msg('state.selfupdateRollbackMissedToast'), 'danger');
+        }
       }),
       Events.On('launcher:update_progress', (event) => selfUpdateProgress.set(event.data as SelfUpdateProgress)),
       Events.On('launcher:release_notes', (event) => {
@@ -124,16 +136,26 @@ export async function initSelfUpdate() {
         clearTimeout(outcomeTimer);
         outcomeTimer = setTimeout(dismissOutcome, OUTCOME_SUCCESS_MS);
       } else {
-        toast(msg('state.selfupdateApplyFailedToast', { version: outcome.version }), 'danger');
+        const key = outcome.kind === 'rolled_back' ? 'state.selfupdateRollbackFailedToast' : 'state.selfupdateApplyFailedToast';
+        toast(msg(key, { version: outcome.version }), 'danger');
       }
     }
   } catch (err) {
     toast(updateReason(err), 'danger');
   }
+  await refreshRollback();
 
   return () => {
     for (const off of offs) off();
   };
+}
+
+export async function refreshRollback() {
+  try {
+    rollbackInfo.set(await getRollback());
+  } catch (err) {
+    toast(updateReason(err), 'danger');
+  }
 }
 
 export async function dismissReleaseNotes() {
@@ -184,6 +206,17 @@ export async function requestApply() {
   try {
     await applyUpdateRequest();
   } catch (err) {
+    toast(updateReason(err), 'danger');
+  }
+}
+
+export async function requestRollback() {
+  if (get(rollbackBusy)) return;
+  rollbackBusy.set(true);
+  try {
+    await applyRollbackRequest();
+  } catch (err) {
+    rollbackBusy.set(false);
     toast(updateReason(err), 'danger');
   }
 }

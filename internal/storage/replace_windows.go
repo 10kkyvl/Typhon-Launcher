@@ -27,6 +27,10 @@ func replaceFile(from, to string) error {
 	return retryTransient(func() error { return os.Rename(from, to) })
 }
 
+func removeFile(path string) error {
+	return retryTransient(func() error { return os.Remove(path) })
+}
+
 func openRead(path string) (*os.File, error) {
 	var f *os.File
 	err := retryTransient(func() error {

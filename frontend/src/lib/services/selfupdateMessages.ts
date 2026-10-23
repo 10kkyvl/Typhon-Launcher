@@ -1,6 +1,6 @@
 import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
-import type { SelfUpdateOutcome, SelfUpdateStatus } from './selfupdate';
+import type { RollbackInfo, SelfUpdateOutcome, SelfUpdateStatus } from './selfupdate';
 
 const REASONS: Record<string, MessageKey> = {
   'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
@@ -62,6 +62,16 @@ const REASONS: Record<string, MessageKey> = {
   'selfupdate.portable_zip_unsafe_entry': 'state.selfupdateReasonPortableUnsafeEntry',
   'selfupdate.portable_zip_no_executable': 'state.selfupdateReasonPortableNoExecutable',
   'selfupdate.portable_zip_executable': 'state.selfupdateReasonPortableBadExecutable',
+  'selfupdate.rollback_unsupported': 'state.selfupdateReasonRollbackUnsupported',
+  'selfupdate.rollback_none': 'state.selfupdateReasonRollbackNone',
+  'selfupdate.rollback_broken': 'state.selfupdateReasonRollbackBroken',
+  'selfupdate.rollback_hash': 'state.selfupdateReasonRollbackBroken',
+  'selfupdate.rollback_state_hash': 'state.selfupdateReasonRollbackStateBroken',
+  'selfupdate.rollback_not_older': 'state.selfupdateReasonRollbackNotOlder',
+  'selfupdate.rollback_version_differs': 'state.selfupdateReasonRollbackVersionDiffers',
+  'selfupdate.snapshot_version': 'state.selfupdateReasonSnapshotVersion',
+  'selfupdate.swap_hash': 'state.selfupdateReasonSwapHash',
+  'selfupdate.snapshot_failed': 'state.selfupdateReasonSnapshotFailed',
 };
 
 // net/http, crypto/tls and the OS surface these directly, with no sentinel of
@@ -101,13 +111,20 @@ function translate(raw: string): string {
 export function outcomeReason(outcome: SelfUpdateOutcome): string {
   const raw = outcome.error ?? '';
   if (!raw) return '';
-  return translate(raw) || msg('state.selfupdateReasonUnknown');
+  const unknown = outcome.kind === 'rolled_back' ? 'state.selfupdateReasonRollbackUnknown' : 'state.selfupdateReasonUnknown';
+  return translate(raw) || msg(unknown);
 }
 
 export function updateReason(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
   if (!raw) return '';
   return translate(raw) || msg('state.selfupdateReasonUnknown');
+}
+
+export function rollbackReason(info: RollbackInfo): string {
+  if (info.available) return '';
+  const key = REASONS[info.reasonCode];
+  return key ? msg(key) : msg('state.selfupdateReasonUnknown');
 }
 
 export function statusReason(status: SelfUpdateStatus): string {

@@ -1,6 +1,11 @@
 package dialogtext
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestResolvedUILanguage(t *testing.T) {
 	if got := For("ru"); got.AllFiles != "Все файлы" || got.FeedTitle != "Выберите файл источника" {
@@ -45,5 +50,23 @@ func TestTrayAndJumpListLabelsExistInBothLanguages(t *testing.T) {
 	if ru.RecentGames == en.RecentGames || ru.Playing == en.Playing || ru.StopGame == en.StopGame ||
 		ru.LibraryTask == en.LibraryTask || ru.DownloadsTask == en.DownloadsTask {
 		t.Fatal("tray and jump list labels are not localised")
+	}
+}
+
+func TestRollbackLabelsExistInBothLanguagesAndTakeTheirArguments(t *testing.T) {
+	for _, language := range []string{"ru", "en"} {
+		got := For(language)
+		if got.RollbackTitle == "" || got.RollbackAsk == "" || got.RollbackFailed == "" {
+			t.Fatalf("%s rollback labels are empty: %+v", language, got)
+		}
+		if fmt.Sprintf(got.RollbackAsk, "1.2.0") == got.RollbackAsk || !strings.Contains(fmt.Sprintf(got.RollbackAsk, "1.2.0"), "1.2.0") {
+			t.Fatalf("%s question does not take the version: %q", language, got.RollbackAsk)
+		}
+		if !strings.Contains(fmt.Sprintf(got.RollbackFailed, errors.New("boom")), "boom") {
+			t.Fatalf("%s failure text does not take the reason: %q", language, got.RollbackFailed)
+		}
+	}
+	if For("ru").RollbackAsk == For("en").RollbackAsk {
+		t.Fatal("the rollback question is not localised")
 	}
 }

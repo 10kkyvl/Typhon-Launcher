@@ -86,10 +86,10 @@ func TestJSONShapesMatchTheFrontendInterfaces(t *testing.T) {
 	}{
 		{"status", Status{
 			State: StateReady, CurrentVersion: "1.0.0", AvailableVersion: "1.2.3", Notes: "n", PublishedAt: stamp,
-			TotalBytes: 1, DownloadedBytes: 1, CheckedAt: stamp, Error: "e", ErrorCode: "c",
+			TotalBytes: 1, DownloadedBytes: 1, CheckedAt: stamp, Error: "e", ErrorCode: "c", Delta: true,
 		}, "SelfUpdateStatus"},
 		{"progress", Progress{Version: "1.2.3", TotalBytes: 2, DownloadedBytes: 1}, "SelfUpdateProgress"},
-		{"outcome", Outcome{Version: "1.2.3", OK: true, Error: "e", FinishedAt: stamp}, "SelfUpdateOutcome"},
+		{"outcome", Outcome{Kind: outcomeRolledBack, Version: "1.2.3", From: "1.3.0", To: "1.2.3", OK: true, Error: "e", SnapshotError: "s", FinishedAt: stamp}, "SelfUpdateOutcome"},
 		{"release note", note, "ReleaseNote"},
 		{"release change", change, "ReleaseChange"},
 		{"release notes", ReleaseNotes{CurrentVersion: "1.0.0", Unseen: []ReleaseNote{note}, History: []ReleaseNote{note}}, "ReleaseNotes"},
@@ -142,7 +142,7 @@ func TestManifestWireFormat(t *testing.T) {
 		OS: "windows", Arch: "amd64", Kind: KindInstaller, Name: "typhon-setup.exe",
 		URL: "https://cdn.example.com/typhon-setup.exe", Size: 1024, SHA256: strings.Repeat("ab", 32),
 	}
-	if art != want {
+	if !reflect.DeepEqual(art, want) {
 		t.Fatalf("artifact = %+v, want %+v", art, want)
 	}
 	if m.Version != "1.2.3" || m.Notes != "fixes" || len(m.Releases) != 1 || m.Releases[0].Changes[0].Kind != ChangeFixed {

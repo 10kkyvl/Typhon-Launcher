@@ -326,7 +326,7 @@ func TestPortableArtifactForBuildsTheZipArtifact(t *testing.T) {
 		OS: "windows", Arch: "amd64", Kind: KindPortable, Name: "typhon-windows-portable.zip",
 		URL: "https://cdn.example.com/typhon-windows-portable.zip", Size: 2048, SHA256: strings.Repeat("fedcba9876543210", 4),
 	}
-	if got != want {
+	if !sameFile(got, want) {
 		t.Fatalf("PortableArtifactFor() = %+v, want %+v", got, want)
 	}
 }

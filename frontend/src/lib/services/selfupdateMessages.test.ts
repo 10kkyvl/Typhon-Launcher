@@ -32,6 +32,52 @@ describe('outcomeReason', () => {
   });
 });
 
+describe('rollback reasons', () => {
+  const codes = [
+    'selfupdate.rollback_unsupported',
+    'selfupdate.rollback_none',
+    'selfupdate.rollback_broken',
+    'selfupdate.rollback_hash',
+    'selfupdate.rollback_state_hash',
+    'selfupdate.rollback_not_older',
+    'selfupdate.rollback_version_differs',
+    'selfupdate.snapshot_version',
+    'selfupdate.swap_hash',
+  ];
+
+  it.each(codes)('translates %s instead of the generic fallback', async (code) => {
+    const { outcomeReason, rollbackReason } = await import('./selfupdateMessages');
+    const generic = ['При обновлении что-то пошло не так.', 'При возврате на прежнюю версию что-то пошло не так.'];
+
+    const fromInfo = rollbackReason({ available: false, version: '', reason: 'x', reasonCode: code });
+    const fromOutcome = outcomeReason({
+      kind: 'rolled_back',
+      version: '1.1.0',
+      ok: false,
+      error: 'typhon:' + code + ': x',
+      finishedAt: '',
+    });
+
+    expect(fromInfo).not.toBe('');
+    expect(generic).not.toContain(fromInfo);
+    expect(fromOutcome).toBe(fromInfo);
+  });
+
+  it('has no reason for an available rollback', async () => {
+    const { rollbackReason } = await import('./selfupdateMessages');
+
+    expect(rollbackReason({ available: true, version: '1.1.0', reason: '', reasonCode: '' })).toBe('');
+  });
+
+  it('falls back to a rollback wording, not the update one, for an unknown failed rollback', async () => {
+    const { outcomeReason } = await import('./selfupdateMessages');
+
+    expect(outcomeReason({ kind: 'rolled_back', version: '1.1.0', ok: false, error: 'strange', finishedAt: '' })).toBe(
+      'При возврате на прежнюю версию что-то пошло не так.',
+    );
+  });
+});
+
 describe('statusReason', () => {
   it.each([
     [

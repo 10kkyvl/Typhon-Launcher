@@ -42,6 +42,15 @@ var (
 	ErrNotReplaced         = uierr.New("selfupdate.not_replaced", "selfupdate: installer finished but left the launcher binary unchanged")
 	ErrManifestOutdated    = uierr.New("selfupdate.manifest_outdated", "selfupdate: launcher version is rejected by the manifest endpoint")
 
+	ErrRollbackUnsupported   = uierr.New("selfupdate.rollback_unsupported", "selfupdate: rolling back the launcher is not supported on this platform")
+	ErrNoPrevious            = uierr.New("selfupdate.rollback_none", "selfupdate: no previous launcher version is saved")
+	ErrPreviousBroken        = uierr.New("selfupdate.rollback_broken", "selfupdate: the saved previous launcher version is damaged")
+	ErrPreviousHash          = uierr.New("selfupdate.rollback_hash", "selfupdate: the saved previous launcher differs from its record")
+	ErrPreviousStateHash     = uierr.New("selfupdate.rollback_state_hash", "selfupdate: a saved state file differs from its record")
+	ErrPreviousNotOlder      = uierr.New("selfupdate.rollback_not_older", "selfupdate: the saved launcher version is not older than the running one")
+	ErrPreviousVersionDiffer = uierr.New("selfupdate.rollback_version_differs", "selfupdate: the saved launcher version is not the one requested")
+	ErrSnapshotVersion       = uierr.New("selfupdate.snapshot_version", "selfupdate: the running launcher version is unknown, cannot save it for a rollback")
+
 	ErrInvalidReleaseNote    = uierr.New("selfupdate.invalid_release_note", "selfupdate: release note is malformed")
 	ErrInvalidChangeKind     = uierr.New("selfupdate.invalid_change_kind", "selfupdate: release note change kind is unknown")
 	ErrEmptyNoteText         = uierr.New("selfupdate.empty_note_text", "selfupdate: release note text is empty")

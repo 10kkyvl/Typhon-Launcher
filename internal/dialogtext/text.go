@@ -14,6 +14,9 @@ type Labels struct {
 	AvatarTitle, AvatarImages              string
 	CoverTitle, CoverImages                string
 	ChatImageTitle, ChatImages             string
+	RollbackTitle                          string
+	// RollbackAsk takes the version to go back to, RollbackFailed the reason.
+	RollbackAsk, RollbackFailed string
 }
 
 func For(language string) Labels {
@@ -31,6 +34,9 @@ func For(language string) Labels {
 			AvatarTitle: "Выберите аватар", AvatarImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 			CoverTitle: "Выберите обложку профиля", CoverImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp)",
 			ChatImageTitle: "Выберите изображение для чата", ChatImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
+			RollbackTitle:  "Typhon",
+			RollbackAsk:    "Typhon не смог запуститься два раза подряд.\n\nВернуться на версию %s? Данные, изменённые после обновления, будут возвращены к состоянию до него.",
+			RollbackFailed: "Не удалось вернуться на прежнюю версию: %v",
 		}
 	}
 	return Labels{
@@ -46,5 +52,8 @@ func For(language string) Labels {
 		AvatarTitle: "Choose an avatar", AvatarImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 		CoverTitle: "Choose a profile cover", CoverImages: "Images (*.png, *.jpg, *.jpeg, *.webp)",
 		ChatImageTitle: "Choose an image for the chat", ChatImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
+		RollbackTitle:  "Typhon",
+		RollbackAsk:    "Typhon failed to start twice in a row.\n\nGo back to version %s? Data changed after the update will be returned to how it was before it.",
+		RollbackFailed: "Could not go back to the previous version: %v",
 	}
 }

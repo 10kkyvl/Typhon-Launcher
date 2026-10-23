@@ -28,24 +28,48 @@ const (
 	outcomeVersion = 1
 )
 
+const (
+	specKindUpdate   = "update"
+	specKindRollback = "rollback"
+	// specKindExe is an update whose new typhon.exe is already built and sits in
+	// the cache: the worker swaps the file instead of running an installer.
+	specKindExe = "exe"
+
+	// outcomeRolledBack marks the record of a rollback; an update leaves Kind empty.
+	outcomeRolledBack = "rolled_back"
+)
+
+// updateSpec.Kind is empty in a spec written before rollbacks existed, which
+// is an update. Version is the version the worker moves the launcher to;
+// FromVersion is the one it moves away from.
 type updateSpec struct {
+	Kind          string `json:"kind,omitempty"`
 	Language      string `json:"language,omitempty"`
 	InstallerPath string `json:"installerPath"`
 	InstallDir    string `json:"installDir"`
 	ParentPID     int    `json:"parentPid"`
 	RelaunchPath  string `json:"relaunchPath"`
 	Version       string `json:"version"`
+	FromVersion   string `json:"fromVersion,omitempty"`
 	Portable      bool   `json:"portable,omitempty"`
 }
 
 // Outcome is what the worker leaves behind for the relaunched launcher: the
 // install runs after the UI is gone, so without it a failed update is
-// indistinguishable from an update that never started.
+// indistinguishable from an update that never started. Kind, From and To are
+// set only for a rollback, where Version repeats To.
 type Outcome struct {
-	Version    string    `json:"version"`
-	OK         bool      `json:"ok"`
-	Error      string    `json:"error,omitempty"`
-	FinishedAt time.Time `json:"finishedAt"`
+	Kind    string `json:"kind,omitempty"`
+	Version string `json:"version"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	OK      bool   `json:"ok"`
+	Error   string `json:"error,omitempty"`
+	// SnapshotError is set when the update went ahead without saving the
+	// launcher it replaced (code selfupdate.snapshot_failed): it succeeded,
+	// and a rollback to the previous version is not on offer.
+	SnapshotError string    `json:"snapshotError,omitempty"`
+	FinishedAt    time.Time `json:"finishedAt"`
 }
 
 var (
@@ -99,7 +123,7 @@ func SpecPath(configDir string) (string, error) {
 }
 
 func writeUpdateSpec(path string, spec updateSpec) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
 		return fmt.Errorf("create selfupdate spec dir: %w", err)
 	}
 	data, err := json.Marshal(spec)
@@ -121,11 +145,16 @@ func readUpdateSpec(path string) (updateSpec, error) {
 	if err := json.Unmarshal(data, &spec); err != nil {
 		return updateSpec{}, fmt.Errorf("decode selfupdate spec: %w", err)
 	}
+	switch spec.Kind {
+	case "", specKindUpdate, specKindRollback, specKindExe:
+	default:
+		return updateSpec{}, fmt.Errorf("selfupdate spec: unknown kind %q", spec.Kind)
+	}
 	return spec, nil
 }
 
 func writeOutcome(path string, o Outcome) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
 		return fmt.Errorf("create selfupdate outcome dir: %w", err)
 	}
 	if err := storage.Save(path, outcomeVersion, o); err != nil {
@@ -147,7 +176,7 @@ func readOutcome(path string) (Outcome, error) {
 // locked, NSIS then skips the file and still exits 0, and the launcher
 // relaunches into the version it started from.
 func copyExecutable(src, dst string) (err error) {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), cacheDirMode); err != nil {
 		return fmt.Errorf("create worker dir: %w", err)
 	}
 	in, err := os.Open(src)

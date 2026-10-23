@@ -45,7 +45,7 @@
   <div class="card">
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
-      <span class="title">{msg('ui.downloadingUpdate', { version })}</span>
+      <span class="title">{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })}</span>
       <IconButton label={msg('ui.cancelDownload')} size="sm" onclick={requestCancelDownload}>
         <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
@@ -58,10 +58,18 @@
     <div class="row">
       {#if outcome.ok}
         <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
-        <span class="title">{msg('ui.launcherUpdatedTo', { version: outcome.version })}</span>
+        <span class="title">
+          {outcome.kind === 'rolled_back'
+            ? msg('ui.launcherRolledBackTo', { version: outcome.version })
+            : msg('ui.launcherUpdatedTo', { version: outcome.version })}
+        </span>
       {:else}
         <TriangleAlert size="1.8rem" strokeWidth={1.8} />
-        <span class="title">{msg('ui.updateFailedVersion', { version: outcome.version })}</span>
+        <span class="title">
+          {outcome.kind === 'rolled_back'
+            ? msg('ui.rollbackFailedVersion', { version: outcome.version })
+            : msg('ui.updateFailedVersion', { version: outcome.version })}
+        </span>
       {/if}
       <IconButton label={msg('ui.hide')} size="sm" onclick={dismissOutcome}>
         <X size="1.6rem" strokeWidth={1.8} />
@@ -69,6 +77,8 @@
     </div>
     {#if !outcome.ok && outcome.error}
       <span class="meta">{outcomeReason(outcome)}</span>
+    {:else if outcome.ok && outcome.snapshotError}
+      <span class="meta">{msg('state.selfupdateReasonSnapshotFailed')}</span>
     {/if}
   </div>
 {/if}

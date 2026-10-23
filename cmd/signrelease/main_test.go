@@ -61,7 +61,7 @@ func TestRun_RoundTrip(t *testing.T) {
 	}
 	env := envFor(map[string]string{privateKeyEnv: base64.StdEncoding.EncodeToString(priv)})
 
-	signed, err := run(args, &bytes.Buffer{}, env)
+	signed, err := run(t.Context(), args, &bytes.Buffer{}, env)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRun_TamperedManifestByteFailsVerification(t *testing.T) {
 	}
 	env := envFor(map[string]string{privateKeyEnv: base64.StdEncoding.EncodeToString(priv)})
 
-	signed, err := run(args, &bytes.Buffer{}, env)
+	signed, err := run(t.Context(), args, &bytes.Buffer{}, env)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestRun_VerifyWithWrongKeyFails(t *testing.T) {
 	}
 	env := envFor(map[string]string{privateKeyEnv: base64.StdEncoding.EncodeToString(priv)})
 
-	signed, err := run(args, &bytes.Buffer{}, env)
+	signed, err := run(t.Context(), args, &bytes.Buffer{}, env)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestRun_EmptyPrivateKeyEnv(t *testing.T) {
 	}
 	env := envFor(nil)
 
-	if _, err := run(args, &bytes.Buffer{}, env); !errors.Is(err, errEmptyPrivateKey) {
+	if _, err := run(t.Context(), args, &bytes.Buffer{}, env); !errors.Is(err, errEmptyPrivateKey) {
 		t.Fatalf("run() err = %v, want errEmptyPrivateKey", err)
 	}
 	if _, statErr := os.Stat(out); !errors.Is(statErr, fs.ErrNotExist) {
@@ -390,7 +390,7 @@ func TestRun_MissingRequiredFlags(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := dropFlag(base, tc.drop)
-			if _, err := run(args, &bytes.Buffer{}, env); !errors.Is(err, tc.wantErr) {
+			if _, err := run(t.Context(), args, &bytes.Buffer{}, env); !errors.Is(err, tc.wantErr) {
 				t.Fatalf("run() err = %v, want %v", err, tc.wantErr)
 			}
 		})
@@ -439,7 +439,7 @@ func TestRun_PortableArchiveLandsInTheSignedManifest(t *testing.T) {
 	}
 	env := envFor(map[string]string{privateKeyEnv: base64.StdEncoding.EncodeToString(priv)})
 
-	signed, err := run(args, &bytes.Buffer{}, env)
+	signed, err := run(t.Context(), args, &bytes.Buffer{}, env)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}

@@ -87,6 +87,8 @@ type Service struct {
 	readyArtifact   *Artifact
 	outcome         Outcome
 	notesState      notesState
+	skippedVersion  string
+	rollbackPending bool
 }
 
 func NewService() (*Service, error) {
@@ -169,6 +171,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return fmt.Errorf("selfupdate: load state: %w", err)
 	}
+	s.skippedVersion = v.SkippedVersion
 	s.mu.Unlock()
 
 	// A release-notes file this launcher cannot read costs the user a
@@ -197,6 +200,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		slog.Warn("record install dir", "error", err)
 	}
 
+	s.recoverRollback()
+
 	if err := s.takeOutcome(); err != nil {
 		return err
 	}
@@ -213,7 +218,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		return err
 	}
 	if stale {
-		v = stored{CheckedAt: v.CheckedAt}
+		v = stored{CheckedAt: v.CheckedAt, SkippedVersion: v.SkippedVersion}
 		if serr := s.store.Save(v); serr != nil {
 			return fmt.Errorf("selfupdate: persist cleared state: %w", serr)
 		}
@@ -355,6 +360,43 @@ func (s *Service) recoverPortable() error {
 	return recoverPortableSwap(exe)
 }
 
+// recoverRollback finishes what a swap, an update or a rollback that died left
+// behind. A swap is one rename, so all it can leave is a temp file beside the
+// launcher; an interrupted rollback or snapshot promotion is settled by
+// RecoverInterrupted (main runs it before any service loads its state, this
+// repeats it, which costs nothing when there is nothing to do); a rollback
+// that got as far as the swap but not as far as dropping its snapshot leaves a
+// record for the version that is running now, which would offer to "go back"
+// to itself. None of it blocks the start: all of it is retried on the next one.
+func (s *Service) recoverRollback() {
+	if exe, err := currentExecutable(); err != nil {
+		slog.Warn("selfupdate: resolve executable for swap recovery", "error", err)
+	} else {
+		recoverSwap(exe)
+	}
+	if err := RecoverInterrupted(s.dir, s.currentVersion); err != nil {
+		slog.Warn("selfupdate: settle an interrupted update", "error", err)
+	}
+	rec, err := loadPrevious(s.dir)
+	if err != nil {
+		if !errors.Is(err, ErrNoPrevious) {
+			slog.Warn("selfupdate: rollback snapshot is unusable", "error", err)
+		}
+		return
+	}
+	if sameVersion(rec.Version, s.currentVersion) {
+		if err := dropPrevious(s.dir); err != nil {
+			slog.Warn("selfupdate: remove the rollback snapshot of the running version", "error", err)
+		}
+	}
+}
+
+func (s *Service) skipped() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.skippedVersion
+}
+
 func (s *Service) staleForCurrent(v stored) (bool, error) {
 	if v.AvailableVersion == "" {
 		return false, nil
@@ -369,7 +411,11 @@ func (s *Service) staleForCurrent(v stored) (bool, error) {
 // stageWorker names the copy after this process so a leftover copy from an
 // earlier attempt, which Windows may still hold open, cannot block a new one.
 func (s *Service) stageWorker(exe string) (string, error) {
-	dir, err := WorkerDir(s.dir)
+	return stageWorkerCopy(s.dir, exe)
+}
+
+func stageWorkerCopy(configDir, exe string) (string, error) {
+	dir, err := WorkerDir(configDir)
 	if err != nil {
 		return "", err
 	}
@@ -434,13 +480,16 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			if d.Name() == workerDirName {
 				return fs.SkipDir
 			}
+			if d.Name() == previousDirName || d.Name() == stagingDirName {
+				return fs.SkipDir
+			}
 			if keepVersion != "" && d.Name() == keepVersion {
 				return nil
 			}
 			remove(relPath, root.RemoveAll)
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName {
+			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == stagingRecordName || d.Name() == snapshotFailedName || d.Name() == startupMarkerName {
 				return nil
 			}
 			remove(relPath, root.Remove)
@@ -532,7 +581,7 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 	}
 
 	if newer && current.State == StateReady && current.AvailableVersion == m.Version &&
-		readyArtifact != nil && *readyArtifact == art {
+		readyMatches(readyArtifact, art) {
 		st := stored{
 			AvailableVersion: m.Version,
 			Notes:            m.Notes,
@@ -550,6 +599,9 @@ func (s *Service) buildCheckStatus(current Status, readyPath string, readyArtifa
 			CheckedAt:        st.CheckedAt,
 			TotalBytes:       art.Size,
 			DownloadedBytes:  art.Size,
+		}
+		if readyArtifact.Kind == KindExe {
+			status.TotalBytes, status.DownloadedBytes, status.Delta = current.TotalBytes, current.DownloadedBytes, current.Delta
 		}
 		return status, st, nil
 	}
@@ -702,12 +754,18 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 	current := s.status
 	readyPath := s.readyPath
 	readyArtifact := s.readyArtifact
+	skipped := s.skippedVersion
 	s.mu.Unlock()
+
+	if artErr == nil && newerErr == nil && newer && skipped != "" {
+		newer, newerErr = IsNewer(m.Version, skipped)
+	}
 
 	status, newStored, buildErr := s.buildCheckStatus(current, readyPath, readyArtifact, m, art, artErr, newer, newerErr)
 	if buildErr != nil {
 		return fail(status.ErrorCode, buildErr)
 	}
+	newStored.SkippedVersion = skipped
 
 	if err := s.store.Save(newStored); err != nil {
 		return Status{}, err
@@ -785,6 +843,20 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		s.downloadCancel = nil
 		s.mu.Unlock()
 	}()
+
+	plan, planErr := planDelta(dlCtx, art, s.currentVersion)
+	switch {
+	case planErr == nil:
+		downloading.TotalBytes = plan.delta.Size
+		downloading.Delta = true
+		s.mu.Lock()
+		s.status = downloading
+		s.mu.Unlock()
+	case errors.Is(planErr, errNoDelta):
+		slog.Debug("selfupdate: downloading the full file", "reason", planErr)
+	case dlCtx.Err() == nil:
+		slog.Info("selfupdate: downloading the full file instead of a patch", "reason", planErr)
+	}
 	emit(eventStatus, downloading)
 
 	failed := func(err error) (Status, error) {
@@ -801,19 +873,43 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 
 	destDir, err := VersionDir(s.dir, version)
 	if err == nil {
-		err = os.MkdirAll(destDir, 0o755)
+		err = os.MkdirAll(destDir, cacheDirMode)
 	}
 	if err != nil {
 		return failed(err)
 	}
 
-	onProgress := func(downloaded int64) {
-		emit(eventProgress, Progress{Version: version, TotalBytes: art.Size, DownloadedBytes: downloaded})
+	progressFor := func(total int64) func(int64) {
+		return func(downloaded int64) {
+			emit(eventProgress, Progress{Version: version, TotalBytes: total, DownloadedBytes: downloaded})
+		}
 	}
 
-	path, err := s.client.Download(dlCtx, art, destDir, onProgress)
-	if err != nil {
-		return failed(err)
+	readyArt := art
+	readyArt.Deltas = nil
+	path, fetched, viaDelta := "", art.Size, false
+	if planErr == nil {
+		exePath, exeArt, derr := s.client.downloadViaDelta(dlCtx, plan, art, destDir, progressFor(plan.delta.Size))
+		switch {
+		case derr == nil:
+			path, readyArt, fetched, viaDelta = exePath, exeArt, plan.delta.Size, true
+		case dlCtx.Err() != nil:
+			return failed(derr)
+		default:
+			slog.Warn("selfupdate: the patch did not work out, downloading the full file", "from", plan.delta.From, "error", derr)
+			downloading.TotalBytes, downloading.DownloadedBytes, downloading.Delta = art.Size, 0, false
+			s.mu.Lock()
+			s.status = downloading
+			s.mu.Unlock()
+			emit(eventStatus, downloading)
+		}
+	}
+	plan.base = nil
+	if !viaDelta {
+		path, err = s.client.Download(dlCtx, art, destDir, progressFor(art.Size))
+		if err != nil {
+			return failed(err)
+		}
 	}
 
 	newStored := stored{
@@ -821,8 +917,9 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		Notes:            base.Notes,
 		PublishedAt:      base.PublishedAt,
 		CheckedAt:        base.CheckedAt,
-		Artifact:         &art,
+		Artifact:         &readyArt,
 		ReadyPath:        path,
+		SkippedVersion:   s.skipped(),
 	}
 	if err := s.store.Save(newStored); err != nil {
 		return failed(err)
@@ -830,12 +927,13 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 
 	ready := base
 	ready.State = StateReady
-	ready.TotalBytes = art.Size
-	ready.DownloadedBytes = art.Size
+	ready.TotalBytes = fetched
+	ready.DownloadedBytes = fetched
+	ready.Delta = viaDelta
 	s.mu.Lock()
 	s.status = ready
 	s.readyPath = path
-	s.readyArtifact = &art
+	s.readyArtifact = &readyArt
 	s.mu.Unlock()
 	emit(eventStatus, ready)
 	return ready, nil
@@ -882,7 +980,8 @@ func (s *Service) ApplyUpdate(language string) error {
 
 	// A portable launcher must never run an installer and an installed one must
 	// never unpack a zip over itself: the record has to match the mode.
-	if s.portable != (readyArtifact != nil && readyArtifact.Kind == KindPortable) {
+	isExe := readyArtifact != nil && readyArtifact.Kind == KindExe
+	if !isExe && s.portable != (readyArtifact != nil && readyArtifact.Kind == KindPortable) {
 		return rollback(ErrNotReady)
 	}
 
@@ -915,7 +1014,11 @@ func (s *Service) ApplyUpdate(language string) error {
 		ParentPID:     os.Getpid(),
 		RelaunchPath:  exe,
 		Version:       version,
+		FromVersion:   s.currentVersion,
 		Portable:      s.portable,
+	}
+	if isExe {
+		spec.Kind = specKindExe
 	}
 
 	specPath, err := SpecPath(s.dir)
@@ -954,6 +1057,19 @@ func (s *Service) watchRestart() {
 func (s *Service) restartMissed() {
 	s.mu.Lock()
 	s.restart = nil
+	if s.rollbackPending {
+		s.rollbackPending = false
+		s.busy = false
+		status := errorStatus(s.status, "rollback", errParentStillRunning)
+		s.status = status
+		hook := s.onRestartMissed
+		s.mu.Unlock()
+		emit(eventStatus, status)
+		if hook != nil {
+			hook()
+		}
+		return
+	}
 	if s.status.State != StateApplying {
 		s.mu.Unlock()
 		return
@@ -990,6 +1106,7 @@ func (s *Service) DismissUpdate() error {
 		Notes:            current.Notes,
 		PublishedAt:      current.PublishedAt,
 		CheckedAt:        current.CheckedAt,
+		SkippedVersion:   s.skipped(),
 	}
 	if err := s.store.Save(newStored); err != nil {
 		return err

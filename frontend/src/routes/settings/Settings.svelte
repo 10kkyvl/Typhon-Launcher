@@ -25,6 +25,7 @@
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import RollbackAction from '../../lib/components/RollbackAction.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
@@ -58,7 +59,9 @@
     type SystemInfo,
     type WineStatus,
   } from '../../lib/services/system';
-  import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { releaseNotesHistory, requestCheck, rollbackInfo, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { rollbackShown } from '../../lib/services/selfupdate';
+  import { rollbackReason } from '../../lib/services/selfupdateMessages';
   import { cloudStatus, refreshCloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { navigate } from '../../lib/stores/router';
@@ -1414,6 +1417,21 @@
               {msg('settings.aboutHistoryButtonLabel')}
             </Button>
           </div>
+          {#if rollbackShown($rollbackInfo)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
+                <span class="row-sub">
+                  {#if $rollbackInfo.available}
+                    {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
+                  {:else}
+                    {rollbackReason($rollbackInfo)}
+                  {/if}
+                </span>
+              </div>
+              <RollbackAction />
+            </div>
+          {/if}
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
