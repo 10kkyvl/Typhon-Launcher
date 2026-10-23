@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_STATUSES, STATUS_LABELS, friendStatusLabel, statusBadgeKind, statusLabel } from './status';
+import { GAME_STATUSES, STATUS_LABELS, completionLine, friendStatusLabel, isFinished, statusBadgeKind, statusLabel } from './status';
 
 describe('statusLabel', () => {
   it('labels every known status', () => {
@@ -8,9 +8,9 @@ describe('statusLabel', () => {
     }
   });
 
-  it('falls back to "Без статуса" for empty or missing status', () => {
-    expect(statusLabel('')).toBe('Без статуса');
-    expect(statusLabel(undefined)).toBe('Без статуса');
+  it('falls back to "Не начата" for empty or missing status', () => {
+    expect(statusLabel('')).toBe('Не начата');
+    expect(statusLabel(undefined)).toBe('Не начата');
   });
 });
 
@@ -50,5 +50,43 @@ describe('statusBadgeKind', () => {
 
   it('maps dropped to warning', () => {
     expect(statusBadgeKind('dropped')).toBe('warning');
+  });
+});
+
+describe('mastered', () => {
+  it('is offered next to completed and labelled as a full completion', () => {
+    expect(GAME_STATUSES).toContain('mastered');
+    expect(statusLabel('mastered')).toBe('Пройдено на 100%');
+  });
+
+  it('counts as a finished status with the success badge', () => {
+    expect(statusBadgeKind('mastered')).toBe('success');
+    expect(isFinished('mastered')).toBe(true);
+    expect(isFinished('completed')).toBe(true);
+    expect(isFinished('playing')).toBe(false);
+    expect(isFinished('')).toBe(false);
+    expect(isFinished(undefined)).toBe(false);
+  });
+
+  it('reads like the other statuses for friends', () => {
+    expect(friendStatusLabel('mastered')).toBe('Пройдено на 100%');
+  });
+});
+
+describe('completionLine', () => {
+  it('says the date for a finished game', () => {
+    const line = completionLine('completed', new Date(2026, 9, 12, 12).toISOString());
+    expect(line).toMatch(/^Пройдено 12 окт\.? 2026/);
+  });
+
+  it('says the date is unknown for a finished game without one', () => {
+    expect(completionLine('mastered', null)).toBe('Дата прохождения неизвестна');
+    expect(completionLine('completed', undefined)).toBe('Дата прохождения неизвестна');
+    expect(completionLine('completed', 'nonsense')).toBe('Дата прохождения неизвестна');
+  });
+
+  it('stays empty for a game that is not finished', () => {
+    expect(completionLine('playing', '2026-10-12T12:00:00Z')).toBe('');
+    expect(completionLine('', null)).toBe('');
   });
 });

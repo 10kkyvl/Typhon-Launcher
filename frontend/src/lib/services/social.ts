@@ -167,6 +167,8 @@ export interface BlockData {
   unknown?: number;
   hours?: number;
   completed?: number;
+  year?: number;
+  total?: number;
 }
 
 export interface PublicBlock extends ProfileBlock {

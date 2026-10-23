@@ -16,6 +16,7 @@ function cell(id: string, body: BlockBody, patch: Partial<GridBlock> = {}): Grid
   const types: Record<BlockBody['kind'], string> = {
     pinned: 'pinned',
     collection: 'collection',
+    completed: 'completed',
     genres: 'genres',
     fingerprint: 'fingerprint',
     text: 'text',
@@ -123,6 +124,32 @@ describe('BlockGrid block types', () => {
 
     expect(html([cell('c', body(true))])).toContain('class="completed');
     expect(html([cell('c', body(false))])).not.toContain('class="completed');
+  });
+
+  it('draws the completed block with the year, the total, dates and a mark on 100% games', () => {
+    const out = html([
+      cell('c', {
+        kind: 'completed',
+        year: 2026,
+        total: 15,
+        games: [
+          game('a', { status: 'mastered', completedAt: '2026-09-01T10:00:00Z' }),
+          game('b', { status: 'completed', completedAt: '2026-08-01T10:00:00Z' }),
+        ],
+      }),
+    ]);
+
+    expect(out).toContain('Completed in 2026 · 15');
+    expect(out.match(/class="tile/g)).toHaveLength(2);
+    expect(out.match(/class="completed/g)).toHaveLength(2);
+    expect(out.match(/class="mastered/g)).toHaveLength(1);
+  });
+
+  it('says so when nothing was completed this year, and still shows the block', () => {
+    const out = html([cell('c', { kind: 'completed', year: 2026, total: 0, games: [] })]);
+
+    expect(out).toContain('Completed in 2026 · 0');
+    expect(out).toContain('Nothing completed this year yet');
   });
 
   it('puts a heart on the favourites', () => {

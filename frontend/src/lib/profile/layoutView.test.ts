@@ -5,6 +5,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 import { locale } from '../i18n';
 import type { ProfileBlock, ProfileLayout, ProfileSettings } from '../services/account';
 import { EMPTY_SNAPSHOT, type GameRef, type ProfileSnapshot } from '../services/profile';
+import type { LibraryGame } from '../services/library';
 import type { GameCard, PublicBlock, PublicProfile } from '../services/social';
 import { defaultLayout } from './layout';
 import {
@@ -376,5 +377,58 @@ describe('resolvePublic', () => {
     const blocks = resolve([block('g', 'genres'), block('p', 'pinned', { igdbId: 0 })]);
 
     expect(blocks.every((item) => !item.hidden && !item.issue)).toBe(true);
+  });
+});
+
+describe('completed block', () => {
+  const now = new Date(2026, 9, 23, 12);
+  const finished = (id: string, patch: Record<string, unknown> = {}) =>
+    ({ id, title: `Game ${id}`, cover: '', status: 'completed', completedAt: '2026-06-01T12:00:00Z', ...patch }) as unknown as LibraryGame;
+
+  it('lists this year from the own library with dates and the total', () => {
+    const library = [
+      finished('a', { completedAt: '2026-03-01T12:00:00Z' }),
+      finished('b', { status: 'mastered', completedAt: '2026-08-01T12:00:00Z' }),
+      finished('c', { completedAt: '2025-03-01T12:00:00Z' }),
+    ];
+
+    const body = bodyOf(resolveOwn(layoutOf(block('d', 'completed')), ownContext({ library, now })), 'd');
+
+    if (body.kind !== 'completed') throw new Error(body.kind);
+    expect(body.year).toBe(2026);
+    expect(body.total).toBe(2);
+    expect(body.games.map((item) => [item.title, item.status, item.completedAt])).toEqual([
+      ['Game b', 'mastered', '2026-08-01T12:00:00Z'],
+      ['Game a', 'completed', '2026-03-01T12:00:00Z'],
+    ]);
+  });
+
+  it('is an empty block, not an error, when nothing was completed', () => {
+    const body = bodyOf(resolveOwn(layoutOf(block('d', 'completed')), ownContext({ library: [], now })), 'd');
+
+    expect(body).toEqual({ kind: 'completed', year: 2026, total: 0, games: [] });
+  });
+
+  it('reads the public payload and keeps the server total above the twelve listed', () => {
+    const games = [{ ...card(1), status: 'mastered', completedAt: '2026-10-19T21:30:00Z' }];
+    const data = { year: 2026, total: 15, games } as unknown as PublicBlock['data'];
+
+    const body = bodyOf(resolvePublic({ version: 1, blocks: [{ ...block('d', 'completed'), data }] }, publicContext(profileOf())), 'd');
+
+    expect(body).toMatchObject({ kind: 'completed', year: 2026, total: 15 });
+    if (body.kind !== 'completed') throw new Error(body.kind);
+    expect(body.games[0]).toMatchObject({ title: 'Card 1', status: 'mastered', completedAt: '2026-10-19T21:30:00Z' });
+  });
+
+  it('shows an error state for a public payload that cannot be read', () => {
+    const blocks = [
+      { ...block('x', 'completed'), data: undefined },
+      { ...block('y', 'completed'), data: { error: 'unavailable' } },
+      { ...block('z', 'completed'), data: { year: 2026, total: 'many' } as unknown as PublicBlock['data'] },
+    ];
+
+    const resolved = resolvePublic({ version: 1, blocks }, publicContext(profileOf()));
+
+    expect(resolved.map((item) => item.body.kind)).toEqual(['error', 'error', 'error']);
   });
 });

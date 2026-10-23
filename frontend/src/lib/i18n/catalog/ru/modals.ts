@@ -2,9 +2,10 @@ export const modals = {
   'modals.telemetryConsentSaveFailed': 'Не удалось сохранить ответ: нет доступа к папке настроек. Проверьте права и попробуйте ещё раз.',
   'modals.telemetryConsentSaveFallback': 'Не удалось сохранить ответ. Попробуйте ещё раз.',
   // GameStatusModal.svelte
-  'modals.gameStatusNone': 'Без статуса',
+  'modals.gameStatusNone': 'Не начата',
   'modals.gameStatusUpdateFailed': 'Не удалось изменить статус',
   'modals.gameStatusTitle': 'Статус игры',
+  'modals.gameCompletedAt': 'Дата прохождения',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': 'Что нового в версии {version}',

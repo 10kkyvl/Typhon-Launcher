@@ -1,6 +1,11 @@
 <script lang="ts">
   import { CircleCheck, CircleAlert, Info } from '@lucide/svelte';
-  import { toasts } from '../stores/toasts';
+  import { dismissToast, toasts, type Toast } from '../stores/toasts';
+
+  function act(t: Toast) {
+    dismissToast(t.id);
+    t.action?.run();
+  }
 </script>
 
 {#if $toasts.length > 0}
@@ -15,6 +20,9 @@
           <Info size="1.6rem" strokeWidth={1.8} />
         {/if}
         <span>{t.message}</span>
+        {#if t.action}
+          <button class="action" type="button" onclick={() => act(t)}>{t.action.label}</button>
+        {/if}
       </div>
     {/each}
   </div>
@@ -41,6 +49,23 @@
     font-size: var(--font-sm);
     color: var(--text);
     animation: slide var(--dur-panel) var(--ease);
+  }
+
+  .action {
+    flex-shrink: 0;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--hover);
+    color: var(--accent-text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .action:hover,
+  .action:focus-visible {
+    background: var(--hover-strong);
   }
 
   .toast :global(svg) {

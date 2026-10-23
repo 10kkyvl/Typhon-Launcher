@@ -53,8 +53,10 @@
   import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import { canPlay } from '../../lib/library/launch';
   import { matchesCollection } from '../../lib/library/collections';
+  import { STATUS_FILTERS, compareByCompleted, compareByStatus, matchesStatus, type StatusFilter } from '../../lib/library/statuses';
+  import { statusLabel } from '../../lib/game/status';
 
-  type Sort = 'alpha' | 'recent' | 'playtime' | 'size';
+  type Sort = 'alpha' | 'recent' | 'playtime' | 'size' | 'status' | 'completed';
 
   interface Entry {
     id: string;
@@ -71,6 +73,7 @@
     inLibrary: boolean;
     tags?: string[];
     status?: string;
+    completedAt?: string | null;
     canonicalGameId?: string;
     watched?: boolean;
     source?: GameSource | null;
@@ -79,6 +82,7 @@
   let filter = $state<LibraryFilter>('all');
   let sort = $state<Sort>('alpha');
   let sourceFilter = $state<GameSource | 'all'>('all');
+  let statusFilter = $state<StatusFilter>('all');
   let search = $state('');
   let heroHidden = $state(false);
   let activeCollectionId = $state('');
@@ -161,7 +165,15 @@
     recent: msg('games.librarySortRecent'),
     playtime: msg('games.librarySortPlaytime'),
     size: msg('games.sortSize'),
+    status: msg('games.sortStatus'),
+    completed: msg('games.sortCompleted'),
   };
+
+  function statusFilterLabel(id: StatusFilter): string {
+    if (id === 'all') return msg('games.filterStatusAll');
+    if (id === 'none') return msg('games.filterStatusNone');
+    return statusLabel(id);
+  }
 
   const sectionTitles: Record<LibraryFilter, string> = {
     all: msg('games.allGamesTitle'),
@@ -195,6 +207,7 @@
       inLibrary: true,
       tags: game.tags,
       status: game.status,
+      completedAt: game.completedAt,
       canonicalGameId: game.canonicalGameId,
       source: gameSource(game),
     };
@@ -280,6 +293,7 @@
       if (query && !entry.title.toLowerCase().includes(query)) return false;
       if (entry.hidden !== (filter === 'hidden')) return false;
       if (filter !== 'watched' && sourceFilter !== 'all' && entry.source !== sourceFilter) return false;
+      if (filter !== 'watched' && statusFilter !== 'all' && !(entry.inLibrary && matchesStatus(entry.status, statusFilter))) return false;
       if (activeCollection) {
         const genres = entry.canonicalGameId ? $libraryGenres[entry.canonicalGameId] : undefined;
         if (!entry.inLibrary || !matchesCollection(entry, genres, activeCollection)) return false;
@@ -302,6 +316,10 @@
           return b.playtimeSeconds - a.playtimeSeconds || a.title.localeCompare(b.title, 'ru');
         case 'size':
           return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title, 'ru');
+        case 'status':
+          return compareByStatus(a, b);
+        case 'completed':
+          return compareByCompleted(a, b);
         default:
           return a.title.localeCompare(b.title, 'ru');
       }
@@ -492,12 +510,27 @@
             {/snippet}
           </DropdownMenu>
         {/if}
+        {#if filter !== 'watched'}
+          <DropdownMenu
+            items={STATUS_FILTERS.map((id) => ({ id, label: statusFilterLabel(id), checked: statusFilter === id }))}
+            onselect={(id) => (statusFilter = id as StatusFilter)}
+          >
+            {#snippet trigger({ open, toggle })}
+              <Chip selected={open || statusFilter !== 'all'} onclick={toggle}>
+                {statusFilterLabel(statusFilter)}
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
+              </Chip>
+            {/snippet}
+          </DropdownMenu>
+        {/if}
         <DropdownMenu
           items={[
             { id: 'alpha', label: sortLabels.alpha },
             { id: 'recent', label: sortLabels.recent },
             { id: 'playtime', label: sortLabels.playtime },
             { id: 'size', label: sortLabels.size },
+            { id: 'status', label: sortLabels.status },
+            { id: 'completed', label: sortLabels.completed },
           ]}
           onselect={(id) => (sort = id as Sort)}
         >

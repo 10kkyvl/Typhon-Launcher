@@ -127,7 +127,7 @@ describe('addBlock', () => {
     expect(ok(addBlock(layoutOf(), 'text')).layout.blocks[0].config.body).toBe('');
   });
 
-  it.each(['genres', 'fingerprint', 'recent', 'activity', 'stats', 'playing', 'about'])('allows %s only once', (type) => {
+  it.each(['genres', 'fingerprint', 'recent', 'activity', 'stats', 'playing', 'about', 'completed'])('allows %s only once', (type) => {
     const first = ok(addBlock(layoutOf(), type));
 
     expect(code(addBlock(first.layout, type))).toBe('duplicate');
@@ -537,5 +537,28 @@ describe('layoutPatch', () => {
     const edited = layoutOf(...defaultLayout(custom).blocks, block('g', 'genres'));
 
     expect(layoutPatch(custom, edited, true)).toEqual({ send: true, layout: edited });
+  });
+});
+
+describe('completed block', () => {
+  it('is offered as a preset that is not in the default layout', () => {
+    const preset = ADD_PRESETS.find((item) => item.id === 'completed');
+
+    expect(preset).toMatchObject({ type: 'completed', width: 'full', config: {} });
+    expect(defaultLayout({ showcase: [] }).blocks.some((item) => item.type === 'completed')).toBe(false);
+  });
+
+  it('is hidden from others together with the library and nothing else', () => {
+    const off = { showPlaying: true, showLibrary: false, showActivity: true, showStats: true };
+
+    expect(hiddenFromOthers('completed', off)).toBe(true);
+    expect(hiddenFromOthers('completed', { ...off, showLibrary: true })).toBe(false);
+    expect(hiddenFromOthers('completed', { ...off, showPlaying: false, showActivity: false, showStats: false, showLibrary: true })).toBe(false);
+  });
+
+  it('refuses a second completed block', () => {
+    const first = ok(addBlock(layoutOf(), 'completed'));
+
+    expect(code(addBlock(first.layout, 'completed'))).toBe('duplicate');
   });
 });

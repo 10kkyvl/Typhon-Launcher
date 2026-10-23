@@ -4,7 +4,9 @@ import type { GameArt } from '../services/metadata';
 import type { GameRef, ProfileSnapshot } from '../services/profile';
 import type { GameCard, GenreBreakdown, PlayedGame, PublicBlock, PublicLayout, PublicProfile } from '../services/social';
 import { msg } from '../i18n';
+import { isFinished } from '../game/status';
 import { blockIssue, defaultLayout, hiddenFromOthers } from './layout';
+import { completedThisYear, parseCompletedData } from './completed';
 import { coverOf, showcaseLabel } from './view';
 
 export interface BlockGame {
@@ -24,6 +26,7 @@ export type BlockBody =
   | { kind: 'genres'; breakdown: GenreBreakdown }
   | { kind: 'fingerprint'; breakdown: GenreBreakdown; hours: number | null; games: number | null; completed: number | null }
   | { kind: 'text'; title: string; body: string }
+  | { kind: 'completed'; year: number; total: number; games: BlockGame[] }
   | { kind: 'external'; empty: boolean }
   | { kind: 'error' }
   | { kind: 'unknown' };
@@ -46,6 +49,8 @@ export interface OwnContext {
   preview: ProfileSnapshot | null;
   art: Record<string, GameArt>;
   picked: Record<number, GameRef>;
+  library?: LibraryGame[];
+  now?: Date;
   open: (game: GameRef) => void;
   empty: (type: string) => boolean;
 }
@@ -103,7 +108,7 @@ function ownGame(ref: GameRef, key: string, ctx: OwnContext): BlockGame {
     hero: heroOf(ref, ctx.art),
     seconds: ref.playtimeSeconds,
     status: ref.status,
-    completedAt: ref.status === 'completed' ? (ref.statusAt ?? null) : null,
+    completedAt: isFinished(ref.status) ? (ref.statusAt ?? null) : null,
     open: () => ctx.open(ref),
   };
 }
@@ -153,6 +158,14 @@ function ownBody(block: ProfileBlock, ctx: OwnContext): BlockBody {
     }
     case 'text':
       return { kind: 'text', title: text(config.title), body: text(config.body) };
+    case 'completed': {
+      const done = completedThisYear(ctx.library ?? [], ctx.now ?? new Date());
+      const games = done.games.map((game) => {
+        const ref = refOfLibrary(game);
+        return { ...ownGame(ref, ref.id, ctx), completedAt: game.completedAt ?? null };
+      });
+      return { kind: 'completed', year: done.year, total: done.total, games };
+    }
     case 'recent':
     case 'activity':
     case 'stats':
@@ -232,6 +245,11 @@ function publicBody(block: PublicBlock, ctx: PublicContext): BlockBody {
     }
     case 'text':
       return { kind: 'text', title: text(config.title), body: text(config.body) };
+    case 'completed': {
+      const done = parseCompletedData(data);
+      if (!done) return { kind: 'error' };
+      return { kind: 'completed', year: done.year, total: done.total, games: done.games.map((card) => publicGame(card, ctx)) };
+    }
     case 'recent':
     case 'activity':
     case 'stats':

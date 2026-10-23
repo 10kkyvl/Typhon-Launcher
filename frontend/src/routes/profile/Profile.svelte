@@ -119,6 +119,7 @@
       preview: editing ? full : null,
       art: $gameArt,
       picked,
+      library: $libraryGames,
       open: (game) => navigate('game', { id: game.id }),
       empty,
     }),
