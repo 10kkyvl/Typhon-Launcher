@@ -50,6 +50,11 @@ on:
         description: One-line summary for the update banner; defaults to the summary of the top CHANGELOG.md entry
         required: false
         default: ""
+      skip_deltas:
+        description: Ship the full installer only, with no patches from earlier releases
+        type: boolean
+        required: false
+        default: false
 
 # Do not interrupt an in-progress publication or let two releases race on latest.
 concurrency:
@@ -365,7 +370,12 @@ jobs:
     needs: [macos, windows]
     # Run the tested signer from this run's Windows build, without a Go SDK.
     runs-on: windows-latest
-    timeout-minutes: 15
+    # 15 minutes covered the publication alone. The patches add three
+    # downloads of about 16 MB each, three 7z extractions, three mkdelta runs
+    # (2-4 s each when measured, allow 10x on a shared runner) and the signer
+    # applying every patch again: about 3-4 minutes in all. 30 keeps that and
+    # the slow image pulls of the upload step inside the limit.
+    timeout-minutes: 30
     permissions:
       contents: write
     env:
@@ -374,8 +384,12 @@ jobs:
       MANIFEST_BASE_URL: ${{ secrets.TYPHON_MANIFEST_BASE_URL }}
       RELEASE_NOTES: ${{ inputs.notes }}
     steps:
+      # The history comes along with its tags: the patch step compares the
+      # installer sources of this release with those of each earlier tag.
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Download the tested manifest signer
         uses: actions/download-artifact@v4
         with:
@@ -429,22 +443,39 @@ jobs:
             exit 1
           fi
 
-      # Launchers that already run the previous releases download a patch
-      # instead of the whole installer. A release that cannot be fetched or
-      # patched is a missing optimisation, never a failed release: its clients
-      # simply take the full installer.
+      # Launchers that already run a previous release download a patch instead
+      # of the whole installer. This step only builds the patches, and for it
+      # every missing piece is a missing optimisation: no 7z, an earlier release
+      # that cannot be fetched or whose installer differs from this one, or a
+      # patch that fails to encode skips that patch with a warning, and those
+      # clients take the full installer. Two stops further on are deliberate
+      # and do fail the release: signrelease applies every patch again and
+      # refuses to sign one that does not rebuild the new typhon.exe, and it
+      # refuses a manifest past the 64 KiB that installed launchers accept.
       - name: Build the patches from the previous releases
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          SKIP_DELTAS: ${{ inputs.skip_deltas || vars.SKIP_DELTAS }}
           DELTA_COUNT: "3"
+          # A patch replaces typhon.exe and nothing else. What the installer
+          # puts or registers besides it comes from these sources, so a change
+          # in them needs the installer to run. build/windows/info.json is left
+          # out on purpose: it changes with every version and ends up inside
+          # the exe.
+          INSTALLER_SOURCES: build/windows/nsis build/windows/Taskfile.yml
         run: |
           set -euo pipefail
 
           : > deltas.txt
           mkdir -p bin/new bin/previous
+
+          if [ "${SKIP_DELTAS:-}" = "true" ]; then
+            echo "::warning::skip_deltas is set; this release ships no patches"
+            exit 0
+          fi
 
           if ! command -v 7z >/dev/null; then
             echo "::warning::7z is not available; this release ships no patches"
@@ -468,6 +499,21 @@ jobs:
           )"
 
           for ver in $older; do
+            rc=0
+            # shellcheck disable=SC2086 # INSTALLER_SOURCES is a list of paths without spaces
+            git diff --quiet "v$ver" HEAD -- $INSTALLER_SOURCES || rc=$?
+            case "$rc" in
+              0) ;;
+              1)
+                echo "::warning::the installer sources changed since v$ver ($INSTALLER_SOURCES); no patch from it, its clients need the installer"
+                continue
+                ;;
+              *)
+                echo "::warning::could not compare the installer sources with v$ver (git diff exited $rc); no patch from it"
+                continue
+                ;;
+            esac
+
             dest="bin/previous/$ver"
             mkdir -p "$dest"
             # The portable zip exists from 1.2.0 on; every release has the
