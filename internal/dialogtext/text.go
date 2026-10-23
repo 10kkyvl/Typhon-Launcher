@@ -5,6 +5,8 @@ package dialogtext
 type Labels struct {
 	AllFiles, Executables                  string
 	OpenTyphon, Quit                       string
+	RecentGames, Playing, StopGame         string
+	LibraryTask, DownloadsTask             string
 	TorrentTitle, Torrents                 string
 	FeedTitle, Feeds                       string
 	TargetFolder                           string
@@ -18,6 +20,8 @@ func For(language string) Labels {
 	if language == "ru" {
 		return Labels{
 			OpenTyphon: "Открыть Typhon", Quit: "Выход",
+			RecentGames: "Недавние игры", Playing: "играет", StopGame: "Остановить",
+			LibraryTask: "Библиотека", DownloadsTask: "Загрузки",
 			AllFiles: "Все файлы", Executables: "Исполняемые файлы (*.exe)",
 			TorrentTitle: "Выберите торрент-файл", Torrents: "Торрент-файлы (*.torrent)",
 			FeedTitle: "Выберите файл источника", Feeds: "Файл источника (*.json)",
@@ -31,6 +35,8 @@ func For(language string) Labels {
 	}
 	return Labels{
 		OpenTyphon: "Open Typhon", Quit: "Quit",
+		RecentGames: "Recent games", Playing: "playing", StopGame: "Stop",
+		LibraryTask: "Library", DownloadsTask: "Downloads",
 		AllFiles: "All files", Executables: "Executable files (*.exe)",
 		TorrentTitle: "Choose a torrent file", Torrents: "Torrent files (*.torrent)",
 		FeedTitle: "Choose a source file", Feeds: "Source file (*.json)",

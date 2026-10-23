@@ -26,3 +26,24 @@ func TestChatImageLabelsExistInBothLanguages(t *testing.T) {
 		t.Fatal("chat image filter label is not localised")
 	}
 }
+
+func TestTrayAndJumpListLabelsExistInBothLanguages(t *testing.T) {
+	for _, language := range []string{"ru", "en"} {
+		got := For(language)
+		fields := map[string]string{
+			"OpenTyphon": got.OpenTyphon, "Quit": got.Quit,
+			"RecentGames": got.RecentGames, "Playing": got.Playing, "StopGame": got.StopGame,
+			"LibraryTask": got.LibraryTask, "DownloadsTask": got.DownloadsTask,
+		}
+		for name, value := range fields {
+			if value == "" {
+				t.Fatalf("%s: %s is empty", language, name)
+			}
+		}
+	}
+	ru, en := For("ru"), For("en")
+	if ru.RecentGames == en.RecentGames || ru.Playing == en.Playing || ru.StopGame == en.StopGame ||
+		ru.LibraryTask == en.LibraryTask || ru.DownloadsTask == en.DownloadsTask {
+		t.Fatal("tray and jump list labels are not localised")
+	}
+}
