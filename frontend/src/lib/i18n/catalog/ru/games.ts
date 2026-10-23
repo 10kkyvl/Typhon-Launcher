@@ -119,7 +119,6 @@ export const games = {
   'games.completedUnknown': 'Дата прохождения неизвестна',
   'games.filterStatusAll': 'Все статусы',
   'games.filterStatusNone': 'Не начата',
-  'games.filterStatusLabel': 'Статус',
   'games.sortStatus': 'По статусу',
   'games.sortCompleted': 'По дате прохождения',
   'games.hintStarted': 'Отметить «{title}» как «Играю»?',

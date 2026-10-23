@@ -121,7 +121,6 @@ export const games: Record<GamesKey, Message> = {
   'games.completedUnknown': 'Completion date unknown',
   'games.filterStatusAll': 'All statuses',
   'games.filterStatusNone': 'Not started',
-  'games.filterStatusLabel': 'Status',
   'games.sortStatus': 'By status',
   'games.sortCompleted': 'By completion date',
   'games.hintStarted': 'Mark "{title}" as "Playing"?',

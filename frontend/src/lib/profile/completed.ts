@@ -11,7 +11,7 @@ export interface CompletedYear<T> {
 }
 
 export function completedThisYear(games: readonly LibraryGame[], now: Date): CompletedYear<LibraryGame> {
-  const year = now.getFullYear();
+  const year = now.getUTCFullYear();
   const done = games
     .filter((game) => !game.hidden && isFinished(game.status) && finishedIn(game.completedAt, year) !== null)
     .map((game) => ({ game, at: finishedIn(game.completedAt, year) as number }))
@@ -22,7 +22,7 @@ export function completedThisYear(games: readonly LibraryGame[], now: Date): Com
 function finishedIn(completedAt: string | null | undefined, year: number): number | null {
   if (!completedAt) return null;
   const at = new Date(completedAt);
-  return !Number.isNaN(at.getTime()) && at.getFullYear() === year ? at.getTime() : null;
+  return !Number.isNaN(at.getTime()) && at.getUTCFullYear() === year ? at.getTime() : null;
 }
 
 export function parseCompletedData(data: unknown): CompletedYear<GameCard> | null {

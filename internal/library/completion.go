@@ -75,6 +75,12 @@ func (s *Service) SetCompletedAt(id string, date time.Time) error {
 	if err := checkCompletedAt(date, now); err != nil {
 		return err
 	}
+	// A day picked as "today" arrives as a moment later today; the server
+	// clips anything past its clock, and a date it stored differently from ours
+	// would never look synced.
+	if date.After(now) {
+		date = now
+	}
 	date = date.UTC()
 	if game.CompletedAt != nil && game.CompletedAt.Equal(date) {
 		return nil

@@ -22,7 +22,6 @@
   let day = $state('');
   let saving = $state(false);
 
-  const today = $derived(dayValue(new Date()));
   const chosen = $derived(picked ?? (current as GameStatus));
   const dated = $derived(isFinished(chosen));
   const invalid = $derived(dated && completionDateIssue(day, new Date()));
@@ -75,7 +74,7 @@
   {#if dated}
     <label class="date">
       <span>{msg('modals.gameCompletedAt')}</span>
-      <input type="date" bind:value={day} min={COMPLETED_MIN} max={today} required aria-invalid={invalid} />
+      <input type="date" bind:value={day} min={COMPLETED_MIN} max={dayValue(new Date())} required aria-invalid={invalid} />
     </label>
     <div class="actions">
       <Button variant="primary" disabled={saving || invalid} onclick={() => apply(chosen)}>{msg('common.save')}</Button>

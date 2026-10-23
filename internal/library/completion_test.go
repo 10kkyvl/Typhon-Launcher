@@ -110,7 +110,6 @@ func TestSetCompletedAt(t *testing.T) {
 	}{
 		{"completed accepts a past date", StatusCompleted, day(3), ""},
 		{"mastered accepts a past date", StatusMastered, day(3), ""},
-		{"date a day ahead of now is allowed", StatusCompleted, now.Add(23 * time.Hour), ""},
 		{"date past the allowed skew", StatusCompleted, now.Add(25 * time.Hour), "library.completed_at_in_future"},
 		{"the first allowed day", StatusCompleted, time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC), ""},
 		{"day before 1980", StatusCompleted, time.Date(1979, 12, 31, 23, 59, 59, 0, time.UTC), "library.completed_at_too_old"},
@@ -452,5 +451,28 @@ func TestCompletionDateJSONKey(t *testing.T) {
 	}
 	if strings.Contains(string(data), `"completedAt"`) {
 		t.Fatalf("completedAt survived leaving the completed statuses: %s", data)
+	}
+}
+
+func TestSetCompletedAtKeepsLaterTodayAsNow(t *testing.T) {
+	now := day(10)
+	path := filepath.Join(t.TempDir(), "library.json")
+	s := mustServiceAt(t, path)
+	id := addGames(t, s, 1)[0]
+	s.now = func() time.Time { return day(1) }
+	if _, err := s.SetStatus(id, StatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return now }
+
+	if err := s.SetCompletedAt(id, now.Add(23*time.Hour)); err != nil {
+		t.Fatalf("SetCompletedAt: %v", err)
+	}
+	got, err := s.Find(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CompletedAt == nil || !got.CompletedAt.Equal(now) {
+		t.Fatalf("CompletedAt = %v, want %v: the server clips a date past its clock, and a copy it stored differently would never look synced", got.CompletedAt, now)
 	}
 }
