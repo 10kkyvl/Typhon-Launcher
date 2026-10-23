@@ -21,6 +21,8 @@ vi.mock('../services/selfupdate', async (importOriginal) => ({
   checkForUpdate: vi.fn(),
   downloadUpdate: vi.fn(),
   applyUpdate: vi.fn(),
+  getRollback: vi.fn(),
+  applyRollback: vi.fn(),
   dismissUpdate: vi.fn(),
   cancelDownload: vi.fn(),
   getReleaseNotes: vi.fn(),
@@ -47,6 +49,7 @@ async function load() {
   const service = await import('../services/selfupdate');
   const store = await import('./selfupdate');
   vi.mocked(service.getReleaseNotes).mockResolvedValue({ currentVersion: '1.0.0', unseen: [], history: [] } as never);
+  vi.mocked(service.getRollback).mockResolvedValue(service.noRollback() as never);
   return { service, store };
 }
 
@@ -377,6 +380,130 @@ describe('release notes', () => {
     await store.dismissReleaseNotes();
 
     expect(service.acknowledgeReleaseNotes).not.toHaveBeenCalled();
+  });
+});
+
+const AVAILABLE_ROLLBACK = { available: true, version: '1.1.0', reason: '', reasonCode: '' };
+
+describe('rollback', () => {
+  it('loads what the launcher can go back to at start', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getRollback).mockResolvedValue(AVAILABLE_ROLLBACK as never);
+
+    await store.initSelfUpdate();
+
+    expect(get(store.rollbackInfo)).toEqual(AVAILABLE_ROLLBACK);
+  });
+
+  it('toasts when the rollback state cannot be read instead of showing nothing', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getRollback).mockRejectedValue(new Error('boom'));
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
+  });
+
+  it('keeps the button busy after a started rollback until the process exits', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.applyRollback).mockResolvedValue(undefined);
+
+    await store.requestRollback();
+
+    expect(service.applyRollback).toHaveBeenCalledTimes(1);
+    expect(get(store.rollbackBusy)).toBe(true);
+    expect(get(store.selfUpdateBusy)).toBe(true);
+  });
+
+  it('does not start a second rollback while one is running', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.applyRollback).mockResolvedValue(undefined);
+
+    await store.requestRollback();
+    await store.requestRollback();
+
+    expect(service.applyRollback).toHaveBeenCalledTimes(1);
+  });
+
+  it('frees the button and toasts the reason when the rollback is refused', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.applyRollback).mockRejectedValue(
+      new Error('typhon:selfupdate.rollback_broken: selfupdate: the saved previous launcher version is damaged'),
+    );
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.requestRollback();
+
+    expect(get(store.rollbackBusy)).toBe(false);
+    expect(get(toasts.toasts).map((t) => t.message)).toContain('Сохранённая копия прежней версии повреждена.');
+  });
+
+  it('frees the button and reports it when the launcher did not exit in time', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus({ state: 'ready', availableVersion: '1.3.0' }) as never);
+    vi.mocked(service.applyRollback).mockResolvedValue(undefined);
+    await store.initSelfUpdate();
+    await store.requestRollback();
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    handlers['launcher:update_status']({
+      data: makeStatus({
+        state: 'ready',
+        availableVersion: '1.3.0',
+        error: 'typhon:selfupdate.parent_still_running: launcher did not exit',
+        errorCode: 'rollback',
+      }),
+    });
+
+    expect(get(store.rollbackBusy)).toBe(false);
+    expect(get(toasts.toasts).some((t) => t.kind === 'danger')).toBe(true);
+    expect(get(store.selfUpdateView)).toBe('ready');
+  });
+
+  it('shows a rolled back start as a success card without an error toast', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({
+      kind: 'rolled_back',
+      version: '1.1.0',
+      from: '1.2.0',
+      to: '1.1.0',
+      ok: true,
+      finishedAt: '',
+    } as never);
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts)).toHaveLength(0);
+    expect(get(store.selfUpdateOutcome)?.kind).toBe('rolled_back');
+  });
+
+  it('toasts a failed rollback with its own wording', async () => {
+    const { service, store } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+    vi.mocked(service.getOutcome).mockResolvedValue({
+      kind: 'rolled_back',
+      version: '1.1.0',
+      from: '1.2.0',
+      to: '1.1.0',
+      ok: false,
+      error: 'x',
+      finishedAt: '',
+    } as never);
+
+    const toasts = await import('./toasts');
+    toasts.toasts.set([]);
+    await store.initSelfUpdate();
+
+    expect(get(toasts.toasts).map((t) => t.message)).toEqual(['Не удалось вернуться на версию 1.1.0']);
   });
 });
 

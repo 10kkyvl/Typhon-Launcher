@@ -54,6 +54,7 @@ vi.mock('../services/selfupdate', () => ({
   getReleaseNotes: vi.fn(),
   acknowledgeReleaseNotes: vi.fn(),
   emptyReleaseNotes: () => ({ currentVersion: '', unseen: [], history: [] }),
+  noRollback: () => ({ available: false, version: '', reason: '', reasonCode: 'selfupdate.rollback_none' }),
 }));
 
 // Первый import графа уведомлений идёт через общий сервер трансформации vite и под нагрузкой

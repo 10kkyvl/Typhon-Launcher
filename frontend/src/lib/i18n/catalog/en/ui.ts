@@ -98,6 +98,7 @@ export const ui: Record<UiKey, Message> = {
 
   'ui.updateCheckFailed': "Couldn't check for updates",
   'ui.downloadingUpdate': 'Downloading update {version}',
+  'ui.downloadingUpdatePatch': 'Downloading update {version}: changes only',
   'ui.installingUpdate': 'Installing update {version}',
   'ui.launcherRestartShort': 'The launcher will close and restart.',
   'ui.updateReadyMessage': 'Update {version} is downloaded and ready to install',
@@ -164,6 +165,15 @@ export const ui: Record<UiKey, Message> = {
     'The launcher will close, install the update, and restart itself. This takes less than a minute.',
   'ui.launcherUpdatedTo': 'Launcher updated to {version}',
   'ui.updateFailedVersion': 'Update {version} failed to install',
+  'ui.launcherRolledBackTo': 'Typhon went back to version {version}',
+  'ui.rollbackFailedVersion': 'Could not go back to version {version}',
+  'ui.rollbackButtonNone': 'Go back to the previous version',
+  'ui.rollbackButton': 'Go back to version {version}',
+  'ui.rollbackConfirmTitle': 'Go back to version {version}?',
+  'ui.rollbackConfirmText':
+    'Typhon will close and start in version {version}. Version {current} will not be offered until a newer one is released.',
+  'ui.rollbackConfirmNote':
+    'Data that the new version converted to a new format returns to how it was before the update — changes made to it since the update are lost.',
   'ui.hide': 'Hide',
 
   'ui.resetAppearance': 'Reset appearance',

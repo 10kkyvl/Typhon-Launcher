@@ -96,6 +96,7 @@ export const ui = {
 
   'ui.updateCheckFailed': 'Не удалось проверить обновления',
   'ui.downloadingUpdate': 'Загрузка обновления {version}',
+  'ui.downloadingUpdatePatch': 'Загрузка обновления {version}: только изменения',
   'ui.installingUpdate': 'Устанавливаем обновление {version}',
   'ui.launcherRestartShort': 'Лаунчер закроется и запустится заново.',
   'ui.updateReadyMessage': 'Обновление {version} загружено и готово к установке',
@@ -162,6 +163,15 @@ export const ui = {
     'Лаунчер закроется, установит обновление и запустится сам. Это займёт меньше минуты.',
   'ui.launcherUpdatedTo': 'Лаунчер обновлён до {version}',
   'ui.updateFailedVersion': 'Обновление {version} не установилось',
+  'ui.launcherRolledBackTo': 'Typhon вернулся на версию {version}',
+  'ui.rollbackFailedVersion': 'Не удалось вернуться на версию {version}',
+  'ui.rollbackButtonNone': 'Вернуться на прежнюю версию',
+  'ui.rollbackButton': 'Вернуться на версию {version}',
+  'ui.rollbackConfirmTitle': 'Вернуться на версию {version}?',
+  'ui.rollbackConfirmText':
+    'Typhon закроется и запустится в версии {version}. Версия {current} не будет предлагаться, пока не выйдет более новая.',
+  'ui.rollbackConfirmNote':
+    'Данные, которые новая версия перевела в новый формат, вернутся к состоянию до обновления — изменения в них после обновления пропадут.',
   'ui.hide': 'Скрыть',
 
   'ui.resetAppearance': 'Сбросить оформление',
