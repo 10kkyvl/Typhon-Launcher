@@ -95,7 +95,7 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 	var totalSeconds int64
 	for _, g := range games {
 		totalSeconds += g.PlaytimeSeconds
-		if g.Status == library.StatusCompleted {
+		if library.IsCompletedStatus(g.Status) {
 			snap.Stats.Completed++
 		}
 	}
@@ -187,7 +187,7 @@ func Build(games []library.Game, sessions []playlog.Session, running []string, s
 	}
 	snap.Stats.MonthGames = len(monthGames)
 	for _, g := range games {
-		if g.Status == library.StatusCompleted && g.StatusAt != nil && !g.StatusAt.Before(monthStart) {
+		if at := completedAt(g); library.IsCompletedStatus(g.Status) && at != nil && !at.Before(monthStart) {
 			snap.Stats.MonthCompleted++
 		}
 	}
@@ -228,11 +228,11 @@ func showcaseGames(kind string, games []library.Game) []GameRef {
 		less = func(a, b library.Game) bool { return timeOf(a.LastPlayed).After(timeOf(b.LastPlayed)) }
 	case "recently_completed":
 		for _, g := range games {
-			if g.Status == library.StatusCompleted {
+			if library.IsCompletedStatus(g.Status) {
 				picked = append(picked, g)
 			}
 		}
-		less = func(a, b library.Game) bool { return timeOf(a.StatusAt).After(timeOf(b.StatusAt)) }
+		less = func(a, b library.Game) bool { return timeOf(completedAt(a)).After(timeOf(completedAt(b))) }
 	case "most_played":
 		for _, g := range games {
 			if g.PlaytimeSeconds > 0 {
@@ -252,6 +252,13 @@ func showcaseGames(kind string, games []library.Game) []GameRef {
 		refs = append(refs, ref(g))
 	}
 	return refs
+}
+
+func completedAt(g library.Game) *time.Time {
+	if g.CompletedAt != nil {
+		return g.CompletedAt
+	}
+	return g.StatusAt
 }
 
 func timeOf(t *time.Time) time.Time {

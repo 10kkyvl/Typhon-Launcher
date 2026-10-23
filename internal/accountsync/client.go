@@ -24,6 +24,9 @@ const (
 	syncPath             = account.APIPrefix + "/me/sync"
 	featuresHeader       = "X-Typhon-Sync-Features"
 	featureHidden        = "hidden"
+	featureCompletion    = "completion"
+	statusCompleted      = "completed"
+	statusMastered       = "mastered"
 )
 
 var (
@@ -64,6 +67,7 @@ type wireGame struct {
 	FavoriteAt      *time.Time `json:"favoriteAt"`
 	Status          string     `json:"status"`
 	StatusAt        *time.Time `json:"statusAt"`
+	CompletedAt     *time.Time `json:"completedAt,omitempty"`
 	Hidden          bool       `json:"hidden,omitempty"`
 	HiddenAt        *time.Time `json:"hiddenAt,omitempty"`
 	LastPlayedAt    *time.Time `json:"lastPlayedAt"`
@@ -102,29 +106,37 @@ type httpClient struct {
 	token   func() (string, error)
 	client  *http.Client
 
-	featMu     sync.Mutex
-	featToken  string
-	hiddenSync bool
+	featMu    sync.Mutex
+	featToken string
+	feats     syncFeatures
 }
 
-func (c *httpClient) supportsHidden() bool {
+type syncFeatures struct {
+	hidden     bool
+	completion bool
+}
+
+func (c *httpClient) features() syncFeatures {
 	c.featMu.Lock()
 	defer c.featMu.Unlock()
-	return c.hiddenSync
+	return c.feats
 }
 
 func (c *httpClient) noteFeatures(tok string, h http.Header) {
-	hidden := false
+	var feats syncFeatures
 	for _, value := range h.Values(featuresHeader) {
 		for _, feature := range strings.Split(value, ",") {
-			if strings.EqualFold(strings.TrimSpace(feature), featureHidden) {
-				hidden = true
+			switch strings.ToLower(strings.TrimSpace(feature)) {
+			case featureHidden:
+				feats.hidden = true
+			case featureCompletion:
+				feats.completion = true
 			}
 		}
 	}
 	c.featMu.Lock()
 	c.featToken = tok
-	c.hiddenSync = hidden
+	c.feats = feats
 	c.featMu.Unlock()
 }
 
@@ -132,7 +144,7 @@ func (c *httpClient) forgetFeaturesIfAccountChanged(tok string) {
 	c.featMu.Lock()
 	if c.featToken != tok {
 		c.featToken = tok
-		c.hiddenSync = false
+		c.feats = syncFeatures{}
 	}
 	c.featMu.Unlock()
 }
