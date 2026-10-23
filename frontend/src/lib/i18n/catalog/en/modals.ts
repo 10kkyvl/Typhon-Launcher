@@ -5,9 +5,10 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.telemetryConsentSaveFailed': 'Could not save your answer: the settings folder is not writable. Check the permissions and try again.',
   'modals.telemetryConsentSaveFallback': 'Could not save your answer. Try again.',
   // GameStatusModal.svelte
-  'modals.gameStatusNone': 'No status',
+  'modals.gameStatusNone': 'Not started',
   'modals.gameStatusUpdateFailed': 'Failed to change status',
   'modals.gameStatusTitle': 'Game status',
+  'modals.gameCompletedAt': 'Completion date',
 
   // ReleaseNotesModal.svelte
   'modals.releaseNotesTitle': "What's new in version {version}",

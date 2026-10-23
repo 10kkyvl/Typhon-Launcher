@@ -57,7 +57,7 @@
   import { playLabel } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { releaseOrigin } from '../../lib/game/releases';
-  import { statusBadgeKind, statusLabel } from '../../lib/game/status';
+  import { completionLine, statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
     clean,
@@ -932,6 +932,8 @@
           {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
+            {@const finished = completionLine(localGame.status, localGame.completedAt)}
+            {#if finished}<span class="completed-on">{finished}</span>{/if}
           {/if}
           {#each localGame?.tags ?? [] as tag (tag)}
             <StatusBadge kind="neutral" label={tag} dot={false} />
@@ -1454,6 +1456,11 @@
 
   .pop {
     display: inline-flex;
+  }
+
+  .completed-on {
+    font-size: var(--font-sm);
+    color: var(--text-3);
   }
 
   .pop:global(.fresh) {

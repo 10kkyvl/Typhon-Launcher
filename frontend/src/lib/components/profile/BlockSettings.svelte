@@ -199,6 +199,9 @@
         </label>
       {:else}
         <p class="hint">{msg('profile.blockNoSettings')}</p>
+        {#if block.type === 'completed'}
+          <p class="hint">{msg('profile.completedVisibility')}</p>
+        {/if}
       {/if}
     </fieldset>
   </div>

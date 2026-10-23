@@ -40,7 +40,7 @@ export interface ProfileAppearance {
 }
 
 export const BLOCK_TYPES = [
-  'pinned', 'collection', 'genres', 'fingerprint', 'text', 'recent', 'activity', 'stats', 'playing', 'about',
+  'pinned', 'collection', 'genres', 'fingerprint', 'text', 'recent', 'activity', 'stats', 'playing', 'about', 'completed',
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 

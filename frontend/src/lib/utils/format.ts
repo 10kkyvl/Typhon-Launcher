@@ -44,6 +44,7 @@ export function makeFormat(loc: Locale, t: Translate) {
   const date = new Intl.DateTimeFormat(loc);
   const longDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' });
   const shortDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short' });
+  const mediumDateFormat = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', year: 'numeric' });
   const dateTimeFormat = new Intl.DateTimeFormat(loc, { dateStyle: 'short', timeStyle: 'medium' });
   const clockFormat = new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' });
   const weekdayFormat = new Intl.DateTimeFormat(loc, { weekday: 'short' });
@@ -122,6 +123,8 @@ export function makeFormat(loc: Locale, t: Translate) {
 
     shortDate: (value: Date) => shortDateFormat.format(value),
 
+    mediumDate: (value: Date) => mediumDateFormat.format(value),
+
     numericDate: (value: Date) => date.format(value),
 
     dateTime: (value: Date) => dateTimeFormat.format(value),
@@ -156,6 +159,7 @@ export const speedBytes: Format['speedBytes'] = (bytes) => current.speedBytes(by
 export const rateMbText: Format['rateMbText'] = (bytes) => current.rateMbText(bytes);
 export const longDate: Format['longDate'] = (value) => current.longDate(value);
 export const shortDate: Format['shortDate'] = (value) => current.shortDate(value);
+export const mediumDate: Format['mediumDate'] = (value) => current.mediumDate(value);
 export const numericDate: Format['numericDate'] = (value) => current.numericDate(value);
 export const dateTime: Format['dateTime'] = (value) => current.dateTime(value);
 export const clockTime: Format['clockTime'] = (value) => current.clockTime(value);

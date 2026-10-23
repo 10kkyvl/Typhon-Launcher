@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { toast, toasts } from './toasts';
+import { dismissToast, toast, toasts } from './toasts';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -62,5 +62,36 @@ describe('toast', () => {
     toast('again');
 
     expect(get(toasts).map((item) => item.message)).toEqual(['again', 'again']);
+  });
+});
+
+describe('toast with an action', () => {
+  it('carries the action and stays up longer than a plain toast', () => {
+    const run = vi.fn();
+    toast('mark it?', 'info', { label: 'Mark', run });
+
+    expect(get(toasts)[0].action?.label).toBe('Mark');
+
+    vi.advanceTimersByTime(3500);
+    expect(get(toasts)).toHaveLength(1);
+
+    vi.advanceTimersByTime(5500);
+    expect(get(toasts)).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('leaves plain toasts without an action key', () => {
+    toast('saved');
+
+    expect('action' in get(toasts)[0]).toBe(false);
+  });
+
+  it('dismisses a single toast by id and keeps the others', () => {
+    const first = toast('first');
+    toast('second');
+
+    dismissToast(first);
+
+    expect(get(toasts).map((item) => item.message)).toEqual(['second']);
   });
 });

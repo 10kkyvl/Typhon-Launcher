@@ -72,6 +72,7 @@ type Game struct {
 	FavoriteAt        *time.Time        `json:"favoriteAt,omitempty"`
 	Status            string            `json:"status,omitempty"`
 	StatusAt          *time.Time        `json:"statusAt,omitempty"`
+	CompletedAt       *time.Time        `json:"completedAt,omitempty"`
 	Tags              []string          `json:"tags,omitempty"`
 	Notes             string            `json:"notes,omitempty"`
 	Hidden            bool              `json:"hidden,omitempty"`
@@ -171,7 +172,7 @@ const (
 
 func ValidStatus(s string) bool {
 	switch s {
-	case "", StatusPlaying, StatusCompleted, StatusDropped, StatusBacklog, StatusPaused:
+	case "", StatusPlaying, StatusCompleted, StatusMastered, StatusDropped, StatusBacklog, StatusPaused:
 		return true
 	default:
 		return false
@@ -369,9 +370,14 @@ func (s *Service) load() ([]Game, error) {
 				// Keep the flag unchanged until the marker can be checked.
 			}
 		}
+		// legacyGame.CompletedAt shadows Game.CompletedAt in JSON, so the date
+		// of the current format arrives through the legacy field. A legacy
+		// "completed" flag keeps its date in StatusAt only.
 		if entry.Completed && g.Status == "" {
 			g.Status = StatusCompleted
 			g.StatusAt = entry.CompletedAt
+		} else if !entry.Completed && IsCompletedStatus(g.Status) {
+			g.CompletedAt = entry.CompletedAt
 		}
 		if g.Status != "" && g.StatusAt == nil {
 			stamp := legacyStamp()
@@ -889,7 +895,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, CompletedAt: game.CompletedAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds
@@ -1049,8 +1055,9 @@ func (s *Service) SetStatus(id, status string) (Game, error) {
 		return *game, nil
 	}
 	previous := *game
-	game.Status = status
 	now := s.now()
+	game.CompletedAt = completedAtAfter(previous.Status, status, previous.CompletedAt, now)
+	game.Status = status
 	game.StatusAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous

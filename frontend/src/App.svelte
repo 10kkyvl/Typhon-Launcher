@@ -20,6 +20,7 @@
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
   import { initAchievements } from './lib/stores/achievements';
+  import { initCompletionHints } from './lib/stores/completionHints';
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
@@ -72,6 +73,7 @@
   initDownloads();
   initPlayThrottle();
   onDestroy(initAchievements());
+  onDestroy(initCompletionHints());
   initNetwork();
   initInstalls();
   refreshStorage();
