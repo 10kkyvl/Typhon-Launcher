@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"typhon/internal/dialogtext"
 	"typhon/internal/jumplist"
@@ -112,7 +115,7 @@ func (m *recentMenu) swap(menu *application.Menu, set func(*application.Menu)) {
 
 func (m *recentMenu) show(systemTray *application.SystemTray) {
 	application.InvokeSync(func() {
-		m.present(func(menu *application.Menu) { systemTray.SetMenu(menu) }, systemTray.ShowMenu)
+		m.present(func(menu *application.Menu) { setTrayMenu(systemTray, menu) }, systemTray.ShowMenu)
 	})
 }
 
@@ -176,11 +179,34 @@ func newSystemTray(wails *application.App, menu *recentMenu) (tray.Tray, error) 
 	systemTray := wails.SystemTray.New()
 	systemTray.SetIcon(trayIcon)
 	systemTray.SetTooltip("Typhon")
-	menu.swap(menu.build(), func(built *application.Menu) { systemTray.SetMenu(built) })
+	menu.swap(menu.build(), func(built *application.Menu) { setTrayMenu(systemTray, built) })
 	systemTray.OnClick(menu.open)
 	systemTray.OnRightClick(func() { menu.show(systemTray) })
 	menu.systemTray.Store(systemTray)
 	return trayHandle{SystemTray: systemTray, menu: menu}, nil
+}
+
+var errTrayMenuField = errors.New("wails SystemTray has no menu field to keep")
+
+func setTrayMenu(systemTray *application.SystemTray, menu *application.Menu) {
+	systemTray.SetMenu(menu)
+	if err := keepTrayMenu(systemTray, menu); err != nil {
+		slog.Error("keep tray menu", "error", err)
+	}
+}
+
+// Wails v3 beta.17 stores the menu that SystemTray.OpenMenu checks only when
+// SetMenu runs before the tray starts. A tray turned on in the settings starts
+// at once, so its SetMenu reaches the native menu alone and every right click
+// found no menu and opened nothing.
+func keepTrayMenu(systemTray *application.SystemTray, menu *application.Menu) error {
+	field := reflect.ValueOf(systemTray).Elem().FieldByName("menu")
+	if !field.IsValid() || field.Type() != reflect.TypeOf(menu) {
+		return errTrayMenuField
+	}
+	//nolint:gosec // G103: the address is of a live field of the tray, written once with a value of its own type.
+	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(menu))
+	return nil
 }
 
 func trayGames(recent []library.RecentGame) []tray.Game {

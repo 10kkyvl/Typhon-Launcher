@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -185,4 +186,16 @@ func TestWaitBounded(t *testing.T) {
 		t.Cleanup(func() { close(stuck) })
 		waitBounded("stuck", 10*time.Millisecond, func() { <-stuck })
 	})
+}
+
+func TestKeepTrayMenuStoresTheMenuOpenMenuChecks(t *testing.T) {
+	systemTray := new(application.SystemTray)
+	menu := application.NewMenu()
+	if err := keepTrayMenu(systemTray, menu); err != nil {
+		t.Fatalf("keepTrayMenu: %v", err)
+	}
+	got := reflect.ValueOf(systemTray).Elem().FieldByName("menu")
+	if got.Pointer() != reflect.ValueOf(menu).Pointer() {
+		t.Fatalf("the tray keeps %v, want the menu it was given", got)
+	}
 }
