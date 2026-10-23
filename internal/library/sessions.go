@@ -455,8 +455,12 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		game.PlaytimeSeconds = previousPlaytime
 		// Вызывающие — cmd.Wait()-горутина и detect-цикл watch.go, вернуть
 		// ошибку им наверх некому: это единственное место в пакете, где
-		// логирование, а не return err, оправдано.
+		// логирование, а не return err, оправдано. Сессия из s.running уже
+		// удалена, поэтому остановка уходит наружу и без записи на диск:
+		// иначе UI и трей остаются в «Играет».
 		slog.Error("persist session", "id", id, "error", err)
+		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
+		s.emitUpdated()
 		return
 	}
 	slog.Info("game stopped", "id", id, "title", game.Title, "sessionSeconds", seconds)

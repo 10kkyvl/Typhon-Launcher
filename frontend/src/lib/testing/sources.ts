@@ -35,7 +35,7 @@ export const frontendSources = rooted(
 );
 
 export const goSources = rooted(
-  import.meta.glob<string>(['../../../../internal/**/*.go', '!../../../../internal/**/*_test.go'], {
+  import.meta.glob<string>(['../../../../*.go', '!../../../../*_test.go', '../../../../internal/**/*.go', '!../../../../internal/**/*_test.go'], {
     query: '?raw',
     import: 'default',
     eager: true,

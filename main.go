@@ -24,7 +24,6 @@ import (
 	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
-	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/diskusage"
@@ -99,6 +98,7 @@ func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[[]library.Collection](library.EventCollections)
+	application.RegisterEvent[navigateEvent](eventNavigate)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[download.Download]("download:added")
@@ -306,6 +306,15 @@ func main() {
 	if err != nil {
 		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
 		playRequested = false
+	}
+	openRoute, openRequested, err := openTarget(os.Args)
+	if err != nil {
+		slog.Error("parse open argument", "args", os.Args[1:], "error", err)
+		openRequested = false
+	}
+	navigation := &NavigationService{}
+	if openRequested && !playRequested {
+		navigation.setPending(openRoute)
 	}
 
 	if err := titles.Ready(); err != nil {
@@ -767,6 +776,7 @@ func main() {
 
 	services := []application.Service{
 		application.NewService(appService),
+		application.NewService(navigation),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
@@ -836,6 +846,7 @@ func main() {
 				}
 				if !requested {
 					trayController.Open()
+					navigateFromArgs(data.Args, navigation, func(route string) { emitNavigate(application.Get(), route) })
 					return
 				}
 				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
@@ -893,8 +904,56 @@ func main() {
 	if err != nil {
 		fatal("start autostart service", err)
 	}
+	recentCtx, stopRecent := context.WithCancel(context.Background())
+	recent := &recentMenu{
+		fetch:    func() []tray.Game { return trayGames(libraryService.RecentGames(tray.MaxRecent)) },
+		language: appService.UILanguage,
+		open:     func() { trayController.Open() },
+		quit:     func() { trayController.Quit() },
+		play:     func(id string) { playFromTray(libraryService, id, func() { trayController.Open() }) },
+		stop:     func(id string) { stopFromTray(libraryService, id, func() { trayController.Open() }) },
+	}
+	recent.setGames(recent.fetch())
+	menuRefresh := tray.NewCoalescer(recentCtx, recentRefreshDelay, recent.refresh)
+	refreshJumpList := jumpListRefresher(libraryService, appService.UILanguage, jumpListAllowed(portable, qaTitleSuffix != ""))
+	var listRefresh *tray.Coalescer
+	if refreshJumpList != nil {
+		listRefresh = tray.NewCoalescer(recentCtx, recentRefreshDelay, refreshJumpList)
+	}
+	recentChanged := func() {
+		menuRefresh.Trigger()
+		if listRefresh != nil {
+			listRefresh.Trigger()
+		}
+	}
+	for _, name := range []string{"game:started", "game:stopped", library.EventUpdated} {
+		unsubscribe := wails.Event.On(name, func(*application.CustomEvent) { recentChanged() })
+		defer unsubscribe()
+	}
+	settingsService.Subscribe(func(settings.Settings) { recentChanged() })
+	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		recent.running.Store(true)
+		recentChanged()
+	})
+	// A refresh that reaches InvokeSync after the UI loop has stopped would wait
+	// on it forever, so the menu is cut off from refreshes as shutdown begins.
+	wails.OnShutdown(func() {
+		recent.running.Store(false)
+		stopRecent()
+		waitBounded("tray click handlers", shutdownWaitLimit, recent.async.Close)
+	})
+	defer func() {
+		stopRecent()
+		menuRefresh.Close()
+		waitBounded("tray menu refresh", shutdownWaitLimit, menuRefresh.Wait)
+		if listRefresh != nil {
+			listRefresh.Close()
+			waitBounded("jump list refresh", shutdownWaitLimit, listRefresh.Wait)
+		}
+	}()
+
 	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {
-		return newSystemTray(wails, trayController, appService.UILanguage)
+		return newSystemTray(wails, recent)
 	}, wails.Quit)
 	if err != nil {
 		fatal("start tray controller", err)
@@ -1056,34 +1115,6 @@ func (w *lateWindow) Show() {
 	if win := w.window.Load(); win != nil {
 		win.Show()
 	}
-}
-
-func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {
-	labels := dialogtext.For(language())
-	menu := application.NewMenu()
-	openItem := menu.Add(labels.OpenTyphon).OnClick(func(*application.Context) {
-		controller.Open()
-	})
-	menu.AddSeparator()
-	quitItem := menu.Add(labels.Quit).OnClick(func(*application.Context) {
-		controller.Quit()
-	})
-
-	systemTray := wails.SystemTray.New()
-	systemTray.SetIcon(trayIcon)
-	systemTray.SetTooltip("Typhon")
-	systemTray.SetMenu(menu)
-	systemTray.OnClick(controller.Open)
-	systemTray.OnRightClick(func() {
-		labels := dialogtext.For(language())
-		application.InvokeSync(func() {
-			openItem.SetLabel(labels.OpenTyphon)
-			quitItem.SetLabel(labels.Quit)
-			menu.Update()
-		})
-		systemTray.ShowMenu()
-	})
-	return systemTray, nil
 }
 
 func newAchievementsService(configDir string, accountService *account.Service, libraryService *library.Service, catalogService *catalog.Service, appService *app.Service) *achievements.Service {

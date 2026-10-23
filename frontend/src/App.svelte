@@ -24,6 +24,7 @@
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
+  import { initLaunchNavigation } from './lib/stores/launchNavigation';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -90,6 +91,7 @@
   initHistory();
   initWatchlist();
   onDestroy(initScreenshots());
+  onDestroy(initLaunchNavigation());
   initLan();
   initSocial();
   onDestroy(initSupport());

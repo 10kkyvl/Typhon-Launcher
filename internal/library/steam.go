@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"typhon/internal/shortcut"
 	"typhon/internal/steamlink"
 	"typhon/internal/uierr"
 )
@@ -113,17 +114,16 @@ func steamProfileTarget(game Game, profileID string, launcherPath func() (string
 		Name:  game.Title,
 		Icon:  chosen.executable,
 	}
-	playArgs := "--play " + game.ID
 	if profileID != "" {
 		if !safeCommandLineID(profileID) {
 			return steamlink.Shortcut{}, fmt.Errorf("%w: %q", errProfileBadID, profileID)
 		}
 		sc.Name = profileTitle(game, profileID)
-		playArgs += " --profile " + profileID
 	}
 	if chosen.admin {
-		if !safeCommandLineID(game.ID) {
-			return steamlink.Shortcut{}, fmt.Errorf("%w: %q", errShortcutBadID, game.ID)
+		playArgs, err := shortcut.PlayArgs(game.ID, profileID)
+		if err != nil {
+			return steamlink.Shortcut{}, fmt.Errorf("%w: %w", errShortcutBadID, err)
 		}
 		launcher, err := launcherPath()
 		if err != nil {
