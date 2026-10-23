@@ -1,17 +1,19 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { CircleAlert, LifeBuoy, Plus } from '@lucide/svelte';
+  import { Activity, CircleAlert, LifeBuoy, Plus } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
+  import { openStatusPage } from '../../lib/services/account';
   import { listTickets, type Ticket } from '../../lib/services/support';
   import { supportErrorText } from '../../lib/services/supportMessages';
   import { statusView, topicLabel } from '../../lib/support/topics';
   import { navigate } from '../../lib/stores/router';
   import { unreadReplies } from '../../lib/stores/support';
+  import { toast } from '../../lib/stores/toasts';
   import { relativeDate } from '../../lib/utils/format';
 
   let tickets = $state<Ticket[]>([]);
@@ -87,11 +89,24 @@
   function newTicket() {
     navigate('support', { view: 'new' });
   }
+
+  async function openStatus() {
+    try {
+      await openStatusPage();
+    } catch (err) {
+      console.error('open status page', err);
+      toast(msg('tickets.statusOpenFailed'), 'danger');
+    }
+  }
 </script>
 
 <Card surface="panel">
   <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')}>
     {#snippet actions()}
+      <Button variant="ghost" onclick={openStatus}>
+        <Activity size="1.5rem" strokeWidth={1.8} />
+        {msg('tickets.statusPage')}
+      </Button>
       <Button variant="primary" onclick={newTicket}>
         <Plus size="1.5rem" strokeWidth={1.8} />
         {msg('tickets.new')}

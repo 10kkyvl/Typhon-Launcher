@@ -88,6 +88,8 @@ export const tickets = {
   'tickets.forgotOpenFailed': 'Не удалось открыть страницу восстановления пароля.',
   'tickets.cantSignIn': 'Не получается войти? Напишите нам с сайта',
   'tickets.siteOpenFailed': 'Не удалось открыть страницу поддержки на сайте.',
+  'tickets.statusPage': 'Статус сервисов',
+  'tickets.statusOpenFailed': 'Не удалось открыть страницу статуса сервисов.',
 
   'tickets.writeSupport': 'Написать в поддержку',
   'tickets.settingsLabel': 'Написать в поддержку',

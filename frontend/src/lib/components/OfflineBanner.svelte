@@ -23,7 +23,8 @@
     try {
       await openStatusPage();
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'danger');
+      console.error('open status page', err);
+      toast(msg('tickets.statusOpenFailed'), 'danger');
     }
   }
 </script>

@@ -5,7 +5,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { msg } from '../../lib/i18n';
-  import { openSupportSite } from '../../lib/services/account';
+  import { openStatusPage, openSupportSite } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { parseTicketNumber, parseTopic } from '../../lib/support/topics';
   import { authState, leaveGuest } from '../../lib/stores/user';
@@ -35,6 +35,15 @@
       toast(msg('tickets.siteOpenFailed'), 'danger');
     }
   }
+
+  async function openStatus() {
+    try {
+      await openStatusPage();
+    } catch (err) {
+      console.error('open status page', err);
+      toast(msg('tickets.statusOpenFailed'), 'danger');
+    }
+  }
 </script>
 
 {#if needsAccount}
@@ -47,6 +56,7 @@
       {#snippet actions()}
         <Button variant="primary" onclick={signIn}>{msg('tickets.guestSignIn')}</Button>
         <Button onclick={writeFromSite}>{msg('tickets.cantSignIn')}</Button>
+        <Button variant="ghost" onclick={openStatus}>{msg('tickets.statusPage')}</Button>
       {/snippet}
     </EmptyState>
   </Card>

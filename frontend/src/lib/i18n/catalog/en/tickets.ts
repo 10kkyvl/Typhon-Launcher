@@ -87,6 +87,8 @@ export const tickets = {
   'tickets.forgotOpenFailed': 'Could not open the password reset page.',
   'tickets.cantSignIn': "Can't sign in? Write to us from the website",
   'tickets.siteOpenFailed': 'Could not open the support page on the website.',
+  'tickets.statusPage': 'Service status',
+  'tickets.statusOpenFailed': 'Could not open the service status page.',
 
   'tickets.writeSupport': 'Contact support',
   'tickets.settingsLabel': 'Contact support',

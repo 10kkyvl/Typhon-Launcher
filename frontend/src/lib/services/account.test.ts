@@ -12,6 +12,7 @@ const bindings = {
   RemoveAvatar: vi.fn(),
   OpenForgotPassword: vi.fn(),
   OpenSupportSite: vi.fn(),
+  OpenStatusPage: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/account', () => ({ Service: bindings }));
@@ -161,6 +162,7 @@ describe('auth calls', () => {
 describe.each([
   ['openForgotPassword', 'OpenForgotPassword'],
   ['openSupportSite', 'OpenSupportSite'],
+  ['openStatusPage', 'OpenStatusPage'],
 ] as const)('%s', (name, binding) => {
   beforeEach(() => {
     vi.clearAllMocks();
