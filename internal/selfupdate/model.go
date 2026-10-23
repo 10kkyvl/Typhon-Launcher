@@ -120,6 +120,9 @@ type stored struct {
 	CheckedAt        time.Time `json:"checkedAt,omitempty"`
 	Artifact         *Artifact `json:"artifact,omitempty"`
 	ReadyPath        string    `json:"readyPath,omitempty"`
+	// SkippedVersion is the version a rollback moved away from: the check does
+	// not offer it again, nor anything older, until a newer release comes out.
+	SkippedVersion string `json:"skippedVersion,omitempty"`
 }
 
 func PublicKey() (ed25519.PublicKey, error) {

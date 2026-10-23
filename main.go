@@ -308,6 +308,24 @@ func main() {
 		playRequested = false
 	}
 
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		fatal("resolve config dir", err)
+	}
+
+	// Counted for --play starts as well: a shortcut start runs the same
+	// services and fails the same way. The workers above never get here, so
+	// an update or a rollback in progress is not counted as a failed start.
+	startGuard := selfupdate.BeginStart(configDir, app.Version)
+	rolledBack, err := startGuard.OfferRollback(settings.IsPortable())
+	if err != nil {
+		slog.Error("offer rollback after failed starts", "error", err)
+	}
+	if rolledBack {
+		slog.Info("rolling back after repeated failed starts", "attempts", startGuard.Attempts())
+		os.Exit(0)
+	}
+
 	if err := titles.Ready(); err != nil {
 		fatal("load title dictionary", err)
 	}
@@ -429,10 +447,6 @@ func main() {
 		}
 		return steamlink.Art{Cover: files.Cover, Hero: files.Hero}, nil
 	})
-	configDir, err := settings.ConfigDir()
-	if err != nil {
-		fatal("resolve config dir", err)
-	}
 	accountSyncService, err := accountsync.NewService(
 		configDir,
 		account.BaseURL(),
@@ -941,6 +955,19 @@ func main() {
 		// вызова остался бы процесс без окна и без иконки.
 		wails.Quit()
 	})
+
+	// Services have all started by the time either event fires. A start that
+	// hides the window in the tray is judged by ApplicationStarted: nothing
+	// promises that a hidden webview reports its runtime as ready.
+	if playRequested && current.MinimizeToTray {
+		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			startGuard.Succeeded()
+		})
+	} else {
+		window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+			startGuard.Succeeded()
+		})
+	}
 
 	if playRequested {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только

@@ -87,6 +87,8 @@ type Service struct {
 	readyArtifact   *Artifact
 	outcome         Outcome
 	notesState      notesState
+	skippedVersion  string
+	rollbackPending bool
 }
 
 func NewService() (*Service, error) {
@@ -169,6 +171,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		cancel()
 		return fmt.Errorf("selfupdate: load state: %w", err)
 	}
+	s.skippedVersion = v.SkippedVersion
 	s.mu.Unlock()
 
 	// A release-notes file this launcher cannot read costs the user a
@@ -197,6 +200,8 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		slog.Warn("record install dir", "error", err)
 	}
 
+	s.recoverRollback()
+
 	if err := s.takeOutcome(); err != nil {
 		return err
 	}
@@ -213,7 +218,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		return err
 	}
 	if stale {
-		v = stored{CheckedAt: v.CheckedAt}
+		v = stored{CheckedAt: v.CheckedAt, SkippedVersion: v.SkippedVersion}
 		if serr := s.store.Save(v); serr != nil {
 			return fmt.Errorf("selfupdate: persist cleared state: %w", serr)
 		}
@@ -355,6 +360,38 @@ func (s *Service) recoverPortable() error {
 	return recoverPortableSwap(exe)
 }
 
+// recoverRollback finishes what a swap or a rollback that died left behind. A
+// swap is one rename, so all it can leave is a temp file beside the launcher;
+// a rollback that got as far as the swap but not as far as dropping its
+// snapshot leaves a record for the version that is running now, which would
+// offer to "go back" to itself. Neither blocks the start: both are retried
+// on the next one.
+func (s *Service) recoverRollback() {
+	if exe, err := currentExecutable(); err != nil {
+		slog.Warn("selfupdate: resolve executable for swap recovery", "error", err)
+	} else {
+		recoverSwap(exe)
+	}
+	rec, err := loadPrevious(s.dir)
+	if err != nil {
+		if !errors.Is(err, ErrNoPrevious) {
+			slog.Warn("selfupdate: rollback snapshot is unusable", "error", err)
+		}
+		return
+	}
+	if sameVersion(rec.Version, s.currentVersion) {
+		if err := dropPrevious(s.dir); err != nil {
+			slog.Warn("selfupdate: remove the rollback snapshot of the running version", "error", err)
+		}
+	}
+}
+
+func (s *Service) skipped() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.skippedVersion
+}
+
 func (s *Service) staleForCurrent(v stored) (bool, error) {
 	if v.AvailableVersion == "" {
 		return false, nil
@@ -369,7 +406,11 @@ func (s *Service) staleForCurrent(v stored) (bool, error) {
 // stageWorker names the copy after this process so a leftover copy from an
 // earlier attempt, which Windows may still hold open, cannot block a new one.
 func (s *Service) stageWorker(exe string) (string, error) {
-	dir, err := WorkerDir(s.dir)
+	return stageWorkerCopy(s.dir, exe)
+}
+
+func stageWorkerCopy(configDir, exe string) (string, error) {
+	dir, err := WorkerDir(configDir)
 	if err != nil {
 		return "", err
 	}
@@ -434,13 +475,16 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			if d.Name() == workerDirName {
 				return fs.SkipDir
 			}
+			if d.Name() == previousDirName {
+				return fs.SkipDir
+			}
 			if keepVersion != "" && d.Name() == keepVersion {
 				return nil
 			}
 			remove(relPath, root.RemoveAll)
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName {
+			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == startupMarkerName {
 				return nil
 			}
 			remove(relPath, root.Remove)
@@ -702,12 +746,18 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 	current := s.status
 	readyPath := s.readyPath
 	readyArtifact := s.readyArtifact
+	skipped := s.skippedVersion
 	s.mu.Unlock()
+
+	if artErr == nil && newerErr == nil && newer && skipped != "" {
+		newer, newerErr = IsNewer(m.Version, skipped)
+	}
 
 	status, newStored, buildErr := s.buildCheckStatus(current, readyPath, readyArtifact, m, art, artErr, newer, newerErr)
 	if buildErr != nil {
 		return fail(status.ErrorCode, buildErr)
 	}
+	newStored.SkippedVersion = skipped
 
 	if err := s.store.Save(newStored); err != nil {
 		return Status{}, err
@@ -801,7 +851,7 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 
 	destDir, err := VersionDir(s.dir, version)
 	if err == nil {
-		err = os.MkdirAll(destDir, 0o755)
+		err = os.MkdirAll(destDir, cacheDirMode)
 	}
 	if err != nil {
 		return failed(err)
@@ -823,6 +873,7 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		CheckedAt:        base.CheckedAt,
 		Artifact:         &art,
 		ReadyPath:        path,
+		SkippedVersion:   s.skipped(),
 	}
 	if err := s.store.Save(newStored); err != nil {
 		return failed(err)
@@ -915,6 +966,7 @@ func (s *Service) ApplyUpdate(language string) error {
 		ParentPID:     os.Getpid(),
 		RelaunchPath:  exe,
 		Version:       version,
+		FromVersion:   s.currentVersion,
 		Portable:      s.portable,
 	}
 
@@ -954,6 +1006,19 @@ func (s *Service) watchRestart() {
 func (s *Service) restartMissed() {
 	s.mu.Lock()
 	s.restart = nil
+	if s.rollbackPending {
+		s.rollbackPending = false
+		s.busy = false
+		status := errorStatus(s.status, "rollback", errParentStillRunning)
+		s.status = status
+		hook := s.onRestartMissed
+		s.mu.Unlock()
+		emit(eventStatus, status)
+		if hook != nil {
+			hook()
+		}
+		return
+	}
 	if s.status.State != StateApplying {
 		s.mu.Unlock()
 		return
@@ -990,6 +1055,7 @@ func (s *Service) DismissUpdate() error {
 		Notes:            current.Notes,
 		PublishedAt:      current.PublishedAt,
 		CheckedAt:        current.CheckedAt,
+		SkippedVersion:   s.skipped(),
 	}
 	if err := s.store.Save(newStored); err != nil {
 		return err

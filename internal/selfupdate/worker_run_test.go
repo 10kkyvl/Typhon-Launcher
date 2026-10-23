@@ -65,7 +65,8 @@ type fakePrimitives struct {
 
 func installFakePrimitives(t *testing.T, f *fakePrimitives) {
 	t.Helper()
-	restoreAlive, restoreApply, restoreRelaunch := parentAlive, applyInstaller, relaunchLauncher
+	restoreAlive, restoreApply, restoreRelaunch, restoreSave := parentAlive, applyInstaller, relaunchLauncher, saveCurrent
+	saveCurrent = func(context.Context, string, string, string) error { return nil }
 	parentAlive = func(int) (bool, error) {
 		f.aliveCalls++
 		return f.aliveCalls <= f.aliveUntil, nil
@@ -84,7 +85,9 @@ func installFakePrimitives(t *testing.T, f *fakePrimitives) {
 		f.relaunchCalls = append(f.relaunchCalls, path)
 		return f.relaunchErr
 	}
-	t.Cleanup(func() { parentAlive, applyInstaller, relaunchLauncher = restoreAlive, restoreApply, restoreRelaunch })
+	t.Cleanup(func() {
+		parentAlive, applyInstaller, relaunchLauncher, saveCurrent = restoreAlive, restoreApply, restoreRelaunch, restoreSave
+	})
 }
 
 func writeWorkerSpec(t *testing.T, configDir string, spec updateSpec) string {

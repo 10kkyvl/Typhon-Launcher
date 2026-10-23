@@ -20,6 +20,8 @@ var (
 	applyInstaller   = Apply
 	applyPortable    = ApplyPortable
 	relaunchLauncher = relaunch
+	saveCurrent      = snapshotPrevious
+	rollBack         = performRollback
 )
 
 // newWorkerContexts derives two independent timeout budgets from a single
@@ -80,13 +82,26 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	defer cancel()
 
 	text := workerText(spec.Language)
-	ui := newReporter(text.title(spec.Version), text.waiting)
-	applyErr := runUpdate(waitCtx, applyCtx, spec, ui)
+	rollingBack := spec.Kind == specKindRollback
+	title := text.title(spec.Version)
+	if rollingBack {
+		title = text.rollbackTitle(spec.Version)
+	}
+	ui := newReporter(title, text.waiting)
+	var applyErr error
+	if rollingBack {
+		applyErr = runRollback(waitCtx, applyCtx, dir, spec, ui)
+	} else {
+		applyErr = runUpdate(waitCtx, applyCtx, dir, spec, ui)
+	}
 
 	outcome := Outcome{Version: spec.Version, OK: applyErr == nil, FinishedAt: time.Now()}
+	if rollingBack {
+		outcome.Kind, outcome.From, outcome.To = outcomeRolledBack, spec.FromVersion, spec.Version
+	}
 	if applyErr != nil {
 		outcome.Error = applyErr.Error()
-		slog.Error("selfupdate worker: apply failed", "version", spec.Version, "error", applyErr)
+		slog.Error("selfupdate worker: apply failed", "kind", spec.Kind, "version", spec.Version, "error", applyErr)
 	}
 	if err := writeOutcome(outcomePath, outcome); err != nil {
 		applyErr = errors.Join(applyErr, err)
@@ -101,10 +116,15 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 		return applyErr
 	}
 
-	if applyErr != nil {
+	switch {
+	case applyErr != nil && rollingBack:
+		ui.setStage(text.rollbackFailed, text.rollbackKept)
+	case applyErr != nil:
 		ui.setStage(text.failed, text.restoring)
-	} else {
-		ui.setStage(text.title(spec.Version), text.restarting)
+	case rollingBack:
+		ui.setStage(title, text.rollbackRestarting)
+	default:
+		ui.setStage(title, text.restarting)
 	}
 
 	if err := relaunchLauncher(spec.RelaunchPath); err != nil {
@@ -117,13 +137,22 @@ func runWorker(specPath string, newReporter func(title, detail string) stageRepo
 	return applyErr
 }
 
-func runUpdate(waitCtx, applyCtx context.Context, spec updateSpec, ui stageReporter) error {
+func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateSpec, ui stageReporter) error {
 	if err := waitForParentExit(waitCtx, spec.ParentPID); err != nil {
 		return err
 	}
 
 	text := workerText(spec.Language)
 	ui.setStage(text.title(spec.Version), text.installing)
+
+	// Taken after the parent is gone, so no state is being written, and before
+	// the installer touches anything. A failed copy stops the update: an
+	// update that quietly cannot be rolled back is worse than one retried.
+	if rollbackSupported() == nil {
+		if err := saveCurrent(applyCtx, configDir, spec.RelaunchPath, spec.FromVersion); err != nil {
+			return err
+		}
+	}
 
 	before, err := fileDigest(applyCtx, spec.RelaunchPath)
 	if err != nil {
@@ -143,6 +172,15 @@ func runUpdate(waitCtx, applyCtx context.Context, spec updateSpec, ui stageRepor
 	}
 
 	return ensureReplaced(before, after, spec.RelaunchPath)
+}
+
+func runRollback(waitCtx, applyCtx context.Context, configDir string, spec updateSpec, ui stageReporter) error {
+	if err := waitForParentExit(waitCtx, spec.ParentPID); err != nil {
+		return err
+	}
+	text := workerText(spec.Language)
+	ui.setStage(text.rollbackTitle(spec.Version), text.rollingBack)
+	return rollBack(applyCtx, configDir, spec.RelaunchPath, spec.FromVersion, spec.Version, spec.Portable)
 }
 
 // ensureReplaced is what tells a real install from a no-op. The NSIS installer

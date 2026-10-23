@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -295,21 +296,41 @@ func OpenRead(path string) (*os.File, error) {
 	return openRead(path)
 }
 
+// EnvelopeVersion reports the version of a document written by Save. ok is
+// false for a document that carries no envelope (version 0 to Load); a
+// document that is not JSON at all is an error.
+func EnvelopeVersion(raw []byte) (version int, ok bool, err error) {
+	_, version, err = split(raw)
+	if err != nil {
+		return 0, false, err
+	}
+	return version, version != 0, nil
+}
+
 func WriteAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
 	mode := fs.FileMode(0o600)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm()
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("stat %s: %w", path, err)
 	}
+	return WriteAtomicStream(path, mode, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
+}
 
+// WriteAtomicStream is WriteAtomic for content that is produced as it is
+// written, such as a copy of a multi-megabyte executable or a file whose hash
+// is taken on the way. mode applies to the file that replaces path.
+func WriteAtomicStream(path string, mode fs.FileMode, fill func(io.Writer) error) error {
+	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp file in %s: %w", dir, err)
 	}
 	tmp := f.Name()
-	if err := writeAndSync(f, data, mode); err != nil {
+	if err := writeAndSync(f, fill, mode); err != nil {
 		discardTemp(f)
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
@@ -325,8 +346,8 @@ func WriteAtomic(path string, data []byte) error {
 	return nil
 }
 
-func writeAndSync(f *os.File, data []byte, mode fs.FileMode) error {
-	if _, err := f.Write(data); err != nil {
+func writeAndSync(f *os.File, fill func(io.Writer) error, mode fs.FileMode) error {
+	if err := fill(f); err != nil {
 		return err
 	}
 	if err := f.Chmod(mode); err != nil {
