@@ -5,6 +5,7 @@ package jumplist
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -75,8 +76,7 @@ type propertyKey struct {
 	pid   uint32
 }
 
-// propVariant повторяет раскладку PROPVARIANT: 8 байт заголовка и union,
-// который на 64-битных платформах занимает 16 байт.
+// PROPVARIANT layout: 8 header bytes and a 16-byte union on 64-bit.
 type propVariant struct {
 	vt   uint16
 	_    [3]uint16
@@ -186,9 +186,6 @@ func hresultErr(call string, hr int32) error {
 	return fmt.Errorf("jumplist: %s: hresult 0x%08X", call, uint32(hr))
 }
 
-// hresult reduces the value SyscallN returns to the HRESULT: COM puts it in
-// the low 32 bits of r0.
-//
 //nolint:gosec // G115: HRESULT is the 32-bit value in r0.
 func hresult(r0 uintptr) int32 { return int32(r0) }
 
@@ -553,10 +550,7 @@ func addEntry(collection *objectCollection, cfg Config, entry Entry) error {
 	return collection.add(link.raw())
 }
 
-// Apply replaces the Jump List of cfg.AppID with the recent games and the two
-// window shortcuts. The COM apartment belongs to the OS thread, so the call
-// pins its goroutine to one for its whole length; it takes no library locks
-// and the caller decides on which goroutine it runs.
+// The COM apartment belongs to the OS thread, so the whole call stays on one.
 func Apply(cfg Config, games []Game) (err error) {
 	if err := cfg.validate(); err != nil {
 		return err
@@ -595,9 +589,9 @@ func Apply(cfg Config, games []Game) (err error) {
 	if err != nil {
 		return err
 	}
-	recent, err := recentEntries(cfg, games, gone)
-	if err != nil {
-		return err
+	recent, skipped := recentEntries(cfg, games, gone)
+	for _, skip := range skipped {
+		slog.Warn("jump list skips a game", "component", "jumplist", "error", skip)
 	}
 	if len(recent) > 0 {
 		collection, err := buildCollection(cfg, recent)
@@ -624,8 +618,6 @@ func Apply(cfg Config, games []Game) (err error) {
 	return nil
 }
 
-// deleteList drops the list of an AppUserModelID so tests do not leave
-// destinations of a throwaway ID behind in the shell.
 func deleteList(appID string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()

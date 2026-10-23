@@ -177,11 +177,13 @@ func gameShortcutLink(game Game, profileID, icon, launcher string) (shortcut.Lin
 // profile shortcuts of one game do not share a taskbar group.
 func shortcutIdentity(game Game, profileID string) (appID, args, description string, err error) {
 	gameID := game.ID
-	args = "--play " + game.ID
+	args, err = shortcut.PlayArgs(game.ID, profileID)
+	if err != nil {
+		return "", "", "", err
+	}
 	description = game.Title
 	if profileID != "" {
 		gameID += "." + profileID
-		args += " --profile " + profileID
 		description = profileTitle(game, profileID)
 	}
 	appID, err = shortcut.GameAppID(gameID)
@@ -339,22 +341,4 @@ func (s *Service) dropShortcutLocked(game *Game) {
 
 // safeCommandLineID отвергает идентификаторы, которые в аргументах ярлыка
 // разъехались бы на несколько аргументов или изменили смысл командной строки.
-func safeCommandLineID(id string) bool {
-	if id == "" {
-		return false
-	}
-	// Идентификатор, начинающийся с дефиса, разбирается как ещё один флаг
-	// командной строки, а не как значение --play.
-	if strings.HasPrefix(id, "-") {
-		return false
-	}
-	for _, r := range id {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return true
-}
+func safeCommandLineID(id string) bool { return shortcut.SafeCommandLineID(id) }

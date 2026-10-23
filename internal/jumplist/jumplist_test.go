@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"typhon/internal/shortcut"
 )
 
 func testConfig(t *testing.T) Config {
@@ -13,31 +15,6 @@ func testConfig(t *testing.T) Config {
 		AppID:    "Typhon.Launcher",
 		Launcher: filepath.Join(t.TempDir(), "typhon.exe"),
 		Labels:   Labels{Recent: "Recent games", Library: "Library", Downloads: "Downloads"},
-	}
-}
-
-func TestPlayArgs(t *testing.T) {
-	cases := []struct {
-		name    string
-		id      string
-		want    string
-		wantErr error
-	}{
-		{"plain id", "a1b2c3", "--play a1b2c3", nil},
-		{"dashes and dots", "g-1.2_x", "--play g-1.2_x", nil},
-		{"empty", "", "", ErrBadGameID},
-		{"space", "a b", "", ErrBadGameID},
-		{"tab", "a\tb", "", ErrBadGameID},
-		{"quote", `a"b`, "", ErrBadGameID},
-		{"newline", "a\nb", "", ErrBadGameID},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := PlayArgs(tc.id)
-			if !errors.Is(err, tc.wantErr) || got != tc.want {
-				t.Fatalf("PlayArgs(%q) = %q, %v; want %q, %v", tc.id, got, err, tc.want, tc.wantErr)
-			}
-		})
 	}
 }
 
@@ -54,19 +31,19 @@ func TestRecentEntries(t *testing.T) {
 	cfg := testConfig(t)
 	gameExe := filepath.Join(t.TempDir(), "game.exe")
 	cases := []struct {
-		name    string
-		games   []Game
-		removed map[string]struct{}
-		want    []Entry
-		wantErr error
+		name     string
+		games    []Game
+		removed  map[string]struct{}
+		want     []Entry
+		wantSkip int
 	}{
-		{"no games", nil, nil, []Entry{}, nil},
+		{"no games", nil, nil, []Entry{}, 0},
 		{
 			"icon comes from the game executable",
 			[]Game{{ID: "g1", Title: "Alpha", Executable: gameExe}},
 			nil,
 			[]Entry{{Title: "Alpha", Args: "--play g1", Icon: gameExe}},
-			nil,
+			0,
 		},
 		{
 			"missing or relative executable falls back to the launcher icon",
@@ -76,7 +53,7 @@ func TestRecentEntries(t *testing.T) {
 				{Title: "Alpha", Args: "--play g1", Icon: cfg.Launcher},
 				{Title: "Beta", Args: "--play g2", Icon: cfg.Launcher},
 			},
-			nil,
+			0,
 		},
 		{
 			"removed games are not put back",
@@ -86,42 +63,47 @@ func TestRecentEntries(t *testing.T) {
 				{Title: "Alpha", Args: "--play g1", Icon: cfg.Launcher},
 				{Title: "Gamma", Args: "--play g3", Icon: cfg.Launcher},
 			},
-			nil,
+			0,
 		},
 		{
 			"everything removed leaves no entries",
 			[]Game{{ID: "g1", Title: "Alpha"}},
 			map[string]struct{}{"--play g1": {}},
 			[]Entry{},
-			nil,
+			0,
 		},
 		{
 			"title is flattened to one line",
 			[]Game{{ID: "g1", Title: " Dark\tSouls \n III "}},
 			nil,
 			[]Entry{{Title: "Dark Souls III", Args: "--play g1", Icon: cfg.Launcher}},
-			nil,
+			0,
 		},
 		{
 			"blank title shows the id",
 			[]Game{{ID: "g1", Title: "  "}},
 			nil,
 			[]Entry{{Title: "g1", Args: "--play g1", Icon: cfg.Launcher}},
-			nil,
+			0,
 		},
 		{
-			"an id that cannot be a command line argument is an error",
-			[]Game{{ID: "g 1", Title: "Alpha"}},
+			"a game with an unusable id is skipped and the rest stay",
+			[]Game{{ID: "g 1", Title: "Bad"}, {ID: "g2", Title: "Beta"}, {ID: "", Title: "Empty"}},
 			nil,
-			nil,
-			ErrBadGameID,
+			[]Entry{{Title: "Beta", Args: "--play g2", Icon: cfg.Launcher}},
+			2,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := recentEntries(cfg, tc.games, tc.removed)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			got, skipped := recentEntries(cfg, tc.games, tc.removed)
+			if len(skipped) != tc.wantSkip {
+				t.Fatalf("skipped = %v, want %d", skipped, tc.wantSkip)
+			}
+			for _, err := range skipped {
+				if !errors.Is(err, shortcut.ErrBadGameID) {
+					t.Fatalf("skip error = %v, want ErrBadGameID", err)
+				}
 			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("entries = %+v\nwant      %+v", got, tc.want)

@@ -846,7 +846,7 @@ func main() {
 				}
 				if !requested {
 					trayController.Open()
-					navigateFromArgs(data.Args, func(route string) { emitNavigate(application.Get(), route) })
+					navigateFromArgs(data.Args, navigation, func(route string) { emitNavigate(application.Get(), route) })
 					return
 				}
 				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
@@ -915,7 +915,7 @@ func main() {
 	}
 	recent.setGames(recent.fetch())
 	menuRefresh := tray.NewCoalescer(recentCtx, recentRefreshDelay, recent.refresh)
-	refreshJumpList := jumpListRefresher(libraryService, appService.UILanguage)
+	refreshJumpList := jumpListRefresher(libraryService, appService.UILanguage, jumpListAllowed(portable, qaTitleSuffix != ""))
 	var listRefresh *tray.Coalescer
 	if refreshJumpList != nil {
 		listRefresh = tray.NewCoalescer(recentCtx, recentRefreshDelay, refreshJumpList)
@@ -940,16 +940,16 @@ func main() {
 	wails.OnShutdown(func() {
 		recent.running.Store(false)
 		stopRecent()
+		waitBounded("tray click handlers", shutdownWaitLimit, recent.async.Close)
 	})
 	defer func() {
 		stopRecent()
 		menuRefresh.Close()
-		menuRefresh.Wait()
+		waitBounded("tray menu refresh", shutdownWaitLimit, menuRefresh.Wait)
 		if listRefresh != nil {
 			listRefresh.Close()
-			listRefresh.Wait()
+			waitBounded("jump list refresh", shutdownWaitLimit, listRefresh.Wait)
 		}
-		recent.async.Close()
 	}()
 
 	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {

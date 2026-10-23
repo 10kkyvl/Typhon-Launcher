@@ -2,10 +2,8 @@ package tray
 
 import "sync"
 
-// Async runs menu click handlers off the UI thread: launching a game can wait
-// on the library lock for as long as the process takes to start, and a menu
-// callback that blocks freezes the whole tray. Every goroutine is counted, and
-// after Close nothing new starts.
+// Click handlers run off the UI thread: PlayGame holds the library lock while
+// the process starts, and a blocked menu callback freezes the tray.
 type Async struct {
 	mu     sync.Mutex
 	closed bool
@@ -26,7 +24,6 @@ func (a *Async) Go(f func()) bool {
 	return true
 }
 
-// Close refuses new work and waits for the running one.
 func (a *Async) Close() {
 	a.mu.Lock()
 	a.closed = true

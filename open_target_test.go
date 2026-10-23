@@ -54,9 +54,17 @@ func TestNavigateFromArgs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var got []string
-			ok := navigateFromArgs(tc.args, func(route string) { got = append(got, route) })
+			nav := &NavigationService{}
+			ok := navigateFromArgs(tc.args, nav, func(route string) { got = append(got, route) })
 			if ok != tc.ok || !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("navigateFromArgs = %v, navigated to %v; want %v, %v", ok, got, tc.ok, tc.want)
+				t.Fatalf("navigateFromArgs = %v, emitted %v; want %v, %v", ok, got, tc.ok, tc.want)
+			}
+			wantPending := ""
+			if len(tc.want) > 0 {
+				wantPending = tc.want[0]
+			}
+			if pending := nav.TakePending(); pending != wantPending {
+				t.Fatalf("pending = %q, want %q", pending, wantPending)
 			}
 		})
 	}
@@ -144,15 +152,18 @@ func TestNavigationServiceHandsTheRouteOverOnce(t *testing.T) {
 	}
 }
 
-func TestSecondInstanceEmitsInsteadOfStoringPending(t *testing.T) {
+func TestSecondInstanceBothEmitsAndKeepsPending(t *testing.T) {
 	nav := &NavigationService{}
 	var emitted []string
-	navigateFromArgs([]string{"typhon.exe", "--open", "library"}, func(route string) { emitted = append(emitted, route) })
+	navigateFromArgs([]string{"typhon.exe", "--open", "library"}, nav, func(route string) { emitted = append(emitted, route) })
 	if !reflect.DeepEqual(emitted, []string{"library"}) {
 		t.Fatalf("emitted = %v, want [library]", emitted)
 	}
+	if got := nav.TakePending(); got != "library" {
+		t.Fatalf("pending = %q, want library: a page that was still loading missed the event", got)
+	}
 	if got := nav.TakePending(); got != "" {
-		t.Fatalf("a second instance left pending %q for the next page load", got)
+		t.Fatalf("second TakePending = %q, want empty", got)
 	}
 }
 

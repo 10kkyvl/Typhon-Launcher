@@ -1,6 +1,3 @@
-// Package jumplist keeps the taskbar Jump List of the launcher current: the
-// recently played games and two shortcuts into the window. Building the
-// entries is plain data; talking to the shell is Windows-only.
 package jumplist
 
 import (
@@ -9,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"typhon/internal/shortcut"
 )
 
 const (
@@ -23,7 +22,6 @@ var (
 	ErrBadAppID     = errors.New("jumplist: недопустимый AppUserModelID")
 	ErrNoLauncher   = errors.New("jumplist: путь к лаунчеру пуст")
 	ErrRelLauncher  = errors.New("jumplist: путь к лаунчеру должен быть абсолютным")
-	ErrBadGameID    = errors.New("jumplist: идентификатор игры нельзя передать в командной строке")
 	ErrUnsupported  = errors.New("jumplist: Jump List есть только в Windows")
 	errNoCategory   = errors.New("jumplist: нет названия категории недавних игр")
 	errNoTaskLabels = errors.New("jumplist: нет названий задач")
@@ -75,31 +73,21 @@ func (c Config) validate() error {
 	return nil
 }
 
-// PlayArgs is the command line the launcher already understands from game
-// shortcuts; the id travels unquoted exactly as there, so one that would not
-// survive a command line is refused instead of being split in two arguments.
-func PlayArgs(id string) (string, error) {
-	if id == "" || strings.ContainsFunc(id, func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.IsControl(r) || r == '"'
-	}) {
-		return "", fmt.Errorf("%w: %q", ErrBadGameID, id)
-	}
-	return "--play " + id, nil
-}
-
 func OpenArgs(route string) string {
 	return "--open " + route
 }
 
-// recentEntries skips what the user removed from the list: the shell answers
-// AppendCategory with E_ACCESSDENIED for the whole category if a removed
-// destination is put back.
-func recentEntries(cfg Config, games []Game, removed map[string]struct{}) ([]Entry, error) {
-	entries := make([]Entry, 0, len(games))
+// recentEntries skips removed destinations: the shell fails AppendCategory
+// with E_ACCESSDENIED for the whole category if one is put back. A game whose
+// id cannot be a command line argument is skipped too and reported, so one bad
+// record does not cost the user the whole list.
+func recentEntries(cfg Config, games []Game, removed map[string]struct{}) (entries []Entry, skipped []error) {
+	entries = make([]Entry, 0, len(games))
 	for _, game := range games {
-		args, err := PlayArgs(game.ID)
+		args, err := shortcut.PlayArgs(game.ID, "")
 		if err != nil {
-			return nil, err
+			skipped = append(skipped, err)
+			continue
 		}
 		if _, gone := removed[args]; gone {
 			continue
@@ -110,7 +98,7 @@ func recentEntries(cfg Config, games []Game, removed map[string]struct{}) ([]Ent
 		}
 		entries = append(entries, Entry{Title: entryTitle(game), Args: args, Icon: icon})
 	}
-	return entries, nil
+	return entries, skipped
 }
 
 func taskEntries(cfg Config) []Entry {

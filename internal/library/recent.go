@@ -13,9 +13,8 @@ type RecentGame struct {
 	Running    bool   `json:"running"`
 }
 
-// RecentGames — единственный источник «последних игр» для меню трея и Jump
-// List: установленные, не скрытые, не заархивированные игры с известным
-// LastPlayed, новые первыми. Под локом только копируются кандидаты.
+// Running games come first, even never-played ones: otherwise the tray could
+// not show or stop a game that fell out of the limit.
 func (s *Service) RecentGames(limit int) []RecentGame {
 	if limit <= 0 {
 		return nil
@@ -23,30 +22,49 @@ func (s *Service) RecentGames(limit int) []RecentGame {
 	type candidate struct {
 		RecentGame
 		lastPlayed time.Time
+		played     bool
 	}
 
 	s.mu.Lock()
 	candidates := make([]candidate, 0, len(s.games))
 	for i := range s.games {
 		game := &s.games[i]
-		if game.Hidden || game.Uninstalled || game.Archived || game.LastPlayed == nil {
+		if game.Hidden || game.Uninstalled || game.Archived {
 			continue
 		}
 		_, running := s.running[game.ID]
 		_, starting := s.starting[game.ID]
-		candidates = append(candidates, candidate{
-			RecentGame: RecentGame{
-				ID:         game.ID,
-				Title:      game.Title,
-				Executable: game.Executable,
-				Running:    running || starting,
-			},
-			lastPlayed: *game.LastPlayed,
-		})
+		active := running || starting
+		if game.LastPlayed == nil && !active {
+			continue
+		}
+		c := candidate{RecentGame: RecentGame{
+			ID:         game.ID,
+			Title:      game.Title,
+			Executable: game.Executable,
+			Running:    active,
+		}}
+		if game.LastPlayed != nil {
+			c.lastPlayed = *game.LastPlayed
+			c.played = true
+		}
+		candidates = append(candidates, c)
 	}
 	s.mu.Unlock()
 
 	slices.SortStableFunc(candidates, func(a, b candidate) int {
+		if a.Running != b.Running {
+			if a.Running {
+				return -1
+			}
+			return 1
+		}
+		if a.played != b.played {
+			if a.played {
+				return -1
+			}
+			return 1
+		}
 		if c := b.lastPlayed.Compare(a.lastPlayed); c != 0 {
 			return c
 		}

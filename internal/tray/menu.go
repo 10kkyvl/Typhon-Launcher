@@ -38,15 +38,12 @@ type Labels struct {
 }
 
 type Item struct {
-	Kind   Kind
-	Label  string
-	GameID string
-	// Disabled marks a status line: the running game cannot be launched again.
+	Kind     Kind
+	Label    string
+	GameID   string
 	Disabled bool
 }
 
-// BuildItems is the whole decision about what the tray menu contains: the
-// caller only turns the model into native items and wires the clicks.
 func BuildItems(labels Labels, games []Game) []Item {
 	var items []Item
 	shown := games
@@ -78,8 +75,7 @@ func BuildItems(labels Labels, games []Game) []Item {
 	)
 }
 
-// cleanTitle keeps a feed- or user-supplied title from breaking the menu: a
-// tab would be read as an accelerator column and a newline cuts the item.
+// A tab in a native menu label starts the accelerator column, a newline cuts the item.
 func cleanTitle(title string) string {
 	var b strings.Builder
 	space := false
@@ -101,8 +97,7 @@ func cleanTitle(title string) string {
 	return string(runes)
 }
 
-// NativeLabel escapes what the platform menu would otherwise interpret: on
-// Windows a single ampersand marks a mnemonic and swallows the next letter.
+// On Windows a single ampersand marks a mnemonic and swallows the next letter.
 func NativeLabel(label string, windows bool) string {
 	if !windows {
 		return label

@@ -10,9 +10,6 @@ type Timer interface {
 	Stop() bool
 }
 
-// Coalescer folds a burst of triggers into one run per delay. A game start
-// fires game:started and library:updated back to back, and rebuilding a
-// native menu or a Jump List for each of them is both slow and visible.
 type Coalescer struct {
 	delay time.Duration
 	run   func()
@@ -64,8 +61,6 @@ func (c *Coalescer) fire() {
 	c.run()
 }
 
-// Close disarms a pending run; a run that already started is left to finish,
-// and Wait covers it.
 func (c *Coalescer) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

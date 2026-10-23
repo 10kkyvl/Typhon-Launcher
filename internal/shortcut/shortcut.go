@@ -35,6 +35,49 @@ var (
 // IsPlayArgs сообщает, что аргументы ярлыка запускают игру через --play.
 func IsPlayArgs(args string) bool { return strings.Contains(args, "--play") }
 
+var (
+	ErrBadGameID    = errors.New("shortcut: идентификатор игры непригоден для командной строки")
+	ErrBadProfileID = errors.New("shortcut: идентификатор профиля непригоден для командной строки")
+)
+
+// SafeCommandLineID отвергает идентификаторы, которые в аргументах ярлыка
+// разъехались бы на несколько аргументов или изменили смысл командной строки.
+func SafeCommandLineID(id string) bool {
+	if id == "" {
+		return false
+	}
+	// Идентификатор, начинающийся с дефиса, разбирается как ещё один флаг
+	// командной строки, а не как значение --play.
+	if strings.HasPrefix(id, "-") {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// PlayArgs — единственное место, где собирается командная строка запуска игры
+// из ярлыка, Steam и Jump List; main.playTarget разбирает именно этот формат.
+func PlayArgs(gameID, profileID string) (string, error) {
+	if !SafeCommandLineID(gameID) {
+		return "", fmt.Errorf("%w: %q", ErrBadGameID, gameID)
+	}
+	args := "--play " + gameID
+	if profileID == "" {
+		return args, nil
+	}
+	if !SafeCommandLineID(profileID) {
+		return "", fmt.Errorf("%w: %q", ErrBadProfileID, profileID)
+	}
+	return args + " --profile " + profileID, nil
+}
+
 func appIDRune(r rune) bool {
 	switch {
 	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':

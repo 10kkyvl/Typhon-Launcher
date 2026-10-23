@@ -195,3 +195,31 @@ func TestRemoveSymlinkDoesNotFollowTarget(t *testing.T) {
 		t.Fatalf("Remove followed the symlink and deleted its target: %v", err)
 	}
 }
+
+func TestPlayArgs(t *testing.T) {
+	cases := []struct {
+		name    string
+		game    string
+		profile string
+		want    string
+		err     error
+	}{
+		{"game", "g1", "", "--play g1", nil},
+		{"game with profile", "g-1_x", "ab12cd34", "--play g-1_x --profile ab12cd34", nil},
+		{"empty game", "", "", "", ErrBadGameID},
+		{"game with a space", "a b", "", "", ErrBadGameID},
+		{"game with a quote", `a"b`, "", "", ErrBadGameID},
+		{"game that looks like a flag", "-x", "", "", ErrBadGameID},
+		{"game with a dot", "a.b", "", "", ErrBadGameID},
+		{"profile with a space", "g1", "a b", "", ErrBadProfileID},
+		{"profile that looks like a flag", "g1", "--play", "", ErrBadProfileID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := PlayArgs(tc.game, tc.profile)
+			if !errors.Is(err, tc.err) || got != tc.want {
+				t.Fatalf("PlayArgs(%q, %q) = %q, %v; want %q, %v", tc.game, tc.profile, got, err, tc.want, tc.err)
+			}
+		})
+	}
+}

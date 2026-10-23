@@ -17,10 +17,13 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const recentRefreshDelay = 500 * time.Millisecond
+const (
+	recentRefreshDelay = 500 * time.Millisecond
+	shutdownWaitLimit  = 3 * time.Second
+)
 
-// trayPlayer is what the Play button in the UI calls: it honours the last
-// launch profile of the game, unlike --play, which names its profile itself.
+// PlayGame, not PlayGameProfile: the tray acts like the Play button and keeps
+// the last launch profile of the game.
 type trayPlayer interface {
 	PlayGame(id string) error
 }
@@ -43,10 +46,6 @@ func stopFromTray(stopper trayStopper, id string, reveal func()) {
 	}
 }
 
-// recentMenu owns the part of the tray menu that follows the library. Wails
-// builds a native menu once, so a change is a whole new menu handed to SetMenu;
-// that is never done while the menu is on screen, because destroying a popup
-// that is being tracked closes it under the user's cursor.
 type recentMenu struct {
 	fetch    func() []tray.Game
 	language func() string
@@ -58,11 +57,11 @@ type recentMenu struct {
 	async      tray.Async
 	running    atomic.Bool
 	showing    atomic.Bool
-	stale      atomic.Bool
 	systemTray atomic.Pointer[application.SystemTray]
 
-	mu    sync.Mutex
-	games []tray.Game
+	mu      sync.Mutex
+	games   []tray.Game
+	current *application.Menu
 }
 
 func (m *recentMenu) setGames(games []tray.Game) {
@@ -77,36 +76,55 @@ func (m *recentMenu) snapshot() []tray.Game {
 	return m.games
 }
 
-// refresh runs on the coalescer's goroutine, outside every library lock.
 func (m *recentMenu) refresh() {
 	m.setGames(m.fetch())
-	if !m.running.Load() {
-		return
-	}
 	systemTray := m.systemTray.Load()
-	if systemTray == nil {
+	if systemTray == nil || !m.running.Load() {
 		return
 	}
 	application.InvokeSync(func() {
-		if m.showing.Load() {
-			m.stale.Store(true)
-			return
-		}
-		systemTray.SetMenu(m.build())
+		m.replaceIfIdle(systemTray, func(menu *application.Menu) { systemTray.SetMenu(menu) })
 	})
+}
+
+// Replacing a menu while its popup is tracked closes it under the cursor; the
+// next right click rebuilds the menu anyway.
+func (m *recentMenu) replaceIfIdle(systemTray *application.SystemTray, set func(*application.Menu)) bool {
+	if !m.running.Load() || m.showing.Load() || m.systemTray.Load() != systemTray {
+		return false
+	}
+	m.swap(m.build(), set)
+	return true
+}
+
+// swap frees the old menu only after the new one is installed: Wails keeps
+// every item in a global map until it is destroyed.
+func (m *recentMenu) swap(menu *application.Menu, set func(*application.Menu)) {
+	set(menu)
+	m.mu.Lock()
+	old := m.current
+	m.current = menu
+	m.mu.Unlock()
+	if old != nil {
+		old.Destroy()
+	}
 }
 
 func (m *recentMenu) show(systemTray *application.SystemTray) {
 	application.InvokeSync(func() {
-		m.showing.Store(true)
-		defer m.showing.Store(false)
-		systemTray.SetMenu(m.build())
-		systemTray.ShowMenu()
-		m.showing.Store(false)
-		if m.stale.CompareAndSwap(true, false) {
-			systemTray.SetMenu(m.build())
-		}
+		m.present(func(menu *application.Menu) { systemTray.SetMenu(menu) }, systemTray.ShowMenu)
 	})
+}
+
+// The menu is never replaced after display returns: TrackPopupMenuEx returns
+// before the click is dispatched, and Wails resolves the item by position in
+// the menu installed at that moment, so a new menu would send the click to a
+// different item.
+func (m *recentMenu) present(set func(*application.Menu), display func()) {
+	m.showing.Store(true)
+	defer m.showing.Store(false)
+	m.swap(m.build(), set)
+	display()
 }
 
 func (m *recentMenu) build() *application.Menu {
@@ -158,7 +176,7 @@ func newSystemTray(wails *application.App, menu *recentMenu) (tray.Tray, error) 
 	systemTray := wails.SystemTray.New()
 	systemTray.SetIcon(trayIcon)
 	systemTray.SetTooltip("Typhon")
-	systemTray.SetMenu(menu.build())
+	menu.swap(menu.build(), func(built *application.Menu) { systemTray.SetMenu(built) })
 	systemTray.OnClick(menu.open)
 	systemTray.OnRightClick(func() { menu.show(systemTray) })
 	menu.systemTray.Store(systemTray)
@@ -173,11 +191,16 @@ func trayGames(recent []library.RecentGame) []tray.Game {
 	return games
 }
 
-// jumpListRefresher is nil where there is no Jump List or the launcher path
-// cannot be resolved: the list is a convenience, and the second case is logged
-// once here instead of on every refresh.
-func jumpListRefresher(recent *library.Service, language func() string) func() {
-	if !jumplist.Supported() {
+// The Jump List is keyed by the shared AppUserModelID: a portable copy or a qa
+// build would overwrite the list of the installed launcher with its own exe.
+func jumpListAllowed(portable, qa bool) bool {
+	return !portable && !qa
+}
+
+// jumpListRefresher is nil where the list must not be touched or the launcher
+// path cannot be resolved; the second case is logged once here.
+func jumpListRefresher(recent *library.Service, language func() string, allowed bool) func() {
+	if !allowed || !jumplist.Supported() {
 		return nil
 	}
 	launcher, err := os.Executable()
@@ -200,5 +223,20 @@ func jumpListRefresher(recent *library.Service, language func() string) func() {
 		if err := jumplist.Apply(cfg, list); err != nil {
 			slog.Error("update jump list", "component", "app", "operation", "jumplist", "error", err)
 		}
+	}
+}
+
+// waitBounded exists for exit only: a COM call stuck inside explorer.exe must
+// not keep the launcher from quitting, so the wait is abandoned after limit.
+func waitBounded(name string, limit time.Duration, wait func()) {
+	done := make(chan struct{})
+	go func() {
+		wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(limit):
+		slog.Warn("shutdown wait abandoned", "what", name, "limit", limit)
 	}
 }

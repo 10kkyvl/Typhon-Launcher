@@ -60,12 +60,9 @@ func TestApplyRefusesAnInvalidConfigBeforeTouchingTheShell(t *testing.T) {
 	}
 }
 
-func TestApplyAbortsOnABadGameID(t *testing.T) {
+func TestApplySkipsAGameWithABadID(t *testing.T) {
 	cfg := throwawayConfig(t)
-	if err := Apply(cfg, []Game{{ID: "bad id", Title: "Bad"}}); err == nil {
-		t.Fatal("Apply accepted an id that cannot be a command line argument")
-	}
-	if err := Apply(cfg, []Game{{ID: "ok", Title: "Ok"}}); err != nil {
-		t.Fatalf("Apply after an aborted list: %v", err)
+	if err := Apply(cfg, []Game{{ID: "bad id", Title: "Bad"}, {ID: "ok", Title: "Ok"}}); err != nil {
+		t.Fatalf("Apply with one unusable id: %v", err)
 	}
 }

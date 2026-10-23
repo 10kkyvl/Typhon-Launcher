@@ -72,6 +72,53 @@ func TestRecentGames(t *testing.T) {
 			[]RecentGame{{ID: "a", Title: "A"}, {ID: "b", Title: "B"}},
 		},
 		{
+			"a running game that was never played is listed first",
+			[]Game{
+				{ID: "a", Title: "A", LastPlayed: at(5)},
+				{ID: "n", Title: "N"},
+			},
+			[]string{"n"}, nil, 5,
+			[]RecentGame{{ID: "n", Title: "N", Running: true}, {ID: "a", Title: "A"}},
+		},
+		{
+			"an old running game outside the newest five stays and takes a slot",
+			[]Game{
+				{ID: "old", Title: "Old", LastPlayed: at(1)},
+				{ID: "a", Title: "A", LastPlayed: at(60)},
+				{ID: "b", Title: "B", LastPlayed: at(50)},
+				{ID: "c", Title: "C", LastPlayed: at(40)},
+				{ID: "d", Title: "D", LastPlayed: at(30)},
+				{ID: "e", Title: "E", LastPlayed: at(20)},
+			},
+			[]string{"old"}, nil, 5,
+			[]RecentGame{
+				{ID: "old", Title: "Old", Running: true},
+				{ID: "a", Title: "A"}, {ID: "b", Title: "B"}, {ID: "c", Title: "C"}, {ID: "d", Title: "D"},
+			},
+		},
+		{
+			"starting games count as running",
+			[]Game{{ID: "a", Title: "A", LastPlayed: at(5)}, {ID: "s", Title: "S"}},
+			nil, []string{"s"}, 5,
+			[]RecentGame{{ID: "s", Title: "S", Running: true}, {ID: "a", Title: "A"}},
+		},
+		{
+			"more running games than the limit are cut, newest played first",
+			[]Game{
+				{ID: "a", Title: "A", LastPlayed: at(1)},
+				{ID: "b", Title: "B", LastPlayed: at(2)},
+				{ID: "c"},
+			},
+			[]string{"a", "b", "c"}, nil, 2,
+			[]RecentGame{{ID: "b", Title: "B", Running: true}, {ID: "a", Title: "A", Running: true}},
+		},
+		{
+			"a hidden running game stays out",
+			[]Game{{ID: "h", Title: "H", Hidden: true}, {ID: "a", Title: "A", LastPlayed: at(5)}},
+			[]string{"h"}, nil, 5,
+			[]RecentGame{{ID: "a", Title: "A"}},
+		},
+		{
 			"running and starting are flagged",
 			[]Game{
 				{ID: "a", Title: "A", LastPlayed: at(3)},
