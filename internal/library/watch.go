@@ -120,6 +120,9 @@ func (s *Service) detectTick(ctx context.Context) {
 		}
 		if sess, ok := s.running[id]; ok {
 			sess.lastSeen = now
+			if !proc.PathUnknown && proc.Path != "" {
+				sess.exePath = proc.Path
+			}
 			// Сессия, запущенная лаунчером, своего createdAt не знает:
 			// без него сверка личности при переиспользовании pid
 			// работать не может, поэтому он забирается с первого же
@@ -179,7 +182,12 @@ func (s *Service) detectTick(ctx context.Context) {
 		} else {
 			slog.Debug("detected game process start time unknown, session playtime will undercount", "id", o.id)
 		}
+		exePath := ""
+		if !o.proc.PathUnknown {
+			exePath = o.proc.Path
+		}
 		s.running[o.id] = &session{
+			exePath:   exePath,
 			pid:       o.proc.PID,
 			createdAt: o.proc.CreatedAt,
 			startedAt: startedAt,

@@ -212,6 +212,7 @@ type Service struct {
 	scan          func(context.Context) ([]procs.Process, bool, error)
 	watchInterval time.Duration
 	now           func() time.Time
+	crash         crashHooks
 	ctx           context.Context
 	cancel        context.CancelFunc
 	closed        bool
@@ -249,6 +250,7 @@ type SessionChangeWatcher interface {
 type session struct {
 	process   gameProcess // nil у сессии, обнаруженной в системе, а не запущенной нами
 	pid       uint32
+	exePath   string    // путь процесса, который реально отслеживается; для обёрток это не exe лаунчера
 	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
 	startedAt time.Time // с этого момента считается наигранное время
 	lastSeen  time.Time
@@ -294,6 +296,7 @@ func NewServiceAt(path string) (*Service, error) {
 		scan:            procs.List,
 		watchInterval:   defaultWatchInterval,
 		now:             time.Now,
+		crash:           defaultCrashHooks(),
 		shortcuts:       systemShortcuts{},
 		steam:           disabledSteam{},
 		launcherPath:    os.Executable,
