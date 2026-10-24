@@ -45,6 +45,9 @@ func ParseEvent(raw []byte) (Fault, error) {
 		}
 		f = Fault{Source: SourceAppError, App: ev.Data[0], Module: ev.Data[3], ModuleVersion: ev.Data[4]}
 		f.ExceptionCode, f.HasException = parseException(ev.Data[6])
+		if len(ev.Data) > 8 {
+			f.PID, f.HasPID = parseException(ev.Data[8])
+		}
 		if len(ev.Data) > 11 {
 			f.ModulePath = strings.TrimSpace(ev.Data[11])
 		}

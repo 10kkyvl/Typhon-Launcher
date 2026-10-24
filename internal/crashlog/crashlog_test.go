@@ -26,7 +26,7 @@ func TestParseEvent(t *testing.T) {
 	}
 	want := Fault{
 		Source: SourceAppError, App: "Game.exe", Module: "MSVCP140.dll", ModuleVersion: "14.38.33135.0",
-		ModulePath: `C:\Games\Foo\MSVCP140.dll`, ExceptionCode: 0xC0000005, HasException: true,
+		ModulePath: `C:\Games\Foo\MSVCP140.dll`, ExceptionCode: 0xC0000005, HasException: true, PID: 0x1a2c, HasPID: true,
 		Time: time.Date(2026, 10, 24, 10, 0, 3, 123456700, time.UTC),
 	}
 	if f != want {
@@ -252,11 +252,11 @@ func TestPickPrefersApplicationError(t *testing.T) {
 		{Source: SourceAppError, App: "game.exe", Module: "new", Time: t0.Add(time.Second)},
 		{Source: SourceAppError, App: "other.exe", Module: "other", Time: t0.Add(time.Hour)},
 	}
-	f, ok := Pick(faults, "Game.exe")
+	f, ok := Pick(faults, Query{Exe: "Game.exe"})
 	if !ok || f.Module != "new" {
 		t.Fatalf("got %+v %v", f, ok)
 	}
-	if _, ok := Pick(faults, "none.exe"); ok {
+	if _, ok := Pick(faults, Query{Exe: "none.exe"}); ok {
 		t.Fatal("unrelated exe matched")
 	}
 }
@@ -315,5 +315,47 @@ func TestFindDump(t *testing.T) {
 	cancel()
 	if _, err := FindDump(ctx, []DumpDir{{Path: root, MaxDepth: 2}}, "game.exe", from, to); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled ctx: %v", err)
+	}
+}
+
+func TestPickMatchesPID(t *testing.T) {
+	faults := []Fault{
+		{Source: SourceAppError, App: "game.exe", Module: "other", PID: 7, HasPID: true},
+		{Source: SourceWER, App: "game.exe", Module: "wer"},
+	}
+	cases := []struct {
+		name   string
+		q      Query
+		module string
+		ok     bool
+	}{
+		{"same pid", Query{Exe: "game.exe", PID: 7}, "other", true},
+		{"other instance crashed", Query{Exe: "game.exe", PID: 8}, "wer", true},
+		{"other instance, pid required", Query{Exe: "game.exe", PID: 8, RequirePID: true}, "", false},
+		{"pid unknown, required", Query{Exe: "game.exe", RequirePID: true}, "", false},
+		{"pid unknown", Query{Exe: "game.exe"}, "other", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ok := Pick(faults, tc.q)
+			if ok != tc.ok || f.Module != tc.module {
+				t.Fatalf("got %+v %v", f, ok)
+			}
+		})
+	}
+}
+
+func TestAwaitDropsEarlierErrorAfterSuccessfulPoll(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	calls := 0
+	src := func(context.Context, Query) ([]Fault, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("transient")
+		}
+		return nil, nil
+	}
+	if _, ok, err := Await(t.Context(), src, clock, Query{Exe: "g.exe"}, DefaultOptions); ok || err != nil {
+		t.Fatalf("a journal that was read at the end is not unknown: ok=%v err=%v", ok, err)
 	}
 }

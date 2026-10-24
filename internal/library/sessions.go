@@ -46,6 +46,7 @@ type CrashEvent struct {
 
 const (
 	crashWindowSlack = 30 * time.Second
+	crashClockSkew   = 2 * time.Second
 	crashDumpDepth   = 2
 )
 
@@ -68,6 +69,7 @@ func defaultCrashHooks() crashHooks {
 type crashInput struct {
 	gameID     string
 	exePath    string
+	pid        uint32
 	installDir string
 	exit       *exitInfo
 	seconds    int64
@@ -100,7 +102,10 @@ func (h crashHooks) analyze(ctx context.Context, in crashInput) (CrashEvent, boo
 		if exitKnown && in.exit.code == 0 {
 			opt.MaxWait = 0
 		}
-		q := crashlog.Query{Exe: exe, From: in.startedAt.Add(-crashWindowSlack), To: in.endedAt.Add(crashWindowSlack)}
+		q := crashlog.Query{
+			Exe: exe, From: in.startedAt.Add(-crashClockSkew), To: in.endedAt.Add(crashWindowSlack),
+			PID: in.pid, RequirePID: exitKnown && in.exit.code == 0,
+		}
 		f, ok, err := h.await(ctx, q, opt)
 		switch {
 		case err == nil:
@@ -336,7 +341,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
 	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: proc, pid: pid, exePath: game.Executable, startedAt: startedAt, lastSeen: startedAt}
+	s.running[id] = &session{process: proc, pid: pid, exePath: game.Executable, gamePID: pid, startedAt: startedAt, lastSeen: startedAt}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
 		"executable", game.Executable, "workDir", workDir)
 	for _, w := range s.watchers {
@@ -519,10 +524,12 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 	stoppedByUser := false
 	var exit *exitInfo
 	exePath := ""
+	var gamePID uint32
 	if current, ok := s.running[id]; ok {
 		stoppedByUser = current.stoppedByUser
 		exit = current.exit
 		exePath = current.exePath
+		gamePID = current.gamePID
 	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
@@ -577,7 +584,7 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		}
 	}
 	if hooks := s.crash; !stoppedByUser && s.ctx != nil && hooks.await != nil {
-		in := crashInput{gameID: id, exePath: exePath, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
+		in := crashInput{gameID: id, exePath: exePath, pid: gamePID, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
 		if game != nil {
 			in.installDir = game.InstallDir
 			if in.exePath == "" {
@@ -588,7 +595,7 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			if ev, ok := hooks.analyze(ctx, in); ok {
+			if ev, ok := hooks.analyze(ctx, in); ok && ctx.Err() == nil {
 				hooks.emit(ev)
 			}
 		}()

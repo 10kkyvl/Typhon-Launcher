@@ -53,7 +53,7 @@ func read(ctx context.Context, q Query) ([]Fault, error) {
 	if err != nil {
 		return nil, err
 	}
-	//nolint:gosec // G103: uintptr(unsafe.Pointer(..)) прямо в аргументах Call — единственная безопасная форма для wevtapi; буферы локальные.
+	//nolint:gosec // G103: wevtapi принимает указатель на локальный буфер, живущий до конца вызова.
 	h, _, callErr := procEvtQuery.Call(0, uintptr(unsafe.Pointer(channel)), uintptr(unsafe.Pointer(query)), uintptr(evtQueryChannelPath|evtQueryReverseDirection))
 	if h == 0 {
 		return nil, fmt.Errorf("EvtQuery: %w", callErr)
@@ -69,7 +69,7 @@ func read(ctx context.Context, q Query) ([]Fault, error) {
 		}
 		var handles [evtBatch]uintptr
 		var returned uint32
-		//nolint:gosec // G103: uintptr(unsafe.Pointer(..)) прямо в аргументах Call — единственная безопасная форма для wevtapi; буферы локальные.
+		//nolint:gosec // G103: wevtapi принимает указатель на локальный буфер, живущий до конца вызова.
 		r, _, callErr := procEvtNext.Call(h, uintptr(evtBatch), uintptr(unsafe.Pointer(&handles[0])), uintptr(evtNextTimeoutMS), 0, uintptr(unsafe.Pointer(&returned)))
 		if r == 0 {
 			if errors.Is(callErr, windows.ERROR_NO_MORE_ITEMS) {
@@ -105,7 +105,7 @@ func renderXML(ev uintptr) ([]byte, error) {
 	var used, props uint32
 	buf := make([]uint16, 4096)
 	for attempt := 0; attempt < 2; attempt++ {
-		//nolint:gosec // G103: uintptr(unsafe.Pointer(..)) прямо в аргументах Call — единственная безопасная форма для wevtapi; буферы локальные.
+		//nolint:gosec // G103: wevtapi принимает указатель на локальный буфер, живущий до конца вызова.
 		r, _, callErr := procEvtRender.Call(0, ev, uintptr(evtRenderEventXML), uintptr(len(buf)*2), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&used)), uintptr(unsafe.Pointer(&props)))
 		if r != 0 {
 			return []byte(windows.UTF16ToString(buf)), nil
