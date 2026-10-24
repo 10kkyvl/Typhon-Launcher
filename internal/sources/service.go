@@ -79,6 +79,7 @@ type Service struct {
 	releases map[string][]*Release
 
 	rulesVersion int
+	rulesAsked   time.Time
 
 	refreshing map[string]bool
 	failures   map[string]int

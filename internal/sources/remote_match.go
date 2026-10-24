@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,11 @@ const (
 // an older rev is asked again, in the ordinary batches, instead of waiting out
 // remoteMatchKnownTTL.
 const remoteMatchRev = 1
+
+// How often a fully cached source asks the server which rules are current. Any
+// answer the launcher gets also counts, so a source that keeps finding new
+// releases never spends a request on it.
+const rulesProbeEvery = 6 * time.Hour
 
 // Stable per key, so a large feed does not expire in a single refresh.
 func remoteMatchJitter(key string, span time.Duration) time.Duration {
@@ -67,6 +73,18 @@ func (s *Service) knownRulesVersion() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.rulesVersion
+}
+
+func (s *Service) rulesProbeDue(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rulesAsked.IsZero() || now.Sub(s.rulesAsked) >= rulesProbeEvery || now.Before(s.rulesAsked)
+}
+
+func (s *Service) noteRulesAsked(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rulesAsked = now
 }
 
 func (s *Service) noteRulesVersion(v int) error {
@@ -164,10 +182,27 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 	if err != nil {
 		return nil, nil, err
 	}
-	run.progress(stageMatch, 0, len(queries))
 	if len(queries) == 0 {
-		return out, nil, nil
+		run.progress(stageMatch, 0, 0)
+		return s.probeRulesVersion(ctx, run, now, out, byKey, cached, known)
 	}
+	matches, partial, err := s.askCatalog(ctx, run, queries)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Never below what is already known: an answer from a server that reports
+	// no version must not make every saved match look outdated again.
+	rules := max(s.catalog.MatchRulesVersion(), known)
+	if err := s.noteRulesVersion(rules); err != nil {
+		return nil, nil, fmt.Errorf("save match rules version: %w", err)
+	}
+	s.noteRulesAsked(now)
+	mergeBatch(out, keys, matches, partial, rules)
+	return out, partial, nil
+}
+
+func (s *Service) askCatalog(ctx context.Context, run *refreshRun, queries []catalog.ReleaseQuery) ([]catalog.Match, *catalog.PartialMatchError, error) {
+	run.progress(stageMatch, 0, len(queries))
 	matchCtx := matchprogress.With(ctx, func(done, total int) { run.progress(stageMatch, done, total) })
 	matches, err := s.catalog.ResolveSourceQueries(matchCtx, queries)
 	var partial *catalog.PartialMatchError
@@ -178,12 +213,10 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 		return nil, nil, err
 	}
 	run.finish(stageMatch, len(queries))
-	// Never below what is already known: an answer from a server that reports
-	// no version must not make every saved match look outdated again.
-	rules := max(s.catalog.MatchRulesVersion(), known)
-	if err := s.noteRulesVersion(rules); err != nil {
-		return nil, nil, fmt.Errorf("save match rules version: %w", err)
-	}
+	return matches, partial, nil
+}
+
+func mergeBatch(out map[string]resolvedRemoteMatch, keys []string, matches []catalog.Match, partial *catalog.PartialMatchError, rules int) {
 	failed := map[int]bool{}
 	if partial != nil {
 		for _, i := range partial.Failed {
@@ -196,6 +229,72 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 		}
 		out[key] = resolvedRemoteMatch{Match: matches[i], fresh: true, rules: rules}
 	}
+}
+
+// With everything cached the launcher never asks the server anything, so a new
+// rules version would stay unknown for good. One release is asked to learn the
+// current version; when it moved on, the saved matches made under older rules
+// are asked again in the same pass. An unchanged version leaves the cache as
+// it is. A failed second batch leaves those releases on their saved match and
+// under their old rules version, so the next pass asks again.
+func (s *Service) probeRulesVersion(ctx context.Context, run *refreshRun, now time.Time, out map[string]resolvedRemoteMatch, byKey map[string]*Release, cached map[string]*RemoteMatch, known int) (map[string]resolvedRemoteMatch, *catalog.PartialMatchError, error) {
+	if !s.rulesProbeDue(now) {
+		return out, nil, nil
+	}
+	sorted := make([]string, 0, len(byKey))
+	for key := range byKey {
+		sorted = append(sorted, key)
+	}
+	slices.Sort(sorted)
+	var probeKey string
+	var probeQuery catalog.ReleaseQuery
+	for _, key := range sorted {
+		keys, queries, err := remoteReleaseQueries(ctx, run.memo, []*Release{byKey[key]})
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(queries) > 0 {
+			probeKey, probeQuery = keys[0], queries[0]
+			break
+		}
+	}
+	if probeKey == "" {
+		return out, nil, nil
+	}
+	matches, partial, err := s.askCatalog(ctx, run, []catalog.ReleaseQuery{probeQuery})
+	if err != nil {
+		return nil, nil, err
+	}
+	if partial != nil {
+		return out, partial, nil
+	}
+	rules := max(s.catalog.MatchRulesVersion(), known)
+	if err := s.noteRulesVersion(rules); err != nil {
+		return nil, nil, fmt.Errorf("save match rules version: %w", err)
+	}
+	s.noteRulesAsked(now)
+	if rules <= known {
+		return out, nil, nil
+	}
+	mergeBatch(out, []string{probeKey}, matches, nil, rules)
+	var stale []*Release
+	for _, key := range sorted {
+		if rm, ok := cached[key]; ok && key != probeKey && rm.GameID != "" && rm.RulesVersion < rules {
+			stale = append(stale, byKey[key])
+		}
+	}
+	keys, queries, err := remoteReleaseQueries(ctx, run.memo, stale)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(queries) == 0 {
+		return out, nil, nil
+	}
+	matches, partial, err = s.askCatalog(ctx, run, queries)
+	if err != nil {
+		return nil, nil, err
+	}
+	mergeBatch(out, keys, matches, partial, rules)
 	return out, partial, nil
 }
 
