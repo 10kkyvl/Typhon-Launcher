@@ -19,6 +19,22 @@ func TestSecondLaunchesQueueUntilReady(t *testing.T) {
 	}
 }
 
+func TestSecondLaunchesPanicDoesNotStopTheHandler(t *testing.T) {
+	var s secondLaunches
+	s.Receive([]string{"boom"})
+	calls := 0
+	s.Ready(func(args []string) {
+		calls++
+		if args[0] == "boom" {
+			panic("handler failed")
+		}
+	})
+	s.Receive([]string{"after"})
+	if calls != 2 {
+		t.Fatalf("handler ran %d times, want 2", calls)
+	}
+}
+
 func TestSecondLaunchesConcurrentReceiveLosesNothing(t *testing.T) {
 	var s secondLaunches
 	var mu sync.Mutex

@@ -34,6 +34,28 @@ type windowsAPI struct{}
 
 func systemAPI() api { return windowsAPI{} }
 
+var claimed []windows.Handle
+
+func (windowsAPI) Claim(name string) (bool, error) {
+	p, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return false, err
+	}
+	h, err := windows.CreateMutex(nil, false, p)
+	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		if err := windows.CloseHandle(h); err != nil {
+			return false, fmt.Errorf("close mutex handle: %w", err)
+		}
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("create mutex: %w", err)
+	}
+	// The handle is never closed: the mutex must live exactly as long as the process.
+	claimed = append(claimed, h)
+	return true, nil
+}
+
 func (windowsAPI) MutexExists(name string) (bool, error) {
 	p, err := windows.UTF16PtrFromString(name)
 	if err != nil {
@@ -78,10 +100,10 @@ func (windowsAPI) Send(window uintptr, dataID uintptr, payload string) error {
 	runtime.KeepAlive(text)
 	if r == 0 {
 		var errno windows.Errno
-		if errors.As(callErr, &errno) && errno != 0 {
+		if errors.As(callErr, &errno) && errno != 0 && errno != windows.ERROR_TIMEOUT {
 			return callErr
 		}
-		return errors.New("the running instance did not answer")
+		return ErrSendTimeout
 	}
 	return nil
 }

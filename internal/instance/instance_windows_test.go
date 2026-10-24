@@ -152,3 +152,13 @@ func TestForwardWithoutFirstInstance(t *testing.T) {
 		t.Fatalf("Forward = %v, %v", forwarded, err)
 	}
 }
+
+func TestClaimGoesToTheFirstCaller(t *testing.T) {
+	var sys windowsAPI
+	for i, want := range []bool{true, false} {
+		got, err := sys.Claim("typhon-claim-test-early")
+		if err != nil || got != want {
+			t.Fatalf("claim %d = %v, %v; want %v", i, got, err, want)
+		}
+	}
+}

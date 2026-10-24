@@ -14,22 +14,31 @@ import (
 )
 
 type fakeAPI struct {
-	held       bool
-	heldErr    error
+	first      bool
+	claimErr   error
+	running    bool
+	runningErr error
 	appearsAt  int
 	findCalls  int
 	findErr    error
+	timeouts   int
 	sendErr    error
-	sentTo     uintptr
+	sends      int
+	delivered  int
 	sentID     uintptr
 	sentData   string
 	asked      []string
 	askedTitle string
 }
 
+func (f *fakeAPI) Claim(name string) (bool, error) {
+	f.asked = append(f.asked, name)
+	return f.first, f.claimErr
+}
+
 func (f *fakeAPI) MutexExists(name string) (bool, error) {
 	f.asked = append(f.asked, name)
-	return f.held, f.heldErr
+	return f.running, f.runningErr
 }
 
 func (f *fakeAPI) FindWindow(class, title string) (uintptr, error) {
@@ -45,9 +54,17 @@ func (f *fakeAPI) FindWindow(class, title string) (uintptr, error) {
 	return 0, nil
 }
 
-func (f *fakeAPI) Send(window uintptr, dataID uintptr, payload string) error {
-	f.sentTo, f.sentID, f.sentData = window, dataID, payload
-	return f.sendErr
+func (f *fakeAPI) Send(_ uintptr, dataID uintptr, payload string) error {
+	f.sends++
+	if f.sends <= f.timeouts {
+		return ErrSendTimeout
+	}
+	if f.sendErr != nil {
+		return f.sendErr
+	}
+	f.delivered++
+	f.sentID, f.sentData = dataID, payload
+	return nil
 }
 
 type clock struct {
@@ -63,28 +80,32 @@ func (c *clock) wait(_ context.Context, d time.Duration) error {
 func TestForward(t *testing.T) {
 	boom := errors.New("boom")
 	tests := []struct {
-		name      string
-		api       fakeAPI
-		clock     clock
-		id        string
-		want      bool
-		wantErr   error
-		wantSent  bool
-		minWaited time.Duration
+		name          string
+		api           fakeAPI
+		clock         clock
+		id            string
+		want          bool
+		wantErr       error
+		wantDelivered int
+		minWaited     time.Duration
 	}{
-		{name: "no mutex means no first instance", api: fakeAPI{}, id: "a"},
-		{name: "window found is forwarded", api: fakeAPI{held: true, appearsAt: 1}, id: "a", want: true, wantSent: true},
-		{name: "window appears while the first instance starts", api: fakeAPI{held: true, appearsAt: 5}, id: "a", want: true, wantSent: true, minWaited: 4 * pollEvery},
-		{name: "window never appears falls back to a normal start", api: fakeAPI{held: true}, id: "a", minWaited: windowWait},
-		{name: "mutex lookup error", api: fakeAPI{heldErr: boom}, id: "a", wantErr: boom},
-		{name: "window lookup error", api: fakeAPI{held: true, findErr: boom}, id: "a", wantErr: boom},
-		{name: "send error", api: fakeAPI{held: true, appearsAt: 1, sendErr: boom}, id: "a", wantErr: boom, wantSent: true},
+		{name: "first instance starts normally", api: fakeAPI{first: true}, id: "a"},
+		{name: "first instance of an older launcher holds only the wails mutex", api: fakeAPI{first: true, running: true, appearsAt: 1}, id: "a", want: true, wantDelivered: 1},
+		{name: "early mutex held and window found", api: fakeAPI{appearsAt: 1}, id: "a", want: true, wantDelivered: 1},
+		{name: "window appears while the first instance starts", api: fakeAPI{appearsAt: 200}, id: "a", want: true, wantDelivered: 1, minWaited: 199 * pollEvery},
+		{name: "window never appears", api: fakeAPI{}, id: "a", wantErr: ErrNotTaken, minWaited: deadline},
+		{name: "claim error", api: fakeAPI{claimErr: boom}, id: "a", wantErr: boom},
+		{name: "wails mutex lookup error", api: fakeAPI{first: true, runningErr: boom}, id: "a", wantErr: boom},
+		{name: "window lookup error", api: fakeAPI{findErr: boom}, id: "a", wantErr: boom},
+		{name: "send error is final", api: fakeAPI{appearsAt: 1, sendErr: boom}, id: "a", wantErr: boom},
+		{name: "send timeouts are retried and delivered once", api: fakeAPI{appearsAt: 1, timeouts: 3}, id: "a", want: true, wantDelivered: 1},
+		{name: "send timeouts until the deadline", api: fakeAPI{appearsAt: 1, timeouts: 1000}, id: "a", wantErr: ErrNotTaken},
 		{name: "empty id", id: "", wantErr: ErrNoID},
-		{name: "cancelled while waiting", api: fakeAPI{held: true}, clock: clock{err: context.Canceled}, id: "a", wantErr: context.Canceled},
+		{name: "cancelled while waiting", api: fakeAPI{}, clock: clock{err: context.Canceled}, id: "a", wantErr: context.Canceled},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := forward(t.Context(), &tc.api, tc.clock.wait, tc.id, []string{"typhon.exe", "--open", "library"}, `C:\work`)
+			got, err := forward(t.Context(), &tc.api, tc.clock.wait, tc.id, []string{"typhon.exe", "--open", "library"}, `C:work`)
 			if got != tc.want {
 				t.Fatalf("forwarded = %v, want %v", got, tc.want)
 			}
@@ -94,8 +115,8 @@ func TestForward(t *testing.T) {
 			if tc.wantErr == nil && err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
-			if tc.wantSent != (tc.api.sentTo != 0) {
-				t.Fatalf("sent = %v, want %v", tc.api.sentTo != 0, tc.wantSent)
+			if tc.api.delivered != tc.wantDelivered {
+				t.Fatalf("delivered = %d, want %d", tc.api.delivered, tc.wantDelivered)
 			}
 			if tc.clock.waited < tc.minWaited {
 				t.Fatalf("waited %v, want at least %v", tc.clock.waited, tc.minWaited)
@@ -105,7 +126,7 @@ func TestForward(t *testing.T) {
 }
 
 func TestForwardSendsWailsPayload(t *testing.T) {
-	api := &fakeAPI{held: true, appearsAt: 1}
+	api := &fakeAPI{appearsAt: 1}
 	c := &clock{}
 	args := []string{"typhon.exe", "--play", "g1"}
 	if _, err := forward(t.Context(), api, c.wait, "com.typhon.launcher", args, `C:\work`); err != nil {
@@ -124,7 +145,7 @@ func TestForwardSendsWailsPayload(t *testing.T) {
 	if len(got.Args) != 3 || got.Args[2] != "g1" || got.WorkingDir != `C:\work` {
 		t.Fatalf("payload = %s", api.sentData)
 	}
-	if api.asked[0] != "wails-app-com.typhon.launcher-sim" || api.asked[1] != "wails-app-com.typhon.launcher-sic" || api.askedTitle != "wails-app-com.typhon.launcher-siw" {
+	if api.asked[0] != "typhon-com.typhon.launcher-early" || api.asked[1] != "wails-app-com.typhon.launcher-sic" || api.askedTitle != "wails-app-com.typhon.launcher-siw" {
 		t.Fatalf("names = %v %q", api.asked, api.askedTitle)
 	}
 }
@@ -135,7 +156,11 @@ func wailsSource(t *testing.T, rel string) string {
 	if err != nil {
 		t.Fatalf("locate the wails module: %v", err)
 	}
-	data, err := os.ReadFile(strings.TrimSpace(string(out)) + "/" + rel)
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		t.Fatal("the wails module is not in the module cache: run go mod download")
+	}
+	data, err := os.ReadFile(dir + "/" + rel)
 	if err != nil {
 		t.Fatalf("read wails source: %v", err)
 	}

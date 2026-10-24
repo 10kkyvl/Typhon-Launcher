@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"sync"
 
 	"typhon/internal/instance"
@@ -34,8 +35,8 @@ func isWorkerLaunch(args []string) bool {
 	return false
 }
 
-// handOffLaunch runs before logging, recovery and every service: a second
-// launch that reaches those writes to the same state files as the first one.
+// Runs before logging, recovery and the services: past that point a second
+// launch writes to the first one's state files.
 func handOffLaunch(ctx context.Context, args []string) (bool, error) {
 	if isWorkerLaunch(args) {
 		return false, nil
@@ -44,13 +45,10 @@ func handOffLaunch(ctx context.Context, args []string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("resolve single instance id: %w", err)
 	}
-	// The regular start repeats this call and logs its failure; when the launch is
-	// handed over there is no log to write to.
+	// The regular start repeats the call and logs its failure.
 	_ = platform.AllowForegroundHandoff() //nolint:errcheck // Главный принцип: ошибка не теряется, обычный старт повторяет вызов и пишет её в лог
-	workDir, err := os.Getwd()
-	if err != nil {
-		return false, fmt.Errorf("resolve working directory: %w", err)
-	}
+	// Wails sends an empty directory when this fails, and so does the hand-off.
+	workDir, _ := os.Getwd() //nolint:errcheck // Главный принцип: пустой каталог — то, что отправляет и сам Wails; запуск от этого не отменяется
 	forwarded, err := instance.Forward(ctx, id, args, workDir)
 	if err != nil {
 		return false, fmt.Errorf("hand the launch to the running instance: %w", err)
@@ -58,9 +56,8 @@ func handOffLaunch(ctx context.Context, args []string) (bool, error) {
 	return forwarded, nil
 }
 
-// secondLaunches holds launches that arrive from other processes before the
-// window and the tray exist: Wails delivers them from its own goroutine as
-// soon as application.New returns, long before the tray controller is built.
+// Wails delivers second launches from its own goroutine as soon as
+// application.New returns, long before the tray controller exists.
 type secondLaunches struct {
 	mu    sync.Mutex
 	run   func(args []string)
@@ -90,8 +87,17 @@ func (s *secondLaunches) Ready(run func(args []string)) {
 		args := s.queue[0]
 		s.queue = s.queue[1:]
 		s.mu.Unlock()
-		run(args)
+		runRecovered(run, args)
 	}
+}
+
+func runRecovered(run func(args []string), args []string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("second launch handler panicked", "args", args, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	run(args)
 }
 
 type windowOpener interface {
