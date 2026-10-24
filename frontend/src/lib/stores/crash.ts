@@ -1,41 +1,47 @@
 import { get, writable } from 'svelte/store';
-import type { SessionEvent } from '../services/library';
+import { CRASH_DETAIL_WINDOW_MS, mergeCrash, recordFromCrash, recordFromStopped, type CrashRecord } from '../redist/crashView';
+import type { CrashEvent, SessionEvent } from '../services/library';
+
+export type { CrashRecord };
 
 export const CRASH_QUIET_MS = 5 * 60 * 1000;
-
-export interface CrashRecord {
-  gameId: string;
-  exitCode: number;
-  exitKnown: boolean;
-  reasonCode: string;
-  sessionSeconds: number;
-  at: number;
-  count: number;
-}
 
 export const crashTarget = writable<CrashRecord | null>(null);
 
 const counts = new Map<string, number>();
 const shownAt = new Map<string, number>();
+const stoppedAt = new Map<string, number>();
 
 export function recordCrash(event: SessionEvent, now: number = Date.now()): CrashRecord {
   const count = (counts.get(event.gameId) ?? 0) + 1;
   counts.set(event.gameId, count);
-  const record: CrashRecord = {
-    gameId: event.gameId,
-    exitCode: event.exitCode,
-    exitKnown: event.exitKnown,
-    reasonCode: event.reasonCode,
-    sessionSeconds: event.sessionSeconds,
-    at: now,
-    count,
-  };
+  const record = recordFromStopped(event, count, now);
+  stoppedAt.set(event.gameId, now);
   const open = get(crashTarget);
   if (open && open.gameId === event.gameId) {
     crashTarget.set(record);
     shownAt.set(event.gameId, now);
     return record;
   }
+  const last = shownAt.get(event.gameId);
+  if (last !== undefined && now - last < CRASH_QUIET_MS) return record;
+  shownAt.set(event.gameId, now);
+  crashTarget.set(record);
+  return record;
+}
+
+export function recordCrashDetail(event: CrashEvent, now: number = Date.now()): CrashRecord | null {
+  const open = get(crashTarget);
+  if (open && open.gameId === event.gameId) {
+    const merged = mergeCrash(open, event);
+    crashTarget.set(merged);
+    return merged;
+  }
+  const stopped = stoppedAt.get(event.gameId);
+  if (stopped !== undefined && now - stopped < CRASH_DETAIL_WINDOW_MS) return null;
+  const count = (counts.get(event.gameId) ?? 0) + 1;
+  counts.set(event.gameId, count);
+  const record = recordFromCrash(event, count, now);
   const last = shownAt.get(event.gameId);
   if (last !== undefined && now - last < CRASH_QUIET_MS) return record;
   shownAt.set(event.gameId, now);
@@ -54,5 +60,6 @@ export function closeCrash() {
 export function resetCrashes() {
   counts.clear();
   shownAt.clear();
+  stoppedAt.clear();
   crashTarget.set(null);
 }

@@ -120,6 +120,22 @@ export interface SessionEvent {
   reasonCode: string;
 }
 
+export type CrashHint = 'vcredist' | 'directx' | 'compat' | 'antivirus' | 'runtimes' | 'unknown';
+
+export interface CrashEvent {
+  gameId: string;
+  exitCode: number;
+  exitKnown: boolean;
+  reasonCode: string;
+  faultModule: string;
+  exceptionCode: string;
+  hint: string;
+  missingFile: string;
+  sessionSeconds: number;
+  dumpFound: boolean;
+  journalUnknown: boolean;
+}
+
 const unavailable = () => new Error('unavailable in browser');
 
 export async function getGames(): Promise<LibraryGame[]> {
