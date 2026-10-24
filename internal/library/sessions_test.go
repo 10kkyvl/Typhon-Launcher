@@ -266,7 +266,7 @@ func TestFinishSessionRecordsUsageDuration(t *testing.T) {
 	s.SetUsageRecorder(rec.record)
 
 	startedAt := time.Now().Add(-7 * time.Second)
-	s.finishSession(game.ID, startedAt)
+	s.finishSession(s.ctx, game.ID, startedAt)
 
 	events := rec.snapshot()
 	if len(events) != 1 {
@@ -306,7 +306,7 @@ func TestFinishSessionEmptyGameIDWhenGameRemoved(t *testing.T) {
 	rec := &usageRecorder{}
 	s.SetUsageRecorder(rec.record)
 
-	s.finishSession(game.ID, time.Now().Add(-3*time.Second))
+	s.finishSession(s.ctx, game.ID, time.Now().Add(-3*time.Second))
 
 	events := rec.snapshot()
 	if len(events) != 1 {
@@ -375,7 +375,7 @@ func TestServiceShutdownWaitsForSessionCallbacks(t *testing.T) {
 		got.seconds = seconds
 	})
 
-	svc.finishSession("game-1", time.Now().Add(-5*time.Second))
+	svc.finishSession(svc.ctx, "game-1", time.Now().Add(-5*time.Second))
 
 	close(release)
 	if err := svc.ServiceShutdown(); err != nil {
@@ -596,7 +596,7 @@ func TestFinishSessionPersistFailureRollsBackMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.finishSession(game.ID, time.Now().Add(-10*time.Second))
+	s.finishSession(s.ctx, game.ID, time.Now().Add(-10*time.Second))
 
 	got, err := s.Find(game.ID)
 	if err != nil {
@@ -657,7 +657,7 @@ func TestFinishSessionCallsPlayRecorder(t *testing.T) {
 	s.running["orphan"] = &session{startedAt: startedAt, lastSeen: startedAt, external: true}
 	s.mu.Unlock()
 	clock = base.Add(90 * time.Second)
-	s.finishSession("orphan", startedAt)
+	s.finishSession(s.ctx, "orphan", startedAt)
 	s.wg.Wait()
 
 	mu.Lock()

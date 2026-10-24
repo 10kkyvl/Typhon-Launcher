@@ -250,6 +250,7 @@ type SessionChangeWatcher interface {
 type session struct {
 	process   gameProcess // nil у сессии, обнаруженной в системе, а не запущенной нами
 	pid       uint32
+	gamePID   uint32    // pid процесса exePath; журналу падений нужен он, а не pid обёртки
 	exePath   string    // путь процесса, который реально отслеживается; для обёрток это не exe лаунчера
 	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
 	startedAt time.Time // с этого момента считается наигранное время

@@ -28,15 +28,19 @@ type Fault struct {
 	Module        string
 	ModuleVersion string
 	ModulePath    string
+	PID           uint32
+	HasPID        bool
 	ExceptionCode uint32
 	HasException  bool
 	Time          time.Time
 }
 
 type Query struct {
-	Exe  string
-	From time.Time
-	To   time.Time
+	Exe        string
+	From       time.Time
+	To         time.Time
+	PID        uint32
+	RequirePID bool
 }
 
 type Reader func(ctx context.Context, q Query) ([]Fault, error)
@@ -69,23 +73,19 @@ func Await(ctx context.Context, src Reader, clock Clock, q Query, opt Options) (
 		return Fault{}, false, ErrNoExe
 	}
 	start := clock.Now()
-	var lastErr error
 	for {
 		if err := ctx.Err(); err != nil {
 			return Fault{}, false, fmt.Errorf("wait for crash event: %w", err)
 		}
 		faults, err := src(ctx, q)
-		if f, ok := Pick(faults, q.Exe); ok {
+		if f, ok := Pick(faults, q); ok {
 			return f, true, nil
 		}
-		if err != nil {
-			if errors.Is(err, ErrUnsupported) {
-				return Fault{}, false, err
-			}
-			lastErr = err
+		if errors.Is(err, ErrUnsupported) {
+			return Fault{}, false, err
 		}
 		if clock.Now().Sub(start)+opt.Interval > opt.MaxWait {
-			return Fault{}, false, lastErr
+			return Fault{}, false, err
 		}
 		select {
 		case <-ctx.Done():
@@ -97,11 +97,11 @@ func Await(ctx context.Context, src Reader, clock Clock, q Query, opt Options) (
 
 // Pick prefers Application Error over WER: it carries the module path, which
 // the antivirus check needs. Within a source the latest event wins.
-func Pick(faults []Fault, exe string) (Fault, bool) {
+func Pick(faults []Fault, q Query) (Fault, bool) {
 	var best Fault
 	found := false
 	for _, f := range faults {
-		if !strings.EqualFold(f.App, exe) {
+		if !strings.EqualFold(f.App, q.Exe) || !samePID(f, q) {
 			continue
 		}
 		if !found || rank(f) > rank(best) || (rank(f) == rank(best) && f.Time.After(best.Time)) {
@@ -117,4 +117,16 @@ func rank(f Fault) int {
 		return 1
 	}
 	return 0
+}
+
+// samePID: a known PID on both sides must agree; with RequirePID an event
+// that carries no PID (WER) cannot be attributed to this session at all.
+func samePID(f Fault, q Query) bool {
+	if q.PID == 0 {
+		return !q.RequirePID
+	}
+	if !f.HasPID {
+		return !q.RequirePID
+	}
+	return f.PID == q.PID
 }

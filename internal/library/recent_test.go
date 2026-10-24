@@ -186,7 +186,7 @@ func TestFinishSessionEmitsStoppedWhenPersistFails(t *testing.T) {
 	updates := 0
 	s.onUpdated = func([]Game) { updates++ }
 
-	s.finishSession("g", startedAt)
+	s.finishSession(s.ctx, "g", startedAt)
 
 	select {
 	case ev := <-stopped:

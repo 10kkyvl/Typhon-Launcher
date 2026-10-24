@@ -239,3 +239,57 @@ func TestFinishedSessionEmitsCrashEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeCrashDoesNotBorrowAnotherInstancesEvent(t *testing.T) {
+	dir, exe := crashGame(t)
+	base := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+	other := crashlog.Fault{Source: crashlog.SourceAppError, App: "Game.exe", Module: "x.dll", PID: 100, HasPID: true, Time: base.Add(time.Minute)}
+	cases := []struct {
+		name  string
+		exit  *exitInfo
+		pid   uint32
+		fault crashlog.Fault
+		emit  bool
+	}{
+		{"clean exit after a restart, event of the first run", &exitInfo{code: 0, known: true}, 200, other, false},
+		{"clean exit, event without pid", &exitInfo{code: 0, known: true}, 200, crashlog.Fault{App: "Game.exe", Source: crashlog.SourceWER}, false},
+		{"clean exit, same pid", &exitInfo{code: 0, known: true}, 100, other, true},
+		{"unknown exit, same pid", nil, 100, other, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := noJournalHooks()
+			h.await = func(_ context.Context, q crashlog.Query, _ crashlog.Options) (crashlog.Fault, bool, error) {
+				f, ok := crashlog.Pick([]crashlog.Fault{tc.fault}, q)
+				if q.From.Before(base.Add(-3*time.Second)) || !q.From.Before(base) {
+					t.Errorf("window must start just before the session: %v", q.From)
+				}
+				return f, ok, nil
+			}
+			in := crashInput{gameID: "g", exePath: exe, installDir: dir, pid: tc.pid, exit: tc.exit, seconds: 600,
+				startedAt: base, endedAt: base.Add(10 * time.Minute)}
+			if _, ok := h.analyze(t.Context(), in); ok != tc.emit {
+				t.Fatalf("emit = %v, want %v", ok, tc.emit)
+			}
+		})
+	}
+}
+
+func TestCrashEventNotEmittedAfterShutdown(t *testing.T) {
+	_, exe := crashGame(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	h := noJournalHooks()
+	h.await = func(context.Context, crashlog.Query, crashlog.Options) (crashlog.Fault, bool, error) {
+		cancel()
+		return crashlog.Fault{App: "Game.exe"}, true, nil
+	}
+	emitted := false
+	h.emit = func(CrashEvent) { emitted = true }
+	s := &Service{ctx: ctx, crash: h, running: map[string]*session{}, now: time.Now}
+	s.running["g"] = &session{exePath: exe, startedAt: time.Now().Add(-time.Minute)}
+	s.finishSession(s.ctx, "g", time.Now().Add(-time.Minute))
+	s.wg.Wait()
+	if emitted {
+		t.Fatal("crash event emitted after the service context was cancelled")
+	}
+}
