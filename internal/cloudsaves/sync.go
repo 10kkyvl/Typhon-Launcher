@@ -164,13 +164,14 @@ func (s *Service) treeOf(ctx context.Context, root string) (tree, error) {
 	sig := signature(files)
 	if c, ok := s.cache[root]; ok && c.sig == sig {
 		t := summarize(files)
-		t.digest = c.digest
+		t.digest, t.sig = c.digest, sig
 		return t, nil
 	}
 	t, err := hashFiles(ctx, files)
 	if err != nil {
 		return tree{}, err
 	}
+	t.sig = sig
 	s.cache[root] = cachedTree{sig: sig, digest: t.digest}
 	return t, nil
 }
@@ -255,10 +256,22 @@ func (s *Service) upload(ctx context.Context, r *run, key string, t tree, act ac
 	if r.list.MaxBytes <= 0 {
 		return fail(errUnknownLimit)
 	}
-	a, err := buildArchive(ctx, s.store.tmpDir(), t.files, r.list.MaxBytes)
+	if prev, ok := s.refused[key]; ok && prev.sig == t.sig && prev.limit == r.list.MaxBytes {
+		return fail(prev.err)
+	}
+	if t.size > maxUnpackedBytes {
+		return fail(fmt.Errorf("%w: файлы занимают %d байт, допустимо %d", errTooLarge, t.size, int64(maxUnpackedBytes)))
+	}
+	a, err := s.build(ctx, s.store.tmpDir(), t.files, r.list.MaxBytes)
+	if errors.Is(err, errTooLarge) {
+		// The same files cannot fit the same limit: remember the refusal until
+		// a file or the limit changes, so no pass zips them again.
+		s.refused[key] = refusal{sig: t.sig, limit: r.list.MaxBytes, err: err}
+	}
 	if err != nil {
 		return fail(err)
 	}
+	delete(s.refused, key)
 	defer removeTemp(a.path)
 
 	saved, err := s.send(ctx, key, a, act)

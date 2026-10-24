@@ -1,8 +1,10 @@
 package cloudsaves
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1504,5 +1506,112 @@ func TestTransfersCarryTheirOwnDeadline(t *testing.T) {
 		if d <= 10*time.Minute || d > transferTimeout {
 			t.Fatalf("transfer deadline in %v, want just under %v", d, transferTimeout)
 		}
+	}
+}
+
+func countBuilds(h *harness) *int {
+	n := new(int)
+	h.svc.build = func(ctx context.Context, dir string, files []treeFile, maxBytes int64) (archive, error) {
+		*n++
+		return buildArchive(ctx, dir, files, maxBytes)
+	}
+	return n
+}
+
+func TestRefusedArchiveIsNotRebuiltUntilFilesChange(t *testing.T) {
+	big := strings.Repeat("0123456789abcdef", 64)
+	later := time.Now().Add(time.Hour)
+	tests := []struct {
+		name       string
+		change     func(t *testing.T, saves string)
+		wantBuilds int
+	}{
+		{"nothing changed", func(*testing.T, string) {}, 1},
+		{"mtime changed", func(t *testing.T, saves string) {
+			if err := os.Chtimes(filepath.Join(saves, "big.sav"), later, later); err != nil {
+				t.Fatal(err)
+			}
+		}, 2},
+		{"size changed", func(t *testing.T, saves string) {
+			writeTree(t, saves, map[string]string{"big.sav": big + "x"})
+		}, 2},
+		{"file added", func(t *testing.T, saves string) {
+			writeTree(t, saves, map[string]string{"extra.sav": big})
+		}, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.client.maxBytes = 10
+			builds := countBuilds(h)
+			writeTree(t, h.saves(), map[string]string{"big.sav": big})
+
+			h.pass()
+			tt.change(t, h.saves())
+			h.pass()
+
+			if *builds != tt.wantBuilds {
+				t.Fatalf("archives built = %d, want %d", *builds, tt.wantBuilds)
+			}
+			got := h.status(gameLocal)
+			if got.State != StateFailed || got.Code != codeTooLarge || got.Message == "" {
+				t.Fatalf("status = %+v, want failed %s with a message", got, codeTooLarge)
+			}
+		})
+	}
+}
+
+func TestRefusedArchiveIsRetriedWhenTheLimitGrows(t *testing.T) {
+	h := newHarness(t)
+	h.client.maxBytes = 10
+	builds := countBuilds(h)
+	writeTree(t, h.saves(), map[string]string{"big.sav": strings.Repeat("0123456789abcdef", 64)})
+
+	h.pass()
+	h.client.maxBytes = 1 << 20
+	h.pass()
+
+	if *builds != 2 || len(h.client.uploads) != 1 {
+		t.Fatalf("builds = %d, uploads = %d, want 2 and 1", *builds, len(h.client.uploads))
+	}
+	if got := h.status(gameLocal); got.State != StateSynced {
+		t.Fatalf("status = %+v, want synced", got)
+	}
+}
+
+func TestSavesOverTheUnpackedCapAreRefusedWithoutArchiving(t *testing.T) {
+	h := newHarness(t)
+	h.client.maxBytes = 1 << 20
+	builds := countBuilds(h)
+	r, err := h.svc.prepare(context.Background(), true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	out := h.svc.upload(context.Background(), r, gameCloud, tree{size: maxUnpackedBytes + 1, sig: "s"}, action{kind: actUpload})
+
+	if *builds != 0 || out.state != StateFailed || out.codeOf() != codeTooLarge {
+		t.Fatalf("builds = %d, outcome = %+v, want no build and failed %s", *builds, out, codeTooLarge)
+	}
+}
+
+func TestUnreadableSavesStayVisibleWithoutRepeatedLogs(t *testing.T) {
+	h := newHarness(t)
+	h.lib.results[gameLocal] = library.SavesResult{Unreadable: 1}
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	h.pass()
+	h.pass()
+	h.pass()
+
+	if n := strings.Count(buf.String(), "code="+codeSavesUnread); n != 1 {
+		t.Fatalf("logged %d times, want once:\n%s", n, buf.String())
+	}
+	got := h.status(gameLocal)
+	if got.State != StateFailed || got.Code != codeSavesUnread || got.Message == "" {
+		t.Fatalf("status = %+v, want failed %s with a message", got, codeSavesUnread)
 	}
 }

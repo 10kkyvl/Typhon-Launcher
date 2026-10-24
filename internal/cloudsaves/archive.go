@@ -34,6 +34,7 @@ type treeFile struct {
 type tree struct {
 	files  []treeFile
 	digest string
+	sig    string
 	size   int64
 	newest time.Time
 }

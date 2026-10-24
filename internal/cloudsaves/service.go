@@ -67,6 +67,10 @@ type Service struct {
 	// recorded state: a pass, a manual sync, a conflict resolution, a delete.
 	opMu  sync.Mutex
 	cache map[string]cachedTree
+	// refused holds, per game, the scan that already proved too large for the
+	// cloud; it is read and written under opMu.
+	refused map[string]refusal
+	build   func(ctx context.Context, dir string, files []treeFile, maxBytes int64) (archive, error)
 
 	mu       sync.Mutex
 	ctx      context.Context
@@ -84,6 +88,12 @@ type Service struct {
 	pending  string
 	enabled  bool
 	wake     chan struct{}
+}
+
+type refusal struct {
+	sig   string
+	limit int64
+	err   error
 }
 
 type cachedTree struct {
@@ -131,6 +141,8 @@ func NewService(
 		retryDelay: defaultRetry,
 		enabled:    config().CloudSaves,
 		cache:      map[string]cachedTree{},
+		refused:    map[string]refusal{},
+		build:      buildArchive,
 		statuses:   map[string]GameStatus{},
 		dirty:      map[string]struct{}{},
 		wake:       make(chan struct{}, 1),
@@ -632,7 +644,7 @@ func (s *Service) record(gameID string, o outcome) {
 	}
 	used, quota := s.usage.UsedBytes, s.usage.QuotaBytes
 	s.mu.Unlock()
-	if o.state == StateFailed {
+	if o.state == StateFailed && (changed || (gameID != "" && prev.Message != msg)) {
 		slog.Warn("cloud saves", "game", gameID, "code", code, "error", o.err)
 	}
 	if changed {
