@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -268,4 +269,70 @@ func TestStateWithBadLocationIsRejected(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDxvkLogsAreRemovedWithTheWrapper(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []string{"disable", "keep changed"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t, makeTgz(t, dxvkEntries()), dxvkRelease, machineX86, []string{"d3d9.dll", "d3d11.dll"})
+			f.write(t, "game_d3d9.log", "written before DXVK")
+			before := dirNames(t, f.dir)
+			if err := f.svc.Enable(ctx, "g1", WrapperDXVK, "default"); err != nil {
+				t.Fatal(err)
+			}
+			for _, n := range []string{"game_d3d9.log", "game_d3d11.log", "game_dxgi.log", "game_d3d10core.log"} {
+				f.write(t, n, "written by DXVK")
+			}
+			f.write(t, "game_other.log", "not DXVK's")
+			var err error
+			if mode == "disable" {
+				err = f.svc.Disable(ctx, "g1")
+			} else {
+				err = f.svc.DisableKeepChanged(ctx, "g1")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f.read(t, "game_d3d9.log") != "written by DXVK" {
+				t.Fatal("a log that existed before the wrapper must stay")
+			}
+			want := append(before, "game_other.log")
+			sort.Strings(want)
+			if got := dirNames(t, f.dir); !reflect.DeepEqual(got, want) {
+				t.Fatalf("folder = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestDxvkLogThatIsADirectoryIsLeftAlone(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, makeTgz(t, dxvkEntries()), dxvkRelease, machineX86, []string{"d3d9.dll"})
+	if err := f.svc.Enable(ctx, "g1", WrapperDXVK, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(f.dir, "game_dxgi.log"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Disable(ctx, "g1"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.exists("game_dxgi.log") {
+		t.Fatal("a non-regular entry must not be removed")
+	}
+}
+
+func dirNames(t *testing.T, dir string) []string {
+	t.Helper()
+	items, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, it := range items {
+		out = append(out, it.Name())
+	}
+	sort.Strings(out)
+	return out
 }

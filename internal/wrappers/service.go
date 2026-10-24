@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -114,6 +115,10 @@ type entry struct {
 	Problem    *Problem  `json:"problem,omitempty"`
 	AppliedAt  time.Time `json:"appliedAt"`
 	Files      []fileRec `json:"files"`
+	// Stem and KeptLogs describe the logs DXVK writes next to the exe: which
+	// of them existed before the wrapper was installed and must stay.
+	Stem     string   `json:"stem,omitempty"`
+	KeptLogs []string `json:"keptLogs,omitempty"`
 }
 
 type stateFile struct {
@@ -211,6 +216,9 @@ func validEntry(id string, e entry) error {
 	}
 	if !filepath.IsAbs(e.InstallDir) || !filepath.IsLocal(e.RelDir) {
 		return fmt.Errorf("entry %s has a bad install location", id)
+	}
+	if e.Stem != "" && (filepath.Base(e.Stem) != e.Stem || e.Stem == "." || e.Stem == "..") {
+		return fmt.Errorf("entry %s has a bad exe stem %q", id, e.Stem)
 	}
 	for _, f := range e.Files {
 		if f.Name == "" || filepath.Base(f.Name) != f.Name || f.Name == "." || f.Name == ".." {
@@ -538,6 +546,12 @@ func (s *Service) Enable(ctx context.Context, gameID, wrapper, preset string) er
 		recs[i] = fileRec{Name: p.name, SHA: p.sha, Orig: exists, OrigSHA: sha}
 	}
 	e := entry{InstallDir: inst, RelDir: relDir, Wrapper: wrapper, Version: rel.Version, Preset: preset, Phase: phaseApplying, Files: recs}
+	if wrapper == WrapperDXVK {
+		e.Stem = strings.TrimSuffix(filepath.Base(exe), filepath.Ext(exe))
+		if e.KeptLogs, err = existingLogs(dir, e.Stem); err != nil {
+			return err
+		}
+	}
 	if err := s.commit(gameID, &e); err != nil {
 		return err
 	}
@@ -762,7 +776,54 @@ func (s *Service) restore(gameID string, mode restoreMode) error {
 			}
 		}
 	}
+	if err := removeDxvkLogs(dir, e); err != nil {
+		return err
+	}
 	return s.finish(gameID)
+}
+
+var dxvkLogSuffixes = []string{"_d3d9.log", "_d3d11.log", "_dxgi.log", "_d3d10core.log"}
+
+func existingLogs(dir, stem string) ([]string, error) {
+	var out []string
+	for _, suf := range dxvkLogSuffixes {
+		if _, err := os.Lstat(filepath.Join(dir, stem+suf)); err == nil {
+			out = append(out, stem+suf)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("stat %s: %w", stem+suf, err)
+		}
+	}
+	return out, nil
+}
+
+// removeDxvkLogs deletes the logs DXVK itself wrote while the wrapper was
+// installed, so the game folder comes back as it was.
+func removeDxvkLogs(dir string, e entry) error {
+	if e.Wrapper != WrapperDXVK || e.Stem == "" {
+		return nil
+	}
+	for _, suf := range dxvkLogSuffixes {
+		name := e.Stem + suf
+		if slices.Contains(e.KeptLogs, name) {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		fi, err := os.Lstat(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", name, err)
+		}
+		if !fi.Mode().IsRegular() {
+			slog.Warn("wrappers: dxvk log is not a regular file, left in place", "name", name)
+			continue
+		}
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("remove %s: %w", p, err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) putBack(gameID, dst string, f fileRec) error {
