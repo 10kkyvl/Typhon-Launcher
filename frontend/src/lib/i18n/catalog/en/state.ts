@@ -190,6 +190,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateReasonRollbackUnknown': 'Something went wrong while going back to the previous version.',
   'state.selfupdateReasonRollbackUnsupported': 'Going back to the previous version is not possible on this system.',
   'state.selfupdateReasonRollbackNone': 'There is no copy of the previous version: it is saved during an update.',
+  'state.selfupdateReasonNoStableOffer': 'No stable version is available to switch to right now.',
   'state.selfupdateReasonRollbackBroken': 'The saved copy of the previous version is damaged.',
   'state.selfupdateReasonRollbackStateBroken': 'The saved copy of the previous version\'s data is damaged.',
   'state.selfupdateReasonRollbackNotOlder': 'The saved version is not older than the current one, so there is nothing to go back to.',

@@ -189,6 +189,7 @@ export const state = {
   'state.selfupdateReasonRollbackUnknown': 'При возврате на прежнюю версию что-то пошло не так.',
   'state.selfupdateReasonRollbackUnsupported': 'В этой системе вернуться на прежнюю версию нельзя.',
   'state.selfupdateReasonRollbackNone': 'Копии прежней версии нет: она сохраняется при обновлении.',
+  'state.selfupdateReasonNoStableOffer': 'Стабильная версия для перехода сейчас недоступна.',
   'state.selfupdateReasonRollbackBroken': 'Сохранённая копия прежней версии повреждена.',
   'state.selfupdateReasonRollbackStateBroken': 'Сохранённая копия данных прежней версии повреждена.',
   'state.selfupdateReasonRollbackNotOlder': 'Сохранённая версия не старше текущей, возвращаться некуда.',

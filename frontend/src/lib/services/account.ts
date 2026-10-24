@@ -125,6 +125,7 @@ export interface CurrentUser {
   bio: string;
   profile: ProfileSettings;
   frames?: OwnedFrame[] | null;
+  tester?: boolean;
   createdAt: string;
   termsAccepted?: { version: string; acceptedAt: string } | null;
 }

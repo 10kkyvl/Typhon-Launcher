@@ -157,7 +157,7 @@
         {:else if $route.name === 'profile'}
           <Profile />
         {:else if $route.name === 'support'}
-          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} />
+          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} subject={$route.params.subject} />
         {:else if $route.name === 'settings'}
           <Settings tab={$route.params.tab} />
         {/if}

@@ -220,3 +220,12 @@ export function rollbackPrompt(version: string, current: string): ConfirmPrompt 
     tone: 'primary',
   };
 }
+
+export function stableOfferPrompt(version: string): ConfirmPrompt {
+  return {
+    title: msg('ui.stableOfferConfirmTitle', { version }),
+    text: msg('ui.stableOfferConfirmText'),
+    confirm: msg('ui.stableOfferButton', { version }),
+    tone: 'primary',
+  };
+}

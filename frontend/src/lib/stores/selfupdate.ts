@@ -15,6 +15,7 @@ import {
   getReleaseNotes as getReleaseNotesRequest,
   getRollback,
   getStatus,
+  installStable as installStableRequest,
   noRollback,
   type ReleaseNotes,
   type RollbackInfo,
@@ -35,6 +36,7 @@ export const selfUpdateOutcome = writable<SelfUpdateOutcome | null>(null);
 export const releaseNotes = writable<ReleaseNotes>(emptyReleaseNotes());
 export const rollbackInfo = writable<RollbackInfo>(noRollback());
 export const rollbackBusy = writable(false);
+export const stableBusy = writable(false);
 
 export const unseenReleaseNotes = derived(releaseNotes, ($notes) => $notes.unseen);
 export const releaseNotesHistory = derived(releaseNotes, ($notes) => $notes.history);
@@ -235,4 +237,16 @@ export function retryFailed() {
     return requestDownload();
   }
   return requestCheck();
+}
+
+export async function requestInstallStable() {
+  if (get(stableBusy)) return;
+  stableBusy.set(true);
+  try {
+    applyStatus(await installStableRequest());
+  } catch (err) {
+    toast(updateReason(err), 'danger');
+  } finally {
+    stableBusy.set(false);
+  }
 }

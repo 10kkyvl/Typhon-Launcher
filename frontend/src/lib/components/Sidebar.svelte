@@ -20,6 +20,7 @@
   import { msg } from '../i18n';
   import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
   import Avatar from './Avatar.svelte';
+  import BetaBadge from './BetaBadge.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuItem } from './DropdownMenu.svelte';
@@ -173,6 +174,7 @@
     <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><filter id="typhon-accent-logo" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values={logoMatrix} /></filter></defs></svg>
     <img style:filter={$appearanceSettings?.tintLogo ? 'url(#typhon-accent-logo)' : undefined} class="logo-mark" src="/typhon.png" alt="" draggable="false" />
     <span class="logo-text">Typhon</span>
+    <BetaBadge />
   </div>
 
   <nav>
@@ -436,6 +438,8 @@
     }
 
     .logo {
+      flex-direction: column;
+      gap: 0.4rem;
       padding: 0.2rem 0 0;
       margin-bottom: var(--space-6);
     }

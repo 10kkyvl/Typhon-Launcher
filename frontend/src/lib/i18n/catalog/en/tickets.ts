@@ -36,6 +36,7 @@ export const tickets = {
   'tickets.gameClear': 'Remove game',
   'tickets.gameCollapse': 'Hide the list',
   'tickets.subjectLabel': 'Summary of the problem',
+  'tickets.betaSubject': 'Beta {version}: ',
   'tickets.bodyLabel': 'Details',
   'tickets.bodyPlaceholder': 'What you did, what you expected and what actually happened',
   'tickets.counter': '{count} of {max}',
