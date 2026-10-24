@@ -169,7 +169,8 @@ func (c *Client) matchReleaseBatch(ctx context.Context, batch []catalog.ReleaseQ
 		return nil, err
 	}
 	var payload struct {
-		Matches []catalog.ReleaseMatch `json:"matches"`
+		RulesVersion int                    `json:"rulesVersion"`
+		Matches      []catalog.ReleaseMatch `json:"matches"`
 	}
 	for attempt := 0; ; attempt++ {
 		err = c.post(ctx, account.APIPrefix+"/catalog/match-releases", body, &payload)
@@ -195,5 +196,21 @@ func (c *Client) matchReleaseBatch(ctx context.Context, batch []catalog.ReleaseQ
 	if len(payload.Matches) != len(batch) {
 		return nil, ErrUpstream
 	}
+	c.noteRulesVersion(payload.RulesVersion)
 	return payload.Matches, nil
+}
+
+func (c *Client) noteRulesVersion(v int) {
+	for {
+		cur := c.rulesVersion.Load()
+		if int64(v) <= cur || c.rulesVersion.CompareAndSwap(cur, int64(v)) {
+			return
+		}
+	}
+}
+
+// MatchRulesVersion is the highest rules version any match answer reported;
+// zero while the server has not reported one.
+func (c *Client) MatchRulesVersion() int {
+	return int(c.rulesVersion.Load())
 }

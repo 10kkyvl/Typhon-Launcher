@@ -119,6 +119,10 @@ type RemoteMatch struct {
 	Confidence float64        `json:"confidence,omitempty"`
 	Method     string         `json:"method,omitempty"`
 	Rev        int            `json:"rev,omitempty"`
+
+	// RulesVersion is the server's matching-rules number that produced the
+	// answer; Rev tracks the launcher's own format, this tracks the server's.
+	RulesVersion int `json:"rulesVersion,omitempty"`
 }
 
 func (r *Release) identity() string {
