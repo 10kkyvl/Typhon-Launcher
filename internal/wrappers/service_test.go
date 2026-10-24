@@ -22,22 +22,25 @@ import (
 func TestSuggest(t *testing.T) {
 	cases := []struct {
 		name    string
+		arch    string
 		imports []string
 		want    string
 	}{
-		{"ddraw", []string{"ddraw"}, WrapperDgVoodoo},
-		{"d3d8", []string{"d3d8"}, WrapperDgVoodoo},
-		{"glide2x", []string{"glide2x"}, WrapperDgVoodoo},
-		{"d3d9", []string{"d3d9"}, WrapperDXVK},
-		{"d3d10_1", []string{"d3d10_1"}, WrapperDXVK},
-		{"d3d11", []string{"d3d11"}, WrapperDXVK},
-		{"ddraw wins over d3d9", []string{"d3d9", "ddraw"}, WrapperDgVoodoo},
-		{"opengl only", []string{"opengl32"}, ""},
-		{"nothing", nil, ""},
+		{"ddraw", archX86, []string{"ddraw"}, WrapperDgVoodoo},
+		{"d3d8", archX86, []string{"d3d8"}, WrapperDgVoodoo},
+		{"glide2x", archX86, []string{"glide2x"}, WrapperDgVoodoo},
+		{"d3d9", archX64, []string{"d3d9"}, WrapperDXVK},
+		{"d3d10_1", archX64, []string{"d3d10_1"}, WrapperDXVK},
+		{"d3d11", archX64, []string{"d3d11"}, WrapperDXVK},
+		{"ddraw wins over d3d9", archX86, []string{"d3d9", "ddraw"}, WrapperDgVoodoo},
+		{"64-bit ddraw has no dgVoodoo files", archX64, []string{"ddraw"}, ""},
+		{"64-bit ddraw with d3d9 takes DXVK", archX64, []string{"d3d9", "ddraw"}, WrapperDXVK},
+		{"opengl only", archX86, []string{"opengl32"}, ""},
+		{"nothing", archX86, nil, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := suggest(c.imports); got != c.want {
+			if got := suggest(c.arch, c.imports); got != c.want {
 				t.Fatalf("suggest(%v) = %q, want %q", c.imports, got, c.want)
 			}
 		})
@@ -243,6 +246,18 @@ func TestEnableDisable(t *testing.T) {
 				t.Fatalf("archive downloaded %d times, cache must be reused", f.hits.Load())
 			}
 		})
+	}
+}
+
+func TestEnableDgVoodooRefuses64BitDirectDraw(t *testing.T) {
+	f := newFixture(t, makeZip(t, dgvoodooEntries()), dgvoodooRelease, machineX64, []string{"DDRAW.dll"})
+	f.write(t, "ddraw.dll", "OLD DDRAW")
+	err := f.svc.Enable(context.Background(), "g1", WrapperDgVoodoo, "default")
+	if !errors.Is(err, ErrArchUnsupported) {
+		t.Fatalf("Enable = %v, want %v", err, ErrArchUnsupported)
+	}
+	if got := f.read(t, "ddraw.dll"); got != "OLD DDRAW" {
+		t.Fatalf("ddraw.dll = %q, the game folder was touched", got)
 	}
 }
 

@@ -159,12 +159,12 @@ func isGraphics(n string) bool {
 	return strings.HasPrefix(n, "d3d10") || strings.HasPrefix(n, "glide")
 }
 
-func suggest(imports []string) string {
+func suggest(arch string, imports []string) string {
 	var dgv, dx bool
 	for _, n := range imports {
 		switch {
 		case n == "ddraw", n == "d3d8", strings.HasPrefix(n, "glide"):
-			dgv = true
+			dgv = arch == archX86
 		case n == "d3d9", n == "d3d11", strings.HasPrefix(n, "d3d10"):
 			dx = true
 		}

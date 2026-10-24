@@ -431,7 +431,7 @@ func (s *Service) Inspect(ctx context.Context, gameID string) (Info, error) {
 	if libs == nil {
 		info.Imports = []string{}
 	}
-	info.Suggested = suggest(libs)
+	info.Suggested = suggest(arch, libs)
 	return info, nil
 }
 
@@ -498,6 +498,9 @@ func (s *Service) Enable(ctx context.Context, gameID, wrapper, preset string) er
 		return err
 	}
 	tg := targets(wrapper, arch, libs)
+	if len(tg) == 0 && wrapper == WrapperDgVoodoo && arch == archX64 && len(targets(wrapper, archX86, libs)) > 0 {
+		return fmt.Errorf("%w: %s on %s", ErrArchUnsupported, wrapper, arch)
+	}
 	if len(tg) == 0 {
 		return fmt.Errorf("%w: %s on %s", ErrNoTarget, wrapper, arch)
 	}

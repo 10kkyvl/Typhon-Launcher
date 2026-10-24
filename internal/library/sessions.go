@@ -145,7 +145,7 @@ func (h crashHooks) analyze(ctx context.Context, in crashInput) (CrashEvent, boo
 	ev.DumpFound = h.findDump(ctx, in, exe, gameDir)
 
 	slog.Warn("game crash analyzed", "id", in.gameID, "exe", redact.Text(exe), "module", redact.Text(ev.FaultModule),
-		"moduleVersion", redact.Text(fault.ModuleVersion), "exception", ev.ExceptionCode, "exit", ev.ExitCode,
+		"moduleVersion", fault.ModuleVersion, "exception", ev.ExceptionCode, "exit", ev.ExitCode,
 		"exitKnown", ev.ExitKnown, "hint", ev.Hint, "missing", redact.Text(ev.MissingFile),
 		"dump", ev.DumpFound, "journalUnknown", ev.JournalUnknown, "sessionSeconds", in.seconds)
 	return ev, true
