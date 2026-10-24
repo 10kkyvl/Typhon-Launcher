@@ -248,13 +248,103 @@ func (s *Service) GetCandidates(releaseID string) ([]catalog.Candidate, error) {
 		return nil, errReleaseNotFound
 	}
 	query := catalog.Query{Title: r.Title, Normalized: r.NormalizedTitle, Year: r.Year}
+	var remote []RemoteCandidate
+	if r.RemoteMatch != nil {
+		remote = append(remote, r.RemoteMatch.Candidates...)
+	}
 	cat := s.catalog
 	s.mu.Unlock()
 
 	if cat == nil {
 		return nil, errNoCatalog
 	}
-	return cat.Resolve(query).Candidates, nil
+	out := make([]catalog.Candidate, 0, len(remote)+catalog.MaxCandidates)
+	seen := make(map[string]bool, len(remote))
+	for _, c := range matchCandidates(remote) {
+		seen[c.GameID] = true
+		c.InCatalog = cat.HasGame(c.GameID)
+		out = append(out, c)
+	}
+	for _, c := range cat.Resolve(query).Candidates {
+		if seen[c.GameID] {
+			continue
+		}
+		c.Source = catalog.SourceLocal
+		c.InCatalog = true
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+const maxFamilyIDs = 32
+
+func (s *Service) SimilarReleases(gameID string, familyIDs []string) ([]SimilarRelease, error) {
+	if gameID == "" {
+		return nil, errors.New("similar releases: empty game id")
+	}
+	if len(familyIDs) > maxFamilyIDs {
+		return nil, fmt.Errorf("similar releases: %d family ids, at most %d", len(familyIDs), maxFamilyIDs)
+	}
+	family := make(map[string]bool, len(familyIDs))
+	for _, id := range familyIDs {
+		if id == "" {
+			return nil, errors.New("similar releases: empty family id")
+		}
+		family[id] = true
+	}
+
+	type hit struct {
+		release   *Release
+		candidate RemoteCandidate
+		direct    bool
+	}
+	s.mu.Lock()
+	var hits []hit
+	byRelease := map[*Release]int{}
+	var list []*Release
+	for _, releases := range s.releases {
+		for _, r := range releases {
+			if r.Ignored || r.Availability != AvailabilityAvailable || r.RemoteMatch == nil {
+				continue
+			}
+			if r.MatchStatus != catalog.StatusUnmatched && r.MatchStatus != catalog.StatusReview {
+				continue
+			}
+			var best *RemoteCandidate
+			direct := false
+			for i := range r.RemoteMatch.Candidates {
+				c := &r.RemoteMatch.Candidates[i]
+				if c.ID == gameID {
+					best, direct = c, true
+					break
+				}
+				if best == nil && family[c.ID] {
+					best = c
+				}
+			}
+			if best == nil {
+				continue
+			}
+			byRelease[r] = len(hits)
+			hits = append(hits, hit{release: r, candidate: *best, direct: direct})
+			list = append(list, r)
+		}
+	}
+	sortReleases(list, "")
+	sort.SliceStable(list, func(a, b int) bool {
+		return hits[byRelease[list[a]]].direct && !hits[byRelease[list[b]]].direct
+	})
+	out := make([]SimilarRelease, 0, len(list))
+	for _, r := range list {
+		h := hits[byRelease[r]]
+		out = append(out, SimilarRelease{
+			ReleaseView:      s.viewLocked(r),
+			MatchedCandidate: MatchedCandidate{ID: h.candidate.ID, Title: h.candidate.Title, Year: h.candidate.Year},
+			Reason:           r.RemoteMatch.Reason,
+		})
+	}
+	s.mu.Unlock()
+	return out, nil
 }
 
 func (s *Service) ConfirmMatch(releaseID, gameID string) error {

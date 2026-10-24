@@ -123,6 +123,16 @@ type RemoteMatch struct {
 	// RulesVersion is the server's matching-rules number that produced the
 	// answer; Rev tracks the launcher's own format, this tracks the server's.
 	RulesVersion int `json:"rulesVersion,omitempty"`
+
+	Reason     string            `json:"reason,omitempty"`
+	Candidates []RemoteCandidate `json:"candidates,omitempty"`
+}
+
+type RemoteCandidate struct {
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Year      int      `json:"year,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 func (r *Release) identity() string {
@@ -156,6 +166,18 @@ type ReleaseView struct {
 	Release    Release `json:"release"`
 	SourceName string  `json:"sourceName"`
 	GameTitle  string  `json:"gameTitle"`
+}
+
+type MatchedCandidate struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Year  int    `json:"year"`
+}
+
+type SimilarRelease struct {
+	ReleaseView
+	MatchedCandidate MatchedCandidate `json:"matchedCandidate"`
+	Reason           string           `json:"reason"`
 }
 
 type ReleaseGroup struct {

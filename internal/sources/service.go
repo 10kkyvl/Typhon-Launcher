@@ -900,6 +900,8 @@ func (s *Service) settle(ctx context.Context, id string, incoming []*Release, re
 						Rev:        remoteMatchRev,
 
 						RulesVersion: rm.rules,
+						Reason:       rm.Reason,
+						Candidates:   remoteCandidates(rm.Candidates),
 					}
 				}
 			}
