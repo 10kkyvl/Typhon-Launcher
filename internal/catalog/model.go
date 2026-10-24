@@ -19,6 +19,7 @@ type Game struct {
 	AliasIDs          []string            `json:"aliasIds,omitempty"`
 	ProviderLinks     map[string][]string `json:"providerLinks,omitempty"`
 	ServerID          string              `json:"serverId,omitempty"`
+	ParentID          string              `json:"parentId,omitempty"`
 	CoverURL          string              `json:"coverUrl,omitempty"`
 	ID                string              `json:"id"`
 	Title             string              `json:"title"`

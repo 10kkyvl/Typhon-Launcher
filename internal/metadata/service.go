@@ -901,6 +901,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		Themes:       meta.Themes,
 		Platforms:    meta.Platforms,
 		GameType:     meta.GameType,
+		ParentID:     meta.ParentID,
 		StoreLinks:   meta.StoreLinks,
 		CoverAssetID: batch.cover,
 		HeroAssetID:  batch.hero,

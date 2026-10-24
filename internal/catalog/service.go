@@ -297,11 +297,29 @@ func (s *Service) sameGameCandidatesLocked(game Game) []int {
 			}
 		})
 	}
+	children := func(g Game) {
+		for _, key := range []string{g.ID, g.ServerID} {
+			for _, pos := range s.idx.byParent[key] {
+				found[pos] = struct{}{}
+				addCanonical(s.resolveIDLocked(s.idx.games[pos].ID))
+			}
+		}
+	}
+	family := func(g Game) {
+		children(g)
+		if pos, ok := s.parentPosLocked(g); ok {
+			found[pos] = struct{}{}
+			addCanonical(s.resolveIDLocked(s.idx.games[pos].ID))
+			children(s.idx.games[pos])
+		}
+	}
 	canonical := s.resolveIDLocked(game.ID)
 	addCanonical(canonical)
 	collect(game)
+	family(game)
 	if canonicalGame, ok := s.idx.game(canonical); ok {
 		collect(canonicalGame)
+		family(canonicalGame)
 	}
 	positions := make([]int, 0, len(found))
 	for pos := range found {
@@ -818,6 +836,29 @@ func (s *Service) resolveIDLocked(id string) string {
 	return id
 }
 
+// parentLocked returns the canonical id of the base game the server named for
+// an edition, or "" when the record has no parent or the parent is not saved.
+func (s *Service) parentLocked(g Game) string {
+	pos, ok := s.parentPosLocked(g)
+	if !ok {
+		return ""
+	}
+	return s.resolveIDLocked(s.idx.games[pos].ID)
+}
+
+func (s *Service) parentPosLocked(g Game) (int, bool) {
+	if g.ParentID == "" {
+		return 0, false
+	}
+	if list := s.idx.byServer[g.ParentID]; len(list) > 0 {
+		return list[len(list)-1], true
+	}
+	if pos, ok := s.idx.byID[s.resolveIDLocked(g.ParentID)]; ok {
+		return pos, true
+	}
+	return 0, false
+}
+
 //wails:ignore
 func (s *Service) SameGame(a, b string) bool {
 	s.mu.RLock()
@@ -837,6 +878,12 @@ func (s *Service) sameGameLocked(a, b string) bool {
 	y, yok := s.idx.game(b)
 	if !xok || !yok {
 		return false
+	}
+	// An edition and its base game share files, so they are one game; so are
+	// two editions of the same base game. Only one level is followed.
+	px, py := s.parentLocked(x), s.parentLocked(y)
+	if px == b || py == a || (px != "" && px == py) {
+		return true
 	}
 	if x.ExternalIDs.IGDB != "" && y.ExternalIDs.IGDB != "" {
 		if x.ExternalIDs.IGDB == y.ExternalIDs.IGDB {

@@ -27,6 +27,7 @@ type MetadataPatch struct {
 	Themes       []string
 	Platforms    []string
 	GameType     string
+	ParentID     string
 	StoreLinks   map[string]string
 	CoverAssetID string
 	HeroAssetID  string
@@ -103,6 +104,9 @@ func applyPatch(game Game, patch MetadataPatch) Game {
 	game.Themes = copyStrings(patch.Themes)
 	game.Platforms = copyStrings(patch.Platforms)
 	game.GameType = strings.TrimSpace(patch.GameType)
+	if parent := strings.TrimSpace(patch.ParentID); parent != "" {
+		game.ParentID = parent
+	}
 	if patch.StoreLinks != nil {
 		game.StoreLinks = nilIfEmpty(SanitizeStoreLinks(patch.StoreLinks))
 	}

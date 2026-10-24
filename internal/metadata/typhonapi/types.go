@@ -32,6 +32,7 @@ type gameResponse struct {
 	Themes      []string          `json:"themes"`
 	Platforms   []string          `json:"platforms"`
 	GameType    string            `json:"gameType"`
+	ParentID    string            `json:"parentId"`
 	StoreLinks  map[string]string `json:"storeLinks"`
 	Cover       *imagePayload     `json:"cover"`
 	Screenshots []imagePayload    `json:"screenshots"`

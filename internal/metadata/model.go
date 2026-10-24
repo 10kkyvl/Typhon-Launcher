@@ -49,6 +49,7 @@ type GameMetadata struct {
 	Themes      []string          `json:"themes,omitempty"`
 	Platforms   []string          `json:"platforms,omitempty"`
 	GameType    string            `json:"gameType,omitempty"`
+	ParentID    string            `json:"parentId,omitempty"`
 	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
 	Cover       *ImageRef         `json:"cover,omitempty"`
 	Screenshots []ImageRef        `json:"screenshots,omitempty"`
