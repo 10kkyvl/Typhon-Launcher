@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { FolderOpen } from '@lucide/svelte';
   import Button from './Button.svelte';
+  import ProgressBar from './ProgressBar.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
   import Select from './Select.svelte';
@@ -9,6 +10,16 @@
   import { chooseSavesDir } from '../game/actions/saves';
   import { errorCode, hasMessage, msg } from '../i18n';
   import { installErrorText } from '../install/installErrors';
+  import {
+    WRAPPERS,
+    defaultWrapper,
+    describeImports,
+    presetLabel,
+    presetsFor,
+    problemText,
+    progressView,
+    wrapperName,
+  } from '../game/compatMode';
   import {
     clearSavesDir,
     getLaunchArgsLine,
@@ -21,8 +32,17 @@
   } from '../services/library';
   import { executableCandidates, type Candidate } from '../services/install';
   import { appInfo, elevationSupported } from '../services/system';
+  import {
+    disableWrapper,
+    enableWrapper,
+    inspectWrapper,
+    onWrapperProgress,
+    type WrapperId,
+    type WrapperInfo,
+    type WrapperProgress,
+  } from '../services/wrappers';
   import { closeGameProperties, gamePropertiesTarget } from '../stores/gameProperties';
-  import { libraryGames } from '../stores/library';
+  import { libraryGames, runningGames } from '../stores/library';
   import { settings } from '../stores/settings';
   import {
     gameModeKeys,
@@ -33,7 +53,7 @@
     type OverrideState,
   } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
-  import { truncateMiddle } from '../utils/format';
+  import { bytesSize, truncateMiddle } from '../utils/format';
 
   const target = $derived($gamePropertiesTarget);
   const game = $derived(target ? ($libraryGames.find((g) => g.id === target.gameId) ?? null) : null);
@@ -84,6 +104,24 @@
       })),
   );
 
+  let compat = $state<WrapperInfo | null>(null);
+  let compatLoading = $state(false);
+  let compatBusy = $state(false);
+  let compatError = $state('');
+  let compatOn = $state(false);
+  let compatForce = $state(false);
+  let compatWrapper = $state<WrapperId>('dgvoodoo');
+  let compatPreset = $state('default');
+  let compatProgress = $state<WrapperProgress | null>(null);
+
+  const running = $derived(Boolean(game && $runningGames.has(game.id)));
+  const compatVisible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
+  const compatSuggested = $derived(compat?.suggested ?? '');
+  const compatLocked = $derived(!compat?.active && compatSuggested === '' && !compatForce);
+  const compatApi = $derived(compat ? describeImports(compat.imports) : '');
+  const compatView = $derived(compatProgress ? progressView(compatProgress, bytesSize) : null);
+  const compatFiles = $derived((compat?.active?.files ?? []).join(', '));
+
   let savesBusy = $state(false);
   let savesError = $state('');
 
@@ -118,7 +156,12 @@
       gameModeError = '';
       presenceError = '';
       savesError = '';
+      compat = null;
+      compatError = '';
+      compatForce = false;
+      compatProgress = null;
       void load(current.gameId);
+      void loadCompat(current.gameId);
     });
   });
 
@@ -128,6 +171,18 @@
 
   $effect(() => {
     presence = !game?.hidePresence;
+  });
+
+  $effect(() => {
+    compatOn = Boolean(compat?.active);
+  });
+
+  $effect(() => {
+    const id = game?.id;
+    if (!id) return;
+    return onWrapperProgress((event) => {
+      if (event.gameId === id) compatProgress = event;
+    });
   });
 
   $effect(() => {
@@ -160,6 +215,45 @@
     adminShown = info.status === 'fulfilled' && elevationSupported(info.value);
     gameModeShown = info.status === 'fulfilled';
     gameModeMac = info.status === 'fulfilled' && info.value.platform === 'darwin';
+  }
+
+  async function loadCompat(gameId: string) {
+    const mine = seq;
+    compatLoading = true;
+    try {
+      const info = await inspectWrapper(gameId);
+      if (mine !== seq) return;
+      compat = info;
+      compatWrapper = info.active ? info.active.wrapper : defaultWrapper(info);
+      compatPreset = info.active ? info.active.preset : 'default';
+    } catch (err) {
+      if (mine !== seq) return;
+      compatError = errorText(err, msg('modals.compatInspectFailed'));
+    } finally {
+      if (mine === seq) compatLoading = false;
+    }
+  }
+
+  function pickWrapper(id: string) {
+    compatWrapper = id as WrapperId;
+    if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
+  }
+
+  async function changeCompat(on: boolean) {
+    if (!game || compatBusy) return;
+    compatBusy = true;
+    compatError = '';
+    compatProgress = null;
+    try {
+      if (on) await enableWrapper(game.id, compatWrapper, compatPreset);
+      else await disableWrapper(game.id);
+    } catch (err) {
+      compatError = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
+    } finally {
+      compatBusy = false;
+      compatProgress = null;
+    }
+    await loadCompat(game.id);
   }
 
   async function pickCandidate(path: string) {
@@ -371,6 +465,97 @@
         </section>
       {/if}
 
+      {#if compatLoading && !compat}
+        <section class="section">
+          <h4>{msg('modals.compatTitle')}</h4>
+          <p class="hint">{msg('modals.compatLoading')}</p>
+        </section>
+      {:else if compatVisible && compat}
+        <section class="section">
+          <div class="row spread">
+            <h4>{msg('modals.compatTitle')}</h4>
+            <Toggle
+              bind:checked={compatOn}
+              label={msg('modals.compatToggle')}
+              disabled={compatBusy || running || (compatLocked && !compat.active)}
+              onchange={changeCompat}
+            />
+          </div>
+          {#if compat.active}
+            <p class="path">
+              {msg('modals.compatActive', {
+                wrapper: wrapperName(compat.active.wrapper),
+                version: compat.active.version,
+                files: compatFiles,
+              })}
+            </p>
+            <p class="hint">{msg('modals.compatActivePreset', { preset: presetLabel(compat.active.preset) })}</p>
+          {:else}
+            <p class="path">{compatApi ? msg('modals.compatFound', { api: compatApi }) : msg('modals.compatFoundUnknown')}</p>
+            <p class="hint">
+              {compatSuggested
+                ? msg('modals.compatSuggest', { wrapper: wrapperName(compatSuggested) })
+                : msg('modals.compatNotNeeded')}
+            </p>
+            {#if compatSuggested === ''}
+              <div>
+                <Button size="sm" variant="ghost" onclick={() => (compatForce = !compatForce)}>
+                  {compatForce ? msg('modals.compatForceHide') : msg('modals.compatForce')}
+                </Button>
+              </div>
+            {/if}
+            {#if !compatLocked}
+              <div class="row spread">
+                <span class="label">{msg('modals.compatWrapper')}</span>
+                <Select
+                  value={compatWrapper}
+                  width="26rem"
+                  options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
+                  onchange={pickWrapper}
+                />
+              </div>
+              {#if presetsFor(compatWrapper).length > 1}
+                <div class="row spread">
+                  <span class="label">{msg('modals.compatPresetLabel')}</span>
+                  <Select
+                    bind:value={compatPreset}
+                    width="26rem"
+                    options={presetsFor(compatWrapper).map((id) => ({ id, label: presetLabel(id) }))}
+                  />
+                </div>
+              {/if}
+            {/if}
+          {/if}
+          {#if compatView}
+            <p class="hint">{compatView.text}</p>
+            <ProgressBar value={compatView.fraction ?? 0} max={1} indeterminate={compatView.fraction === null} />
+          {/if}
+          {#if running}
+            <p class="hint">{msg('modals.compatRunning')}</p>
+          {/if}
+          {#if compat.problem}
+            <div class="warning" role="alert">
+              <strong>{msg('modals.compatProblemTitle')}</strong>
+              <span>{problemText(compat.problem.code, compat.problem.file)}</span>
+              <div>
+                <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false)}>
+                  {msg('modals.compatRevert')}
+                </Button>
+              </div>
+            </div>
+          {/if}
+          {#if compatError}
+            <p class="failure">{compatError}</p>
+          {/if}
+          <p class="hint">{msg('modals.compatHint')}</p>
+        </section>
+      {:else if compatError}
+        <section class="section">
+          <h4>{msg('modals.compatTitle')}</h4>
+          <p class="failure">{compatError}</p>
+        </section>
+      {/if}
+
       <GameProfiles {game} {candidates} {adminShown} />
       {#if gameModeShown}
         <section class="section">
@@ -473,6 +658,17 @@
   .failure {
     margin: 0;
     font-size: var(--font-xs);
+    color: var(--danger);
+  }
+
+  .warning {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
     color: var(--danger);
   }
 
