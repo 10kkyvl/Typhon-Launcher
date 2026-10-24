@@ -36,7 +36,14 @@
     "gog": "gog",
     "license": "license",
     "licensed": "license",
-    "лицензия": "license"
+    "лицензия": "license",
+    "hf": "hotfix",
+    "hf2": "hotfix",
+    "ptbr": "ptbr",
+    "testks": "testks",
+    "denuvoless": "denuvoless",
+    "crackfix": "crack",
+    "release": "release"
   },
   "editionPhrases": [
     "Deluxe Edition",
@@ -60,7 +67,10 @@
     "Digital Deluxe Edition",
     "Digital Deluxe",
     "Complete Deluxe Edition",
-    "Remastered"
+    "Remastered",
+    "Complete",
+    "Gold",
+    "Deluxe"
   ],
   "releasePhraseTags": {
     "All DLCs": "dlc",
