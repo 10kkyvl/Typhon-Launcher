@@ -16,6 +16,7 @@
     describeImports,
     presetLabel,
     presetsFor,
+    problemActions,
     problemText,
     progressView,
     wrapperName,
@@ -34,6 +35,7 @@
   import { appInfo, elevationSupported } from '../services/system';
   import {
     disableWrapper,
+    disableWrapperKeepChanged,
     enableWrapper,
     inspectWrapper,
     onWrapperProgress,
@@ -113,6 +115,7 @@
   let compatWrapper = $state<WrapperId>('dgvoodoo');
   let compatPreset = $state('default');
   let compatProgress = $state<WrapperProgress | null>(null);
+  let compatKeepOffer = $state(false);
 
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
   const compatVisible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
@@ -120,6 +123,7 @@
   const compatLocked = $derived(!compat?.active && compatSuggested === '' && !compatForce);
   const compatApi = $derived(compat ? describeImports(compat.imports) : '');
   const compatView = $derived(compatProgress ? progressView(compatProgress, bytesSize) : null);
+  const compatActions = $derived(compat?.problem ? problemActions(compat.problem.code) : null);
   const compatFiles = $derived((compat?.active?.files ?? []).join(', '));
 
   let savesBusy = $state(false);
@@ -160,6 +164,7 @@
       compatError = '';
       compatForce = false;
       compatProgress = null;
+      compatKeepOffer = false;
       void load(current.gameId);
       void loadCompat(current.gameId);
     });
@@ -239,15 +244,18 @@
     if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
   }
 
-  async function changeCompat(on: boolean) {
+  async function changeCompat(on: boolean, keepChanged = false) {
     if (!game || compatBusy) return;
     compatBusy = true;
     compatError = '';
+    compatKeepOffer = false;
     compatProgress = null;
     try {
       if (on) await enableWrapper(game.id, compatWrapper, compatPreset);
+      else if (keepChanged) await disableWrapperKeepChanged(game.id);
       else await disableWrapper(game.id);
     } catch (err) {
+      compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
       compatError = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
     } finally {
       compatBusy = false;
@@ -533,15 +541,34 @@
           {#if running}
             <p class="hint">{msg('modals.compatRunning')}</p>
           {/if}
-          {#if compat.problem}
+          {#if compat.problem && compatActions?.dirMissing}
+            <p class="hint">{problemText(compat.problem.code)}</p>
+          {:else if compat.problem && compatActions}
             <div class="warning" role="alert">
               <strong>{msg('modals.compatProblemTitle')}</strong>
               <span>{problemText(compat.problem.code, compat.problem.file)}</span>
-              <div>
+              <div class="row">
                 <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false)}>
                   {msg('modals.compatRevert')}
                 </Button>
+                {#if compatActions.keepChanged}
+                  <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false, true)}>
+                    {msg('modals.compatKeepChanged')}
+                  </Button>
+                {/if}
               </div>
+              {#if compatActions.keepChanged}
+                <span class="hint">{msg('modals.compatKeepChangedHint')}</span>
+              {/if}
+            </div>
+          {:else if compatKeepOffer}
+            <div class="warning" role="alert">
+              <div class="row">
+                <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false, true)}>
+                  {msg('modals.compatKeepChanged')}
+                </Button>
+              </div>
+              <span class="hint">{msg('modals.compatKeepChangedHint')}</span>
             </div>
           {/if}
           {#if compatError}

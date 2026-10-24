@@ -476,6 +476,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.compatProblemTitle': 'Compatibility mode was not finished cleanly',
   'modals.compatProblemFile': 'Could not restore the original files: {file} was changed',
   'modals.compatProblemUnknown': 'Could not restore the original files',
+  'modals.compatKeepChanged': 'Turn off, keeping changed files',
+  'modals.compatKeepChangedHint': 'Changed files (for example after a game update) stay as they are, the rest are restored.',
   'modals.compatRevert': 'Turn off and restore originals',
   'modals.compatDownloading': 'Downloading: {done} of {total}',
   'modals.compatDownloadingUnknown': 'Downloading: {done}',
@@ -502,6 +504,8 @@ export const modals: Record<ModalsKey, Message> = {
   'wrappers.download': 'Could not download the wrapper. Check your internet connection',
   'wrappers.foreign_host': 'The wrapper link does not point to the official address, download cancelled',
   'wrappers.bad_state': 'The saved compatibility mode state is damaged',
-  'wrappers.needs_repair': 'The previous operation was interrupted. Turn compatibility mode off to restore the originals',
+  'wrappers.needs_repair': 'Turn compatibility mode off first to restore the files',
+  'wrappers.busy': 'Another operation on this game is already in progress',
+  'wrappers.game_dir_missing': 'The game folder is unavailable — connect the drive the game is installed on',
   'wrappers.recovery_failed': 'Could not recover the files after an interrupted operation',
 };

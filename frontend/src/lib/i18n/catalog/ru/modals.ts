@@ -474,6 +474,8 @@ export const modals = {
   'modals.compatProblemTitle': 'Режим совместимости не удалось довести до конца',
   'modals.compatProblemFile': 'Не удалось вернуть оригинальные файлы: {file} изменён',
   'modals.compatProblemUnknown': 'Не удалось вернуть оригинальные файлы',
+  'modals.compatKeepChanged': 'Выключить, оставив изменённые файлы',
+  'modals.compatKeepChangedHint': 'Изменённые файлы (например, после обновления игры) останутся как есть, остальные вернутся.',
   'modals.compatRevert': 'Выключить и вернуть оригиналы',
   'modals.compatDownloading': 'Скачивание: {done} из {total}',
   'modals.compatDownloadingUnknown': 'Скачивание: {done}',
@@ -500,7 +502,9 @@ export const modals = {
   'wrappers.download': 'Не удалось скачать обёртку. Проверьте подключение к интернету',
   'wrappers.foreign_host': 'Ссылка на обёртку ведёт не на официальный адрес, загрузка отменена',
   'wrappers.bad_state': 'Сохранённое состояние режима совместимости повреждено',
-  'wrappers.needs_repair': 'Прошлая операция прервалась. Выключите режим совместимости, чтобы вернуть оригиналы',
+  'wrappers.needs_repair': 'Сначала выключите режим совместимости, чтобы вернуть файлы',
+  'wrappers.busy': 'С этой игрой уже выполняется другая операция',
+  'wrappers.game_dir_missing': 'Папка игры недоступна — подключите диск, на котором установлена игра',
   'wrappers.recovery_failed': 'Не удалось восстановить файлы после прерванной операции',
 } as const;
 
