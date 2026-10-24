@@ -88,6 +88,10 @@ func sameRemoteMatch(a, b *RemoteMatch) bool {
 			a.Confidence == b.Confidence &&
 			a.Method == b.Method &&
 			a.Rev == b.Rev &&
-			a.RulesVersion == b.RulesVersion
+			a.RulesVersion == b.RulesVersion &&
+			a.Reason == b.Reason &&
+			slices.EqualFunc(a.Candidates, b.Candidates, func(x, y RemoteCandidate) bool {
+				return x.ID == y.ID && x.Title == y.Title && x.Year == y.Year && slices.Equal(x.Platforms, y.Platforms)
+			})
 	}
 }

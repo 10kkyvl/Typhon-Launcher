@@ -100,6 +100,35 @@ func (s *Service) noteRulesVersion(v int) error {
 	return nil
 }
 
+func remoteCandidates(in []catalog.Candidate) []RemoteCandidate {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]RemoteCandidate, len(in))
+	for i, c := range in {
+		out[i] = RemoteCandidate{ID: c.GameID, Title: c.Title, Platforms: slices.Clone(c.Platforms)}
+		if c.Year != nil {
+			out[i].Year = *c.Year
+		}
+	}
+	return out
+}
+
+func matchCandidates(in []RemoteCandidate) []catalog.Candidate {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]catalog.Candidate, len(in))
+	for i, c := range in {
+		out[i] = catalog.Candidate{GameID: c.ID, Title: c.Title, Method: catalog.MethodNone, Platforms: slices.Clone(c.Platforms), Source: catalog.SourceServer}
+		if c.Year != 0 {
+			year := c.Year
+			out[i].Year = &year
+		}
+	}
+	return out
+}
+
 type resolvedRemoteMatch struct {
 	catalog.Match
 	fresh bool
@@ -172,6 +201,8 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 				GameID:     rm.GameID,
 				Confidence: rm.Confidence,
 				Method:     catalog.Method(rm.Method),
+				Reason:     rm.Reason,
+				Candidates: matchCandidates(rm.Candidates),
 			}}
 			continue
 		}

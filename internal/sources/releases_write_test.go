@@ -270,7 +270,13 @@ func fillValue(v reflect.Value, variant uint8) {
 	case reflect.Bool:
 		v.SetBool(variant == 1)
 	case reflect.Slice:
-		v.Set(reflect.ValueOf([]string{"v" + strconv.Itoa(int(variant))}))
+		if v.Type().Elem().Kind() == reflect.String {
+			v.Set(reflect.ValueOf([]string{"v" + strconv.Itoa(int(variant))}))
+			return
+		}
+		items := reflect.MakeSlice(v.Type(), 1, 1)
+		fillValue(items.Index(0), variant)
+		v.Set(items)
 	case reflect.Pointer:
 		p := reflect.New(v.Type().Elem())
 		fillValue(p.Elem(), variant)

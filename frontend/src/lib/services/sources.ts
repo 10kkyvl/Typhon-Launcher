@@ -155,6 +155,9 @@ export interface MatchCandidate {
   year?: number;
   score: number;
   method: string;
+  platforms?: string[] | null;
+  source?: 'server' | 'local';
+  inCatalog?: boolean;
 }
 
 export interface CatalogExternalIDs {
@@ -382,6 +385,18 @@ export async function getReleasesForTitle(title: string): Promise<ReleaseGroup[]
 export async function getMatchCandidates(releaseId: string): Promise<MatchCandidate[]> {
   if (!inWails) return [];
   return ((await SourcesService.GetCandidates(releaseId)) ?? []) as unknown as MatchCandidate[];
+}
+
+export type SimilarReason = 'ambiguous' | 'none' | 'too_many' | '';
+
+export interface SimilarRelease extends ReleaseView {
+  matchedCandidate: { id: string; title: string; year: number };
+  reason: SimilarReason;
+}
+
+export async function similarReleases(gameId: string, familyIds: string[]): Promise<SimilarRelease[]> {
+  if (!inWails) return [];
+  return ((await SourcesService.SimilarReleases(gameId, familyIds)) ?? []) as unknown as SimilarRelease[];
 }
 
 export async function confirmMatch(releaseId: string, gameId: string): Promise<void> {
