@@ -20,6 +20,8 @@ export type NameStyle = (typeof NAME_STYLES)[number];
 
 export const AUTO_SOURCES = ['playing', 'pinned', 'most_played'] as const;
 export type AutoSource = (typeof AUTO_SOURCES)[number];
+export const ACCENT_SOURCES = ['custom', 'theme'] as const;
+export type AccentSource = (typeof ACCENT_SOURCES)[number];
 
 export interface ProfileAppearance {
   theme: string;
@@ -37,6 +39,7 @@ export interface ProfileAppearance {
   nameColor: string;
   frameColor: string;
   customPure: boolean;
+  accentSource: AccentSource;
 }
 
 export const BLOCK_TYPES = [

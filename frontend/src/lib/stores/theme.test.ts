@@ -16,7 +16,10 @@ vi.mock('@wailsio/runtime', () => ({
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('./settings', () => ({ updateSettings: vi.fn(async () => true) }));
-vi.mock('../theme/apply', () => ({ applyTheme: vi.fn(), clearTheme: vi.fn() }));
+vi.mock('../theme/apply', async () => {
+  const { writable } = await import('svelte/store');
+  return { applyTheme: vi.fn(), clearTheme: vi.fn(), displayedAccent: writable('#4F6BFF') };
+});
 
 const api = {
   applyTheme: vi.fn(),
@@ -167,6 +170,54 @@ describe('choosing a theme', () => {
 
     expect(toast).toHaveBeenCalledTimes(1);
     expect(toast.mock.calls[0][1]).toBe('danger');
+  });
+});
+
+describe('confirmed accent', () => {
+  async function previewing(accent: string, fail = false) {
+    const loaded = await load();
+    if (fail) api.confirmTheme.mockRejectedValueOnce(new Error('typhon:theme.not_found: gone'));
+    const { displayedAccent } = await import('../theme/apply');
+    const { confirmedAccent } = await import('./confirmedAccent');
+    displayedAccent.set('#4F6BFF');
+    confirmedAccent.set('#4F6BFF');
+    api.activeTheme.mockResolvedValue(theme('light', { base: 'light' }));
+    await loaded.store.selectTheme('light');
+    displayedAccent.set(accent);
+    return { confirmedAccent };
+  }
+
+  it('does not move while the theme is only previewed', async () => {
+    const { confirmedAccent } = await previewing('#112233');
+    vi.advanceTimersByTime(4999);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(confirmedAccent)).toBe('#4F6BFF');
+  });
+
+  it('does not move when the confirmation fails', async () => {
+    const { confirmedAccent } = await previewing('#112233', true);
+    vi.advanceTimersByTime(5000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(confirmedAccent)).toBe('#4F6BFF');
+  });
+
+  it('keeps the accent of the confirmed theme when another one is previewed meanwhile', async () => {
+    const { confirmedAccent } = await previewing('#112233');
+    const { displayedAccent } = await import('../theme/apply');
+    let resolve!: () => void;
+    api.confirmTheme.mockImplementationOnce(() => new Promise<void>((r) => { resolve = r; }));
+    vi.advanceTimersByTime(5000);
+    displayedAccent.set('#445566');
+    resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(confirmedAccent)).toBe('#112233');
+  });
+
+  it('moves to the accent on screen once the theme is confirmed', async () => {
+    const { confirmedAccent } = await previewing('#112233');
+    vi.advanceTimersByTime(5000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(confirmedAccent)).toBe('#112233');
   });
 });
 

@@ -4,6 +4,8 @@
   import HexColorField from '../../lib/components/HexColorField.svelte';
   import { validAccent } from '../../lib/theme/accent';
   import BannerCropModal from '../../lib/components/BannerCropModal.svelte';
+  import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
+  import ProfileCover from '../../lib/components/ProfileCover.svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
   import { Upload, RotateCcw, Smile, X } from '@lucide/svelte';
@@ -22,13 +24,15 @@
     appearanceAccentStyle, appearanceOf, AUTO_THEME, CUSTOM_THEME, customBanner, DEFAULT_APPEARANCE,
     pickCustomColor, PROFILE_ACCENTS, PROFILE_THEMES, themeOf,
   } from '../../lib/profile/appearance';
+  import { toast } from '../../lib/stores/toasts';
+  import { launcherAccent } from '../../lib/stores/profileAccent';
   import { artStatus } from '../../lib/profile/artPalette';
   import { STATUS_EMOJI } from '../../lib/profile/appearanceEmoji';
   import { layoutErrorText, statusIssue } from '../../lib/profile/layout';
   import { currentUser } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
 
-  let { draft = $bindable(), disabled }: { draft: ProfileSettings; disabled: boolean } = $props();
+  let { draft = $bindable(), disabled, autoArt }: { draft: ProfileSettings; disabled: boolean; autoArt?: string } = $props();
 
   const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
@@ -38,6 +42,7 @@
   const accentStyle = $derived(
     appearanceAccentStyle(a).split(';').filter((rule) => rule.startsWith('--accent')).join(';'),
   );
+  const preview = $derived({ ...a, parallax: false });
   const statusLength = $derived([...(draft.statusText ?? '')].length);
   const statusError = $derived(statusIssue(draft.statusText));
 
@@ -75,7 +80,16 @@
     else toText = value;
     if (!validAccent(value)) return;
     if (field === 'customFrom') draft.appearance = pickCustomColor(a, value);
+    else if (field === 'accent') patch({ accent: value, accentSource: 'custom' });
     else patch({ [field]: value });
+  }
+  function useLauncherAccent() {
+    const accent = launcherAccent();
+    if (!accent) {
+      toast(msg('profileStyle.accentThemeUnreadable'), 'danger');
+      return;
+    }
+    patch({ accentSource: 'theme', accent });
   }
   function setOptionalColor(field: 'nameColor' | 'frameColor', value: string) {
     if (field === 'nameColor') nameText = value;
@@ -161,12 +175,16 @@
         </button>
       </div>
 
+      <div class="preview" aria-hidden="true">
+        <div class="preview-scale">
+          <ProfileCanvas appearance={preview} {autoArt} quiet>
+            <ProfileCover appearance={preview} />
+            <span class="preview-card" style:background="var(--surface-2)" style:color="var(--text)">{previewName}</span>
+          </ProfileCanvas>
+        </div>
+      </div>
+
       <div class="custom">
-        {#if a.theme === CUSTOM_THEME}
-          <div class="gradient-preview" style:background={customBanner(a)}>
-            <span class="gradient-card" style:background={themeOf(a).surface} style:color={themeOf(a).ink?.text}>{previewName}</span>
-          </div>
-        {/if}
         <div class="pick">
           <span class="pick-label">{fromLabel}</span>
           <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
@@ -210,9 +228,14 @@
 
     <section>
       <h3>{msg('profile.accent')}</h3>
+      <div class="options" role="group" aria-label={msg('profile.accent')}>
+        <button type="button" class="option" class:selected={a.accentSource === 'custom'} aria-pressed={a.accentSource === 'custom'} onclick={() => patch({ accentSource: 'custom' })}>{msg('profileStyle.accentOwn')}</button>
+        <button type="button" class="option" class:selected={a.accentSource === 'theme'} aria-pressed={a.accentSource === 'theme'} onclick={useLauncherAccent}>{msg('profileStyle.accentTheme')}</button>
+      </div>
+      {#if a.accentSource === 'theme'}<p class="hint">{msg('profileStyle.accentThemeHint')}</p>{/if}
       <div class="accents">
         {#each PROFILE_ACCENTS as color}
-          <button type="button" class="color" style:background={color} class:selected={a.accent.toLowerCase() === color} aria-label={`${msg('profile.accent')} ${color}`} aria-pressed={a.accent.toLowerCase() === color} onclick={() => setColor('accent', color)}></button>
+          <button type="button" class="color" style:background={color} class:selected={a.accentSource === 'custom' && a.accent.toLowerCase() === color} aria-label={`${msg('profile.accent')} ${color}`} aria-pressed={a.accentSource === 'custom' && a.accent.toLowerCase() === color} onclick={() => setColor('accent', color)}></button>
         {/each}
         <Button size="sm" onclick={() => togglePalette('accent')}>{msg('settings.accentCustom')}</Button>
       </div>
@@ -331,8 +354,9 @@
   .theme-swatch.auto { background: linear-gradient(125deg, var(--accent-subtle), var(--accent)); }
   .selected { outline: 2px solid var(--accent); outline-offset: 1px; }
   .custom { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.4rem; }
-  .gradient-preview { display: flex; align-items: flex-end; height: 7rem; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
-  .gradient-card { padding: .5rem 1rem; border-radius: var(--radius-sm); font-size: var(--font-xs); color: #f1f4f8; }
+  .preview { height: 9rem; margin-top: 1.4rem; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .preview-scale { width: 250%; transform: scale(.4); transform-origin: 0 0; pointer-events: none; }
+  .preview-card { display: block; margin-top: 4rem; padding: 1.4rem 2rem; border-radius: var(--radius-md); font-size: var(--font-md); }
   .pick { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
   .pick-label { font-size: var(--font-xs); color: var(--text-2); min-width: 6rem; }
   .frames + .pick, .names + .pick { margin-top: 1.2rem; }

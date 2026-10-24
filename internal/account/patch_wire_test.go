@@ -37,7 +37,7 @@ func sentProfile(t *testing.T, patch Patch) map[string]json.RawMessage {
 
 func TestUpdateProfileSendsAppearanceAndShowcaseOnlyWhenSet(t *testing.T) {
 	const privacy = `"visibility":"private","showOnline":true,"showPlaying":true,"showPlaytime":false,"showLibrary":true,"showActivity":true,"showStats":true`
-	themed := `{"theme":"forest","accent":"#91c59c","coverUrl":"","coverDim":10,"coverPosition":20,"customFrom":"#142235","customTo":"#111923","customAngle":90,"autoSource":"playing","avatarFrame":"none","nameStyle":"plain","parallax":false,"nameColor":"","frameColor":"","customPure":false}`
+	themed := `{"theme":"forest","accent":"#91c59c","coverUrl":"","coverDim":10,"coverPosition":20,"customFrom":"#142235","customTo":"#111923","customAngle":90,"autoSource":"playing","avatarFrame":"none","nameStyle":"plain","parallax":false,"nameColor":"","frameColor":"","customPure":false,"accentSource":"custom"}`
 	tests := []struct {
 		name    string
 		profile string

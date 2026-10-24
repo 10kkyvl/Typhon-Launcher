@@ -12,9 +12,10 @@ import {
   type BindingTheme,
   type Theme,
 } from '../services/theme';
-import { applyTheme as applyThemeDom, clearTheme as clearThemeDom } from '../theme/apply';
+import { applyTheme as applyThemeDom, clearTheme as clearThemeDom, displayedAccent } from '../theme/apply';
 import { themeErrorText } from '../theme/themeErrors';
 import { toast } from './toasts';
+import { confirmAccent } from './confirmedAccent';
 
 export type ThemeMode = 'system' | 'theme';
 
@@ -40,7 +41,8 @@ function scheduleConfirm(id: string) {
   confirmTimer = setTimeout(() => {
     confirmTimer = null;
     if (get(activeTheme)?.id !== id) return;
-    confirmThemeRequest(id).catch((err) => toast(themeErrorText(err), 'danger'));
+    const accent = get(displayedAccent);
+    confirmThemeRequest(id).then(() => confirmAccent(accent), (err) => toast(themeErrorText(err), 'danger'));
   }, CONFIRM_DELAY_MS);
 }
 
@@ -112,6 +114,7 @@ export async function initTheme() {
 
   try {
     setActive(await fetchActiveTheme());
+    confirmAccent();
   } catch (err) {
     toast(themeErrorText(err), 'danger');
   }
@@ -129,7 +132,10 @@ export async function initTheme() {
       next[index] = theme;
       return next;
     });
-    if (get(activeTheme)?.id === theme.id) setActive(theme);
+    if (get(activeTheme)?.id === theme.id) {
+      setActive(theme);
+      confirmAccent();
+    }
   });
 
   Events.On('theme:list', (event) => {
