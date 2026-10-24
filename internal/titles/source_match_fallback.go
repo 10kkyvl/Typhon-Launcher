@@ -258,3 +258,29 @@ func cutCyrillicTail(s string) string {
 	}
 	return head
 }
+
+var reTrailingOne = regexp.MustCompile(`^(.*\p{L}\S*)\s+1$`)
+
+var trailingOneNouns = map[string]struct{}{
+	"episode": {}, "chapter": {}, "part": {}, "season": {}, "vol": {}, "volume": {}, "act": {}, "book": {}, "case": {}, "level": {}, "mission": {},
+}
+
+// withoutTrailingOne drops a lone final "1" ("Portal 1" is "Portal" in a
+// catalog that only knows the first game by its bare name). The result goes
+// after every other spelling, so a catalog entry that really ends in "1"
+// ("Battlefield 1") is still found first.
+func withoutTrailingOne(names []string) []string {
+	var out []string
+	for _, name := range names {
+		parts := reTrailingOne.FindStringSubmatch(strings.TrimSpace(name))
+		if parts == nil {
+			continue
+		}
+		words := strings.Fields(parts[1])
+		if _, numbered := trailingOneNouns[strings.ToLower(words[len(words)-1])]; numbered {
+			continue
+		}
+		out = append(out, parts[1])
+	}
+	return out
+}

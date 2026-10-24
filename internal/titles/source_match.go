@@ -219,6 +219,7 @@ func matchNamesMixed(raw string) []string {
 		out = append(out, glyphNames...)
 		out = append(out, glyphExtra...)
 	}
+	out = append(out, withoutTrailingOne(out)...)
 	// Каталог принимает не больше шести написаний на раздачу.
 	return limitMatchNames(out)
 }
