@@ -205,6 +205,7 @@ type Service struct {
 	onLaunchFail  func(gameID, code, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
+	launchHooks   []LaunchHook
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
@@ -241,6 +242,13 @@ type Service struct {
 type SessionWatcher interface {
 	SessionStarted(game Game)
 	SessionStopped(gameID string)
+}
+
+// LaunchHook вызывается синхронно после подготовки окружения и до старта
+// процесса, без блокировки библиотеки. Ошибка хука запуск не отменяет:
+// библиотека пишет её в журнал и стартует игру; отмену запуска хук видит по ctx.
+type LaunchHook interface {
+	SessionStarting(ctx context.Context, game Game) error
 }
 
 type SessionChangeWatcher interface {
@@ -694,6 +702,16 @@ func (s *Service) AddSessionWatcher(w SessionWatcher) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.watchers = append(s.watchers, w)
+}
+
+//wails:ignore
+func (s *Service) AddLaunchHook(h LaunchHook) {
+	if h == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.launchHooks = append(s.launchHooks, h)
 }
 
 //wails:ignore

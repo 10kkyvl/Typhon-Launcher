@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -45,7 +46,7 @@ const (
 // a pre-restore copy identical to the newest snapshot adds nothing, while a
 // manual or update copy is something the player or the update asked for.
 func dedupFor(kind Kind) dedupMode {
-	if kind == KindSession || kind == KindPreRestore || kind == KindCloud {
+	if kind == KindSession || kind == KindPreRestore || kind == KindCloud || kind == KindLaunch {
 		return dedupLatest
 	}
 	return dedupNone
@@ -56,6 +57,9 @@ type captureOpts struct {
 	at      time.Time
 	protect string
 	rotate  bool
+	// cheap lets an unchanged tree (same files, sizes, times as the newest
+	// snapshot recorded) skip hashing altogether.
+	cheap bool
 }
 
 func validName(s string) bool {
@@ -72,7 +76,7 @@ func validName(s string) bool {
 	return true
 }
 
-var snapshotIDPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-(manual|session|update|pre-restore|cloud)(-[0-9]+)?$`)
+var snapshotIDPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-(manual|session|update|pre-restore|cloud|launch)(-[0-9]+)?$`)
 
 // validSnapshotID accepts exactly the shape reserveID generates, so that no
 // other file in a game directory (the restore journal, a stray file) can be
@@ -109,16 +113,30 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 	if !info.IsDir() {
 		return Snapshot{}, false, fmt.Errorf("%w: %s", errSavesNotDir, src)
 	}
-	manifest, err := hashdir.Build(ctx, src, nil)
-	if err != nil {
-		return Snapshot{}, false, fmt.Errorf("чтение сохранений %s: %w", src, err)
-	}
-	digest := digestOf(manifest.Entries)
-
 	existing, err := s.list(ctx, gameID)
 	if err != nil {
 		return Snapshot{}, false, err
 	}
+	stats, err := statTree(ctx, src)
+	if err != nil {
+		return Snapshot{}, false, fmt.Errorf("чтение сохранений %s: %w", src, err)
+	}
+	if opts.cheap && opts.dedup == dedupLatest {
+		for _, snap := range existing {
+			if snap.Broken {
+				continue
+			}
+			if unchangedSince(snap, src, stats) {
+				return snap, false, nil
+			}
+			break
+		}
+	}
+	manifest, err := s.build(ctx, src, nil)
+	if err != nil {
+		return Snapshot{}, false, fmt.Errorf("чтение сохранений %s: %w", src, err)
+	}
+	digest := digestOf(manifest.Entries)
 	// A skipped copy must not rest on a Digest that nobody re-checked when the
 	// skip leads to deleting live data (a safety copy before a restore, the
 	// legacy folder in a migration). A session copy is different: skipping it
@@ -126,6 +144,13 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 	// on disk, so the recorded Digest is enough there.
 	for _, dup := range duplicates(existing, digest, kind, opts.dedup) {
 		if kind != KindPreRestore && opts.dedup != dedupAny {
+			if opts.cheap && dup.Path != "" {
+				// Same content under new times: record them so the next launch
+				// skips hashing. Losing the record only costs that speed-up.
+				if err := writeStat(filepath.Dir(dup.Path), src, stats); err != nil {
+					slog.Warn("refresh snapshot stat record", "snapshot", dup.ID, "error", err)
+				}
+			}
 			return dup, false, nil
 		}
 		err := verifyFiles(ctx, dup.Path, manifest)
@@ -176,6 +201,9 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 		Files:      len(manifest.Entries),
 		Digest:     digest,
 	}
+	if err := writeStat(partial, src, stats); err != nil {
+		return fail(err)
+	}
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
 		return fail(err)
@@ -188,6 +216,7 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 		return fail(fmt.Errorf("публикация копии %s: %w", id, err))
 	}
 	snap.Path = filepath.Join(final, filesDirName)
+	snap.Large = snap.SizeBytes > s.largeAt
 
 	if !opts.rotate {
 		return snap, true, nil
@@ -298,6 +327,7 @@ func (s *Service) readSnapshot(gameID, id string) (Snapshot, bool) {
 	dir := filepath.Join(s.gameDir(gameID), id)
 	snap, err := inspectSnapshot(gameID, id, dir)
 	if err == nil {
+		snap.Large = snap.SizeBytes > s.largeAt
 		return snap, true
 	}
 	if _, statErr := os.Stat(dir); errors.Is(statErr, fs.ErrNotExist) {
@@ -333,6 +363,7 @@ func inspectSnapshot(gameID, id, dir string) (Snapshot, error) {
 	}
 	snap.Path = files
 	snap.Broken, snap.Problem = false, ""
+	snap.Large, snap.PlayedAfterSeconds, snap.PlayedAfterKnown = false, 0, false
 	return snap, nil
 }
 
@@ -343,7 +374,7 @@ func brokenSnapshot(gameID, id, dir string, cause error) Snapshot {
 			snap.CreatedAt = at.UTC()
 		}
 		rest := strings.TrimPrefix(id[len(idTimeLayout):], "-")
-		for _, kind := range []Kind{KindPreRestore, KindManual, KindSession, KindUpdate, KindCloud} {
+		for _, kind := range []Kind{KindPreRestore, KindManual, KindSession, KindUpdate, KindCloud, KindLaunch} {
 			if strings.HasPrefix(rest, string(kind)) {
 				snap.Kind = kind
 				break

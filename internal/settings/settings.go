@@ -189,6 +189,7 @@ type Settings struct {
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
 	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
+	SaveBackupBeforeLaunch bool `json:"saveBackupBeforeLaunch"`
 	SaveBackupLimit        int  `json:"saveBackupLimit"`
 
 	CloudSaves bool `json:"cloudSaves"`
@@ -296,6 +297,7 @@ func Defaults() Settings {
 		AllowTorrentReuse:        true,
 
 		SaveBackupAfterSession: true,
+		SaveBackupBeforeLaunch: true,
 		SaveBackupLimit:        DefaultSaveBackupLimit,
 
 		CloudSaves: false,

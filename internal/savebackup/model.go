@@ -1,6 +1,7 @@
 package savebackup
 
 import (
+	"errors"
 	"time"
 
 	"typhon/internal/uierr"
@@ -14,11 +15,12 @@ const (
 	KindUpdate     Kind = "update"
 	KindPreRestore Kind = "pre-restore"
 	KindCloud      Kind = "cloud"
+	KindLaunch     Kind = "launch"
 )
 
 func (k Kind) valid() bool {
 	switch k {
-	case KindManual, KindSession, KindUpdate, KindPreRestore, KindCloud:
+	case KindManual, KindSession, KindUpdate, KindPreRestore, KindCloud, KindLaunch:
 		return true
 	}
 	return false
@@ -51,6 +53,15 @@ type Snapshot struct {
 	Path       string    `json:"path,omitempty"`
 	Broken     bool      `json:"broken,omitempty"`
 	Problem    string    `json:"problem,omitempty"`
+	// Large marks saves above largeSavesBytes: the copy exists, but each
+	// automatic one of that size costs the disk and the time before a launch.
+	// It is derived from SizeBytes on every read, not stored.
+	Large bool `json:"large"`
+	// PlayedAfterSeconds is the playing time recorded after CreatedAt. It is
+	// filled by List only; PlayedAfterKnown is false when the play log could
+	// not answer, and then the number means nothing.
+	PlayedAfterSeconds int64 `json:"playedAfterSeconds"`
+	PlayedAfterKnown   bool  `json:"playedAfterKnown"`
 }
 
 // Event is the saves:backups payload. Error is set next to StatusCreated when
@@ -78,6 +89,8 @@ var (
 	errSnapshotNotFound = uierr.New("savebackup.snapshot_not_found", "резервная копия не найдена")
 	errSnapshotBroken   = uierr.New("savebackup.snapshot_broken", "резервная копия повреждена")
 	errVerify           = uierr.New("savebackup.verify_failed", "копия сохранений не совпала с оригиналом")
+	errSavesUnreadable  = errors.New("часть каталогов не удалось прочитать")
+	errLaunchTimeout    = uierr.New("savebackup.launch_timeout", "копия сохранений перед запуском не успела — игра запущена без неё")
 	errUnchanged        = uierr.New("savebackup.unchanged", "сохранения не изменились с прошлой копии")
 	errLeftovers        = uierr.New("savebackup.restore_leftovers", "рядом с папкой сохранений остались следы прерванного восстановления")
 	errRecovery         = uierr.New("savebackup.recovery_failed", "не удалось довести до конца прерванную операцию с сохранениями")

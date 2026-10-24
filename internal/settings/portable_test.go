@@ -33,6 +33,7 @@ var portableNames = []string{
 	"keepPreviousVersion",
 	"allowTorrentReuse",
 	"saveBackupAfterSession",
+	"saveBackupBeforeLaunch",
 	"saveBackupLimit",
 }
 

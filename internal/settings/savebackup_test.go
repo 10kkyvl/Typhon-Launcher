@@ -81,3 +81,34 @@ func TestSaveBackupFieldsArePortable(t *testing.T) {
 		t.Fatalf("after=%v limit=%d, want false and 20", got.SaveBackupAfterSession, got.SaveBackupLimit)
 	}
 }
+
+func TestSaveBackupBeforeLaunchDefaultsOn(t *testing.T) {
+	if !Defaults().SaveBackupBeforeLaunch {
+		t.Error("SaveBackupBeforeLaunch = false in Defaults, want on")
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !mustServiceAt(t, path).GetSettings().SaveBackupBeforeLaunch {
+		t.Error("old config without the field lost the default")
+	}
+}
+
+func TestSaveBackupBeforeLaunchOffSurvivesRoundTripAndSync(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.SaveBackupBeforeLaunch = false
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatal(err)
+	}
+	if mustServiceAt(t, path).GetSettings().SaveBackupBeforeLaunch {
+		t.Error("switched-off value did not survive a reload")
+	}
+	remote := Defaults()
+	remote.SaveBackupBeforeLaunch = false
+	if ApplyPortable(Defaults(), PortableOf(remote)).SaveBackupBeforeLaunch {
+		t.Error("portable import dropped the switch")
+	}
+}

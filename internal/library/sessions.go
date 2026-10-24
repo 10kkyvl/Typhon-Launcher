@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"typhon/internal/crashlog"
@@ -311,7 +312,17 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		}
 		return err
 	}
+	hooks := slices.Clone(s.launchHooks)
 	s.mu.Unlock()
+	for _, h := range hooks {
+		if hookErr := h.SessionStarting(ctx, *game); hookErr != nil && ctx.Err() == nil {
+			slog.Warn("pre-launch hook failed, launching anyway", "id", id, "error", redact.Error(hookErr))
+		}
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		s.mu.Lock()
+		return uierr.Wrap("library.launch_cancelled", ctxErr)
+	}
 	proc, err := s.start(ctx, req)
 	s.mu.Lock()
 	if err != nil {
