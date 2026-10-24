@@ -1,6 +1,6 @@
 # Copyright Infringement Notices
 
-Revision of 23 October 2026.
+Revision of 25 October 2026.
 
 This document explains how to send the Typhon project operator a copyright infringement notice, and what can and cannot be done in response to one.
 

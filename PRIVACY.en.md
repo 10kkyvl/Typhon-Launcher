@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 23 October 2026.
+Revision of 25 October 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -62,6 +62,8 @@ Stored on the server are: the account identifier, username, display name, email 
 
 Acceptance of the Terms of Use is stored as a record: the revision, the time of acceptance and where it was made — on the website or in the app. Records are only added: accepting a new revision adds a new one, earlier ones remain. The IP address and browser or device details do not go into this record.
 
+**Tester mark.** The account carries a "tester" mark that gives access to beta versions of the app (section 2.4). The operator's administrator sets and clears it in the administration panel; each change is recorded in the operator's internal action journal (who changed it, for which account, when). For administrators the mark applies automatically. The user sees their own mark: it is returned with the profile data. The mark is used for nothing except issuing beta versions and is deleted together with the account.
+
 The session token is stored on the device in the Windows credential store (Credential Manager), not in the settings file. In portable mode (section 1) the system store is not used: the session token and the proxy password, if one is set, are written to a `credentials.json` file in the data directory next to the executable, readable only by the file's owner; moving that directory to another drive moves the token with it.
 
 The same account works on the `typhon-launcher.com` website: there you can register, sign in, write to support, and confirm an address or change a password through a link from an email. A website session is the same kind of session record as an app session (token hash, creation time, expiry, issued length, revocation flag), but the token itself lives not in the Windows credential store but in a browser cookie (section 8.4). When registering on the website, the checkbox accepts the Terms of Use and confirms that the user has read the Privacy Policy: without it no account is created, and the accepted revision and time are recorded on the server. In the app, the accepted revision is recorded in the settings on the device and, if the user is signed in, sent to the server — on registration, when a new revision is accepted, and on sign-in and launch if the server does not yet hold a record of the accepted current revision; a failed send is retried until the record appears. Accounts created before these records existed get one at the next acceptance in the app.
@@ -90,7 +92,7 @@ Sync is off by default and is enabled manually in the app settings. While it is 
 
 When it is on, the following is sent to the service and stored on the server:
 
-- **some app settings** — theme, interface scale, animations, minimize to tray, Discord Rich Presence, the install, verification and cleanup policies, the source refresh interval, game update parameters, and seeding after download. The list is bounded by the database schema: each value sits in its own field of a predefined type, and enumerated values are constrained to a list of permitted options;
+- **some app settings** — theme, interface scale, animations, minimize to tray, Discord Rich Presence, the install, verification and cleanup policies, the source refresh interval, game update parameters (including the choice to receive beta versions, section 2.4), and seeding after download. The list is bounded by the database schema: each value sits in its own field of a predefined type, and enumerated values are constrained to a list of permitted options;
 - **the game list** — only the game's numeric identifier in the external IGDB catalog, the flag marking that the app manages the installation, the last launch date, playtime, the "favorite" mark, the completion status, the completion date, the "hidden" mark and the dates these changed. The user can correct the completion date; only the "completed" and "100% completed" statuses have one, and it is erased when the status changes to any other. The "hidden" mark, the completion date and the "100% completed" status are sent only once the server has reported that it can store them; until then "100% completed" is sent as "completed" and the date is not sent;
 - **device identifiers** — a random UUIDv4 created the first time sync is enabled on each device, together with first- and last-seen timestamps. This identifier is not the same as the installation identifier from `installation.json` (section 1) and is not linked to it.
 
@@ -102,7 +104,7 @@ A game for which the app has not determined an IGDB identifier is not synced at 
 
 ### 2.4. Checking for app updates
 
-The app checks for a new version by itself: it requests the update manifest from the Typhon service at startup and roughly every six hours thereafter. The request is made without an account and without a token. Like every request the app makes to the service (section 2.5), it carries the installed version in its headers: the service uses it to pick a manifest in the format that version can read, and the decision to update is made on the device. If an update is accepted, the new version's file is downloaded from the same service.
+The app checks for a new version by itself: it requests the update manifest from the Typhon service at startup and roughly every 15 minutes thereafter while it is running. By default the request is made without an account and without a token. Only if a user whose account has the tester mark (section 2.1) has turned on "Receive beta versions" in the settings, the request also carries a header naming the beta channel and the account's session token, and only over HTTPS; the service uses them to decide whether to serve the beta manifest or the stable one. The choice is stored in the app settings as `updateBetaChannel` and travels with the other update parameters when cross-device sync (section 2.3) is on. The service does not store the fact of this request or its parameters, and the token does not go into the server log (section 2.5). Like every request the app makes to the service (section 2.5), it carries the installed version in its headers: the service uses it to pick a manifest in the format that version can read, and the decision to update is made on the device. If an update is accepted, the new version's file is downloaded from the same service.
 
 As with any network request, the server can see the device's IP address and the fact that a request was made.
 
