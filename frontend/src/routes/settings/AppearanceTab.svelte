@@ -4,6 +4,7 @@
   import { msg } from '../../lib/i18n';
   import { themeDisplayName, personalThemeVars, displayedAccent } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
+  import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -263,6 +264,13 @@
         <Button size="sm" disabled={importing} onclick={runImport}>
           {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
         </Button>
+      </div>
+      <div class="row">
+        <div class="row-text">
+          <span class="row-label">{msg('settings.aiSkillLabel')}</span>
+          <span class="row-sub">{msg('settings.aiSkillSub')}</span>
+        </div>
+        <AiSkillButton label={msg('settings.aiSkillButton')} />
       </div>
       {#if draft}
         <div class="row">

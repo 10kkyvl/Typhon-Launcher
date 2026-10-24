@@ -3,6 +3,7 @@ package theme
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -45,6 +46,7 @@ var (
 	ErrThemeBase       = uierr.New("theme.invalid_base", "недопустимая базовая палитра темы")
 	ErrThemeTokenName  = uierr.New("theme.unknown_token", "неизвестное имя токена темы")
 	ErrThemeTokenValue = uierr.New("theme.invalid_token_value", "недопустимое значение токена темы")
+	ErrThemeTokenKind  = uierr.New("theme.token_kind", "значение токена не подходит по типу")
 	ErrThemeCSSSize    = uierr.New("theme.css_too_large", "пользовательский CSS превышает допустимый размер")
 	ErrThemeCSSContent = uierr.New("theme.css_forbidden", "пользовательский CSS содержит запрещённую конструкцию")
 	ErrThemeCSSBraces  = uierr.New("theme.css_unbalanced_braces", "непарные или слишком глубоко вложенные фигурные скобки в CSS")
@@ -92,13 +94,29 @@ func Validate(t Theme) (Theme, error) {
 		return Theme{}, fmt.Errorf("%q: %w", t.Base, ErrThemeBase)
 	}
 
-	for name, value := range t.Tokens {
+	names := make([]string, 0, len(t.Tokens))
+	for name := range t.Tokens {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	var wrongKind []string
+	for _, name := range names {
+		value := t.Tokens[name]
 		if err := validateTokenName(name); err != nil {
 			return Theme{}, err
 		}
 		if err := validateTokenValue(value); err != nil {
 			return Theme{}, fmt.Errorf("%s: %w", name, err)
 		}
+		if !validTokenKind(name, allowedTokenSet[name], value) {
+			wrongKind = append(wrongKind, fmt.Sprintf("%s (%s)", name, allowedTokenSet[name]))
+		}
+	}
+	if len(wrongKind) > 0 {
+		return Theme{}, fmt.Errorf("%s: %w", strings.Join(wrongKind, ", "), ErrThemeTokenKind)
+	}
+	if cycle := varCycles(t.Tokens); len(cycle) > 0 {
+		return Theme{}, fmt.Errorf("var() cycle: %s: %w", strings.Join(cycle, ", "), ErrThemeTokenKind)
 	}
 
 	if err := validateCSS(t.CSS); err != nil {
