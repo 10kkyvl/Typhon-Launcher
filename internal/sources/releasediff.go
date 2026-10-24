@@ -87,6 +87,7 @@ func sameRemoteMatch(a, b *RemoteMatch) bool {
 			a.GameID == b.GameID &&
 			a.Confidence == b.Confidence &&
 			a.Method == b.Method &&
-			a.Rev == b.Rev
+			a.Rev == b.Rev &&
+			a.RulesVersion == b.RulesVersion
 	}
 }

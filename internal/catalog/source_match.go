@@ -17,6 +17,12 @@ type ReleaseMatcher interface {
 	MatchReleases(context.Context, []ReleaseQuery) ([]ReleaseMatch, error)
 }
 
+// RulesVersioner is implemented by a matcher whose server numbers its matching
+// rules; a saved match from an older number is worth asking again.
+type RulesVersioner interface {
+	MatchRulesVersion() int
+}
+
 // Failed positions in the results are zero values, not misses.
 type PartialMatchError struct {
 	Failed []int
@@ -38,6 +44,16 @@ func (s *Service) HasReleaseMatcher() bool {
 	defer s.mu.RUnlock()
 	_, ok := s.remote.(ReleaseMatcher)
 	return ok
+}
+
+//wails:ignore
+func (s *Service) MatchRulesVersion() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := s.remote.(RulesVersioner); ok {
+		return v.MatchRulesVersion()
+	}
+	return 0
 }
 
 //wails:ignore

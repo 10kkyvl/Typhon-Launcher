@@ -13,6 +13,8 @@ import (
 const (
 	sourcesVersion  = 1
 	releasesVersion = 1
+
+	matchRulesStateVersion = 1
 )
 
 type store struct {
@@ -35,6 +37,41 @@ func (s *store) releasesPath(sourceID string) string {
 		return ""
 	}
 	return filepath.Join(s.dir, "releases", sourceID+".json")
+}
+
+type matchRulesState struct {
+	Version int `json:"version"`
+}
+
+func (s *store) matchRulesPath() string {
+	if s.dir == "" {
+		return ""
+	}
+	return filepath.Join(s.dir, "match-rules.json")
+}
+
+func (s *store) loadMatchRules() (int, error) {
+	path := s.matchRulesPath()
+	if path == "" {
+		return 0, errors.New("match rules path unavailable")
+	}
+	var state matchRulesState
+	err := storage.Load(path, matchRulesStateVersion, nil, &state)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("load match rules: %w", err)
+	}
+	return state.Version, nil
+}
+
+func (s *store) saveMatchRules(version int) error {
+	path := s.matchRulesPath()
+	if path == "" {
+		return errors.New("match rules path unavailable")
+	}
+	return storage.Save(path, matchRulesStateVersion, matchRulesState{Version: version})
 }
 
 func (s *store) loadSources() ([]Source, error) {

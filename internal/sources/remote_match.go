@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"strings"
 	"time"
@@ -55,9 +56,36 @@ func remoteMatchFresh(rm *RemoteMatch, key string, now time.Time) bool {
 	return age >= 0 && age < remoteMatchLifetime(rm, key)
 }
 
+// A found match saved under older server rules than the newest the launcher
+// has heard of is asked again; a server that reports no version never
+// outdates anything.
+func remoteMatchOutdated(rm *RemoteMatch, known int) bool {
+	return rm.GameID != "" && rm.RulesVersion < known
+}
+
+func (s *Service) knownRulesVersion() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rulesVersion
+}
+
+func (s *Service) noteRulesVersion(v int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if v <= s.rulesVersion {
+		return nil
+	}
+	if err := s.store.saveMatchRules(v); err != nil {
+		return err
+	}
+	s.rulesVersion = v
+	return nil
+}
+
 type resolvedRemoteMatch struct {
 	catalog.Match
 	fresh bool
+	rules int
 }
 
 func cloneReleases(list []*Release) []*Release {
@@ -87,6 +115,7 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 	}
 	defer run.begin(stageMatch)()
 	now := s.now()
+	known := s.knownRulesVersion()
 	out := make(map[string]resolvedRemoteMatch)
 	byKey := map[string]*Release{}
 	cached := map[string]*RemoteMatch{}
@@ -101,7 +130,7 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 		if _, ok := byKey[key]; !ok {
 			byKey[key] = r
 		}
-		if _, ok := cached[key]; !ok && remoteMatchFresh(r.RemoteMatch, key, now) {
+		if _, ok := cached[key]; !ok && remoteMatchFresh(r.RemoteMatch, key, now) && !remoteMatchOutdated(r.RemoteMatch, known) {
 			cached[key] = r.RemoteMatch
 		}
 	}
@@ -149,6 +178,12 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 		return nil, nil, err
 	}
 	run.finish(stageMatch, len(queries))
+	// Never below what is already known: an answer from a server that reports
+	// no version must not make every saved match look outdated again.
+	rules := max(s.catalog.MatchRulesVersion(), known)
+	if err := s.noteRulesVersion(rules); err != nil {
+		return nil, nil, fmt.Errorf("save match rules version: %w", err)
+	}
 	failed := map[int]bool{}
 	if partial != nil {
 		for _, i := range partial.Failed {
@@ -159,7 +194,7 @@ func (s *Service) resolveRemoteReleases(ctx context.Context, list []*Release, ru
 		if failed[i] {
 			continue
 		}
-		out[key] = resolvedRemoteMatch{Match: matches[i], fresh: true}
+		out[key] = resolvedRemoteMatch{Match: matches[i], fresh: true, rules: rules}
 	}
 	return out, partial, nil
 }
