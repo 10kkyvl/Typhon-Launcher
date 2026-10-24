@@ -37,6 +37,7 @@ var (
 	ErrHashMismatch        = uierr.New("selfupdate.hash_mismatch", "selfupdate: downloaded hash differs from the manifest")
 	ErrNotReady            = uierr.New("selfupdate.not_ready", "selfupdate: no verified update is ready to apply")
 	ErrApplyUnsupported    = uierr.New("selfupdate.apply_unsupported", "selfupdate: applying updates is not supported on this platform")
+	ErrNoStableOffer       = uierr.New("selfupdate.no_stable_offer", "selfupdate: no stable release is offered to this beta build")
 	ErrBusy                = uierr.New("selfupdate.busy", "selfupdate: another update operation is in progress")
 	ErrReadOnly            = uierr.New("selfupdate.read_only", "selfupdate: state failed to load, refusing to persist")
 	ErrNotReplaced         = uierr.New("selfupdate.not_replaced", "selfupdate: installer finished but left the launcher binary unchanged")

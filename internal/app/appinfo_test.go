@@ -25,3 +25,25 @@ func TestAppInfoWireNamesForPortableMode(t *testing.T) {
 		t.Fatalf("AppInfo JSON = %s, want portable and dataDir", raw)
 	}
 }
+
+func TestCurrentInfoChannel(t *testing.T) {
+	cases := []struct {
+		version string
+		want    string
+	}{
+		{"1.2.0", "stable"},
+		{"1.3.0-beta.1", "beta"},
+		{"1.3.0-beta.12", "beta"},
+		{"dev", "stable"},
+	}
+	for _, c := range cases {
+		t.Run(c.version, func(t *testing.T) {
+			prev := Version
+			Version = c.version
+			t.Cleanup(func() { Version = prev })
+			if got := CurrentInfo().Channel; got != c.want {
+				t.Fatalf("Channel = %q, want %q", got, c.want)
+			}
+		})
+	}
+}

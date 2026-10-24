@@ -35,6 +35,7 @@ type CurrentUser struct {
 	Profile     ProfileSettings `json:"profile"`
 	Frames      []OwnedFrame    `json:"frames"`
 	CreatedAt   time.Time       `json:"createdAt"`
+	Tester      bool            `json:"tester"`
 
 	TermsAccepted *TermsAcceptance `json:"termsAccepted"`
 }

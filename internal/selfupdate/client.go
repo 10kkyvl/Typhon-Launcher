@@ -8,12 +8,23 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/uierr"
 )
+
+const (
+	ChannelHeader = "X-Typhon-Channel"
+	ChannelStable = "stable"
+	ChannelBeta   = "beta"
+)
+
+// BetaAccess says whether this launcher asks for the beta manifest and with
+// which session token. Nothing but a signed-in tester who opted in gets true.
+type BetaAccess func() (token string, ok bool, err error)
 
 var ErrManifestStatus = uierr.New("selfupdate.manifest_status", "selfupdate: manifest endpoint returned an error status")
 
@@ -76,16 +87,34 @@ func checkArtifactRedirect(req *http.Request, via []*http.Request) error {
 }
 
 func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
+	m, _, err := c.fetchManifest(ctx, nil)
+	return m, err
+}
+
+func (c *Client) fetchManifest(ctx context.Context, access BetaAccess) (Manifest, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+ManifestPath, nil)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("build manifest request: %w", err)
+		return Manifest{}, "", fmt.Errorf("build manifest request: %w", err)
 	}
 	req.Header.Set("User-Agent", account.UserAgent)
 	req.Header.Set("X-Typhon-Version", app.Version)
+	if access != nil {
+		token, ok, aerr := access()
+		if aerr != nil {
+			return Manifest{}, "", fmt.Errorf("resolve beta access: %w", aerr)
+		}
+		if ok {
+			if serr := account.CheckURLScheme(req.URL); serr != nil {
+				return Manifest{}, "", fmt.Errorf("beta channel needs a secure manifest url: %w", serr)
+			}
+			req.Header.Set(ChannelHeader, ChannelBeta)
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("fetch manifest: %w", err)
+		return Manifest{}, "", fmt.Errorf("fetch manifest: %w", err)
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
@@ -94,20 +123,20 @@ func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
 	}()
 
 	if resp.StatusCode == http.StatusUpgradeRequired {
-		return Manifest{}, ErrManifestOutdated
+		return Manifest{}, "", ErrManifestOutdated
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return Manifest{}, fmt.Errorf("%w: status %d", ErrManifestStatus, resp.StatusCode)
+		return Manifest{}, "", fmt.Errorf("%w: status %d", ErrManifestStatus, resp.StatusCode)
 	}
 
 	limited := io.LimitReader(resp.Body, MaxManifestSize+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("read manifest body: %w", err)
+		return Manifest{}, "", fmt.Errorf("read manifest body: %w", err)
 	}
 	if int64(len(data)) > MaxManifestSize {
-		return Manifest{}, ErrManifestTooLarge
+		return Manifest{}, "", ErrManifestTooLarge
 	}
 
 	// c.key непустой только у клиента, собранного newClientWithKey — то есть
@@ -116,9 +145,17 @@ func (c *Client) FetchManifest(ctx context.Context) (Manifest, error) {
 	if len(key) == 0 {
 		pub, perr := PublicKey()
 		if perr != nil {
-			return Manifest{}, perr
+			return Manifest{}, "", perr
 		}
 		key = pub
 	}
-	return VerifyManifest(data, key)
+	m, err := VerifyManifest(data, key)
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	channel := ChannelStable
+	if strings.EqualFold(strings.TrimSpace(resp.Header.Get(ChannelHeader)), ChannelBeta) {
+		channel = ChannelBeta
+	}
+	return m, channel, nil
 }

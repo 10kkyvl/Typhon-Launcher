@@ -17,6 +17,7 @@ import (
 	"typhon/internal/app"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
+	"typhon/internal/version"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -89,6 +90,10 @@ type Service struct {
 	notesState      notesState
 	skippedVersion  string
 	rollbackPending bool
+
+	beta          BetaAccess
+	offerArtifact *Artifact
+	offerVersion  string
 }
 
 func NewService() (*Service, error) {
@@ -124,6 +129,13 @@ func NewService() (*Service, error) {
 		portable:       portable,
 		currentVersion: app.Version,
 	}, nil
+}
+
+//wails:ignore
+func (s *Service) SetBetaAccess(access BetaAccess) {
+	s.mu.Lock()
+	s.beta = access
+	s.mu.Unlock()
 }
 
 func emit(name string, data any) {
@@ -732,7 +744,10 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 		return s.setError(code, err), err
 	}
 
-	m, err := s.client.FetchManifest(ctx)
+	s.mu.Lock()
+	access := s.beta
+	s.mu.Unlock()
+	m, channel, err := s.client.fetchManifest(ctx, access)
 	if err != nil {
 		return fail("manifest", err)
 	}
@@ -765,6 +780,22 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 	if buildErr != nil {
 		return fail(status.ErrorCode, buildErr)
 	}
+	status.Channel = channel
+
+	var offer *Artifact
+	if artErr == nil && newerErr == nil && !newer && version.IsPrerelease(version.Parse(s.currentVersion)) &&
+		!version.IsPrerelease(version.Parse(m.Version)) {
+		older, cmpErr := IsNewer(s.currentVersion, m.Version)
+		if cmpErr != nil {
+			return fail("version", cmpErr)
+		}
+		if older {
+			offered := art
+			offered.Deltas = nil
+			offer = &offered
+			status.StableOffer = m.Version
+		}
+	}
 	newStored.SkippedVersion = skipped
 
 	if err := s.store.Save(newStored); err != nil {
@@ -773,6 +804,8 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 
 	s.mu.Lock()
 	s.status = status
+	s.offerArtifact = offer
+	s.offerVersion = status.StableOffer
 	if newer {
 		s.pendingArtifact = &art
 		s.pendingVersion = m.Version
@@ -802,7 +835,47 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	defer s.release()
+	return s.downloadPending(ctx)
+}
 
+// InstallStable is the explicit way off a beta: it downloads the stable release
+// the last check offered, which is older than the running build, and applies
+// it through the same path as any update.
+func (s *Service) InstallStable(ctx context.Context, language string) (Status, error) {
+	if err := s.acquire(); err != nil {
+		return Status{}, err
+	}
+	s.mu.Lock()
+	offer, offered := s.offerArtifact, s.offerVersion
+	if offer == nil {
+		s.mu.Unlock()
+		s.release()
+		return s.GetStatus(), ErrNoStableOffer
+	}
+	art := *offer
+	s.pendingArtifact = &art
+	s.pendingVersion = offered
+	s.readyPath = ""
+	s.readyArtifact = nil
+	s.status = clearError(s.status)
+	s.status.State = StateAvailable
+	s.status.AvailableVersion = offered
+	s.status.Notes = ""
+	s.status.PublishedAt = time.Time{}
+	s.mu.Unlock()
+
+	status, err := s.downloadPending(ctx)
+	s.release()
+	if err != nil {
+		return status, err
+	}
+	if err := s.ApplyUpdate(language); err != nil {
+		return s.GetStatus(), err
+	}
+	return s.GetStatus(), nil
+}
+
+func (s *Service) downloadPending(ctx context.Context) (Status, error) {
 	s.mu.Lock()
 	if s.status.State == StateReady {
 		// The installer is already on disk: whatever went wrong before this

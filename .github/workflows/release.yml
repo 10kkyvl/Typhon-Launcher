@@ -1,6 +1,10 @@
 # Reproducible release pipeline for the Typhon launcher.
 #
 # Trigger: push of a `v*` tag, or manual `workflow_dispatch`.
+# A tag vX.Y.Z-beta.N (VERSION = X.Y.Z-beta.N) is a beta: same builds and
+# signature, but the manifest goes to launcher/beta/manifest.json only, there are
+# no patches and no legacy manifest, the site is not told, and the GitHub release
+# is a prerelease.
 # Builds the Windows installer, signs the self-update manifest, and uploads
 # both to the Garage/S3-compatible object store the launcher checks for
 # updates.
@@ -123,6 +127,8 @@ jobs:
             exit 1
           fi
           expected="$(tr -d ' \t\r\n' < VERSION)"
+          # Info.plist carries three numbers: a beta's suffix lives in VERSION only.
+          expected="${expected%%-*}"
           for key in CFBundleShortVersionString CFBundleVersion; do
             actual=$(/usr/libexec/PlistBuddy -c "Print :$key" bin/typhon.app/Contents/Info.plist)
             [ "$actual" = "$expected" ] || { echo "$key=$actual, expected $expected" >&2; exit 1; }
@@ -414,6 +420,25 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # A version with a suffix is a beta only in the exact shape X.Y.Z-beta.N.
+      # Any other suffix stops here: it would otherwise go out as a stable
+      # release to everybody.
+      - name: Determine release channel
+        id: channel
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          elif [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION $RELEASE_VERSION is neither X.Y.Z nor X.Y.Z-beta.N" >&2
+            exit 1
+          fi
+
       - name: Download the Windows installer
         uses: actions/download-artifact@v4
         with:
@@ -459,6 +484,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
           SKIP_DELTAS: ${{ inputs.skip_deltas || vars.SKIP_DELTAS }}
+          RELEASE_CHANNEL: ${{ steps.channel.outputs.channel }}
           DELTA_COUNT: "3"
           # A patch replaces typhon.exe and nothing else. What the installer
           # puts or registers besides it comes from these sources, so a change
@@ -471,6 +497,11 @@ jobs:
 
           : > deltas.txt
           mkdir -p bin/new bin/previous
+
+          if [ "$RELEASE_CHANNEL" = "beta" ]; then
+            echo "beta release; it ships the full installer only, with no patches"
+            exit 0
+          fi
 
           if [ "${SKIP_DELTAS:-}" = "true" ]; then
             echo "::warning::skip_deltas is set; this release ships no patches"
@@ -541,8 +572,22 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           set -euo pipefail
+
+          # A beta has no changelog entry and no legacy manifest: clients older
+          # than 0.5.0 cannot read its version and are never sent this document.
+          if [ "$RELEASE_CHANNEL" = "beta" ]; then
+            ./bin/signrelease.exe \
+              -version "$RELEASE_VERSION" \
+              -notes "${RELEASE_NOTES:-Beta build $RELEASE_VERSION}" \
+              -base-url "$MANIFEST_BASE_URL" \
+              -out manifest.json \
+              -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe,portable=bin/typhon-windows-portable.zip" \
+              -artifact "os=darwin,arch=arm64,kind=bundle,path=bin/typhon-darwin-arm64.zip"
+            exit 0
+          fi
 
           delta_flags=()
           while IFS= read -r spec; do
@@ -584,6 +629,7 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_CHANNEL: ${{ steps.channel.outputs.channel }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -603,6 +649,7 @@ jobs:
           remote_dir="$1"
           version="$2"
           bucket_override="$3"
+          channel="$4"
 
           set -a
           . /opt/typhon-backend/.env
@@ -661,25 +708,39 @@ jobs:
                 "s3://$r2_bucket/launcher/releases/$version/$file" \
                 --cache-control "public, max-age=31536000, immutable"
             done
-            for file in manifest.json manifest-legacy.json; do
-              run_r2 s3 cp "/data/$file" \
-                "s3://$r2_bucket/launcher/$file" \
+            if [ "$channel" = "beta" ]; then
+              run_r2 s3 cp /data/manifest.json \
+                "s3://$r2_bucket/launcher/beta/manifest.json" \
                 --content-type application/json \
                 --cache-control "no-cache, no-store, must-revalidate"
-            done
+            else
+              for file in manifest.json manifest-legacy.json; do
+                run_r2 s3 cp "/data/$file" \
+                  "s3://$r2_bucket/launcher/$file" \
+                  --content-type application/json \
+                  --cache-control "no-cache, no-store, must-revalidate"
+              done
+            fi
           else
             echo "::warning::RELEASES_S3_ENDPOINT is not set in /opt/typhon-backend/.env; this release is in Garage only, and a backend serving releases from R2 will not see it"
           fi
 
-          run_aws s3 cp /data/manifest.json \
-            "s3://$bucket/launcher/manifest.json" \
-            --endpoint-url http://127.0.0.1:3900 \
-            --cache-control "no-cache, no-store, must-revalidate"
+          if [ "$channel" = "beta" ]; then
+            run_aws s3 cp /data/manifest.json \
+              "s3://$bucket/launcher/beta/manifest.json" \
+              --endpoint-url http://127.0.0.1:3900 \
+              --cache-control "no-cache, no-store, must-revalidate"
+          else
+            run_aws s3 cp /data/manifest.json \
+              "s3://$bucket/launcher/manifest.json" \
+              --endpoint-url http://127.0.0.1:3900 \
+              --cache-control "no-cache, no-store, must-revalidate"
 
-          run_aws s3 cp /data/manifest-legacy.json \
-            "s3://$bucket/launcher/manifest-legacy.json" \
-            --endpoint-url http://127.0.0.1:3900 \
-            --cache-control "no-cache, no-store, must-revalidate"
+            run_aws s3 cp /data/manifest-legacy.json \
+              "s3://$bucket/launcher/manifest-legacy.json" \
+              --endpoint-url http://127.0.0.1:3900 \
+              --cache-control "no-cache, no-store, must-revalidate"
+          fi
 
           rm -rf "$remote_dir"
           REMOTE
@@ -688,6 +749,11 @@ jobs:
           patches=(bin/*.delta)
           shopt -u nullglob
 
+          legacy=()
+          if [ "$RELEASE_CHANNEL" != "beta" ]; then
+            legacy=(manifest-legacy.json)
+          fi
+
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -i ~/.ssh/publish \
             bin/typhon-amd64-installer.exe \
@@ -695,13 +761,14 @@ jobs:
             bin/typhon-windows-portable.zip \
             ${patches[@]+"${patches[@]}"} \
             manifest.json \
-            manifest-legacy.json \
+            ${legacy[@]+"${legacy[@]}"} \
             publish-remote.sh \
             "$VPS_USER@$VPS_HOST:$remote_dir/"
           ssh -i ~/.ssh/publish "$VPS_USER@$VPS_HOST" \
-            "bash '$remote_dir/publish-remote.sh' '$remote_dir' '$RELEASE_VERSION' '$S3_RELEASES_BUCKET'"
+            "bash '$remote_dir/publish-remote.sh' '$remote_dir' '$RELEASE_VERSION' '$S3_RELEASES_BUCKET' '$RELEASE_CHANNEL'"
 
       - name: Ask the website to republish the download facts
+        if: steps.channel.outputs.channel == 'stable'
         shell: bash
         env:
           SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
@@ -735,8 +802,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
           RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           set -euo pipefail
+
+          if [ "$RELEASE_CHANNEL" = "beta" ]; then
+            {
+              printf 'Бета-сборка для тестеров, не стабильный выпуск. Обновляются только тестеры с включённым бета-каналом.\n'
+              printf 'Beta build for testers, not a stable release. Only testers who turned the beta channel on are updated to it.\n\n'
+              printf '%s\n\n' "${RELEASE_NOTES:-Beta build $RELEASE_VERSION}"
+              printf 'Контрольные суммы всех файлов — в `SHA256SUMS`.\n'
+              printf 'Checksums for every file are in `SHA256SUMS`.\n'
+            } > release-body.md
+            (cd bin && sha256sum typhon-amd64-installer.exe typhon-darwin-arm64.zip typhon-windows-portable.zip > SHA256SUMS)
+            (cd bin && sha256sum -c SHA256SUMS)
+            gh release create "$RELEASE_TAG" \
+              bin/typhon-amd64-installer.exe \
+              bin/typhon-darwin-arm64.zip \
+              bin/typhon-windows-portable.zip \
+              bin/SHA256SUMS \
+              --title "Typhon $RELEASE_VERSION" \
+              --notes-file release-body.md \
+              --prerelease \
+              --latest=false
+            exit 0
+          fi
 
           # Prints the body of one "## <version> — <date>" entry: everything
           # up to the next release heading.
