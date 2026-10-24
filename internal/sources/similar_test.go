@@ -291,3 +291,38 @@ func TestOldServerAnswerWithoutFieldsStaysUnmatched(t *testing.T) {
 		t.Fatalf("cache: %+v", rm)
 	}
 }
+
+func TestSimilarReleasesFindsGameByLocalIDWhenServerIDDiffers(t *testing.T) {
+	s, cat, _ := testService(t)
+	game, err := cat.AddGame(catalog.Game{ID: "local-q", ServerID: "srv-q", Title: "Quokka Quest", ExternalIDs: catalog.ExternalIDs{IGDB: "77"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat.SetRemoteCatalog(&candidateRemote{answers: map[string]catalog.ReleaseMatch{
+		"vermilion": {Reason: catalog.ReasonAmbiguous, Candidates: []catalog.ReleaseCandidate{{ID: "srv-q", Title: "Quokka Quest"}}},
+	}})
+	server := newFeedServer(t, feedBody(t, "Source", feedEntry{Title: "Vermilion Tide", URIs: []string{magnetOf("c1")}}))
+	src := addSource(t, s, server.url())
+	if _, err := s.RefreshSource(src.ID); err != nil {
+		t.Fatal(err)
+	}
+	items := releasesOf(t, s, src.ID, "")
+	if len(items) != 1 || items[0].Release.MatchStatus != catalog.StatusReview {
+		t.Fatalf("release: %+v", items)
+	}
+	list, err := s.GetCandidates(items[0].Release.ID)
+	if err != nil || len(list) == 0 || list[0].GameID != game.ID || !list[0].InCatalog {
+		t.Fatalf("candidates: %+v %v", list, err)
+	}
+	cases := []struct {
+		name   string
+		game   string
+		family []string
+	}{{"direct", game.ID, nil}, {"family", "other", []string{game.ID}}}
+	for _, tc := range cases {
+		got, err := s.SimilarReleases(tc.game, tc.family)
+		if err != nil || len(got) != 1 || got[0].Release.ID != items[0].Release.ID {
+			t.Fatalf("%s: %+v %v", tc.name, got, err)
+		}
+	}
+}

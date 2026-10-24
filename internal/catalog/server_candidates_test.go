@@ -27,6 +27,7 @@ func TestServerCandidatesDropsAndCutsBadInput(t *testing.T) {
 		}},
 		{"long title cut", []ReleaseCandidate{{ID: "1", Title: long}}, []Candidate{{GameID: "1", Title: strings.Repeat("я", maxCandidateTitle), Method: MethodNone, Source: SourceServer}}},
 		{"control chars stripped", []ReleaseCandidate{{ID: "1", Title: "A\x1b\tB"}}, []Candidate{{GameID: "1", Title: "AB", Method: MethodNone, Source: SourceServer}}},
+		{"bidi override stripped", []ReleaseCandidate{{ID: "1", Title: "A\u202eB\u200b"}}, []Candidate{{GameID: "1", Title: "AB", Method: MethodNone, Source: SourceServer}}},
 		{"absurd year dropped", []ReleaseCandidate{{ID: "1", Title: "A", ReleaseYear: 99999}}, []Candidate{one}},
 		{"platforms cleaned", []ReleaseCandidate{{ID: "1", Title: "A", Platforms: []string{"PC", "", strings.Repeat("x", 80)}}}, []Candidate{{GameID: "1", Title: "A", Method: MethodNone, Source: SourceServer, Platforms: []string{"PC", strings.Repeat("x", maxCandidatePlat)}}}},
 	}
@@ -98,5 +99,25 @@ func TestResolveSourceQueriesReadsReasonAndCandidates(t *testing.T) {
 	}
 	if s.HasGame("a") || s.HasGame("b") {
 		t.Fatal("candidates must not enter the local catalog")
+	}
+}
+
+func TestResolveSourceQueriesTranslatesCandidateServerIDs(t *testing.T) {
+	s := mustServiceAt(t, t.TempDir())
+	seed(t, s, Game{ID: "local-1", ServerID: "srv-1", Title: "Known Game", ExternalIDs: ExternalIDs{IGDB: "5"}})
+	s.SetRemoteCatalog(&answerFixture{answers: []ReleaseMatch{{
+		Reason:     ReasonAmbiguous,
+		Candidates: []ReleaseCandidate{{ID: "srv-1", Title: "Known Game"}, {ID: "srv-unknown", Title: "Unknown Game"}},
+	}}})
+	out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"t"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out[0].Candidates
+	if len(got) != 2 || got[0].GameID != "local-1" || got[1].GameID != "srv-unknown" {
+		t.Fatalf("candidates: %+v", got)
+	}
+	if !s.HasGame(got[0].GameID) || s.HasGame(got[1].GameID) {
+		t.Fatal("known candidate must resolve in the catalog, unknown must not")
 	}
 }
