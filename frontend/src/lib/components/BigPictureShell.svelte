@@ -229,7 +229,7 @@
           {#if page.page.name === 'home'}
             <HomePage bind:this={handles[page.key]} ongame={(id) => navigate({ name: 'game', id })} oncatalog={() => section('catalog')} onlaunch={play} />
           {:else if page.page.name === 'library'}
-            <LibraryPage onback={back} ongame={(id) => navigate({ name: 'game', id })} oncatalog={() => section('catalog')} {requestText} />
+            <LibraryPage bind:this={handles[page.key]} onlaunch={play} onback={back} ongame={(id) => navigate({ name: 'game', id })} oncatalog={() => section('catalog')} {requestText} />
           {:else if page.page.name === 'catalog'}
             <CatalogPage bind:this={handles[page.key]} onback={back} ongame={(id) => navigate({ name: 'game', id })} {requestText} />
           {:else if page.page.name === 'game'}
