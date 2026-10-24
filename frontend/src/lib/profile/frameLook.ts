@@ -49,7 +49,8 @@ export function frameLook(
     return image ? { frame, frameImage: image } : { frame: 'none' };
   }
   const preset = presetFrame(frame);
-  return preset === 'none' ? { frame: 'none' } : { frame: preset, frameColor: color || undefined };
+  if (preset === 'none') return { frame: 'none' };
+  return { frame: preset, frameColor: typeof color === 'string' && validAccent(color) ? color : undefined };
 }
 
 interface FrameFields {

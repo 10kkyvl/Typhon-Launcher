@@ -28,6 +28,12 @@ describe('frameLook', () => {
     expect(frameLook('none', '#00ff00')).toEqual({ frame: 'none' });
     expect(frameLook(undefined, undefined)).toEqual({ frame: 'none' });
   });
+  it('drops a frame colour that is not a hex colour', () => {
+    for (const color of ['red; background: url(https://x/y)', 'url(https://x/y)', 'var(--accent)', '#12345']) {
+      expect(frameLook('ring', color)).toEqual({ frame: 'ring', frameColor: undefined });
+      expect(fieldsFrame({ avatarFrame: 'ring', frameColor: color })).toEqual({ frame: 'ring', frameColor: undefined });
+    }
+  });
   it('finds the image of an owned frame by id', () => {
     expect(frameLook(`custom:${id}`, '', owned)).toEqual({ frame: `custom:${id}`, frameImage: image });
   });
