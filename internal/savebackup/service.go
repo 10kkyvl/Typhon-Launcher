@@ -343,7 +343,7 @@ func (s *Service) autoBackup(ctx context.Context, gameID string) {
 		ev = createdEvent(snap, err)
 	case errors.Is(err, errUnchanged):
 		ev.Status, ev.Code, ev.Error, ev.Snapshot = StatusSkipped, uierr.Code(err), err.Error(), &snap
-	case errors.Is(err, errSavesNotFound), errors.Is(err, errSavesAmbiguous):
+	case errors.Is(err, errSavesNotFound), errors.Is(err, errSavesAmbiguous), errors.Is(err, errSavesCacheLike):
 		ev.Status, ev.Code, ev.Error = StatusSkipped, uierr.Code(err), err.Error()
 	default:
 		ev.Status, ev.Code, ev.Error = StatusFailed, uierr.Code(err), err.Error()
@@ -391,6 +391,8 @@ func (s *Service) locate(ctx context.Context, gameID string) (string, error) {
 		return res.Path, nil
 	case len(res.Candidates) > 0:
 		return "", fmt.Errorf("%w: вариантов %d", errSavesAmbiguous, len(res.Candidates))
+	case len(res.Rejected) > 0:
+		return "", fmt.Errorf("%w: %s; укажите папку сохранений вручную", errSavesCacheLike, res.Rejected[0].Path)
 	case res.Unreadable > 0:
 		return "", fmt.Errorf("%w: не удалось прочитать каталогов %d", errSavesNotFound, res.Unreadable)
 	}

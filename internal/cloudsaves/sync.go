@@ -89,7 +89,7 @@ func decide(m mode, local string, st gameState, remote account.Save, hasRemote b
 }
 
 func skippable(err error) bool {
-	for _, target := range []error{errSavesMissing, errSavesAmbig, errGameRunning, errEmpty, errRemoteMissing, errExcluded, errDuplicate} {
+	for _, target := range []error{errSavesMissing, errSavesAmbig, errSavesCache, errGameRunning, errEmpty, errRemoteMissing, errExcluded, errDuplicate} {
 		if errors.Is(err, target) {
 			return true
 		}
@@ -148,6 +148,8 @@ func (s *Service) locate(ctx context.Context, id string) (string, error) {
 		return res.Path, nil
 	case len(res.Candidates) > 0:
 		return "", fmt.Errorf("%w: вариантов %d", errSavesAmbig, len(res.Candidates))
+	case len(res.Rejected) > 0:
+		return "", fmt.Errorf("%w: %s; укажите папку сохранений вручную", errSavesCache, res.Rejected[0].Path)
 	case res.Unreadable > 0:
 		return "", fmt.Errorf("%w: каталогов %d", errSavesUnread, res.Unreadable)
 	}

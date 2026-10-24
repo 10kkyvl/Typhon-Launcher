@@ -8,6 +8,7 @@ export const errSaves: Record<ErrSavesKey, Message> = {
   'savebackup.invalid_id': 'Invalid game or backup identifier',
   'savebackup.invalid_kind': 'Unknown backup kind',
   'savebackup.saves_not_found': 'Save folder not found. Specify it manually',
+  'savebackup.saves_cache_like': 'The folder found looks like a game cache, not saves. Specify the save folder manually',
   'savebackup.saves_ambiguous': 'Several save folders were found. Choose the right one',
   'savebackup.saves_not_a_directory': 'The saves path is not a folder',
   'savebackup.saves_path_unavailable': 'The save folder is unavailable',

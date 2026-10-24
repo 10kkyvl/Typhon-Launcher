@@ -5,6 +5,7 @@ export const errSaves = {
   'savebackup.invalid_id': 'Некорректный идентификатор игры или копии',
   'savebackup.invalid_kind': 'Неизвестный вид резервной копии',
   'savebackup.saves_not_found': 'Папка сохранений не найдена. Укажите её вручную',
+  'savebackup.saves_cache_like': 'Найденная папка похожа на кеш игры, а не на сохранения. Укажите папку сохранений вручную',
   'savebackup.saves_ambiguous': 'Найдено несколько папок сохранений. Выберите нужную',
   'savebackup.saves_not_a_directory': 'Путь сохранений не является папкой',
   'savebackup.saves_path_unavailable': 'Папка сохранений недоступна',
