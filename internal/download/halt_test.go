@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,6 +80,24 @@ func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 		<-jobEnded
 	})
 
+	// The jobs are told to stop before the cut, so their cancellation says
+	// nothing about it. The park is written after the cut and before the wait
+	// for the jobs: the client seen cut when it is announced was cut ahead of
+	// the wait.
+	parked := make(chan struct{})
+	var park sync.Once
+	var cutWhenParked bool
+	original := emit
+	emit = func(name string, data any) {
+		if d, ok := data.(Download); ok && name == eventUpdated && d.ID == "dl" && d.Status == StatusQueued {
+			park.Do(func() {
+				cutWhenParked = old.halted()
+				close(parked)
+			})
+		}
+	}
+	t.Cleanup(func() { emit = original })
+
 	r.net.set()
 	torn := make(chan struct{})
 	go func() {
@@ -86,10 +105,8 @@ func TestTeardownCutsTheClientOffBeforeItWaitsForJobs(t *testing.T) {
 		r.reconcile(t)
 	}()
 
-	// The job is cancelled after the persist and right before the wait, so
-	// once it is, the teardown is sitting in the wait.
-	await(t, jobCtx.Done(), "the teardown to cancel the job")
-	if !old.halted() {
+	await(t, parked, "the teardown to park the download")
+	if !cutWhenParked {
 		t.Fatal("the client still carried data while the teardown waited for a job to end")
 	}
 	select {
